@@ -83,7 +83,7 @@ public:
         const ATTR::Attribute_set* attribute_set, const mi::base::IInterface* owner) const;
 };
 
-const SERIAL::Class_id ID_ATTRIBUTE_CONTAINER = 0x5F415443; // '_ATC'
+constexpr SERIAL::Class_id ID_ATTRIBUTE_CONTAINER = 0x5F415443; // '_ATC'
 
 class Attribute_container : public SCENE::Scene_element<Attribute_container, ID_ATTRIBUTE_CONTAINER>
 {

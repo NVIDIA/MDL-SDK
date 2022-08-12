@@ -232,7 +232,7 @@ public:
     }
 };
 
-/*@}*/ // end group mi_neuray_collections
+/**@}*/ // end group mi_neuray_collections
 
 } // namespace mi
 

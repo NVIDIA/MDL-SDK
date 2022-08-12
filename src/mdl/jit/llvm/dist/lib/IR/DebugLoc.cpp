@@ -1,9 +1,8 @@
 //===-- DebugLoc.cpp - Implement DebugLoc class ---------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -51,26 +50,27 @@ DebugLoc DebugLoc::getFnDebugLoc() const {
   // FIXME: Add a method on \a DILocation that does this work.
   const MDNode *Scope = getInlinedAtScope();
   if (auto *SP = getDISubprogram(Scope))
-    return DebugLoc::get(SP->getScopeLine(), 0, SP);
+    return DILocation::get(SP->getContext(), SP->getScopeLine(), 0, SP);
 
   return DebugLoc();
 }
 
-DebugLoc DebugLoc::get(unsigned Line, unsigned Col, const MDNode *Scope,
-                       const MDNode *InlinedAt) {
-  // If no scope is available, this is an unknown location.
-  if (!Scope)
-    return DebugLoc();
-
-  return DILocation::get(Scope->getContext(), Line, Col,
-                         const_cast<MDNode *>(Scope),
-                         const_cast<MDNode *>(InlinedAt));
+bool DebugLoc::isImplicitCode() const {
+  if (DILocation *Loc = get()) {
+    return Loc->isImplicitCode();
+  }
+  return true;
 }
 
-DebugLoc DebugLoc::appendInlinedAt(DebugLoc DL, DILocation *InlinedAt,
+void DebugLoc::setImplicitCode(bool ImplicitCode) {
+  if (DILocation *Loc = get()) {
+    Loc->setImplicitCode(ImplicitCode);
+  }
+}
+
+DebugLoc DebugLoc::appendInlinedAt(const DebugLoc &DL, DILocation *InlinedAt,
                                    LLVMContext &Ctx,
-                                   DenseMap<const MDNode *, MDNode *> &Cache,
-                                   bool ReplaceLast) {
+                                   DenseMap<const MDNode *, MDNode *> &Cache) {
   SmallVector<DILocation *, 3> InlinedAtLocations;
   DILocation *Last = InlinedAt;
   DILocation *CurInlinedAt = DL;
@@ -83,8 +83,6 @@ DebugLoc DebugLoc::appendInlinedAt(DebugLoc DL, DILocation *InlinedAt,
       break;
     }
 
-    if (ReplaceLast && !IA->getInlinedAt())
-      break;
     InlinedAtLocations.push_back(IA);
     CurInlinedAt = IA;
   }

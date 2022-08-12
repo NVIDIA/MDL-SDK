@@ -60,9 +60,9 @@ bool compress_and_serialize(
 
     // compress the data
     uLong compressed_size = compress_bound;
-    if (compress2(reinterpret_cast<Byte*>(&temp_buffer[0]),
+    if (compress2(reinterpret_cast<Byte*>(temp_buffer.data()),
                   &compressed_size, 
-                  reinterpret_cast<const Byte*>(&data[0]),
+                  reinterpret_cast<const Byte*>(data.data()),
                   data_bytes,
                   compression_level) != Z_OK)
     {
@@ -102,9 +102,9 @@ bool deserialize_and_decompress(
 
     // decompress the data
     uLong dest_len(data_size * sizeof(T));
-    return uncompress(reinterpret_cast<Byte*>(&data[0]),
+    return uncompress(reinterpret_cast<Byte*>(data.data()),
                       &dest_len,
-                      reinterpret_cast<const Byte*>(&temp_buffer[0]),
+                      reinterpret_cast<const Byte*>(temp_buffer.data()),
                       static_cast<uLong>(temp_buffer.size())) == Z_OK;
 }
 

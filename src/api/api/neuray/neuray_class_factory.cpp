@@ -75,10 +75,10 @@ Class_factory::Class_factory()
 
 Class_factory::~Class_factory()
 {
-    ASSERT( M_NEURAY_API, m_map_name_user_class_factory.size() == 0);
-    ASSERT( M_NEURAY_API, m_map_uuid_user_class_factory.size() == 0);
-    ASSERT( M_NEURAY_API, m_map_name_structure_decl.size() == 0);
-    ASSERT( M_NEURAY_API, m_map_name_enum_decl.size() == 0);
+    ASSERT( M_NEURAY_API, m_map_name_user_class_factory.empty());
+    ASSERT( M_NEURAY_API, m_map_uuid_user_class_factory.empty());
+    ASSERT( M_NEURAY_API, m_map_name_structure_decl.empty());
+    ASSERT( M_NEURAY_API, m_map_name_enum_decl.empty());
 }
 
 void Class_factory::set_materials_are_functions( bool value)
@@ -489,18 +489,18 @@ std::string Class_factory::uuid_to_string( const mi::base::Uuid& uuid)
 {
     std::ostringstream s;
     s.fill( '0');
-    s << std::setiosflags( std::ios::right) << std::hex << "("
-        << "0x" << std::setw( 8) <<    uuid.m_id1                << ","
-        << "0x" << std::setw( 4) <<   (uuid.m_id2      & 0xffff) << ","
-        << "0x" << std::setw( 4) <<   (uuid.m_id2 >> 16)         << ","
-        << "0x" << std::setw( 2) <<  ((uuid.m_id3      ) & 0xff) << ","
-        << "0x" << std::setw( 2) <<  ((uuid.m_id3 >>  8) & 0xff) << ","
-        << "0x" << std::setw( 2) <<  ((uuid.m_id3 >> 16) & 0xff) << ","
-        << "0x" << std::setw( 2) <<   (uuid.m_id3 >> 24)         << ","
-        << "0x" << std::setw( 2) <<  ((uuid.m_id4      ) & 0xff) << ","
-        << "0x" << std::setw( 2) <<  ((uuid.m_id4 >>  8) & 0xff) << ","
-        << "0x" << std::setw( 2) <<  ((uuid.m_id4 >> 16) & 0xff) << ","
-        << "0x" << std::setw( 2) <<   (uuid.m_id4 >> 24)         << ")";
+    s << std::setiosflags( std::ios::right) << std::hex << '('
+        << "0x" << std::setw( 8) <<    uuid.m_id1                << ','
+        << "0x" << std::setw( 4) <<   (uuid.m_id2      & 0xffff) << ','
+        << "0x" << std::setw( 4) <<   (uuid.m_id2 >> 16)         << ','
+        << "0x" << std::setw( 2) <<  ((uuid.m_id3      ) & 0xff) << ','
+        << "0x" << std::setw( 2) <<  ((uuid.m_id3 >>  8) & 0xff) << ','
+        << "0x" << std::setw( 2) <<  ((uuid.m_id3 >> 16) & 0xff) << ','
+        << "0x" << std::setw( 2) <<   (uuid.m_id3 >> 24)         << ','
+        << "0x" << std::setw( 2) <<  ((uuid.m_id4      ) & 0xff) << ','
+        << "0x" << std::setw( 2) <<  ((uuid.m_id4 >>  8) & 0xff) << ','
+        << "0x" << std::setw( 2) <<  ((uuid.m_id4 >> 16) & 0xff) << ','
+        << "0x" << std::setw( 2) <<   (uuid.m_id4 >> 24)         << ')';
     return s.str();
 }
 

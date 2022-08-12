@@ -40,7 +40,7 @@
 
 #include "i_neuray_proxy.h"
 
-#include <map>
+#include <base/lib/robin_hood/robin_hood.h>
 #include <string>
 #include <vector>
 #include <boost/core/noncopyable.hpp>
@@ -125,7 +125,7 @@ private:
     /// Note that a structure type name can become invalid because it was unregistered between check
     /// and the actual construction. Other types (like "Ref") require a transaction. Hence,
     /// create_api_class() checks whether the constructor was successful.
-    bool successfully_constructed() { return m_successfully_constructed; }
+    bool successfully_constructed() const { return m_successfully_constructed; }
 
     /// Indicates whether the value has the correct value type.
     ///
@@ -149,7 +149,7 @@ private:
     std::vector<mi::base::IInterface*> m_member;
 
     /// The map that maps keys to indices.
-    std::map<std::string, mi::Size> m_key_to_index;
+    robin_hood::unordered_map<std::string, mi::Size> m_key_to_index;
 
     /// The map that maps indices to keys.
     std::vector<std::string> m_index_to_key;
@@ -259,7 +259,7 @@ private:
     std::string m_type_name;
 
     /// The map that maps keys to indices.
-    std::map<std::string, mi::Size> m_key_to_index;
+    robin_hood::unordered_map<std::string, mi::Size> m_key_to_index;
 
     /// The map that maps indices to keys.
     std::vector<std::string> m_index_to_key;

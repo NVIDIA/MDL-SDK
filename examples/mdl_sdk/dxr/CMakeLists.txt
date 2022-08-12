@@ -45,6 +45,7 @@ set(PROJECT_HEADERS
     "mdl_d3d12/common.h"
     "mdl_d3d12/descriptor_heap.h"
     "mdl_d3d12/gltf.h"
+    "mdl_d3d12/gltf_nv_materials_mdl.h"
     "mdl_d3d12/mdl_d3d12.h"
     "mdl_d3d12/mdl_material.h"
     "mdl_d3d12/mdl_material_description.h"

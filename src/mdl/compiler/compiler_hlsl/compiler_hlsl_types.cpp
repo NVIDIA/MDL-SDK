@@ -372,6 +372,20 @@ Type::Kind Type_min16float::get_kind()
     return s_kind;
 }
 
+// ---------------------------- string type ----------------------------
+
+/// Constructor.
+Type_string::Type_string()
+: Base(Symbol_table::get_predefined_symbol(Symbol::SYM_TYPE_STRING))
+{
+}
+
+// Get the type kind.
+Type::Kind Type_string::get_kind()
+{
+    return s_kind;
+}
+
 // ---------------------------- compound type ----------------------------
 
 // Constructor.
@@ -645,10 +659,25 @@ Type::Kind Type_function::get_kind()
 // Get a parameter of the function type.
 Type_function::Parameter *Type_function::get_parameter(size_t index)
 {
-    if (index < m_n_params)
+    if (index < m_n_params) {
         return &m_params[index];
+    }
     HLSL_ASSERT(!"index out of range");
     return NULL;
+}
+
+// Check if this function type is a "function template".
+bool Type_function::is_template() const
+{
+    // small optimization: template types are typically used as last parameter
+    for (size_t i = m_n_params; i > 0;) {
+        Type *p_type = m_params[--i].get_type()->skip_type_alias();
+
+        if (is<Type_template>(p_type)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // ---------------------------- texture type ----------------------------
@@ -663,6 +692,20 @@ Type_texture::Type_texture(
 
 // Get the type kind.
 Type::Kind Type_texture::get_kind()
+{
+    return s_kind;
+}
+
+// ---------------------------- template type ----------------------------
+
+/// Constructor.
+Type_template::Type_template()
+: Base(Symbol_table::get_predefined_symbol(Symbol::SYM_TYPE_TEMPLATE))
+{
+}
+
+// Get the type kind.
+Type::Kind Type_template::get_kind()
 {
     return s_kind;
 }
@@ -799,6 +842,12 @@ Type_min10float *Type_factory::get_min10float()
 Type_min16float *Type_factory::get_min16float()
 {
     return &hlsl_min16float_type;
+}
+
+// Get the (singleton) string type instance.
+Type_string *Type_factory::get_string()
+{
+    return &hlsl_string_type;
 }
 
 // Get a vector type 1instance.
@@ -1042,6 +1091,84 @@ Type_texture *Type_factory::get_texture(
     return NULL;
 }
 
+// Get the template type instance.
+Type_template *Type_factory::get_template()
+{
+    return &hlsl_template_type;
+}
+
+// If a given type has an unsigned variant, return it.
+Type *Type_factory::to_unsigned_type(Type *type)
+{
+    switch (type->get_kind()) {
+    case Type::TK_ALIAS:
+        return to_unsigned_type(type->skip_type_alias());
+
+    case Type::TK_VOID:
+    case Type::TK_BOOL:
+    case Type::TK_HALF:
+    case Type::TK_FLOAT:
+    case Type::TK_DOUBLE:
+    case Type::TK_MIN10FLOAT:
+    case Type::TK_MIN16FLOAT:
+    case Type::TK_ARRAY:
+    case Type::TK_STRUCT:
+    case Type::TK_FUNCTION:
+    case Type::TK_TEXTURE:
+    case Type::TK_ERROR:
+    case Type::TK_STRING:
+    case Type::TK_TEMPLATE:
+        return NULL;
+
+    case Type::TK_INT:
+        return get_uint();
+
+    case Type::TK_UINT:
+        return type;
+
+    case Type::TK_MIN12INT:
+        // no unsigned variant
+        return NULL;
+
+    case Type::TK_MIN16INT:
+        return get_min16uint();
+
+    case Type::TK_MIN16UINT:
+        return type;
+
+    case Type::TK_VECTOR:
+        {
+            Type_vector *v_type = cast<Type_vector>(type);
+            Type_scalar *e_type = v_type->get_element_type();
+            Type_scalar *u_type = cast<Type_scalar>(to_unsigned_type(e_type));
+
+            if (u_type != NULL) {
+                if (u_type != e_type) {
+                    return get_vector(u_type, v_type->get_size());
+                }
+                return type;
+            }
+        }
+        return NULL;
+
+    case Type::TK_MATRIX:
+        {
+            Type_matrix *m_type = cast<Type_matrix>(type);
+            Type_vector *e_type = m_type->get_element_type();
+            Type_vector *u_type = cast<Type_vector>(to_unsigned_type(e_type));
+
+            if (u_type != NULL) {
+                if (u_type != e_type) {
+                    return get_matrix(u_type, m_type->get_columns());
+                }
+                return type;
+            }
+        }
+        return NULL;
+    }
+    HLSL_ASSERT("!unexpected type kind");
+    return NULL;
+}
 
 }  // hlsl
 }  // mdl

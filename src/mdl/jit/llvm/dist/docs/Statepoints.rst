@@ -26,8 +26,8 @@ historical interest at this point with one exception - its implementation of
 shadow stacks has been used successfully by a number of language frontends and
 is still supported.  
 
-Overview
-========
+Overview & Core Concepts
+========================
 
 To collect dead objects, garbage collectors must be able to identify
 any references to objects contained within executing code, and,
@@ -93,7 +93,10 @@ the collector must be able to:
 
 This document describes the mechanism by which an LLVM based compiler
 can provide this information to a language runtime/collector, and
-ensure that all pointers can be read and updated if desired.  
+ensure that all pointers can be read and updated if desired.
+
+Abstract Machine Model
+^^^^^^^^^^^^^^^^^^^^^^^
 
 At a high level, LLVM has been extended to support compiling to an abstract 
 machine which extends the actual target with a non-integral pointer type 
@@ -103,10 +106,16 @@ integer representation.  This semantic quirk allows the runtime to pick a
 integer mapping for each point in the program allowing relocations of objects 
 without visible effects.
 
-Warning: Non-Integral Pointer Types are a newly added concept in LLVM IR.  
-It's possible that we've missed disabling some of the optimizations which 
-assume an integral value for pointers.  If you find such a case, please 
-file a bug or share a patch.
+This high level abstract machine model is used for most of the optimizer.  As
+a result, transform passes do not need to be extended to look through explicit
+relocation sequence.  Before starting code generation, we switch
+representations to an explicit form.  The exact location chosen for lowering
+is an implementation detail.
+
+Note that most of the value of the abstract machine model comes for collectors
+which need to model potentially relocatable objects.  For a compiler which
+supports only a non-relocating collector, you may wish to consider starting
+with the fully explicit form.  
 
 Warning: There is one currently known semantic hole in the definition of 
 non-integral pointers which has not been addressed upstream.  To work around
@@ -116,10 +125,13 @@ not safe to speculate a load if doing causes a non-integral pointer value to
 be loaded as any other type or vice versa.  In practice, this restriction is 
 well isolated to isSafeToSpeculate in ValueTracking.cpp.
 
-This high level abstract machine model is used for most of the LLVM optimizer.
-Before starting code generation, we switch representations to an explicit form.
-In theory, a frontend could directly generate this low level explicit form, but 
-doing so is likely to inhibit optimization.  
+Explicit Representation
+^^^^^^^^^^^^^^^^^^^^^^^
+
+A frontend could directly generate this low level explicit form, but 
+doing so may inhibit optimization.  Instead, it is recommended that
+compilers with relocating collectors target the abstract machine model just
+described.  
 
 The heart of the explicit approach is to construct (or rewrite) the IR in a 
 manner where the possible updates performed by the garbage collector are
@@ -242,6 +254,56 @@ following command.
 
   opt -rewrite-statepoints-for-gc test/Transforms/RewriteStatepointsForGC/basics.ll -S | llc -debug-only=stackmaps
 
+Simplifications for Non-Relocating GCs
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Some of the complexity in the previous example is unnecessary for a
+non-relocating collector.  While a non-relocating collector still needs the
+information about which location contain live references, it doesn't need to
+represent explicit relocations.  As such, the previously described explicit
+lowering can be simplified to remove all of the ``gc.relocate`` intrinsic
+calls and leave uses in terms of the original reference value.  
+
+Here's the explicit lowering for the previous example for a non-relocating
+collector:
+
+.. code-block:: llvm
+
+  define i8 addrspace(1)* @test1(i8 addrspace(1)* %obj) 
+         gc "statepoint-example" {
+    call token (i64, i32, void ()*, i32, i32, ...)* @llvm.experimental.gc.statepoint.p0f_isVoidf(i64 0, i32 0, void ()* @foo, i32 0, i32 0, i32 0, i32 0, i8 addrspace(1)* %obj)
+    ret i8 addrspace(1)* %obj
+  }
+
+Recording On Stack Regions
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+In addition to the explicit relocation form previously described, the
+statepoint infrastructure also allows the listing of allocas within the gc
+pointer list.  Allocas can be listed with or without additional explicit gc
+pointer values and relocations.
+
+An alloca in the gc region of the statepoint operand list will cause the
+address of the stack region to be listed in the stackmap for the statepoint.
+
+This mechanism can be used to describe explicit spill slots if desired.  It
+then becomes the generator's responsibility to ensure that values are
+spill/filled to/from the alloca as needed on either side of the safepoint.
+Note that there is no way to indicate a corresponding base pointer for such
+an explicitly specified spill slot, so usage is restricted to values for
+which the associated collector can derive the object base from the pointer
+itself.
+
+This mechanism can be used to describe on stack objects containing
+references provided that the collector can map from the location on the
+stack to a heap map describing the internal layout of the references the
+collector needs to process.
+
+WARNING: At the moment, this alternate form is not well exercised.  It is
+recommended to use this with caution and expect to have to fix a few bugs.
+In particular, the RewriteStatepointsForGC utility pass does not do
+anything for allocas today.
+  
 Base & Derived Pointers
 ^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -372,6 +434,8 @@ removed by the backend during dead machine instruction elimination.
 Intrinsics
 ===========
 
+.. _gc_statepoint:
+
 'llvm.experimental.gc.statepoint' Intrinsic
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -385,9 +449,7 @@ Syntax:
                        func_type <target>, 
                        i64 <#call args>, i64 <flags>,
                        ... (call parameters),
-                       i64 <# transition args>, ... (transition parameters),
-                       i64 <# deopt args>, ... (deopt parameters),
-                       ... (gc parameters))
+                       i64 0, i64 0)
 
 Overview:
 """""""""
@@ -451,27 +513,11 @@ instruction.  The number of arguments must exactly match what is
 specified in '# call args'.  The types must match the signature of
 'target'.
 
-The 'transition parameters' arguments contain an arbitrary list of
-Values which need to be passed to GC transition code. They will be
-lowered and passed as operands to the appropriate GC_TRANSITION nodes
-in the selection DAG. It is assumed that these arguments must be
-available before and after (but not necessarily during) the execution
-of the callee. The '# transition args' field indicates how many operands
-are to be interpreted as 'transition parameters'.
-
-The 'deopt parameters' arguments contain an arbitrary list of Values
-which is meaningful to the runtime.  The runtime may read any of these
-values, but is assumed not to modify them.  If the garbage collector
-might need to modify one of these values, it must also be listed in
-the 'gc pointer' argument list.  The '# deopt args' field indicates
-how many operands are to be interpreted as 'deopt parameters'.
-
-The 'gc parameters' arguments contain every pointer to a garbage
-collector object which potentially needs to be updated by the garbage
-collector.  Note that the argument list must explicitly contain a base
-pointer for every derived pointer listed.  The order of arguments is
-unimportant.  Unlike the other variable length parameter sets, this
-list is not length prefixed.
+The 'call parameter' attributes must be followed by two 'i64 0' constants.
+These were originally the length prefixes for 'gc transition parameter' and
+'deopt parameter' arguments, but the role of these parameter sets have been
+entirely replaced with the corresponding operand bundles.  In a future
+revision, these now redundant arguments will be removed.
 
 Semantics:
 """"""""""
@@ -552,21 +598,25 @@ safepoint sequence of which this ``gc.relocation`` is a part.
 Despite the typing of this as a generic token, *only* the value defined 
 by a ``gc.statepoint`` is legal here.
 
-The second argument is an index into the statepoints list of arguments
-which specifies the allocation for the pointer being relocated.
-This index must land within the 'gc parameter' section of the
-statepoint's argument list.  The associated value must be within the
-object with which the pointer being relocated is associated. The optimizer
-is free to change *which* interior derived pointer is reported, provided that
-it does not replace an actual base pointer with another interior derived 
-pointer.  Collectors are allowed to rely on the base pointer operand 
-remaining an actual base pointer if so constructed.
+The second and third arguments are both indices into operands of their
+corresponding statepoint.  If the statepoint has a :ref:`gc-live <ob_gc_live>`
+operand bundle, then both arguments are indices into the operand bundle's
+operands. If there is no "gc-live" bundle, then the index is into the
+statepoint's list of arguments.  This index must land within the 'gc
+parameter' section of the statepoint's argument list.  Use of the "gc-live"
+form is recommended.
 
-The third argument is an index into the statepoint's list of arguments
-which specify the (potentially) derived pointer being relocated.  It
-is legal for this index to be the same as the second argument
-if-and-only-if a base pointer is being relocated. This index must land
-within the 'gc parameter' section of the statepoint's argument list.
+The second argument is an index which specifies the allocation for the pointer
+being relocated. The associated value must be within the object with which the
+pointer being relocated is associated. The optimizer is free to change *which*
+interior derived pointer is reported, provided that it does not replace an
+actual base pointer with another interior derived pointer. Collectors are
+allowed to rely on the base pointer operand remaining an actual base pointer if
+so constructed.
+
+The third argument is an index which specify the (potentially) derived pointer
+being relocated.  It is legal for this index to be the same as the second
+argument if-and-only-if a base pointer is being relocated.
 
 Semantics:
 """"""""""
@@ -590,8 +640,15 @@ Stack Map Format
 ================
 
 Locations for each pointer value which may need read and/or updated by
-the runtime or collector are provided via the :ref:`Stack Map format
-<stackmap-format>` specified in the PatchPoint documentation.
+the runtime or collector are provided in a separate section of the
+generated object file as specified in the PatchPoint documentation.
+This special section is encoded per the
+:ref:`Stack Map format <stackmap-format>`.
+
+The general expectation is that a JIT compiler will parse and discard this
+format; it is not particularly memory efficient.  If you need an alternate
+format (e.g. for an ahead of time compiler), see discussion under
+:ref: `open work items <OpenWork>` below.
 
 Each statepoint generates the following Locations:
 
@@ -602,13 +659,12 @@ Each statepoint generates the following Locations:
   these identifiers.
 * Constant which describes the flags passed to the statepoint intrinsic
 * Constant which describes number of following deopt *Locations* (not
-  operands)
-* Variable number of Locations, one for each deopt parameter listed in
-  the IR statepoint (same number as described by previous Constant).  At 
-  the moment, only deopt parameters with a bitwidth of 64 bits or less 
-  are supported.  Values of a type larger than 64 bits can be specified 
-  and reported only if a) the value is constant at the call site, and b) 
-  the constant can be represented with less than 64 bits (assuming zero 
+  operands).  Will be 0 if no "deopt" bundle is provided.
+* Variable number of Locations, one for each deopt parameter listed in the
+  "deopt" operand bundle.  At the moment, only deopt parameters with a bitwidth
+  of 64 bits or less are supported.  Values of a type larger than 64 bits can be
+  specified and reported only if a) the value is constant at the call site, and
+  b) the constant can be represented with less than 64 bits (assuming zero 
   extension to the original bitwidth).
 * Variable number of relocation records, each of which consists of 
   exactly two Locations.  Relocation records are described in detail
@@ -698,7 +754,7 @@ relocation sequence, including all required ``gc.relocates``.
 
 Note that by default, this pass only runs for the "statepoint-example" or 
 "core-clr" gc strategies.  You will need to add your custom strategy to this 
-whitelist or use one of the predefined ones. 
+list or use one of the predefined ones. 
 
 As an example, given this code:
 
@@ -760,6 +816,50 @@ could be successfully parsed.
 In practice, RewriteStatepointsForGC should be run much later in the pass 
 pipeline, after most optimization is already done.  This helps to improve 
 the quality of the generated code when compiled with garbage collection support.
+
+.. _RewriteStatepointsForGC_intrinsic_lowering:
+
+RewriteStatepointsForGC intrinsic lowering
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+As a part of lowering to the explicit model of relocations
+RewriteStatepointsForGC performs GC specific lowering for
+'``llvm.memcpy.element.unordered.atomic.*``',
+'``llvm.memmove.element.unordered.atomic.*``' intrinsics.
+
+There are two possible lowerings for these copy operations: GC leaf lowering
+and GC parseable lowering. If a call is explicitly marked with
+"gc-leaf-function" attribute the call is lowered to a GC leaf call to
+'``__llvm_memcpy_element_unordered_atomic_*``' or
+'``__llvm_memmove_element_unordered_atomic_*``' symbol. Such a call can not
+take a safepoint. Otherwise, the call is made GC parseable by wrapping the
+call into a statepoint. This makes it possible to take a safepoint during
+copy operation. Note that a GC parseable copy operation is not required to
+take a safepoint. For example, a short copy operation may be performed without
+taking a safepoint.
+
+GC parseable calls to '``llvm.memcpy.element.unordered.atomic.*``',
+'``llvm.memmove.element.unordered.atomic.*``' intrinsics are lowered to calls
+to '``__llvm_memcpy_element_unordered_atomic_safepoint_*``',
+'``__llvm_memmove_element_unordered_atomic_safepoint_*``' symbols respectively.
+This way the runtime can provide implementations of copy operations with and
+without safepoints.
+
+GC parseable lowering also involves adjusting the arguments for the call.
+Memcpy and memmove intrinsics take derived pointers as source and destination
+arguments. If a copy operation takes a safepoint it might need to relocate the
+underlying source and destination objects. This requires the corresponding base
+pointers to be available in the copy operation. In order to make the base
+pointers available RewriteStatepointsForGC replaces derived pointers with base
+pointer and offset pairs. For example:
+
+.. code-block:: llvm
+
+  declare void @__llvm_memcpy_element_unordered_atomic_safepoint_1(
+    i8 addrspace(1)*  %dest_base, i64 %dest_offset,
+    i8 addrspace(1)*  %src_base, i64 %src_offset,
+    i64 %length)
+
 
 .. _PlaceSafepoints:
 
@@ -831,35 +931,73 @@ Supported Architectures
 =======================
 
 Support for statepoint generation requires some code for each backend.
-Today, only X86_64 is supported.  
+Today, only X86_64 is supported.
 
-Problem Areas and Active Work
-=============================
+.. _OpenWork:
 
-#. Support for languages which allow unmanaged pointers to garbage collected
-   objects (i.e. pass a pointer to an object to a C routine) via pinning.
+Limitations and Half Baked Ideas
+================================
 
-#. Support for garbage collected objects allocated on the stack.  Specifically,
-   allocas are always assumed to be in address space 0 and we need a
-   cast/promotion operator to let rewriting identify them.
+Mixing References and Raw Pointers
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-#. The current statepoint lowering is known to be somewhat poor.  In the very
-   long term, we'd like to integrate statepoints with the register allocator;
-   in the near term this is unlikely to happen.  We've found the quality of
-   lowering to be relatively unimportant as hot-statepoints are almost always
-   inliner bugs.
+Support for languages which allow unmanaged pointers to garbage collected
+objects (i.e. pass a pointer to an object to a C routine) in the abstract
+machine model.  At the moment, the best idea on how to approach this
+involves an intrinsic or opaque function which hides the connection between
+the reference value and the raw pointer.  The problem is that having a
+ptrtoint or inttoptr cast (which is common for such use cases) breaks the
+rules used for inferring base pointers for arbitrary references when
+lowering out of the abstract model to the explicit physical model.  Note
+that a frontend which lowers directly to the physical model doesn't have
+any problems here.
 
-#. Concerns have been raised that the statepoint representation results in a
-   large amount of IR being produced for some examples and that this
-   contributes to higher than expected memory usage and compile times.  There's
-   no immediate plans to make changes due to this, but alternate models may be
-   explored in the future.
+Objects on the Stack
+^^^^^^^^^^^^^^^^^^^^
 
-#. Relocations along exceptional paths are currently broken in ToT.  In
-   particular, there is current no way to represent a rethrow on a path which
-   also has relocations.  See `this llvm-dev discussion
-   <https://groups.google.com/forum/#!topic/llvm-dev/AE417XjgxvI>`_ for more
-   detail.
+As noted above, the explicit lowering supports objects allocated on the
+stack provided the collector can find a heap map given the stack address.
+
+The missing pieces are a) integration with rewriting (RS4GC) from the
+abstract machine model and b) support for optionally decomposing on stack
+objects so as not to require heap maps for them.  The later is required
+for ease of integration with some collectors.  
+
+Lowering Quality and Representation Overhead
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The current statepoint lowering is known to be somewhat poor.  In the very
+long term, we'd like to integrate statepoints with the register allocator;
+in the near term this is unlikely to happen.  We've found the quality of
+lowering to be relatively unimportant as hot-statepoints are almost always
+inliner bugs.
+
+Concerns have been raised that the statepoint representation results in a
+large amount of IR being produced for some examples and that this
+contributes to higher than expected memory usage and compile times.  There's
+no immediate plans to make changes due to this, but alternate models may be
+explored in the future.
+
+Relocations Along Exceptional Edges
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Relocations along exceptional paths are currently broken in ToT.  In
+particular, there is current no way to represent a rethrow on a path which
+also has relocations.  See `this llvm-dev discussion
+<https://groups.google.com/forum/#!topic/llvm-dev/AE417XjgxvI>`_ for more
+detail.
+
+Support for alternate stackmap formats
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For some use cases, it is
+desirable to directly encode a final memory efficient stackmap format for
+use by the runtime.  This is particularly relevant for ahead of time
+compilers which wish to directly link object files without the need for
+post processing of each individual object file.  While not implemented
+today for statepoints, there is precedent for a GCStrategy to be able to
+select a customer GCMetataPrinter for this purpose.  Patches to enable
+this functionality upstream are welcome.   
 
 Bugs and Enhancements
 =====================

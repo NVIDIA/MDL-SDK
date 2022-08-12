@@ -130,7 +130,7 @@ template <class T>
 class Type_base : public mi::base::Interface_implement<T>
 {
 public:
-    IType::Kind get_kind() const final { return T::s_kind; };
+    IType::Kind get_kind() const final { return T::s_kind; }
 
     mi::Uint32 get_all_type_modifiers() const override { return 0; }
 
@@ -144,7 +144,7 @@ template <class T>
 class Type_base_immutable : public Interface_implement_singleton<T>
 {
 public:
-    IType::Kind get_kind() const final { return T::s_kind; };
+    IType::Kind get_kind() const final { return T::s_kind; }
 
     mi::Uint32 get_all_type_modifiers() const override { return 0; }
 
@@ -168,7 +168,6 @@ public:
     {
     }
 
-public:
     mi::Uint32 get_all_type_modifiers() const final {
         mi::base::Handle<const IType> aliased_type(this->get_aliased_type());
         return this->get_type_modifiers() | aliased_type->get_all_type_modifiers();
@@ -224,6 +223,7 @@ public:
 class Type_enum final : public Type_base<IType_enum>
 {
     friend class MDL::Type_factory;
+
 public:
     Type_enum(
         Type_factory* owner,
@@ -243,7 +243,6 @@ public:
             m_value_annotations.size() == m_values.size() || m_value_annotations.empty());
     }
 
-public:
     const char* get_symbol() const final { return m_symbol.c_str(); }
 
     mi::Size get_size() const final { return m_values.size(); }
@@ -264,7 +263,7 @@ public:
         return m_values[index].second;
     }
 
-    mi::Size find_value(char const* name) const final {
+    mi::Size find_value(const char* name) const final {
         if (!name)
             return static_cast<mi::Size>(-1);
 
@@ -365,7 +364,6 @@ public:
     {
     }
 
-public:
     const IType* get_component_type(mi::Size index) const final {
         if (index < m_size)
             return get_element_type();
@@ -394,7 +392,6 @@ public:
     {
     }
 
-public:
     const IType* get_component_type(mi::Size index) const final {
         if (index < m_columns)
             return get_element_type();
@@ -422,7 +419,6 @@ public:
     {
     }
 
-public:
     const IType* get_component_type(mi::Size index) const final {
         if (index >= s_compound_size)
             return nullptr;
@@ -446,7 +442,7 @@ public:
     : m_element_type(element_type, mi::base::DUP_INTERFACE)
     , m_immediate_sized(true)
     , m_immediate_size(size)
-    , m_deferred_size("")
+    , m_deferred_size()
     {
     }
 
@@ -459,7 +455,6 @@ public:
     {
     }
 
-public:
     const IType* get_component_type(mi::Size index) const final {
         if (m_immediate_sized && index >= m_immediate_size)
             return nullptr;
@@ -497,8 +492,8 @@ class Type_struct final : public Type_base<IType_struct>
 {
     friend class MDL::Type_factory;
     using Base = Type_base<IType_struct>;
+
 public:
-    // Constructor.
     Type_struct(
         Type_factory *owner,
         const char* symbol,
@@ -506,8 +501,7 @@ public:
         const IType_struct::Fields& fields,
         const mi::base::Handle<const IAnnotation_block>& annotations,
         const IType_struct::Field_annotations& field_annotations)
-    : Base()
-    , m_owner(owner, mi::base::DUP_INTERFACE)
+    : m_owner(owner, mi::base::DUP_INTERFACE)
     , m_symbol(symbol)
     , m_predefined_id(id)
     , m_fields(fields)
@@ -518,8 +512,8 @@ public:
             m_field_annotations.size() == m_fields.size() || m_field_annotations.empty());
     }
 
-public:
-    const IType* get_component_type(mi::Size index) const final {
+    const IType* get_component_type(mi::Size index) const final
+    {
         return get_field_type(index);
     }
 
@@ -527,20 +521,23 @@ public:
 
     const char* get_symbol() const final { return m_symbol.c_str(); }
 
-    const IType* get_field_type(mi::Size index) const final {
+    const IType* get_field_type(mi::Size index) const final
+    {
         if (index >= m_fields.size())
             return nullptr;
         m_fields[index].first->retain();
         return m_fields[index].first.get();
     }
 
-    const char* get_field_name(mi::Size index) const final {
+    const char* get_field_name(mi::Size index) const final
+    {
         if (index >= m_fields.size())
             return nullptr;
         return m_fields[index].second.c_str();
     }
 
-    mi::Size find_field(const char* name) const final {
+    mi::Size find_field(const char* name) const final
+    {
         if (!name)
             return -1;
 
@@ -553,7 +550,8 @@ public:
 
     IType_struct::Predefined_id get_predefined_id() const final { return m_predefined_id; }
 
-    const IAnnotation_block* get_annotations() const final {
+    const IAnnotation_block* get_annotations() const final
+    {
         if (!m_annotations)
             return nullptr;
 
@@ -561,7 +559,8 @@ public:
         return m_annotations.get();
     }
 
-    const IAnnotation_block* get_field_annotations(mi::Size index) const final {
+    const IAnnotation_block* get_field_annotations(mi::Size index) const final
+    {
         if (index >= m_field_annotations.size() || !m_field_annotations[index])
             return nullptr;
 
@@ -569,7 +568,8 @@ public:
         return m_field_annotations[index].get();
     }
 
-    mi::Size get_memory_consumption() const final {
+    mi::Size get_memory_consumption() const final
+    {
         return sizeof(*this)
             + dynamic_memory_consumption(m_symbol)
             + dynamic_memory_consumption(m_fields);
@@ -607,7 +607,6 @@ public:
     {
     }
 
-public:
     IType_texture::Shape get_shape() const final { return m_shape; }
 
 private:
@@ -1018,19 +1017,23 @@ IType_list* Type_factory::create_type_list() const
     return new Type_list;
 }
 
-const IType_bsdf* Type_factory::create_bsdf() const {
+const IType_bsdf* Type_factory::create_bsdf() const
+{
     return &TYPES::the_bsdf_type;
 }
 
-const IType_hair_bsdf* Type_factory::create_hair_bsdf() const {
+const IType_hair_bsdf* Type_factory::create_hair_bsdf() const
+{
     return &TYPES::the_hair_bsdf_type;
 }
 
-const IType_edf* Type_factory::create_edf() const {
+const IType_edf* Type_factory::create_edf() const
+{
     return &TYPES::the_edf_type;
 }
 
-const IType_vdf* Type_factory::create_vdf() const {
+const IType_vdf* Type_factory::create_vdf() const
+{
     return &TYPES::the_vdf_type;
 }
 
@@ -1701,7 +1704,7 @@ std::string Type_factory::get_type_name_static(const IType* type, bool include_a
                 type->get_interface<IType_enum>());
             std::string result = "enum \"";
             result += type_enum->get_symbol();
-            result += "\"";
+            result += '\"';
             return result;
         }
 
@@ -1720,9 +1723,9 @@ std::string Type_factory::get_type_name_static(const IType* type, bool include_a
             case IType_texture::TS_CUBE: return "texture_cube";
             case IType_texture::TS_PTEX: return "texture_ptex";
             case IType_texture::TS_BSDF_DATA:
-                ASSERT(M_SCENE, false); return "";
+                ASSERT(M_SCENE, false); return std::string();
             case IType_texture::TS_FORCE_32_BIT:
-                ASSERT(M_SCENE, false); return "";
+                ASSERT(M_SCENE, false); return std::string();
             }
             ASSERT(M_SCENE, false);
             return "";
@@ -1754,7 +1757,7 @@ std::string Type_factory::get_type_name_static(const IType* type, bool include_a
                 vector_type->get_element_type());
             std::ostringstream result;
             result << get_type_name_static(element_type.get());
-            result << type_matrix->get_size() << "x" << vector_type->get_size();
+            result << type_matrix->get_size() << 'x' << vector_type->get_size();
             return result.str();
         }
     case IType::TK_ALIAS: {
@@ -1764,7 +1767,7 @@ std::string Type_factory::get_type_name_static(const IType* type, bool include_a
             result << "alias";
             const char* symbol = type_alias->get_symbol();
             if (symbol)
-                result << " \"" << symbol << "\"";
+                result << " \"" << symbol << '\"';
             mi::Sint32 modifiers = type_alias->get_type_modifiers();
             if (modifiers & IType::MK_UNIFORM)
                 result << " uniform";
@@ -1773,7 +1776,7 @@ std::string Type_factory::get_type_name_static(const IType* type, bool include_a
             if (include_aliased_type) {
                 mi::base::Handle<const IType> aliased_type(
                     type_alias->get_aliased_type());
-                result << " " << get_type_name_static(aliased_type.get());
+                result << ' ' << get_type_name_static(aliased_type.get());
             }
             return result.str();
         }
@@ -1783,12 +1786,12 @@ std::string Type_factory::get_type_name_static(const IType* type, bool include_a
             mi::base::Handle<const IType> element_type(
                 type_array->get_element_type());
             std::ostringstream result;
-            result << get_type_name_static(element_type.get()) << "[";
+            result << get_type_name_static(element_type.get()) << '[';
             if (type_array->is_immediate_sized())
                 result << type_array->get_size();
             else
                 result << type_array->get_deferred_size();
-            result << "]";
+            result << ']';
             return result.str();
         }
     case IType::TK_STRUCT: {
@@ -1796,7 +1799,7 @@ std::string Type_factory::get_type_name_static(const IType* type, bool include_a
                 type->get_interface<IType_struct>());
             std::string result = "struct \"";
             result += type_struct->get_symbol();
-            result += "\"";
+            result += '\"';
             return result;
         }
     case IType::TK_FORCE_32_BIT:
@@ -1854,7 +1857,7 @@ std::string Type_factory::get_serialization_type_name( const IType* type)
                 vector_type->get_element_type());
             std::ostringstream result;
             result << get_serialization_type_name( element_type.get());
-            result << type_matrix->get_size() << "x" << vector_type->get_size();
+            result << type_matrix->get_size() << 'x' << vector_type->get_size();
             return result.str();
         }
         case IType::TK_ARRAY: {
@@ -1863,7 +1866,7 @@ std::string Type_factory::get_serialization_type_name( const IType* type)
             mi::base::Handle<const IType> element_type(
                 type_array->get_element_type());
             std::ostringstream result;
-            result << get_serialization_type_name( element_type.get()) << "[";
+            result << get_serialization_type_name( element_type.get()) << '[';
             if( type_array->is_immediate_sized())
                 result << type_array->get_size();
             else {
@@ -1874,7 +1877,7 @@ std::string Type_factory::get_serialization_type_name( const IType* type)
                     s = s.substr( scope+2);
                 result << s;
             }
-            result << "]";
+            result << ']';
             return result.str();
         }
         default: {
@@ -2010,7 +2013,7 @@ const IType* Type_factory::create_type( const char* serialization_type_name) con
 
     // IType_vector and IType_matrix
     const char* element_type_names[] =  { "bool", "int", "float", "double" };
-    for( auto element_type_name: element_type_names) {
+    for( const char* element_type_name: element_type_names) {
 
         size_t m = strlen( element_type_name);
         if( strncmp( s.c_str(), element_type_name, m) != 0)
@@ -2169,7 +2172,7 @@ void Type_factory::dump_static(
     case IType::TK_ALIAS: {
             mi::base::Handle<const IType_alias> type_alias(
                 type->get_interface<IType_alias>());
-            s << get_type_name_static(type, false) << "\n" << get_prefix(depth + 1);
+            s << get_type_name_static(type, false) << '\n' << get_prefix(depth + 1);
             mi::base::Handle<const IType> aliased_type(
                 type_alias->get_aliased_type());
             dump_static(aliased_type.get(), depth + 1, s);
@@ -2185,7 +2188,7 @@ void Type_factory::dump_static(
                 s << prefix << "    "
                 << type_enum->get_value_name(i) << " = "
                 << type_enum->get_value_code(i) << ",\n";
-            s << prefix << "}";
+            s << prefix << '}';
             return;
         }
     case IType::TK_STRUCT: {
@@ -2199,9 +2202,9 @@ void Type_factory::dump_static(
                 mi::base::Handle<const IType> field_type(
                     type_struct->get_field_type(i));
                 dump_static(field_type.get(), depth + 1, s);
-                s << " " << type_struct->get_field_name(i) << ";\n";
+                s << ' ' << type_struct->get_field_name(i) << ";\n";
             }
-            s << prefix << "}";
+            s << prefix << '}';
             return;
         }
     case IType::TK_FORCE_32_BIT:
@@ -2220,17 +2223,17 @@ void Type_factory::dump_static(
 
     mi::Size n = list->get_size();
     s << "type_list [";
-    s << (n > 0 ? "\n" : " ");
+    s << (n > 0 ? '\n' : ' ');
 
     const std::string& prefix = get_prefix(depth);
     for (mi::Size i = 0; i < n; ++i) {
         mi::base::Handle<const IType> type(list->get_type(i));
         s << prefix << "    ";
         dump_static(type.get(), depth + 1, s);
-        s << " " << i << ": " << list->get_name(i) << ";\n";
+        s << ' ' << i << ": " << list->get_name(i) << ";\n";
     }
 
-    s << (n > 0 ? prefix : "") << "]";
+    s << (n > 0 ? prefix : "") << ']';
 }
 
 mi::Sint32 Type_factory::is_compatible(const IType* src, const IType* dst) const

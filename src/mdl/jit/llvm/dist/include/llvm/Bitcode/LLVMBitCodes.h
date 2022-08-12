@@ -1,9 +1,8 @@
 //===- LLVMBitCodes.h - Enum values for the LLVM bitcode format -*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -18,7 +17,7 @@
 #ifndef LLVM_BITCODE_LLVMBITCODES_H
 #define LLVM_BITCODE_LLVMBITCODES_H
 
-#include "llvm/Bitcode/BitCodes.h"
+#include "llvm/Bitstream/BitCodes.h"
 
 namespace llvm {
 namespace bitc {
@@ -86,7 +85,7 @@ enum ModuleCodes {
   MODULE_CODE_ASM = 4,         // ASM:         [strchr x N]
   MODULE_CODE_SECTIONNAME = 5, // SECTIONNAME: [strchr x N]
 
-  // FIXME: Remove DEPLIB in 4.0.
+  // Deprecated, but still needed to read old bitcode files.
   MODULE_CODE_DEPLIB = 6, // DEPLIB:      [strchr x N]
 
   // GLOBALVAR: [pointer type, isconst, initid,
@@ -122,7 +121,7 @@ enum ModuleCodes {
 
 /// PARAMATTR blocks have code for defining a parameter attribute set.
 enum AttributeCodes {
-  // FIXME: Remove `PARAMATTR_CODE_ENTRY_OLD' in 4.0
+  // Deprecated, but still needed to read old bitcode files.
   PARAMATTR_CODE_ENTRY_OLD = 1, // ENTRY: [paramidx0, attr0,
                                 //         paramidx1, attr1...]
   PARAMATTR_CODE_ENTRY = 2,     // ENTRY: [attrgrp0, attrgrp1, ...]
@@ -167,7 +166,10 @@ enum TypeCodes {
 
   TYPE_CODE_FUNCTION = 21, // FUNCTION: [vararg, retty, paramty x N]
 
-  TYPE_CODE_TOKEN = 22 // TOKEN
+  TYPE_CODE_TOKEN = 22, // TOKEN
+
+  TYPE_CODE_BFLOAT = 23, // BRAIN FLOATING POINT
+  TYPE_CODE_X86_AMX = 24 // X86 AMX
 };
 
 enum OperandBundleTagCode {
@@ -264,10 +266,36 @@ enum GlobalValueSummarySymtabCodes {
   // Index-wide flags
   FS_FLAGS = 20,
   // Maps type identifier to summary information for that type identifier.
+  // Produced by the thin link (only lives in combined index).
   // TYPE_ID: [typeid, kind, bitwidth, align, size, bitmask, inlinebits,
   //           n x (typeid, kind, name, numrba,
   //                numrba x (numarg, numarg x arg, kind, info, byte, bit))]
   FS_TYPE_ID = 21,
+  // For background see overview at https://llvm.org/docs/TypeMetadata.html.
+  // The type metadata includes both the type identifier and the offset of
+  // the address point of the type (the address held by objects of that type
+  // which may not be the beginning of the virtual table). Vtable definitions
+  // are decorated with type metadata for the types they are compatible with.
+  //
+  // Maps type identifier to summary information for that type identifier
+  // computed from type metadata: the valueid of each vtable definition
+  // decorated with a type metadata for that identifier, and the offset from
+  // the corresponding type metadata.
+  // Exists in the per-module summary to provide information to thin link
+  // for index-based whole program devirtualization.
+  // TYPE_ID_METADATA: [typeid, n x (valueid, offset)]
+  FS_TYPE_ID_METADATA = 22,
+  // Summarizes vtable definition for use in index-based whole program
+  // devirtualization during the thin link.
+  // PERMODULE_VTABLE_GLOBALVAR_INIT_REFS: [valueid, flags, varflags,
+  //                                        numrefs, numrefs x valueid,
+  //                                        n x (valueid, offset)]
+  FS_PERMODULE_VTABLE_GLOBALVAR_INIT_REFS = 23,
+  // The total number of basic blocks in the module.
+  FS_BLOCK_COUNT = 24,
+  // Range information for accessed offsets for every argument.
+  // [n x (paramno, range, numcalls, numcalls x (callee_guid, paramno, range))]
+  FS_PARAM_ACCESS = 25,
 };
 
 enum MetadataCodes {
@@ -311,6 +339,11 @@ enum MetadataCodes {
   METADATA_INDEX_OFFSET = 38,           // [offset]
   METADATA_INDEX = 39,                  // [bitpos]
   METADATA_LABEL = 40,                  // [distinct, scope, name, file, line]
+  METADATA_STRING_TYPE = 41,            // [distinct, name, size, align,...]
+  // Codes 42 and 43 are reserved for support for Fortran array specific debug
+  // info.
+  METADATA_COMMON_BLOCK = 44,    // [distinct, scope, name, variable,...]
+  METADATA_GENERIC_SUBRANGE = 45 // [distinct, count, lo, up, stride]
 };
 
 // The constants block (CONSTANTS_BLOCK_ID) describes emission for each
@@ -342,6 +375,8 @@ enum ConstantsCodes {
   CST_CODE_INLINEASM = 23,       // INLINEASM:     [sideeffect|alignstack|
                                  //                 asmdialect,asmstr,conststr]
   CST_CODE_CE_GEP_WITH_INRANGE_INDEX = 24, //      [opty, flags, n x operands]
+  CST_CODE_CE_UNOP = 25,         // CE_UNOP:      [opcode, opval]
+  CST_CODE_POISON = 26,          // POISON
 };
 
 /// CastOpcodes - These are values used in the bitcode files to encode which
@@ -362,6 +397,14 @@ enum CastOpcodes {
   CAST_INTTOPTR = 10,
   CAST_BITCAST = 11,
   CAST_ADDRSPACECAST = 12
+};
+
+/// UnaryOpcodes - These are values used in the bitcode files to encode which
+/// unop a CST_CODE_CE_UNOP or a XXX refers to.  The values of these enums
+/// have no fixed relation to the LLVM IR enum values.  Changing these will
+/// break compatibility with old files.
+enum UnaryOpcodes {
+  UNOP_FNEG = 0
 };
 
 /// BinaryOpcodes - These are values used in the bitcode files to encode which
@@ -398,7 +441,9 @@ enum RMWOperations {
   RMW_MAX = 7,
   RMW_MIN = 8,
   RMW_UMAX = 9,
-  RMW_UMIN = 10
+  RMW_UMIN = 10,
+  RMW_FADD = 11,
+  RMW_FSUB = 12
 };
 
 /// OverflowingBinaryOperatorOptionalFlags - Flags for serializing
@@ -497,8 +542,9 @@ enum FunctionCodes {
 
   FUNC_CODE_DEBUG_LOC = 35,        // DEBUG_LOC:  [Line,Col,ScopeVal, IAVal]
   FUNC_CODE_INST_FENCE = 36,       // FENCE: [ordering, synchscope]
-  FUNC_CODE_INST_CMPXCHG_OLD = 37, // CMPXCHG: [ptrty,ptr,cmp,new, align, vol,
-                                   //           ordering, synchscope]
+  FUNC_CODE_INST_CMPXCHG_OLD = 37, // CMPXCHG: [ptrty, ptr, cmp, val, vol,
+                                   //            ordering, synchscope,
+                                   //            failure_ordering?, weak?]
   FUNC_CODE_INST_ATOMICRMW = 38,   // ATOMICRMW: [ptrty,ptr,val, operation,
                                    //             align, vol,
                                    //             ordering, synchscope]
@@ -512,8 +558,9 @@ enum FunctionCodes {
   FUNC_CODE_INST_GEP = 43,             // GEP:  [inbounds, n x operands]
   FUNC_CODE_INST_STORE = 44,       // STORE: [ptrty,ptr,valty,val, align, vol]
   FUNC_CODE_INST_STOREATOMIC = 45, // STORE: [ptrty,ptr,val, align, vol
-  FUNC_CODE_INST_CMPXCHG = 46,     // CMPXCHG: [ptrty,ptr,valty,cmp,new, align,
-                                   //           vol,ordering,synchscope]
+  FUNC_CODE_INST_CMPXCHG = 46,     // CMPXCHG: [ptrty, ptr, cmp, val, vol,
+                                   //           success_ordering, synchscope,
+                                   //           failure_ordering, weak]
   FUNC_CODE_INST_LANDINGPAD = 47,  // LANDINGPAD: [ty,val,num,id0,val0...]
   FUNC_CODE_INST_CLEANUPRET = 48,  // CLEANUPRET: [val] or [val,bb#]
   FUNC_CODE_INST_CATCHRET = 49,    // CATCHRET: [val,bb#]
@@ -524,6 +571,10 @@ enum FunctionCodes {
   // 53 is unused.
   // 54 is unused.
   FUNC_CODE_OPERAND_BUNDLE = 55, // OPERAND_BUNDLE: [tag#, value...]
+  FUNC_CODE_INST_UNOP = 56,      // UNOP:       [opcode, ty, opval]
+  FUNC_CODE_INST_CALLBR = 57,    // CALLBR:     [attr, cc, norm, transfs,
+                                 //              fnty, fnid, args...]
+  FUNC_CODE_INST_FREEZE = 58,    // FREEZE: [opty, opval]
 };
 
 enum UseListCodes {
@@ -591,6 +642,21 @@ enum AttributeKindCodes {
   ATTR_KIND_NOCF_CHECK = 56,
   ATTR_KIND_OPT_FOR_FUZZING = 57,
   ATTR_KIND_SHADOWCALLSTACK = 58,
+  ATTR_KIND_SPECULATIVE_LOAD_HARDENING = 59,
+  ATTR_KIND_IMMARG = 60,
+  ATTR_KIND_WILLRETURN = 61,
+  ATTR_KIND_NOFREE = 62,
+  ATTR_KIND_NOSYNC = 63,
+  ATTR_KIND_SANITIZE_MEMTAG = 64,
+  ATTR_KIND_PREALLOCATED = 65,
+  ATTR_KIND_NO_MERGE = 66,
+  ATTR_KIND_NULL_POINTER_IS_VALID = 67,
+  ATTR_KIND_NOUNDEF = 68,
+  ATTR_KIND_BYREF = 69,
+  ATTR_KIND_MUSTPROGRESS = 70,
+  ATTR_KIND_NO_CALLBACK = 71,
+  ATTR_KIND_HOT = 72,
+  ATTR_KIND_NO_PROFILE = 73,
 };
 
 enum ComdatSelectionKindCodes {

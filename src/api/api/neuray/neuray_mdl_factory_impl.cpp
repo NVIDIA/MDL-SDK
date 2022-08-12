@@ -41,6 +41,7 @@
 #include <mi/neuraylib/istructure.h>
 #include <base/data/db/i_db_transaction.h>
 #include <base/lib/log/i_log_logger.h>
+#include <base/system/main/access_module.h>
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module_builder.h>
@@ -48,6 +49,7 @@
 #include <io/scene/mdl_elements/i_mdl_elements_function_definition.h>
 #include <mdl/compiler/compilercore/compilercore_modules.h>
 #include <mdl/compiler/compilercore/compilercore_tools.h>
+#include <mdl/integration/mdlnr/i_mdlnr.h>
 
 #include "neuray_expression_impl.h"
 #include "neuray_class_factory.h"
@@ -67,7 +69,8 @@ namespace NEURAY {
 
 Mdl_factory_impl::Mdl_factory_impl(
     mi::neuraylib::INeuray* neuray, const Class_factory* class_factory)
-  : m_neuray( neuray), m_class_factory( class_factory)
+  : m_neuray( neuray),
+    m_class_factory( class_factory)
 {
 }
 
@@ -506,6 +509,24 @@ mi::Sint32 Mdl_factory_impl::deprecated_create_materials(
     return -1;
 }
 
+bool Mdl_factory_impl::is_valid_mdl_identifier( const char* name) const
+{
+    return m_mdl->is_valid_mdl_identifier( name);
+}
+
+mi::Sint32 Mdl_factory_impl::start()
+{
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
+    m_mdl = mdlc_module->get_mdl();
+    return 0;
+}
+
+mi::Sint32 Mdl_factory_impl::shutdown()
+{
+    m_mdl.reset();
+    return 0;
+}
+    
 } // namespace NEURAY
 
 } // namespace MI

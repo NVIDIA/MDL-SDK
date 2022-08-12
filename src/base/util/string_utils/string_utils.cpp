@@ -390,5 +390,11 @@ int compare_case_insensitive(
 #endif
 }
 
+// create a formated string.
+std::string formatted_string(const char* format)
+{
+    return format;
+}
+
 }
 }

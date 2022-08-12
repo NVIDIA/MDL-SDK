@@ -84,7 +84,7 @@ mi::Sint32 Mdl_archive_api_impl::create_archive(
     std::string package_name;
     size_t sep = archive_str.rfind( HAL::Ospath::sep());
     if( sep == std::string::npos) {
-        output_directory = ".";
+        output_directory = '.';
         package_name += archive_str;
     } else {
         output_directory = archive_str.substr( 0, sep);

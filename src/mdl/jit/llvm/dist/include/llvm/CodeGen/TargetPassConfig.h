@@ -1,9 +1,8 @@
 //===- TargetPassConfig.h - Code Generation pass options --------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -25,6 +24,8 @@ class LLVMTargetMachine;
 struct MachineSchedContext;
 class PassConfigImpl;
 class ScheduleDAGInstrs;
+class CSEConfigBase;
+class PassInstrumentationCallbacks;
 
 // The old pass manager infrastructure is hidden in a legacy namespace now.
 namespace legacy {
@@ -75,9 +76,6 @@ public:
   }
 };
 
-template <> struct isPodLike<IdentifyingPassPtr> {
-  static const bool value = true;
-};
 
 /// Target-Independent Code Generator Pass Configuration Options.
 ///
@@ -90,9 +88,23 @@ private:
   AnalysisID StartAfter = nullptr;
   AnalysisID StopBefore = nullptr;
   AnalysisID StopAfter = nullptr;
+
+  unsigned StartBeforeInstanceNum = 0;
+  unsigned StartBeforeCount = 0;
+
+  unsigned StartAfterInstanceNum = 0;
+  unsigned StartAfterCount = 0;
+
+  unsigned StopBeforeInstanceNum = 0;
+  unsigned StopBeforeCount = 0;
+
+  unsigned StopAfterInstanceNum = 0;
+  unsigned StopAfterCount = 0;
+
   bool Started = true;
   bool Stopped = false;
   bool AddingMachinePasses = false;
+  bool DebugifyIsSafe = true;
 
   /// Set the StartAfter, StartBefore and StopAfter passes to allow running only
   /// a portion of the normal code-gen pass sequence.
@@ -145,26 +157,19 @@ public:
 
   CodeGenOpt::Level getOptLevel() const;
 
-  /// Describe the status of the codegen
-  /// pipeline set by this target pass config.
-  /// Having a limited codegen pipeline means that options
-  /// have been used to restrict what codegen is doing.
-  /// In particular, that means that codegen won't emit
-  /// assembly code.
-  bool hasLimitedCodeGenPipeline() const;
+  /// Returns true if one of the `-start-after`, `-start-before`, `-stop-after`
+  /// or `-stop-before` options is set.
+  static bool hasLimitedCodeGenPipeline();
+
+  /// Returns true if none of the `-stop-before` and `-stop-after` options is
+  /// set.
+  static bool willCompleteCodeGenPipeline();
 
   /// If hasLimitedCodeGenPipeline is true, this method
   /// returns a string with the name of the options, separated
   /// by \p Separator that caused this pipeline to be limited.
-  std::string
-  getLimitedCodeGenPipelineReason(const char *Separator = "/") const;
-
-  /// Check if the codegen pipeline is limited in such a way that it
-  /// won't be complete. When the codegen pipeline is not complete,
-  /// this means it may not be possible to generate assembly from it.
-  bool willCompleteCodeGenPipeline() const {
-    return !hasLimitedCodeGenPipeline() || (!StopAfter && !StopBefore);
-  }
+  static std::string
+  getLimitedCodeGenPipelineReason(const char *Separator = "/");
 
   void setDisableVerify(bool Disable) { setOpt(DisableVerify, Disable); }
 
@@ -183,7 +188,7 @@ public:
 
   /// Insert InsertedPassID pass after TargetPassID pass.
   void insertPass(AnalysisID TargetPassID, IdentifyingPassPtr InsertedPassID,
-                  bool VerifyAfter = true, bool PrintAfter = true);
+                  bool VerifyAfter = true);
 
   /// Allow the target to enable a specific standard pass by default.
   void enablePass(AnalysisID PassID) { substitutePass(PassID, PassID); }
@@ -277,7 +282,7 @@ public:
   ///
   /// This can also be used to plug a new MachineSchedStrategy into an instance
   /// of the standard ScheduleDAGMI:
-  ///   return new ScheduleDAGMI(C, make_unique<MyStrategy>(C), /*RemoveKillFlags=*/false)
+  ///   return new ScheduleDAGMI(C, std::make_unique<MyStrategy>(C), /*RemoveKillFlags=*/false)
   ///
   /// Return NULL to select the default (generic) machine scheduler.
   virtual ScheduleDAGInstrs *
@@ -303,6 +308,24 @@ public:
   /// verification is enabled.
   void addVerifyPass(const std::string &Banner);
 
+  /// Add a pass to add synthesized debug info to the MIR.
+  void addDebugifyPass();
+
+  /// Add a pass to remove debug info from the MIR.
+  void addStripDebugPass();
+
+  /// Add a pass to check synthesized debug info for MIR.
+  void addCheckDebugPass();
+
+  /// Add standard passes before a pass that's about to be added. For example,
+  /// the DebugifyMachineModulePass if it is enabled.
+  void addMachinePrePasses(bool AllowDebugify = true);
+
+  /// Add standard passes after a pass that has just been added. For example,
+  /// the MachineVerifier if it is enabled.
+  void addMachinePostPasses(const std::string &Banner, bool AllowVerify = true,
+                            bool AllowStrip = true);
+
   /// Check whether or not GlobalISel should abort on error.
   /// When this is disabled, GlobalISel will fall back on SDISel instead of
   /// erroring out.
@@ -312,6 +335,13 @@ public:
   /// uses the fallback path. In other words, it will emit a diagnostic
   /// when GlobalISel failed and isGlobalISelAbortEnabled is false.
   virtual bool reportDiagnosticWhenGlobalISelFallback() const;
+
+  /// Check whether continuous CSE should be enabled in GISel passes.
+  /// By default, it's enabled for non O0 levels.
+  virtual bool isGISelCSEEnabled() const;
+
+  /// Returns the CSEConfig object to use for the current optimization level.
+  virtual std::unique_ptr<CSEConfigBase> getCSEConfig() const;
 
 protected:
   // Helper to verify the analysis is really immutable.
@@ -354,11 +384,11 @@ protected:
 
   /// addFastRegAlloc - Add the minimum set of target-independent passes that
   /// are required for fast register allocation.
-  virtual void addFastRegAlloc(FunctionPass *RegAllocPass);
+  virtual void addFastRegAlloc();
 
   /// addOptimizedRegAlloc - Add passes related to register allocation.
   /// LLVMTargetMachine provides standard regalloc passes for most targets.
-  virtual void addOptimizedRegAlloc(FunctionPass *RegAllocPass);
+  virtual void addOptimizedRegAlloc();
 
   /// addPreRewrite - Add passes to the optimized register allocation pipeline
   /// after register allocation is complete, but before virtual registers are
@@ -368,9 +398,17 @@ protected:
   /// after RABasic or RAGreedy, they should take advantage of LiveRegMatrix.
   /// When these passes run, VirtRegMap contains legal physreg assignments for
   /// all virtual registers.
+  ///
+  /// Note if the target overloads addRegAssignAndRewriteOptimized, this may not
+  /// be honored. This is also not generally used for the the fast variant,
+  /// where the allocation and rewriting are done in one pass.
   virtual bool addPreRewrite() {
     return false;
   }
+
+  /// Add passes to be run immediately after virtual registers are rewritten
+  /// to physical registers.
+  virtual void addPostRewrite() { }
 
   /// This method may be implemented by targets that want to run passes after
   /// register allocation pass pipeline but before prolog-epilog insertion.
@@ -407,26 +445,29 @@ protected:
 
   /// Add a CodeGen pass at this point in the pipeline after checking overrides.
   /// Return the pass that was added, or zero if no pass was added.
-  /// @p printAfter    if true and adding a machine function pass add an extra
-  ///                  machine printer pass afterwards
   /// @p verifyAfter   if true and adding a machine function pass add an extra
   ///                  machine verification pass afterwards.
-  AnalysisID addPass(AnalysisID PassID, bool verifyAfter = true,
-                     bool printAfter = true);
+  AnalysisID addPass(AnalysisID PassID, bool verifyAfter = true);
 
   /// Add a pass to the PassManager if that pass is supposed to be run, as
   /// determined by the StartAfter and StopAfter options. Takes ownership of the
   /// pass.
-  /// @p printAfter    if true and adding a machine function pass add an extra
-  ///                  machine printer pass afterwards
   /// @p verifyAfter   if true and adding a machine function pass add an extra
   ///                  machine verification pass afterwards.
-  void addPass(Pass *P, bool verifyAfter = true, bool printAfter = true);
+  void addPass(Pass *P, bool verifyAfter = true);
 
   /// addMachinePasses helper to create the target-selected or overriden
   /// regalloc pass.
-  FunctionPass *createRegAllocPass(bool Optimized);
+  virtual FunctionPass *createRegAllocPass(bool Optimized);
+
+  /// Add core register allocator passes which do the actual register assignment
+  /// and rewriting. \returns true if any passes were added.
+  virtual bool addRegAssignAndRewriteFast();
+  virtual bool addRegAssignAndRewriteOptimized();
 };
+
+void registerCodeGenCallback(PassInstrumentationCallbacks &PIC,
+                             LLVMTargetMachine &);
 
 } // end namespace llvm
 

@@ -1,9 +1,8 @@
 //===- TypeBasedAliasAnalysis.cpp - Type-Based Alias Analysis -------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -112,9 +111,11 @@
 #include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Metadata.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
@@ -368,26 +369,28 @@ static bool isStructPathTBAA(const MDNode *MD) {
 }
 
 AliasResult TypeBasedAAResult::alias(const MemoryLocation &LocA,
-                                     const MemoryLocation &LocB) {
+                                     const MemoryLocation &LocB,
+                                     AAQueryInfo &AAQI) {
   if (!EnableTBAA)
-    return AAResultBase::alias(LocA, LocB);
+    return AAResultBase::alias(LocA, LocB, AAQI);
 
   // If accesses may alias, chain to the next AliasAnalysis.
   if (Aliases(LocA.AATags.TBAA, LocB.AATags.TBAA))
-    return AAResultBase::alias(LocA, LocB);
+    return AAResultBase::alias(LocA, LocB, AAQI);
 
   // Otherwise return a definitive result.
   return NoAlias;
 }
 
 bool TypeBasedAAResult::pointsToConstantMemory(const MemoryLocation &Loc,
+                                               AAQueryInfo &AAQI,
                                                bool OrLocal) {
   if (!EnableTBAA)
-    return AAResultBase::pointsToConstantMemory(Loc, OrLocal);
+    return AAResultBase::pointsToConstantMemory(Loc, AAQI, OrLocal);
 
   const MDNode *M = Loc.AATags.TBAA;
   if (!M)
-    return AAResultBase::pointsToConstantMemory(Loc, OrLocal);
+    return AAResultBase::pointsToConstantMemory(Loc, AAQI, OrLocal);
 
   // If this is an "immutable" type, we can assume the pointer is pointing
   // to constant memory.
@@ -395,24 +398,24 @@ bool TypeBasedAAResult::pointsToConstantMemory(const MemoryLocation &Loc,
       (isStructPathTBAA(M) && TBAAStructTagNode(M).isTypeImmutable()))
     return true;
 
-  return AAResultBase::pointsToConstantMemory(Loc, OrLocal);
+  return AAResultBase::pointsToConstantMemory(Loc, AAQI, OrLocal);
 }
 
 FunctionModRefBehavior
-TypeBasedAAResult::getModRefBehavior(ImmutableCallSite CS) {
+TypeBasedAAResult::getModRefBehavior(const CallBase *Call) {
   if (!EnableTBAA)
-    return AAResultBase::getModRefBehavior(CS);
+    return AAResultBase::getModRefBehavior(Call);
 
   FunctionModRefBehavior Min = FMRB_UnknownModRefBehavior;
 
   // If this is an "immutable" type, we can assume the call doesn't write
   // to memory.
-  if (const MDNode *M = CS.getInstruction()->getMetadata(LLVMContext::MD_tbaa))
+  if (const MDNode *M = Call->getMetadata(LLVMContext::MD_tbaa))
     if ((!isStructPathTBAA(M) && TBAANode(M).isTypeImmutable()) ||
         (isStructPathTBAA(M) && TBAAStructTagNode(M).isTypeImmutable()))
       Min = FMRB_OnlyReadsMemory;
 
-  return FunctionModRefBehavior(AAResultBase::getModRefBehavior(CS) & Min);
+  return FunctionModRefBehavior(AAResultBase::getModRefBehavior(Call) & Min);
 }
 
 FunctionModRefBehavior TypeBasedAAResult::getModRefBehavior(const Function *F) {
@@ -420,33 +423,32 @@ FunctionModRefBehavior TypeBasedAAResult::getModRefBehavior(const Function *F) {
   return AAResultBase::getModRefBehavior(F);
 }
 
-ModRefInfo TypeBasedAAResult::getModRefInfo(ImmutableCallSite CS,
-                                            const MemoryLocation &Loc) {
+ModRefInfo TypeBasedAAResult::getModRefInfo(const CallBase *Call,
+                                            const MemoryLocation &Loc,
+                                            AAQueryInfo &AAQI) {
   if (!EnableTBAA)
-    return AAResultBase::getModRefInfo(CS, Loc);
+    return AAResultBase::getModRefInfo(Call, Loc, AAQI);
 
   if (const MDNode *L = Loc.AATags.TBAA)
-    if (const MDNode *M =
-            CS.getInstruction()->getMetadata(LLVMContext::MD_tbaa))
+    if (const MDNode *M = Call->getMetadata(LLVMContext::MD_tbaa))
       if (!Aliases(L, M))
         return ModRefInfo::NoModRef;
 
-  return AAResultBase::getModRefInfo(CS, Loc);
+  return AAResultBase::getModRefInfo(Call, Loc, AAQI);
 }
 
-ModRefInfo TypeBasedAAResult::getModRefInfo(ImmutableCallSite CS1,
-                                            ImmutableCallSite CS2) {
+ModRefInfo TypeBasedAAResult::getModRefInfo(const CallBase *Call1,
+                                            const CallBase *Call2,
+                                            AAQueryInfo &AAQI) {
   if (!EnableTBAA)
-    return AAResultBase::getModRefInfo(CS1, CS2);
+    return AAResultBase::getModRefInfo(Call1, Call2, AAQI);
 
-  if (const MDNode *M1 =
-          CS1.getInstruction()->getMetadata(LLVMContext::MD_tbaa))
-    if (const MDNode *M2 =
-            CS2.getInstruction()->getMetadata(LLVMContext::MD_tbaa))
+  if (const MDNode *M1 = Call1->getMetadata(LLVMContext::MD_tbaa))
+    if (const MDNode *M2 = Call2->getMetadata(LLVMContext::MD_tbaa))
       if (!Aliases(M1, M2))
         return ModRefInfo::NoModRef;
 
-  return AAResultBase::getModRefInfo(CS1, CS2);
+  return AAResultBase::getModRefInfo(Call1, Call2, AAQI);
 }
 
 bool MDNode::isTBAAVtableAccess() const {
@@ -520,23 +522,20 @@ static const MDNode *getLeastCommonType(const MDNode *A, const MDNode *B) {
 }
 
 void Instruction::getAAMetadata(AAMDNodes &N, bool Merge) const {
-  if (Merge)
+  if (Merge) {
     N.TBAA =
         MDNode::getMostGenericTBAA(N.TBAA, getMetadata(LLVMContext::MD_tbaa));
-  else
-    N.TBAA = getMetadata(LLVMContext::MD_tbaa);
-
-  if (Merge)
+    N.TBAAStruct = nullptr;
     N.Scope = MDNode::getMostGenericAliasScope(
         N.Scope, getMetadata(LLVMContext::MD_alias_scope));
-  else
-    N.Scope = getMetadata(LLVMContext::MD_alias_scope);
-
-  if (Merge)
     N.NoAlias =
         MDNode::intersect(N.NoAlias, getMetadata(LLVMContext::MD_noalias));
-  else
+  } else {
+    N.TBAA = getMetadata(LLVMContext::MD_tbaa);
+    N.TBAAStruct = getMetadata(LLVMContext::MD_tbaa_struct);
+    N.Scope = getMetadata(LLVMContext::MD_alias_scope);
     N.NoAlias = getMetadata(LLVMContext::MD_noalias);
+  }
 }
 
 static const MDNode *createAccessTag(const MDNode *AccessType) {
@@ -737,4 +736,85 @@ bool TypeBasedAAWrapperPass::doFinalization(Module &M) {
 
 void TypeBasedAAWrapperPass::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesAll();
+}
+
+MDNode *AAMDNodes::ShiftTBAA(MDNode *MD, size_t Offset) {
+  // Fast path if there's no offset
+  if (Offset == 0)
+    return MD;
+  // Fast path if there's no path tbaa node (and thus scalar)
+  if (!isStructPathTBAA(MD))
+    return MD;
+
+  TBAAStructTagNode Tag(MD);
+  SmallVector<Metadata *, 5> Sub;
+  Sub.push_back(MD->getOperand(0));
+  Sub.push_back(MD->getOperand(1));
+  ConstantInt *InnerOffset = mdconst::extract<ConstantInt>(MD->getOperand(2));
+
+  if (Tag.isNewFormat()) {
+    ConstantInt *InnerSize = mdconst::extract<ConstantInt>(MD->getOperand(3));
+
+    if (InnerOffset->getZExtValue() + InnerSize->getZExtValue() <= Offset) {
+      return nullptr;
+    }
+
+    uint64_t NewSize = InnerSize->getZExtValue();
+    uint64_t NewOffset = InnerOffset->getZExtValue() - Offset;
+    if (InnerOffset->getZExtValue() < Offset) {
+      NewOffset = 0;
+      NewSize -= Offset - InnerOffset->getZExtValue();
+    }
+
+    Sub.push_back(ConstantAsMetadata::get(
+        ConstantInt::get(InnerOffset->getType(), NewOffset)));
+
+    Sub.push_back(ConstantAsMetadata::get(
+        ConstantInt::get(InnerSize->getType(), NewSize)));
+
+    // immutable type
+    if (MD->getNumOperands() >= 5)
+      Sub.push_back(MD->getOperand(4));
+  } else {
+    if (InnerOffset->getZExtValue() < Offset)
+      return nullptr;
+
+    Sub.push_back(ConstantAsMetadata::get(ConstantInt::get(
+        InnerOffset->getType(), InnerOffset->getZExtValue() - Offset)));
+
+    // immutable type
+    if (MD->getNumOperands() >= 4)
+      Sub.push_back(MD->getOperand(3));
+  }
+  return MDNode::get(MD->getContext(), Sub);
+}
+
+MDNode *AAMDNodes::ShiftTBAAStruct(MDNode *MD, size_t Offset) {
+  // Fast path if there's no offset
+  if (Offset == 0)
+    return MD;
+  SmallVector<Metadata *, 3> Sub;
+  for (size_t i = 0, size = MD->getNumOperands(); i < size; i += 3) {
+    ConstantInt *InnerOffset = mdconst::extract<ConstantInt>(MD->getOperand(i));
+    ConstantInt *InnerSize =
+        mdconst::extract<ConstantInt>(MD->getOperand(i + 1));
+    // Don't include any triples that aren't in bounds
+    if (InnerOffset->getZExtValue() + InnerSize->getZExtValue() <= Offset)
+      continue;
+
+    uint64_t NewSize = InnerSize->getZExtValue();
+    uint64_t NewOffset = InnerOffset->getZExtValue() - Offset;
+    if (InnerOffset->getZExtValue() < Offset) {
+      NewOffset = 0;
+      NewSize -= Offset - InnerOffset->getZExtValue();
+    }
+
+    // Shift the offset of the triple
+    Sub.push_back(ConstantAsMetadata::get(
+        ConstantInt::get(InnerOffset->getType(), NewOffset)));
+    Sub.push_back(ConstantAsMetadata::get(
+        ConstantInt::get(InnerSize->getType(), NewSize)));
+    Sub.push_back(MD->getOperand(i + 2));
+  }
+  return MDNode::get(MD->getContext(), Sub);
 }

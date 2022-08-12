@@ -1,9 +1,8 @@
 //===- OrcRemoteTargetClient.h - Orc Remote-target Client -------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -21,6 +20,7 @@
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ExecutionEngine/JITSymbol.h"
+#include "llvm/ExecutionEngine/JITLink/JITLinkMemoryManager.h"
 #include "llvm/ExecutionEngine/Orc/IndirectionUtils.h"
 #include "llvm/ExecutionEngine/Orc/OrcRemoteTargetRPCAPI.h"
 #include "llvm/ExecutionEngine/RuntimeDyld.h"
@@ -54,7 +54,7 @@ namespace remote {
 /// OrcRemoteTargetServer class) via an RPC system (see RPCUtils.h) to carry out
 /// its actions.
 class OrcRemoteTargetClient
-    : public rpc::SingleThreadedRPCEndpoint<rpc::RawByteChannel> {
+    : public shared::SingleThreadedRPCEndpoint<shared::RawByteChannel> {
 public:
   /// Remote-mapped RuntimeDyld-compatible memory manager.
   class RemoteRTDyldMemoryManager : public RuntimeDyld::MemoryManager {
@@ -70,8 +70,7 @@ public:
     RemoteRTDyldMemoryManager &
     operator=(const RemoteRTDyldMemoryManager &) = delete;
     RemoteRTDyldMemoryManager(RemoteRTDyldMemoryManager &&) = default;
-    RemoteRTDyldMemoryManager &
-    operator=(RemoteRTDyldMemoryManager &&) = default;
+    RemoteRTDyldMemoryManager &operator=(RemoteRTDyldMemoryManager &&) = delete;
 
     uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
                                  unsigned SectionID,
@@ -119,30 +118,33 @@ public:
         Unmapped.back().RemoteCodeAddr =
             Client.reserveMem(Id, CodeSize, CodeAlign);
 
-        LLVM_DEBUG(dbgs() << "  code: "
-                          << format("0x%016x", Unmapped.back().RemoteCodeAddr)
-                          << " (" << CodeSize << " bytes, alignment "
-                          << CodeAlign << ")\n");
+        LLVM_DEBUG(
+            dbgs() << "  code: "
+                   << format("0x%016" PRIx64, Unmapped.back().RemoteCodeAddr)
+                   << " (" << CodeSize << " bytes, alignment " << CodeAlign
+                   << ")\n");
       }
 
       if (RODataSize != 0) {
         Unmapped.back().RemoteRODataAddr =
             Client.reserveMem(Id, RODataSize, RODataAlign);
 
-        LLVM_DEBUG(dbgs() << "  ro-data: "
-                          << format("0x%016x", Unmapped.back().RemoteRODataAddr)
-                          << " (" << RODataSize << " bytes, alignment "
-                          << RODataAlign << ")\n");
+        LLVM_DEBUG(
+            dbgs() << "  ro-data: "
+                   << format("0x%016" PRIx64, Unmapped.back().RemoteRODataAddr)
+                   << " (" << RODataSize << " bytes, alignment " << RODataAlign
+                   << ")\n");
       }
 
       if (RWDataSize != 0) {
         Unmapped.back().RemoteRWDataAddr =
             Client.reserveMem(Id, RWDataSize, RWDataAlign);
 
-        LLVM_DEBUG(dbgs() << "  rw-data: "
-                          << format("0x%016x", Unmapped.back().RemoteRWDataAddr)
-                          << " (" << RWDataSize << " bytes, alignment "
-                          << RWDataAlign << ")\n");
+        LLVM_DEBUG(
+            dbgs() << "  rw-data: "
+                   << format("0x%016" PRIx64, Unmapped.back().RemoteRWDataAddr)
+                   << " (" << RWDataSize << " bytes, alignment " << RWDataAlign
+                   << ")\n");
       }
     }
 
@@ -270,9 +272,9 @@ public:
       for (auto &Alloc : Allocs) {
         NextAddr = alignTo(NextAddr, Alloc.getAlign());
         Dyld.mapSectionAddress(Alloc.getLocalAddress(), NextAddr);
-        LLVM_DEBUG(dbgs() << "     "
-                          << static_cast<void *>(Alloc.getLocalAddress())
-                          << " -> " << format("0x%016x", NextAddr) << "\n");
+        LLVM_DEBUG(
+            dbgs() << "     " << static_cast<void *>(Alloc.getLocalAddress())
+                   << " -> " << format("0x%016" PRIx64, NextAddr) << "\n");
         Alloc.setRemoteAddress(NextAddr);
 
         // Only advance NextAddr if it was non-null to begin with,
@@ -294,7 +296,7 @@ public:
           LLVM_DEBUG(dbgs() << "  copying section: "
                             << static_cast<void *>(Alloc.getLocalAddress())
                             << " -> "
-                            << format("0x%016x", Alloc.getRemoteAddress())
+                            << format("0x%016" PRIx64, Alloc.getRemoteAddress())
                             << " (" << Alloc.getSize() << " bytes)\n";);
 
           if (Client.writeMem(Alloc.getRemoteAddress(), Alloc.getLocalAddress(),
@@ -307,7 +309,8 @@ public:
                           << (Permissions & sys::Memory::MF_WRITE ? 'W' : '-')
                           << (Permissions & sys::Memory::MF_EXEC ? 'X' : '-')
                           << " permissions on block: "
-                          << format("0x%016x", RemoteSegmentAddr) << "\n");
+                          << format("0x%016" PRIx64, RemoteSegmentAddr)
+                          << "\n");
         if (Client.setProtections(Id, RemoteSegmentAddr, Permissions))
           return true;
       }
@@ -325,6 +328,221 @@ public:
     };
     std::vector<EHFrame> UnfinalizedEHFrames;
     std::vector<EHFrame> RegisteredEHFrames;
+  };
+
+  class RPCMMAlloc : public jitlink::JITLinkMemoryManager::Allocation {
+    using AllocationMap = DenseMap<unsigned, sys::MemoryBlock>;
+    using FinalizeContinuation =
+        jitlink::JITLinkMemoryManager::Allocation::FinalizeContinuation;
+    using ProtectionFlags = sys::Memory::ProtectionFlags;
+    using SegmentsRequestMap =
+        DenseMap<unsigned, jitlink::JITLinkMemoryManager::SegmentRequest>;
+
+    RPCMMAlloc(OrcRemoteTargetClient &Client, ResourceIdMgr::ResourceId Id)
+        : Client(Client), Id(Id) {}
+
+  public:
+    static Expected<std::unique_ptr<RPCMMAlloc>>
+    Create(OrcRemoteTargetClient &Client, ResourceIdMgr::ResourceId Id,
+           const SegmentsRequestMap &Request) {
+      auto *MM = new RPCMMAlloc(Client, Id);
+
+      if (Error Err = MM->allocateHostBlocks(Request))
+        return std::move(Err);
+
+      if (Error Err = MM->allocateTargetBlocks())
+        return std::move(Err);
+
+      return std::unique_ptr<RPCMMAlloc>(MM);
+    }
+
+    MutableArrayRef<char> getWorkingMemory(ProtectionFlags Seg) override {
+      assert(HostSegBlocks.count(Seg) && "No allocation for segment");
+      return {static_cast<char *>(HostSegBlocks[Seg].base()),
+              HostSegBlocks[Seg].allocatedSize()};
+    }
+
+    JITTargetAddress getTargetMemory(ProtectionFlags Seg) override {
+      assert(TargetSegBlocks.count(Seg) && "No allocation for segment");
+      return pointerToJITTargetAddress(TargetSegBlocks[Seg].base());
+    }
+
+    void finalizeAsync(FinalizeContinuation OnFinalize) override {
+      // Host allocations (working memory) remain ReadWrite.
+      OnFinalize(copyAndProtect());
+    }
+
+    Error deallocate() override {
+      // TODO: Cannot release target allocation. RPCAPI has no function
+      // symmetric to reserveMem(). Add RPC call like freeMem()?
+      return errorCodeToError(sys::Memory::releaseMappedMemory(HostAllocation));
+    }
+
+  private:
+    OrcRemoteTargetClient &Client;
+    ResourceIdMgr::ResourceId Id;
+    AllocationMap HostSegBlocks;
+    AllocationMap TargetSegBlocks;
+    JITTargetAddress TargetSegmentAddr;
+    sys::MemoryBlock HostAllocation;
+
+    Error allocateHostBlocks(const SegmentsRequestMap &Request) {
+      unsigned TargetPageSize = Client.getPageSize();
+
+      if (!isPowerOf2_64(static_cast<uint64_t>(TargetPageSize)))
+        return make_error<StringError>("Host page size is not a power of 2",
+                                       inconvertibleErrorCode());
+
+      auto TotalSize = calcTotalAllocSize(Request, TargetPageSize);
+      if (!TotalSize)
+        return TotalSize.takeError();
+
+      // Allocate one slab to cover all the segments.
+      const sys::Memory::ProtectionFlags ReadWrite =
+          static_cast<sys::Memory::ProtectionFlags>(sys::Memory::MF_READ |
+                                                    sys::Memory::MF_WRITE);
+      std::error_code EC;
+      HostAllocation =
+          sys::Memory::allocateMappedMemory(*TotalSize, nullptr, ReadWrite, EC);
+      if (EC)
+        return errorCodeToError(EC);
+
+      char *SlabAddr = static_cast<char *>(HostAllocation.base());
+#ifndef NDEBUG
+      char *SlabAddrEnd = SlabAddr + HostAllocation.allocatedSize();
+#endif
+
+      // Allocate segment memory from the slab.
+      for (auto &KV : Request) {
+        const auto &Seg = KV.second;
+
+        uint64_t SegmentSize = Seg.getContentSize() + Seg.getZeroFillSize();
+        uint64_t AlignedSegmentSize = alignTo(SegmentSize, TargetPageSize);
+
+        // Zero out zero-fill memory.
+        char *ZeroFillBegin = SlabAddr + Seg.getContentSize();
+        memset(ZeroFillBegin, 0, Seg.getZeroFillSize());
+
+        // Record the block for this segment.
+        HostSegBlocks[KV.first] =
+            sys::MemoryBlock(SlabAddr, AlignedSegmentSize);
+
+        SlabAddr += AlignedSegmentSize;
+        assert(SlabAddr <= SlabAddrEnd && "Out of range");
+      }
+
+      return Error::success();
+    }
+
+    Error allocateTargetBlocks() {
+      // Reserve memory for all blocks on the target. We need as much space on
+      // the target as we allocated on the host.
+      TargetSegmentAddr = Client.reserveMem(Id, HostAllocation.allocatedSize(),
+                                            Client.getPageSize());
+      if (!TargetSegmentAddr)
+        return make_error<StringError>("Failed to reserve memory on the target",
+                                       inconvertibleErrorCode());
+
+      // Map memory blocks into the allocation, that match the host allocation.
+      JITTargetAddress TargetAllocAddr = TargetSegmentAddr;
+      for (const auto &KV : HostSegBlocks) {
+        size_t TargetAllocSize = KV.second.allocatedSize();
+
+        TargetSegBlocks[KV.first] =
+            sys::MemoryBlock(jitTargetAddressToPointer<void *>(TargetAllocAddr),
+                             TargetAllocSize);
+
+        TargetAllocAddr += TargetAllocSize;
+        assert(TargetAllocAddr - TargetSegmentAddr <=
+                   HostAllocation.allocatedSize() &&
+               "Out of range on target");
+      }
+
+      return Error::success();
+    }
+
+    Error copyAndProtect() {
+      unsigned Permissions = 0u;
+
+      // Copy segments one by one.
+      for (auto &KV : TargetSegBlocks) {
+        Permissions |= KV.first;
+
+        const sys::MemoryBlock &TargetBlock = KV.second;
+        const sys::MemoryBlock &HostBlock = HostSegBlocks.lookup(KV.first);
+
+        size_t TargetAllocSize = TargetBlock.allocatedSize();
+        auto TargetAllocAddr = pointerToJITTargetAddress(TargetBlock.base());
+        auto *HostAllocBegin = static_cast<const char *>(HostBlock.base());
+
+        bool CopyErr =
+            Client.writeMem(TargetAllocAddr, HostAllocBegin, TargetAllocSize);
+        if (CopyErr)
+          return createStringError(inconvertibleErrorCode(),
+                                   "Failed to copy %d segment to the target",
+                                   KV.first);
+      }
+
+      // Set permission flags for all segments at once.
+      bool ProtectErr =
+          Client.setProtections(Id, TargetSegmentAddr, Permissions);
+      if (ProtectErr)
+        return createStringError(inconvertibleErrorCode(),
+                                 "Failed to apply permissions for %d segment "
+                                 "on the target",
+                                 Permissions);
+      return Error::success();
+    }
+
+    static Expected<size_t>
+    calcTotalAllocSize(const SegmentsRequestMap &Request,
+                       unsigned TargetPageSize) {
+      size_t TotalSize = 0;
+      for (const auto &KV : Request) {
+        const auto &Seg = KV.second;
+
+        if (Seg.getAlignment() > TargetPageSize)
+          return make_error<StringError>("Cannot request alignment higher than "
+                                         "page alignment on target",
+                                         inconvertibleErrorCode());
+
+        TotalSize = alignTo(TotalSize, TargetPageSize);
+        TotalSize += Seg.getContentSize();
+        TotalSize += Seg.getZeroFillSize();
+      }
+
+      return TotalSize;
+    }
+  };
+
+  class RemoteJITLinkMemoryManager : public jitlink::JITLinkMemoryManager {
+  public:
+    RemoteJITLinkMemoryManager(OrcRemoteTargetClient &Client,
+                               ResourceIdMgr::ResourceId Id)
+        : Client(Client), Id(Id) {}
+
+    RemoteJITLinkMemoryManager(const RemoteJITLinkMemoryManager &) = delete;
+    RemoteJITLinkMemoryManager(RemoteJITLinkMemoryManager &&) = default;
+
+    RemoteJITLinkMemoryManager &
+    operator=(const RemoteJITLinkMemoryManager &) = delete;
+    RemoteJITLinkMemoryManager &
+    operator=(RemoteJITLinkMemoryManager &&) = delete;
+
+    ~RemoteJITLinkMemoryManager() {
+      Client.destroyRemoteAllocator(Id);
+      LLVM_DEBUG(dbgs() << "Destroyed remote allocator " << Id << "\n");
+    }
+
+    Expected<std::unique_ptr<Allocation>>
+    allocate(const jitlink::JITLinkDylib *JD,
+             const SegmentsRequestMap &Request) override {
+      return RPCMMAlloc::Create(Client, Id, Request);
+    }
+
+  private:
+    OrcRemoteTargetClient &Client;
+    ResourceIdMgr::ResourceId Id;
   };
 
   /// Remote indirect stubs manager.
@@ -447,13 +665,9 @@ public:
     StringMap<std::pair<StubKey, JITSymbolFlags>> StubIndexes;
   };
 
-  /// Remote compile callback manager.
-  class RemoteCompileCallbackManager : public JITCompileCallbackManager {
+  class RemoteTrampolinePool : public TrampolinePool {
   public:
-    RemoteCompileCallbackManager(OrcRemoteTargetClient &Client,
-                                 ExecutionSession &ES,
-                                 JITTargetAddress ErrorHandlerAddress)
-        : JITCompileCallbackManager(ES, ErrorHandlerAddress), Client(Client) {}
+    RemoteTrampolinePool(OrcRemoteTargetClient &Client) : Client(Client) {}
 
   private:
     Error grow() override {
@@ -466,7 +680,7 @@ public:
 
       uint32_t TrampolineSize = Client.getTrampolineSize();
       for (unsigned I = 0; I < NumTrampolines; ++I)
-        this->AvailableTrampolines.push_back(BlockAddr + (I * TrampolineSize));
+        AvailableTrampolines.push_back(BlockAddr + (I * TrampolineSize));
 
       return Error::success();
     }
@@ -474,11 +688,22 @@ public:
     OrcRemoteTargetClient &Client;
   };
 
+  /// Remote compile callback manager.
+  class RemoteCompileCallbackManager : public JITCompileCallbackManager {
+  public:
+    RemoteCompileCallbackManager(OrcRemoteTargetClient &Client,
+                                 ExecutionSession &ES,
+                                 JITTargetAddress ErrorHandlerAddress)
+        : JITCompileCallbackManager(
+              std::make_unique<RemoteTrampolinePool>(Client), ES,
+              ErrorHandlerAddress) {}
+  };
+
   /// Create an OrcRemoteTargetClient.
   /// Channel is the ChannelT instance to communicate on. It is assumed that
   /// the channel is ready to be read from and written to.
   static Expected<std::unique_ptr<OrcRemoteTargetClient>>
-  Create(rpc::RawByteChannel &Channel, ExecutionSession &ES) {
+  Create(shared::RawByteChannel &Channel, ExecutionSession &ES) {
     Error Err = Error::success();
     auto Client = std::unique_ptr<OrcRemoteTargetClient>(
         new OrcRemoteTargetClient(Channel, ES, Err));
@@ -490,9 +715,17 @@ public:
   /// Call the int(void) function at the given address in the target and return
   /// its result.
   Expected<int> callIntVoid(JITTargetAddress Addr) {
-    LLVM_DEBUG(dbgs() << "Calling int(*)(void) " << format("0x%016x", Addr)
-                      << "\n");
+    LLVM_DEBUG(dbgs() << "Calling int(*)(void) "
+                      << format("0x%016" PRIx64, Addr) << "\n");
     return callB<exec::CallIntVoid>(Addr);
+  }
+
+  /// Call the int(int) function at the given address in the target and return
+  /// its result.
+  Expected<int> callIntInt(JITTargetAddress Addr, int Arg) {
+    LLVM_DEBUG(dbgs() << "Calling int(*)(int) " << format("0x%016" PRIx64, Addr)
+                      << "\n");
+    return callB<exec::CallIntInt>(Addr, Arg);
   }
 
   /// Call the int(int, char*[]) function at the given address in the target and
@@ -500,15 +733,15 @@ public:
   Expected<int> callMain(JITTargetAddress Addr,
                          const std::vector<std::string> &Args) {
     LLVM_DEBUG(dbgs() << "Calling int(*)(int, char*[]) "
-                      << format("0x%016x", Addr) << "\n");
+                      << format("0x%016" PRIx64, Addr) << "\n");
     return callB<exec::CallMain>(Addr, Args);
   }
 
   /// Call the void() function at the given address in the target and wait for
   /// it to finish.
   Error callVoidVoid(JITTargetAddress Addr) {
-    LLVM_DEBUG(dbgs() << "Calling void(*)(void) " << format("0x%016x", Addr)
-                      << "\n");
+    LLVM_DEBUG(dbgs() << "Calling void(*)(void) "
+                      << format("0x%016" PRIx64, Addr) << "\n");
     return callB<exec::CallVoidVoid>(Addr);
   }
 
@@ -523,6 +756,18 @@ public:
         new RemoteRTDyldMemoryManager(*this, Id));
   }
 
+  /// Create a JITLink-compatible memory manager which will allocate working
+  /// memory on the host and target memory on the remote target.
+  Expected<std::unique_ptr<RemoteJITLinkMemoryManager>>
+  createRemoteJITLinkMemoryManager() {
+    auto Id = AllocatorIds.getNext();
+    if (auto Err = callB<mem::CreateRemoteAllocator>(Id))
+      return std::move(Err);
+    LLVM_DEBUG(dbgs() << "Created remote allocator " << Id << "\n");
+    return std::unique_ptr<RemoteJITLinkMemoryManager>(
+        new RemoteJITLinkMemoryManager(*this, Id));
+  }
+
   /// Create an RCIndirectStubsManager that will allocate stubs on the remote
   /// target.
   Expected<std::unique_ptr<RemoteIndirectStubsManager>>
@@ -530,7 +775,7 @@ public:
     auto Id = IndirectStubOwnerIds.getNext();
     if (auto Err = callB<stubs::CreateIndirectStubsOwner>(Id))
       return std::move(Err);
-    return llvm::make_unique<RemoteIndirectStubsManager>(*this, Id);
+    return std::make_unique<RemoteIndirectStubsManager>(*this, Id);
   }
 
   Expected<RemoteCompileCallbackManager &>
@@ -560,9 +805,10 @@ public:
   Error terminateSession() { return callB<utils::TerminateSession>(); }
 
 private:
-  OrcRemoteTargetClient(rpc::RawByteChannel &Channel, ExecutionSession &ES,
+  OrcRemoteTargetClient(shared::RawByteChannel &Channel, ExecutionSession &ES,
                         Error &Err)
-      : rpc::SingleThreadedRPCEndpoint<rpc::RawByteChannel>(Channel, true),
+      : shared::SingleThreadedRPCEndpoint<shared::RawByteChannel>(Channel,
+                                                                  true),
         ES(ES) {
     ErrorAsOutParameter EAO(&Err);
 

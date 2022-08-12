@@ -101,7 +101,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
         /// Constructor.
         /// Create a material description as described in a scene file.
-        explicit Mdl_material_description(const IScene_loader::Material& parameters);
+        explicit Mdl_material_description(
+            const IScene_loader::Scene* scene,
+            const IScene_loader::Material& material);
 
         /// Constructor.
         /// Create a material description by a unique name like the fully qualified MDL material
@@ -111,39 +113,15 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// Destructor.
         ~Mdl_material_description();
 
-        /// Get the material parameters read from GLTF.
-        const IScene_loader::Material& get_material_parameters() const;
+        /// Get the scene info read from glTF. Only required when the material needs access to
+        /// scene information. E.g., when using global glTF extension data.
+        const IScene_loader::Scene* get_scene() const;
 
-        /// Prepares the material for being instantiated.
-        /// Depending on the type and source of the material, this can be a more time consuming
-        /// Operation. Afterwards the MDL Material definition for this material is available in the
-        /// Database, or in case of errors and invalid material that still can be rendered will
-        /// be returned when the material library calls the getter functions to setup a material
-        /// instance. In that case, the method will return false.
-        bool load_material_definition(
-            Mdl_sdk& sdk,
-            const std::string& scene_directory,
-            mi::neuraylib::IMdl_execution_context* context);
+        /// Get the material info read from GLTF.
+        const IScene_loader::Material& get_scene_material() const;
 
         /// Checks if 'load_material_definition' was called and if the resulting data is available.
         bool is_loaded() const;
-
-        /// Get the mdl parameter list for this material instance. This can contain complex graphs.
-        /// When this function is called by the material library, this materials parenting module
-        /// is already loaded, so it is valid to use exported types and types from imported modules.
-        /// All other types present in the database are also valid.
-        const mi::neuraylib::IExpression_list* get_parameters() const;
-
-        /// Get the (qualified) module name.
-        /// This is expected to be of the form: [::<package>]::<module>
-        /// Note: available after calling load_material_definition.
-        const char* get_qualified_module_name() const;
-
-        /// Get the (simple) material name.
-        /// This is only <material>-part of a qualified material name
-        /// of the form [::<package>]::<module>::<material>
-        /// Note: available after calling load_material_definition.
-        const char* get_material_name() const;
 
         /// Name of the material in the scene, which is only for display on the UI or in logs.
         /// Note: available after calling load_material_definition.
@@ -161,11 +139,18 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// Note: available after calling load_material_definition.
         bool supports_reloading() const;
 
-        /// Get the database name of the module that contains the material definition.
-        const char* get_module_db_name() const;
+        /// Get the database name of the modules that are used by this material.
+        const std::vector<std::string>& get_module_db_names() const;
 
-        /// Get the database name of the material definition.
-        const char* get_material_definition_db_name() const;
+        /// Builds a material graph (nested function calls) based on the material descriptions.
+        /// All nodes are stored in the DB using the `unique_db_prefix` to avoid clashes between
+        /// different materials.
+        /// Returns the database name of the root node function call.
+        std::string build_material_graph(
+            Mdl_sdk& sdk,
+            const std::string& scene_directory,
+            const std::string& unique_db_prefix,
+            mi::neuraylib::IMdl_execution_context* context);
 
         /// Generate and get the source code of materials that are loaded from string.
         /// MDLs that are loaded from a search path (including the GLTF support materials)
@@ -176,6 +161,24 @@ namespace mi { namespace examples { namespace mdl_d3d12
             mi::neuraylib::IMdl_execution_context* context);
 
     private:
+
+        /// Prepares the material for being instantiated.
+        /// Depending on the type and source of the material, this can be a more time consuming
+        /// Operation. Afterwards the MDL Material definition for this material is available in the
+        /// Database, or in case of errors and invalid material that still can be rendered will
+        /// be returned when the material library calls the getter functions to setup a material
+        /// instance. In that case, the method will return false.
+        bool load_material_definition(
+            Mdl_sdk& sdk,
+            const std::string& scene_directory,
+            mi::neuraylib::IMdl_execution_context* context);
+
+        std::string build_material_graph_NV_materials_mdl(
+            Mdl_sdk& sdk,
+            const std::string& scene_directory,
+            const std::string& unique_db_prefix,
+            mi::neuraylib::IMdl_execution_context* context);
+
         bool load_material_definition_mdl(
             Mdl_sdk& sdk,
             const std::string& scene_directory,
@@ -214,14 +217,16 @@ namespace mi { namespace examples { namespace mdl_d3d12
             const std::string& scene_directory,
             mi::neuraylib::IMdl_execution_context* context);
 
-        IScene_loader::Material m_parameters;
+
+        const IScene_loader::Scene* m_scene;
+        IScene_loader::Material m_scene_material;
         bool m_is_loaded;
         bool m_is_fallback;
         bool m_supports_reloading;
         const IMdl_material_description_loader* m_loader;
 
         mi::base::Handle<mi::neuraylib::IExpression_list> m_parameter_list;
-        std::string m_module_db_name;
+        std::vector<std::string> m_module_db_names;
         std::string m_material_definition_db_name;
 
         std::string m_qualified_module_name;

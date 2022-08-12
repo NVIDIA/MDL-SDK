@@ -64,7 +64,7 @@ public:
 
     void abort();
 
-    bool is_open();
+    bool is_open(bool closing_is_open);
 
     DB::Tag reserve_tag();
 

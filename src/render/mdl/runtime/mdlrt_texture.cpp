@@ -227,7 +227,7 @@ mi::Float32_4 interpolate_biquintic(
     const mi::Float32_4 &crop_uv,
     const mi::Float32_2 &crop_w,
     const mi::Float32_3 &texo,
-    const bool linear,
+    const bool smootherstep,
     const float gamma_val,
     const unsigned int layer_offset = 0)
 {
@@ -299,7 +299,7 @@ mi::Float32_4 interpolate_biquintic(
         lerp_z = tex_z - floorf(tex_z);
     }
 
-    if(linear == false) {
+    if(smootherstep) {
         lerp.x *= lerp.x*lerp.x*(lerp.x*(lerp.x*6.0f-15.0f)+10.0f); // smootherstep
         lerp.y *= lerp.y*lerp.y*(lerp.y*(lerp.y*6.0f-15.0f)+10.0f);
     }
@@ -401,12 +401,33 @@ mi::Size Texture::get_frame_id(mi::Float32 frame) const
     if (!m_is_animated)
         return 0;
 
+    // just an optimization
     if (frame < 0.0f)
         return static_cast<mi::Size>(-1);
 
-    mi::Size f = static_cast<mi::Size>(floor(frame));
+    mi::Size f = static_cast<mi::Size>(floorf(frame));
     auto it = m_frame_number_to_id.find(f);
     return it != m_frame_number_to_id.end() ? it->second : static_cast<mi::Size>(-1);
+}
+
+std::pair<mi::Size, mi::Size> Texture::get_frame_ids(mi::Float32 frame) const
+{
+    if (!m_is_animated)
+        return std::make_pair<mi::Size, mi::Size>( 0, 0);
+
+    // important to return invalid IDs for both values
+    if (frame < m_frame_number_to_id.begin()->first || frame > m_frame_number_to_id.rbegin()->first)
+        return std::make_pair<mi::Size, mi::Size>( -1,  -1);
+
+    mi::Size f = static_cast<mi::Size>(floorf(frame));
+    auto f_it = m_frame_number_to_id.find(f);
+    mi::Size f_id = f_it != m_frame_number_to_id.end() ? f_it->second : static_cast<mi::Size>(-1);
+
+    mi::Size c = static_cast<mi::Size>(ceilf(frame));
+    auto c_it = m_frame_number_to_id.find(c);
+    mi::Size c_id = c_it != m_frame_number_to_id.end() ? c_it->second : static_cast<mi::Size>(-1);
+
+    return std::make_pair( f_id, c_id);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -562,27 +583,26 @@ mi::Float32_4 Texture_2d::lookup_float4(
     Wrap_mode wrap_v,
     const mi::Float32_2& crop_u,
     const mi::Float32_2& crop_v,
-    mi::Float32 frame_param) const
+    mi::Float32 frame) const
 {
     if (!m_is_valid)
         return mi::Float32_4(0.0f);
 
-    mi::Size frame_id = get_frame_id(frame_param);
-    if (frame_id == static_cast<mi::Size>(-1))
+    mi::Size floor_frame_id, ceil_frame_id;
+    std::tie( floor_frame_id, ceil_frame_id) = get_frame_ids(frame);
+    bool floor_frame_valid = floor_frame_id != static_cast<mi::Size>(-1);
+    bool ceil_frame_valid  = ceil_frame_id  != static_cast<mi::Size>(-1);
+    if (!floor_frame_valid && !ceil_frame_valid)
         return mi::Float32_4(0.0f);
-
-    const Frame& frame = m_frames[frame_id];
 
     mi::Float32_3 coords(coord.x, coord.y, 0.0f);
 
-    mi::Uint32 uvtile_id = 0;
     mi::Float32_4 crop_uv;
+    mi::Sint32 u = 0;
+    mi::Sint32 v = 0;
     if (m_is_uvtile) {
-        mi::Sint32 u = static_cast<mi::Sint32>(floorf(coords.x));
-        mi::Sint32 v = static_cast<mi::Sint32>(floorf(coords.y));
-        uvtile_id = frame.m_uv_to_id.get(u, v);
-        if (uvtile_id == ~0u)
-            return mi::Float32_4(0.0f);
+        u         = static_cast<mi::Sint32>(floorf(coords.x));
+        v         = static_cast<mi::Sint32>(floorf(coords.y));
         coords.x -= floorf(coords.x);
         coords.y -= floorf(coords.y);
         crop_uv   = mi::Float32_4(0.0f, 1.0f, 0.0f, 1.0f);
@@ -594,16 +614,59 @@ mi::Float32_4 Texture_2d::lookup_float4(
           saturate(crop_v.x), saturate(crop_v.y - crop_v.x));
     }
 
-    const Uvtile& uvtile = frame.m_uvtiles[uvtile_id];
-
     const mi::Float32_2 crop_w(0.f, 1.f);
+
+    mi::Float32_4 floor_value = lookup_float4_frame(
+        coords,
+        wrap_u, wrap_v, mi::mdl::stdlib::wrap_repeat,
+        crop_uv, crop_w,
+        floor_frame_id, u, v);
+
+    // Use just the floor value if not animated or frame param is not fractional.
+    if( floor_frame_id == ceil_frame_id)
+        return floor_value;
+
+    mi::Float32_4 ceil_value = lookup_float4_frame(
+        coords,
+        wrap_u, wrap_v, mi::mdl::stdlib::wrap_repeat,
+        crop_uv, crop_w,
+        ceil_frame_id, u, v);
+
+    mi::Float32 ceil_weight = frame - floorf(frame);
+    return (1.0f-ceil_weight) * floor_value + ceil_weight * ceil_value;
+}
+
+mi::Float32_4 Texture_2d::lookup_float4_frame(
+    const mi::Float32_3& coords,
+    mi::mdl::stdlib::Tex_wrap_mode wrap_u,
+    mi::mdl::stdlib::Tex_wrap_mode wrap_v,
+    mi::mdl::stdlib::Tex_wrap_mode wrap_w,
+    const mi::Float32_4& crop_uv,
+    const mi::Float32_2& crop_w,
+    mi::Size frame_id,
+    mi::Uint32 u,
+    mi::Uint32 v) const
+{
+    if (frame_id == static_cast<mi::Size>(-1))
+        return mi::Float32_4(0.0f);
+
+    const Frame& frame = m_frames[frame_id];
+
+    mi::Uint32 uvtile_id = 0;
+    if (m_is_uvtile) {
+        uvtile_id = frame.m_uv_to_id.get(u, v);
+        if (uvtile_id == ~0u)
+            return mi::Float32_4(0.0f);
+    }
+
+    const Uvtile& uvtile = frame.m_uvtiles[uvtile_id];
 
     return interpolate_biquintic(
         uvtile.m_canvas[0],
         uvtile.m_resolution[0],
         wrap_u, wrap_v, mi::mdl::stdlib::wrap_repeat,
         crop_uv, crop_w,
-        coords, false, uvtile.m_gamma);
+        coords, /*smootherstep*/ true, uvtile.m_gamma);
 }
 
 mi::Float32_4 Texture_2d::lookup_deriv_float4(
@@ -614,33 +677,31 @@ mi::Float32_4 Texture_2d::lookup_deriv_float4(
     Wrap_mode wrap_v,
     const mi::Float32_2& crop_u,
     const mi::Float32_2& crop_v,
-    mi::Float32 frame_param) const
+    mi::Float32 frame) const
 {
     ASSERT(M_BACKENDS, m_use_derivatives);
     if (!m_use_derivatives)
         return lookup_float4(
-            coord_val, wrap_u, wrap_v, crop_u, crop_v, frame_param);
+            coord_val, wrap_u, wrap_v, crop_u, crop_v, frame);
 
     if (!m_is_valid)
         return mi::Float32_4(0.0f);
 
-    mi::Size frame_id = get_frame_id(frame_param);
-    if (frame_id == static_cast<mi::Size>(-1))
+    mi::Size floor_frame_id, ceil_frame_id;
+    std::tie( floor_frame_id, ceil_frame_id) = get_frame_ids(frame);
+    bool floor_frame_valid = floor_frame_id != static_cast<mi::Size>(-1);
+    bool ceil_frame_valid  = ceil_frame_id  != static_cast<mi::Size>(-1);
+    if (!floor_frame_valid && !ceil_frame_valid)
         return mi::Float32_4(0.0f);
-
-    const Frame& frame = m_frames[frame_id];
 
     mi::Float32_3 coords(coord_val.x, coord_val.y, 0.0f);
 
-    mi::Uint32 uvtile_id = 0;
     mi::Float32_4 crop_uv;
-    const mi::Float32_2 crop_w(0.f, 1.f);
+    mi::Sint32 u = 0;
+    mi::Sint32 v = 0;
     if (m_is_uvtile) {
-        mi::Sint32 u = static_cast<mi::Sint32>(floorf(coords.x));
-        mi::Sint32 v = static_cast<mi::Sint32>(floorf(coords.y));
-        uvtile_id = frame.m_uv_to_id.get(u, v);
-        if (uvtile_id == ~0u)
-            return mi::Float32_4(0.0f);
+        u         = static_cast<mi::Sint32>(floorf(coords.x));
+        v         = static_cast<mi::Sint32>(floorf(coords.y));
         coords.x -= floorf(coords.x);
         coords.y -= floorf(coords.y);
         crop_uv   = mi::Float32_4(0.0f, 1.0f, 0.0f, 1.0f);
@@ -650,6 +711,52 @@ mi::Float32_4 Texture_2d::lookup_deriv_float4(
         crop_uv = mi::Float32_4(
           saturate(crop_u.x), saturate(crop_u.y - crop_u.x),
           saturate(crop_v.x), saturate(crop_v.y - crop_v.x));
+    }
+
+    const mi::Float32_2 crop_w(0.f, 1.f);
+
+    mi::Float32_4 floor_value = lookup_deriv_float4_frame(
+        coords, coord_dx, coord_dy,
+        wrap_u, wrap_v, mi::mdl::stdlib::wrap_repeat,
+        crop_uv, crop_w,
+        floor_frame_id, u, v);
+
+    // Use just the floor value if not animated or frame param is not fractional.
+    if( floor_frame_id == ceil_frame_id)
+        return floor_value;
+
+    mi::Float32_4 ceil_value = lookup_deriv_float4_frame(
+        coords, coord_dx, coord_dy, wrap_u, wrap_v, mi::mdl::stdlib::wrap_repeat,
+        crop_uv, crop_w,
+        ceil_frame_id, u, v);
+
+    mi::Float32 ceil_weight = frame - floorf(frame);
+    return (1.0f-ceil_weight) * floor_value + ceil_weight * ceil_value;
+}
+
+mi::Float32_4 Texture_2d::lookup_deriv_float4_frame(
+    const mi::Float32_3& coords,
+    const mi::Float32_2& coord_dx,
+    const mi::Float32_2& coord_dy,
+    mi::mdl::stdlib::Tex_wrap_mode wrap_u,
+    mi::mdl::stdlib::Tex_wrap_mode wrap_v,
+    mi::mdl::stdlib::Tex_wrap_mode wrap_w,
+    const mi::Float32_4& crop_uv,
+    const mi::Float32_2& crop_w,
+    mi::Size frame_id,
+    mi::Uint32 u,
+    mi::Uint32 v) const
+{
+    if (frame_id == static_cast<mi::Size>(-1))
+        return mi::Float32_4(0.0f);
+
+    const Frame& frame = m_frames[frame_id];
+
+    mi::Uint32 uvtile_id = 0;
+    if (m_is_uvtile) {
+        uvtile_id = frame.m_uv_to_id.get(u, v);
+        if (uvtile_id == ~0u)
+            return mi::Float32_4(0.0f);
     }
 
     const Uvtile& uvtile = frame.m_uvtiles[uvtile_id];
@@ -667,7 +774,7 @@ mi::Float32_4 Texture_2d::lookup_deriv_float4(
             uvtile.m_resolution[0],
             wrap_u, wrap_v, mi::mdl::stdlib::wrap_repeat,
             crop_uv, crop_w,
-            coords, false, 1.0f);
+            coords, /*smootherstep*/ true, 1.0f);
     }
 
     if (level >= n_levels - 1) {
@@ -686,14 +793,14 @@ mi::Float32_4 Texture_2d::lookup_deriv_float4(
         uvtile.m_resolution[level_uint],
         wrap_u, wrap_v, mi::mdl::stdlib::wrap_repeat,
         crop_uv, crop_w,
-        coords, false, 1.0f);
+        coords, /*smootherstep*/ true, 1.0f);
 
     mi::Float32_4 rgba_1 = interpolate_biquintic(
         uvtile.m_canvas[level_uint + 1],
         uvtile.m_resolution[level_uint + 1],
         wrap_u, wrap_v, mi::mdl::stdlib::wrap_repeat,
         crop_uv, crop_w,
-        coords, false, 1.0f);
+        coords, /*smootherstep*/ true, 1.0f);
 
     return (1 - lerp) * rgba_0 + lerp * rgba_1;
 }
@@ -946,8 +1053,11 @@ mi::Float32_4 Texture_3d::lookup_float4(
     if (!m_is_valid)
         return mi::Float32_4(0.0f);
 
-    mi::Size frame_id = get_frame_id(frame);
-    if (frame_id == static_cast<mi::Size>(-1))
+    mi::Size floor_frame_id, ceil_frame_id;
+    std::tie( floor_frame_id, ceil_frame_id) = get_frame_ids(frame);
+    bool floor_frame_valid = floor_frame_id != static_cast<mi::Size>(-1);
+    bool ceil_frame_valid  = ceil_frame_id  != static_cast<mi::Size>(-1);
+    if (!floor_frame_valid && !ceil_frame_valid)
         return mi::Float32_4(0.0f);
 
     const mi::Float32_4 crop_uv(
@@ -955,14 +1065,38 @@ mi::Float32_4 Texture_3d::lookup_float4(
         saturate(crop_v.x), saturate(crop_v.y - crop_v.x));
     const mi::Float32_2 crop_w2(saturate(crop_w.x), saturate(crop_w.y - crop_w.x));
 
-    return interpolate_biquintic(
-        m_frames[frame_id].m_canvas,
-        m_frames[frame_id].m_resolution,
-        wrap_u, wrap_v, wrap_w,
-        crop_uv, crop_w2,
-        coord,
-        true,
-        m_frames[frame_id].m_gamma);
+    mi::Float32_4 floor_value(0.0f);
+    if( floor_frame_valid) {
+        const Frame& floor_frame = m_frames[floor_frame_id];
+        floor_value = interpolate_biquintic(
+            floor_frame.m_canvas,
+            floor_frame.m_resolution,
+            wrap_u, wrap_v, wrap_w,
+            crop_uv, crop_w2,
+            coord,
+            true,
+            floor_frame.m_gamma);
+    }
+
+    // Use just the floor value if not animated or frame param is not fractional.
+    if( floor_frame_id == ceil_frame_id)
+        return floor_value;
+
+    mi::Float32_4 ceil_value(0.0f);
+    if( ceil_frame_valid) {
+        const Frame& ceil_frame = m_frames[ceil_frame_id];
+        ceil_value = interpolate_biquintic(
+            ceil_frame.m_canvas,
+            ceil_frame.m_resolution,
+            wrap_u, wrap_v, wrap_w,
+            crop_uv, crop_w2,
+            coord,
+            /*smootherstep*/ false,
+            ceil_frame.m_gamma);
+    }
+
+    mi::Float32 ceil_weight = frame - floorf(frame);
+    return (1.0f-ceil_weight) * floor_value + ceil_weight * ceil_value;
 }
 
 mi::Spectrum Texture_3d::lookup_color(
@@ -1137,7 +1271,7 @@ mi::Float32_4 Texture_cube::lookup_float4(const mi::Float32_3& direction) const
         m_canvas, m_resolution,
         mi::mdl::stdlib::wrap_clamp, mi::mdl::stdlib::wrap_clamp, mi::mdl::stdlib::wrap_repeat,
         crop_uv, crop_w,
-        coords, false, m_gamma, cube_face);
+        coords, /*smootherstep*/ true, m_gamma, cube_face);
 }
 
 mi::Spectrum Texture_cube::lookup_color(const mi::Float32_3& direction) const

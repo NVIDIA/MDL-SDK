@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 #
 # Checks C++ files to make sure they conform to LLVM standards, as specified in
 # http://llvm.org/docs/CodingStandards.html .
@@ -6,6 +6,7 @@
 # TODO: add unittests for the verifier functions:
 # http://docs.python.org/library/unittest.html .
 
+from __future__ import print_function
 import common_lint
 import re
 import sys
@@ -52,7 +53,7 @@ def VerifyIncludes(filename, lines):
     if system_header:
       curr_system_header = system_header.group(1)
 
-      # Is it blacklisted?
+      # Is it disallowed?
       if curr_system_header in DISALLOWED_SYSTEM_HEADERS:
         lint.append((filename, line_num,
                      'Disallowed system header: <%s>' % curr_system_header))
@@ -86,7 +87,7 @@ class CppLint(common_lint.BaseLint):
 def CppLintMain(filenames):
   all_lint = common_lint.RunLintOverAllFiles(CppLint(), filenames)
   for lint in all_lint:
-    print '%s:%d:%s' % (lint[0], lint[1], lint[2])
+    print('%s:%d:%s' % (lint[0], lint[1], lint[2]))
   return 0
 
 

@@ -1,11 +1,23 @@
+set(TARGETS_TO_APPEND "")
+
 if (LLVM_TARGETS_TO_BUILD MATCHES "X86")
   add_subdirectory(X86)
-  set(LLVM_EXEGESIS_TARGETS "${LLVM_EXEGESIS_TARGETS} X86" PARENT_SCOPE)
+  set(TARGETS_TO_APPEND "${TARGETS_TO_APPEND} X86")
 endif()
 if (LLVM_TARGETS_TO_BUILD MATCHES "AArch64")
   add_subdirectory(AArch64)
-  set(LLVM_EXEGESIS_TARGETS "${LLVM_EXEGESIS_TARGETS} AArch64" PARENT_SCOPE)
+  set(TARGETS_TO_APPEND "${TARGETS_TO_APPEND} AArch64")
 endif()
+if (LLVM_TARGETS_TO_BUILD MATCHES "PowerPC")
+  add_subdirectory(PowerPC)
+  set(TARGETS_TO_APPEND "${TARGETS_TO_APPEND} PowerPC")
+endif()
+if (LLVM_TARGETS_TO_BUILD MATCHES "Mips")
+  add_subdirectory(Mips)
+  set(TARGETS_TO_APPEND "${TARGETS_TO_APPEND} Mips")
+endif()
+
+set(LLVM_EXEGESIS_TARGETS "${LLVM_EXEGESIS_TARGETS} ${TARGETS_TO_APPEND}" PARENT_SCOPE)
 
 add_library(LLVMExegesis
   STATIC
@@ -14,13 +26,22 @@ add_library(LLVMExegesis
   BenchmarkResult.cpp
   BenchmarkRunner.cpp
   Clustering.cpp
-  Latency.cpp
+  CodeTemplate.cpp
+  Error.cpp
+  LatencyBenchmarkRunner.cpp
   LlvmState.cpp
   MCInstrDescView.cpp
+  ParallelSnippetGenerator.cpp
   PerfHelper.cpp
   RegisterAliasing.cpp
+  RegisterValue.cpp
+  SchedClassResolution.cpp
+  SerialSnippetGenerator.cpp
+  SnippetFile.cpp
+  SnippetGenerator.cpp
+  SnippetRepetitor.cpp
   Target.cpp
-  Uops.cpp
+  UopsBenchmarkRunner.cpp
   )
 
 llvm_update_compile_flags(LLVMExegesis)
@@ -33,8 +54,10 @@ llvm_map_components_to_libnames(libs
   MC
   MCDisassembler
   MCJIT
+  MCParser
   Object
   ObjectYAML
+  RuntimeDyld
   Support
   )
 

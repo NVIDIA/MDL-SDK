@@ -1,14 +1,13 @@
 //===- WithColor.cpp ------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Support/WithColor.h"
-#include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/CommandLine.h"
 
 using namespace llvm;
 
@@ -19,15 +18,10 @@ static cl::opt<cl::boolOrDefault>
              cl::desc("Use colors in output (default=autodetect)"),
              cl::init(cl::BOU_UNSET));
 
-bool WithColor::colorsEnabled(raw_ostream &OS) {
-  if (UseColor == cl::BOU_UNSET)
-    return OS.has_colors();
-  return UseColor == cl::BOU_TRUE;
-}
-
-WithColor::WithColor(raw_ostream &OS, HighlightColor Color) : OS(OS) {
+WithColor::WithColor(raw_ostream &OS, HighlightColor Color, ColorMode Mode)
+    : OS(OS), Mode(Mode) {
   // Detect color from terminal type unless the user passed the --color option.
-  if (colorsEnabled(OS)) {
+  if (colorsEnabled()) {
     switch (Color) {
     case HighlightColor::Address:
       OS.changeColor(raw_ostream::YELLOW);
@@ -56,6 +50,9 @@ WithColor::WithColor(raw_ostream &OS, HighlightColor Color) : OS(OS) {
     case HighlightColor::Note:
       OS.changeColor(raw_ostream::BLACK, true);
       break;
+    case HighlightColor::Remark:
+      OS.changeColor(raw_ostream::BLUE, true);
+      break;
     }
   }
 }
@@ -66,25 +63,84 @@ raw_ostream &WithColor::warning() { return warning(errs()); }
 
 raw_ostream &WithColor::note() { return note(errs()); }
 
-raw_ostream &WithColor::error(raw_ostream &OS, StringRef Prefix) {
+raw_ostream &WithColor::remark() { return remark(errs()); }
+
+raw_ostream &WithColor::error(raw_ostream &OS, StringRef Prefix,
+                              bool DisableColors) {
   if (!Prefix.empty())
     OS << Prefix << ": ";
-  return WithColor(OS, HighlightColor::Error).get() << "error: ";
+  return WithColor(OS, HighlightColor::Error,
+                   DisableColors ? ColorMode::Disable : ColorMode::Auto)
+             .get()
+         << "error: ";
 }
 
-raw_ostream &WithColor::warning(raw_ostream &OS, StringRef Prefix) {
+raw_ostream &WithColor::warning(raw_ostream &OS, StringRef Prefix,
+                                bool DisableColors) {
   if (!Prefix.empty())
     OS << Prefix << ": ";
-  return WithColor(OS, HighlightColor::Warning).get() << "warning: ";
+  return WithColor(OS, HighlightColor::Warning,
+                   DisableColors ? ColorMode::Disable : ColorMode::Auto)
+             .get()
+         << "warning: ";
 }
 
-raw_ostream &WithColor::note(raw_ostream &OS, StringRef Prefix) {
+raw_ostream &WithColor::note(raw_ostream &OS, StringRef Prefix,
+                             bool DisableColors) {
   if (!Prefix.empty())
     OS << Prefix << ": ";
-  return WithColor(OS, HighlightColor::Note).get() << "note: ";
+  return WithColor(OS, HighlightColor::Note,
+                   DisableColors ? ColorMode::Disable : ColorMode::Auto)
+             .get()
+         << "note: ";
 }
 
-WithColor::~WithColor() {
-  if (colorsEnabled(OS))
+raw_ostream &WithColor::remark(raw_ostream &OS, StringRef Prefix,
+                               bool DisableColors) {
+  if (!Prefix.empty())
+    OS << Prefix << ": ";
+  return WithColor(OS, HighlightColor::Remark,
+                   DisableColors ? ColorMode::Disable : ColorMode::Auto)
+             .get()
+         << "remark: ";
+}
+
+bool WithColor::colorsEnabled() {
+  switch (Mode) {
+  case ColorMode::Enable:
+    return true;
+  case ColorMode::Disable:
+    return false;
+  case ColorMode::Auto:
+    return UseColor == cl::BOU_UNSET ? OS.has_colors()
+                                     : UseColor == cl::BOU_TRUE;
+  }
+  llvm_unreachable("All cases handled above.");
+}
+
+WithColor &WithColor::changeColor(raw_ostream::Colors Color, bool Bold,
+                                  bool BG) {
+  if (colorsEnabled())
+    OS.changeColor(Color, Bold, BG);
+  return *this;
+}
+
+WithColor &WithColor::resetColor() {
+  if (colorsEnabled())
     OS.resetColor();
+  return *this;
+}
+
+WithColor::~WithColor() { resetColor(); }
+
+void WithColor::defaultErrorHandler(Error Err) {
+  handleAllErrors(std::move(Err), [](ErrorInfoBase &Info) {
+    WithColor::error() << Info.message() << '\n';
+  });
+}
+
+void WithColor::defaultWarningHandler(Error Warning) {
+  handleAllErrors(std::move(Warning), [](ErrorInfoBase &Info) {
+    WithColor::warning() << Info.message() << '\n';
+  });
 }

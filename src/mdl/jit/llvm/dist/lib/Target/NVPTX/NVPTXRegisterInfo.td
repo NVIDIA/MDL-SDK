@@ -1,9 +1,8 @@
 //===-- NVPTXRegisterInfo.td - NVPTX Register defs ---------*- tablegen -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -31,7 +30,7 @@ def VRDepot  : NVPTXReg<"%Depot">;
 
 // We use virtual registers, but define a few physical registers here to keep
 // SDAG and the MachineInstr layers happy.
-foreach i = 0-4 in {
+foreach i = 0...4 in {
   def P#i  : NVPTXReg<"%p"#i>;  // Predicate
   def RS#i : NVPTXReg<"%rs"#i>; // 16-bit
   def R#i  : NVPTXReg<"%r"#i>;  // 32-bit
@@ -48,7 +47,7 @@ foreach i = 0-4 in {
   def da#i : NVPTXReg<"%da"#i>;
 }
 
-foreach i = 0-31 in {
+foreach i = 0...31 in {
   def ENVREG#i : NVPTXReg<"%envreg"#i>;
 }
 

@@ -55,7 +55,7 @@ std::string get_selector_string( const char* selector)
 {
     if( !selector || !selector[0])
         return std::string( "no selector");
-    return std::string( "selector \"") + selector + "\"";
+    return std::string( "selector \"") + selector + '\"';
 }
 
 } // namespace
@@ -87,18 +87,47 @@ Canvas_impl::Canvas_impl(
         m_tiles[i] = create_tile( m_pixel_type, m_width, m_height);
 }
 
+Canvas_impl::Canvas_impl(const mi::neuraylib::ICanvas* other)
+{
+    const Pixel_type pixel_type = convert_pixel_type_string_to_enum(other->get_type());
+    const mi::Uint32 width = other->get_resolution_x();
+    const mi::Uint32 height = other->get_resolution_y();
+    const mi::Uint32 layers = other->get_layers_size();
+    const mi::Float32 gamma = other->get_gamma();
+
+    mi::base::Handle<const ICanvas> canvas_internal(other->get_interface<ICanvas>());
+    const bool is_cubemap = canvas_internal && canvas_internal->get_is_cubemap();
+
+    // check incorrect arguments
+    ASSERT( M_IMAGE, pixel_type != PT_UNDEF);
+    ASSERT( M_IMAGE, width > 0 && height > 0 && layers > 0);
+    ASSERT( M_IMAGE, !is_cubemap || layers == 6);
+    ASSERT( M_IMAGE, gamma >= 0);
+
+    m_pixel_type    = pixel_type;
+    m_width         = width;
+    m_height        = height;
+    m_nr_of_layers  = layers;
+    m_miplevel      = 0;
+    m_is_cubemap    = is_cubemap;
+    m_gamma         = gamma == 0.0f ? get_default_gamma( m_pixel_type) : gamma;
+
+    m_tiles.resize( m_nr_of_layers);
+    for( mi::Uint32 i = 0; i < m_nr_of_layers; ++i)
+        m_tiles[i] = copy_tile( other->get_tile(i));
+}
+
 Canvas_impl::Canvas_impl(
     const std::string& filename,
     const char* selector,
     mi::Uint32 miplevel,
     mi::neuraylib::IImage_file* image_file,
-    mi::Sint32* errors)
+    mi::Sint32* errors) : m_filename(filename)
 {
     mi::Sint32 dummy_errors = 0;
     if( !errors)
         errors = &dummy_errors;
 
-    m_filename = filename;
     if( selector)
         m_selector = selector;
 
@@ -165,7 +194,7 @@ Canvas_impl::Canvas_impl(
         return;
     }
 
-    if( selector && m_pixel_type) {
+    if( selector) {
         const Pixel_type new_pixel_type = get_pixel_type_for_channel( m_pixel_type, selector);
         if( new_pixel_type == PT_UNDEF) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
@@ -371,8 +400,8 @@ Canvas_impl::Canvas_impl(
         m_selector = selector;
 
     const std::string log_identifier = mdl_file_path
-        ? std::string( "an image from MDL file path \"") + mdl_file_path + "\""
-        : std::string( "a memory-based image with image format \"") + image_format + "\"";
+        ? std::string( "an image from MDL file path \"") + mdl_file_path + '\"'
+        : std::string( "a memory-based image with image format \"") + image_format + '\"';
 
     mi::base::Handle<mi::neuraylib::IImage_file> image_file2;
     if( image_file) {
@@ -420,13 +449,12 @@ Canvas_impl::Canvas_impl(
         return;
     }
 
-    if( selector && m_pixel_type) {
+    if( selector) {
         const Pixel_type new_pixel_type = get_pixel_type_for_channel( m_pixel_type, selector);
         if( new_pixel_type == PT_UNDEF) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                 "Failed to apply selector \"%s\" to \"%s\" with pixel type \"%s\".",
-                m_selector.c_str(), log_identifier.c_str(),
-                image_file2->get_type());
+                m_selector.c_str(), log_identifier.c_str(), image_file2->get_type());
             *errors = -5;
             set_default_pink_dummy_canvas();
             return;
@@ -473,7 +501,7 @@ Canvas_impl::Canvas_impl(
 }
 
 Canvas_impl::Canvas_impl(
-    const std::vector<mi::base::Handle<mi::neuraylib::ITile>>& tiles, Float32 gamma)
+    const std::vector<mi::base::Handle<mi::neuraylib::ITile>>& tiles, Float32 gamma) : m_tiles(tiles)
 {
     // check incorrect arguments
     ASSERT( M_IMAGE, !tiles.empty());
@@ -494,8 +522,6 @@ Canvas_impl::Canvas_impl(
         ASSERT( M_IMAGE, tiles[i]->get_resolution_y() == m_height);
         ASSERT( M_IMAGE, strcmp( tiles[i]->get_type(), tiles[0]->get_type()) == 0);
     }
-
-    m_tiles = tiles;
 }
 
 const char* Canvas_impl::get_type() const

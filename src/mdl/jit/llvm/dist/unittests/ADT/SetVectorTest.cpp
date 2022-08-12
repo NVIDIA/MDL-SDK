@@ -1,9 +1,8 @@
 //===- llvm/unittest/ADT/SetVector.cpp ------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -32,3 +31,20 @@ TEST(SetVector, EraseTest) {
   EXPECT_EQ(2, *std::next(S.begin()));
 }
 
+TEST(SetVector, ContainsTest) {
+  SetVector<int> S;
+  S.insert(0);
+  S.insert(1);
+  S.insert(2);
+
+  EXPECT_TRUE(S.contains(0));
+  EXPECT_TRUE(S.contains(1));
+  EXPECT_TRUE(S.contains(2));
+  EXPECT_FALSE(S.contains(-1));
+
+  S.insert(2);
+  EXPECT_TRUE(S.contains(2));
+
+  S.remove(2);
+  EXPECT_FALSE(S.contains(2));
+}

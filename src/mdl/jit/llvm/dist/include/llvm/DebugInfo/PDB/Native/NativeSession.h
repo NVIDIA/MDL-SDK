@@ -1,9 +1,8 @@
 //===- NativeSession.h - Native implementation of IPDBSession ---*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -15,9 +14,8 @@
 #include "llvm/DebugInfo/CodeView/TypeIndex.h"
 #include "llvm/DebugInfo/PDB/IPDBRawSymbol.h"
 #include "llvm/DebugInfo/PDB/IPDBSession.h"
-#include "llvm/DebugInfo/PDB/Native/DbiModuleDescriptor.h"
-#include "llvm/DebugInfo/PDB/Native/NativeBuiltinSymbol.h"
 #include "llvm/DebugInfo/PDB/Native/NativeRawSymbol.h"
+#include "llvm/DebugInfo/PDB/Native/SymbolCache.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/Error.h"
 
@@ -25,8 +23,14 @@ namespace llvm {
 class MemoryBuffer;
 namespace pdb {
 class PDBFile;
+class NativeExeSymbol;
 
 class NativeSession : public IPDBSession {
+  struct PdbSearchOptions {
+    StringRef ExePath;
+    // FIXME: Add other PDB search options (_NT_SYMBOL_PATH, symsrv)
+  };
+
 public:
   NativeSession(std::unique_ptr<PDBFile> PdbFile,
                 std::unique_ptr<BumpPtrAllocator> Allocator);
@@ -34,37 +38,29 @@ public:
 
   static Error createFromPdb(std::unique_ptr<MemoryBuffer> MB,
                              std::unique_ptr<IPDBSession> &Session);
+  static Error createFromPdbPath(StringRef PdbPath,
+                                 std::unique_ptr<IPDBSession> &Session);
   static Error createFromExe(StringRef Path,
                              std::unique_ptr<IPDBSession> &Session);
-
-  std::unique_ptr<PDBSymbolCompiland>
-  createCompilandSymbol(DbiModuleDescriptor MI);
-
-  std::unique_ptr<PDBSymbolTypeEnum>
-  createEnumSymbol(codeview::TypeIndex Index);
-
-  std::unique_ptr<IPDBEnumSymbols>
-  createTypeEnumerator(codeview::TypeLeafKind Kind);
-
-  SymIndexId findSymbolByTypeIndex(codeview::TypeIndex TI);
+  static Expected<std::string> searchForPdb(const PdbSearchOptions &Opts);
 
   uint64_t getLoadAddress() const override;
   bool setLoadAddress(uint64_t Address) override;
   std::unique_ptr<PDBSymbolExe> getGlobalScope() override;
-  std::unique_ptr<PDBSymbol> getSymbolById(uint32_t SymbolId) const override;
+  std::unique_ptr<PDBSymbol> getSymbolById(SymIndexId SymbolId) const override;
 
   bool addressForVA(uint64_t VA, uint32_t &Section,
                     uint32_t &Offset) const override;
   bool addressForRVA(uint32_t RVA, uint32_t &Section,
                      uint32_t &Offset) const override;
 
-  std::unique_ptr<PDBSymbol>
-  findSymbolByAddress(uint64_t Address, PDB_SymType Type) const override;
+  std::unique_ptr<PDBSymbol> findSymbolByAddress(uint64_t Address,
+                                                 PDB_SymType Type) override;
   std::unique_ptr<PDBSymbol> findSymbolByRVA(uint32_t RVA,
-                                             PDB_SymType Type) const override;
-  std::unique_ptr<PDBSymbol>
-  findSymbolBySectOffset(uint32_t Sect, uint32_t Offset,
-                         PDB_SymType Type) const override;
+                                             PDB_SymType Type) override;
+  std::unique_ptr<PDBSymbol> findSymbolBySectOffset(uint32_t Sect,
+                                                    uint32_t Offset,
+                                                    PDB_SymType Type) override;
 
   std::unique_ptr<IPDBEnumLineNumbers>
   findLineNumbers(const PDBSymbolCompiland &Compiland,
@@ -104,14 +100,37 @@ public:
 
   std::unique_ptr<IPDBEnumSectionContribs> getSectionContribs() const override;
 
+  std::unique_ptr<IPDBEnumFrameData> getFrameData() const override;
+
   PDBFile &getPDBFile() { return *Pdb; }
   const PDBFile &getPDBFile() const { return *Pdb; }
 
+  NativeExeSymbol &getNativeGlobalScope() const;
+  SymbolCache &getSymbolCache() { return Cache; }
+  const SymbolCache &getSymbolCache() const { return Cache; }
+  uint32_t getRVAFromSectOffset(uint32_t Section, uint32_t Offset) const;
+  uint64_t getVAFromSectOffset(uint32_t Section, uint32_t Offset) const;
+  bool moduleIndexForVA(uint64_t VA, uint16_t &ModuleIndex) const;
+  bool moduleIndexForSectOffset(uint32_t Sect, uint32_t Offset,
+                                uint16_t &ModuleIndex) const;
+  Expected<ModuleDebugStreamRef> getModuleDebugStream(uint32_t Index) const;
+
 private:
+  void initializeExeSymbol();
+  void parseSectionContribs();
+
   std::unique_ptr<PDBFile> Pdb;
   std::unique_ptr<BumpPtrAllocator> Allocator;
-  std::vector<std::unique_ptr<NativeRawSymbol>> SymbolCache;
-  DenseMap<codeview::TypeIndex, SymIndexId> TypeIndexToSymbolId;
+
+  SymbolCache Cache;
+  SymIndexId ExeSymbol = 0;
+  uint64_t LoadAddress = 0;
+
+  /// Map from virtual address to module index.
+  using IMap =
+      IntervalMap<uint64_t, uint16_t, 8, IntervalMapHalfOpenInfo<uint64_t>>;
+  IMap::Allocator IMapAllocator;
+  IMap AddrToModuleIndex;
 };
 } // namespace pdb
 } // namespace llvm

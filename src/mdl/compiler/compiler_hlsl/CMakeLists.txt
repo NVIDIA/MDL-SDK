@@ -57,6 +57,7 @@ set(PROJECT_HEADERS
     "compiler_hlsl_declarations.h"
     "compiler_hlsl_definitions.h"
     "compiler_hlsl_exprs.h"
+    "compiler_hlsl_intrinsics.h"
     "compiler_hlsl_locations.h"
     "compiler_hlsl_messages.h"
     "compiler_hlsl_optimizer.h"

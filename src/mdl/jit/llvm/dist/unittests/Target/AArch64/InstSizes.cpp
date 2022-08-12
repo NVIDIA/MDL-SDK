@@ -10,7 +10,7 @@
 using namespace llvm;
 
 namespace {
-std::unique_ptr<TargetMachine> createTargetMachine() {
+std::unique_ptr<LLVMTargetMachine> createTargetMachine() {
   auto TT(Triple::normalize("aarch64--"));
   std::string CPU("generic");
   std::string FS("");
@@ -22,14 +22,16 @@ std::unique_ptr<TargetMachine> createTargetMachine() {
   std::string Error;
   const Target *TheTarget = TargetRegistry::lookupTarget(TT, Error);
 
-  return std::unique_ptr<TargetMachine>(TheTarget->createTargetMachine(
-      TT, CPU, FS, TargetOptions(), None, None, CodeGenOpt::Default));
+  return std::unique_ptr<LLVMTargetMachine>(static_cast<LLVMTargetMachine*>(
+      TheTarget->createTargetMachine(TT, CPU, FS, TargetOptions(), None, None,
+                                     CodeGenOpt::Default)));
 }
 
 std::unique_ptr<AArch64InstrInfo> createInstrInfo(TargetMachine *TM) {
-  AArch64Subtarget ST(TM->getTargetTriple(), TM->getTargetCPU(),
-                      TM->getTargetFeatureString(), *TM, /* isLittle */ false);
-  return llvm::make_unique<AArch64InstrInfo>(ST);
+  AArch64Subtarget ST(TM->getTargetTriple(), std::string(TM->getTargetCPU()),
+                      std::string(TM->getTargetFeatureString()), *TM,
+                      /* isLittle */ false);
+  return std::make_unique<AArch64InstrInfo>(ST);
 }
 
 /// The \p InputIRSnippet is only needed for things that can't be expressed in
@@ -37,7 +39,7 @@ std::unique_ptr<AArch64InstrInfo> createInstrInfo(TargetMachine *TM) {
 /// TODO: Some of this might be useful for other architectures as well - extract
 ///       the platform-independent parts somewhere they can be reused.
 void runChecks(
-    TargetMachine *TM, AArch64InstrInfo *II, const StringRef InputIRSnippet,
+    LLVMTargetMachine *TM, AArch64InstrInfo *II, const StringRef InputIRSnippet,
     const StringRef InputMIRSnippet,
     std::function<void(AArch64InstrInfo &, MachineFunction &)> Checks) {
   LLVMContext Context;
@@ -77,8 +79,40 @@ void runChecks(
 
 } // anonymous namespace
 
+TEST(InstSizes, Authenticated) {
+  std::unique_ptr<LLVMTargetMachine> TM = createTargetMachine();
+  ASSERT_TRUE(TM);
+  std::unique_ptr<AArch64InstrInfo> II = createInstrInfo(TM.get());
+
+  auto isAuthInst = [](AArch64InstrInfo &II, MachineFunction &MF) {
+    auto I = MF.begin()->begin();
+    EXPECT_EQ(4u, II.getInstSizeInBytes(*I));
+    EXPECT_TRUE(I->getDesc().isAuthenticated());
+  };
+
+  runChecks(TM.get(), II.get(), "",
+            "    \n"
+            "    BLRAA $x10, $x9\n",
+            isAuthInst);
+
+  runChecks(TM.get(), II.get(), "",
+            "    \n"
+            "    RETAB implicit $lr, implicit $sp, implicit killed $x0\n",
+            isAuthInst);
+
+  runChecks(TM.get(), II.get(), "",
+            "    \n"
+            "    frame-destroy AUTIASP implicit-def $lr, implicit killed $lr, implicit $sp\n",
+            isAuthInst);
+
+  runChecks(TM.get(), II.get(), "",
+            "    \n"
+            "    frame-destroy AUTIBSP implicit-def $lr, implicit killed $lr, implicit $sp\n",
+            isAuthInst);
+}
+
 TEST(InstSizes, STACKMAP) {
-  std::unique_ptr<TargetMachine> TM = createTargetMachine();
+  std::unique_ptr<LLVMTargetMachine> TM = createTargetMachine();
   ASSERT_TRUE(TM);
   std::unique_ptr<AArch64InstrInfo> II = createInstrInfo(TM.get());
 
@@ -93,7 +127,7 @@ TEST(InstSizes, STACKMAP) {
 }
 
 TEST(InstSizes, PATCHPOINT) {
-  std::unique_ptr<TargetMachine> TM = createTargetMachine();
+  std::unique_ptr<LLVMTargetMachine> TM = createTargetMachine();
   std::unique_ptr<AArch64InstrInfo> II = createInstrInfo(TM.get());
 
   runChecks(TM.get(), II.get(), "",
@@ -108,7 +142,7 @@ TEST(InstSizes, PATCHPOINT) {
 }
 
 TEST(InstSizes, TLSDESC_CALLSEQ) {
-  std::unique_ptr<TargetMachine> TM = createTargetMachine();
+  std::unique_ptr<LLVMTargetMachine> TM = createTargetMachine();
   std::unique_ptr<AArch64InstrInfo> II = createInstrInfo(TM.get());
 
   runChecks(

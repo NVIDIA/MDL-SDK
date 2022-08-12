@@ -101,8 +101,9 @@ bool LLVM_code_generator::load_and_link_libmdlrt(llvm::Module *llvm_module)
     for (llvm::Function &f : llvm_module->functions()) {
         // just a declaration or did already exist before linking? -> skip
         if (f.isDeclaration() || old_func_names.count(
-                string(f.getName().begin(), f.getName().end(), get_allocator())) != 0)
+                string(f.getName().begin(), f.getName().end(), get_allocator())) != 0) {
             continue;
+        }
 
         // Found a libmdlrt function
 
@@ -110,7 +111,7 @@ bool LLVM_code_generator::load_and_link_libmdlrt(llvm::Module *llvm_module)
         // for non-PTX backends
         f.removeFnAttr("target-features");
 
-        if (m_target_lang == LLVM_code_generator::TL_HLSL) {
+        if (!target_supports_pointers()) {
             // mark all functions WITH pointer parameters as force-inline
             for (llvm::Argument const &arg : f.args()) {
                 llvm::Type *tp = arg.getType();

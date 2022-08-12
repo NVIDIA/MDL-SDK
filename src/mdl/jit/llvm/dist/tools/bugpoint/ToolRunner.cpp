@@ -1,9 +1,8 @@
 //===-- ToolRunner.cpp ----------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -171,7 +170,7 @@ Expected<int> LLI::ExecuteProgram(const std::string &Bitcode,
                                   const std::vector<std::string> &SharedLibs,
                                   unsigned Timeout, unsigned MemoryLimit) {
   std::vector<StringRef> LLIArgs;
-  LLIArgs.push_back(LLIPath.c_str());
+  LLIArgs.push_back(LLIPath);
   LLIArgs.push_back("-force-interpreter=true");
 
   for (std::vector<std::string>::const_iterator i = SharedLibs.begin(),
@@ -202,19 +201,7 @@ Expected<int> LLI::ExecuteProgram(const std::string &Bitcode,
 
 void AbstractInterpreter::anchor() {}
 
-#if defined(LLVM_ON_UNIX)
-const char EXESuffix[] = "";
-#elif defined(_WIN32)
-const char EXESuffix[] = "exe";
-#endif
-
-/// Prepend the path to the program being executed
-/// to \p ExeName, given the value of argv[0] and the address of main()
-/// itself. This allows us to find another LLVM tool if it is built in the same
-/// directory. An empty string is returned on error; note that this function
-/// just mainpulates the path and doesn't check for executability.
-/// Find a named executable.
-static std::string PrependMainExecutablePath(const std::string &ExeName,
+ErrorOr<std::string> llvm::FindProgramByName(const std::string &ExeName,
                                              const char *Argv0,
                                              void *MainAddr) {
   // Check the directory that the calling program is in.  We can do
@@ -222,30 +209,25 @@ static std::string PrependMainExecutablePath(const std::string &ExeName,
   // is a relative path to the executable itself.
   std::string Main = sys::fs::getMainExecutable(Argv0, MainAddr);
   StringRef Result = sys::path::parent_path(Main);
+  if (ErrorOr<std::string> Path = sys::findProgramByName(ExeName, Result))
+    return *Path;
 
-  if (!Result.empty()) {
-    SmallString<128> Storage = Result;
-    sys::path::append(Storage, ExeName);
-    sys::path::replace_extension(Storage, EXESuffix);
-    return Storage.str();
-  }
-
-  return Result.str();
+  // Check the user PATH.
+  return sys::findProgramByName(ExeName);
 }
 
 // LLI create method - Try to find the LLI executable
 AbstractInterpreter *
 AbstractInterpreter::createLLI(const char *Argv0, std::string &Message,
                                const std::vector<std::string> *ToolArgs) {
-  std::string LLIPath =
-      PrependMainExecutablePath("lli", Argv0, (void *)(intptr_t)&createLLI);
-  if (!LLIPath.empty()) {
-    Message = "Found lli: " + LLIPath + "\n";
-    return new LLI(LLIPath, ToolArgs);
+  if (ErrorOr<std::string> LLIPath =
+      FindProgramByName("lli", Argv0, (void *)(intptr_t)&createLLI)) {
+    Message = "Found lli: " + *LLIPath + "\n";
+    return new LLI(*LLIPath, ToolArgs);
+  } else {
+    Message = LLIPath.getError().message() + "\n";
+    return nullptr;
   }
-
-  Message = "Cannot find `lli' in executable directory!\n";
-  return nullptr;
 }
 
 //===---------------------------------------------------------------------===//
@@ -284,15 +266,15 @@ Error CustomCompiler::compileProgram(const std::string &Bitcode,
                                      unsigned Timeout, unsigned MemoryLimit) {
 
   std::vector<StringRef> ProgramArgs;
-  ProgramArgs.push_back(CompilerCommand.c_str());
+  ProgramArgs.push_back(CompilerCommand);
 
-  for (std::size_t i = 0; i < CompilerArgs.size(); ++i)
-    ProgramArgs.push_back(CompilerArgs.at(i).c_str());
+  for (const auto &Arg : CompilerArgs)
+    ProgramArgs.push_back(Arg);
   ProgramArgs.push_back(Bitcode);
 
   // Add optional parameters to the running program from Argv
-  for (unsigned i = 0, e = CompilerArgs.size(); i != e; ++i)
-    ProgramArgs.push_back(CompilerArgs[i].c_str());
+  for (const auto &Arg : CompilerArgs)
+    ProgramArgs.push_back(Arg);
 
   if (RunProgramWithTimeout(CompilerCommand, ProgramArgs, "", "", "", Timeout,
                             MemoryLimit))
@@ -368,8 +350,9 @@ Expected<int> CustomExecutor::ExecuteProgram(
 // '\ ' -> ' '
 // 'exa\mple' -> 'example'
 //
-static void lexCommand(std::string &Message, const std::string &CommandLine,
-                       std::string &CmdPath, std::vector<std::string> &Args) {
+static void lexCommand(const char *Argv0, std::string &Message,
+                       const std::string &CommandLine, std::string &CmdPath,
+                       std::vector<std::string> &Args) {
 
   std::string Token;
   std::string Command;
@@ -402,7 +385,7 @@ static void lexCommand(std::string &Message, const std::string &CommandLine,
     Token.push_back(CommandLine[Pos]);
   }
 
-  auto Path = sys::findProgramByName(Command);
+  auto Path = FindProgramByName(Command, Argv0, (void *)(intptr_t)&lexCommand);
   if (!Path) {
     Message = std::string("Cannot find '") + Command +
               "' in PATH: " + Path.getError().message() + "\n";
@@ -416,11 +399,12 @@ static void lexCommand(std::string &Message, const std::string &CommandLine,
 // Custom execution environment create method, takes the execution command
 // as arguments
 AbstractInterpreter *AbstractInterpreter::createCustomCompiler(
-    std::string &Message, const std::string &CompileCommandLine) {
+    const char *Argv0, std::string &Message,
+    const std::string &CompileCommandLine) {
 
   std::string CmdPath;
   std::vector<std::string> Args;
-  lexCommand(Message, CompileCommandLine, CmdPath, Args);
+  lexCommand(Argv0, Message, CompileCommandLine, CmdPath, Args);
   if (CmdPath.empty())
     return nullptr;
 
@@ -430,12 +414,13 @@ AbstractInterpreter *AbstractInterpreter::createCustomCompiler(
 // Custom execution environment create method, takes the execution command
 // as arguments
 AbstractInterpreter *
-AbstractInterpreter::createCustomExecutor(std::string &Message,
+AbstractInterpreter::createCustomExecutor(const char *Argv0,
+                                          std::string &Message,
                                           const std::string &ExecCommandLine) {
 
   std::string CmdPath;
   std::vector<std::string> Args;
-  lexCommand(Message, ExecCommandLine, CmdPath, Args);
+  lexCommand(Argv0, Message, ExecCommandLine, CmdPath, Args);
   if (CmdPath.empty())
     return nullptr;
 
@@ -457,7 +442,7 @@ Expected<CC::FileType> LLC::OutputCode(const std::string &Bitcode,
     errs() << "Error making unique filename: " << EC.message() << "\n";
     exit(1);
   }
-  OutputAsmFile = UniqueFile.str();
+  OutputAsmFile = std::string(UniqueFile.str());
   std::vector<StringRef> LLCArgs;
   LLCArgs.push_back(LLCPath);
 
@@ -510,7 +495,7 @@ Expected<int> LLC::ExecuteProgram(const std::string &Bitcode,
     return std::move(E);
 
   std::vector<std::string> CCArgs(ArgsForCC);
-  CCArgs.insert(CCArgs.end(), SharedLibs.begin(), SharedLibs.end());
+  llvm::append_range(CCArgs, SharedLibs);
 
   // Assuming LLC worked, compile the result with CC and run it.
   return cc->ExecuteProgram(OutputAsmFile, Args, *FileKind, InputFile,
@@ -524,20 +509,20 @@ LLC *AbstractInterpreter::createLLC(const char *Argv0, std::string &Message,
                                     const std::vector<std::string> *Args,
                                     const std::vector<std::string> *CCArgs,
                                     bool UseIntegratedAssembler) {
-  std::string LLCPath =
-      PrependMainExecutablePath("llc", Argv0, (void *)(intptr_t)&createLLC);
-  if (LLCPath.empty()) {
-    Message = "Cannot find `llc' in executable directory!\n";
+  ErrorOr<std::string> LLCPath =
+      FindProgramByName("llc", Argv0, (void *)(intptr_t)&createLLC);
+  if (!LLCPath) {
+    Message = LLCPath.getError().message() + "\n";
     return nullptr;
   }
 
-  CC *cc = CC::create(Message, CCBinary, CCArgs);
+  CC *cc = CC::create(Argv0, Message, CCBinary, CCArgs);
   if (!cc) {
     errs() << Message << "\n";
     exit(1);
   }
-  Message = "Found llc: " + LLCPath + "\n";
-  return new LLC(LLCPath, cc, Args, UseIntegratedAssembler);
+  Message = "Found llc: " + *LLCPath + "\n";
+  return new LLC(*LLCPath, cc, Args, UseIntegratedAssembler);
 }
 
 //===---------------------------------------------------------------------===//
@@ -574,7 +559,7 @@ Expected<int> JIT::ExecuteProgram(const std::string &Bitcode,
                                   unsigned Timeout, unsigned MemoryLimit) {
   // Construct a vector of parameters, incorporating those from the command-line
   std::vector<StringRef> JITArgs;
-  JITArgs.push_back(LLIPath.c_str());
+  JITArgs.push_back(LLIPath);
   JITArgs.push_back("-force-interpreter=false");
 
   // Add any extra LLI args.
@@ -585,7 +570,7 @@ Expected<int> JIT::ExecuteProgram(const std::string &Bitcode,
     JITArgs.push_back("-load");
     JITArgs.push_back(SharedLibs[i]);
   }
-  JITArgs.push_back(Bitcode.c_str());
+  JITArgs.push_back(Bitcode);
   // Add optional parameters to the running program from Argv
   for (unsigned i = 0, e = Args.size(); i != e; ++i)
     JITArgs.push_back(Args[i]);
@@ -606,15 +591,14 @@ Expected<int> JIT::ExecuteProgram(const std::string &Bitcode,
 AbstractInterpreter *
 AbstractInterpreter::createJIT(const char *Argv0, std::string &Message,
                                const std::vector<std::string> *Args) {
-  std::string LLIPath =
-      PrependMainExecutablePath("lli", Argv0, (void *)(intptr_t)&createJIT);
-  if (!LLIPath.empty()) {
-    Message = "Found lli: " + LLIPath + "\n";
-    return new JIT(LLIPath, Args);
+  if (ErrorOr<std::string> LLIPath =
+          FindProgramByName("lli", Argv0, (void *)(intptr_t)&createJIT)) {
+    Message = "Found lli: " + *LLIPath + "\n";
+    return new JIT(*LLIPath, Args);
+  } else {
+    Message = LLIPath.getError().message() + "\n";
+    return nullptr;
   }
-
-  Message = "Cannot find `lli' in executable directory!\n";
-  return nullptr;
 }
 
 //===---------------------------------------------------------------------===//
@@ -788,7 +772,7 @@ Error CC::MakeSharedObject(const std::string &InputFile, FileType fileType,
     errs() << "Error making unique filename: " << EC.message() << "\n";
     exit(1);
   }
-  OutputFile = UniqueFilename.str();
+  OutputFile = std::string(UniqueFilename.str());
 
   std::vector<StringRef> CCArgs;
 
@@ -855,9 +839,10 @@ Error CC::MakeSharedObject(const std::string &InputFile, FileType fileType,
 
 /// create - Try to find the CC executable
 ///
-CC *CC::create(std::string &Message, const std::string &CCBinary,
+CC *CC::create(const char *Argv0, std::string &Message,
+               const std::string &CCBinary,
                const std::vector<std::string> *Args) {
-  auto CCPath = sys::findProgramByName(CCBinary);
+  auto CCPath = FindProgramByName(CCBinary, Argv0, (void *)(intptr_t)&create);
   if (!CCPath) {
     Message = "Cannot find `" + CCBinary + "' in PATH: " +
               CCPath.getError().message() + "\n";

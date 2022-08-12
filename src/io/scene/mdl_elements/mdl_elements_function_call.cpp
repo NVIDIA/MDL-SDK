@@ -54,6 +54,7 @@
 #include <base/data/db/i_db_transaction.h>
 #include <base/data/serial/i_serializer.h>
 #include <base/util/registry/i_config_registry.h>
+#include <base/util/string_utils/i_string_utils.h>
 #include <io/scene/scene/i_scene_journal_types.h>
 #include <mdl/integration/mdlnr/i_mdlnr.h>
 
@@ -67,17 +68,10 @@ Mdl_function_call::Mdl_function_call()
   : m_tf( get_type_factory()),
     m_vf( get_value_factory()),
     m_ef( get_expression_factory()),
-    m_module_tag(),
-    m_definition_tag(),
     m_definition_ident(),
     m_mdl_semantic( mi::mdl::IDefinition::DS_UNKNOWN),
-    m_definition_name(),
     m_immutable( false), // avoid ubsan warning with swap() and temporaries
-    m_is_material( false),
-    m_parameter_types(),
-    m_return_type(),
-    m_arguments(),
-    m_enable_if_conditions()
+    m_is_material( false)
 {
 }
 
@@ -216,7 +210,7 @@ bool Mdl_function_call::is_valid(
         return false;
 
     if (module->has_definition(m_is_material,m_definition_db_name, m_definition_ident) != 0) {
-        add_context_error(
+        add_error_message(
             context, "The function definition '" + m_definition_db_name + "' "
             "does no longer exist or has interface changes.", -1);
         return false;
@@ -234,14 +228,14 @@ bool Mdl_function_call::is_valid(
                 return false; // cycle in graph, always invalid.
             SERIAL::Class_id class_id = transaction->get_class_id(call_tag);
             if (class_id != ID_MDL_FUNCTION_CALL) {
-                add_context_error(
+                add_error_message(
                     context, "The function call attached to parameter '"
                     + std::string(m_arguments->get_name(i)) + "' has a wrong element type.", -1);
                 return false;
             }
             DB::Access<Mdl_function_call> fcall(call_tag, transaction);
             if (!fcall->is_valid(transaction, tags_seen, context)) {
-                add_context_error(
+                add_error_message(
                     context, "The function call attached to parameter '"
                     + std::string(m_arguments->get_name(i)) + "' is invalid.", -1);
                 return false;
@@ -273,7 +267,7 @@ mi::Sint32 Mdl_function_call::repair(
         // a definition of that name does no longer exist
         m_definition_tag = DB::Tag();
         m_definition_ident = -1;
-        add_context_error(
+        add_error_message(
             context, "The definition '" + m_definition_db_name +
             "' does no longer exist in the module.", -1);
         return -1;
@@ -295,7 +289,7 @@ mi::Sint32 Mdl_function_call::repair(
                 // for now, we cannot adapt to this.
                 m_definition_tag = DB::Tag();
                 m_definition_ident = -1;
-                add_context_error(
+                add_error_message(
                     context, "The parameter count of definition '" + m_definition_db_name +
                     "' has changed.", -1);
                 return -1;
@@ -349,7 +343,7 @@ mi::Sint32 Mdl_function_call::repair(
                 // different type, cannot promote
                 m_definition_tag = DB::Tag();
                 m_definition_ident = -1;
-                add_context_error(
+                add_error_message(
                     context, "The return type of definition '" + m_definition_db_name +
                     "' has changed.", -1);
                 return -1;
@@ -838,11 +832,11 @@ Mdl_compiled_material* Mdl_function_call::create_compiled_material(
         MDL_CTX_OPTION_METERS_PER_SCENE_UNIT);
     mi::Float32 mdl_wavelength_min = context->get_option<mi::Float32>(MDL_CTX_OPTION_WAVELENGTH_MIN);
     mi::Float32 mdl_wavelength_max = context->get_option<mi::Float32>(MDL_CTX_OPTION_WAVELENGTH_MAX);
-    bool load_resources = context->get_option<bool>(MDL_CTX_OPTION_RESOLVE_RESOURCES);
+    bool resolve_resources = context->get_option<bool>(MDL_CTX_OPTION_RESOLVE_RESOURCES);
 
     return new Mdl_compiled_material(
         transaction, instance.get(), module_filename, module_name,
-        mdl_meters_per_scene_unit, mdl_wavelength_min, mdl_wavelength_max, load_resources);
+        mdl_meters_per_scene_unit, mdl_wavelength_min, mdl_wavelength_max, resolve_resources);
 }
 
 const mi::mdl::IGenerated_code_dag::IMaterial_instance*
@@ -985,22 +979,31 @@ Mdl_function_call::create_dag_material_instance(
             break;
 
         case mi::mdl::IGenerated_code_dag::EC_ARGUMENT_TYPE_MISMATCH: {
-            add_message( context, Message( mi::base::MESSAGE_SEVERITY_ERROR,
-                "Type mismatch for an argument in a graph rooted at the material "
-                "definition \"" + m_definition_db_name + "\".",
-                 mi::mdl::IGenerated_code_dag::EC_ARGUMENT_TYPE_MISMATCH,
-                 Message::MSG_COMPILER_DAG), -1);
+            add_message(
+                context,
+                Message(
+                    mi::base::MESSAGE_SEVERITY_ERROR,
+                    "Type mismatch for an argument in a graph rooted at the material "
+                    "definition \"" + m_definition_db_name + "\".",
+                    mi::mdl::IGenerated_code_dag::EC_ARGUMENT_TYPE_MISMATCH,
+                    Message::MSG_COMPILER_DAG),
+                -1);
             return nullptr;
         }
 
         case mi::mdl::IGenerated_code_dag::EC_WRONG_TRANSMISSION_ON_THIN_WALLED: {
-            add_message( context, Message(mi::base::MESSAGE_SEVERITY_ERROR,
-                "The thin-walled material instance rooted of the material definition \""
-                + m_definition_db_name + "\" has "
-                "different transmission for surface and backface.",
-                mi::mdl::IGenerated_code_dag::EC_WRONG_TRANSMISSION_ON_THIN_WALLED,
-                Message::MSG_COMPILER_DAG), -2);
-            return nullptr;
+            // Warn if we detect different transmission
+            add_message(
+                context,
+                Message(
+                    mi::base::MESSAGE_SEVERITY_WARNING,
+                    "The thin-walled material instance rooted of the material definition \""
+                    + m_definition_db_name
+                    + "\" has different transmission for surface and backface.",
+                    mi::mdl::IGenerated_code_dag::EC_WRONG_TRANSMISSION_ON_THIN_WALLED,
+                    Message::MSG_COMPILER_DAG),
+                0);
+            break;
         }
 
         case mi::mdl::IGenerated_code_dag::EC_INSTANTIATION_ERROR:
@@ -1075,11 +1078,11 @@ void Mdl_function_call::dump( DB::Transaction* transaction) const
     mi::base::Handle<const mi::IString> tmp;
 
     s << "Module tag: " << m_module_tag.get_uint() << std::endl;
-    s << "Module DB name: \"" << m_module_db_name << "\"" << std::endl;
+    s << "Module DB name: \"" << m_module_db_name << '\"' << std::endl;
     s << "Function definition tag: " << m_definition_tag.get_uint() << std::endl;
     s << "Function definition identifier: " << m_definition_ident << std::endl;
-    s << "Function definition MDL name: \"" << m_definition_name << "\"" << std::endl;
-    s << "Function definition DB name: \"" << m_definition_db_name << "\"" << std::endl;
+    s << "Function definition MDL name: \"" << m_definition_name << '\"' << std::endl;
+    s << "Function definition DB name: \"" << m_definition_db_name << '\"' << std::endl;
     tmp = m_ef->dump( transaction, m_arguments.get(), /*name*/ nullptr);
     s << "Arguments: " << tmp->get_c_str() << std::endl;
     s << "Immutable: " << m_immutable << std::endl;
@@ -1125,6 +1128,100 @@ void Mdl_function_call::get_scene_element_references( DB::Tag_set* result) const
 
     collect_references( m_arguments.get(), result);
     collect_references( m_enable_if_conditions.get(), result);
+}
+
+mi::Sint32 Mdl_function_call::repair_call(
+    DB::Transaction* transaction,
+    const DB::Access<Mdl_function_call>& call_access,
+    mi::base::Handle<IExpression>& new_expr,
+    const IExpression *default_expr,
+    const IExpression_call* arg_call,
+    IExpression_factory* ef,
+    IValue_factory* vf,
+    bool repair_invalid_calls,
+    bool remove_invalid_calls,
+    mi::Uint32 level,
+    Execution_context* context
+)
+{
+    DB::Edit<Mdl_function_call> call_edit(call_access);
+    mi::Sint32 res = call_edit->repair(
+        transaction, repair_invalid_calls, remove_invalid_calls, level, context);
+    if (res == 0)
+        return 0;
+
+    if (remove_invalid_calls) {
+
+        if (default_expr) {
+            new_expr =
+                ef->clone(default_expr, transaction, /*copy_immutable_calls=*/true);
+        }
+        else { // create a value
+            mi::base::Handle<const IType> arg_type(arg_call->get_type());
+            mi::base::Handle<IValue> new_val(vf->create(arg_type.get()));
+            new_expr = ef->create_constant(new_val.get());
+        }
+        return 0;
+    }
+    return -1;
+}
+
+mi::Sint32 Mdl_function_call::repair_arguments(
+    DB::Transaction* transaction,
+    IExpression_list* arguments,
+    const IExpression_list* defaults,
+    bool repair_invalid_calls,
+    bool remove_invalid_calls,
+    mi::Uint32 level,
+    Execution_context* context)
+{
+    mi::base::Handle<IExpression_factory> ef(get_expression_factory());
+    mi::base::Handle<IValue_factory> vf(get_value_factory());
+
+    for (mi::Size i = 0, n = arguments->get_size(); i < n; ++i) {
+
+        mi::base::Handle<const IExpression_call> arg_call(
+            arguments->get_expression<IExpression_call>(i));
+        if (arg_call.is_valid_interface()) {
+            DB::Tag call_tag = arg_call->get_call();
+            if (!call_tag.is_valid())
+                continue;
+
+            SERIAL::Class_id class_id = transaction->get_class_id(call_tag);
+            if (class_id != ID_MDL_FUNCTION_CALL)
+                continue;
+
+            const char* arg_name = arguments->get_name(i);
+            mi::base::Handle<const IExpression> default_expr(
+                defaults->get_expression(defaults->get_index(arg_name)));
+
+            mi::base::Handle<IExpression> new_expr;
+            DB::Access<Mdl_function_call> fcall(call_tag, transaction);
+            if (!fcall->is_valid(transaction, context)) {
+                if (repair_call(
+                    transaction,
+                    fcall,
+                    new_expr,
+                    default_expr.get(),
+                    arg_call.get(),
+                    ef.get(),
+                    vf.get(),
+                    repair_invalid_calls,
+                    remove_invalid_calls,
+                    level,
+                    context) != 0) {
+                        add_error_message( context,
+                            STRING::formatted_string(
+                                "The call \"%s\" attached to argument \"%s\" could not be "
+                                "repaired.", transaction->tag_to_name(call_tag), arg_name), -1);
+                    return -1;
+                }
+            }
+            if (new_expr)
+                arguments->set_expression(i, new_expr.get());
+        }
+    }
+    return 0;
 }
 
 } // namespace MDL

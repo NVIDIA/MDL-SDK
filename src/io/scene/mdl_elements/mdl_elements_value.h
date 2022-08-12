@@ -57,7 +57,7 @@ public:
 
     Value_base( const T* type) : m_type( type, mi::base::DUP_INTERFACE) { }
 
-    IValue::Kind get_kind() const { return V::s_kind; };
+    IValue::Kind get_kind() const { return V::s_kind; }
 
     const T* get_type() const { m_type->retain(); return m_type.get(); }
 

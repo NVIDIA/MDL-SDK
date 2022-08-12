@@ -67,7 +67,7 @@ public:
         IModule_cache *module_cache)
     : m_module_cache(module_cache)
     , m_cb(module_cache != NULL ? module_cache->get_module_loading_callback() : NULL)
-    , m_cache_lookup_handle(m_cb != NULL ? module_cache->create_lookup_handle() : NULL)
+    , m_cache_lookup_handle(m_cb != NULL ? module_cache->create_lookup_handle() : NULL) //-V1004
     {
     }
 

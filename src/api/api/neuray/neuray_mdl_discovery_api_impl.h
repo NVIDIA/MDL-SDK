@@ -523,11 +523,11 @@ class Mdl_discovery_api_impl
         // Checks if a search path exists already.
         bool is_known_search_path(
             const char* path,
-            mi::base::Handle<Mdl_package_info_impl> package) const;
+            const mi::base::Handle<Mdl_package_info_impl>& package) const;
 
         // Assigns modules from the current archive recursion level.
         bool add_archive_entries(
-            mi::base::Handle<Mdl_package_info_impl> parent, 
+            const mi::base::Handle<Mdl_package_info_impl>& parent, 
             mi::Size s_idx,
             const char* sp,
             const char* fqp,
@@ -545,7 +545,7 @@ class Mdl_discovery_api_impl
 
         // Creates a graph structure out of an mdl archive file.
         bool discover_archive(
-            mi::base::Handle<Mdl_package_info_impl> parent,
+            const mi::base::Handle<Mdl_package_info_impl>& parent,
             const char* search_path,
             mi::Size search_idx,
             const char* dir,
@@ -553,7 +553,7 @@ class Mdl_discovery_api_impl
 
         // Direct recursion to create a graph out of an archive entry.
         bool discover_archive_recursive(
-            mi::base::Handle<Mdl_package_info_impl> parent,
+            const mi::base::Handle<Mdl_package_info_impl>& parent,
             const char* previous_module,
             const char* q_path,
             const char* search_path,
@@ -564,7 +564,7 @@ class Mdl_discovery_api_impl
 
         // Direct recursion to create a graph out of a folder from a file system.
         bool discover_filesystem_recursive(
-            mi::base::Handle<Mdl_package_info_impl> parent,
+            const mi::base::Handle<Mdl_package_info_impl>& parent,
             const char* search_path,
             mi::Size search_idx,
             const char* dir,
@@ -583,7 +583,7 @@ class Mdl_discovery_result_impl
     public:
         Mdl_discovery_result_impl(
             const Mdl_package_info_impl* graph,
-            const std::vector<std::string>);
+            const std::vector<std::string>& paths);
         ~Mdl_discovery_result_impl() {};
 
         /// Returns a pointer to the root of mdl graph.

@@ -81,6 +81,7 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
     m_mdl_options.fold_all_enum_parameters = false;
     m_mdl_options.enable_shader_cache = app->get_options()->enable_shader_cache;
 
+
     // Access the MDL SDK
     m_neuray = mi::examples::mdl::load_and_get_ineuray();
     if (!m_neuray.is_valid_interface())
@@ -121,6 +122,7 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
         return;
     }
 
+
     // Start the MDL SDK
     mi::Sint32 result = m_neuray->start();
     if (result != 0)
@@ -135,6 +137,7 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
     m_mdl_factory = m_neuray->get_api_component<mi::neuraylib::IMdl_factory>();
     m_mdl_impexp_api = m_neuray->get_api_component<mi::neuraylib::IMdl_impexp_api>();
     m_evaluator_api = m_neuray->get_api_component<mi::neuraylib::IMdl_evaluator_api>();
+
 
     // create and setup HLSL backend
     mi::base::Handle<mi::neuraylib::IMdl_backend_api> mdl_backend_api(
@@ -237,6 +240,7 @@ Mdl_sdk::~Mdl_sdk()
     m_hlsl_backend = nullptr;
     m_database = nullptr;
     m_config = nullptr;
+
 
     // Shut down the MDL SDK
     if (m_neuray->shutdown() != 0)

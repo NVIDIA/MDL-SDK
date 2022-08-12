@@ -32,7 +32,6 @@
 #define MI_NEURAYLIB_ISCENE_ELEMENT_H
 
 #include <mi/neuraylib/iattribute_set.h>
-#include <mi/neuraylib/version.h>
 
 namespace mi {
 
@@ -76,12 +75,10 @@ enum Element_type
     ELEMENT_TYPE_MODULE                          = 29, ///< #mi::neuraylib::IModule
     ELEMENT_TYPE_FUNCTION_DEFINITION             = 30, ///< #mi::neuraylib::IFunction_definition
     ELEMENT_TYPE_FUNCTION_CALL                   = 31, ///< #mi::neuraylib::IFunction_call
-    /// #mi::neuraylib::IMaterial_definition
-    /// \see mi_mdl_materials_are_functions
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     ELEMENT_TYPE_MATERIAL_DEFINITION             = 32,
-    /// #mi::neuraylib::IMaterial_instance
-    /// \see mi_mdl_materials_are_functions
     ELEMENT_TYPE_MATERIAL_INSTANCE               = 33,
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
     ELEMENT_TYPE_COMPILED_MATERIAL               = 34, ///< #mi::neuraylib::ICompiled_material
     ELEMENT_TYPE_BSDF_MEASUREMENT                = 35, ///< #mi::neuraylib::IBsdf_measurement
 #ifndef MI_SKIP_WITH_MDL_SDK_DOXYGEN
@@ -107,7 +104,7 @@ public:
     virtual Element_type get_element_type() const = 0;
 };
 
-/*@}*/ // end group mi_neuray_scene_element
+/**@}*/ // end group mi_neuray_scene_element
 
 } // namespace neuraylib
 

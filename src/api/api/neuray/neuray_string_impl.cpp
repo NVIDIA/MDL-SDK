@@ -76,9 +76,9 @@ void String_impl::set_c_str( const char* str)
     // Defer deallocation of m_storage, str might be identical to m_storage.
     if( !str)
         str = "";
-    mi::Size len = strlen( str);
-    char* copy = new char[len+1];
-    strncpy( copy, str, len+1);
+    const mi::Size len = strlen( str);
+    char* const copy = new char[len+1];
+    memcpy( copy, str, len+1);
     delete[] m_storage;
     m_storage = copy;
 }
@@ -117,9 +117,9 @@ void String_impl_proxy::set_c_str( const char* str)
     // Defer deallocation of *m_pointer, str might be identical to *m_pointer.
     if( !str)
         str = "";
-    mi::Size len = strlen( str);
-    char* copy = new char[len+1];
-    strncpy( copy, str, len+1);
+    const mi::Size len = strlen( str);
+    char* const copy = new char[len+1];
+    memcpy( copy, str, len+1);
     delete[] *m_pointer;
     *m_pointer = copy;
 }

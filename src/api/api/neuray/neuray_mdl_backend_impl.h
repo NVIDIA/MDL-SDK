@@ -132,10 +132,8 @@ private:
     /// Get the internal backend.
     BACKENDS::Mdl_llvm_backend &get_backend() { return m_backend; };
 
-private:
     BACKENDS::Mdl_llvm_backend m_backend;
 };
-
 
 /// Implementation of #mi::neuraylib::ILink_unit interface.
 class Link_unit : public mi::base::Interface_implement<mi::neuraylib::ILink_unit>
@@ -151,7 +149,6 @@ public:
         BACKENDS::Mdl_llvm_backend            &be,
         mi::neuraylib::ITransaction           *transaction,
         mi::neuraylib::IMdl_execution_context *context);
-
 
     // API methods
 
@@ -198,4 +195,3 @@ private:
 } // namespace MI
 
 #endif // API_API_NEURAY_MDL_BACKEND_H
-

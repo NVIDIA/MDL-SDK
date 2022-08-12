@@ -826,9 +826,9 @@ IExpression *Module_inliner::clone_literal(IExpression_literal const *lit)
             if (it == m_references.end()) {
                 return simple_name_to_reference(m_target_module->clone_name(sn));
             } else {
-                ISymbol const *sym = it->second;
-                ISimple_name *sn = m_nf.create_simple_name(sym);
-                return simple_name_to_reference(sn);
+                ISymbol const *sym  = it->second;
+                ISimple_name  *n_sn = m_nf.create_simple_name(sym);
+                return simple_name_to_reference(n_sn);
             }
         } else if (IValue_compound const *vs = as<IValue_compound>(lit->get_value())) {
             ISymbol const *sym;
@@ -944,17 +944,18 @@ IExpression_call *Module_inliner::make_constructor(
                 MDL_ASSERT(it != m_references.end());
                 arg_expr = make_constructor(cast<IValue_compound>(old_value), it->second);
             } else if (is<IValue_enum>(old_value)) {
+                int enum_idx = cast<IValue_enum>(old_value)->get_index();
                 ISimple_name const *sn = cast<IDeclaration_type_enum>(
-                    type_def->get_declaration())->get_value_name(cast<IValue_enum>(old_value)->get_index());
+                    type_def->get_declaration())->get_value_name(enum_idx);
 
                 IDefinition const *vndef = sn->get_definition();
                 Reference_map::iterator const &it = m_references.find(vndef);
                 if (it == m_references.end()) {
                     arg_expr = simple_name_to_reference(m_target_module->clone_name(sn));
                 } else {
-                    ISymbol const *sym = it->second;
-                    ISimple_name  *sn  = m_nf.create_simple_name(sym);
-                    arg_expr =  simple_name_to_reference(sn);
+                    ISymbol const *sym  = it->second;
+                    ISimple_name  *n_sn = m_nf.create_simple_name(sym);
+                    arg_expr = simple_name_to_reference(n_sn);
                 }
             }
         } else {
@@ -1015,9 +1016,9 @@ IStatement *Module_inliner::clone_statement(IStatement const *stmt)
 
             IStatement_compound *new_cmp = m_sf.create_compound();
             for (int i = 0, n = stmt_cmp->get_statement_count(); i < n; ++i) {
-                IStatement *stmt = clone_statement(stmt_cmp->get_statement(i));
-                if (stmt != NULL) {
-                    new_cmp->add_statement(stmt);
+                IStatement *n_stmt = clone_statement(stmt_cmp->get_statement(i));
+                if (n_stmt != NULL) {
+                    new_cmp->add_statement(n_stmt);
                 }
             }
             return new_cmp;
@@ -1186,13 +1187,13 @@ IAnnotation_block *Module_inliner::create_annotation_block(
 
     if (anno_block != NULL) {
         for (size_t i = 0, n = anno_block->get_annotation_count(); i < n; ++i) {
-            IAnnotation const     *anno = anno_block->get_annotation(i);
-            IQualified_name const *qn   = anno->get_name();
-            IDefinition const     *def  = qn->get_definition();
+            IAnnotation const     *anno     = anno_block->get_annotation(i);
+            IQualified_name const *qn       = anno->get_name();
+            IDefinition const     *anno_def = qn->get_definition();
 
             if (!is_anno) {
                 // only for non-annotations
-                switch (def->get_semantics()) {
+                switch (anno_def->get_semantics()) {
                 case IDefinition::DS_DISPLAY_NAME_ANNOTATION:
                     // copy and remember the display_name annotation
                     anno_display_name = m_target_module->clone_annotation(anno, /*modifier=*/NULL);
@@ -1217,7 +1218,7 @@ IAnnotation_block *Module_inliner::create_annotation_block(
             }
 
             // for all entities
-            if (def->get_semantics() == IDefinition::DS_ORIGIN_ANNOTATION) {
+            if (anno_def->get_semantics() == IDefinition::DS_ORIGIN_ANNOTATION) {
                 // copy and remember the origin annotation
                 anno_origin = m_target_module->clone_annotation(anno, /*modifier=*/ NULL);
             }

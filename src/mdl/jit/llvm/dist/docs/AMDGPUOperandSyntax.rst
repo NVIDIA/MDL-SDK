@@ -1,6 +1,6 @@
-=================================================
-Syntax of AMDGPU Assembler Operands and Modifiers
-=================================================
+=====================================
+Syntax of AMDGPU Instruction Operands
+=====================================
 
 .. contents::
    :local:
@@ -8,1048 +8,1144 @@ Syntax of AMDGPU Assembler Operands and Modifiers
 Conventions
 ===========
 
-The following conventions are used in syntax description:
+The following notation is used throughout this document:
 
-    =================== =============================================================
+    =================== =============================================================================
     Notation            Description
-    =================== =============================================================
+    =================== =============================================================================
     {0..N}              Any integer value in the range from 0 to N (inclusive).
-                        Unless stated otherwise, this value may be specified as
-                        either a literal or an llvm expression.
-    <x>                 Syntax and meaning of *<x>* is explained elsewhere.
-    =================== =============================================================
+    <x>                 Syntax and meaning of *x* is explained elsewhere.
+    =================== =============================================================================
 
 .. _amdgpu_syn_operands:
 
 Operands
 ========
 
-TBD
+.. _amdgpu_synid_v:
 
-.. _amdgpu_syn_modifiers:
+v
+-
 
-Modifiers
-=========
+Vector registers. There are 256 32-bit vector registers.
 
-DS Modifiers
+A sequence of *vector* registers may be used to operate with more than 32 bits of data.
+
+Assembler currently supports sequences of 1, 2, 3, 4, 8 and 16 *vector* registers.
+
+    =================================================== ====================================================================
+    Syntax                                              Description
+    =================================================== ====================================================================
+    **v**\<N>                                           A single 32-bit *vector* register.
+
+                                                        *N* must be a decimal
+                                                        :ref:`integer number<amdgpu_synid_integer_number>`.
+    **v[**\ <N>\ **]**                                  A single 32-bit *vector* register.
+
+                                                        *N* may be specified as an
+                                                        :ref:`integer number<amdgpu_synid_integer_number>`
+                                                        or an :ref:`absolute expression<amdgpu_synid_absolute_expression>`.
+    **v[**\ <N>:<K>\ **]**                              A sequence of (\ *K-N+1*\ ) *vector* registers.
+
+                                                        *N* and *K* may be specified as
+                                                        :ref:`integer numbers<amdgpu_synid_integer_number>`
+                                                        or :ref:`absolute expressions<amdgpu_synid_absolute_expression>`.
+    **[v**\ <N>, \ **v**\ <N+1>, ... **v**\ <K>\ **]**  A sequence of (\ *K-N+1*\ ) *vector* registers.
+
+                                                        Register indices must be specified as decimal
+                                                        :ref:`integer numbers<amdgpu_synid_integer_number>`.
+    =================================================== ====================================================================
+
+Note: *N* and *K* must satisfy the following conditions:
+
+* *N* <= *K*.
+* 0 <= *N* <= 255.
+* 0 <= *K* <= 255.
+* *K-N+1* must be equal to 1, 2, 3, 4, 8 or 16.
+
+Examples:
+
+.. parsed-literal::
+
+  v255
+  v[0]
+  v[0:1]
+  v[1:1]
+  v[0:3]
+  v[2*2]
+  v[1-1:2-1]
+  [v252]
+  [v252,v253,v254,v255]
+
+.. _amdgpu_synid_nsa:
+
+GFX10 *Image* instructions may use special *NSA* (Non-Sequential Address) syntax for *image addresses*:
+
+    ===================================== =================================================
+    Syntax                                Description
+    ===================================== =================================================
+    **[Vm**, \ **Vn**, ... **Vk**\ **]**  A sequence of 32-bit *vector* registers.
+                                          Each register may be specified using syntax
+                                          defined :ref:`above<amdgpu_synid_v>`.
+
+                                          In contrast with standard syntax, registers
+                                          in *NSA* sequence are not required to have
+                                          consecutive indices. Moreover, the same register
+                                          may appear in the list more than once.
+    ===================================== =================================================
+
+Examples:
+
+.. parsed-literal::
+
+  [v32,v1,v[2]]
+  [v[32],v[1:1],[v2]]
+  [v4,v4,v4,v4]
+
+.. _amdgpu_synid_a:
+
+a
+-
+
+Accumulator registers. There are 256 32-bit accumulator registers.
+
+A sequence of *accumulator* registers may be used to operate with more than 32 bits of data.
+
+Assembler currently supports sequences of 1, 2, 4 and 16 *accumulator* registers.
+
+    =================================================== ========================================================= ====================================================================
+    Syntax                                              An Alternative Syntax (SP3)                               Description
+    =================================================== ========================================================= ====================================================================
+    **a**\<N>                                           **acc**\<N>                                               A single 32-bit *accumulator* register.
+
+                                                                                                                  *N* must be a decimal
+                                                                                                                  :ref:`integer number<amdgpu_synid_integer_number>`.
+    **a[**\ <N>\ **]**                                  **acc[**\ <N>\ **]**                                      A single 32-bit *accumulator* register.
+
+                                                                                                                  *N* may be specified as an
+                                                                                                                  :ref:`integer number<amdgpu_synid_integer_number>`
+                                                                                                                  or an :ref:`absolute expression<amdgpu_synid_absolute_expression>`.
+    **a[**\ <N>:<K>\ **]**                              **acc[**\ <N>:<K>\ **]**                                  A sequence of (\ *K-N+1*\ ) *accumulator* registers.
+
+                                                                                                                  *N* and *K* may be specified as
+                                                                                                                  :ref:`integer numbers<amdgpu_synid_integer_number>`
+                                                                                                                  or :ref:`absolute expressions<amdgpu_synid_absolute_expression>`.
+    **[a**\ <N>, \ **a**\ <N+1>, ... **a**\ <K>\ **]**  **[acc**\ <N>, \ **acc**\ <N+1>, ... **acc**\ <K>\ **]**  A sequence of (\ *K-N+1*\ ) *accumulator* registers.
+
+                                                                                                                  Register indices must be specified as decimal
+                                                                                                                  :ref:`integer numbers<amdgpu_synid_integer_number>`.
+    =================================================== ========================================================= ====================================================================
+
+Note: *N* and *K* must satisfy the following conditions:
+
+* *N* <= *K*.
+* 0 <= *N* <= 255.
+* 0 <= *K* <= 255.
+* *K-N+1* must be equal to 1, 2, 4 or 16.
+
+Examples:
+
+.. parsed-literal::
+
+  a255
+  a[0]
+  a[0:1]
+  a[1:1]
+  a[0:3]
+  a[2*2]
+  a[1-1:2-1]
+  [a252]
+  [a252,a253,a254,a255]
+
+  acc0
+  acc[1]
+  [acc250]
+  [acc2,acc3]
+
+.. _amdgpu_synid_s:
+
+s
+-
+
+Scalar 32-bit registers. The number of available *scalar* registers depends on GPU:
+
+    ======= ============================
+    GPU     Number of *scalar* registers
+    ======= ============================
+    GFX7    104
+    GFX8    102
+    GFX9    102
+    GFX10   106
+    ======= ============================
+
+A sequence of *scalar* registers may be used to operate with more than 32 bits of data.
+Assembler currently supports sequences of 1, 2, 4, 8 and 16 *scalar* registers.
+
+Pairs of *scalar* registers must be even-aligned (the first register must be even).
+Sequences of 4 and more *scalar* registers must be quad-aligned.
+
+    ======================================================== ====================================================================
+    Syntax                                                   Description
+    ======================================================== ====================================================================
+    **s**\ <N>                                               A single 32-bit *scalar* register.
+
+                                                             *N* must be a decimal
+                                                             :ref:`integer number<amdgpu_synid_integer_number>`.
+
+    **s[**\ <N>\ **]**                                       A single 32-bit *scalar* register.
+
+                                                             *N* may be specified as an
+                                                             :ref:`integer number<amdgpu_synid_integer_number>`
+                                                             or an :ref:`absolute expression<amdgpu_synid_absolute_expression>`.
+    **s[**\ <N>:<K>\ **]**                                   A sequence of (\ *K-N+1*\ ) *scalar* registers.
+
+                                                             *N* and *K* may be specified as
+                                                             :ref:`integer numbers<amdgpu_synid_integer_number>`
+                                                             or :ref:`absolute expressions<amdgpu_synid_absolute_expression>`.
+
+    **[s**\ <N>, \ **s**\ <N+1>, ... **s**\ <K>\ **]**       A sequence of (\ *K-N+1*\ ) *scalar* registers.
+
+                                                             Register indices must be specified as decimal
+                                                             :ref:`integer numbers<amdgpu_synid_integer_number>`.
+    ======================================================== ====================================================================
+
+Note: *N* and *K* must satisfy the following conditions:
+
+* *N* must be properly aligned based on sequence size.
+* *N* <= *K*.
+* 0 <= *N* < *SMAX*\ , where *SMAX* is the number of available *scalar* registers.
+* 0 <= *K* < *SMAX*\ , where *SMAX* is the number of available *scalar* registers.
+* *K-N+1* must be equal to 1, 2, 4, 8 or 16.
+
+Examples:
+
+.. parsed-literal::
+
+  s0
+  s[0]
+  s[0:1]
+  s[1:1]
+  s[0:3]
+  s[2*2]
+  s[1-1:2-1]
+  [s4]
+  [s4,s5,s6,s7]
+
+Examples of *scalar* registers with an invalid alignment:
+
+.. parsed-literal::
+
+  s[1:2]
+  s[2:5]
+
+.. _amdgpu_synid_trap:
+
+trap
+----
+
+A set of trap handler registers:
+
+* :ref:`ttmp<amdgpu_synid_ttmp>`
+* :ref:`tba<amdgpu_synid_tba>`
+* :ref:`tma<amdgpu_synid_tma>`
+
+.. _amdgpu_synid_ttmp:
+
+ttmp
+----
+
+Trap handler temporary scalar registers, 32-bits wide.
+The number of available *ttmp* registers depends on GPU:
+
+    ======= ===========================
+    GPU     Number of *ttmp* registers
+    ======= ===========================
+    GFX7    12
+    GFX8    12
+    GFX9    16
+    GFX10   16
+    ======= ===========================
+
+A sequence of *ttmp* registers may be used to operate with more than 32 bits of data.
+Assembler currently supports sequences of 1, 2, 4, 8 and 16 *ttmp* registers.
+
+Pairs of *ttmp* registers must be even-aligned (the first register must be even).
+Sequences of 4 and more *ttmp* registers must be quad-aligned.
+
+    ============================================================= ====================================================================
+    Syntax                                                        Description
+    ============================================================= ====================================================================
+    **ttmp**\ <N>                                                 A single 32-bit *ttmp* register.
+
+                                                                  *N* must be a decimal
+                                                                  :ref:`integer number<amdgpu_synid_integer_number>`.
+    **ttmp[**\ <N>\ **]**                                         A single 32-bit *ttmp* register.
+
+                                                                  *N* may be specified as an
+                                                                  :ref:`integer number<amdgpu_synid_integer_number>`
+                                                                  or an :ref:`absolute expression<amdgpu_synid_absolute_expression>`.
+    **ttmp[**\ <N>:<K>\ **]**                                     A sequence of (\ *K-N+1*\ ) *ttmp* registers.
+
+                                                                  *N* and *K* may be specified as
+                                                                  :ref:`integer numbers<amdgpu_synid_integer_number>`
+                                                                  or :ref:`absolute expressions<amdgpu_synid_absolute_expression>`.
+    **[ttmp**\ <N>, \ **ttmp**\ <N+1>, ... **ttmp**\ <K>\ **]**   A sequence of (\ *K-N+1*\ ) *ttmp* registers.
+
+                                                                  Register indices must be specified as decimal
+                                                                  :ref:`integer numbers<amdgpu_synid_integer_number>`.
+    ============================================================= ====================================================================
+
+Note: *N* and *K* must satisfy the following conditions:
+
+* *N* must be properly aligned based on sequence size.
+* *N* <= *K*.
+* 0 <= *N* < *TMAX*, where *TMAX* is the number of available *ttmp* registers.
+* 0 <= *K* < *TMAX*, where *TMAX* is the number of available *ttmp* registers.
+* *K-N+1* must be equal to 1, 2, 4, 8 or 16.
+
+Examples:
+
+.. parsed-literal::
+
+  ttmp0
+  ttmp[0]
+  ttmp[0:1]
+  ttmp[1:1]
+  ttmp[0:3]
+  ttmp[2*2]
+  ttmp[1-1:2-1]
+  [ttmp4]
+  [ttmp4,ttmp5,ttmp6,ttmp7]
+
+Examples of *ttmp* registers with an invalid alignment:
+
+.. parsed-literal::
+
+  ttmp[1:2]
+  ttmp[2:5]
+
+.. _amdgpu_synid_tba:
+
+tba
+---
+
+Trap base address, 64-bits wide. Holds the pointer to the current trap handler program.
+
+    ================== ======================================================================= =============
+    Syntax             Description                                                             Availability
+    ================== ======================================================================= =============
+    tba                64-bit *trap base address* register.                                    GFX7, GFX8
+    [tba]              64-bit *trap base address* register (an SP3 syntax).                    GFX7, GFX8
+    [tba_lo,tba_hi]    64-bit *trap base address* register (an SP3 syntax).                    GFX7, GFX8
+    ================== ======================================================================= =============
+
+High and low 32 bits of *trap base address* may be accessed as separate registers:
+
+    ================== ======================================================================= =============
+    Syntax             Description                                                             Availability
+    ================== ======================================================================= =============
+    tba_lo             Low 32 bits of *trap base address* register.                            GFX7, GFX8
+    tba_hi             High 32 bits of *trap base address* register.                           GFX7, GFX8
+    [tba_lo]           Low 32 bits of *trap base address* register (an SP3 syntax).            GFX7, GFX8
+    [tba_hi]           High 32 bits of *trap base address* register (an SP3 syntax).           GFX7, GFX8
+    ================== ======================================================================= =============
+
+Note that *tba*, *tba_lo* and *tba_hi* are not accessible as assembler registers in GFX9 and GFX10,
+but *tba* is readable/writable with the help of *s_get_reg* and *s_set_reg* instructions.
+
+.. _amdgpu_synid_tma:
+
+tma
+---
+
+Trap memory address, 64-bits wide.
+
+    ================= ======================================================================= ==================
+    Syntax            Description                                                             Availability
+    ================= ======================================================================= ==================
+    tma               64-bit *trap memory address* register.                                  GFX7, GFX8
+    [tma]             64-bit *trap memory address* register (an SP3 syntax).                  GFX7, GFX8
+    [tma_lo,tma_hi]   64-bit *trap memory address* register (an SP3 syntax).                  GFX7, GFX8
+    ================= ======================================================================= ==================
+
+High and low 32 bits of *trap memory address* may be accessed as separate registers:
+
+    ================= ======================================================================= ==================
+    Syntax            Description                                                             Availability
+    ================= ======================================================================= ==================
+    tma_lo            Low 32 bits of *trap memory address* register.                          GFX7, GFX8
+    tma_hi            High 32 bits of *trap memory address* register.                         GFX7, GFX8
+    [tma_lo]          Low 32 bits of *trap memory address* register (an SP3 syntax).          GFX7, GFX8
+    [tma_hi]          High 32 bits of *trap memory address* register (an SP3 syntax).         GFX7, GFX8
+    ================= ======================================================================= ==================
+
+Note that *tma*, *tma_lo* and *tma_hi* are not accessible as assembler registers in GFX9 and GFX10,
+but *tma* is readable/writable with the help of *s_get_reg* and *s_set_reg* instructions.
+
+.. _amdgpu_synid_flat_scratch:
+
+flat_scratch
 ------------
 
-.. _amdgpu_synid_ds_offset8:
+Flat scratch address, 64-bits wide. Holds the base address of scratch memory.
+
+    ================================== ================================================================
+    Syntax                             Description
+    ================================== ================================================================
+    flat_scratch                       64-bit *flat scratch* address register.
+    [flat_scratch]                     64-bit *flat scratch* address register (an SP3 syntax).
+    [flat_scratch_lo,flat_scratch_hi]  64-bit *flat scratch* address register (an SP3 syntax).
+    ================================== ================================================================
+
+High and low 32 bits of *flat scratch* address may be accessed as separate registers:
+
+    ========================= =========================================================================
+    Syntax                    Description
+    ========================= =========================================================================
+    flat_scratch_lo           Low 32 bits of *flat scratch* address register.
+    flat_scratch_hi           High 32 bits of *flat scratch* address register.
+    [flat_scratch_lo]         Low 32 bits of *flat scratch* address register (an SP3 syntax).
+    [flat_scratch_hi]         High 32 bits of *flat scratch* address register (an SP3 syntax).
+    ========================= =========================================================================
+
+Note that *flat_scratch*, *flat_scratch_lo* and *flat_scratch_hi* are not accessible as assembler
+registers in GFX10, but *flat_scratch* is readable/writable with the help of
+*s_get_reg* and *s_set_reg* instructions.
+
+.. _amdgpu_synid_xnack:
+
+xnack
+-----
+
+Xnack mask, 64-bits wide. Holds a 64-bit mask of which threads
+received an *XNACK* due to a vector memory operation.
+
+.. WARNING:: GFX7 does not support *xnack* feature. For availability of this feature in other GPUs, refer :ref:`this table<amdgpu-processors>`.
+
+\
+
+    ============================== =====================================================
+    Syntax                         Description
+    ============================== =====================================================
+    xnack_mask                     64-bit *xnack mask* register.
+    [xnack_mask]                   64-bit *xnack mask* register (an SP3 syntax).
+    [xnack_mask_lo,xnack_mask_hi]  64-bit *xnack mask* register (an SP3 syntax).
+    ============================== =====================================================
 
-ds_offset8
-~~~~~~~~~~
+High and low 32 bits of *xnack mask* may be accessed as separate registers:
 
-Specifies an immediate unsigned 8-bit offset, in bytes. The default value is 0.
+    ===================== ==============================================================
+    Syntax                Description
+    ===================== ==============================================================
+    xnack_mask_lo         Low 32 bits of *xnack mask* register.
+    xnack_mask_hi         High 32 bits of *xnack mask* register.
+    [xnack_mask_lo]       Low 32 bits of *xnack mask* register (an SP3 syntax).
+    [xnack_mask_hi]       High 32 bits of *xnack mask* register (an SP3 syntax).
+    ===================== ==============================================================
 
-Used with DS instructions which have 2 addresses.
+Note that *xnack_mask*, *xnack_mask_lo* and *xnack_mask_hi* are not accessible as assembler
+registers in GFX10, but *xnack_mask* is readable/writable with the help of
+*s_get_reg* and *s_set_reg* instructions.
 
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    offset:{0..0xFF}                         Specifies a 8-bit offset.
-    ======================================== ================================================
+.. _amdgpu_synid_vcc:
+.. _amdgpu_synid_vcc_lo:
 
-.. _amdgpu_synid_ds_offset16:
+vcc
+---
 
-ds_offset16
-~~~~~~~~~~~
+Vector condition code, 64-bits wide. A bit mask with one bit per thread;
+it holds the result of a vector compare operation.
 
-Specifies an immediate unsigned 16-bit offset, in bytes. The default value is 0.
+Note that GFX10 H/W does not use high 32 bits of *vcc* in *wave32* mode.
 
-Used with DS instructions which have 1 address.
+    ================ =========================================================================
+    Syntax           Description
+    ================ =========================================================================
+    vcc              64-bit *vector condition code* register.
+    [vcc]            64-bit *vector condition code* register (an SP3 syntax).
+    [vcc_lo,vcc_hi]  64-bit *vector condition code* register (an SP3 syntax).
+    ================ =========================================================================
 
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    offset:{0..0xFFFF}                       Specifies a 16-bit offset.
-    ======================================== ================================================
+High and low 32 bits of *vector condition code* may be accessed as separate registers:
 
-.. _amdgpu_synid_sw_offset16:
+    ================ =========================================================================
+    Syntax           Description
+    ================ =========================================================================
+    vcc_lo           Low 32 bits of *vector condition code* register.
+    vcc_hi           High 32 bits of *vector condition code* register.
+    [vcc_lo]         Low 32 bits of *vector condition code* register (an SP3 syntax).
+    [vcc_hi]         High 32 bits of *vector condition code* register (an SP3 syntax).
+    ================ =========================================================================
 
-sw_offset16
-~~~~~~~~~~~
+.. _amdgpu_synid_m0:
 
-This is a special modifier which may be used with *ds_swizzle_b32* instruction only.
-Specifies a sizzle pattern in numeric or symbolic form. The default value is 0.
+m0
+--
 
-See AMD documentation for more information.
+A 32-bit memory register. It has various uses,
+including register indexing and bounds checking.
 
-    ======================================================= ===================================================
-    Syntax                                                  Description
-    ======================================================= ===================================================
-    offset:{0..0xFFFF}                                      Specifies a 16-bit swizzle pattern
-                                                            in a numeric form.
-    offset:swizzle(QUAD_PERM,{0..3},{0..3},{0..3},{0..3})   Specifies a quad permute mode pattern; each
-                                                            number is a lane id.
-    offset:swizzle(BITMASK_PERM, "<mask>")                  Specifies a bitmask permute mode pattern
-                                                            which converts a 5-bit lane id to another
-                                                            lane id with which the lane interacts.
+    =========== ===================================================
+    Syntax      Description
+    =========== ===================================================
+    m0          A 32-bit *memory* register.
+    [m0]        A 32-bit *memory* register (an SP3 syntax).
+    =========== ===================================================
 
-                                                            <mask> is a 5 character sequence which
-                                                            specifies how to transform the bits of the
-                                                            lane id. The following characters are allowed:
+.. _amdgpu_synid_exec:
 
-                                                              * "0" - set bit to 0.
+exec
+----
 
-                                                              * "1" - set bit to 1.
+Execute mask, 64-bits wide. A bit mask with one bit per thread,
+which is applied to vector instructions and controls which threads execute
+and which ignore the instruction.
 
-                                                              * "p" - preserve bit.
+Note that GFX10 H/W does not use high 32 bits of *exec* in *wave32* mode.
 
-                                                              * "i" - inverse bit.
+    ===================== =================================================================
+    Syntax                Description
+    ===================== =================================================================
+    exec                  64-bit *execute mask* register.
+    [exec]                64-bit *execute mask* register (an SP3 syntax).
+    [exec_lo,exec_hi]     64-bit *execute mask* register (an SP3 syntax).
+    ===================== =================================================================
 
-    offset:swizzle(BROADCAST,{2..32},{0..N})                Specifies a broadcast mode.
-                                                            Broadcasts the value of any particular lane to
-                                                            all lanes in its group.
+High and low 32 bits of *execute mask* may be accessed as separate registers:
 
-                                                            The first numeric parameter is a group
-                                                            size and must be equal to 2, 4, 8, 16 or 32.
+    ===================== =================================================================
+    Syntax                Description
+    ===================== =================================================================
+    exec_lo               Low 32 bits of *execute mask* register.
+    exec_hi               High 32 bits of *execute mask* register.
+    [exec_lo]             Low 32 bits of *execute mask* register (an SP3 syntax).
+    [exec_hi]             High 32 bits of *execute mask* register (an SP3 syntax).
+    ===================== =================================================================
 
-                                                            The second numeric parameter is an index of the
-                                                            lane being broadcasted. The index must not exceed
-                                                            group size.
-    offset:swizzle(SWAP,{1..16})                            Specifies a swap mode.
-                                                            Swaps the neighboring groups of
-                                                            1, 2, 4, 8 or 16 lanes.
-    offset:swizzle(REVERSE,{2..32})                         Specifies a reverse mode. Reverses
-                                                            the lanes for groups of 2, 4, 8, 16 or 32 lanes.
-    ======================================================= ===================================================
+.. _amdgpu_synid_vccz:
 
-.. _amdgpu_synid_gds:
+vccz
+----
 
-gds
-~~~
+A single bit flag indicating that the :ref:`vcc<amdgpu_synid_vcc>` is all zeros.
 
-Specifies whether to use GDS or LDS memory (LDS is the default).
+Note: when GFX10 operates in *wave32* mode, this register reflects state of :ref:`vcc_lo<amdgpu_synid_vcc_lo>`.
 
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    gds                                      Use GDS memory.
-    ======================================== ================================================
+.. _amdgpu_synid_execz:
 
+execz
+-----
 
-EXP Modifiers
--------------
+A single bit flag indicating that the :ref:`exec<amdgpu_synid_exec>` is all zeros.
 
-.. _amdgpu_synid_done:
+Note: when GFX10 operates in *wave32* mode, this register reflects state of :ref:`exec_lo<amdgpu_synid_exec>`.
 
-done
-~~~~
+.. _amdgpu_synid_scc:
 
-Specifies if this is the last export from the shader to the target. By default, current
-instruction does not finish an export sequence.
+scc
+---
 
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    done                                     Indicates the last export operation.
-    ======================================== ================================================
+A single bit flag indicating the result of a scalar compare operation.
 
-.. _amdgpu_synid_compr:
+.. _amdgpu_synid_lds_direct:
 
-compr
-~~~~~
+lds_direct
+----------
 
-Indicates if the data are compressed (not compressed by default).
+A special operand which supplies a 32-bit value
+fetched from *LDS* memory using :ref:`m0<amdgpu_synid_m0>` as an address.
 
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    compr                                    Data are compressed.
-    ======================================== ================================================
+.. _amdgpu_synid_null:
 
-.. _amdgpu_synid_vm:
+null
+----
 
-vm
-~~
+This is a special operand which may be used as a source or a destination.
 
-Specifies valid mask flag state (off by default).
+When used as a destination, the result of the operation is discarded.
 
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    vm                                       Set valid mask flag.
-    ======================================== ================================================
+When used as a source, it supplies zero value.
 
-FLAT Modifiers
---------------
+GFX10 only.
 
-.. _amdgpu_synid_flat_offset12:
+.. WARNING:: Due to a H/W bug, this operand cannot be used with VALU instructions in first generation of GFX10.
 
-flat_offset12
-~~~~~~~~~~~~~
+.. _amdgpu_synid_constant:
 
-Specifies an immediate unsigned 12-bit offset, in bytes. The default value is 0.
-
-Cannot be used with *global/scratch* opcodes. GFX9 only.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    offset:{0..4095}                         Specifies a 12-bit unsigned offset.
-    ======================================== ================================================
-
-.. _amdgpu_synid_flat_offset13:
-
-flat_offset13
-~~~~~~~~~~~~~
-
-Specifies an immediate signed 13-bit offset, in bytes. The default value is 0.
-
-Can be used with *global/scratch* opcodes only. GFX9 only.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    offset:{-4096..+4095}                    Specifies a 13-bit signed offset.
-    ======================================== ================================================
-
-glc
-~~~
-
-See a description :ref:`here<amdgpu_synid_glc>`.
-
-slc
-~~~
-
-See a description :ref:`here<amdgpu_synid_slc>`.
-
-tfe
-~~~
-
-See a description :ref:`here<amdgpu_synid_tfe>`.
-
-nv
-~~
-
-See a description :ref:`here<amdgpu_synid_nv>`.
-
-MIMG Modifiers
---------------
-
-.. _amdgpu_synid_dmask:
-
-dmask
-~~~~~
-
-Specifies which channels (image components) are used by the operation. By default, no channels
-are used.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    dmask:{0..15}                            Each bit corresponds to one of 4 image
-                                             components (RGBA). If the specified bit value
-                                             is 0, the component is not used, value 1 means
-                                             that the component is used.
-    ======================================== ================================================
-
-This modifier has some limitations depending on instruction kind:
-
-    ======================================== ================================================
-    Instruction Kind                         Valid dmask Values
-    ======================================== ================================================
-    32-bit atomic cmpswap                    0x3
-    other 32-bit atomic instructions         0x1
-    64-bit atomic cmpswap                    0xF
-    other 64-bit atomic instructions         0x3
-    GATHER4                                  0x1, 0x2, 0x4, 0x8
-    Other instructions                       any value
-    ======================================== ================================================
-
-.. _amdgpu_synid_unorm:
-
-unorm
-~~~~~
-
-Specifies whether address is normalized or not (normalized by default).
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    unorm                                    Force address to be un-normalized.
-    ======================================== ================================================
-
-glc
-~~~
-
-See a description :ref:`here<amdgpu_synid_glc>`.
-
-slc
-~~~
-
-See a description :ref:`here<amdgpu_synid_slc>`.
-
-.. _amdgpu_synid_r128:
-
-r128
-~~~~
-
-Specifies texture resource size. The default size is 256 bits.
-
-GFX7 and GFX8 only.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    r128                                     Specifies 128 bits texture resource size.
-    ======================================== ================================================
-
-tfe
-~~~
-
-See a description :ref:`here<amdgpu_synid_tfe>`.
-
-.. _amdgpu_synid_lwe:
-
-lwe
-~~~
-
-Specifies LOD warning status (LOD warning is disabled by default).
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    lwe                                      Enables LOD warning.
-    ======================================== ================================================
-
-.. _amdgpu_synid_da:
-
-da
-~~
-
-Specifies if an array index must be sent to TA. By default, array index is not sent.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    da                                       Send an array-index to TA.
-    ======================================== ================================================
-
-.. _amdgpu_synid_d16:
-
-d16
-~~~
-
-Specifies data size: 16 or 32 bits (32 bits by default). Not supported by GFX7.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    d16                                      Enables 16-bits data mode.
-
-                                             On loads, convert data in memory to 16-bit
-                                             format before storing it in VGPRs.
-
-                                             For stores, convert 16-bit data in VGPRs to
-                                             32 bits before going to memory.
-
-                                             Note that 16-bit data are stored in VGPRs
-                                             unpacked in GFX8.0. In GFX8.1 and GFX9 16-bit
-                                             data are packed.
-    ======================================== ================================================
-
-.. _amdgpu_synid_a16:
-
-a16
-~~~
-
-Specifies size of image address components: 16 or 32 bits (32 bits by default). GFX9 only.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    a16                                      Enables 16-bits image address components.
-    ======================================== ================================================
-
-Miscellaneous Modifiers
------------------------
-
-.. _amdgpu_synid_glc:
-
-glc
-~~~
-
-This modifier has different meaning for loads, stores, and atomic operations.
-The default value is off (0).
-
-See AMD documentation for details.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    glc                                      Set glc bit to 1.
-    ======================================== ================================================
-
-.. _amdgpu_synid_slc:
-
-slc
-~~~
-
-Specifies cache policy. The default value is off (0).
-
-See AMD documentation for details.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    slc                                      Set slc bit to 1.
-    ======================================== ================================================
-
-.. _amdgpu_synid_tfe:
-
-tfe
-~~~
-
-Controls access to partially resident textures. The default value is off (0).
-
-See AMD documentation for details.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    tfe                                      Set tfe bit to 1.
-    ======================================== ================================================
-
-.. _amdgpu_synid_nv:
-
-nv
-~~
-
-Specifies if instruction is operating on non-volatile memory. By default, memory is volatile.
-
-GFX9 only.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    nv                                       Indicates that instruction operates on
-                                             non-volatile memory.
-    ======================================== ================================================
-
-MUBUF/MTBUF Modifiers
----------------------
-
-.. _amdgpu_synid_idxen:
-
-idxen
-~~~~~
-
-Specifies whether address components include an index. By default, no components are used.
-
-Can be used together with :ref:`offen<amdgpu_synid_offen>`.
-
-Cannot be used with :ref:`addr64<amdgpu_synid_addr64>`.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    idxen                                    Address components include an index.
-    ======================================== ================================================
-
-.. _amdgpu_synid_offen:
-
-offen
-~~~~~
-
-Specifies whether address components include an offset. By default, no components are used.
-
-Can be used together with :ref:`idxen<amdgpu_synid_idxen>`.
-
-Cannot be used with :ref:`addr64<amdgpu_synid_addr64>`.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    offen                                    Address components include an offset.
-    ======================================== ================================================
-
-.. _amdgpu_synid_addr64:
-
-addr64
-~~~~~~
-
-Specifies whether a 64-bit address is used. By default, no address is used.
-
-GFX7 only. Cannot be used with :ref:`offen<amdgpu_synid_offen>` and
-:ref:`idxen<amdgpu_synid_idxen>` modifiers.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    addr64                                   A 64-bit address is used.
-    ======================================== ================================================
-
-.. _amdgpu_synid_buf_offset12:
-
-buf_offset12
-~~~~~~~~~~~~
-
-Specifies an immediate unsigned 12-bit offset, in bytes. The default value is 0.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    offset:{0..0xFFF}                        Specifies a 12-bit unsigned offset.
-    ======================================== ================================================
-
-glc
-~~~
-
-See a description :ref:`here<amdgpu_synid_glc>`.
-
-slc
-~~~
-
-See a description :ref:`here<amdgpu_synid_slc>`.
-
-.. _amdgpu_synid_lds:
-
-lds
-~~~
-
-Specifies where to store the result: VGPRs or LDS (VGPRs by default).
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    lds                                      Store result in LDS.
-    ======================================== ================================================
-
-tfe
-~~~
-
-See a description :ref:`here<amdgpu_synid_tfe>`.
-
-.. _amdgpu_synid_dfmt:
-
-dfmt
-~~~~
-
-TBD
-
-.. _amdgpu_synid_nfmt:
-
-nfmt
-~~~~
-
-TBD
-
-SMRD/SMEM Modifiers
--------------------
-
-glc
-~~~
-
-See a description :ref:`here<amdgpu_synid_glc>`.
-
-nv
-~~
-
-See a description :ref:`here<amdgpu_synid_nv>`.
-
-VINTRP Modifiers
-----------------
-
-.. _amdgpu_synid_high:
-
-high
-~~~~
-
-Specifies which half of the LDS word to use. Low half of LDS word is used by default.
-GFX9 only.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    high                                     Use high half of LDS word.
-    ======================================== ================================================
-
-VOP1/VOP2 DPP Modifiers
------------------------
-
-GFX8 and GFX9 only.
-
-.. _amdgpu_synid_dpp_ctrl:
-
-dpp_ctrl
-~~~~~~~~
-
-Specifies how data are shared between threads. This is a mandatory modifier.
-There is no default value.
-
-Note. The lanes of a wavefront are organized in four banks and four rows.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    quad_perm:[{0..3},{0..3},{0..3},{0..3}]  Full permute of 4 threads.
-    row_mirror                               Mirror threads within row.
-    row_half_mirror                          Mirror threads within 1/2 row (8 threads).
-    row_bcast:15                             Broadcast 15th thread of each row to next row.
-    row_bcast:31                             Broadcast thread 31 to rows 2 and 3.
-    wave_shl:1                               Wavefront left shift by 1 thread.
-    wave_rol:1                               Wavefront left rotate by 1 thread.
-    wave_shr:1                               Wavefront right shift by 1 thread.
-    wave_ror:1                               Wavefront right rotate by 1 thread.
-    row_shl:{1..15}                          Row shift left by 1-15 threads.
-    row_shr:{1..15}                          Row shift right by 1-15 threads.
-    row_ror:{1..15}                          Row rotate right by 1-15 threads.
-    ======================================== ================================================
-
-.. _amdgpu_synid_row_mask:
-
-row_mask
-~~~~~~~~
-
-Controls which rows are enabled for data sharing. By default, all rows are enabled.
-
-Note. The lanes of a wavefront are organized in four banks and four rows.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    row_mask:{0..15}                         Each of 4 bits in the mask controls one
-                                             row (0 - disabled, 1 - enabled).
-    ======================================== ================================================
-
-.. _amdgpu_synid_bank_mask:
-
-bank_mask
-~~~~~~~~~
-
-Controls which banks are enabled for data sharing. By default, all banks are enabled.
-
-Note. The lanes of a wavefront are organized in four banks and four rows.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    bank_mask:{0..15}                        Each of 4 bits in the mask controls one
-                                             bank (0 - disabled, 1 - enabled).
-    ======================================== ================================================
-
-.. _amdgpu_synid_bound_ctrl:
-
-bound_ctrl
-~~~~~~~~~~
-
-Controls data sharing when accessing an invalid lane. By default, data sharing with
-invalid lanes is disabled.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    bound_ctrl:0                             Enables data sharing with invalid lanes.
-                                             Accessing data from an invalid lane will
-                                             return zero.
-    ======================================== ================================================
-
-VOP1/VOP2/VOPC SDWA Modifiers
------------------------------
-
-GFX8 and GFX9 only.
-
-clamp
-~~~~~
-
-See a description :ref:`here<amdgpu_synid_clamp>`.
-
-omod
-~~~~
-
-See a description :ref:`here<amdgpu_synid_omod>`.
-
-GFX9 only.
-
-.. _amdgpu_synid_dst_sel:
-
-dst_sel
-~~~~~~~
-
-Selects which bits in the destination are affected. By default, all bits are affected.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    dst_sel:DWORD                            Use bits 31:0.
-    dst_sel:BYTE_0                           Use bits 7:0.
-    dst_sel:BYTE_1                           Use bits 15:8.
-    dst_sel:BYTE_2                           Use bits 23:16.
-    dst_sel:BYTE_3                           Use bits 31:24.
-    dst_sel:WORD_0                           Use bits 15:0.
-    dst_sel:WORD_1                           Use bits 31:16.
-    ======================================== ================================================
-
-
-.. _amdgpu_synid_dst_unused:
-
-dst_unused
-~~~~~~~~~~
-
-Controls what to do with the bits in the destination which are not selected
-by :ref:`dst_sel<amdgpu_synid_dst_sel>`.
-By default, unused bits are preserved.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    dst_unused:UNUSED_PAD                    Pad with zeros.
-    dst_unused:UNUSED_SEXT                   Sign-extend upper bits, zero lower bits.
-    dst_unused:UNUSED_PRESERVE               Preserve bits.
-    ======================================== ================================================
-
-.. _amdgpu_synid_src0_sel:
-
-src0_sel
-~~~~~~~~
-
-Controls which bits in the src0 are used. By default, all bits are used.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    src0_sel:DWORD                           Use bits 31:0.
-    src0_sel:BYTE_0                          Use bits 7:0.
-    src0_sel:BYTE_1                          Use bits 15:8.
-    src0_sel:BYTE_2                          Use bits 23:16.
-    src0_sel:BYTE_3                          Use bits 31:24.
-    src0_sel:WORD_0                          Use bits 15:0.
-    src0_sel:WORD_1                          Use bits 31:16.
-    ======================================== ================================================
-
-.. _amdgpu_synid_src1_sel:
-
-src1_sel
-~~~~~~~~
-
-Controls which bits in the src1 are used. By default, all bits are used.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    src1_sel:DWORD                           Use bits 31:0.
-    src1_sel:BYTE_0                          Use bits 7:0.
-    src1_sel:BYTE_1                          Use bits 15:8.
-    src1_sel:BYTE_2                          Use bits 23:16.
-    src1_sel:BYTE_3                          Use bits 31:24.
-    src1_sel:WORD_0                          Use bits 15:0.
-    src1_sel:WORD_1                          Use bits 31:16.
-    ======================================== ================================================
-
-VOP1/VOP2/VOPC SDWA Operand Modifiers
--------------------------------------
-
-Operand modifiers are not used separately. They are applied to source operands.
-
-GFX8 and GFX9 only.
-
-abs
-~~~
-
-See a description :ref:`here<amdgpu_synid_abs>`.
-
-neg
-~~~
-
-See a description :ref:`here<amdgpu_synid_neg>`.
-
-.. _amdgpu_synid_sext:
-
-sext
-~~~~
-
-Sign-extends value of a (sub-dword) operand to fill all 32 bits.
-Has no effect for 32-bit operands.
-
-Valid for integer operands only.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    sext(<operand>)                          Sign-extend operand value.
-    ======================================== ================================================
-
-VOP3 Modifiers
---------------
-
-.. _amdgpu_synid_vop3_op_sel:
-
-vop3_op_sel
-~~~~~~~~~~~
-
-Selects the low [15:0] or high [31:16] operand bits for source and destination operands.
-By default, low bits are used for all operands.
-
-The number of values specified with the op_sel modifier must match the number of instruction
-operands (both source and destination). First value controls src0, second value controls src1
-and so on, except that the last value controls destination.
-The value 0 selects the low bits, while 1 selects the high bits.
-
-Note. op_sel modifier affects 16-bit operands only. For 32-bit operands the value specified
-by op_sel must be 0.
-
-GFX9 only.
-
-    ======================================== ============================================================
-    Syntax                                   Description
-    ======================================== ============================================================
-    op_sel:[{0..1},{0..1}]                   Select operand bits for instructions with 1 source operand.
-    op_sel:[{0..1},{0..1},{0..1}]            Select operand bits for instructions with 2 source operands.
-    op_sel:[{0..1},{0..1},{0..1},{0..1}]     Select operand bits for instructions with 3 source operands.
-    ======================================== ============================================================
-
-.. _amdgpu_synid_clamp:
-
-clamp
-~~~~~
-
-Clamp meaning depends on instruction.
-
-For *v_cmp* instructions, clamp modifier indicates that the compare signals
-if a floating point exception occurs. By default, signaling is disabled.
-Not supported by GFX7.
-
-For integer operations, clamp modifier indicates that the result must be clamped
-to the largest and smallest representable value. By default, there is no clamping.
-Integer clamping is not supported by GFX7.
-
-For floating point operations, clamp modifier indicates that the result must be clamped
-to the range [0.0, 1.0]. By default, there is no clamping.
-
-Note. Clamp modifier is applied after :ref:`output modifiers<amdgpu_synid_omod>` (if any).
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    clamp                                    Enables clamping (or signaling).
-    ======================================== ================================================
-
-.. _amdgpu_synid_omod:
-
-omod
-~~~~
-
-Specifies if an output modifier must be applied to the result.
-By default, no output modifiers are applied.
-
-Note. Output modifiers are applied before :ref:`clamping<amdgpu_synid_clamp>` (if any).
-
-Output modifiers are valid for f32 and f64 floating point results only.
-They must not be used with f16.
-
-Note. *v_cvt_f16_f32* is an exception. This instruction produces f16 result
-but accepts output modifiers.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    mul:2                                    Multiply the result by 2.
-    mul:4                                    Multiply the result by 4.
-    div:2                                    Multiply the result by 0.5.
-    ======================================== ================================================
-
-VOP3 Operand Modifiers
-----------------------
-
-Operand modifiers are not used separately. They are applied to source operands.
-
-.. _amdgpu_synid_abs:
-
-abs
-~~~
-
-Computes absolute value of its operand. Applied before :ref:`neg<amdgpu_synid_neg>` (if any).
-Valid for floating point operands only.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    abs(<operand>)                           Get absolute value of operand.
-    \|<operand>|                             The same as above.
-    ======================================== ================================================
-
-.. _amdgpu_synid_neg:
-
-neg
-~~~
-
-Computes negative value of its operand. Applied after :ref:`abs<amdgpu_synid_abs>` (if any).
-Valid for floating point operands only.
-
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    neg(<operand>)                           Get negative value of operand.
-    -<operand>                               The same as above.
-    ======================================== ================================================
-
-VOP3P Modifiers
+inline constant
 ---------------
 
-This section describes modifiers of regular VOP3P instructions.
-*v_mad_mix* modifiers are described :ref:`in a separate section<amdgpu_synid_mad_mix>`.
+An *inline constant* is an integer or a floating-point value encoded as a part of an instruction.
+Compare *inline constants* with :ref:`literals<amdgpu_synid_literal>`.
 
-GFX9 only.
+Inline constants include:
 
-.. _amdgpu_synid_op_sel:
+* :ref:`iconst<amdgpu_synid_iconst>`
+* :ref:`fconst<amdgpu_synid_fconst>`
+* :ref:`ival<amdgpu_synid_ival>`
 
-op_sel
+If a number may be encoded as either
+a :ref:`literal<amdgpu_synid_literal>` or
+a :ref:`constant<amdgpu_synid_constant>`,
+assembler selects the latter encoding as more efficient.
+
+.. _amdgpu_synid_iconst:
+
+iconst
 ~~~~~~
 
-Selects the low [15:0] or high [31:16] operand bits as input to the operation
-which results in the lower-half of the destination.
-By default, low bits are used for all operands.
+An :ref:`integer number<amdgpu_synid_integer_number>` or
+an :ref:`absolute expression<amdgpu_synid_absolute_expression>`
+encoded as an *inline constant*.
 
-The number of values specified with the op_sel modifier must match the number of source
-operands. First value controls src0, second value controls src1 and so on.
-The value 0 selects the low bits, while 1 selects the high bits.
+Only a small fraction of integer numbers may be encoded as *inline constants*.
+They are enumerated in the table below.
+Other integer numbers have to be encoded as :ref:`literals<amdgpu_synid_literal>`.
 
-    ======================================== =============================================================
-    Syntax                                   Description
-    ======================================== =============================================================
-    op_sel:[{0..1}]                          Select operand bits for instructions with 1 source operand.
-    op_sel:[{0..1},{0..1}]                   Select operand bits for instructions with 2 source operands.
-    op_sel:[{0..1},{0..1},{0..1}]            Select operand bits for instructions with 3 source operands.
-    ======================================== =============================================================
+    ================================== ====================================
+    Value                              Note
+    ================================== ====================================
+    {0..64}                            Positive integer inline constants.
+    {-16..-1}                          Negative integer inline constants.
+    ================================== ====================================
 
-.. _amdgpu_synid_op_sel_hi:
+.. WARNING:: GFX7 does not support inline constants for *f16* operands.
 
-op_sel_hi
-~~~~~~~~~
+.. _amdgpu_synid_fconst:
 
-Selects the low [15:0] or high [31:16] operand bits as input to the operation
-which results in the upper-half of the destination.
-By default, high bits are used for all operands.
-
-The number of values specified with the op_sel_hi modifier must match the number of source
-operands. First value controls src0, second value controls src1 and so on.
-The value 0 selects the low bits, while 1 selects the high bits.
-
-    ======================================== =============================================================
-    Syntax                                   Description
-    ======================================== =============================================================
-    op_sel_hi:[{0..1}]                       Select operand bits for instructions with 1 source operand.
-    op_sel_hi:[{0..1},{0..1}]                Select operand bits for instructions with 2 source operands.
-    op_sel_hi:[{0..1},{0..1},{0..1}]         Select operand bits for instructions with 3 source operands.
-    ======================================== =============================================================
-
-.. _amdgpu_synid_neg_lo:
-
-neg_lo
+fconst
 ~~~~~~
 
-Specifies whether to change sign of operand values selected by
-:ref:`op_sel<amdgpu_synid_op_sel>`. These values are then used
-as input to the operation which results in the upper-half of the destination.
+A :ref:`floating-point number<amdgpu_synid_floating-point_number>`
+encoded as an *inline constant*.
 
-The number of values specified with this modifier must match the number of source
-operands. First value controls src0, second value controls src1 and so on.
+Only a small fraction of floating-point numbers may be encoded as *inline constants*.
+They are enumerated in the table below.
+Other floating-point numbers have to be encoded as :ref:`literals<amdgpu_synid_literal>`.
 
-The value 0 indicates that the corresponding operand value is used unmodified,
-the value 1 indicates that negative value of the operand must be used.
+    ===================== ===================================================== ==================
+    Value                 Note                                                  Availability
+    ===================== ===================================================== ==================
+    0.0                   The same as integer constant 0.                       All GPUs
+    0.5                   Floating-point constant 0.5                           All GPUs
+    1.0                   Floating-point constant 1.0                           All GPUs
+    2.0                   Floating-point constant 2.0                           All GPUs
+    4.0                   Floating-point constant 4.0                           All GPUs
+    -0.5                  Floating-point constant -0.5                          All GPUs
+    -1.0                  Floating-point constant -1.0                          All GPUs
+    -2.0                  Floating-point constant -2.0                          All GPUs
+    -4.0                  Floating-point constant -4.0                          All GPUs
+    0.1592                1.0/(2.0*pi). Use only for 16-bit operands.           GFX8, GFX9, GFX10
+    0.15915494            1.0/(2.0*pi). Use only for 16- and 32-bit operands.   GFX8, GFX9, GFX10
+    0.15915494309189532   1.0/(2.0*pi).                                         GFX8, GFX9, GFX10
+    ===================== ===================================================== ==================
 
-By default, operand values are used unmodified.
+.. WARNING:: Floating-point inline constants cannot be used with *16-bit integer* operands. \
+             Assembler will attempt to encode these values as literals.
 
-This modifier is valid for floating point operands only.
+.. WARNING:: GFX7 does not support inline constants for *f16* operands.
 
-    ======================================== ==================================================================
-    Syntax                                   Description
-    ======================================== ==================================================================
-    neg_lo:[{0..1}]                          Select affected operands for instructions with 1 source operand.
-    neg_lo:[{0..1},{0..1}]                   Select affected operands for instructions with 2 source operands.
-    neg_lo:[{0..1},{0..1},{0..1}]            Select affected operands for instructions with 3 source operands.
-    ======================================== ==================================================================
+.. _amdgpu_synid_ival:
 
-.. _amdgpu_synid_neg_hi:
+ival
+~~~~
 
-neg_hi
-~~~~~~
+A symbolic operand encoded as an *inline constant*.
+These operands provide read-only access to H/W registers.
 
-Specifies whether to change sign of operand values selected by
-:ref:`op_sel_hi<amdgpu_synid_op_sel_hi>`. These values are then used
-as input to the operation which results in the upper-half of the destination.
+    ======================== ================================================ =============
+    Syntax                   Note                                             Availability
+    ======================== ================================================ =============
+    shared_base              Base address of shared memory region.            GFX9, GFX10
+    shared_limit             Address of the end of shared memory region.      GFX9, GFX10
+    private_base             Base address of private memory region.           GFX9, GFX10
+    private_limit            Address of the end of private memory region.     GFX9, GFX10
+    pops_exiting_wave_id     A dedicated counter for POPS.                    GFX9, GFX10
+    ======================== ================================================ =============
 
-The number of values specified with this modifier must match the number of source
-operands. First value controls src0, second value controls src1 and so on.
+.. _amdgpu_synid_literal:
 
-The value 0 indicates that the corresponding operand value is used unmodified,
-the value 1 indicates that negative value of the operand must be used.
+literal
+-------
 
-By default, operand values are used unmodified.
+A *literal* is a 64-bit value encoded as a separate 32-bit dword in the instruction stream.
+Compare *literals* with :ref:`inline constants<amdgpu_synid_constant>`.
 
-This modifier is valid for floating point operands only.
+If a number may be encoded as either
+a :ref:`literal<amdgpu_synid_literal>` or
+an :ref:`inline constant<amdgpu_synid_constant>`,
+assembler selects the latter encoding as more efficient.
 
-    ======================================== ==================================================================
-    Syntax                                   Description
-    ======================================== ==================================================================
-    neg_hi:[{0..1}]                          Select affected operands for instructions with 1 source operand.
-    neg_hi:[{0..1},{0..1}]                   Select affected operands for instructions with 2 source operands.
-    neg_hi:[{0..1},{0..1},{0..1}]            Select affected operands for instructions with 3 source operands.
-    ======================================== ==================================================================
+Literals may be specified as :ref:`integer numbers<amdgpu_synid_integer_number>`,
+:ref:`floating-point numbers<amdgpu_synid_floating-point_number>`,
+:ref:`absolute expressions<amdgpu_synid_absolute_expression>` or
+:ref:`relocatable expressions<amdgpu_synid_relocatable_expression>`.
 
-clamp
-~~~~~
+An instruction may use only one literal but several operands may refer the same literal.
 
-See a description :ref:`here<amdgpu_synid_clamp>`.
+.. _amdgpu_synid_uimm8:
 
-.. _amdgpu_synid_mad_mix:
+uimm8
+-----
 
-VOP3P V_MAD_MIX Modifiers
--------------------------
+A 8-bit :ref:`integer number<amdgpu_synid_integer_number>`
+or an :ref:`absolute expression<amdgpu_synid_absolute_expression>`.
+The value must be in the range 0..0xFF.
 
-These instructions use VOP3P format but have different modifiers.
+.. _amdgpu_synid_uimm32:
 
-GFX9 only.
+uimm32
+------
 
-.. _amdgpu_synid_mad_mix_op_sel:
+A 32-bit :ref:`integer number<amdgpu_synid_integer_number>`
+or an :ref:`absolute expression<amdgpu_synid_absolute_expression>`.
+The value must be in the range 0..0xFFFFFFFF.
 
-mad_mix_op_sel
-~~~~~~~~~~~~~~
+.. _amdgpu_synid_uimm20:
 
-This operand has meaning only for 16-bit source operands as indicated by
-:ref:`mad_mix_op_sel_hi<amdgpu_synid_mad_mix_op_sel_hi>`.
-It specifies to select either the low [15:0] or high [31:16] operand bits
-as input to the operation.
+uimm20
+------
 
-The value 0 indicates the low bits, the value 1 indicates the high 16 bits.
-By default, low bits are used for all operands.
+A 20-bit :ref:`integer number<amdgpu_synid_integer_number>`
+or an :ref:`absolute expression<amdgpu_synid_absolute_expression>`.
 
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    op_sel:[{0..1},{0..1},{0..1}]            Select location of each 16-bit source operand.
-    ======================================== ================================================
+The value must be in the range 0..0xFFFFF.
 
-.. _amdgpu_synid_mad_mix_op_sel_hi:
+.. _amdgpu_synid_uimm21:
 
-mad_mix_op_sel_hi
-~~~~~~~~~~~~~~~~~
+uimm21
+------
 
-Selects the size of source operands: either 32 bits or 16 bits.
-By default, 32 bits are used for all source operands.
+A 21-bit :ref:`integer number<amdgpu_synid_integer_number>`
+or an :ref:`absolute expression<amdgpu_synid_absolute_expression>`.
 
-The value 0 indicates 32 bits, the value 1 indicates 16 bits.
-The location of 16 bits in the operand may be specified by
-:ref:`mad_mix_op_sel<amdgpu_synid_mad_mix_op_sel>`.
+The value must be in the range 0..0x1FFFFF.
 
-    ======================================== ================================================
-    Syntax                                   Description
-    ======================================== ================================================
-    op_sel_hi:[{0..1},{0..1},{0..1}]         Select size of each source operand.
-    ======================================== ================================================
+.. WARNING:: Assembler currently supports 20-bit offsets only. Use :ref:`uimm20<amdgpu_synid_uimm20>` as a replacement.
 
-abs
-~~~
+.. _amdgpu_synid_simm21:
 
-See a description :ref:`here<amdgpu_synid_abs>`.
+simm21
+------
 
-neg
-~~~
+A 21-bit :ref:`integer number<amdgpu_synid_integer_number>`
+or an :ref:`absolute expression<amdgpu_synid_absolute_expression>`.
 
-See a description :ref:`here<amdgpu_synid_neg>`.
+The value must be in the range -0x100000..0x0FFFFF.
 
-clamp
-~~~~~
+.. WARNING:: Assembler currently supports 20-bit unsigned offsets only. Use :ref:`uimm20<amdgpu_synid_uimm20>` as a replacement.
 
-See a description :ref:`here<amdgpu_synid_clamp>`.
+.. _amdgpu_synid_off:
+
+off
+---
+
+A special entity which indicates that the value of this operand is not used.
+
+    ================================== ===================================================
+    Syntax                             Description
+    ================================== ===================================================
+    off                                Indicates an unused operand.
+    ================================== ===================================================
+
+
+.. _amdgpu_synid_number:
+
+Numbers
+=======
+
+.. _amdgpu_synid_integer_number:
+
+Integer Numbers
+---------------
+
+Integer numbers are 64 bits wide.
+They are converted to :ref:`expected operand type<amdgpu_syn_instruction_type>`
+as described :ref:`here<amdgpu_synid_int_conv>`.
+
+Integer numbers may be specified in binary, octal, hexadecimal and decimal formats:
+
+    ============ =============================== ========
+    Format       Syntax                          Example
+    ============ =============================== ========
+    Decimal      [-]?[1-9][0-9]*                 -1234
+    Binary       [-]?0b[01]+                     0b1010
+    Octal        [-]?0[0-7]+                     010
+    Hexadecimal  [-]?0x[0-9a-fA-F]+              0xff
+    \            [-]?[0x]?[0-9][0-9a-fA-F]*[hH]  0ffh
+    ============ =============================== ========
+
+.. _amdgpu_synid_floating-point_number:
+
+Floating-Point Numbers
+----------------------
+
+All floating-point numbers are handled as double (64 bits wide).
+They are converted to
+:ref:`expected operand type<amdgpu_syn_instruction_type>`
+as described :ref:`here<amdgpu_synid_fp_conv>`.
+
+Floating-point numbers may be specified in hexadecimal and decimal formats:
+
+    ============ ======================================================== ====================== ====================
+    Format       Syntax                                                   Examples               Note
+    ============ ======================================================== ====================== ====================
+    Decimal      [-]?[0-9]*[.][0-9]*([eE][+-]?[0-9]*)?                    -1.234, 234e2          Must include either
+                                                                                                 a decimal separator
+                                                                                                 or an exponent.
+    Hexadecimal  [-]0x[0-9a-fA-F]*(.[0-9a-fA-F]*)?[pP][+-]?[0-9a-fA-F]+   -0x1afp-10, 0x.1afp10
+    ============ ======================================================== ====================== ====================
+
+.. _amdgpu_synid_expression:
+
+Expressions
+===========
+
+An expression is evaluated to a 64-bit integer.
+Note that floating-point expressions are not supported.
+
+There are two kinds of expressions:
+
+* :ref:`Absolute<amdgpu_synid_absolute_expression>`.
+* :ref:`Relocatable<amdgpu_synid_relocatable_expression>`.
+
+.. _amdgpu_synid_absolute_expression:
+
+Absolute Expressions
+--------------------
+
+The value of an absolute expression does not change after program relocation.
+Absolute expressions must not include unassigned and relocatable values
+such as labels.
+
+Absolute expressions are evaluated to 64-bit integer values and converted to
+:ref:`expected operand type<amdgpu_syn_instruction_type>`
+as described :ref:`here<amdgpu_synid_int_conv>`.
+
+Examples:
+
+.. parsed-literal::
+
+    x = -1
+    y = x + 10
+
+.. _amdgpu_synid_relocatable_expression:
+
+Relocatable Expressions
+-----------------------
+
+The value of a relocatable expression depends on program relocation.
+
+Note that use of relocatable expressions is limited with branch targets
+and 32-bit integer operands.
+
+A relocatable expression is evaluated to a 64-bit integer value
+which depends on operand kind and :ref:`relocation type<amdgpu-relocation-records>`
+of symbol(s) used in the expression. For example, if an instruction refers a label,
+this reference is evaluated to an offset from the address after the instruction
+to the label address:
+
+.. parsed-literal::
+
+    label:
+    v_add_co_u32_e32 v0, vcc, label, v1  // 'label' operand is evaluated to -4
+
+Note that values of relocatable expressions are usually unknown at assembly time;
+they are resolved later by a linker and converted to
+:ref:`expected operand type<amdgpu_syn_instruction_type>`
+as described :ref:`here<amdgpu_synid_rl_conv>`.
+
+Operands and Operations
+-----------------------
+
+Expressions are composed of 64-bit integer operands and operations.
+Operands include :ref:`integer numbers<amdgpu_synid_integer_number>`
+and :ref:`symbols<amdgpu_synid_symbol>`.
+
+Expressions may also use "." which is a reference to the current PC (program counter).
+
+:ref:`Unary<amdgpu_synid_expression_un_op>` and :ref:`binary<amdgpu_synid_expression_bin_op>`
+operations produce 64-bit integer results.
+
+Syntax of Expressions
+---------------------
+
+Syntax of expressions is shown below::
+
+    expr ::= expr binop expr | primaryexpr ;
+
+    primaryexpr ::= '(' expr ')' | symbol | number | '.' | unop primaryexpr ;
+
+    binop ::= '&&'
+            | '||'
+            | '|'
+            | '^'
+            | '&'
+            | '!'
+            | '=='
+            | '!='
+            | '<>'
+            | '<'
+            | '<='
+            | '>'
+            | '>='
+            | '<<'
+            | '>>'
+            | '+'
+            | '-'
+            | '*'
+            | '/'
+            | '%' ;
+
+    unop ::= '~'
+           | '+'
+           | '-'
+           | '!' ;
+
+.. _amdgpu_synid_expression_bin_op:
+
+Binary Operators
+----------------
+
+Binary operators are described in the following table.
+They operate on and produce 64-bit integers.
+Operators with higher priority are performed first.
+
+    ========== ========= ===============================================
+    Operator   Priority  Meaning
+    ========== ========= ===============================================
+       \*         5      Integer multiplication.
+       /          5      Integer division.
+       %          5      Integer signed remainder.
+       \+         4      Integer addition.
+       \-         4      Integer subtraction.
+       <<         3      Integer shift left.
+       >>         3      Logical shift right.
+       ==         2      Equality comparison.
+       !=         2      Inequality comparison.
+       <>         2      Inequality comparison.
+       <          2      Signed less than comparison.
+       <=         2      Signed less than or equal comparison.
+       >          2      Signed greater than comparison.
+       >=         2      Signed greater than or equal comparison.
+      \|          1      Bitwise or.
+       ^          1      Bitwise xor.
+       &          1      Bitwise and.
+       &&         0      Logical and.
+       ||         0      Logical or.
+    ========== ========= ===============================================
+
+.. _amdgpu_synid_expression_un_op:
+
+Unary Operators
+---------------
+
+Unary operators are described in the following table.
+They operate on and produce 64-bit integers.
+
+    ========== ===============================================
+    Operator   Meaning
+    ========== ===============================================
+       !       Logical negation.
+       ~       Bitwise negation.
+       \+      Integer unary plus.
+       \-      Integer unary minus.
+    ========== ===============================================
+
+.. _amdgpu_synid_symbol:
+
+Symbols
+-------
+
+A symbol is a named 64-bit integer value, representing a relocatable
+address or an absolute (non-relocatable) number.
+
+Symbol names have the following syntax:
+    ``[a-zA-Z_.][a-zA-Z0-9_$.@]*``
+
+The table below provides several examples of syntax used for symbol definition.
+
+    ================ ==========================================================
+    Syntax           Meaning
+    ================ ==========================================================
+    .globl <S>       Declares a global symbol S without assigning it a value.
+    .set <S>, <E>    Assigns the value of an expression E to a symbol S.
+    <S> = <E>        Assigns the value of an expression E to a symbol S.
+    <S>:             Declares a label S and assigns it the current PC value.
+    ================ ==========================================================
+
+A symbol may be used before it is declared or assigned;
+unassigned symbols are assumed to be PC-relative.
+
+Additional information about symbols may be found :ref:`here<amdgpu-symbols>`.
+
+.. _amdgpu_synid_conv:
+
+Type and Size Conversion
+========================
+
+This section describes what happens when a 64-bit
+:ref:`integer number<amdgpu_synid_integer_number>`, a
+:ref:`floating-point number<amdgpu_synid_floating-point_number>` or an
+:ref:`expression<amdgpu_synid_expression>`
+is used for an operand which has a different type or size.
+
+.. _amdgpu_synid_int_conv:
+
+Conversion of Integer Values
+----------------------------
+
+Instruction operands may be specified as 64-bit :ref:`integer numbers<amdgpu_synid_integer_number>` or
+:ref:`absolute expressions<amdgpu_synid_absolute_expression>`. These values are converted to
+the :ref:`expected operand type<amdgpu_syn_instruction_type>` using the following steps:
+
+1. *Validation*. Assembler checks if the input value may be truncated without loss to the required *truncation width*
+(see the table below). There are two cases when this operation is enabled:
+
+    * The truncated bits are all 0.
+    * The truncated bits are all 1 and the value after truncation has its MSB bit set.
+
+In all other cases assembler triggers an error.
+
+2. *Conversion*. The input value is converted to the expected type as described in the table below.
+Depending on operand kind, this conversion is performed by either assembler or AMDGPU H/W (or both).
+
+    ============== ================= =============== ====================================================================
+    Expected type  Truncation Width  Conversion      Description
+    ============== ================= =============== ====================================================================
+    i16, u16, b16  16                num.u16         Truncate to 16 bits.
+    i32, u32, b32  32                num.u32         Truncate to 32 bits.
+    i64            32                {-1,num.i32}    Truncate to 32 bits and then sign-extend the result to 64 bits.
+    u64, b64       32                {0,num.u32}     Truncate to 32 bits and then zero-extend the result to 64 bits.
+    f16            16                num.u16         Use low 16 bits as an f16 value.
+    f32            32                num.u32         Use low 32 bits as an f32 value.
+    f64            32                {num.u32,0}     Use low 32 bits of the number as high 32 bits
+                                                     of the result; low 32 bits of the result are zeroed.
+    ============== ================= =============== ====================================================================
+
+Examples of enabled conversions:
+
+.. parsed-literal::
+
+    // GFX9
+
+    v_add_u16 v0, -1, 0                   // src0 = 0xFFFF
+    v_add_f16 v0, -1, 0                   // src0 = 0xFFFF (NaN)
+                                          //
+    v_add_u32 v0, -1, 0                   // src0 = 0xFFFFFFFF
+    v_add_f32 v0, -1, 0                   // src0 = 0xFFFFFFFF (NaN)
+                                          //
+    v_add_u16 v0, 0xff00, v0              // src0 = 0xff00
+    v_add_u16 v0, 0xffffffffffffff00, v0  // src0 = 0xff00
+    v_add_u16 v0, -256, v0                // src0 = 0xff00
+                                          //
+    s_bfe_i64 s[0:1], 0xffefffff, s3      // src0 = 0xffffffffffefffff
+    s_bfe_u64 s[0:1], 0xffefffff, s3      // src0 = 0x00000000ffefffff
+    v_ceil_f64_e32 v[0:1], 0xffefffff     // src0 = 0xffefffff00000000 (-1.7976922776554302e308)
+                                          //
+    x = 0xffefffff                        //
+    s_bfe_i64 s[0:1], x, s3               // src0 = 0xffffffffffefffff
+    s_bfe_u64 s[0:1], x, s3               // src0 = 0x00000000ffefffff
+    v_ceil_f64_e32 v[0:1], x              // src0 = 0xffefffff00000000 (-1.7976922776554302e308)
+
+Examples of disabled conversions:
+
+.. parsed-literal::
+
+    // GFX9
+
+    v_add_u16 v0, 0x1ff00, v0               // truncated bits are not all 0 or 1
+    v_add_u16 v0, 0xffffffffffff00ff, v0    // truncated bits do not match MSB of the result
+
+.. _amdgpu_synid_fp_conv:
+
+Conversion of Floating-Point Values
+-----------------------------------
+
+Instruction operands may be specified as 64-bit :ref:`floating-point numbers<amdgpu_synid_floating-point_number>`.
+These values are converted to the :ref:`expected operand type<amdgpu_syn_instruction_type>` using the following steps:
+
+1. *Validation*. Assembler checks if the input f64 number can be converted
+to the *required floating-point type* (see the table below) without overflow or underflow.
+Precision lost is allowed. If this conversion is not possible, assembler triggers an error.
+
+2. *Conversion*. The input value is converted to the expected type as described in the table below.
+Depending on operand kind, this is performed by either assembler or AMDGPU H/W (or both).
+
+    ============== ================ ================= =================================================================
+    Expected type  Required FP Type Conversion        Description
+    ============== ================ ================= =================================================================
+    i16, u16, b16  f16              f16(num)          Convert to f16 and use bits of the result as an integer value.
+                                                      The value has to be encoded as a literal or an error occurs.
+                                                      Note that the value cannot be encoded as an inline constant.
+    i32, u32, b32  f32              f32(num)          Convert to f32 and use bits of the result as an integer value.
+    i64, u64, b64  \-               \-                Conversion disabled.
+    f16            f16              f16(num)          Convert to f16.
+    f32            f32              f32(num)          Convert to f32.
+    f64            f64              {num.u32.hi,0}    Use high 32 bits of the number as high 32 bits of the result;
+                                                      zero-fill low 32 bits of the result.
+
+                                                      Note that the result may differ from the original number.
+    ============== ================ ================= =================================================================
+
+Examples of enabled conversions:
+
+.. parsed-literal::
+
+    // GFX9
+
+    v_add_f16 v0, 1.0, 0        // src0 = 0x3C00 (1.0)
+    v_add_u16 v0, 1.0, 0        // src0 = 0x3C00
+                                //
+    v_add_f32 v0, 1.0, 0        // src0 = 0x3F800000 (1.0)
+    v_add_u32 v0, 1.0, 0        // src0 = 0x3F800000
+
+                                // src0 before conversion:
+                                //   1.7976931348623157e308 = 0x7fefffffffffffff
+                                // src0 after conversion:
+                                //   1.7976922776554302e308 = 0x7fefffff00000000
+    v_ceil_f64 v[0:1], 1.7976931348623157e308
+
+    v_add_f16 v1, 65500.0, v2   // ok for f16.
+    v_add_f32 v1, 65600.0, v2   // ok for f32, but would result in overflow for f16.
+
+Examples of disabled conversions:
+
+.. parsed-literal::
+
+    // GFX9
+
+    v_add_f16 v1, 65600.0, v2    // overflow
+
+.. _amdgpu_synid_rl_conv:
+
+Conversion of Relocatable Values
+--------------------------------
+
+:ref:`Relocatable expressions<amdgpu_synid_relocatable_expression>`
+may be used with 32-bit integer operands and jump targets.
+
+When the value of a relocatable expression is resolved by a linker, it is
+converted as needed and truncated to the operand size. The conversion depends
+on :ref:`relocation type<amdgpu-relocation-records>` and operand kind.
+
+For example, when a 32-bit operand of an instruction refers a relocatable expression *expr*,
+this reference is evaluated to a 64-bit offset from the address after the
+instruction to the address being referenced, *counted in bytes*.
+Then the value is truncated to 32 bits and encoded as a literal:
+
+.. parsed-literal::
+
+    expr = .
+    v_add_co_u32_e32 v0, vcc, expr, v1  // 'expr' operand is evaluated to -4
+                                        // and then truncated to 0xFFFFFFFC
+
+As another example, when a branch instruction refers a label,
+this reference is evaluated to an offset from the address after the
+instruction to the label address, *counted in dwords*.
+Then the value is truncated to 16 bits:
+
+.. parsed-literal::
+
+    label:
+    s_branch label  // 'label' operand is evaluated to -1 and truncated to 0xFFFF

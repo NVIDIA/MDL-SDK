@@ -1,9 +1,8 @@
 //===- llvm/IR/DiagnosticInfo.h - Diagnostic Declaration --------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -22,6 +21,7 @@
 #include "llvm/ADT/Twine.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/Support/CBindingWrapping.h"
+#include "llvm/Support/TypeSize.h"
 #include "llvm/Support/YAMLTraits.h"
 #include <algorithm>
 #include <cstdint>
@@ -35,6 +35,7 @@ namespace llvm {
 class DiagnosticPrinter;
 class Function;
 class Instruction;
+class InstructionCost;
 class LLVMContext;
 class Module;
 class SMDiagnostic;
@@ -56,6 +57,7 @@ enum DiagnosticKind {
   DK_ResourceLimit,
   DK_StackSize,
   DK_Linker,
+  DK_Lowering,
   DK_DebugMetadataVersion,
   DK_DebugMetadataInvalid,
   DK_ISelFallback,
@@ -76,7 +78,8 @@ enum DiagnosticKind {
   DK_MIRParser,
   DK_PGOProfile,
   DK_Unsupported,
-  DK_FirstPluginKind
+  DK_FirstPluginKind // Must be last value to work with
+                     // getNextAvailablePluginDiagnosticKind
 };
 
 /// Get the next available kind ID for a plugin diagnostic.
@@ -101,6 +104,7 @@ private:
   /// Severity gives the severity of the diagnostic.
   const DiagnosticSeverity Severity;
 
+  virtual void anchor();
 public:
   DiagnosticInfo(/* DiagnosticKind */ int Kind, DiagnosticSeverity Severity)
       : Kind(Kind), Severity(Severity) {}
@@ -210,6 +214,7 @@ public:
 };
 
 class DiagnosticInfoStackSize : public DiagnosticInfoResourceLimit {
+  void anchor() override;
 public:
   DiagnosticInfoStackSize(const Function &Fn, uint64_t StackSize,
                           DiagnosticSeverity Severity = DS_Warning,
@@ -340,7 +345,7 @@ private:
 };
 
 class DiagnosticLocation {
-  StringRef Filename;
+  DIFile *File = nullptr;
   unsigned Line = 0;
   unsigned Column = 0;
 
@@ -349,14 +354,18 @@ public:
   DiagnosticLocation(const DebugLoc &DL);
   DiagnosticLocation(const DISubprogram *SP);
 
-  bool isValid() const { return !Filename.empty(); }
-  StringRef getFilename() const { return Filename; }
+  bool isValid() const { return File; }
+  /// Return the full path to the file.
+  std::string getAbsolutePath() const;
+  /// Return the file name relative to the compilation directory.
+  StringRef getRelativePath() const;
   unsigned getLine() const { return Line; }
   unsigned getColumn() const { return Column; }
 };
 
 /// Common features for diagnostics with an associated location.
 class DiagnosticInfoWithLocationBase : public DiagnosticInfo {
+  void anchor() override;
 public:
   /// \p Fn is the function where the diagnostic is being emitted. \p Loc is
   /// the location information to use in the diagnostic.
@@ -375,9 +384,13 @@ public:
   const std::string getLocationStr() const;
 
   /// Return location information for this diagnostic in three parts:
-  /// the source file name, line number and column.
-  void getLocation(StringRef *Filename, unsigned *Line, unsigned *Column) const;
+  /// the relative source file path, line number and column.
+  void getLocation(StringRef &RelativePath, unsigned &Line,
+                   unsigned &Column) const;
 
+  /// Return the absolute path tot the file.
+  std::string getAbsolutePath() const;
+  
   const Function &getFunction() const { return Fn; }
   DiagnosticLocation getLocation() const { return Loc; }
 
@@ -414,6 +427,7 @@ public:
     Argument(StringRef Key, const Value *V);
     Argument(StringRef Key, const Type *T);
     Argument(StringRef Key, StringRef S);
+    Argument(StringRef Key, const char *S) : Argument(Key, StringRef(S)) {};
     Argument(StringRef Key, int N);
     Argument(StringRef Key, float N);
     Argument(StringRef Key, long N);
@@ -421,8 +435,10 @@ public:
     Argument(StringRef Key, unsigned N);
     Argument(StringRef Key, unsigned long N);
     Argument(StringRef Key, unsigned long long N);
+    Argument(StringRef Key, ElementCount EC);
     Argument(StringRef Key, bool B) : Key(Key), Val(B ? "true" : "false") {}
     Argument(StringRef Key, DebugLoc dl);
+    Argument(StringRef Key, InstructionCost C);
   };
 
   /// \p PassName is the name of the pass emitting this diagnostic. \p
@@ -455,11 +471,14 @@ public:
   virtual bool isEnabled() const = 0;
 
   StringRef getPassName() const { return PassName; }
+  StringRef getRemarkName() const { return RemarkName; }
   std::string getMsg() const;
   Optional<uint64_t> getHotness() const { return Hotness; }
   void setHotness(Optional<uint64_t> H) { Hotness = H; }
 
   bool isVerbose() const { return IsVerbose; }
+
+  ArrayRef<Argument> getArgs() const { return Args; }
 
   static bool classof(const DiagnosticInfo *DI) {
     return (DI->getKind() >= DK_FirstRemark &&
@@ -490,7 +509,7 @@ protected:
   const char *PassName;
 
   /// Textual identifier for the remark (single-word, camel-case). Can be used
-  /// by external tools reading the YAML output file for optimization remarks to
+  /// by external tools reading the output file for optimization remarks to
   /// identify the remark.
   StringRef RemarkName;
 
@@ -508,8 +527,6 @@ protected:
   /// the optimization records and not in the remark printed in the compiler
   /// output.
   int FirstExtraArgIndex = -1;
-
-  friend struct yaml::MappingTraits<DiagnosticInfoOptimizationBase *>;
 };
 
 /// Allow the insertion operator to return the actual remark type rather than a
@@ -518,9 +535,10 @@ protected:
 template <class RemarkT>
 RemarkT &
 operator<<(RemarkT &R,
-           typename std::enable_if<
+           std::enable_if_t<
                std::is_base_of<DiagnosticInfoOptimizationBase, RemarkT>::value,
-               StringRef>::type S) {
+               StringRef>
+               S) {
   R.insert(S);
   return R;
 }
@@ -530,9 +548,10 @@ operator<<(RemarkT &R,
 template <class RemarkT>
 RemarkT &
 operator<<(RemarkT &&R,
-           typename std::enable_if<
+           std::enable_if_t<
                std::is_base_of<DiagnosticInfoOptimizationBase, RemarkT>::value,
-               StringRef>::type S) {
+               StringRef>
+               S) {
   R.insert(S);
   return R;
 }
@@ -540,9 +559,10 @@ operator<<(RemarkT &&R,
 template <class RemarkT>
 RemarkT &
 operator<<(RemarkT &R,
-           typename std::enable_if<
+           std::enable_if_t<
                std::is_base_of<DiagnosticInfoOptimizationBase, RemarkT>::value,
-               DiagnosticInfoOptimizationBase::Argument>::type A) {
+               DiagnosticInfoOptimizationBase::Argument>
+               A) {
   R.insert(A);
   return R;
 }
@@ -550,9 +570,10 @@ operator<<(RemarkT &R,
 template <class RemarkT>
 RemarkT &
 operator<<(RemarkT &&R,
-           typename std::enable_if<
+           std::enable_if_t<
                std::is_base_of<DiagnosticInfoOptimizationBase, RemarkT>::value,
-               DiagnosticInfoOptimizationBase::Argument>::type A) {
+               DiagnosticInfoOptimizationBase::Argument>
+               A) {
   R.insert(A);
   return R;
 }
@@ -560,9 +581,10 @@ operator<<(RemarkT &&R,
 template <class RemarkT>
 RemarkT &
 operator<<(RemarkT &R,
-           typename std::enable_if<
+           std::enable_if_t<
                std::is_base_of<DiagnosticInfoOptimizationBase, RemarkT>::value,
-               DiagnosticInfoOptimizationBase::setIsVerbose>::type V) {
+               DiagnosticInfoOptimizationBase::setIsVerbose>
+               V) {
   R.insert(V);
   return R;
 }
@@ -570,9 +592,10 @@ operator<<(RemarkT &R,
 template <class RemarkT>
 RemarkT &
 operator<<(RemarkT &&R,
-           typename std::enable_if<
+           std::enable_if_t<
                std::is_base_of<DiagnosticInfoOptimizationBase, RemarkT>::value,
-               DiagnosticInfoOptimizationBase::setIsVerbose>::type V) {
+               DiagnosticInfoOptimizationBase::setIsVerbose>
+               V) {
   R.insert(V);
   return R;
 }
@@ -580,9 +603,10 @@ operator<<(RemarkT &&R,
 template <class RemarkT>
 RemarkT &
 operator<<(RemarkT &R,
-           typename std::enable_if<
+           std::enable_if_t<
                std::is_base_of<DiagnosticInfoOptimizationBase, RemarkT>::value,
-               DiagnosticInfoOptimizationBase::setExtraArgs>::type EA) {
+               DiagnosticInfoOptimizationBase::setExtraArgs>
+               EA) {
   R.insert(EA);
   return R;
 }
@@ -590,6 +614,7 @@ operator<<(RemarkT &R,
 /// Common features for diagnostics dealing with optimization remarks
 /// that are used by IR passes.
 class DiagnosticInfoIROptimization : public DiagnosticInfoOptimizationBase {
+  void anchor() override;
 public:
   /// \p PassName is the name of the pass emitting this diagnostic. \p
   /// RemarkName is a textual identifier for the remark (single-word,
@@ -651,7 +676,7 @@ public:
 private:
   /// The IR value (currently basic block) that the optimization operates on.
   /// This is currently used to provide run-time hotness information with PGO.
-  const Value *CodeRegion;
+  const Value *CodeRegion = nullptr;
 };
 
 /// Diagnostic information for applied optimization remarks.
@@ -810,6 +835,7 @@ private:
 /// Diagnostic information for optimization analysis remarks related to
 /// floating-point non-commutativity.
 class OptimizationRemarkAnalysisFPCommute : public OptimizationRemarkAnalysis {
+  void anchor() override;
 public:
   /// \p PassName is the name of the pass emitting this diagnostic. If this name
   /// matches the regular expression given in -Rpass-analysis=, then the
@@ -851,6 +877,7 @@ private:
 /// Diagnostic information for optimization analysis remarks related to
 /// pointer aliasing.
 class OptimizationRemarkAnalysisAliasing : public OptimizationRemarkAnalysis {
+  void anchor() override;
 public:
   /// \p PassName is the name of the pass emitting this diagnostic. If this name
   /// matches the regular expression given in -Rpass-analysis=, then the
@@ -987,12 +1014,6 @@ public:
 
   void print(DiagnosticPrinter &DP) const override;
 };
-
-namespace yaml {
-template <> struct MappingTraits<DiagnosticInfoOptimizationBase *> {
-  static void mapping(IO &io, DiagnosticInfoOptimizationBase *&OptDiag);
-};
-} // namespace yaml
 
 } // end namespace llvm
 

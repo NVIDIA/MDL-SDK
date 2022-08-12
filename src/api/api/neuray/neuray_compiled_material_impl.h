@@ -90,7 +90,7 @@ public:
 
     mi::Size get_referenced_scene_data_count() const final;
 
-    char const *get_referenced_scene_data_name( mi::Size index) const final;
+    const char* get_referenced_scene_data_name( mi::Size index) const final;
 
     mi::Size get_parameter_count() const final;
 
@@ -105,8 +105,8 @@ public:
     const mi::neuraylib::IExpression* lookup_sub_expression( const char* path) const final;
 
     const mi::IString* get_connected_function_db_name(
-        const char* material_instance_name, 
-        mi::Size parameter_index, 
+        const char* material_instance_name,
+        mi::Size parameter_index,
         mi::Sint32* errors) const final;
 
     mi::neuraylib::Material_opacity get_opacity() const final;

@@ -203,7 +203,7 @@ private:
     mutable base::Lock m_pointer_lock;
 };
 
-/*@}*/ // end group mi_neuray_plugins
+/**@}*/ // end group mi_neuray_plugins
 
 } // namespace neuraylib
 

@@ -79,6 +79,8 @@ public:
     ///
     /// See \ref mi_neuray_ptx_texture_lookup_call_modes for more details about texture handlers
     /// for the PTX backend.
+    /// See \ref mi_neuray_example_execution_glsl for more details about texture handlers
+    /// for the GLSL backend.
     ///
     /// \param resource  the resource value
     ///
@@ -158,7 +160,6 @@ Target_code::Target_code(
     }
 }
 
-
 // Constructor for link mode.
 Target_code::Target_code(
     bool string_ids,
@@ -230,7 +231,6 @@ void Target_code::finalize(
         }
     }
 }
-
 
 mi::neuraylib::IMdl_backend_api::Mdl_backend_kind Target_code::get_backend_kind() const
 {
@@ -1526,6 +1526,7 @@ bool Target_code::deserialize(
         switch (m_backend_kind)
         {
             case mi::neuraylib::IMdl_backend_api::MB_HLSL:
+            case mi::neuraylib::IMdl_backend_api::MB_GLSL:
             case mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX:
             {
                 mi::base::Handle<mi::mdl::ICode_generator_jit> code_gen_jit(

@@ -1,9 +1,8 @@
 //===- NVPTX.td - Describe the NVPTX Target Machine -----------*- tblgen -*-==//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 // This is the top level entry point for the NVPTX target.
@@ -52,6 +51,8 @@ def SM62 : SubtargetFeature<"sm_62", "SmVersion", "62",
                              "Target SM 6.2">;
 def SM70 : SubtargetFeature<"sm_70", "SmVersion", "70",
                              "Target SM 7.0">;
+def SM72 : SubtargetFeature<"sm_72", "SmVersion", "72",
+                             "Target SM 7.2">;
 def SM75 : SubtargetFeature<"sm_75", "SmVersion", "75",
                              "Target SM 7.5">;
 def SM80 : SubtargetFeature<"sm_80", "SmVersion", "80",
@@ -76,8 +77,6 @@ def PTX60 : SubtargetFeature<"ptx60", "PTXVersion", "60",
                              "Use PTX version 6.0">;
 def PTX61 : SubtargetFeature<"ptx61", "PTXVersion", "61",
                              "Use PTX version 6.1">;
-def PTX62 : SubtargetFeature<"ptx62", "PTXVersion", "62",
-                             "Use PTX version 6.2">;
 def PTX63 : SubtargetFeature<"ptx63", "PTXVersion", "63",
                              "Use PTX version 6.3">;
 def PTX64 : SubtargetFeature<"ptx64", "PTXVersion", "64",
@@ -109,6 +108,7 @@ def : Proc<"sm_60", [SM60, PTX50]>;
 def : Proc<"sm_61", [SM61, PTX50]>;
 def : Proc<"sm_62", [SM62, PTX50]>;
 def : Proc<"sm_70", [SM70, PTX60]>;
+def : Proc<"sm_72", [SM72, PTX61]>;
 def : Proc<"sm_75", [SM75, PTX63]>;
 def : Proc<"sm_80", [SM80, PTX70]>;
 def : Proc<"sm_86", [SM86, PTX71]>;

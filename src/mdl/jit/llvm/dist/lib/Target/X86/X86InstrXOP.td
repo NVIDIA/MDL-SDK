@@ -1,9 +1,8 @@
 //===-- X86InstrXOP.td - XOP Instruction Set ---------------*- tablegen -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -11,84 +10,84 @@
 //
 //===----------------------------------------------------------------------===//
 
-multiclass xop2op<bits<8> opc, string OpcodeStr, Intrinsic Int, PatFrag memop> {
+multiclass xop2op<bits<8> opc, string OpcodeStr, Intrinsic Int> {
   def rr : IXOP<opc, MRMSrcReg, (outs VR128:$dst), (ins VR128:$src),
            !strconcat(OpcodeStr, "\t{$src, $dst|$dst, $src}"),
            [(set VR128:$dst, (Int VR128:$src))]>, XOP, Sched<[SchedWritePHAdd.XMM]>;
   def rm : IXOP<opc, MRMSrcMem, (outs VR128:$dst), (ins i128mem:$src),
            !strconcat(OpcodeStr, "\t{$src, $dst|$dst, $src}"),
-           [(set VR128:$dst, (Int (bitconvert (memop addr:$src))))]>, XOP,
-           Sched<[SchedWritePHAdd.XMM.Folded, ReadAfterLd]>;
+           [(set VR128:$dst, (Int (load addr:$src)))]>, XOP,
+           Sched<[SchedWritePHAdd.XMM.Folded, SchedWritePHAdd.XMM.ReadAfterFold]>;
 }
 
 let ExeDomain = SSEPackedInt in {
-  defm VPHSUBWD  : xop2op<0xE2, "vphsubwd", int_x86_xop_vphsubwd, loadv2i64>;
-  defm VPHSUBDQ  : xop2op<0xE3, "vphsubdq", int_x86_xop_vphsubdq, loadv2i64>;
-  defm VPHSUBBW  : xop2op<0xE1, "vphsubbw", int_x86_xop_vphsubbw, loadv2i64>;
-  defm VPHADDWQ  : xop2op<0xC7, "vphaddwq", int_x86_xop_vphaddwq, loadv2i64>;
-  defm VPHADDWD  : xop2op<0xC6, "vphaddwd", int_x86_xop_vphaddwd, loadv2i64>;
-  defm VPHADDUWQ : xop2op<0xD7, "vphadduwq", int_x86_xop_vphadduwq, loadv2i64>;
-  defm VPHADDUWD : xop2op<0xD6, "vphadduwd", int_x86_xop_vphadduwd, loadv2i64>;
-  defm VPHADDUDQ : xop2op<0xDB, "vphaddudq", int_x86_xop_vphaddudq, loadv2i64>;
-  defm VPHADDUBW : xop2op<0xD1, "vphaddubw", int_x86_xop_vphaddubw, loadv2i64>;
-  defm VPHADDUBQ : xop2op<0xD3, "vphaddubq", int_x86_xop_vphaddubq, loadv2i64>;
-  defm VPHADDUBD : xop2op<0xD2, "vphaddubd", int_x86_xop_vphaddubd, loadv2i64>;
-  defm VPHADDDQ  : xop2op<0xCB, "vphadddq", int_x86_xop_vphadddq, loadv2i64>;
-  defm VPHADDBW  : xop2op<0xC1, "vphaddbw", int_x86_xop_vphaddbw, loadv2i64>;
-  defm VPHADDBQ  : xop2op<0xC3, "vphaddbq", int_x86_xop_vphaddbq, loadv2i64>;
-  defm VPHADDBD  : xop2op<0xC2, "vphaddbd", int_x86_xop_vphaddbd, loadv2i64>;
+  defm VPHSUBWD  : xop2op<0xE2, "vphsubwd", int_x86_xop_vphsubwd>;
+  defm VPHSUBDQ  : xop2op<0xE3, "vphsubdq", int_x86_xop_vphsubdq>;
+  defm VPHSUBBW  : xop2op<0xE1, "vphsubbw", int_x86_xop_vphsubbw>;
+  defm VPHADDWQ  : xop2op<0xC7, "vphaddwq", int_x86_xop_vphaddwq>;
+  defm VPHADDWD  : xop2op<0xC6, "vphaddwd", int_x86_xop_vphaddwd>;
+  defm VPHADDUWQ : xop2op<0xD7, "vphadduwq", int_x86_xop_vphadduwq>;
+  defm VPHADDUWD : xop2op<0xD6, "vphadduwd", int_x86_xop_vphadduwd>;
+  defm VPHADDUDQ : xop2op<0xDB, "vphaddudq", int_x86_xop_vphaddudq>;
+  defm VPHADDUBW : xop2op<0xD1, "vphaddubw", int_x86_xop_vphaddubw>;
+  defm VPHADDUBQ : xop2op<0xD3, "vphaddubq", int_x86_xop_vphaddubq>;
+  defm VPHADDUBD : xop2op<0xD2, "vphaddubd", int_x86_xop_vphaddubd>;
+  defm VPHADDDQ  : xop2op<0xCB, "vphadddq", int_x86_xop_vphadddq>;
+  defm VPHADDBW  : xop2op<0xC1, "vphaddbw", int_x86_xop_vphaddbw>;
+  defm VPHADDBQ  : xop2op<0xC3, "vphaddbq", int_x86_xop_vphaddbq>;
+  defm VPHADDBD  : xop2op<0xC2, "vphaddbd", int_x86_xop_vphaddbd>;
 }
 
 // Scalar load 2 addr operand instructions
 multiclass xop2opsld<bits<8> opc, string OpcodeStr, Intrinsic Int,
-                     Operand memop, ComplexPattern mem_cpat,
+                     Operand memop, PatFrags mem_frags,
                      X86FoldableSchedWrite sched> {
   def rr : IXOP<opc, MRMSrcReg, (outs VR128:$dst), (ins VR128:$src),
            !strconcat(OpcodeStr, "\t{$src, $dst|$dst, $src}"),
            [(set VR128:$dst, (Int VR128:$src))]>, XOP, Sched<[sched]>;
   def rm : IXOP<opc, MRMSrcMem, (outs VR128:$dst), (ins memop:$src),
            !strconcat(OpcodeStr, "\t{$src, $dst|$dst, $src}"),
-           [(set VR128:$dst, (Int (bitconvert mem_cpat:$src)))]>, XOP,
-           Sched<[sched.Folded, ReadAfterLd]>;
+           [(set VR128:$dst, (Int (mem_frags addr:$src)))]>, XOP,
+           Sched<[sched.Folded, sched.ReadAfterFold]>;
 }
 
 multiclass xop2op128<bits<8> opc, string OpcodeStr, Intrinsic Int,
-                     PatFrag memop, X86FoldableSchedWrite sched> {
+                     X86FoldableSchedWrite sched> {
   def rr : IXOP<opc, MRMSrcReg, (outs VR128:$dst), (ins VR128:$src),
            !strconcat(OpcodeStr, "\t{$src, $dst|$dst, $src}"),
            [(set VR128:$dst, (Int VR128:$src))]>, XOP, Sched<[sched]>;
   def rm : IXOP<opc, MRMSrcMem, (outs VR128:$dst), (ins f128mem:$src),
            !strconcat(OpcodeStr, "\t{$src, $dst|$dst, $src}"),
-           [(set VR128:$dst, (Int (bitconvert (memop addr:$src))))]>, XOP,
-           Sched<[sched.Folded, ReadAfterLd]>;
+           [(set VR128:$dst, (Int (load addr:$src)))]>, XOP,
+           Sched<[sched.Folded, sched.ReadAfterFold]>;
 }
 
 multiclass xop2op256<bits<8> opc, string OpcodeStr, Intrinsic Int,
-                     PatFrag memop, X86FoldableSchedWrite sched> {
+                     X86FoldableSchedWrite sched> {
   def Yrr : IXOP<opc, MRMSrcReg, (outs VR256:$dst), (ins VR256:$src),
            !strconcat(OpcodeStr, "\t{$src, $dst|$dst, $src}"),
            [(set VR256:$dst, (Int VR256:$src))]>, XOP, VEX_L, Sched<[sched]>;
   def Yrm : IXOP<opc, MRMSrcMem, (outs VR256:$dst), (ins f256mem:$src),
            !strconcat(OpcodeStr, "\t{$src, $dst|$dst, $src}"),
-           [(set VR256:$dst, (Int (bitconvert (memop addr:$src))))]>, XOP, VEX_L,
-           Sched<[sched.Folded, ReadAfterLd]>;
+           [(set VR256:$dst, (Int (load addr:$src)))]>, XOP, VEX_L,
+           Sched<[sched.Folded, sched.ReadAfterFold]>;
 }
 
 let ExeDomain = SSEPackedSingle in {
   defm VFRCZSS : xop2opsld<0x82, "vfrczss", int_x86_xop_vfrcz_ss,
                            ssmem, sse_load_f32, SchedWriteFRnd.Scl>;
-  defm VFRCZPS : xop2op128<0x80, "vfrczps", int_x86_xop_vfrcz_ps, loadv4f32,
+  defm VFRCZPS : xop2op128<0x80, "vfrczps", int_x86_xop_vfrcz_ps,
                            SchedWriteFRnd.XMM>;
-  defm VFRCZPS : xop2op256<0x80, "vfrczps", int_x86_xop_vfrcz_ps_256, loadv8f32,
+  defm VFRCZPS : xop2op256<0x80, "vfrczps", int_x86_xop_vfrcz_ps_256,
                            SchedWriteFRnd.YMM>;
 }
 
 let ExeDomain = SSEPackedDouble in {
   defm VFRCZSD : xop2opsld<0x83, "vfrczsd", int_x86_xop_vfrcz_sd,
                            sdmem, sse_load_f64, SchedWriteFRnd.Scl>;
-  defm VFRCZPD : xop2op128<0x81, "vfrczpd", int_x86_xop_vfrcz_pd, loadv2f64,
+  defm VFRCZPD : xop2op128<0x81, "vfrczpd", int_x86_xop_vfrcz_pd,
                            SchedWriteFRnd.XMM>;
-  defm VFRCZPD : xop2op256<0x81, "vfrczpd", int_x86_xop_vfrcz_pd_256, loadv4f64,
+  defm VFRCZPD : xop2op256<0x81, "vfrczpd", int_x86_xop_vfrcz_pd_256,
                            SchedWriteFRnd.YMM>;
 }
 
@@ -105,15 +104,15 @@ multiclass xop3op<bits<8> opc, string OpcodeStr, SDNode OpNode,
            !strconcat(OpcodeStr, "\t{$src2, $src1, $dst|$dst, $src1, $src2}"),
            [(set VR128:$dst,
               (vt128 (OpNode (vt128 VR128:$src1),
-                             (vt128 (bitconvert (loadv2i64 addr:$src2))))))]>,
-           XOP_4V, VEX_W, Sched<[sched.Folded, ReadAfterLd]>;
+                             (vt128 (load addr:$src2)))))]>,
+           XOP_4V, VEX_W, Sched<[sched.Folded, sched.ReadAfterFold]>;
   def mr : IXOP<opc, MRMSrcMem4VOp3, (outs VR128:$dst),
            (ins i128mem:$src1, VR128:$src2),
            !strconcat(OpcodeStr, "\t{$src2, $src1, $dst|$dst, $src1, $src2}"),
            [(set VR128:$dst,
-              (vt128 (OpNode (vt128 (bitconvert (loadv2i64 addr:$src1))),
+              (vt128 (OpNode (vt128 (load addr:$src1)),
                              (vt128 VR128:$src2))))]>,
-             XOP, Sched<[sched.Folded, ReadAfterLd]>;
+             XOP, Sched<[sched.Folded, sched.ReadAfterFold]>;
   // For disassembler
   let isCodeGenOnly = 1, ForceDisassemble = 1, hasSideEffects = 0 in
   def rr_REV : IXOP<opc, MRMSrcReg, (outs VR128:$dst),
@@ -144,14 +143,14 @@ multiclass xop3opimm<bits<8> opc, string OpcodeStr, SDNode OpNode,
            (ins VR128:$src1, u8imm:$src2),
            !strconcat(OpcodeStr, "\t{$src2, $src1, $dst|$dst, $src1, $src2}"),
            [(set VR128:$dst,
-              (vt128 (OpNode (vt128 VR128:$src1), imm:$src2)))]>,
+              (vt128 (OpNode (vt128 VR128:$src1), timm:$src2)))]>,
            XOP, Sched<[sched]>;
   def mi : IXOPi8<opc, MRMSrcMem, (outs VR128:$dst),
            (ins i128mem:$src1, u8imm:$src2),
            !strconcat(OpcodeStr, "\t{$src2, $src1, $dst|$dst, $src1, $src2}"),
            [(set VR128:$dst,
-              (vt128 (OpNode (vt128 (bitconvert (loadv2i64 addr:$src1))), imm:$src2)))]>,
-           XOP, Sched<[sched.Folded, ReadAfterLd]>;
+              (vt128 (OpNode (vt128 (load addr:$src1)), timm:$src2)))]>,
+           XOP, Sched<[sched.Folded, sched.ReadAfterFold]>;
 }
 
 let ExeDomain = SSEPackedInt in {
@@ -181,8 +180,8 @@ multiclass xop4opm2<bits<8> opc, string OpcodeStr, Intrinsic Int,
            !strconcat(OpcodeStr,
            "\t{$src3, $src2, $src1, $dst|$dst, $src1, $src2, $src3}"),
            [(set VR128:$dst,
-              (Int VR128:$src1, (bitconvert (loadv2i64 addr:$src2)),
-              VR128:$src3))]>, XOP_4V, Sched<[sched.Folded, ReadAfterLd]>;
+              (Int VR128:$src1, (load addr:$src2),
+              VR128:$src3))]>, XOP_4V, Sched<[sched.Folded, sched.ReadAfterFold]>;
 }
 
 let ExeDomain = SSEPackedInt in {
@@ -247,42 +246,28 @@ multiclass xopvpcom<bits<8> opc, string Suffix, SDNode OpNode, ValueType vt128,
   let ExeDomain = SSEPackedInt in { // SSE integer instructions
     let isCommutable = 1 in
     def ri : IXOPi8<opc, MRMSrcReg, (outs VR128:$dst),
-             (ins VR128:$src1, VR128:$src2, XOPCC:$cc),
-             !strconcat("vpcom${cc}", Suffix,
-             "\t{$src2, $src1, $dst|$dst, $src1, $src2}"),
+             (ins VR128:$src1, VR128:$src2, u8imm:$cc),
+             !strconcat("vpcom", Suffix,
+             "\t{$cc, $src2, $src1, $dst|$dst, $src1, $src2, $cc}"),
              [(set VR128:$dst,
                 (vt128 (OpNode (vt128 VR128:$src1), (vt128 VR128:$src2),
-                               imm:$cc)))]>,
+                               timm:$cc)))]>,
              XOP_4V, Sched<[sched]>;
     def mi : IXOPi8<opc, MRMSrcMem, (outs VR128:$dst),
-             (ins VR128:$src1, i128mem:$src2, XOPCC:$cc),
-             !strconcat("vpcom${cc}", Suffix,
-             "\t{$src2, $src1, $dst|$dst, $src1, $src2}"),
+             (ins VR128:$src1, i128mem:$src2, u8imm:$cc),
+             !strconcat("vpcom", Suffix,
+             "\t{$cc, $src2, $src1, $dst|$dst, $src1, $src2, $cc}"),
              [(set VR128:$dst,
                 (vt128 (OpNode (vt128 VR128:$src1),
-                               (vt128 (bitconvert (loadv2i64 addr:$src2))),
-                                imm:$cc)))]>,
-             XOP_4V, Sched<[sched.Folded, ReadAfterLd]>;
-    let isAsmParserOnly = 1, hasSideEffects = 0 in {
-      def ri_alt : IXOPi8<opc, MRMSrcReg, (outs VR128:$dst),
-                   (ins VR128:$src1, VR128:$src2, u8imm:$src3),
-                   !strconcat("vpcom", Suffix,
-                   "\t{$src3, $src2, $src1, $dst|$dst, $src1, $src2, $src3}"),
-                   []>, XOP_4V, Sched<[sched]>, NotMemoryFoldable;
-      let mayLoad = 1 in
-      def mi_alt : IXOPi8<opc, MRMSrcMem, (outs VR128:$dst),
-                   (ins VR128:$src1, i128mem:$src2, u8imm:$src3),
-                   !strconcat("vpcom", Suffix,
-                   "\t{$src3, $src2, $src1, $dst|$dst, $src1, $src2, $src3}"),
-                   []>, XOP_4V, Sched<[sched.Folded, ReadAfterLd]>,
-                   NotMemoryFoldable;
-    }
+                               (vt128 (load addr:$src2)),
+                                timm:$cc)))]>,
+             XOP_4V, Sched<[sched.Folded, sched.ReadAfterFold]>;
   }
 
-  def : Pat<(OpNode (bitconvert (loadv2i64 addr:$src2)),
-                    (vt128 VR128:$src1), imm:$cc),
+  def : Pat<(OpNode (load addr:$src2),
+                    (vt128 VR128:$src1), timm:$cc),
             (!cast<Instruction>(NAME#"mi") VR128:$src1, addr:$src2,
-                                           (CommuteVPCOMCC imm:$cc))>;
+                                           (CommuteVPCOMCC timm:$cc))>;
 }
 
 defm VPCOMB  : xopvpcom<0xCC, "b", X86vpcom, v16i8, SchedWriteVecALU.XMM>;
@@ -310,21 +295,21 @@ multiclass xop4op<bits<8> opc, string OpcodeStr, SDNode OpNode,
             "\t{$src3, $src2, $src1, $dst|$dst, $src1, $src2, $src3}"),
             [(set VR128:$dst,
               (vt128 (OpNode (vt128 VR128:$src1), (vt128 VR128:$src2),
-                             (vt128 (bitconvert (loadv2i64 addr:$src3))))))]>,
-            XOP_4V, VEX_W, Sched<[sched.Folded, ReadAfterLd, ReadAfterLd]>;
+                             (vt128 (load addr:$src3)))))]>,
+            XOP_4V, VEX_W, Sched<[sched.Folded, sched.ReadAfterFold, sched.ReadAfterFold]>;
   def rmr : IXOPi8Reg<opc, MRMSrcMem, (outs VR128:$dst),
             (ins VR128:$src1, i128mem:$src2, VR128:$src3),
             !strconcat(OpcodeStr,
             "\t{$src3, $src2, $src1, $dst|$dst, $src1, $src2, $src3}"),
             [(set VR128:$dst,
-              (v16i8 (OpNode (vt128 VR128:$src1), (vt128 (bitconvert (loadv2i64 addr:$src2))),
+              (v16i8 (OpNode (vt128 VR128:$src1), (vt128 (load addr:$src2)),
                              (vt128 VR128:$src3))))]>,
-            XOP_4V, Sched<[sched.Folded, ReadAfterLd,
+            XOP_4V, Sched<[sched.Folded, sched.ReadAfterFold,
                            // 128mem:$src2
                            ReadDefault, ReadDefault, ReadDefault, ReadDefault,
                            ReadDefault,
                            // VR128:$src3
-                           ReadAfterLd]>;
+                           sched.ReadAfterFold]>;
   // For disassembler
   let isCodeGenOnly = 1, ForceDisassemble = 1, hasSideEffects = 0 in
   def rrr_REV : IXOPi8Reg<opc, MRMSrcRegOp4, (outs VR128:$dst),
@@ -350,25 +335,26 @@ multiclass xop4op_int<bits<8> opc, string OpcodeStr, RegisterClass RC,
             [(set RC:$dst, (VT (or (and RC:$src3, RC:$src1),
                                    (X86andnp RC:$src3, RC:$src2))))]>, XOP_4V,
             Sched<[sched]>;
+  // FIXME: We can't write a pattern for this in tablegen.
+  let hasSideEffects = 0, mayLoad = 1 in
   def rrm : IXOPi8Reg<opc, MRMSrcMemOp4, (outs RC:$dst),
             (ins RC:$src1, RC:$src2, x86memop:$src3),
             !strconcat(OpcodeStr,
             "\t{$src3, $src2, $src1, $dst|$dst, $src1, $src2, $src3}"),
-            [(set RC:$dst, (VT (or (and (load addr:$src3), RC:$src1),
-                                   (X86andnp (load addr:$src3), RC:$src2))))]>,
-            XOP_4V, VEX_W, Sched<[sched.Folded, ReadAfterLd, ReadAfterLd]>;
+            []>,
+            XOP_4V, VEX_W, Sched<[sched.Folded, sched.ReadAfterFold, sched.ReadAfterFold]>;
   def rmr : IXOPi8Reg<opc, MRMSrcMem, (outs RC:$dst),
             (ins RC:$src1, x86memop:$src2, RC:$src3),
             !strconcat(OpcodeStr,
             "\t{$src3, $src2, $src1, $dst|$dst, $src1, $src2, $src3}"),
             [(set RC:$dst, (VT (or (and RC:$src3, RC:$src1),
                                    (X86andnp RC:$src3, (load addr:$src2)))))]>,
-            XOP_4V, Sched<[sched.Folded, ReadAfterLd,
+            XOP_4V, Sched<[sched.Folded, sched.ReadAfterFold,
                            // x86memop:$src2
                            ReadDefault, ReadDefault, ReadDefault, ReadDefault,
                            ReadDefault,
                            // RC::$src3
-                           ReadAfterLd]>;
+                           sched.ReadAfterFold]>;
   // For disassembler
   let isCodeGenOnly = 1, ForceDisassemble = 1, hasSideEffects = 0 in
   def rrr_REV : IXOPi8Reg<opc, MRMSrcRegOp4, (outs RC:$dst),
@@ -385,42 +371,83 @@ let ExeDomain = SSEPackedInt in {
                             SchedWriteShuffle.YMM>, VEX_L;
 }
 
+let Predicates = [HasXOP] in {
+  def : Pat<(v16i8 (or (and VR128:$src3, VR128:$src1),
+                   (X86andnp VR128:$src3, VR128:$src2))),
+            (VPCMOVrrr VR128:$src1, VR128:$src2, VR128:$src3)>;
+  def : Pat<(v8i16 (or (and VR128:$src3, VR128:$src1),
+                   (X86andnp VR128:$src3, VR128:$src2))),
+            (VPCMOVrrr VR128:$src1, VR128:$src2, VR128:$src3)>;
+  def : Pat<(v4i32 (or (and VR128:$src3, VR128:$src1),
+                   (X86andnp VR128:$src3, VR128:$src2))),
+            (VPCMOVrrr VR128:$src1, VR128:$src2, VR128:$src3)>;
+
+  def : Pat<(or (and VR128:$src3, VR128:$src1),
+                (X86andnp VR128:$src3, (loadv16i8 addr:$src2))),
+            (VPCMOVrmr VR128:$src1, addr:$src2, VR128:$src3)>;
+  def : Pat<(or (and VR128:$src3, VR128:$src1),
+                (X86andnp VR128:$src3, (loadv8i16 addr:$src2))),
+            (VPCMOVrmr VR128:$src1, addr:$src2, VR128:$src3)>;
+  def : Pat<(or (and VR128:$src3, VR128:$src1),
+                (X86andnp VR128:$src3, (loadv4i32 addr:$src2))),
+            (VPCMOVrmr VR128:$src1, addr:$src2, VR128:$src3)>;
+
+  def : Pat<(v32i8 (or (and VR256:$src3, VR256:$src1),
+                   (X86andnp VR256:$src3, VR256:$src2))),
+            (VPCMOVYrrr VR256:$src1, VR256:$src2, VR256:$src3)>;
+  def : Pat<(v16i16 (or (and VR256:$src3, VR256:$src1),
+                    (X86andnp VR256:$src3, VR256:$src2))),
+            (VPCMOVYrrr VR256:$src1, VR256:$src2, VR256:$src3)>;
+  def : Pat<(v8i32 (or (and VR256:$src3, VR256:$src1),
+                   (X86andnp VR256:$src3, VR256:$src2))),
+            (VPCMOVYrrr VR256:$src1, VR256:$src2, VR256:$src3)>;
+
+  def : Pat<(or (and VR256:$src3, VR256:$src1),
+                (X86andnp VR256:$src3, (loadv32i8 addr:$src2))),
+            (VPCMOVYrmr VR256:$src1, addr:$src2, VR256:$src3)>;
+  def : Pat<(or (and VR256:$src3, VR256:$src1),
+                (X86andnp VR256:$src3, (loadv16i16 addr:$src2))),
+            (VPCMOVYrmr VR256:$src1, addr:$src2, VR256:$src3)>;
+  def : Pat<(or (and VR256:$src3, VR256:$src1),
+                (X86andnp VR256:$src3, (loadv8i32 addr:$src2))),
+            (VPCMOVYrmr VR256:$src1, addr:$src2, VR256:$src3)>;
+}
+
 multiclass xop_vpermil2<bits<8> Opc, string OpcodeStr, RegisterClass RC,
                         X86MemOperand intmemop, X86MemOperand fpmemop,
                         ValueType VT, PatFrag FPLdFrag, PatFrag IntLdFrag,
                         X86FoldableSchedWrite sched> {
   def rr : IXOP5<Opc, MRMSrcReg, (outs RC:$dst),
-        (ins RC:$src1, RC:$src2, RC:$src3, u8imm:$src4),
+        (ins RC:$src1, RC:$src2, RC:$src3, u4imm:$src4),
         !strconcat(OpcodeStr,
         "\t{$src4, $src3, $src2, $src1, $dst|$dst, $src1, $src2, $src3, $src4}"),
         [(set RC:$dst,
-           (VT (X86vpermil2 RC:$src1, RC:$src2, RC:$src3, (i8 imm:$src4))))]>,
+           (VT (X86vpermil2 RC:$src1, RC:$src2, RC:$src3, (i8 timm:$src4))))]>,
         Sched<[sched]>;
   def rm : IXOP5<Opc, MRMSrcMemOp4, (outs RC:$dst),
-        (ins RC:$src1, RC:$src2, intmemop:$src3, u8imm:$src4),
+        (ins RC:$src1, RC:$src2, intmemop:$src3, u4imm:$src4),
         !strconcat(OpcodeStr,
         "\t{$src4, $src3, $src2, $src1, $dst|$dst, $src1, $src2, $src3, $src4}"),
         [(set RC:$dst,
-          (VT (X86vpermil2 RC:$src1, RC:$src2,
-                           (bitconvert (IntLdFrag addr:$src3)),
-                           (i8 imm:$src4))))]>, VEX_W,
-        Sched<[sched.Folded, ReadAfterLd, ReadAfterLd]>;
+          (VT (X86vpermil2 RC:$src1, RC:$src2, (IntLdFrag addr:$src3),
+                           (i8 timm:$src4))))]>, VEX_W,
+        Sched<[sched.Folded, sched.ReadAfterFold, sched.ReadAfterFold]>;
   def mr : IXOP5<Opc, MRMSrcMem, (outs RC:$dst),
-        (ins RC:$src1, fpmemop:$src2, RC:$src3, u8imm:$src4),
+        (ins RC:$src1, fpmemop:$src2, RC:$src3, u4imm:$src4),
         !strconcat(OpcodeStr,
         "\t{$src4, $src3, $src2, $src1, $dst|$dst, $src1, $src2, $src3, $src4}"),
         [(set RC:$dst,
           (VT (X86vpermil2 RC:$src1, (FPLdFrag addr:$src2),
-                           RC:$src3, (i8 imm:$src4))))]>,
-        Sched<[sched.Folded, ReadAfterLd,
+                           RC:$src3, (i8 timm:$src4))))]>,
+        Sched<[sched.Folded, sched.ReadAfterFold,
                // fpmemop:$src2
                ReadDefault, ReadDefault, ReadDefault, ReadDefault, ReadDefault,
                // RC:$src3
-               ReadAfterLd]>;
+               sched.ReadAfterFold]>;
   // For disassembler
   let isCodeGenOnly = 1, ForceDisassemble = 1, hasSideEffects = 0 in
   def rr_REV : IXOP5<Opc, MRMSrcRegOp4, (outs RC:$dst),
-        (ins RC:$src1, RC:$src2, RC:$src3, u8imm:$src4),
+        (ins RC:$src1, RC:$src2, RC:$src3, u4imm:$src4),
         !strconcat(OpcodeStr,
         "\t{$src4, $src3, $src2, $src1, $dst|$dst, $src1, $src2, $src3, $src4}"),
         []>, VEX_W, Sched<[sched]>, FoldGenData<NAME#rr>;
@@ -437,10 +464,10 @@ let ExeDomain = SSEPackedDouble in {
 
 let ExeDomain = SSEPackedSingle in {
   defm VPERMIL2PS : xop_vpermil2<0x48, "vpermil2ps", VR128, i128mem, f128mem,
-                                 v4f32, loadv4f32, loadv2i64,
+                                 v4f32, loadv4f32, loadv4i32,
                                  SchedWriteFVarShuffle.XMM>;
   defm VPERMIL2PSY : xop_vpermil2<0x48, "vpermil2ps", VR256, i256mem, f256mem,
-                                  v8f32, loadv8f32, loadv4i64,
+                                  v8f32, loadv8f32, loadv8i32,
                                   SchedWriteFVarShuffle.YMM>, VEX_L;
 }
 

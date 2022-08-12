@@ -1,9 +1,8 @@
 //===- SymbolStringPool.h - Multi-threaded pool for JIT symbols -*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -14,6 +13,7 @@
 #ifndef LLVM_EXECUTIONENGINE_ORC_SYMBOLSTRINGPOOL_H
 #define LLVM_EXECUTIONENGINE_ORC_SYMBOLSTRINGPOOL_H
 
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringMap.h"
 #include <atomic>
 #include <mutex>
@@ -48,24 +48,24 @@ private:
 
 /// Pointer to a pooled string representing a symbol name.
 class SymbolStringPtr {
+  friend class OrcV2CAPIHelper;
   friend class SymbolStringPool;
-  friend bool operator==(const SymbolStringPtr &LHS,
-                         const SymbolStringPtr &RHS);
-  friend bool operator<(const SymbolStringPtr &LHS, const SymbolStringPtr &RHS);
+  friend struct DenseMapInfo<SymbolStringPtr>;
 
 public:
   SymbolStringPtr() = default;
+  SymbolStringPtr(std::nullptr_t) {}
   SymbolStringPtr(const SymbolStringPtr &Other)
     : S(Other.S) {
-    if (S)
+    if (isRealPoolEntry(S))
       ++S->getValue();
   }
 
   SymbolStringPtr& operator=(const SymbolStringPtr &Other) {
-    if (S)
+    if (isRealPoolEntry(S))
       --S->getValue();
     S = Other.S;
-    if (S)
+    if (isRealPoolEntry(S))
       ++S->getValue();
     return *this;
   }
@@ -75,7 +75,7 @@ public:
   }
 
   SymbolStringPtr& operator=(SymbolStringPtr &&Other) {
-    if (S)
+    if (isRealPoolEntry(S))
       --S->getValue();
     S = nullptr;
     std::swap(S, Other.S);
@@ -83,34 +83,67 @@ public:
   }
 
   ~SymbolStringPtr() {
-    if (S)
+    if (isRealPoolEntry(S))
       --S->getValue();
   }
 
+  explicit operator bool() const { return S; }
+
   StringRef operator*() const { return S->first(); }
 
+  friend bool operator==(const SymbolStringPtr &LHS,
+                         const SymbolStringPtr &RHS) {
+    return LHS.S == RHS.S;
+  }
+
+  friend bool operator!=(const SymbolStringPtr &LHS,
+                         const SymbolStringPtr &RHS) {
+    return !(LHS == RHS);
+  }
+
+  friend bool operator<(const SymbolStringPtr &LHS,
+                        const SymbolStringPtr &RHS) {
+    return LHS.S < RHS.S;
+  }
+
 private:
+  using PoolEntry = SymbolStringPool::PoolMapEntry;
+  using PoolEntryPtr = PoolEntry *;
 
   SymbolStringPtr(SymbolStringPool::PoolMapEntry *S)
       : S(S) {
-    if (S)
+    if (isRealPoolEntry(S))
       ++S->getValue();
   }
 
-  SymbolStringPool::PoolMapEntry *S = nullptr;
+  // Returns false for null, empty, and tombstone values, true otherwise.
+  bool isRealPoolEntry(PoolEntryPtr P) {
+    return ((reinterpret_cast<uintptr_t>(P) - 1) & InvalidPtrMask) !=
+           InvalidPtrMask;
+  }
+
+  static SymbolStringPtr getEmptyVal() {
+    return SymbolStringPtr(reinterpret_cast<PoolEntryPtr>(EmptyBitPattern));
+  }
+
+  static SymbolStringPtr getTombstoneVal() {
+    return SymbolStringPtr(reinterpret_cast<PoolEntryPtr>(TombstoneBitPattern));
+  }
+
+  constexpr static uintptr_t EmptyBitPattern =
+      std::numeric_limits<uintptr_t>::max()
+      << PointerLikeTypeTraits<PoolEntryPtr>::NumLowBitsAvailable;
+
+  constexpr static uintptr_t TombstoneBitPattern =
+      (std::numeric_limits<uintptr_t>::max() - 1)
+      << PointerLikeTypeTraits<PoolEntryPtr>::NumLowBitsAvailable;
+
+  constexpr static uintptr_t InvalidPtrMask =
+      (std::numeric_limits<uintptr_t>::max() - 3)
+      << PointerLikeTypeTraits<PoolEntryPtr>::NumLowBitsAvailable;
+
+  PoolEntryPtr S = nullptr;
 };
-
-inline bool operator==(const SymbolStringPtr &LHS, const SymbolStringPtr &RHS) {
-  return LHS.S == RHS.S;
-}
-
-inline bool operator!=(const SymbolStringPtr &LHS, const SymbolStringPtr &RHS) {
-  return !(LHS == RHS);
-}
-
-inline bool operator<(const SymbolStringPtr &LHS, const SymbolStringPtr &RHS) {
-  return LHS.S < RHS.S;
-}
 
 inline SymbolStringPool::~SymbolStringPool() {
 #ifndef NDEBUG
@@ -142,6 +175,28 @@ inline bool SymbolStringPool::empty() const {
 }
 
 } // end namespace orc
+
+template <>
+struct DenseMapInfo<orc::SymbolStringPtr> {
+
+  static orc::SymbolStringPtr getEmptyKey() {
+    return orc::SymbolStringPtr::getEmptyVal();
+  }
+
+  static orc::SymbolStringPtr getTombstoneKey() {
+    return orc::SymbolStringPtr::getTombstoneVal();
+  }
+
+  static unsigned getHashValue(const orc::SymbolStringPtr &V) {
+    return DenseMapInfo<orc::SymbolStringPtr::PoolEntryPtr>::getHashValue(V.S);
+  }
+
+  static bool isEqual(const orc::SymbolStringPtr &LHS,
+                      const orc::SymbolStringPtr &RHS) {
+    return LHS.S == RHS.S;
+  }
+};
+
 } // end namespace llvm
 
 #endif // LLVM_EXECUTIONENGINE_ORC_SYMBOLSTRINGPOOL_H

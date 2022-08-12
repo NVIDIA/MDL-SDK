@@ -89,16 +89,17 @@ namespace mi { namespace examples { namespace mdl_d3d12
         virtual ~Fence();
 
         UINT64 signal();
-        bool is_completed(const UINT64& handle) const;
-        bool wait(const UINT64& handle) const;
+        bool is_completed(UINT64 handle) const;
+        bool wait(UINT64 handle) const;
 
     private:
         Base_application* m_app;
-        std::mutex m_mtx;
+        mutable std::mutex m_mtx;
         Command_queue* m_command_queue;
         ComPtr<ID3D12Fence> m_fence;
         HANDLE m_fence_event;
         UINT64 m_fence_value;
+        mutable UINT64 m_wait_value;
     };
 
 }}} // mi::examples::mdl_d3d12

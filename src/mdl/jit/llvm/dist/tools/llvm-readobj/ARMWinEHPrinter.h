@@ -1,9 +1,8 @@
 //===--- ARMWinEHPrinter.h - Windows on ARM Unwind Information Printer ----===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License.  See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -18,19 +17,23 @@ namespace llvm {
 namespace ARM {
 namespace WinEH {
 class RuntimeFunction;
+class RuntimeFunctionARM64;
 
 class Decoder {
   static const size_t PDataEntrySize;
 
   ScopedPrinter &SW;
   raw_ostream &OS;
+  bool isAArch64;
 
   struct RingEntry {
     uint8_t Mask;
     uint8_t Value;
+    uint8_t Length;
     bool (Decoder::*Routine)(const uint8_t *, unsigned &, unsigned, bool);
   };
   static const RingEntry Ring[];
+  static const RingEntry Ring64[];
 
   bool opcode_0xxxxxxx(const uint8_t *Opcodes, unsigned &Offset,
                        unsigned Length, bool Prologue);
@@ -75,6 +78,58 @@ class Decoder {
   bool opcode_11111111(const uint8_t *Opcodes, unsigned &Offset,
                        unsigned Length, bool Prologue);
 
+  // ARM64 unwind codes start here.
+  bool opcode_alloc_s(const uint8_t *Opcodes, unsigned &Offset, unsigned Length,
+                      bool Prologue);
+  bool opcode_save_r19r20_x(const uint8_t *Opcodes, unsigned &Offset,
+                            unsigned Length, bool Prologue);
+  bool opcode_save_fplr(const uint8_t *Opcodes, unsigned &Offset,
+                        unsigned Length, bool Prologue);
+  bool opcode_save_fplr_x(const uint8_t *Opcodes, unsigned &Offset,
+                          unsigned Length, bool Prologue);
+  bool opcode_alloc_m(const uint8_t *Opcodes, unsigned &Offset, unsigned Length,
+                      bool Prologue);
+  bool opcode_save_regp(const uint8_t *Opcodes, unsigned &Offset,
+                        unsigned Length, bool Prologue);
+  bool opcode_save_regp_x(const uint8_t *Opcodes, unsigned &Offset,
+                          unsigned Length, bool Prologue);
+  bool opcode_save_reg(const uint8_t *Opcodes, unsigned &Offset,
+                       unsigned Length, bool Prologue);
+  bool opcode_save_reg_x(const uint8_t *Opcodes, unsigned &Offset,
+                         unsigned Length, bool Prologue);
+  bool opcode_save_lrpair(const uint8_t *Opcodes, unsigned &Offset,
+                          unsigned Length, bool Prologue);
+  bool opcode_save_fregp(const uint8_t *Opcodes, unsigned &Offset,
+                         unsigned Length, bool Prologue);
+  bool opcode_save_fregp_x(const uint8_t *Opcodes, unsigned &Offset,
+                           unsigned Length, bool Prologue);
+  bool opcode_save_freg(const uint8_t *Opcodes, unsigned &Offset,
+                        unsigned Length, bool Prologue);
+  bool opcode_save_freg_x(const uint8_t *Opcodes, unsigned &Offset,
+                          unsigned Length, bool Prologue);
+  bool opcode_alloc_l(const uint8_t *Opcodes, unsigned &Offset, unsigned Length,
+                      bool Prologue);
+  bool opcode_setfp(const uint8_t *Opcodes, unsigned &Offset, unsigned Length,
+                    bool Prologue);
+  bool opcode_addfp(const uint8_t *Opcodes, unsigned &Offset, unsigned Length,
+                    bool Prologue);
+  bool opcode_nop(const uint8_t *Opcodes, unsigned &Offset, unsigned Length,
+                  bool Prologue);
+  bool opcode_end(const uint8_t *Opcodes, unsigned &Offset, unsigned Length,
+                  bool Prologue);
+  bool opcode_end_c(const uint8_t *Opcodes, unsigned &Offset, unsigned Length,
+                    bool Prologue);
+  bool opcode_save_next(const uint8_t *Opcodes, unsigned &Offset,
+                        unsigned Length, bool Prologue);
+  bool opcode_trap_frame(const uint8_t *Opcodes, unsigned &Offset,
+                         unsigned Length, bool Prologue);
+  bool opcode_machine_frame(const uint8_t *Opcodes, unsigned &Offset,
+                            unsigned Length, bool Prologue);
+  bool opcode_context(const uint8_t *Opcodes, unsigned &Offset, unsigned Length,
+                      bool Prologue);
+  bool opcode_clear_unwound_to_call(const uint8_t *Opcodes, unsigned &Offset,
+                                    unsigned Length, bool Prologue);
+
   void decodeOpcodes(ArrayRef<uint8_t> Opcodes, unsigned Offset,
                      bool Prologue);
 
@@ -100,6 +155,9 @@ class Decoder {
   bool dumpPackedEntry(const object::COFFObjectFile &COFF,
                        const object::SectionRef Section, uint64_t Offset,
                        unsigned Index, const RuntimeFunction &Entry);
+  bool dumpPackedARM64Entry(const object::COFFObjectFile &COFF,
+                            const object::SectionRef Section, uint64_t Offset,
+                            unsigned Index, const RuntimeFunctionARM64 &Entry);
   bool dumpProcedureDataEntry(const object::COFFObjectFile &COFF,
                               const object::SectionRef Section, unsigned Entry,
                               ArrayRef<uint8_t> Contents);
@@ -107,8 +165,10 @@ class Decoder {
                          const object::SectionRef Section);
 
 public:
-  Decoder(ScopedPrinter &SW) : SW(SW), OS(SW.getOStream()) {}
-  std::error_code dumpProcedureData(const object::COFFObjectFile &COFF);
+  Decoder(ScopedPrinter &SW, bool isAArch64) : SW(SW),
+                                               OS(SW.getOStream()),
+                                               isAArch64(isAArch64) {}
+  Error dumpProcedureData(const object::COFFObjectFile &COFF);
 };
 }
 }

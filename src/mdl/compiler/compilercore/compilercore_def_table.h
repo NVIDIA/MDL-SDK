@@ -267,6 +267,9 @@ public:
     /// Set the scope that this definition creates.
     void set_own_scope(Scope *scope);
 
+    /// Remove the scope that this definition creates.
+    void remove_own_scope();
+
     /// Link a previous definition for the same symbol.
     ///
     /// Note that the symbol table is updated, and shows a list of same
@@ -396,6 +399,9 @@ public:
     /// \param name_space  the namespace
     void set_namespace(
         ISymbol const *name_space);
+
+    /// Remove this definition from its parent scope.
+    void remove_from_parent();
 
 private:
     /// Constructor.
@@ -566,6 +572,14 @@ public:
         m_definitions = def;
     }
 
+    /// Remove a definition from this scope.
+    ///
+    /// \param def  the definition to remove
+    ///
+    /// \return true if the definition was found and removed, false otherwise
+    bool remove_definition(
+        Definition *def);
+
     /// Returns the first definition in this scope.
     inline Definition *get_first_definition_in_scope() const {
         return m_definitions;
@@ -633,6 +647,9 @@ public:
     /// Get the next (sibling) sub-scope.
     Scope const *get_next_subscope() const { return m_next_subscope; }
 
+    /// Remove this scope from its parent sub-scopes.
+    void remove_from_parent();
+
 private:
     /// Creates a new environmental scope.
     ///
@@ -657,9 +674,6 @@ private:
         Scope         *parent,
         ISymbol const *name,
         size_t        id);
-
-    /// Remove this scope from its parent sub-scopes.
-    void remove_from_parent();
 
     /// Serialize this scope.
     ///
@@ -1166,6 +1180,13 @@ unsigned mdl_since_version(unsigned flags);
 /// \return The MDL version (as IMDL::MDL_version) when this entity was removed,
 ///         or 0xFFFFFFFF if it is the current version.
 unsigned mdl_removed_version(unsigned flags);
+
+/// Check if the version flags indicate a removed version.
+///
+/// \param flags  version flags of a definition
+///
+/// \return True if this entity is removed, false if it is current.
+bool is_mdl_removed_version(unsigned flags);
 
 /// Check if a entity is available in the given MDL language level of a module.
 ///

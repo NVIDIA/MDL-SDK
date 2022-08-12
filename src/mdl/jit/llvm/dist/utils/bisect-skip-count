@@ -1,6 +1,26 @@
 #!/usr/bin/env python
 # This script is used to bisect skip and count arguments for --debug-counter.
 # It is similar to bisect, except it understands how to increase skip and decrease count
+#
+# Typical usage:
+#
+# bisect-skip-count bisect-command.sh "%(skip)d" "%(count)d" 2>&1 | tee bisect.out
+#
+# bisect-command.sh is something like this:
+# #! /bin/bash
+#
+# skip=$1
+# count=$2
+#
+# opt -debug-counter=my-counter-skip=${skip},my-counter-count=${count}
+# ... Test output of opt and exit zero for pass, non-zero for fail
+#
+# Examine bisect.out to look for "Last good skip" and "Last good
+# count" to find the values of the counter that produce a passing
+# result.  Incrementing the last good count by one or decrementing the
+# last good skip by one should produce a failure.
+#
+from __future__ import print_function
 import os
 import sys
 import argparse
@@ -33,10 +53,10 @@ print("End: %d" % end)
 
 last = None
 while start != end and start != end-1:
-    count = start + (end - start)/2
+    count = start + (end - start)//2
     print("Visiting Skip: %d with (Start, End) = (%d,%d)" % (count, start, end))
     cmd = [x % {'skip':count, 'count':-1} for x in args.command]
-    print cmd
+    print(cmd)
     try:
         result = subprocess.call(cmd, shell=args.shell, timeout=args.timeout)
         if result == 0:
@@ -56,10 +76,10 @@ print("Bisect of Count starting!")
 print("Start: %d" % start)
 print("End: %d" % end)
 while start != end and start != end-1:
-    count = start + (end - start)/2
+    count = start + (end - start)//2
     print("Visiting Count: %d with (Start, End) = (%d,%d)" % (count, start, end))
     cmd = [x % {'count':count, 'skip':firstcount } for x in args.command]
-    print cmd
+    print(cmd)
     try:
         result = subprocess.call(cmd, shell=args.shell, timeout=args.timeout)
         if result == 0:

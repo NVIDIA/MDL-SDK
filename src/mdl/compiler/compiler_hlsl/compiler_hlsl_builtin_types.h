@@ -73,6 +73,8 @@ BUILTIN_SCALAR(min16uint)
 BUILTIN_SCALAR(min10float)
 BUILTIN_SCALAR(min16float)
 
+BUILTIN_TYPE(Type_string, hlsl_string_type,)
+
 BUILTIN_VECTOR(bool)
 BUILTIN_VECTOR(int)
 BUILTIN_VECTOR(uint)
@@ -105,6 +107,8 @@ BUILTIN_TYPE(Type_texture, hlsl_texture3D_type,              (SHAPE_3D))
 BUILTIN_TYPE(Type_texture, hlsl_textureCube_type,            (SHAPE_CUBE))
 BUILTIN_TYPE(Type_texture, hlsl_texture1DArray_type,         (SHAPE_1D_ARRAY))
 BUILTIN_TYPE(Type_texture, hlsl_texture2DArray_type,         (SHAPE_2D_ARRAY))
+
+BUILTIN_TYPE(Type_template, hlsl_template_type,)
 
 #undef BUILTIN_MATRIX
 #undef BUILTIN_VECTOR

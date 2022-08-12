@@ -1,9 +1,8 @@
 //===-- BenchmarkResult.h ---------------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 ///
@@ -16,6 +15,8 @@
 #ifndef LLVM_TOOLS_LLVM_EXEGESIS_BENCHMARKRESULT_H
 #define LLVM_TOOLS_LLVM_EXEGESIS_BENCHMARKRESULT_H
 
+#include "LlvmState.h"
+#include "RegisterValue.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/MC/MCInst.h"
@@ -26,62 +27,75 @@
 #include <unordered_map>
 #include <vector>
 
-namespace exegesis {
+namespace llvm {
+class Error;
 
-struct BenchmarkResultContext; // Forward declaration.
+namespace exegesis {
 
 struct InstructionBenchmarkKey {
   // The LLVM opcode name.
-  std::vector<llvm::MCInst> Instructions;
+  std::vector<MCInst> Instructions;
+  // The initial values of the registers.
+  std::vector<RegisterValue> RegisterInitialValues;
   // An opaque configuration, that can be used to separate several benchmarks of
   // the same instruction under different configurations.
   std::string Config;
 };
 
 struct BenchmarkMeasure {
+  // A helper to create an unscaled BenchmarkMeasure.
+  static BenchmarkMeasure Create(std::string Key, double Value) {
+    return {Key, Value, Value};
+  }
   std::string Key;
-  double Value;
-  std::string DebugString;
+  // This is the per-instruction value, i.e. measured quantity scaled per
+  // instruction.
+  double PerInstructionValue;
+  // This is the per-snippet value, i.e. measured quantity for one repetition of
+  // the whole snippet.
+  double PerSnippetValue;
 };
 
 // The result of an instruction benchmark.
 struct InstructionBenchmark {
   InstructionBenchmarkKey Key;
-  enum ModeE { Unknown, Latency, Uops };
+  enum ModeE { Unknown, Latency, Uops, InverseThroughput };
   ModeE Mode;
   std::string CpuName;
   std::string LLVMTriple;
+  // Which instruction is being benchmarked here?
+  const MCInst &keyInstruction() const { return Key.Instructions[0]; }
   // The number of instructions inside the repeated snippet. For example, if a
   // snippet of 3 instructions is repeated 4 times, this is 12.
   int NumRepetitions = 0;
+  enum RepetitionModeE { Duplicate, Loop, AggregateMin };
   // Note that measurements are per instruction.
   std::vector<BenchmarkMeasure> Measurements;
   std::string Error;
   std::string Info;
   std::vector<uint8_t> AssembledSnippet;
-
+  // How to aggregate measurements.
+  enum ResultAggregationModeE { Min, Max, Mean, MinVariance };
   // Read functions.
-  static llvm::Expected<InstructionBenchmark>
-  readYaml(const BenchmarkResultContext &Context, llvm::StringRef Filename);
+  static Expected<InstructionBenchmark> readYaml(const LLVMState &State,
+                                                 StringRef Filename);
 
-  static llvm::Expected<std::vector<InstructionBenchmark>>
-  readYamls(const BenchmarkResultContext &Context, llvm::StringRef Filename);
+  static Expected<std::vector<InstructionBenchmark>>
+  readYamls(const LLVMState &State, StringRef Filename);
 
-  void readYamlFrom(const BenchmarkResultContext &Context,
-                    llvm::StringRef InputContent);
+  class Error readYamlFrom(const LLVMState &State, StringRef InputContent);
 
   // Write functions, non-const because of YAML traits.
-  void writeYamlTo(const BenchmarkResultContext &Context, llvm::raw_ostream &S);
+  class Error writeYamlTo(const LLVMState &State, raw_ostream &S);
 
-  llvm::Error writeYaml(const BenchmarkResultContext &Context,
-                        const llvm::StringRef Filename);
+  class Error writeYaml(const LLVMState &State, const StringRef Filename);
 };
 
 //------------------------------------------------------------------------------
 // Utilities to work with Benchmark measures.
 
 // A class that measures stats over benchmark measures.
-class BenchmarkMeasureStats {
+class PerInstructionStats {
 public:
   void push(const BenchmarkMeasure &BM);
 
@@ -102,38 +116,7 @@ private:
   double MinValue = std::numeric_limits<double>::max();
 };
 
-// This context is used when de/serializing InstructionBenchmark to guarantee
-// that Registers and Instructions are human readable and preserved accross
-// different versions of LLVM.
-struct BenchmarkResultContext {
-  BenchmarkResultContext() = default;
-  BenchmarkResultContext(BenchmarkResultContext &&) = default;
-  BenchmarkResultContext &operator=(BenchmarkResultContext &&) = default;
-  BenchmarkResultContext(const BenchmarkResultContext &) = delete;
-  BenchmarkResultContext &operator=(const BenchmarkResultContext &) = delete;
-
-  // Populate Registers and Instruction mapping.
-  void addRegEntry(unsigned RegNo, llvm::StringRef Name);
-  void addInstrEntry(unsigned Opcode, llvm::StringRef Name);
-
-  // Register accessors.
-  llvm::StringRef getRegName(unsigned RegNo) const;
-  unsigned getRegNo(llvm::StringRef Name) const; // 0 is not found.
-
-  // Instruction accessors.
-  llvm::StringRef getInstrName(unsigned Opcode) const;
-  unsigned getInstrOpcode(llvm::StringRef Name) const; // 0 is not found.
-
-private:
-  // Ideally we would like to use MCRegisterInfo and MCInstrInfo but doing so
-  // would make testing harder, instead we create a mapping that we can easily
-  // populate.
-  std::unordered_map<unsigned, llvm::StringRef> InstrOpcodeToName;
-  std::unordered_map<unsigned, llvm::StringRef> RegNoToName;
-  llvm::StringMap<unsigned> InstrNameToOpcode;
-  llvm::StringMap<unsigned> RegNameToNo;
-};
-
 } // namespace exegesis
+} // namespace llvm
 
 #endif // LLVM_TOOLS_LLVM_EXEGESIS_BENCHMARKRESULT_H

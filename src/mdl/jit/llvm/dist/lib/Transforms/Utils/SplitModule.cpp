@@ -1,9 +1,8 @@
 //===- SplitModule.cpp - Split a module into partitions -------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -181,14 +180,12 @@ static void findPartitions(Module *M, ClusterIDMapType &ClusterIDMap,
           std::make_pair(std::distance(GVtoClusterMap.member_begin(I),
                                        GVtoClusterMap.member_end()), I));
 
-  llvm::sort(Sets.begin(), Sets.end(),
-             [](const SortType &a, const SortType &b) {
-               if (a.first == b.first)
-                 return a.second->getData()->getName() >
-                        b.second->getData()->getName();
-               else
-                 return a.first > b.first;
-             });
+  llvm::sort(Sets, [](const SortType &a, const SortType &b) {
+    if (a.first == b.first)
+      return a.second->getData()->getName() > b.second->getData()->getName();
+    else
+      return a.first > b.first;
+  });
 
   for (auto &I : Sets) {
     unsigned CurrentClusterID = BalancinQueue.top().first;

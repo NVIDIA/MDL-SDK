@@ -54,7 +54,6 @@ Mdl_material::Mdl_material(Base_application* app)
     , m_compiled_hash("")
     , m_resource_hash("")
     , m_target(nullptr)
-    , m_scene_data_name_map()
     , m_constants(m_app, m_name + "_Constants")
     , m_argument_block_buffer(nullptr) // size is not known at this point
     , m_argument_block_data()
@@ -91,50 +90,30 @@ Mdl_material::~Mdl_material()
 
 bool Mdl_material::compile_material(const Mdl_material_description& description)
 {
+    // copy description
+    m_description = description;
+
     // since this method can be called from multiple threads simultaneously
     // a new context for is created
     mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
         m_sdk->create_context());
 
-    // copy description
-    m_description = description;
+    // database names for the instance and the compiled material
+    {
+        auto p = m_app->get_profiling().measure("creating MDL material instance");
+        m_instance_db_name = m_description.build_material_graph(
+            *m_sdk,
+            mi::examples::io::dirname(m_app->get_scene_path()),
+            "mdl_dxr::material_graph_" + std::to_string(m_material_id),
+            context.get());
+    }
+    if (m_instance_db_name.empty())
+        return false;
 
-    // load the definitions
-    std::string scene_directory = mi::examples::io::dirname(m_app->get_scene_path());
-    m_description.load_material_definition(*m_sdk, scene_directory, context.get());
-    if (!m_description.is_loaded())
-        return false; // error case, no fall-back
+    m_compiled_db_name = "mdl_dxr::compiled_material_" + std::to_string(m_material_id);
 
     // get the scene for this material
     set_name(m_description.get_scene_name());
-
-    // database names for the instance and the compiled material
-    std::string base = "mdl_dxr::material_" + std::to_string(m_material_id) + "_";
-    m_instance_db_name = base + "instance";
-    m_compiled_db_name = base + "compiled";
-
-    // get the material definition from the database
-    mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
-        m_sdk->get_transaction().access<mi::neuraylib::IFunction_definition>(
-            m_description.get_material_definition_db_name()));
-
-    // create a material instance with the provided parameters and store it in the database
-    {
-        auto p = m_app->get_profiling().measure("creating MDL material instance");
-        mi::Sint32 ret = 0;
-        mi::base::Handle<const mi::neuraylib::IExpression_list> parameter_list(
-            m_description.get_parameters());
-
-
-        mi::base::Handle<mi::neuraylib::IFunction_call> material_instance(
-            material_definition->create_function_call(parameter_list.get(), &ret));
-        if (ret != 0 || !material_instance)
-        {
-            log_error("Instantiating material '" + get_name() + "' failed", SRC);
-            return false;
-        }
-        m_sdk->get_transaction().store(material_instance.get(), m_instance_db_name.c_str());
-    }
 
     // the instance is setup and in the DB, now it is the same as recompiling
     return recompile_material(context.get());
@@ -181,9 +160,10 @@ bool Mdl_material::recompile_material(mi::neuraylib::IMdl_execution_context* con
             }
 
             // fall-back, the invalid material
-            IScene_loader::Material copy = get_material_desciption().get_material_parameters();
+            const IScene_loader::Scene* scene = get_material_desciption().get_scene();
+            IScene_loader::Material copy = get_material_desciption().get_scene_material();
             copy.name = Mdl_material_description::Invalid_material_identifier;
-            Mdl_material_description invalid(copy); // invalid but keep material parameters
+            Mdl_material_description invalid(scene, copy); // invalid but keep material parameters
             if (compile_material(invalid))
             {
                 log_warning("Repairing and recreating the material instance failed. "
@@ -222,6 +202,8 @@ bool Mdl_material::recompile_material(mi::neuraylib::IMdl_execution_context* con
         if (!m_sdk->log_messages("Compiling material failed: " + get_name(), context, SRC) ||
             !compiled_material)
                 return false;
+
+
         m_sdk->get_transaction().store(compiled_material.get(), m_compiled_db_name.c_str());
     }
 
@@ -332,9 +314,10 @@ size_t Mdl_material::get_target_code_id() const
 
 // ------------------------------------------------------------------------------------------------
 
-const std::unordered_map<std::string, uint32_t>& Mdl_material::get_scene_data_name_map() const
+uint32_t Mdl_material::register_scene_data_name(const std::string& name)
 {
-    return m_scene_data_name_map;
+    // scene data names are actually just string constants
+    return map_string_constant(name);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -421,12 +404,39 @@ const std::vector<Mdl_resource_assignment>& Mdl_material::get_resources(
 
 // ------------------------------------------------------------------------------------------------
 
+uint32_t Mdl_material::map_string_constant(const std::string& string_value)
+{
+    // the empty string is also the invalid string
+    if (string_value == "")
+        return 0;
+
+    // if the constant is already mapped, use it
+    for (auto& c : m_string_constants)
+    if(c.value == string_value)
+        return c.runtime_string_id;
+
+    // map the new constant. keep this mapping dense in order to easy the data layout on the GPU
+    uint32_t runtime_id =
+        m_string_constants.empty() ? 1 : m_string_constants.back().runtime_string_id + 1;
+    Mdl_string_constant entry;
+    entry.runtime_string_id = runtime_id;
+    entry.value = string_value;
+    m_string_constants.push_back(entry);
+
+    return runtime_id;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+const std::vector<Mdl_string_constant>& Mdl_material::get_string_constants() const
+{
+    return m_string_constants;
+}
+
+// ------------------------------------------------------------------------------------------------
+
 bool Mdl_material::on_target_generated(D3DCommandList* command_list)
 {
-    mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
-        m_sdk->get_transaction().access<const mi::neuraylib::IFunction_definition>(
-            m_description.get_material_definition_db_name()));
-
     mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
         m_sdk->get_transaction().access<const mi::neuraylib::ICompiled_material>(
         m_compiled_db_name.c_str()));
@@ -450,6 +460,11 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
         m_resources[kind_i].clear();
         m_resources[kind_i].insert(m_resources[kind_i].end(), to_copy.begin(), to_copy.end());
     }
+
+    // copy the string constant list
+    m_string_constants.clear();
+    auto to_copy = m_target->get_string_constants();
+    m_string_constants.insert(m_string_constants.end(), to_copy.begin(), to_copy.end());
 
     // get target code information for this specific material
     mi::base::Handle<const mi::neuraylib::ITarget_code> target_code(m_target->get_target_code());
@@ -668,29 +683,6 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
     // copy the infos into the buffer
     m_resource_infos->set_data(info_data.data(), info_data.size());
 
-    // get all names in the compiled material
-    std::unordered_set<std::string> present_names;
-    for (mi::Size i = 0, n = compiled_material->get_referenced_scene_data_count(); i < n; ++i)
-        present_names.insert(compiled_material->get_referenced_scene_data_name(i));
-
-    // check which of them is still available after code generation
-    // and update the scene data name map
-    m_scene_data_name_map.clear();
-    for (mi::Size i = 1, n = target_code->get_string_constant_count(); i < n; ++i)
-    {
-        const char* name = target_code->get_string_constant(i);
-        if (present_names.find(name) != present_names.end())
-            m_scene_data_name_map[name] = static_cast<uint32_t>(i);
-    }
-
-    // add TEXCOORD_0 to demonstrate renderer driven scene data elements
-    // NOTE, if this is added manually, MDL code will not create any runtime function call
-    // that with the 'scene_data_id'. Instead, only the render can call this outside of the
-    // generated code.
-    if (m_scene_data_name_map.find("TEXCOORD_0") == m_scene_data_name_map.end())
-        m_scene_data_name_map["TEXCOORD_0"] =
-            std::max(static_cast<uint32_t>(target_code->get_string_constant_count()), 1u);
-
     // optimization potential
     m_constants.data.material_flags = static_cast<uint32_t>(m_flags);
 
@@ -702,3 +694,4 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
 }
 
 }}} // mi::examples::mdl_d3d12
+

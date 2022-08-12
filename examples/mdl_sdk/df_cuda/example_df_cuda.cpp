@@ -1884,11 +1884,6 @@ Df_cuda_material create_cuda_material(
         // and the function_index inside this target_code.
         // same for the EDF and the intensity expression.
 
-        // has material a constant cutout opacity?
-        float constant_opacity = 1.f;
-        const bool has_constant_opacity =
-            compiled_material->get_cutout_opacity(&constant_opacity);
-
         // has material a constant thin_walled property?
         mi::base::Handle<mi::neuraylib::IExpression const> thin_walled(
             compiled_material->lookup_sub_expression("thin_walled"));

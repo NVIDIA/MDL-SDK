@@ -103,7 +103,6 @@ extern IGenerated_code_dag const *deserialize_code_dag(
     MDL                     *compiler);
 
 extern ICode_generator *create_code_generator_jit(IAllocator *alloc, MDL *mdl);
-extern ICode_generator *create_code_generator_glsl(IAllocator *alloc, MDL *mdl);
 extern Jitted_code     *create_jitted_code_singleton(IAllocator *alloc);
 extern void            terminate_jitted_code_singleton(Jitted_code *jitted_code);
 
@@ -1482,8 +1481,6 @@ ICode_generator *MDL::load_code_generator(const char *target_language)
 {
     if (strcmp(target_language, "dag") == 0) {
         return create_code_generator_dag(m_builder.get_allocator(), this);
-    } else if (strcmp(target_language, "glsl") == 0) {
-        return create_code_generator_glsl(m_builder.get_allocator(), this);
     } else if (strcmp(target_language, "jit") == 0) {
         return create_code_generator_jit(m_builder.get_allocator(), this);
     }

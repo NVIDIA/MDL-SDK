@@ -43,6 +43,8 @@
 #include <base/util/string_utils/i_string_lexicographic_cast.h>
 #include <base/lib/log/i_log_logger.h>
 
+#include <cstring>
+
 namespace MI {
 
 namespace NEURAY {
@@ -108,8 +110,8 @@ bool Type_utilities::is_valid_structure_attribute_type( const std::string& type_
 
     mi::Size n = decl->get_length();
     for( mi::Size i = 0; i < n; ++i) {
-        const char* type_name = decl->get_member_type_name( i);
-        if( !is_valid_attribute_type( type_name))
+        const char* member_type_name = decl->get_member_type_name( i);
+        if( !is_valid_attribute_type( member_type_name))
             return false;
     }
 
@@ -207,9 +209,9 @@ std::string Type_utilities::strip_array( const std::string& type_name, mi::Size&
 std::string Type_utilities::strip_map( const std::string& type_name)
 {
     if( type_name.substr( 0, 4) != "Map<")
-        return "";
-    if( type_name[type_name.size()-1] != '>')
-        return "";
+        return std::string();
+    if( type_name[type_name.size() - 1] != '>')
+        return std::string();
     return type_name.substr( 4, type_name.size() - 5);
 }
 

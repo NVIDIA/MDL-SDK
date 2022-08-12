@@ -328,7 +328,7 @@ public:
     ///
     /// \param type   the type
     /// \param index  the index of the requested constructor
-    IDefinition const *get_type_constructor(IType const *type, int index) const MDL_FINAL;
+    Definition const *get_type_constructor(IType const *type, int index) const MDL_FINAL;
 
     /// Get the the number of conversion operators of a given type.
     /// The type must exists in this module, or -1 will be returned.
@@ -340,7 +340,7 @@ public:
     ///
     /// \param type   the type
     /// \param index  the index of the requested conversion operator
-    IDefinition const *get_conversion_operator(
+    Definition const *get_conversion_operator(
         IType const *type,
         int         index) const MDL_FINAL;
 
@@ -751,7 +751,7 @@ public:
     /// Return the value create by a const default constructor of a type.
     ///
     /// \param factory  the factory to create the value
-    /// \param type     the type
+    /// \param type     the type of the value (must be owned by this module)
     IValue const *create_default_value(
         IValue_factory *factory,
         IType const    *type) const;

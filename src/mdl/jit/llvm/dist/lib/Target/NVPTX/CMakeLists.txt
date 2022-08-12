@@ -1,3 +1,5 @@
+add_llvm_component_group(NVPTX)
+
 set(LLVM_TARGET_DEFINITIONS NVPTX.td)
 
 tablegen(LLVM NVPTXGenAsmWriter.inc -gen-asm-writer)
@@ -32,10 +34,31 @@ set(NVPTXCodeGen_sources
   NVPTXUtilities.cpp
   NVVMIntrRange.cpp
   NVVMReflect.cpp
+  NVPTXProxyRegErasure.cpp
   )
 
-add_llvm_target(NVPTXCodeGen ${NVPTXCodeGen_sources})
+add_llvm_target(NVPTXCodeGen
+  ${NVPTXCodeGen_sources}
 
-add_subdirectory(InstPrinter)
+  LINK_COMPONENTS
+  Analysis
+  AsmPrinter
+  CodeGen
+  Core
+  IPO
+  MC
+  NVPTXDesc
+  NVPTXInfo
+  Scalar
+  SelectionDAG
+  Support
+  Target
+  TransformUtils
+  Vectorize
+
+  ADD_TO_COMPONENT
+  NVPTX
+)
+
 add_subdirectory(MCTargetDesc)
 add_subdirectory(TargetInfo)

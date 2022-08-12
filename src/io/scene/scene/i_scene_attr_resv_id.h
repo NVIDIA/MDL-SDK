@@ -68,7 +68,6 @@ enum Attr_resv_id {
     FACE_BACK,			///< back face visible?
     HULL,			///< call no shaders, just enter new volume
     MATTE,                      ///< is this a matte object
-    LIGHT_PORTAL,               ///< is this light a portal light
     SHADOW_TERMINATOR_OFFSET,   ///< is the shadow terminator smoothing enabled
     MATTE_CONNECT_TO_ENV,       ///< connect matte to environment or backplate instead
     MATTE_CONNECT_FROM_CAM,     ///< connect matte from camera or use real incoming ray
@@ -138,6 +137,8 @@ enum Attr_resv_id {
     SHMAP_SOFTNESS,		///< Scalar      add fixed blur radius
     SHMAP_FILTER,		///< Scalar      sample filter radius
     SHMAP_MOTION,		///< bool        shadowmap is motion-blurred
+                                //------------------ material -----------------
+    EXCLUDE_FROM_WHITE_MODE,    /// < bool exclude from white mode
                                 //------------------ options ------------------
     OPT_BSP_FOLDING,		///< bool        enable or disable bsp folding
     OPT_BSP_FILE_MODE,          ///< uint        MMODE: update rebuild freeze off

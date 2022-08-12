@@ -1,9 +1,8 @@
 //===- DependencyAnalysis.cpp - ObjC ARC Optimization ---------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 /// \file
@@ -20,9 +19,12 @@
 ///
 //===----------------------------------------------------------------------===//
 
+#ifdef LLVM_ENABLE_OBJC
+
 #include "DependencyAnalysis.h"
 #include "ObjCARC.h"
 #include "ProvenanceAnalysis.h"
+#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/IR/CFG.h"
 
 using namespace llvm;
@@ -45,20 +47,15 @@ bool llvm::objcarc::CanAlterRefCount(const Instruction *Inst, const Value *Ptr,
   default: break;
   }
 
-  ImmutableCallSite CS(Inst);
-  assert(CS && "Only calls can alter reference counts!");
+  const auto *Call = cast<CallBase>(Inst);
 
   // See if AliasAnalysis can help us with the call.
-  FunctionModRefBehavior MRB = PA.getAA()->getModRefBehavior(CS);
+  FunctionModRefBehavior MRB = PA.getAA()->getModRefBehavior(Call);
   if (AliasAnalysis::onlyReadsMemory(MRB))
     return false;
   if (AliasAnalysis::onlyAccessesArgPointees(MRB)) {
-    const DataLayout &DL = Inst->getModule()->getDataLayout();
-    for (ImmutableCallSite::arg_iterator I = CS.arg_begin(), E = CS.arg_end();
-         I != E; ++I) {
-      const Value *Op = *I;
-      if (IsPotentialRetainableObjPtr(Op, *PA.getAA()) &&
-          PA.related(Ptr, Op, DL))
+    for (const Value *Op : Call->args()) {
+      if (IsPotentialRetainableObjPtr(Op, *PA.getAA()) && PA.related(Ptr, Op))
         return true;
     }
     return false;
@@ -89,8 +86,6 @@ bool llvm::objcarc::CanUse(const Instruction *Inst, const Value *Ptr,
   if (Class == ARCInstKind::Call)
     return false;
 
-  const DataLayout &DL = Inst->getModule()->getDataLayout();
-
   // Consider various instructions which may have pointer arguments which are
   // not "uses".
   if (const ICmpInst *ICI = dyn_cast<ICmpInst>(Inst)) {
@@ -99,31 +94,28 @@ bool llvm::objcarc::CanUse(const Instruction *Inst, const Value *Ptr,
     // of any other dynamic reference-counted pointers.
     if (!IsPotentialRetainableObjPtr(ICI->getOperand(1), *PA.getAA()))
       return false;
-  } else if (auto CS = ImmutableCallSite(Inst)) {
+  } else if (const auto *CS = dyn_cast<CallBase>(Inst)) {
     // For calls, just check the arguments (and not the callee operand).
-    for (ImmutableCallSite::arg_iterator OI = CS.arg_begin(),
-         OE = CS.arg_end(); OI != OE; ++OI) {
+    for (auto OI = CS->arg_begin(), OE = CS->arg_end(); OI != OE; ++OI) {
       const Value *Op = *OI;
-      if (IsPotentialRetainableObjPtr(Op, *PA.getAA()) &&
-          PA.related(Ptr, Op, DL))
+      if (IsPotentialRetainableObjPtr(Op, *PA.getAA()) && PA.related(Ptr, Op))
         return true;
     }
     return false;
   } else if (const StoreInst *SI = dyn_cast<StoreInst>(Inst)) {
     // Special-case stores, because we don't care about the stored value, just
     // the store address.
-    const Value *Op = GetUnderlyingObjCPtr(SI->getPointerOperand(), DL);
+    const Value *Op = GetUnderlyingObjCPtr(SI->getPointerOperand());
     // If we can't tell what the underlying object was, assume there is a
     // dependence.
-    return IsPotentialRetainableObjPtr(Op, *PA.getAA()) &&
-           PA.related(Op, Ptr, DL);
+    return IsPotentialRetainableObjPtr(Op, *PA.getAA()) && PA.related(Op, Ptr);
   }
 
   // Check each operand for a match.
   for (User::const_op_iterator OI = Inst->op_begin(), OE = Inst->op_end();
        OI != OE; ++OI) {
     const Value *Op = *OI;
-    if (IsPotentialRetainableObjPtr(Op, *PA.getAA()) && PA.related(Ptr, Op, DL))
+    if (IsPotentialRetainableObjPtr(Op, *PA.getAA()) && PA.related(Ptr, Op))
       return true;
   }
   return false;
@@ -219,15 +211,13 @@ llvm::objcarc::Depends(DependenceKind Flavor, Instruction *Inst,
 /// non-local dependencies on Arg.
 ///
 /// TODO: Cache results?
-void
-llvm::objcarc::FindDependencies(DependenceKind Flavor,
-                                const Value *Arg,
-                                BasicBlock *StartBB, Instruction *StartInst,
-                                SmallPtrSetImpl<Instruction *> &DependingInsts,
-                                SmallPtrSetImpl<const BasicBlock *> &Visited,
-                                ProvenanceAnalysis &PA) {
+static bool findDependencies(DependenceKind Flavor, const Value *Arg,
+                             BasicBlock *StartBB, Instruction *StartInst,
+                             SmallPtrSetImpl<Instruction *> &DependingInsts,
+                             ProvenanceAnalysis &PA) {
   BasicBlock::iterator StartPos = StartInst->getIterator();
 
+  SmallPtrSet<const BasicBlock *, 4> Visited;
   SmallVector<std::pair<BasicBlock *, BasicBlock::iterator>, 4> Worklist;
   Worklist.push_back(std::make_pair(StartBB, StartPos));
   do {
@@ -240,15 +230,14 @@ llvm::objcarc::FindDependencies(DependenceKind Flavor,
       if (LocalStartPos == StartBBBegin) {
         pred_iterator PI(LocalStartBB), PE(LocalStartBB, false);
         if (PI == PE)
-          // If we've reached the function entry, produce a null dependence.
-          DependingInsts.insert(nullptr);
-        else
-          // Add the predecessors to the worklist.
-          do {
-            BasicBlock *PredBB = *PI;
-            if (Visited.insert(PredBB).second)
-              Worklist.push_back(std::make_pair(PredBB, PredBB->end()));
-          } while (++PI != PE);
+          // Return if we've reached the function entry.
+          return false;
+        // Add the predecessors to the worklist.
+        do {
+          BasicBlock *PredBB = *PI;
+          if (Visited.insert(PredBB).second)
+            Worklist.push_back(std::make_pair(PredBB, PredBB->end()));
+        } while (++PI != PE);
         break;
       }
 
@@ -266,13 +255,25 @@ llvm::objcarc::FindDependencies(DependenceKind Flavor,
   for (const BasicBlock *BB : Visited) {
     if (BB == StartBB)
       continue;
-    const TerminatorInst *TI = cast<TerminatorInst>(&BB->back());
-    for (succ_const_iterator SI(TI), SE(TI, false); SI != SE; ++SI) {
-      const BasicBlock *Succ = *SI;
-      if (Succ != StartBB && !Visited.count(Succ)) {
-        DependingInsts.insert(reinterpret_cast<Instruction *>(-1));
-        return;
-      }
-    }
+    for (const BasicBlock *Succ : successors(BB))
+      if (Succ != StartBB && !Visited.count(Succ))
+        return false;
   }
+
+  return true;
 }
+
+llvm::Instruction *llvm::objcarc::findSingleDependency(DependenceKind Flavor,
+                                                       const Value *Arg,
+                                                       BasicBlock *StartBB,
+                                                       Instruction *StartInst,
+                                                       ProvenanceAnalysis &PA) {
+  SmallPtrSet<Instruction *, 4> DependingInsts;
+
+  if (!findDependencies(Flavor, Arg, StartBB, StartInst, DependingInsts, PA) ||
+      DependingInsts.size() != 1)
+    return nullptr;
+  return *DependingInsts.begin();
+}
+
+#endif

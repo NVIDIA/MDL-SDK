@@ -38,6 +38,7 @@ namespace mdl {
 class MDL;
 class Module;
 class Call_graph;
+class Definition;
 class Statement_factory;
 class Expression_factory;
 class Value_factory;
@@ -86,6 +87,12 @@ private:
     void run_on_function(
         IStatement const *(Optimizer::* body_func)(IStatement const *),
         IExpression const *(Optimizer::* expr_func)(IExpression const *));
+
+    /// Remove unused function definition from the definition table.
+    ///
+    /// \param def  the function definition
+    void remove_unused_function(
+        Definition const *def);
 
     /// Remove unused functions from the AST.
     void remove_unused_functions();

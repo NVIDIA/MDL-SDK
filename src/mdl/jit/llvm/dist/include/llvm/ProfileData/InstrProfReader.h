@@ -1,9 +1,8 @@
 //===- InstrProfReader.h - Instrumented profiling readers -------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -51,8 +50,12 @@ public:
   InstrProfIterator(InstrProfReader *Reader) : Reader(Reader) { Increment(); }
 
   InstrProfIterator &operator++() { Increment(); return *this; }
-  bool operator==(const InstrProfIterator &RHS) { return Reader == RHS.Reader; }
-  bool operator!=(const InstrProfIterator &RHS) { return Reader != RHS.Reader; }
+  bool operator==(const InstrProfIterator &RHS) const {
+    return Reader == RHS.Reader;
+  }
+  bool operator!=(const InstrProfIterator &RHS) const {
+    return Reader != RHS.Reader;
+  }
   value_type &operator*() { return Record; }
   value_type *operator->() { return &Record; }
 };
@@ -78,6 +81,10 @@ public:
 
   virtual bool isIRLevelProfile() const = 0;
 
+  virtual bool hasCSIRLevelProfile() const = 0;
+
+  virtual bool instrEntryBBEnabled() const = 0;
+
   /// Return the PGO symtab. There are three different readers:
   /// Raw, Text, and Indexed profile readers. The first two types
   /// of readers are used only by llvm-profdata tool, while the indexed
@@ -89,6 +96,9 @@ public:
   /// only used for dumping purpose with llvm-proftool, not with the
   /// compiler.
   virtual InstrProfSymtab &getSymtab() = 0;
+
+  /// Compute the sum of counts and return in Sum.
+  void accumulateCounts(CountSumOrPercent &Sum, bool IsCS);
 
 protected:
   std::unique_ptr<InstrProfSymtab> Symtab;
@@ -143,6 +153,8 @@ private:
   /// Iterator over the profile data.
   line_iterator Line;
   bool IsIRLevelProfile = false;
+  bool HasCSIRLevelProfile = false;
+  bool InstrEntryBBEnabled = false;
 
   Error readValueProfileData(InstrProfRecord &Record);
 
@@ -156,6 +168,10 @@ public:
   static bool hasFormat(const MemoryBuffer &Buffer);
 
   bool isIRLevelProfile() const override { return IsIRLevelProfile; }
+
+  bool hasCSIRLevelProfile() const override { return HasCSIRLevelProfile; }
+
+  bool instrEntryBBEnabled() const override { return InstrEntryBBEnabled; }
 
   /// Read the header.
   Error readHeader() override;
@@ -213,6 +229,14 @@ public:
     return (Version & VARIANT_MASK_IR_PROF) != 0;
   }
 
+  bool hasCSIRLevelProfile() const override {
+    return (Version & VARIANT_MASK_CSIR_PROF) != 0;
+  }
+
+  bool instrEntryBBEnabled() const override {
+    return (Version & VARIANT_MASK_INSTR_ENTRY) != 0;
+  }
+
   InstrProfSymtab &getSymtab() override {
     assert(Symtab.get());
     return *Symtab.get();
@@ -257,8 +281,14 @@ private:
       return (const char *)ValueDataStart;
   }
 
-  const uint64_t *getCounter(IntPtrT CounterPtr) const {
-    ptrdiff_t Offset = (swap(CounterPtr) - CountersDelta) / sizeof(uint64_t);
+  /// Get the offset of \p CounterPtr from the start of the counters section of
+  /// the profile. The offset has units of "number of counters", i.e. increasing
+  /// the offset by 1 corresponds to an increase in the *byte offset* by 8.
+  ptrdiff_t getCounterOffset(IntPtrT CounterPtr) const {
+    return (swap(CounterPtr) - CountersDelta) / sizeof(uint64_t);
+  }
+
+  const uint64_t *getCounter(ptrdiff_t Offset) const {
     return CountersStart + Offset;
   }
 
@@ -342,6 +372,8 @@ struct InstrProfReaderIndexBase {
   virtual void setValueProfDataEndianness(support::endianness Endianness) = 0;
   virtual uint64_t getVersion() const = 0;
   virtual bool isIRLevelProfile() const = 0;
+  virtual bool hasCSIRLevelProfile() const = 0;
+  virtual bool instrEntryBBEnabled() const = 0;
   virtual Error populateSymtab(InstrProfSymtab &) = 0;
 };
 
@@ -349,11 +381,16 @@ using OnDiskHashTableImplV3 =
     OnDiskIterableChainedHashTable<InstrProfLookupTrait>;
 
 template <typename HashTableImpl>
+class InstrProfReaderItaniumRemapper;
+
+template <typename HashTableImpl>
 class InstrProfReaderIndex : public InstrProfReaderIndexBase {
 private:
   std::unique_ptr<HashTableImpl> HashTable;
   typename HashTableImpl::data_iterator RecordIterator;
   uint64_t FormatVersion;
+
+  friend class InstrProfReaderItaniumRemapper<HashTableImpl>;
 
 public:
   InstrProfReaderIndex(const unsigned char *Buckets,
@@ -381,9 +418,26 @@ public:
     return (FormatVersion & VARIANT_MASK_IR_PROF) != 0;
   }
 
+  bool hasCSIRLevelProfile() const override {
+    return (FormatVersion & VARIANT_MASK_CSIR_PROF) != 0;
+  }
+
+  bool instrEntryBBEnabled() const override {
+    return (FormatVersion & VARIANT_MASK_INSTR_ENTRY) != 0;
+  }
+
   Error populateSymtab(InstrProfSymtab &Symtab) override {
     return Symtab.create(HashTable->keys());
   }
+};
+
+/// Name matcher supporting fuzzy matching of symbol names to names in profiles.
+class InstrProfReaderRemapper {
+public:
+  virtual ~InstrProfReaderRemapper() {}
+  virtual Error populateRemappings() { return Error::success(); }
+  virtual Error getRecords(StringRef FuncName,
+                           ArrayRef<NamedInstrProfRecord> &Data) = 0;
 };
 
 /// Reader for the indexed binary instrprof format.
@@ -391,27 +445,44 @@ class IndexedInstrProfReader : public InstrProfReader {
 private:
   /// The profile data file contents.
   std::unique_ptr<MemoryBuffer> DataBuffer;
+  /// The profile remapping file contents.
+  std::unique_ptr<MemoryBuffer> RemappingBuffer;
   /// The index into the profile data.
   std::unique_ptr<InstrProfReaderIndexBase> Index;
+  /// The profile remapping file contents.
+  std::unique_ptr<InstrProfReaderRemapper> Remapper;
   /// Profile summary data.
   std::unique_ptr<ProfileSummary> Summary;
+  /// Context sensitive profile summary data.
+  std::unique_ptr<ProfileSummary> CS_Summary;
   // Index to the current record in the record array.
   unsigned RecordIndex;
 
   // Read the profile summary. Return a pointer pointing to one byte past the
   // end of the summary data if it exists or the input \c Cur.
+  // \c UseCS indicates whether to use the context-sensitive profile summary.
   const unsigned char *readSummary(IndexedInstrProf::ProfVersion Version,
-                                   const unsigned char *Cur);
+                                   const unsigned char *Cur, bool UseCS);
 
 public:
-  IndexedInstrProfReader(std::unique_ptr<MemoryBuffer> DataBuffer)
-      : DataBuffer(std::move(DataBuffer)), RecordIndex(0) {}
+  IndexedInstrProfReader(
+      std::unique_ptr<MemoryBuffer> DataBuffer,
+      std::unique_ptr<MemoryBuffer> RemappingBuffer = nullptr)
+      : DataBuffer(std::move(DataBuffer)),
+        RemappingBuffer(std::move(RemappingBuffer)), RecordIndex(0) {}
   IndexedInstrProfReader(const IndexedInstrProfReader &) = delete;
   IndexedInstrProfReader &operator=(const IndexedInstrProfReader &) = delete;
 
   /// Return the profile version.
   uint64_t getVersion() const { return Index->getVersion(); }
   bool isIRLevelProfile() const override { return Index->isIRLevelProfile(); }
+  bool hasCSIRLevelProfile() const override {
+    return Index->hasCSIRLevelProfile();
+  }
+
+  bool instrEntryBBEnabled() const override {
+    return Index->instrEntryBBEnabled();
+  }
 
   /// Return true if the given buffer is in an indexed instrprof format.
   static bool hasFormat(const MemoryBuffer &DataBuffer);
@@ -430,14 +501,24 @@ public:
                           std::vector<uint64_t> &Counts);
 
   /// Return the maximum of all known function counts.
-  uint64_t getMaximumFunctionCount() { return Summary->getMaxFunctionCount(); }
+  /// \c UseCS indicates whether to use the context-sensitive count.
+  uint64_t getMaximumFunctionCount(bool UseCS) {
+    if (UseCS) {
+      assert(CS_Summary && "No context sensitive profile summary");
+      return CS_Summary->getMaxFunctionCount();
+    } else {
+      assert(Summary && "No profile summary");
+      return Summary->getMaxFunctionCount();
+    }
+  }
 
   /// Factory method to create an indexed reader.
   static Expected<std::unique_ptr<IndexedInstrProfReader>>
-  create(const Twine &Path);
+  create(const Twine &Path, const Twine &RemappingPath = "");
 
   static Expected<std::unique_ptr<IndexedInstrProfReader>>
-  create(std::unique_ptr<MemoryBuffer> Buffer);
+  create(std::unique_ptr<MemoryBuffer> Buffer,
+         std::unique_ptr<MemoryBuffer> RemappingBuffer = nullptr);
 
   // Used for testing purpose only.
   void setValueProfDataEndianness(support::endianness Endianness) {
@@ -448,7 +529,18 @@ public:
   // to be used by llvm-profdata (for dumping). Avoid using this when
   // the client is the compiler.
   InstrProfSymtab &getSymtab() override;
-  ProfileSummary &getSummary() { return *(Summary.get()); }
+
+  /// Return the profile summary.
+  /// \c UseCS indicates whether to use the context-sensitive summary.
+  ProfileSummary &getSummary(bool UseCS) {
+    if (UseCS) {
+      assert(CS_Summary && "No context sensitive summary");
+      return *(CS_Summary.get());
+    } else {
+      assert(Summary && "No profile summary");
+      return *(Summary.get());
+    }
+  }
 };
 
 } // end namespace llvm

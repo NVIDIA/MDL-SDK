@@ -111,7 +111,7 @@ public:
     virtual const Float32* get_data() const = 0;
 };
 
-/*@}*/ // end group mi_neuray_misc
+/**@}*/ // end group mi_neuray_misc
 
 } // namespace neuraylib
 

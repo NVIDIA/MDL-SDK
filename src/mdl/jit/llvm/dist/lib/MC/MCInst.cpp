@@ -1,9 +1,8 @@
 //===- lib/MC/MCInst.cpp - MCInst implementation --------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -72,11 +71,17 @@ void MCInst::print(raw_ostream &OS) const {
 
 void MCInst::dump_pretty(raw_ostream &OS, const MCInstPrinter *Printer,
                          StringRef Separator) const {
+  StringRef InstName = Printer ? Printer->getOpcodeName(getOpcode()) : "";
+  dump_pretty(OS, InstName, Separator);
+}
+
+void MCInst::dump_pretty(raw_ostream &OS, StringRef Name,
+                         StringRef Separator) const {
   OS << "<MCInst #" << getOpcode();
 
-  // Show the instruction opcode name if we have access to a printer.
-  if (Printer)
-    OS << ' ' << Printer->getOpcodeName(getOpcode());
+  // Show the instruction opcode name if we have it.
+  if (!Name.empty())
+    OS << ' ' << Name;
 
   for (unsigned i = 0, e = getNumOperands(); i != e; ++i) {
     OS << Separator;

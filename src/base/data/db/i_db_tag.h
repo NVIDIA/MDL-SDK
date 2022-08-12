@@ -33,7 +33,6 @@
 #define BASE_DATA_DB_I_DB_TAG_H
 
 #include <base/system/main/types.h>
-#include <boost/unordered_map.hpp>
 #include <set>
 #include "i_db_transaction_id.h"
 
@@ -223,29 +222,5 @@ inline size_t dynamic_memory_consumption (Tag_version const &) { return 0; }
 }
 }
 
-namespace boost
-{
-
-template <>                             // Hash functor for a tag
-class hash<MI::DB::Tag>
-{
-public:
-    size_t operator()(const MI::DB::Tag& tag) const
-    {
-        return tag.get_uint();
-    }
-};
-
-template <class T>                      // Hash functor for a typed tag
-class hash< MI::DB::Typed_tag<T> >
-{
-  public:
-    size_t operator()(const MI::DB::Typed_tag<T>& tag) const
-    {
-        return tag.get_uint();
-    }
-};
-
-}
 
 #endif

@@ -155,7 +155,7 @@ struct Config
 template <typename T>
 inline std::ostream& print(std::ostream& str, const Prefixed<T> num)
 {
-    Config cfg{str};
+    const Config cfg{str};
     if (num.value < size_t(cfg.threshold)) {
         return str << num.value;
     }

@@ -1,9 +1,8 @@
 //===- NativeSession.cpp - Native implementation of IPDBSession -*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -11,25 +10,31 @@
 
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/DebugInfo/CodeView/TypeIndex.h"
-#include "llvm/DebugInfo/PDB/GenericError.h"
 #include "llvm/DebugInfo/PDB/IPDBEnumChildren.h"
 #include "llvm/DebugInfo/PDB/IPDBSourceFile.h"
-#include "llvm/DebugInfo/PDB/Native/NativeBuiltinSymbol.h"
+#include "llvm/DebugInfo/PDB/Native/DbiStream.h"
+#include "llvm/DebugInfo/PDB/Native/ISectionContribVisitor.h"
 #include "llvm/DebugInfo/PDB/Native/NativeCompilandSymbol.h"
-#include "llvm/DebugInfo/PDB/Native/NativeEnumSymbol.h"
+#include "llvm/DebugInfo/PDB/Native/NativeEnumInjectedSources.h"
 #include "llvm/DebugInfo/PDB/Native/NativeEnumTypes.h"
 #include "llvm/DebugInfo/PDB/Native/NativeExeSymbol.h"
+#include "llvm/DebugInfo/PDB/Native/NativeTypeBuiltin.h"
+#include "llvm/DebugInfo/PDB/Native/NativeTypeEnum.h"
 #include "llvm/DebugInfo/PDB/Native/PDBFile.h"
 #include "llvm/DebugInfo/PDB/Native/RawError.h"
+#include "llvm/DebugInfo/PDB/Native/SymbolCache.h"
 #include "llvm/DebugInfo/PDB/Native/TpiStream.h"
 #include "llvm/DebugInfo/PDB/PDBSymbolCompiland.h"
 #include "llvm/DebugInfo/PDB/PDBSymbolExe.h"
 #include "llvm/DebugInfo/PDB/PDBSymbolTypeEnum.h"
+#include "llvm/Object/COFF.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/BinaryByteStream.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/ErrorOr.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/Path.h"
 
 #include <algorithm>
 #include <cassert>
@@ -40,175 +45,221 @@ using namespace llvm;
 using namespace llvm::msf;
 using namespace llvm::pdb;
 
-namespace {
-// Maps codeview::SimpleTypeKind of a built-in type to the parameters necessary
-// to instantiate a NativeBuiltinSymbol for that type.
-static const struct BuiltinTypeEntry {
-  codeview::SimpleTypeKind Kind;
-  PDB_BuiltinType Type;
-  uint32_t Size;
-} BuiltinTypes[] = {
-    {codeview::SimpleTypeKind::Int32, PDB_BuiltinType::Int, 4},
-    {codeview::SimpleTypeKind::UInt32, PDB_BuiltinType::UInt, 4},
-    {codeview::SimpleTypeKind::UInt32Long, PDB_BuiltinType::UInt, 4},
-    {codeview::SimpleTypeKind::UInt64Quad, PDB_BuiltinType::UInt, 8},
-    {codeview::SimpleTypeKind::NarrowCharacter, PDB_BuiltinType::Char, 1},
-    {codeview::SimpleTypeKind::SignedCharacter, PDB_BuiltinType::Char, 1},
-    {codeview::SimpleTypeKind::UnsignedCharacter, PDB_BuiltinType::UInt, 1},
-    {codeview::SimpleTypeKind::UInt16Short, PDB_BuiltinType::UInt, 2},
-    {codeview::SimpleTypeKind::Boolean8, PDB_BuiltinType::Bool, 1}
-    // This table can be grown as necessary, but these are the only types we've
-    // needed so far.
-};
-} // namespace
+static DbiStream *getDbiStreamPtr(PDBFile &File) {
+  Expected<DbiStream &> DbiS = File.getPDBDbiStream();
+  if (DbiS)
+    return &DbiS.get();
+
+  consumeError(DbiS.takeError());
+  return nullptr;
+}
 
 NativeSession::NativeSession(std::unique_ptr<PDBFile> PdbFile,
                              std::unique_ptr<BumpPtrAllocator> Allocator)
-    : Pdb(std::move(PdbFile)), Allocator(std::move(Allocator)) {}
+    : Pdb(std::move(PdbFile)), Allocator(std::move(Allocator)),
+      Cache(*this, getDbiStreamPtr(*Pdb)), AddrToModuleIndex(IMapAllocator) {}
 
 NativeSession::~NativeSession() = default;
 
 Error NativeSession::createFromPdb(std::unique_ptr<MemoryBuffer> Buffer,
                                    std::unique_ptr<IPDBSession> &Session) {
   StringRef Path = Buffer->getBufferIdentifier();
-  auto Stream = llvm::make_unique<MemoryBufferByteStream>(
+  auto Stream = std::make_unique<MemoryBufferByteStream>(
       std::move(Buffer), llvm::support::little);
 
-  auto Allocator = llvm::make_unique<BumpPtrAllocator>();
-  auto File = llvm::make_unique<PDBFile>(Path, std::move(Stream), *Allocator);
+  auto Allocator = std::make_unique<BumpPtrAllocator>();
+  auto File = std::make_unique<PDBFile>(Path, std::move(Stream), *Allocator);
   if (auto EC = File->parseFileHeaders())
     return EC;
   if (auto EC = File->parseStreamData())
     return EC;
 
   Session =
-      llvm::make_unique<NativeSession>(std::move(File), std::move(Allocator));
+      std::make_unique<NativeSession>(std::move(File), std::move(Allocator));
 
   return Error::success();
 }
 
-Error NativeSession::createFromExe(StringRef Path,
+static Expected<std::unique_ptr<PDBFile>>
+loadPdbFile(StringRef PdbPath, std::unique_ptr<BumpPtrAllocator> &Allocator) {
+  ErrorOr<std::unique_ptr<MemoryBuffer>> ErrorOrBuffer =
+      MemoryBuffer::getFile(PdbPath, /*FileSize=*/-1,
+                            /*RequiresNullTerminator=*/false);
+  if (!ErrorOrBuffer)
+    return make_error<RawError>(ErrorOrBuffer.getError());
+  std::unique_ptr<llvm::MemoryBuffer> Buffer = std::move(*ErrorOrBuffer);
+
+  PdbPath = Buffer->getBufferIdentifier();
+  file_magic Magic;
+  auto EC = identify_magic(PdbPath, Magic);
+  if (EC || Magic != file_magic::pdb)
+    return make_error<RawError>(EC);
+
+  auto Stream = std::make_unique<MemoryBufferByteStream>(std::move(Buffer),
+                                                         llvm::support::little);
+
+  auto File = std::make_unique<PDBFile>(PdbPath, std::move(Stream), *Allocator);
+  if (auto EC = File->parseFileHeaders())
+    return std::move(EC);
+
+  if (auto EC = File->parseStreamData())
+    return std::move(EC);
+
+  return std::move(File);
+}
+
+Error NativeSession::createFromPdbPath(StringRef PdbPath,
+                                       std::unique_ptr<IPDBSession> &Session) {
+  auto Allocator = std::make_unique<BumpPtrAllocator>();
+  auto PdbFile = loadPdbFile(PdbPath, Allocator);
+  if (!PdbFile)
+    return PdbFile.takeError();
+
+  Session = std::make_unique<NativeSession>(std::move(PdbFile.get()),
+                                            std::move(Allocator));
+  return Error::success();
+}
+
+static Expected<std::string> getPdbPathFromExe(StringRef ExePath) {
+  Expected<object::OwningBinary<object::Binary>> BinaryFile =
+      object::createBinary(ExePath);
+  if (!BinaryFile)
+    return BinaryFile.takeError();
+
+  const object::COFFObjectFile *ObjFile =
+      dyn_cast<object::COFFObjectFile>(BinaryFile->getBinary());
+  if (!ObjFile)
+    return make_error<RawError>(raw_error_code::invalid_format);
+
+  StringRef PdbPath;
+  const llvm::codeview::DebugInfo *PdbInfo = nullptr;
+  if (Error E = ObjFile->getDebugPDBInfo(PdbInfo, PdbPath))
+    return std::move(E);
+
+  return std::string(PdbPath);
+}
+
+Error NativeSession::createFromExe(StringRef ExePath,
                                    std::unique_ptr<IPDBSession> &Session) {
-  return make_error<RawError>(raw_error_code::feature_unsupported);
+  Expected<std::string> PdbPath = getPdbPathFromExe(ExePath);
+  if (!PdbPath)
+    return PdbPath.takeError();
+
+  file_magic Magic;
+  auto EC = identify_magic(PdbPath.get(), Magic);
+  if (EC || Magic != file_magic::pdb)
+    return make_error<RawError>(EC);
+
+  auto Allocator = std::make_unique<BumpPtrAllocator>();
+  auto File = loadPdbFile(PdbPath.get(), Allocator);
+  if (!File)
+    return File.takeError();
+
+  Session = std::make_unique<NativeSession>(std::move(File.get()),
+                                            std::move(Allocator));
+
+  return Error::success();
 }
 
-std::unique_ptr<PDBSymbolCompiland>
-NativeSession::createCompilandSymbol(DbiModuleDescriptor MI) {
-  const auto Id = static_cast<SymIndexId>(SymbolCache.size());
-  SymbolCache.push_back(
-      llvm::make_unique<NativeCompilandSymbol>(*this, Id, MI));
-  return llvm::make_unique<PDBSymbolCompiland>(
-      *this, std::unique_ptr<IPDBRawSymbol>(SymbolCache[Id]->clone()));
+Expected<std::string>
+NativeSession::searchForPdb(const PdbSearchOptions &Opts) {
+  Expected<std::string> PathOrErr = getPdbPathFromExe(Opts.ExePath);
+  if (!PathOrErr)
+    return PathOrErr.takeError();
+  StringRef PathFromExe = PathOrErr.get();
+  sys::path::Style Style = PathFromExe.startswith("/")
+                               ? sys::path::Style::posix
+                               : sys::path::Style::windows;
+  StringRef PdbName = sys::path::filename(PathFromExe, Style);
+
+  // Check if pdb exists in the executable directory.
+  SmallString<128> PdbPath = StringRef(Opts.ExePath);
+  sys::path::remove_filename(PdbPath);
+  sys::path::append(PdbPath, PdbName);
+
+  auto Allocator = std::make_unique<BumpPtrAllocator>();
+
+  if (auto File = loadPdbFile(PdbPath, Allocator))
+    return std::string(PdbPath);
+  else
+    consumeError(File.takeError());
+
+  // Check path that was in the executable.
+  if (auto File = loadPdbFile(PathFromExe, Allocator))
+    return std::string(PathFromExe);
+  else
+    return File.takeError();
+
+  return make_error<RawError>("PDB not found");
 }
 
-std::unique_ptr<PDBSymbolTypeEnum>
-NativeSession::createEnumSymbol(codeview::TypeIndex Index) {
-  const auto Id = findSymbolByTypeIndex(Index);
-  return llvm::make_unique<PDBSymbolTypeEnum>(
-      *this, std::unique_ptr<IPDBRawSymbol>(SymbolCache[Id]->clone()));
+uint64_t NativeSession::getLoadAddress() const { return LoadAddress; }
+
+bool NativeSession::setLoadAddress(uint64_t Address) {
+  LoadAddress = Address;
+  return true;
 }
-
-std::unique_ptr<IPDBEnumSymbols>
-NativeSession::createTypeEnumerator(codeview::TypeLeafKind Kind) {
-  auto Tpi = Pdb->getPDBTpiStream();
-  if (!Tpi) {
-    consumeError(Tpi.takeError());
-    return nullptr;
-  }
-  auto &Types = Tpi->typeCollection();
-  return std::unique_ptr<IPDBEnumSymbols>(
-      new NativeEnumTypes(*this, Types, codeview::LF_ENUM));
-}
-
-SymIndexId NativeSession::findSymbolByTypeIndex(codeview::TypeIndex Index) {
-  // First see if it's already in our cache.
-  const auto Entry = TypeIndexToSymbolId.find(Index);
-  if (Entry != TypeIndexToSymbolId.end())
-    return Entry->second;
-
-  // Symbols for built-in types are created on the fly.
-  if (Index.isSimple()) {
-    // FIXME:  We will eventually need to handle pointers to other simple types,
-    // which are still simple types in the world of CodeView TypeIndexes.
-    if (Index.getSimpleMode() != codeview::SimpleTypeMode::Direct)
-      return 0;
-    const auto Kind = Index.getSimpleKind();
-    const auto It =
-        std::find_if(std::begin(BuiltinTypes), std::end(BuiltinTypes),
-                     [Kind](const BuiltinTypeEntry &Builtin) {
-                       return Builtin.Kind == Kind;
-                     });
-    if (It == std::end(BuiltinTypes))
-      return 0;
-    SymIndexId Id = SymbolCache.size();
-    SymbolCache.emplace_back(
-        llvm::make_unique<NativeBuiltinSymbol>(*this, Id, It->Type, It->Size));
-    TypeIndexToSymbolId[Index] = Id;
-    return Id;
-  }
-
-  // We need to instantiate and cache the desired type symbol.
-  auto Tpi = Pdb->getPDBTpiStream();
-  if (!Tpi) {
-    consumeError(Tpi.takeError());
-    return 0;
-  }
-  auto &Types = Tpi->typeCollection();
-  const auto &I = Types.getType(Index);
-  const auto Id = static_cast<SymIndexId>(SymbolCache.size());
-  // TODO(amccarth):  Make this handle all types, not just LF_ENUMs.
-  assert(I.kind() == codeview::LF_ENUM);
-  SymbolCache.emplace_back(llvm::make_unique<NativeEnumSymbol>(*this, Id, I));
-  TypeIndexToSymbolId[Index] = Id;
-  return Id;
-}
-
-uint64_t NativeSession::getLoadAddress() const { return 0; }
-
-bool NativeSession::setLoadAddress(uint64_t Address) { return false; }
 
 std::unique_ptr<PDBSymbolExe> NativeSession::getGlobalScope() {
-  const auto Id = static_cast<SymIndexId>(SymbolCache.size());
-  SymbolCache.push_back(llvm::make_unique<NativeExeSymbol>(*this, Id));
-  auto RawSymbol = SymbolCache[Id]->clone();
-  auto PdbSymbol(PDBSymbol::create(*this, std::move(RawSymbol)));
-  std::unique_ptr<PDBSymbolExe> ExeSymbol(
-      static_cast<PDBSymbolExe *>(PdbSymbol.release()));
-  return ExeSymbol;
+  return PDBSymbol::createAs<PDBSymbolExe>(*this, getNativeGlobalScope());
 }
 
 std::unique_ptr<PDBSymbol>
-NativeSession::getSymbolById(uint32_t SymbolId) const {
-  // If the caller has a SymbolId, it'd better be in our SymbolCache.
-  return SymbolId < SymbolCache.size()
-             ? PDBSymbol::create(*this, SymbolCache[SymbolId]->clone())
-             : nullptr;
+NativeSession::getSymbolById(SymIndexId SymbolId) const {
+  return Cache.getSymbolById(SymbolId);
 }
 
 bool NativeSession::addressForVA(uint64_t VA, uint32_t &Section,
                                  uint32_t &Offset) const {
-  return false;
+  uint32_t RVA = VA - getLoadAddress();
+  return addressForRVA(RVA, Section, Offset);
 }
 
-bool NativeSession::addressForRVA(uint32_t VA, uint32_t &Section,
+bool NativeSession::addressForRVA(uint32_t RVA, uint32_t &Section,
                                   uint32_t &Offset) const {
-  return false;
+  Section = 0;
+  Offset = 0;
+
+  auto Dbi = Pdb->getPDBDbiStream();
+  if (!Dbi)
+    return false;
+
+  if ((int32_t)RVA < 0)
+    return true;
+
+  Offset = RVA;
+  for (; Section < Dbi->getSectionHeaders().size(); ++Section) {
+    auto &Sec = Dbi->getSectionHeaders()[Section];
+    if (RVA < Sec.VirtualAddress)
+      return true;
+    Offset = RVA - Sec.VirtualAddress;
+  }
+  return true;
 }
 
 std::unique_ptr<PDBSymbol>
-NativeSession::findSymbolByAddress(uint64_t Address, PDB_SymType Type) const {
-  return nullptr;
+NativeSession::findSymbolByAddress(uint64_t Address, PDB_SymType Type) {
+  uint32_t Section;
+  uint32_t Offset;
+  addressForVA(Address, Section, Offset);
+  return findSymbolBySectOffset(Section, Offset, Type);
 }
 
-std::unique_ptr<PDBSymbol>
-NativeSession::findSymbolByRVA(uint32_t RVA, PDB_SymType Type) const {
-  return nullptr;
+std::unique_ptr<PDBSymbol> NativeSession::findSymbolByRVA(uint32_t RVA,
+                                                          PDB_SymType Type) {
+  uint32_t Section;
+  uint32_t Offset;
+  addressForRVA(RVA, Section, Offset);
+  return findSymbolBySectOffset(Section, Offset, Type);
 }
 
 std::unique_ptr<PDBSymbol>
 NativeSession::findSymbolBySectOffset(uint32_t Sect, uint32_t Offset,
-                                      PDB_SymType Type) const {
-  return nullptr;
+                                      PDB_SymType Type) {
+  if (AddrToModuleIndex.empty())
+    parseSectionContribs();
+
+  return Cache.findSymbolBySectOffset(Sect, Offset, Type);
 }
 
 std::unique_ptr<IPDBEnumLineNumbers>
@@ -220,18 +271,19 @@ NativeSession::findLineNumbers(const PDBSymbolCompiland &Compiland,
 std::unique_ptr<IPDBEnumLineNumbers>
 NativeSession::findLineNumbersByAddress(uint64_t Address,
                                         uint32_t Length) const {
-  return nullptr;
+  return Cache.findLineNumbersByVA(Address, Length);
 }
 
 std::unique_ptr<IPDBEnumLineNumbers>
 NativeSession::findLineNumbersByRVA(uint32_t RVA, uint32_t Length) const {
-  return nullptr;
+  return Cache.findLineNumbersByVA(getLoadAddress() + RVA, Length);
 }
 
 std::unique_ptr<IPDBEnumLineNumbers>
 NativeSession::findLineNumbersBySectOffset(uint32_t Section, uint32_t Offset,
                                            uint32_t Length) const {
-  return nullptr;
+  uint64_t VA = getVAFromSectOffset(Section, Offset);
+  return Cache.findLineNumbersByVA(VA, Length);
 }
 
 std::unique_ptr<IPDBEnumSourceFiles>
@@ -271,7 +323,7 @@ std::unique_ptr<IPDBEnumSourceFiles> NativeSession::getSourceFilesForCompiland(
 
 std::unique_ptr<IPDBSourceFile>
 NativeSession::getSourceFileById(uint32_t FileId) const {
-  return nullptr;
+  return Cache.getSourceFileById(FileId);
 }
 
 std::unique_ptr<IPDBEnumDataStreams> NativeSession::getDebugStreams() const {
@@ -284,10 +336,128 @@ std::unique_ptr<IPDBEnumTables> NativeSession::getEnumTables() const {
 
 std::unique_ptr<IPDBEnumInjectedSources>
 NativeSession::getInjectedSources() const {
-  return nullptr;
+  auto ISS = Pdb->getInjectedSourceStream();
+  if (!ISS) {
+    consumeError(ISS.takeError());
+    return nullptr;
+  }
+  auto Strings = Pdb->getStringTable();
+  if (!Strings) {
+    consumeError(Strings.takeError());
+    return nullptr;
+  }
+  return std::make_unique<NativeEnumInjectedSources>(*Pdb, *ISS, *Strings);
 }
 
 std::unique_ptr<IPDBEnumSectionContribs>
 NativeSession::getSectionContribs() const {
   return nullptr;
+}
+
+std::unique_ptr<IPDBEnumFrameData>
+NativeSession::getFrameData() const {
+  return nullptr;
+}
+
+void NativeSession::initializeExeSymbol() {
+  if (ExeSymbol == 0)
+    ExeSymbol = Cache.createSymbol<NativeExeSymbol>();
+}
+
+NativeExeSymbol &NativeSession::getNativeGlobalScope() const {
+  const_cast<NativeSession &>(*this).initializeExeSymbol();
+
+  return Cache.getNativeSymbolById<NativeExeSymbol>(ExeSymbol);
+}
+
+uint32_t NativeSession::getRVAFromSectOffset(uint32_t Section,
+                                             uint32_t Offset) const {
+  if (Section <= 0)
+    return 0;
+
+  auto Dbi = getDbiStreamPtr(*Pdb);
+  if (!Dbi)
+    return 0;
+
+  uint32_t MaxSection = Dbi->getSectionHeaders().size();
+  if (Section > MaxSection + 1)
+    Section = MaxSection + 1;
+  auto &Sec = Dbi->getSectionHeaders()[Section - 1];
+  return Sec.VirtualAddress + Offset;
+}
+
+uint64_t NativeSession::getVAFromSectOffset(uint32_t Section,
+                                            uint32_t Offset) const {
+  return LoadAddress + getRVAFromSectOffset(Section, Offset);
+}
+
+bool NativeSession::moduleIndexForVA(uint64_t VA, uint16_t &ModuleIndex) const {
+  ModuleIndex = 0;
+  auto Iter = AddrToModuleIndex.find(VA);
+  if (Iter == AddrToModuleIndex.end())
+    return false;
+  ModuleIndex = Iter.value();
+  return true;
+}
+
+bool NativeSession::moduleIndexForSectOffset(uint32_t Sect, uint32_t Offset,
+                                             uint16_t &ModuleIndex) const {
+  ModuleIndex = 0;
+  auto Iter = AddrToModuleIndex.find(getVAFromSectOffset(Sect, Offset));
+  if (Iter == AddrToModuleIndex.end())
+    return false;
+  ModuleIndex = Iter.value();
+  return true;
+}
+
+void NativeSession::parseSectionContribs() {
+  auto Dbi = Pdb->getPDBDbiStream();
+  if (!Dbi)
+    return;
+
+  class Visitor : public ISectionContribVisitor {
+    NativeSession &Session;
+    IMap &AddrMap;
+
+  public:
+    Visitor(NativeSession &Session, IMap &AddrMap)
+        : Session(Session), AddrMap(AddrMap) {}
+    void visit(const SectionContrib &C) override {
+      if (C.Size == 0)
+        return;
+
+      uint64_t VA = Session.getVAFromSectOffset(C.ISect, C.Off);
+      uint64_t End = VA + C.Size;
+
+      // Ignore overlapping sections based on the assumption that a valid
+      // PDB file should not have overlaps.
+      if (!AddrMap.overlaps(VA, End))
+        AddrMap.insert(VA, End, C.Imod);
+    }
+    void visit(const SectionContrib2 &C) override { visit(C.Base); }
+  };
+
+  Visitor V(*this, AddrToModuleIndex);
+  Dbi->visitSectionContributions(V);
+}
+
+Expected<ModuleDebugStreamRef>
+NativeSession::getModuleDebugStream(uint32_t Index) const {
+  auto *Dbi = getDbiStreamPtr(*Pdb);
+  assert(Dbi && "Dbi stream not present");
+
+  DbiModuleDescriptor Modi = Dbi->modules().getModuleDescriptor(Index);
+
+  uint16_t ModiStream = Modi.getModuleStreamIndex();
+  if (ModiStream == kInvalidStreamIndex)
+    return make_error<RawError>("Module stream not present");
+
+  std::unique_ptr<msf::MappedBlockStream> ModStreamData =
+      Pdb->createIndexedStream(ModiStream);
+
+  ModuleDebugStreamRef ModS(Modi, std::move(ModStreamData));
+  if (auto EC = ModS.reload())
+    return std::move(EC);
+
+  return std::move(ModS);
 }

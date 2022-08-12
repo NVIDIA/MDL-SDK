@@ -43,6 +43,8 @@
 #include "generator_jit_generated_code.h"
 #include "generator_jit_type_map.h"
 
+#include <llvm/ExecutionEngine/Orc/Core.h>
+
 namespace llvm {
     class Argument;
     class DIBuilder;
@@ -82,7 +84,7 @@ class MDL;
 class MDL_runtime_creator;
 class MDL_JIT;
 
-using MDL_JIT_module_key = uint64_t;
+using MDL_JIT_module_key = llvm::orc::ResourceTrackerSP;
 
 /// The Jitted code interface holds jitted code.
 class IJitted_code : public
@@ -115,15 +117,13 @@ public:
     ///
     /// \param module_key  the module key returned by add_llvm_module() for the module containing
     ///                    the function
-    /// \param func        the LLVM function to compile
+    /// \param func_name   the name of the LLVM function to compile
     /// \param code_gen    the code generator used for reporting errors
     ///
     /// \return The address of the jitted code of the function or NULL on error.
-    ///
-    /// \note: the module of this function must be added in advance
     void *jit_compile(
         MDL_JIT_module_key module_key,
-        llvm::Function *func,
+        char const *func_name,
         LLVM_code_generator &code_gen);
 
     /// Get the only instance.
@@ -951,6 +951,110 @@ private:
     Function_state_usage_info_map m_func_state_usage_info_map;
 };
 
+/// Helper struct containing all structured language API helper functions.
+struct SL_api_functions
+{
+    /// Default Constructor.
+    SL_api_functions()
+    : m_argblock_as_int(nullptr)
+    , m_argblock_as_uint(nullptr)
+    , m_argblock_as_float(nullptr)
+    , m_argblock_as_double(nullptr)
+    , m_argblock_as_bool(nullptr)
+    , m_rodata_as_int(nullptr)
+    , m_rodata_as_uint(nullptr)
+    , m_rodata_as_float(nullptr)
+    , m_rodata_as_double(nullptr)
+    , m_rodata_as_bool(nullptr)
+    , m_scene_data_lookup_int(nullptr)
+    , m_scene_data_lookup_int2(nullptr)
+    , m_scene_data_lookup_int3(nullptr)
+    , m_scene_data_lookup_int4(nullptr)
+    , m_scene_data_lookup_float(nullptr)
+    , m_scene_data_lookup_float2(nullptr)
+    , m_scene_data_lookup_float3(nullptr)
+    , m_scene_data_lookup_float4(nullptr)
+    , m_scene_data_lookup_color(nullptr)
+    , m_scene_data_lookup_deriv_float(nullptr)
+    , m_scene_data_lookup_deriv_float2(nullptr)
+    , m_scene_data_lookup_deriv_float3(nullptr)
+    , m_scene_data_lookup_deriv_float4(nullptr)
+    , m_scene_data_lookup_deriv_color(nullptr)
+    {
+    }
+
+    /// The SL function asint().
+    llvm::Function *m_argblock_as_int;
+
+    /// The SL function asuint().
+    llvm::Function *m_argblock_as_uint;
+
+    /// The SL function asfloat().
+    llvm::Function *m_argblock_as_float;
+
+    /// The SL function asdouble().
+    llvm::Function *m_argblock_as_double;
+
+    /// A helper function to get an bool from the argument block.
+    llvm::Function *m_argblock_as_bool;
+
+    /// A helper function to get an int from the read-only data segment.
+    llvm::Function *m_rodata_as_int;
+
+    /// A helper function to get an uint from the read-only data segment.
+    llvm::Function *m_rodata_as_uint;
+
+    /// A helper function to get an float from the read-only data segment.
+    llvm::Function *m_rodata_as_float;
+
+    /// A helper function to get an double from the read-only data segment.
+    llvm::Function *m_rodata_as_double;
+
+    /// A helper function to get an bool from the read-only data segment.
+    llvm::Function *m_rodata_as_bool;
+
+    /// The SL renderer runtime function for scene::data_lookup_int.
+    llvm::Function *m_scene_data_lookup_int;
+
+    /// The SL renderer runtime function for scene::data_lookup_int2.
+    llvm::Function *m_scene_data_lookup_int2;
+
+    /// The SL renderer runtime function for scene::data_lookup_int3.
+    llvm::Function *m_scene_data_lookup_int3;
+
+    /// The SL renderer runtime function for scene::data_lookup_int4.
+    llvm::Function *m_scene_data_lookup_int4;
+
+    /// The SL renderer runtime function for scene::data_lookup_float.
+    llvm::Function *m_scene_data_lookup_float;
+
+    /// The SL renderer runtime function for scene::data_lookup_float2.
+    llvm::Function *m_scene_data_lookup_float2;
+
+    /// The SL renderer runtime function for scene::data_lookup_float3.
+    llvm::Function *m_scene_data_lookup_float3;
+
+    /// The SL renderer runtime function for scene::data_lookup_float4.
+    llvm::Function *m_scene_data_lookup_float4;
+
+    /// The SL renderer runtime function for scene::data_lookup_color.
+    llvm::Function *m_scene_data_lookup_color;
+
+    /// The SL renderer runtime function for scene::data_lookup_float with derivatives.
+    llvm::Function *m_scene_data_lookup_deriv_float;
+
+    /// The SL renderer runtime function for scene::data_lookup_float2 with derivatives.
+    llvm::Function *m_scene_data_lookup_deriv_float2;
+
+    /// The SL renderer runtime function for scene::data_lookup_float3 with derivatives.
+    llvm::Function *m_scene_data_lookup_deriv_float3;
+
+    /// The SL renderer runtime function for scene::data_lookup_float4 with derivatives.
+    llvm::Function *m_scene_data_lookup_deriv_float4;
+
+    /// The SL renderer runtime function for scene::data_lookup_color with derivatives.
+    llvm::Function *m_scene_data_lookup_deriv_color;
+};
 
 ///
 /// Implementation of the LLVM jit code generator.
@@ -979,11 +1083,7 @@ public:
     ///
     /// The target language for the code generator.
     ///
-    enum Target_language {
-        TL_NATIVE = 0,    ///< Native CPU/LLVM-IR code generation.
-        TL_PTX    = 1,    ///< PTX assembler.
-        TL_HLSL   = 2,    ///< HLSL code.
-    };
+    typedef ICode_generator::Target_language Target_language;
 
     ///
     /// Debug modes for the generated JIT code.
@@ -1075,6 +1175,7 @@ public:
         size_t                                         arg_block_index;
 
         // The name may later be updated by the actual target code generator.
+        // HLSLWriterPass:runOnModule() currently does this.
         string                                         name;
         vector<string>::Type                           prototypes;
         vector<string>::Type                           df_handles;
@@ -1284,6 +1385,9 @@ public:
     /// Retrieve the LLVM module.
     llvm::Module *get_llvm_module() { return m_module; }
 
+    /// Set the LLVM module.
+    void set_llvm_module(llvm::Module *M) { m_module = M; }
+
     /// Retrieve a reference to the LLVM context that will own the LLVM module.
     llvm::LLVMContext &get_llvm_context() { return m_llvm_context; }
 
@@ -1436,12 +1540,12 @@ public:
         Function_context             &ctx,
         mi::mdl::DAG_parameter const *param_node);
 
-    /// Translate a part of a DAG parameter for HLSL into LLVM IR.
+    /// Translate a part of a DAG parameter for GLSL/HLSL into LLVM IR.
     ///
     /// \param ctx         the current function context
     /// \param param_type  the type of the part to translate
     /// \param cur_offs    the current offset, will be updated
-    llvm::Value *translate_parameter_hlsl_value(
+    llvm::Value *translate_parameter_sl_value(
         Function_context             &ctx,
         mi::mdl::IType const         *param_type,
         int                          &cur_offs);
@@ -1450,17 +1554,17 @@ public:
     ///
     /// \param ctx       the current function context
     /// \param cur_offs  the current offset
-    llvm::Value *translate_parameter_hlsl_offset(
+    llvm::Value *translate_parameter_sl_offset(
         Function_context &ctx,
         int               cur_offs);
 
-    /// Translate a part of the RO-data-segment for HLSL into LLVM IR.
+    /// Translate a part of the RO-data-segment for GLSL/HLSL into LLVM IR.
     ///
     /// \param ctx         the current function context
     /// \param param_type  the type of the part to translate
     /// \param cur_offs    the current offset, will be updated
     /// \param add_val     additional value added to the offset, if non-NULL
-    llvm::Value *translate_ro_data_segment_hlsl_value(
+    llvm::Value *translate_ro_data_segment_sl_value(
         Function_context             &ctx,
         mi::mdl::IType const         *param_type,
         int                          &cur_offs,
@@ -1540,17 +1644,49 @@ public:
     /// Retrieve the div-by-zero reporting routine.
     llvm::Function *get_div_by_zero() const;
 
+    /// Retrieve the target specific compare function if any.
+    ///
+    /// \param op       the MDL compare operator
+    /// \param op_type  the LLVM operator (result) type
+    llvm::Function *get_target_compare_function(
+        mi::mdl::IExpression_binary::Operator op,
+        llvm::Type                            *op_type);
+
+    /// Retrieve the target specific (binary) operator function if any.
+    ///
+    /// \param op        the LLVM instruction opcode
+    /// \param arg_type  the LLVM argument(result) type
+    llvm::Function *get_target_operator_function(
+        unsigned   op,
+        llvm::Type *arg_type);
+
+    /// Retrieve the target specific (binary) operator function if any.
+    ///
+    /// \param op        the MDL binary operator
+    /// \param arg_type  the LLVM argument(result) type
+    llvm::Function *get_target_operator_function(
+        mi::mdl::IExpression_binary::Operator op,
+        llvm::Type                            *arg_type);
+
     /// Compile the given module into PTX code.
     ///
     /// \param module       the LLVM module to JIT compile
     /// \param code         will be filled with the PTX code
-    void ptx_compile(llvm::Module *module, string &code);
+    void ptx_compile(
+        llvm::Module *module,
+        string       &code);
 
-    /// Compile the given module into HLSL code.
+    /// Compile the given module into HLSL or GLSL code.
     ///
-    /// \param module       the LLVM module to JIT compile
-    /// \param code         will be filled with the HLSL code
-    void hlsl_compile(llvm::Module *module, string &code);
+    /// \param mod       the LLVM module to JIT compile
+    /// \param target    the target language
+    /// \param options   backend options
+    /// \param code      will be filled with the generated code
+    void sl_compile(
+        llvm::Module          *mod,
+        Target_language       target,
+        Options_impl const    &options,
+        Generated_code_source &code);
 
     /// Get the HLSL function suffix for the texture type in the first parameter of the given
     /// function definition.
@@ -1558,7 +1694,7 @@ public:
     /// \param tex_func_def  the definition of the texture function
     ///
     /// \returns the function suffix to use for this function, like "_2d"
-    char const *get_hlsl_tex_type_func_suffix(IDefinition const *tex_func_def);
+    char const *get_sl_tex_type_func_suffix(IDefinition const *tex_func_def);
 
     /// Possible promotion rules.
     enum Promote_rules {
@@ -1604,7 +1740,7 @@ public:
     /// \param return_derivs  if true, derivatives will be generated for the return value
     ///
     /// \returns the requested function or NULL if no special handling for HLSL is required
-    llvm::Function *get_hlsl_intrinsic_function(
+    llvm::Function *get_sl_intrinsic_function(
         IDefinition const *def,
         bool              return_derivs);
 
@@ -3000,16 +3136,16 @@ private:
     /// Initialize the current LLVM module with user-specified LLVM implementations.
     bool init_user_modules();
 
-    /// Declare an user-provided HLSL read function, which gets an int offset as parameter.
+    /// Declare an user-provided HLSL/GLSL read function, which gets an int offset as parameter.
     ///
     /// \param ret_type  the type the function should return
     /// \param name      the name of the function
-    llvm::Function *declare_hlsl_read_func(
+    llvm::Function *declare_sl_read_func(
         llvm::Type *ret_type,
         char const *name);
 
-    /// Initialize types and functions needed for HLSL.
-    void init_hlsl_code_gen();
+    /// Initialize types and functions needed for HLSL/GLSL.
+    void init_sl_code_gen();
 
     /// Finalize compilation of the current module that was created by create_module().
     ///
@@ -3018,12 +3154,17 @@ private:
     llvm::Module *finalize_module();
 
     /// JIT compile all functions of the given module.
+    /// The JIT takes ownership of the module.
     ///
     /// \param module  the LLVM module to JIT compile
     MDL_JIT_module_key jit_compile(llvm::Module *module);
 
     /// Get the address of a JIT compiled LLVM function.
-    void *get_entry_point(MDL_JIT_module_key module_key, llvm::Function *func);
+    ///
+    /// \param module_key  the module key returned by add_llvm_module() for the module containing
+    ///                    the function
+    /// \param func_name   the name of the LLVM function
+    void *get_entry_point(MDL_JIT_module_key module_key, char const *func_name);
 
     /// Create a runtime.
     ///
@@ -3070,37 +3211,138 @@ private:
         char const *fname,
         int        line);
 
-
     /// Specifies, whether an resource data parameter should be provided to subfunctions
     /// which use resources.
     bool target_uses_resource_data_parameter() const {
-        return m_target_lang != TL_HLSL || m_hlsl_use_resource_data;
+        switch (m_target_lang) {
+        case ICode_generator::TL_NATIVE:
+        case ICode_generator::TL_PTX:
+        case ICode_generator::TL_LLVM_IR:
+            return true;
+        case ICode_generator::TL_HLSL:
+        case ICode_generator::TL_GLSL:
+            return m_sl_use_resource_data;
+        }
+        MDL_ASSERT(!"unsupported target language");
+        return false;
     }
 
     /// Specifies, whether an exception state parameter should be provided to subfunctions
     /// which could cause exceptions.
     bool target_uses_exception_state_parameter() const {
-        return m_target_lang != TL_HLSL;
+        switch (m_target_lang) {
+        case ICode_generator::TL_NATIVE:
+        case ICode_generator::TL_PTX:
+        case ICode_generator::TL_LLVM_IR:
+            return true;
+        case ICode_generator::TL_HLSL:
+        case ICode_generator::TL_GLSL:
+            return false;
+        }
+        MDL_ASSERT(!"unsupported target language");
+        return false;
     }
 
     /// Returns true if the target supports sret parameters for lambda functions.
     bool target_supports_sret_for_lambda() const {
-        return m_target_lang != TL_HLSL;
+        switch (m_target_lang) {
+        case ICode_generator::TL_NATIVE:
+        case ICode_generator::TL_PTX:
+        case ICode_generator::TL_LLVM_IR:
+            return true;
+        case ICode_generator::TL_HLSL:
+        case ICode_generator::TL_GLSL:
+            return false;
+        }
+        MDL_ASSERT(!"unsupported target language");
+        return false;
     }
 
     /// Returns true if the target supports an captured arguments parameter.
     bool target_supports_captured_argument_parameter() const {
-        return m_target_lang != TL_HLSL;
+        switch (m_target_lang) {
+        case ICode_generator::TL_NATIVE:
+        case ICode_generator::TL_PTX:
+        case ICode_generator::TL_LLVM_IR:
+            return true;
+        case ICode_generator::TL_HLSL:
+        case ICode_generator::TL_GLSL:
+            return false;
+        }
+        MDL_ASSERT(!"unsupported target language");
+        return false;
     }
 
     /// Returns true if the target supports an lambda results parameter.
     bool target_supports_lambda_results_parameter() const {
-        return m_target_lang != TL_HLSL;
+        switch (m_target_lang) {
+        case ICode_generator::TL_NATIVE:
+        case ICode_generator::TL_PTX:
+        case ICode_generator::TL_LLVM_IR:
+            return true;
+        case ICode_generator::TL_HLSL:
+        case ICode_generator::TL_GLSL:
+            return false;
+        }
+        MDL_ASSERT(!"unsupported target language");
+        return false;
     }
 
     /// Returns true if the target supports pointers.
     bool target_supports_pointers() const {
-        return m_target_lang != TL_HLSL;
+        switch (m_target_lang) {
+        case ICode_generator::TL_NATIVE:
+        case ICode_generator::TL_PTX:
+        case ICode_generator::TL_LLVM_IR:
+            return true;
+        case ICode_generator::TL_HLSL:
+            return false;
+        case ICode_generator::TL_GLSL:
+            // FIXME: check extension
+            return false;
+        }
+        MDL_ASSERT(!"unsupported target language");
+        return false;
+    }
+
+    /// Returns true if the target uses the renderer normal adaption.
+    bool target_uses_renderer_adapt_normal() const {
+        switch (m_target_lang) {
+        case ICode_generator::TL_NATIVE:
+        case ICode_generator::TL_PTX:
+        case ICode_generator::TL_LLVM_IR:
+            return false;
+        case ICode_generator::TL_HLSL:
+        case ICode_generator::TL_GLSL:
+            return m_use_renderer_adapt_normal;
+        }
+        MDL_ASSERT(!"unsupported target language");
+        return false;
+    }
+
+    /// Specifies, whether the target language is a structured language (HLSL, GLSL).
+    static bool target_is_structured_language(Target_language target_lang) {
+        switch (target_lang) {
+        case ICode_generator::TL_NATIVE:
+        case ICode_generator::TL_PTX:
+        case ICode_generator::TL_LLVM_IR:
+            return false;
+        case ICode_generator::TL_HLSL:
+        case ICode_generator::TL_GLSL:
+            return true;
+        }
+        MDL_ASSERT(!"unsupported target language");
+        return false;
+    }
+
+    /// Specifies, whether the target language is a structured language (HLSL, GLSL).
+    bool target_is_structured_language() const {
+        return target_is_structured_language(m_target_lang);
+    }
+
+    /// Specifies, whether the target has a sincos() implementation that should be used.
+    bool target_has_sincos() const {
+        return m_target_lang == ICode_generator::TL_PTX;
     }
 
     /// Find the definition of a signature of a standard library function.
@@ -3419,7 +3661,7 @@ private:
     bool m_eval_dag_ternary_strictly;
 
     /// If true, pass a user defined resource data struct to all resource callbacks.
-    bool m_hlsl_use_resource_data;
+    bool m_sl_use_resource_data;
 
     /// If true, use a renderer provided function to adapt microfacet roughness,
     /// otherwise use a function returning roughness unmodified.
@@ -3594,11 +3836,10 @@ private:
     typedef hash_set<char const *, cstring_hash, cstring_equal_to>::Type String_set;
 
     /// The set of names for which scene data may be available in the renderer.
-    String_set m_scene_data_names;
+    String_set m_scene_data_existing_names;
 
-    /// If true, all scene data names have to be treated as referencing possibly available
-    /// scene data.
-    bool m_scene_data_all_pos_avail;
+    /// If true, all scene data names are filtered and only those inside the set above exists.
+    bool m_scene_data_filtered;
 
     /// The option rt_callable_program_from_id(_64) function once created.
     llvm::Function *m_optix_cp_from_id;
@@ -3609,77 +3850,8 @@ private:
     /// The type of all captured arguments if any.
     llvm::StructType *m_captured_args_type;
 
-    /// The HLSL function asint().
-    llvm::Function *m_hlsl_func_argblock_as_int;
-
-    /// The HLSL function asuint().
-    llvm::Function *m_hlsl_func_argblock_as_uint;
-
-    /// The HLSL function asfloat().
-    llvm::Function *m_hlsl_func_argblock_as_float;
-
-    /// The HLSL function asdouble().
-    llvm::Function *m_hlsl_func_argblock_as_double;
-
-    /// A helper function to get an bool from the argument block.
-    llvm::Function *m_hlsl_func_argblock_as_bool;
-
-    /// A helper function to get an int from the read-only data segment.
-    llvm::Function *m_hlsl_func_rodata_as_int;
-
-    /// A helper function to get an uint from the read-only data segment.
-    llvm::Function *m_hlsl_func_rodata_as_uint;
-
-    /// A helper function to get an float from the read-only data segment.
-    llvm::Function *m_hlsl_func_rodata_as_float;
-
-    /// A helper function to get an double from the read-only data segment.
-    llvm::Function *m_hlsl_func_rodata_as_double;
-
-    /// A helper function to get an bool from the read-only data segment.
-    llvm::Function *m_hlsl_func_rodata_as_bool;
-
-    /// The HLSL renderer runtime function for scene::data_lookup_int.
-    llvm::Function *m_hlsl_func_scene_data_lookup_int;
-
-    /// The HLSL renderer runtime function for scene::data_lookup_int2.
-    llvm::Function *m_hlsl_func_scene_data_lookup_int2;
-
-    /// The HLSL renderer runtime function for scene::data_lookup_int3.
-    llvm::Function *m_hlsl_func_scene_data_lookup_int3;
-
-    /// The HLSL renderer runtime function for scene::data_lookup_int4.
-    llvm::Function *m_hlsl_func_scene_data_lookup_int4;
-
-    /// The HLSL renderer runtime function for scene::data_lookup_float.
-    llvm::Function *m_hlsl_func_scene_data_lookup_float;
-
-    /// The HLSL renderer runtime function for scene::data_lookup_float2.
-    llvm::Function *m_hlsl_func_scene_data_lookup_float2;
-
-    /// The HLSL renderer runtime function for scene::data_lookup_float3.
-    llvm::Function *m_hlsl_func_scene_data_lookup_float3;
-
-    /// The HLSL renderer runtime function for scene::data_lookup_float4.
-    llvm::Function *m_hlsl_func_scene_data_lookup_float4;
-
-    /// The HLSL renderer runtime function for scene::data_lookup_color.
-    llvm::Function *m_hlsl_func_scene_data_lookup_color;
-
-    /// The HLSL renderer runtime function for scene::data_lookup_float with derivatives.
-    llvm::Function *m_hlsl_func_scene_data_lookup_deriv_float;
-
-    /// The HLSL renderer runtime function for scene::data_lookup_float2 with derivatives.
-    llvm::Function *m_hlsl_func_scene_data_lookup_deriv_float2;
-
-    /// The HLSL renderer runtime function for scene::data_lookup_float3 with derivatives.
-    llvm::Function *m_hlsl_func_scene_data_lookup_deriv_float3;
-
-    /// The HLSL renderer runtime function for scene::data_lookup_float4 with derivatives.
-    llvm::Function *m_hlsl_func_scene_data_lookup_deriv_float4;
-
-    /// The HLSL renderer runtime function for scene::data_lookup_color with derivatives.
-    llvm::Function *m_hlsl_func_scene_data_lookup_deriv_color;
+    /// API helper functions for structured languages.
+    SL_api_functions m_sl_funcs;
 
     /// If set, a resource map for mapping resources to tags.
     Resource_tag_map const *m_resource_tag_map;
@@ -3821,6 +3993,9 @@ private:
 
     /// If true, auxiliary functions are generated for DFs.
     bool m_enable_auxiliary;
+
+    /// If true, PDF functions are generated.
+    bool m_enable_pdf;
 
     /// List of all compiled lambda functions in the module.
     mi::mdl::vector<llvm::Function *>::Type m_module_lambda_funcs;

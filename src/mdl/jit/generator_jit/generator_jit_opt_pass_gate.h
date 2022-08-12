@@ -41,28 +41,41 @@ namespace llvm {
 namespace mi {
 namespace mdl {
 
-class HLSLOptPassGate : public llvm::OptPassGate {
+/// Helper class to disable LLVM passes generating results we cannot handle in the SL code
+/// generation.
+class SLOptPassGate : public llvm::OptPassGate {
 public:
-    bool shouldRunPass(const llvm::Pass *P, const llvm::Function &U) MDL_FINAL {
-        // This introduces irregular control flow
-        return P->getPassName() != "Jump Threading";
-    }
+    /// IRDescription is a textual description of the IR unit the pass is running
+    /// over.
+    bool shouldRunPass(
+        const llvm::Pass *P,
+        llvm::StringRef  IRDescription) MDL_FINAL
+    {
+        // Avoid this pass introducing irregular control flow
+        if (P->getPassName() == "Jump Threading") {
+            return false;
+        }
 
-    bool shouldRunPass(const llvm::Pass *P, const llvm::Loop &L) MDL_FINAL {
         // This pass creates i33 values, which we currently cannot translate
-        if (P->getPassName() == "Induction Variable Simplification")
+        if (P->getPassName() == "Induction Variable Simplification") {
             return false;
+        }
 
-        // Let the HLSL compiler do loop unrolling to generate shorter code
-        if (P->getPassName() == "Unroll loops")
+        // Let the HLSL compiler do loop unrolling to generate shorter code, not LLVM
+        if (P->getPassName() == "Unroll loops") {
             return false;
+        }
 
         // Don't turn while loops into do-while loops
-        if (P->getPassName() == "Rotate Loops")
+        if (P->getPassName() == "Rotate Loops") {
             return false;
+        }
 
         return true;
     }
+
+    /// isEnabled() should return true before calling shouldRunPass().
+    bool isEnabled() const MDL_FINAL { return true; }
 };
 
 }  // mdl

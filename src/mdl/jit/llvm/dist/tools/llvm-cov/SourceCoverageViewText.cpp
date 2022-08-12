@@ -1,9 +1,8 @@
 //===- SourceCoverageViewText.cpp - A text-based code coverage view -------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 ///
@@ -11,11 +10,12 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#include "CoverageReport.h"
 #include "SourceCoverageViewText.h"
+#include "CoverageReport.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/Format.h"
 
 using namespace llvm;
 
@@ -221,6 +221,53 @@ void SourceCoverageViewText::renderExpansionView(raw_ostream &OS,
            << " -> " << ESV.getEndCol() << '\n';
   ESV.View->print(OS, /*WholeFile=*/false, /*ShowSourceName=*/false,
                   /*ShowTitle=*/false, ViewDepth + 1);
+}
+
+void SourceCoverageViewText::renderBranchView(raw_ostream &OS, BranchView &BRV,
+                                              unsigned ViewDepth) {
+  // Render the child subview.
+  if (getOptions().Debug)
+    errs() << "Branch at line " << BRV.getLine() << '\n';
+
+  for (const auto &R : BRV.Regions) {
+    double TruePercent = 0.0;
+    double FalsePercent = 0.0;
+    unsigned Total = R.ExecutionCount + R.FalseExecutionCount;
+
+    if (!getOptions().ShowBranchCounts && Total != 0) {
+      TruePercent = ((double)(R.ExecutionCount) / (double)Total) * 100.0;
+      FalsePercent = ((double)(R.FalseExecutionCount) / (double)Total) * 100.0;
+    }
+
+    renderLinePrefix(OS, ViewDepth);
+    OS << "  Branch (" << R.LineStart << ":" << R.ColumnStart << "): [";
+
+    if (R.Folded) {
+      OS << "Folded - Ignored]\n";
+      continue;
+    }
+
+    colored_ostream(OS, raw_ostream::RED,
+                    getOptions().Colors && !R.ExecutionCount,
+                    /*Bold=*/false, /*BG=*/true)
+        << "True";
+
+    if (getOptions().ShowBranchCounts)
+      OS << ": " << formatCount(R.ExecutionCount) << ", ";
+    else
+      OS << ": " << format("%0.2f", TruePercent) << "%, ";
+
+    colored_ostream(OS, raw_ostream::RED,
+                    getOptions().Colors && !R.FalseExecutionCount,
+                    /*Bold=*/false, /*BG=*/true)
+        << "False";
+
+    if (getOptions().ShowBranchCounts)
+      OS << ": " << formatCount(R.FalseExecutionCount);
+    else
+      OS << ": " << format("%0.2f", FalsePercent) << "%";
+    OS << "]\n";
+  }
 }
 
 void SourceCoverageViewText::renderInstantiationView(raw_ostream &OS,

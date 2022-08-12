@@ -44,6 +44,7 @@ namespace MI {
 namespace IMAGE {
 
 mi::neuraylib::ITile* create_tile( Pixel_type pixel_type, mi::Uint32 width, mi::Uint32 height);
+mi::neuraylib::ITile* copy_tile( const mi::neuraylib::ITile*);
 
 /// IMAGE::ITile is an interface derived from mi::neuraylib::ITile.
 ///
@@ -74,6 +75,10 @@ public:
     ///
     /// Creates a tile of the given width and height.
     Tile_impl( mi::Uint32 width, mi::Uint32 height);
+    /// Constructor.
+    ///
+    /// Copies from another tile
+    Tile_impl( const mi::neuraylib::ITile* other);
 
     // methods of mi::neuraylib::ITile
 

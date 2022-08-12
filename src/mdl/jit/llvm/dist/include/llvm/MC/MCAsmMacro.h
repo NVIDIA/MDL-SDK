@@ -1,9 +1,8 @@
 //===- MCAsmMacro.h - Assembly Macros ---------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -52,7 +51,7 @@ public:
     Pipe, PipePipe, Caret,
     Amp, AmpAmp, Exclaim, ExclaimEqual, Percent, Hash,
     Less, LessEqual, LessLess, LessGreater,
-    Greater, GreaterEqual, GreaterGreater, At,
+    Greater, GreaterEqual, GreaterGreater, At, MinusGreater,
 
     // MIPS unary expression operators such as %neg.
     PercentCall16, PercentCall_Hi, PercentCall_Lo, PercentDtprel_Hi,
@@ -125,7 +124,6 @@ public:
   }
 
   void dump(raw_ostream &OS) const;
-  void dump() const { dump(dbgs()); }
 };
 
 struct MCAsmMacroParameter {
@@ -134,10 +132,10 @@ struct MCAsmMacroParameter {
   bool Required = false;
   bool Vararg = false;
 
-  MCAsmMacroParameter() = default;
-
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
   void dump() const { dump(dbgs()); }
-  void dump(raw_ostream &OS) const;
+  LLVM_DUMP_METHOD void dump(raw_ostream &OS) const;
+#endif
 };
 
 typedef std::vector<MCAsmMacroParameter> MCAsmMacroParameters;
@@ -145,13 +143,21 @@ struct MCAsmMacro {
   StringRef Name;
   StringRef Body;
   MCAsmMacroParameters Parameters;
+  std::vector<std::string> Locals;
+  bool IsFunction = false;
 
 public:
   MCAsmMacro(StringRef N, StringRef B, MCAsmMacroParameters P)
       : Name(N), Body(B), Parameters(std::move(P)) {}
+  MCAsmMacro(StringRef N, StringRef B, MCAsmMacroParameters P,
+             std::vector<std::string> L, bool F)
+      : Name(N), Body(B), Parameters(std::move(P)), Locals(std::move(L)),
+        IsFunction(F) {}
 
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
   void dump() const { dump(dbgs()); }
-  void dump(raw_ostream &OS) const;
+  LLVM_DUMP_METHOD void dump(raw_ostream &OS) const;
+#endif
 };
 } // namespace llvm
 

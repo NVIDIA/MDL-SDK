@@ -135,18 +135,18 @@ mi::neuraylib::ITile* Image_file_reader_impl::read(
 
         // Compressed images
         mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( m_pixel_type);
-        mi::Uint32 bytes_per_layer = image_width * image_height * bytes_per_pixel;
+        size_t bytes_per_layer = (size_t)image_width * image_height * bytes_per_pixel;
 
         Dxt_decompressor decompressor;
         decompressor.set_source_format( m_image.get_compressed_format(), image_width, image_height);
         decompressor.set_target_format( get_components_per_pixel( m_pixel_type), image_width);
 
         mi::Uint32 block_height = decompressor.get_block_dimension();
-        mi::Uint32 bytes_per_block = image_width * block_height * bytes_per_pixel;
+        size_t bytes_per_block = (size_t)image_width * block_height * bytes_per_pixel;
 
-        const mi::Uint8* src = surface.get_pixels() + z * surface.get_size() / 6;
-        const mi::Uint8* buffer1 = decompressor.get_buffer();
-        mi::Uint8* buffer2 = new mi::Uint8[bytes_per_layer];
+        const mi::Uint8* const src = surface.get_pixels() + z * surface.get_size() / 6;
+        const mi::Uint8* const buffer1 = decompressor.get_buffer();
+        mi::Uint8* const buffer2 = new mi::Uint8[bytes_per_layer];
 
         for( mi::Uint32 block = 0; block < decompressor.get_block_count_y(); ++block) {
             decompressor.decompress_blockline( src, block);

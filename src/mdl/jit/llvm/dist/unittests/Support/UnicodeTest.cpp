@@ -1,13 +1,13 @@
 //===- unittests/Support/UnicodeTest.cpp - Unicode.h tests ----------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Support/Unicode.h"
+#include "llvm/Support/ConvertUTF.h"
 #include "gtest/gtest.h"
 
 namespace llvm {
@@ -24,6 +24,7 @@ TEST(Unicode, columnWidthUTF8) {
   EXPECT_EQ(6, columnWidthUTF8("abcdef"));
 
   EXPECT_EQ(-1, columnWidthUTF8("\x01"));
+  EXPECT_EQ(-1, columnWidthUTF8("\t"));
   EXPECT_EQ(-1, columnWidthUTF8("aaaaaaaaaa\x01"));
   EXPECT_EQ(-1, columnWidthUTF8("\342\200\213")); // 200B ZERO WIDTH SPACE
 
@@ -85,6 +86,19 @@ TEST(Unicode, isPrintable) {
   EXPECT_TRUE(isPrintable(0x20000));  // CJK UNIFIED IDEOGRAPH-20000
 
   EXPECT_FALSE(isPrintable(0x10FFFF)); // noncharacter
+
+  // test the validity of a fast path in columnWidthUTF8
+  for (unsigned char c = 0; c < 128; ++c) {
+    const UTF8 buf8[2] = {c, 0};
+    const UTF8 *Target8 = &buf8[0];
+    UTF32 buf32[1];
+    UTF32 *Target32 = &buf32[0];
+    auto status = ConvertUTF8toUTF32(&Target8, Target8 + 1, &Target32,
+                                     Target32 + 1, strictConversion);
+    EXPECT_TRUE(status == conversionOK);
+    EXPECT_TRUE((columnWidthUTF8(reinterpret_cast<const char *>(buf8)) == 1) ==
+                (bool)isPrintable(buf32[0]));
+  }
 }
 
 } // namespace

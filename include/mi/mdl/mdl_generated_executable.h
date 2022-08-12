@@ -202,6 +202,16 @@ public:
         PL_NUM_LANGUAGES
     };
 
+    /// Helper type to describe a (read-only) data segment.
+    struct Segment {
+        char const          *name;   ///< The name of this data segment.
+        unsigned char const *data;   ///< Pointer to the (binary blob) data.
+        size_t              size;    ///< The size of this segment.
+
+        /// Default constructor.
+        Segment() : name(NULL), data(NULL), size(0u) {}
+    };
+
     /// Returns the source code of the module if available.
     ///
     /// \param size  will be assigned to the length of the source code
@@ -210,11 +220,14 @@ public:
     /// \note The source code might be generated lazily.
     virtual char const *get_source_code(size_t &size) const = 0;
 
-    /// Get the data for the read-only data segment if available.
+    /// Get the number of data segments associated with this code.
+    virtual size_t get_data_segment_count() const = 0;
+
+    /// Get the i'th data segment if available.
     ///
-    /// \param size  will be assigned to the length of the RO data segment
-    /// \returns the data segment or NULL if no RO data segment is available.
-    virtual char const *get_ro_data_segment(size_t &size) const = 0;
+    /// \param i  the index of the data segment
+    /// \returns the data segment descriptor or NULL if data segment is available.
+    virtual Segment const *get_data_segment(size_t i) const = 0;
 
     /// Get the used state properties of the generated lambda function code.
     virtual State_usage get_state_usage() const = 0;
@@ -281,7 +294,9 @@ public:
     ///
     /// \return The prototype or NULL or an empty string if \p index is out of bounds or \p lang
     ///         cannot be used for this target code.
-    virtual char const *get_function_prototype(size_t index, Prototype_language lang) const = 0;
+    virtual char const *get_function_prototype(
+        size_t             index,
+        Prototype_language lang) const = 0;
 
     /// Set a function prototype for a function.
     ///
@@ -289,9 +304,9 @@ public:
     /// \param lang       the language of the prototype being set
     /// \param prototype  the function prototype
     virtual void set_function_prototype(
-        size_t index,
+        size_t             index,
         Prototype_language lang,
-        char const *prototype) = 0;
+        char const         *prototype) = 0;
 
     /// Add a function to the given target code, also registering the function prototypes
     /// applicable for the used backend.
@@ -304,10 +319,10 @@ public:
     ///
     /// \returns the function index of the added function
     virtual size_t add_function_info(
-        char const *name,
-        Distribution_kind dist_kind,
-        Function_kind func_kind,
-        size_t arg_block_index,
+        char const                              *name,
+        Distribution_kind                       dist_kind,
+        Function_kind                           func_kind,
+        size_t                                  arg_block_index,
         IGenerated_code_executable::State_usage state_usage) = 0;
 
     /// Get the number of distribution function handles referenced by a function.
@@ -325,7 +340,9 @@ public:
     ///
     /// \return The name of the distribution function handle or \c NULL, if the
     ///         function is not a distribution function or \p index is invalid.
-    virtual char const *get_function_df_handle(size_t func_index, size_t handle_index) const = 0;
+    virtual char const *get_function_df_handle(
+        size_t func_index,
+        size_t handle_index) const = 0;
 
     /// Add the name of a distribution function handle referenced by a function.
     ///
@@ -334,7 +351,7 @@ public:
     ///
     /// \return The index of the added handle, or ~0, if the \p func_index was invalid.
     virtual size_t add_function_df_handle(
-        size_t func_index,
+        size_t     func_index,
         char const *handle_name) = 0;
 
     /// Get the state properties used by a function.

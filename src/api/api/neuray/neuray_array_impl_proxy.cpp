@@ -43,7 +43,6 @@
 #include <mi/neuraylib/istring.h>
 #include <mi/neuraylib/itransaction.h>
 
-#include <sstream>
 #include <base/system/stlext/i_stlext_likely.h>
 #include <boost/core/ignore_unused.hpp>
 #include <base/util/string_utils/i_string_lexicographic_cast.h>
@@ -93,12 +92,10 @@ Array_impl_proxy::Array_impl_proxy(
     set_length_internal( length);
     m_attribute_name = attribute_name;
 
-    std::ostringstream s;
-    s << length;
     m_type_name  = element_type_name;
-    m_type_name += "[";
-    m_type_name += s.str();
-    m_type_name += "]";
+    m_type_name += '[';
+    m_type_name += std::to_string( length);
+    m_type_name += ']';
 }
 
 const char* Array_impl_proxy::get_type_name() const
@@ -113,11 +110,8 @@ mi::Size Array_impl_proxy::get_length() const
 
 const char* Array_impl_proxy::get_key( mi::Size index) const
 {
-    std::string key;
-    if( !index_to_key( index, key))
+    if( !index_to_key( index, m_cached_key))
         return nullptr;
-
-    m_cached_key = key;
     return m_cached_key.c_str();
 }
 
@@ -181,12 +175,14 @@ const mi::base::IInterface* Array_impl_proxy::get_element( mi::Size index) const
     if( index >= m_length)
         return nullptr;
 
-    std::ostringstream s;
-    s << m_attribute_name << "[" << index << "]";
+    std::string s( m_attribute_name);
+    s += '[';
+    s += std::to_string( index);
+    s += ']';
 
     mi::base::Handle<const IAttribute_context> attribute_context(
         m_owner->get_interface<IAttribute_context>());
-    return Attribute_set_impl_helper::get_attribute( attribute_context.get(), s.str());
+    return Attribute_set_impl_helper::get_attribute( attribute_context.get(), s);
 }
 
 mi::base::IInterface* Array_impl_proxy::get_element( mi::Size index)
@@ -194,12 +190,14 @@ mi::base::IInterface* Array_impl_proxy::get_element( mi::Size index)
     if( index >= m_length)
         return nullptr;
 
-    std::ostringstream s;
-    s << m_attribute_name << "[" << index << "]";
+    std::string s( m_attribute_name);
+    s += '[';
+    s += std::to_string( index);
+    s += ']';
 
     mi::base::Handle<const IAttribute_context> attribute_context(
         m_owner->get_interface<IAttribute_context>());
-    return Attribute_set_impl_helper::get_attribute( attribute_context.get(), s.str());
+    return Attribute_set_impl_helper::get_attribute( attribute_context.get(), s);
 }
 
 mi::Sint32 Array_impl_proxy::set_element(
@@ -270,9 +268,7 @@ bool Array_impl_proxy::index_to_key( mi::Size index, std::string& key) const
 {
     if( index >= m_length)
         return false;
-    std::ostringstream s;
-    s << index;
-    key = s.str();
+    key = std::to_string( index);
     return true;
 }
 
@@ -347,11 +343,8 @@ mi::Size Dynamic_array_impl_proxy::get_length() const
 
 const char* Dynamic_array_impl_proxy::get_key( mi::Size index) const
 {
-    std::string key;
-    if( !index_to_key( index, key))
+    if( !index_to_key( index, m_cached_key))
         return nullptr;
-
-    m_cached_key = key;
     return m_cached_key.c_str();
 }
 
@@ -415,12 +408,14 @@ const mi::base::IInterface* Dynamic_array_impl_proxy::get_element( mi::Size inde
     if( index >= m_length)
         return nullptr;
 
-    std::ostringstream s;
-    s << m_attribute_name << "[" << index << "]";
+    std::string s( m_attribute_name);
+    s += '[';
+    s += std::to_string( index);
+    s += ']';
 
     mi::base::Handle<const IAttribute_context> attribute_context(
         m_owner->get_interface<IAttribute_context>());
-    return Attribute_set_impl_helper::get_attribute( attribute_context.get(), s.str());
+    return Attribute_set_impl_helper::get_attribute( attribute_context.get(), s);
 }
 
 mi::base::IInterface* Dynamic_array_impl_proxy::get_element( mi::Size index)
@@ -428,12 +423,14 @@ mi::base::IInterface* Dynamic_array_impl_proxy::get_element( mi::Size index)
     if( index >= m_length)
         return nullptr;
 
-    std::ostringstream s;
-    s << m_attribute_name << "[" << index << "]";
+    std::string s( m_attribute_name);
+    s += '[';
+    s += std::to_string( index);
+    s += ']';
 
     mi::base::Handle<const IAttribute_context> attribute_context(
         m_owner->get_interface<IAttribute_context>());
-    return Attribute_set_impl_helper::get_attribute( attribute_context.get(), s.str());
+    return Attribute_set_impl_helper::get_attribute( attribute_context.get(), s);
 }
 
 mi::Sint32 Dynamic_array_impl_proxy::set_element(
@@ -505,15 +502,15 @@ mi::Sint32 Dynamic_array_impl_proxy::erase( mi::Size index)
 
     // Shift entries [index+1, m_length) one slot to the front and
     // move the element at slot index to slot m_length-1.
-    char* base   = static_cast<ATTR::Dynamic_array*>( m_pointer)->m_value;
-    char* source = base + (index+1)    * m_size_of_element;
-    char* target = base + index        * m_size_of_element;
-    char* last   = base + (m_length-1) * m_size_of_element;
-    char* buffer = new char[m_size_of_element];
-    memcpy( buffer, target, m_size_of_element);
+    char* const base   = static_cast<ATTR::Dynamic_array*>( m_pointer)->m_value;
+    char* const source = base + (index+1)    * m_size_of_element;
+    char* const target = base + index        * m_size_of_element;
+    char* const last   = base + (m_length-1) * m_size_of_element;
+    {
+    const std::vector<char> buffer(target, target+m_size_of_element);
     memmove( target, source, (m_length - (index+1)) * m_size_of_element);
-    memcpy( last, buffer, m_size_of_element);
-    delete[] buffer;
+    memcpy( last, buffer.data(), m_size_of_element);
+    }
 
     set_length( m_length-1);
     return 0;
@@ -670,9 +667,7 @@ bool Dynamic_array_impl_proxy::index_to_key( mi::Size index, std::string& key) c
 {
     if( index >= m_length)
         return false;
-    std::ostringstream s;
-    s << index;
-    key = s.str();
+    key = std::to_string( index);
     return true;
 }
 

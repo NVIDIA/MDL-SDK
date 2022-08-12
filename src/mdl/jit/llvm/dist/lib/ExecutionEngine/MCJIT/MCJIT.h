@@ -1,9 +1,8 @@
 //===-- MCJIT.h - Class definition for the MCJIT ----------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -13,14 +12,13 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
-#include "llvm/ExecutionEngine/ObjectCache.h"
 #include "llvm/ExecutionEngine/RTDyldMemoryManager.h"
 #include "llvm/ExecutionEngine/RuntimeDyld.h"
-#include "llvm/IR/Module.h"
-#include "llvm/Support/SmallVectorMemoryBuffer.h"
 
 namespace llvm {
 class MCJIT;
+class Module;
+class ObjectCache;
 
 // This is a helper class that the MCJIT execution engine uses for linking
 // functions across modules that it owns.  It aggregates the memory manager
@@ -104,22 +102,22 @@ class MCJIT : public ExecutionEngine {
     }
 
     bool hasModuleBeenAddedButNotLoaded(Module *M) {
-      return AddedModules.count(M) != 0;
+      return AddedModules.contains(M);
     }
 
     bool hasModuleBeenLoaded(Module *M) {
       // If the module is in either the "loaded" or "finalized" sections it
       // has been loaded.
-      return (LoadedModules.count(M) != 0 ) || (FinalizedModules.count(M) != 0);
+      return LoadedModules.contains(M) || FinalizedModules.contains(M);
     }
 
     bool hasModuleBeenFinalized(Module *M) {
-      return FinalizedModules.count(M) != 0;
+      return FinalizedModules.contains(M);
     }
 
     bool ownsModule(Module* M) {
-      return (AddedModules.count(M) != 0) || (LoadedModules.count(M) != 0) ||
-             (FinalizedModules.count(M) != 0);
+      return AddedModules.contains(M) || LoadedModules.contains(M) ||
+             FinalizedModules.contains(M);
     }
 
     void markModuleAsLoaded(Module *M) {
@@ -331,9 +329,9 @@ protected:
   /// the future.
   std::unique_ptr<MemoryBuffer> emitObject(Module *M);
 
-  void NotifyObjectEmitted(const object::ObjectFile& Obj,
-                           const RuntimeDyld::LoadedObjectInfo &L);
-  void NotifyFreeingObject(const object::ObjectFile& Obj);
+  void notifyObjectLoaded(const object::ObjectFile &Obj,
+                          const RuntimeDyld::LoadedObjectInfo &L);
+  void notifyFreeingObject(const object::ObjectFile &Obj);
 
   JITSymbol findExistingSymbol(const std::string &Name);
   Module *findModuleForSymbol(const std::string &Name, bool CheckFunctionsOnly);

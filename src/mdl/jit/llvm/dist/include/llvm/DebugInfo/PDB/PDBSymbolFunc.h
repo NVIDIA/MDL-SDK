@@ -1,9 +1,8 @@
 //===- PDBSymbolFunc.h - class representing a function instance -*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -22,17 +21,13 @@ class raw_ostream;
 namespace pdb {
 
 class PDBSymbolFunc : public PDBSymbol {
+  DECLARE_PDB_SYMBOL_CONCRETE_TYPE(PDB_SymType::Function)
 public:
-  PDBSymbolFunc(const IPDBSession &PDBSession,
-                std::unique_ptr<IPDBRawSymbol> FuncSymbol);
-
   void dump(PDBSymDumper &Dumper) const override;
 
   bool isDestructor() const;
 
   std::unique_ptr<IPDBEnumChildren<PDBSymbolData>> getArguments() const;
-
-  DECLARE_PDB_SYMBOL_CONCRETE_TYPE(PDB_SymType::Function)
 
   FORWARD_SYMBOL_METHOD(getAccess)
   FORWARD_SYMBOL_METHOD(getAddressOffset)

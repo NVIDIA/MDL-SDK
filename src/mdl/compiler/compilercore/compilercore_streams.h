@@ -296,10 +296,7 @@ public:
     size_t get_data_size() const { return m_data_length; }
 
     /// Retrieve the buffer itself.
-    char const *get_data() const { return m_data; }
-
-    /// Retrieve the (writable) buffer itself.
-    char *get_data() { return m_data; }
+    char const *get_data();
 
     /// Clear the buffer.
     void clear();

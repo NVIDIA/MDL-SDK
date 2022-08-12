@@ -1494,9 +1494,9 @@ __device__ inline render_result render_scene(
 // quantize + gamma
 __device__ inline unsigned int float3_to_rgba8(float3 val)
 {
-    const unsigned int r = (unsigned int) (255.0 * powf(saturate(val.x), 1.0f / 2.2f));
-    const unsigned int g = (unsigned int) (255.0 * powf(saturate(val.y), 1.0f / 2.2f));
-    const unsigned int b = (unsigned int) (255.0 * powf(saturate(val.z), 1.0f / 2.2f));
+    const unsigned int r = (unsigned int) (255.0 * powf(__saturatef(val.x), 1.0f / 2.2f));
+    const unsigned int g = (unsigned int) (255.0 * powf(__saturatef(val.y), 1.0f / 2.2f));
+    const unsigned int b = (unsigned int) (255.0 * powf(__saturatef(val.z), 1.0f / 2.2f));
     return 0xff000000 | (b << 16) | (g << 8) | r;
 }
 

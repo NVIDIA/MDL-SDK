@@ -44,7 +44,7 @@
 #include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/ExecutionEngine/Orc/CompileUtils.h>
 #include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
-#include <llvm/ExecutionEngine/Orc/LambdaResolver.h>
+#include <llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h>
 #include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include <llvm/IR/Constants.h>
@@ -62,10 +62,10 @@
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/Support/CodeGen.h>
 #include <llvm/Support/DynamicLibrary.h>
+#include <llvm/Support/FileSystem.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/ManagedStatic.h>
 #include <llvm/Support/MemoryBuffer.h>
-#include <llvm/Support/MutexGuard.h>
 #include <llvm/Support/PrettyStackTrace.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/TargetSelect.h>
@@ -95,6 +95,7 @@
 #include "generator_jit_context.h"
 #include "generator_jit_res_manager.h"
 #include "generator_jit_streams.h"
+#include "generator_jit_sl_passes.h"
 
 namespace mi {
 namespace mdl {
@@ -177,77 +178,70 @@ float exp2f(const float x)
 }
 
 
-/// LLVM JIT based on the BuildingAJIT tutorial and the OrcMCJITReplacement class.
+/// LLVM JIT based on the BuildingAJIT tutorial.
 /// Differences:
 ///  - no lazy emitting
 ///  - search for symbols in specific modules (avoid problems with duplicate names)
-///  - don't delete module after compilation to allow printing it (only when removed from JIT)
-///  - don't allow using symbols which were not explicitly added
-///  - conservative locking to ensure thread-safety
+///  - special handling for COFF object formats
 class MDL_JIT {
 public:
     /// Constructor.
-    MDL_JIT(std::unique_ptr<llvm::TargetMachine> TM)
-    : m_resolver(llvm::orc::createLegacyLookupResolver(
-        m_execution_session,
-        // LegacyLookup
-        [this](const std::string &Name) -> llvm::JITSymbol {
-            if (auto Sym = m_compile_layer.findSymbol(Name, false)) {
-                return Sym;
-            } else if (auto Err = Sym.takeError()) {
-                return std::move(Err);
-            }
-            if (auto SymAddr = uint64_t(llvm::sys::DynamicLibrary::SearchForAddressOfSymbol(
-                    Name.c_str())))
-            {
-                return llvm::JITSymbol(SymAddr, llvm::JITSymbolFlags::Exported);
-            }
-            return nullptr;
-        },
-        // ErrorReporter
-        [](llvm::Error Err) { llvm::cantFail(std::move(Err), "lookupFlags failed"); }))
-    , m_target_machine(std::move(TM))
-    , m_data_layout(m_target_machine->createDataLayout())
+    MDL_JIT(llvm::orc::JITTargetMachineBuilder jtm_builder, llvm::DataLayout data_layout)
+    : m_next_module_id(0)
+    , m_uses_coff(jtm_builder.getTargetTriple().isOSBinFormatCOFF())
     , m_object_layer(m_execution_session,
-        // GetResources
-        [this](llvm::orc::VModuleKey) {
-            return llvm::orc::RTDyldObjectLinkingLayer::Resources{
-                std::make_shared<llvm::SectionMemoryManager>(&m_memory_mapper), m_resolver };
-        })
+        // GetMemoryManager
+        [this]() { return std::make_unique<llvm::SectionMemoryManager>(&m_memory_mapper); })
     , m_compile_layer(
+        m_execution_session,
         m_object_layer,
-        llvm::orc::SimpleCompiler(*m_target_machine),
-        // NotifyCompiled
-        [this](MDL_JIT_module_key K, std::unique_ptr<llvm::Module> module) {
-            // keep module alive after compilation to allow printing it
-            m_compiled_modules[K] = std::move(module);
-        })
+        std::make_unique<llvm::orc::ConcurrentIRCompiler>(std::move(jtm_builder)))
+    , m_data_layout(std::move(data_layout))
+    , m_mangler(m_execution_session, m_data_layout)
+    , m_llvm_context(std::make_unique<llvm::LLVMContext>())
+    , m_mdl_runtime_dylib(m_execution_session.createBareJITDylib("mdl_runtime"))
     {
+        // Special handling for COFF object formats
+        if (m_uses_coff) {
+            // By default, the Exported flag is not set for symbols.
+            // Ensure, the flags are overridden, if necessary
+            m_object_layer.setOverrideObjectFlagsWithResponsibilityFlags(true);
+
+            // Add support for COFF comdat constants
+            m_object_layer.setAutoClaimResponsibilityForObjectSymbols(true);
+        }
+    }
+
+    ~MDL_JIT() {
+        llvm::cantFail(m_execution_session.endSession());
     }
 
     /// Get the data layout of the target machine.
     llvm::DataLayout const &get_data_layout() const { return m_data_layout; }
 
+    /// Get the LLVM context.
+    llvm::LLVMContext &getContext() { return *m_llvm_context.getContext(); }
+
     /// Add an LLVM module to the JIT and get its module key.
     MDL_JIT_module_key add_module(std::unique_ptr<llvm::Module> module) {
         MDL_ASSERT(!module->getDataLayout().isDefault() && "No data layout was set for module");
 
-        llvm::MutexGuard locked(m_lock);
-
-        // Add the module to the JIT with a new VModuleKey.
-        auto K = m_execution_session.allocateVModule();
-        llvm::cantFail(m_compile_layer.addModule(K, std::move(module)));
-        return K;
+        // Add the module to the JIT with a new dylib.
+        std::string module_name = std::to_string(m_next_module_id++);
+        llvm::orc::JITDylibSP dylib = &m_execution_session.createBareJITDylib(module_name);
+        dylib->addToLinkOrder(m_mdl_runtime_dylib);
+        llvm::orc::ResourceTrackerSP rt = dylib->createResourceTracker();
+        llvm::cantFail(m_compile_layer.add(
+            rt, llvm::orc::ThreadSafeModule(std::move(module), m_llvm_context)));
+        return rt;
     }
 
     /// Search for a symbol name in the given module.
-    llvm::JITSymbol find_symbol_in(MDL_JIT_module_key key, const llvm::Twine &name) {
-        std::string mangled_name;
-        llvm::raw_string_ostream mangled_name_stream(mangled_name);
-        llvm::Mangler::getNameWithPrefix(mangled_name_stream, name, m_data_layout);
-
-        llvm::MutexGuard locked(m_lock);
-        return m_compile_layer.findSymbolIn(key, mangled_name_stream.str(), false);
+    llvm::Expected<llvm::JITEvaluatedSymbol> find_symbol_in(
+        MDL_JIT_module_key key,
+        const llvm::Twine &name)
+    {
+        return m_execution_session.lookup({&key->getJITDylib()}, m_mangler(name.str()));
     }
 
     /// Get the address for a symbol name in the given module.
@@ -256,50 +250,67 @@ public:
         const llvm::Twine &name,
         LLVM_code_generator &code_gen)
     {
-        llvm::Expected<uint64_t> addr = find_symbol_in(K, name).getAddress();
-        if (auto error = addr.takeError()) {
+        llvm::Expected<llvm::JITEvaluatedSymbol> sym = find_symbol_in(K, name);
+        if (auto error = sym.takeError()) {
             code_gen.error(GET_SYMBOL_FAILED, llvm::toString(std::move(error)));
             return llvm::JITTargetAddress(0);
         }
-        return addr.get();
+        return sym->getAddress();
     }
 
     /// Remove the given module.
     void remove_module(MDL_JIT_module_key key) {
-        llvm::MutexGuard locked(m_lock);
-        cantFail(m_compile_layer.removeModule(key));
-        m_compiled_modules.erase(key);
+        // TODO: The JITDylib objects are still stored in the execution session until the session
+        //       is ended. This "leaks" at least 400 byte per JIT compilation.
+        llvm::cantFail(key->remove());
+    }
+
+    void register_mdl_runtime_function(llvm::StringRef const &func_name, void *address)
+    {
+        llvm::orc::SymbolStringPtr sym_name(m_mangler(func_name.str()));
+        llvm::JITEvaluatedSymbol sym(
+            static_cast<llvm::JITTargetAddress>(reinterpret_cast<uintptr_t>(address)),
+            llvm::JITSymbolFlags::Exported);
+        llvm::cantFail(m_mdl_runtime_dylib.define(llvm::orc::absoluteSymbols({{sym_name, sym}})));
     }
 
 private:
     /// Lock protecting all internal data structures.
     llvm::sys::Mutex m_lock;
 
+    /// The ID of the next module to be added.
+    std::atomic<uint64_t> m_next_module_id;
+
+    /// True, if the binary object format is COFF.
+    bool m_uses_coff;
+
     /// Execution session used to identify modules.
     llvm::orc::ExecutionSession m_execution_session;
-
-    /// Resolver for linking.
-    std::shared_ptr<llvm::orc::SymbolResolver> m_resolver;
-
-    /// The target machine.
-    std::unique_ptr<llvm::TargetMachine> m_target_machine;
-
-    /// The data layout of the target machine.
-    const llvm::DataLayout m_data_layout;
 
     /// The object linking layer.
     llvm::orc::RTDyldObjectLinkingLayer m_object_layer;
 
     /// The compile layer.
-    llvm::orc::IRCompileLayer<llvm::orc::RTDyldObjectLinkingLayer, llvm::orc::SimpleCompiler>
-        m_compile_layer;
+    llvm::orc::IRCompileLayer m_compile_layer;
+
+    /// The data layout of the target machine.
+    const llvm::DataLayout m_data_layout;
+
+    /// The symbol mangler.
+    llvm::orc::MangleAndInterner m_mangler;
+
+    /// Thread-safe LLVM context owning all compiled modules.
+    llvm::orc::ThreadSafeContext m_llvm_context;
+
+    /// Dylib receiving the runtime library functions.
+    llvm::orc::JITDylib &m_mdl_runtime_dylib;
 
     /// The already compiled modules.
     std::map<MDL_JIT_module_key, std::unique_ptr<llvm::Module>> m_compiled_modules;
 
     // Trivial implementation of SectionMemoryManager::MemoryMapper that just calls
     // into sys::Memory. Copied from LLVM's SectionMemoryManager.cpp.
-    // Needed to avoid used of global MemoryMapper which may be freed before the jitted code,
+    // Needed to avoid use of global MemoryMapper which may be freed before the jitted code,
     // leading to use-after-free in SectionMemoryManager destructor.
     class DefaultMMapper final : public llvm::SectionMemoryManager::MemoryMapper {
     public:
@@ -311,7 +322,7 @@ private:
         }
 
         std::error_code protectMappedMemory(const llvm::sys::MemoryBlock &Block,
-            unsigned Flags) override {
+                unsigned Flags) override {
             return llvm::sys::Memory::protectMappedMemory(Block, Flags);
         }
 
@@ -332,26 +343,20 @@ Jitted_code::Jitted_code(mi::mdl::IAllocator *alloc)
 , m_llvm_context(new llvm::LLVMContext())
 , m_mdl_jit(NULL)
 {
-    llvm::TargetOptions target_options;
-
-#if defined(__i386__) || defined(_M_IX86)
-    // we may use SSE instructions, so set the stack to 16 bytes in running
-    // under x86
-    target_options.StackAlignmentOverride = 16;
-#endif
-
     std::unique_ptr<llvm::Module> module(new llvm::Module("MDL global", *m_llvm_context));
 
     // Set the default triple here: This is only necessary for MacOS where the triple
     // contains the lowest supported runtime version.
     module->setTargetTriple(LLVM_DEFAULT_TARGET_TRIPLE);
 
-    llvm::EngineBuilder engine_builder;
-    engine_builder.setEngineKind(llvm::EngineKind::JIT)
-        .setOptLevel(llvm::CodeGenOpt::Aggressive)
-        .setTargetOptions(target_options);
+    // In 64-bit mode, the stack alignment is always 16 bytes
+    llvm::orc::JITTargetMachineBuilder jtm_builder = llvm::cantFail(
+        llvm::orc::JITTargetMachineBuilder::detectHost());
+    jtm_builder.setCodeGenOptLevel(llvm::CodeGenOpt::Aggressive);
 
-    m_mdl_jit = new MDL_JIT(std::unique_ptr<llvm::TargetMachine>(engine_builder.selectTarget()));
+    llvm::DataLayout data_layout = llvm::cantFail(jtm_builder.getDefaultDataLayoutForTarget());
+
+    m_mdl_jit = new MDL_JIT(std::move(jtm_builder), std::move(data_layout));
 
     LLVM_code_generator::register_native_runtime_functions(this);
 }
@@ -404,11 +409,7 @@ Jitted_code *Jitted_code::get_instance(IAllocator *alloc)
 /// Registers a native function for symbol resolving by the JIT.
 void Jitted_code::register_function(llvm::StringRef const &func_name, void *address)
 {
-    std::string mangled_name;
-    llvm::raw_string_ostream mangled_name_stream(mangled_name);
-    llvm::Mangler::getNameWithPrefix(mangled_name_stream, func_name, m_mdl_jit->get_data_layout());
-
-    llvm::sys::DynamicLibrary::AddSymbol(mangled_name_stream.str(), address);
+    m_mdl_jit->register_mdl_runtime_function(func_name, address);
 }
 
 // Get the layout data for the current JITer target.
@@ -432,10 +433,10 @@ void Jitted_code::delete_llvm_module(MDL_JIT_module_key module_key)
 // JIT compile the given LLVM function.
 void *Jitted_code::jit_compile(
     MDL_JIT_module_key module_key,
-    llvm::Function *func,
+    char const *func_name,
     LLVM_code_generator &code_gen)
 {
-    return (void *)(m_mdl_jit->get_symbol_address_in(module_key, func->getName(), code_gen));
+    return (void *)(m_mdl_jit->get_symbol_address_in(module_key, func_name, code_gen));
 }
 
 // ----------------------------- Internal_function class -----------------------------
@@ -508,15 +509,16 @@ llvm::Value *Expression_result::as_value(Function_context &context) {
     // turn offset result into value
     if (m_res_kind == RK_OFFSET) {
         int cur_offs = 0;
-        m_content = context.get_code_gen().translate_ro_data_segment_hlsl_value(
+        m_content = context.get_code_gen().translate_ro_data_segment_sl_value(
             context, m_offset_res_mdl_type, cur_offs, m_content);
         m_res_kind = RK_VALUE;
     }
 
     if (m_res_kind == RK_VALUE) {
         return m_content;
-    } else {  // RK_POINTER
+    } else {
         // do not add debug info here, it is not clear, when this is executed
+        MDL_ASSERT(m_res_kind == RK_POINTER);
         return context->CreateLoad(m_content);
     }
 }
@@ -889,12 +891,12 @@ public:
                     {
                         mi::mdl::IType_struct const *s_type = cast<mi::mdl::IType_struct>(arg_type);
                         for (int i = 0, n = s_type->get_field_count(); i < n; ++i) {
-                            mi::mdl::ISymbol const *s;
-                            mi::mdl::IType const   *f;
+                            mi::mdl::ISymbol const *f_sym;
+                            mi::mdl::IType const   *f_tp;
 
-                            s_type->get_field(i, f, s);
+                            s_type->get_field(i, f_tp, f_sym);
 
-                            if (s->get_name() == f_name) {
+                            if (f_sym->get_name() == f_name) {
                                 return i;
                             }
                         }
@@ -1061,16 +1063,19 @@ void State_usage_analysis::update_exported_functions_state_usage()
 // ------------------------------- LLVM code generator -------------------------------
 
 static unsigned map_target_lang(
-    LLVM_code_generator::Target_language lang,
-    Type_mapper::Type_mapping_mode       def_mode)
+    ICode_generator::Target_language lang,
+    Type_mapper::Type_mapping_mode   def_mode)
 {
     switch (lang) {
-    case LLVM_code_generator::TL_NATIVE:
+    case ICode_generator::TL_NATIVE:
+    case ICode_generator::TL_LLVM_IR:
         return def_mode;
-    case LLVM_code_generator::TL_PTX:
+    case ICode_generator::TL_PTX:
         return Type_mapper::TM_PTX;
-    case LLVM_code_generator::TL_HLSL:
+    case ICode_generator::TL_HLSL:
         return Type_mapper::TM_HLSL | Type_mapper::TM_STRINGS_ARE_IDS;
+    case ICode_generator::TL_GLSL:
+        return Type_mapper::TM_GLSL | Type_mapper::TM_STRINGS_ARE_IDS;
     }
     MDL_ASSERT(!"unsupported target language");
     return def_mode;
@@ -1149,12 +1154,12 @@ LLVM_code_generator::LLVM_code_generator(
 , m_func_pass_manager()
 , m_fast_math(options.get_bool_option(MDL_JIT_OPTION_FAST_MATH))
 , m_enable_ro_segment(
-    target_lang == TL_HLSL || options.get_bool_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT))
+    options.get_bool_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT))
 , m_finite_math(false)
 , m_reciprocal_math(false)
 , m_always_inline(options.get_bool_option(MDL_JIT_OPTION_INLINE_AGGRESSIVELY))
 , m_eval_dag_ternary_strictly(options.get_bool_option(MDL_JIT_OPTION_EVAL_DAG_TERNARY_STRICTLY))
-, m_hlsl_use_resource_data(options.get_bool_option(MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA))
+, m_sl_use_resource_data(options.get_bool_option(MDL_JIT_OPTION_SL_USE_RESOURCE_DATA))
 , m_use_renderer_adapt_microfacet_roughness(options.get_bool_option(
     MDL_JIT_OPTION_USE_RENDERER_ADAPT_MICROFACET_ROUGHNESS))
 , m_use_renderer_adapt_normal(options.get_bool_option(
@@ -1183,7 +1188,7 @@ LLVM_code_generator::LLVM_code_generator(
     state_mapping |
         (options.get_bool_option(MDL_JIT_OPTION_TEX_RUNTIME_WITH_DERIVATIVES) ?
             Type_mapper::SM_USE_DERIVATIVES : 0) |
-        (target_lang == TL_HLSL ? Type_mapper::SM_INCLUDE_ARG_BLOCK_OFFS : 0),
+        (target_is_structured_language(target_lang) ? Type_mapper::SM_INCLUDE_ARG_BLOCK_OFFS : 0),
     Type_mapper::Type_mapping_mode(
         map_target_lang(target_lang, tm_mode) |
         (options.get_bool_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS) ?
@@ -1204,59 +1209,40 @@ LLVM_code_generator::LLVM_code_generator(
 , m_ro_segment(NULL)
 , m_next_ro_data_offset(0)
 , m_ro_data_values(jitted_code->get_allocator())
-, m_scene_data_names(get_allocator())
-, m_scene_data_all_pos_avail(false)
+, m_scene_data_existing_names(get_allocator())
+, m_scene_data_filtered(false)
 , m_optix_cp_from_id(NULL)
 , m_captured_args_mdl_types(get_allocator())
 , m_captured_args_type(NULL)
-, m_hlsl_func_argblock_as_int(NULL)
-, m_hlsl_func_argblock_as_uint(NULL)
-, m_hlsl_func_argblock_as_float(NULL)
-, m_hlsl_func_argblock_as_double(NULL)
-, m_hlsl_func_argblock_as_bool(NULL)
-, m_hlsl_func_rodata_as_int(NULL)
-, m_hlsl_func_rodata_as_uint(NULL)
-, m_hlsl_func_rodata_as_float(NULL)
-, m_hlsl_func_rodata_as_double(NULL)
-, m_hlsl_func_rodata_as_bool(NULL)
-, m_hlsl_func_scene_data_lookup_int(NULL)
-, m_hlsl_func_scene_data_lookup_int2(NULL)
-, m_hlsl_func_scene_data_lookup_int3(NULL)
-, m_hlsl_func_scene_data_lookup_int4(NULL)
-, m_hlsl_func_scene_data_lookup_float(NULL)
-, m_hlsl_func_scene_data_lookup_float2(NULL)
-, m_hlsl_func_scene_data_lookup_float3(NULL)
-, m_hlsl_func_scene_data_lookup_float4(NULL)
-, m_hlsl_func_scene_data_lookup_color(NULL)
-, m_hlsl_func_scene_data_lookup_deriv_float(NULL)
-, m_hlsl_func_scene_data_lookup_deriv_float2(NULL)
-, m_hlsl_func_scene_data_lookup_deriv_float3(NULL)
-, m_hlsl_func_scene_data_lookup_deriv_float4(NULL)
-, m_hlsl_func_scene_data_lookup_deriv_color(NULL)
+, m_sl_funcs()
 , m_resource_tag_map(NULL)
 , m_opt_level(unsigned(options.get_int_option(MDL_JIT_OPTION_OPT_LEVEL)))
 , m_jit_dbg_mode(JDBG_NONE)
 , m_num_texture_spaces(num_texture_spaces)
 , m_num_texture_results(num_texture_results)
-, m_sm_version(target_lang == TL_PTX ? sm_version : 0)
+, m_sm_version(target_lang == ICode_generator::TL_PTX ? sm_version : 0)
 , m_min_ptx_version(0)
 , m_state_usage_analysis(*this)
 , m_enable_full_debug(enable_debug)
-, m_enable_type_debug(target_lang == TL_HLSL)
+, m_enable_type_debug(target_is_structured_language(target_lang))
 , m_exported_funcs_are_entries(false)
 , m_bounds_check_exception_disabled(
-    target_lang != TL_NATIVE || options.get_bool_option(MDL_JIT_OPTION_DISABLE_EXCEPTIONS))
+    target_lang != ICode_generator::TL_NATIVE ||
+    options.get_bool_option(MDL_JIT_OPTION_DISABLE_EXCEPTIONS))
 , m_divzero_check_exception_disabled(
-    target_lang != TL_NATIVE || options.get_bool_option(MDL_JIT_OPTION_DISABLE_EXCEPTIONS))
+    target_lang != ICode_generator::TL_NATIVE ||
+    options.get_bool_option(MDL_JIT_OPTION_DISABLE_EXCEPTIONS))
 , m_uses_state_param(false)
-, m_mangle_name(target_lang != TL_NATIVE)
+, m_mangle_name(target_lang != ICode_generator::TL_NATIVE)
 , m_enable_instancing(true)
 , m_lambda_force_sret(true)  // sret is the default mode
 , m_lambda_first_param_by_ref(false)
 , m_lambda_force_render_state(false)
 , m_lambda_force_no_lambda_results(false)
 , m_use_ro_data_segment(false)
-, m_link_libdevice(target_lang == TL_PTX && options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE))
+, m_link_libdevice(
+    target_lang == ICode_generator::TL_PTX &&
+    options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE))
 , m_link_libmdlrt(false)
 , m_link_libbsdf_df_handle_slot_mode(parse_df_handle_slot_mode(
     options.get_string_option(MDL_JIT_OPTION_LINK_LIBBSDF_DF_HANDLE_SLOT_MODE)))
@@ -1275,6 +1261,7 @@ LLVM_code_generator::LLVM_code_generator(
     get_allocator())
 , m_libbsdf_template_funcs(get_allocator())
 , m_enable_auxiliary(options.get_bool_option(MDL_JIT_OPTION_ENABLE_AUXILIARY))
+, m_enable_pdf(options.get_bool_option(MDL_JIT_OPTION_ENABLE_PDF))
 , m_module_lambda_funcs(get_allocator())
 , m_module_lambda_index_map(get_allocator())
 , m_lambda_results_struct_type(NULL)
@@ -1361,7 +1348,7 @@ LLVM_code_generator::LLVM_code_generator(
         }
     }
 
-    if (target_lang == TL_PTX) {
+    if (target_lang == ICode_generator::TL_PTX) {
         // Optimization level 3+ activates argument promotion. This is bad, because the NVPTX
         // backend cannot handle aggregate types passed by value. Hence limit the level to
         // 2 in this case.
@@ -1370,16 +1357,16 @@ LLVM_code_generator::LLVM_code_generator(
         }
     }
 
-    if (target_lang != TL_HLSL) {
-        // this option can only be set for HLSL
-        m_hlsl_use_resource_data = false;
+    if (!target_is_structured_language()) {
+        // this option can only be set for GLSL/HLSL
+        m_sl_use_resource_data = false;
     }
 
     // parse scene data names option if available
     char const *names = options.get_string_option(MDL_JIT_OPTION_SCENE_DATA_NAMES);
     if (names != NULL && *names) {
         if (names[0] == '*' && names[1] == 0) {
-            m_scene_data_all_pos_avail = true;
+            m_scene_data_filtered = false;
         } else {
             // split the list at ',' and put the names into a set
             char const *start_ptr = names;
@@ -1391,7 +1378,7 @@ LLVM_code_generator::LLVM_code_generator(
                         char *buf = static_cast<char *>(m_arena.allocate(len + 1));
                         memcpy(buf, start_ptr, len);
                         buf[len] = 0;
-                        m_scene_data_names.insert(buf);
+                        m_scene_data_existing_names.insert(buf);
                     }
                     start_ptr = ptr + 1;
                 }
@@ -1403,9 +1390,10 @@ LLVM_code_generator::LLVM_code_generator(
                     char *buf = static_cast<char *>(m_arena.allocate(len + 1));
                     memcpy(buf, start_ptr, len);
                     buf[len] = 0;
-                    m_scene_data_names.insert(buf);
+                    m_scene_data_existing_names.insert(buf);
                 }
             }
+            m_scene_data_filtered = true;
         }
     }
 
@@ -1723,7 +1711,7 @@ bool LLVM_code_generator::optimize(llvm::Function *func)
 // Optimize LLVM code.
 bool LLVM_code_generator::optimize(llvm::Module *module)
 {
-    if (m_target_lang == TL_PTX) {
+    if (m_target_lang == ICode_generator::TL_PTX) {
         // already remove any unreferenced libDevice functions to avoid
         // LLVM optimizing them for nothing
         if (m_link_libdevice) {
@@ -1736,18 +1724,18 @@ bool LLVM_code_generator::optimize(llvm::Module *module)
         // This will replace all __nvvm_reflect calls for __CUDA_FTZ by zero to not flush
         // denormal values to zero, when performing single-precision FP operations.
         // Note: To set it to a different value, set the value as module flag "nvvm-reflect-ftz".
-        // Note: The NVVMReflect pass currently does not support the __CUDA_ARCH reflection option.
 
         llvm::legacy::FunctionPassManager fpm(module);
-        fpm.add(llvm::createNVVMReflectPass());
+        fpm.add(llvm::createNVVMReflectPass(m_sm_version));
         for (auto &func : module->functions()) {
             fpm.run(func);
         }
     }
 
     llvm::PassManagerBuilder builder;
-    builder.OptLevel = m_opt_level;
-    builder.AvoidPointerPHIs = m_target_lang == TL_HLSL;
+    builder.OptLevel         = m_opt_level;
+    builder.AvoidPointerPHIs = target_is_structured_language();
+    builder.EnableVectorizer = !target_is_structured_language();
 
     // TODO: in PTX mode we don't use the C-library, but libdevice, this probably must
     // be registered somewhere, or libcall simplification can happen
@@ -1758,7 +1746,7 @@ bool LLVM_code_generator::optimize(llvm::Module *module)
         builder.Inliner = llvm::createAlwaysInlinerLegacyPass();
     }
 
-    if (m_target_lang == TL_PTX && m_link_libdevice) {
+    if (m_target_lang == ICode_generator::TL_PTX && m_link_libdevice) {
         // add our extra pass to remove any unused rest of libDevice after the inliner
         // and even in optlevel 0
         builder.addExtension(
@@ -2071,8 +2059,8 @@ llvm::Module *LLVM_code_generator::compile_module(
         return NULL;
     }
 
-    if (m_target_lang == TL_HLSL) {
-        init_hlsl_code_gen();
+    if (target_is_structured_language()) {
+        init_sl_code_gen();
     }
 
     // Generate resource tables: these are "dummy", i.e. they contain only one invalid entry.
@@ -2123,11 +2111,11 @@ llvm::Module *LLVM_code_generator::compile_module(
                 int n_params = ftype->get_parameter_count();
 
                 bool need_instantiation = false;
-                for (int i = 0; i < n_params; ++i) {
+                for (int p_idx = 0; p_idx < n_params; ++p_idx) {
                     ISymbol const *p_sym;
-                    IType const *p_type;
+                    IType const   *p_type;
 
-                    ftype->get_parameter(i, p_type, p_sym);
+                    ftype->get_parameter(p_idx, p_type, p_sym);
 
                     if (IType_array const *a_tp = as<IType_array>(p_type)) {
                         if (!a_tp->is_immediate_sized()) {
@@ -2264,8 +2252,8 @@ void LLVM_code_generator::create_captured_argument_struct(
         context, members, "Captured_arguments", /*is_packed=*/false);
 }
 
-// Declare an user-provided HLSL read function, which gets an int offset as parameter.
-llvm::Function *LLVM_code_generator::declare_hlsl_read_func(
+// Declare an user-provided HLSL/GLSL read function, which gets an int offset as parameter.
+llvm::Function *LLVM_code_generator::declare_sl_read_func(
     llvm::Type *ret_type,
     char const *name)
 {
@@ -2285,48 +2273,71 @@ llvm::Function *LLVM_code_generator::declare_hlsl_read_func(
     return func;
 }
 
-// Initialize types and functions needed for HLSL.
-void LLVM_code_generator::init_hlsl_code_gen()
+// Initialize types and functions needed for HLSL/GLSL.
+void LLVM_code_generator::init_sl_code_gen()
 {
-    m_hlsl_func_rodata_as_int = declare_hlsl_read_func(
-        m_type_mapper.get_int_type(),
-        "mdl_read_rodata_as_int");
+    struct Descriptor {
+        llvm::Function *&result;
+        llvm::Type     *ret_type;
+        char const     *name;
+    } functions[] = {
+        {
+            m_sl_funcs.m_rodata_as_int,
+            m_type_mapper.get_int_type(),
+            "mdl_read_rodata_as_int"
+        },
+        {
+            m_sl_funcs.m_rodata_as_uint,
+            m_type_mapper.get_int_type(),
+            "mdl_read_rodata_as_uint"
+        },
+        {
+            m_sl_funcs.m_rodata_as_bool,
+            m_type_mapper.get_bool_type(),
+            "mdl_read_rodata_as_bool"
+        },
+        {
+            m_sl_funcs.m_rodata_as_float,
+            m_type_mapper.get_float_type(),
+            "mdl_read_rodata_as_float"
+        },
+        {
+            m_sl_funcs.m_rodata_as_double,
+            m_type_mapper.get_double_type(),
+            "mdl_read_rodata_as_double"
+        },
+        {
+            m_sl_funcs.m_argblock_as_int,
+            m_type_mapper.get_int_type(),
+            "mdl_read_argblock_as_int"
+        },
+        {
+            m_sl_funcs.m_argblock_as_uint,
+            m_type_mapper.get_int_type(),
+            "mdl_read_argblock_as_uint"
+        },
+        {
+            m_sl_funcs.m_argblock_as_bool,
+            m_type_mapper.get_bool_type(),
+            "mdl_read_argblock_as_bool"
+        },
+        {
+            m_sl_funcs.m_argblock_as_float,
+            m_type_mapper.get_float_type(),
+            "mdl_read_argblock_as_float"
+        },
+        {
+            m_sl_funcs.m_argblock_as_double,
+            m_type_mapper.get_double_type(),
+            "mdl_read_argblock_as_double"
+        }
+    };
 
-    m_hlsl_func_rodata_as_uint = declare_hlsl_read_func(
-        m_type_mapper.get_int_type(),
-        "mdl_read_rodata_as_uint");
+    for (size_t i = 0, n = llvm::array_lengthof(functions); i < n; ++i) {
+        Descriptor &d = functions[i];
 
-    m_hlsl_func_rodata_as_bool = declare_hlsl_read_func(
-        m_type_mapper.get_bool_type(),
-        "mdl_read_rodata_as_bool");
-
-    m_hlsl_func_rodata_as_float = declare_hlsl_read_func(
-        m_type_mapper.get_float_type(),
-        "mdl_read_rodata_as_float");
-
-    m_hlsl_func_rodata_as_double = declare_hlsl_read_func(
-        m_type_mapper.get_double_type(),
-        "mdl_read_rodata_as_double");
-
-    m_hlsl_func_argblock_as_int = declare_hlsl_read_func(
-        m_type_mapper.get_int_type(),
-        "mdl_read_argblock_as_int");
-
-    m_hlsl_func_argblock_as_uint = declare_hlsl_read_func(
-        m_type_mapper.get_int_type(),
-        "mdl_read_argblock_as_uint");
-
-    m_hlsl_func_argblock_as_bool = declare_hlsl_read_func(
-        m_type_mapper.get_bool_type(),
-        "mdl_read_argblock_as_bool");
-
-    m_hlsl_func_argblock_as_float = declare_hlsl_read_func(
-        m_type_mapper.get_float_type(),
-        "mdl_read_argblock_as_float");
-
-    m_hlsl_func_argblock_as_double = declare_hlsl_read_func(
-        m_type_mapper.get_double_type(),
-        "mdl_read_argblock_as_double");
+        d.result = declare_sl_read_func(d.ret_type, d.name);
+    }
 }
 
 // Compile a switch lambda function into an LLVM Module and return the LLVM function.
@@ -2365,8 +2376,8 @@ llvm::Function *LLVM_code_generator::compile_switch_lambda(
             return NULL;
         }
 
-        if (m_target_lang == TL_HLSL) {
-            init_hlsl_code_gen();
+        if (target_is_structured_language()) {
+            init_sl_code_gen();
         }
     }
 
@@ -2481,7 +2492,7 @@ llvm::Function *LLVM_code_generator::compile_switch_lambda(
                     res_type = v_tp->getElementType();
 
                     // reduce the alignment of the store to this size
-                    st->setAlignment(res_type->getPrimitiveSizeInBits() / 8);
+                    st->setAlignment(llvm::Align(res_type->getPrimitiveSizeInBits() / 8));
                 }
             }
 
@@ -2544,7 +2555,7 @@ llvm::Function *LLVM_code_generator::compile_lambda(
 
     create_captured_argument_struct(m_llvm_context, lambda);
 
-    if (m_target_lang == TL_NATIVE) {
+    if (m_target_lang == ICode_generator::TL_NATIVE) {
         // when running on the CPU, we can disable instancing to speed up code generation
         disable_function_instancing();
     }
@@ -2563,8 +2574,8 @@ llvm::Function *LLVM_code_generator::compile_lambda(
             return NULL;
         }
 
-        if (m_target_lang == TL_HLSL) {
-            init_hlsl_code_gen();
+        if (target_is_structured_language()) {
+            init_sl_code_gen();
         }
     }
 
@@ -2922,7 +2933,10 @@ LLVM_context_data *LLVM_code_generator::declare_function(
             // the SRET attribute does not work yet (2.8) on 32bit MSVC Target,
             // because of the differences between cygwin/msys and VC API (currently
             // only the first is implemented), so don't use it.
-            func->addParamAttr(arg_it->getArgNo(), llvm::Attribute::StructRet);
+            func->addParamAttr(
+                arg_it->getArgNo(),
+                llvm::Attribute::getWithStructRetType(
+                    m_llvm_context, arg_it->getType()->getPointerElementType()));
         } else {
             // treat the first argument as a pointer, but we could at least improve
             // the code a bit, because we "know" that the extra parameter is alias free
@@ -3803,7 +3817,7 @@ void LLVM_code_generator::translate_boolean_branch(
         if (un_expr->get_operator() == mi::mdl::IExpression_unary::OK_LOGICAL_NOT) {
             // logical not: just exchange true and false targets
             mi::mdl::IExpression const *arg = un_expr->get_argument();
-            translate_boolean_branch(ctx, arg, false_bb, true_bb);
+            translate_boolean_branch(ctx, arg, false_bb, true_bb); //-V764
             return;
         }
     }
@@ -3914,10 +3928,11 @@ void LLVM_code_generator::translate_switch(
     Function_context                 &ctx,
     mi::mdl::IStatement_switch const *switch_stmt)
 {
-    mi::mdl::IStatement_case const *default_case = NULL;
+    size_t n_cases = switch_stmt->get_case_count();
 
-    size_t n = switch_stmt->get_case_count();
-    for (size_t i = 0; i < n; ++i) {
+    // find the default case if any
+    mi::mdl::IStatement_case const *default_case = NULL;
+    for (size_t i = 0; i < n_cases; ++i) {
         mi::mdl::IStatement const *stmt = switch_stmt->get_case(i);
 
         if (mi::mdl::IStatement_case const *case_stmt = cast<mi::mdl::IStatement_case>(stmt)) {
@@ -3939,11 +3954,11 @@ void LLVM_code_generator::translate_switch(
     llvm::Value *expr = translate_expression_value(
         ctx, switch_stmt->get_condition(), /*return_derivs=*/ false);
 
-    llvm::SwitchInst *switch_instr = ctx->CreateSwitch(expr, default_bb, unsigned(n));
+    llvm::SwitchInst *switch_instr = ctx->CreateSwitch(expr, default_bb, unsigned(n_cases));
 
     ctx->SetInsertPoint(ctx.get_unreachable_bb());
 
-    for (size_t i = 0, n = switch_stmt->get_case_count(); i < n; ++i) {
+    for (size_t i = 0; i < n_cases; ++i) {
         mi::mdl::IStatement const *stmt = switch_stmt->get_case(i);
 
         if (mi::mdl::IStatement_case const *case_stmt = cast<mi::mdl::IStatement_case>(stmt)) {
@@ -4078,7 +4093,7 @@ void LLVM_code_generator::translate_for(
     {
         mi::mdl::IStatement const *body = for_stmt->get_body();
 
-        Function_context::Block_scope block_scope(ctx, body);
+        Function_context::Block_scope body_block_scope(ctx, body);
         translate_statement(ctx, body);
     }
     ctx->CreateBr(upd_bb);
@@ -4407,7 +4422,7 @@ Expression_result LLVM_code_generator::translate_index_expression(
                 MDL_ASSERT(comp.get_offset_kind() == Expression_result::OK_RO_DATA_SEGMENT &&
                     "ARG BLOCK not supported yet");
                 int cur_offs = 0;
-                llvm::Value *res = translate_ro_data_segment_hlsl_value(
+                llvm::Value *res = translate_ro_data_segment_sl_value(
                     ctx, a_type->get_element_type(), cur_offs, offs);
                 return Expression_result::value(res);
             }
@@ -4932,12 +4947,12 @@ llvm::Value *LLVM_code_generator::translate_ro_data_segment_hlsl_offset(
     return ctx->CreateAdd(arg_block_offs, ctx.get_constant(cur_offs));
 }
 
-// Translate a part of the RO-data-segment for HLSL into LLVM IR.
-llvm::Value *LLVM_code_generator::translate_ro_data_segment_hlsl_value(
-    Function_context             &ctx,
-    mi::mdl::IType const         *param_type,
-    int                          &cur_offs,
-    llvm::Value                  *add_val)
+// Translate a part of the RO-data-segment for GLSL/HLSL into LLVM IR.
+llvm::Value *LLVM_code_generator::translate_ro_data_segment_sl_value(
+    Function_context     &ctx,
+    mi::mdl::IType const *param_type,
+    int                  &cur_offs,
+    llvm::Value          *add_val)
 {
     llvm::Value *res;
     param_type = param_type->skip_type_alias();
@@ -4945,7 +4960,7 @@ llvm::Value *LLVM_code_generator::translate_ro_data_segment_hlsl_value(
     switch (param_type->get_kind()) {
     case mi::mdl::IType::TK_BOOL:
         res = ctx->CreateCall(
-            m_hlsl_func_rodata_as_bool,
+            m_sl_funcs.m_rodata_as_bool,
             translate_ro_data_segment_hlsl_offset(ctx, cur_offs, add_val));
         ++cur_offs;
         break;
@@ -4953,7 +4968,7 @@ llvm::Value *LLVM_code_generator::translate_ro_data_segment_hlsl_value(
     case mi::mdl::IType::TK_FLOAT:
         cur_offs = (cur_offs + 3) & ~3;
         res = ctx->CreateCall(
-            m_hlsl_func_rodata_as_float,
+            m_sl_funcs.m_rodata_as_float,
             translate_ro_data_segment_hlsl_offset(ctx, cur_offs, add_val));
         cur_offs += 4;
         break;
@@ -4963,7 +4978,7 @@ llvm::Value *LLVM_code_generator::translate_ro_data_segment_hlsl_value(
     case mi::mdl::IType::TK_STRING:
         cur_offs = (cur_offs + 3) & ~3;
         res = ctx->CreateCall(
-            m_hlsl_func_rodata_as_int,
+            m_sl_funcs.m_rodata_as_int,
             translate_ro_data_segment_hlsl_offset(ctx, cur_offs, add_val));
         cur_offs += 4;
         break;
@@ -4971,7 +4986,7 @@ llvm::Value *LLVM_code_generator::translate_ro_data_segment_hlsl_value(
     case mi::mdl::IType::TK_DOUBLE:
         cur_offs = (cur_offs + 7) & ~7;
         res = ctx->CreateCall(
-            m_hlsl_func_rodata_as_double,
+            m_sl_funcs.m_rodata_as_double,
             translate_ro_data_segment_hlsl_offset(ctx, cur_offs, add_val));
         cur_offs += 8;
         break;
@@ -4993,7 +5008,7 @@ llvm::Value *LLVM_code_generator::translate_ro_data_segment_hlsl_value(
                 mi::mdl::IType const *et = ct->get_compound_type(i);
                 res = ctx.create_insert(
                     res,
-                    translate_ro_data_segment_hlsl_value(ctx, et, cur_offs, add_val),
+                    translate_ro_data_segment_sl_value(ctx, et, cur_offs, add_val),
                     unsigned(i));
             }
 
@@ -5010,7 +5025,7 @@ llvm::Value *LLVM_code_generator::translate_ro_data_segment_hlsl_value(
         // resources are mapped to integer in HLSL
         cur_offs = (cur_offs + 3) & ~3;
         res = ctx->CreateCall(
-            m_hlsl_func_rodata_as_int,
+            m_sl_funcs.m_rodata_as_int,
             translate_ro_data_segment_hlsl_offset(ctx, cur_offs, add_val));
         cur_offs += 4;
         break;
@@ -5063,8 +5078,8 @@ Expression_result LLVM_code_generator::translate_value(
                 mi::mdl::IType const *v_type = v->get_type();
                 llvm::Type *tp  = m_type_mapper.lookup_type(m_llvm_context, v_type);
 
-                // for HLSL we use user provided functions to read the value
-                if (m_target_lang == TL_HLSL) {
+                // for HLSL and GLSL we use user provided functions to read the value
+                if (target_is_structured_language()) {
                     llvm::ConstantInt *ci = llvm::cast<llvm::ConstantInt>(res);
                     int cur_offs = int(ci->getZExtValue());
                     return Expression_result::offset(
@@ -5680,7 +5695,7 @@ llvm::Value *LLVM_code_generator::translate_binary_no_side_effect(
                 op == IExpression_binary::OK_MODULO ||
                 op == IExpression_binary::OK_MODULO_ASSIGN) && maybe_zero(r)) {
         llvm::Type *r_type = lookup_type(rhs->get_type());
-        if (llvm::VectorType *v_tp = llvm::dyn_cast<llvm::VectorType>(r_type)) {
+        if (llvm::FixedVectorType *v_tp = llvm::dyn_cast<llvm::FixedVectorType>(r_type)) {
             res_type = v_tp->getElementType();
 
             // transform into element wise operation, because we must check the rhs element wise ...
@@ -5963,6 +5978,17 @@ llvm::Value *LLVM_code_generator::translate_binary_basic(
             }
         }
         MDL_ASSERT(l_type == r_type);
+    }
+
+    // check if target requires a wrapper function call
+    llvm::Function *cmp_func = get_target_operator_function(op, l_type);
+
+    if (cmp_func != nullptr) {
+        // create function call to wrapper function
+
+        // FIXME: handle derivs correct?
+        llvm::Value *args[] = { l, r };
+        return ctx->CreateCall(cmp_func, args);
     }
 
     bool is_integer_op = l_type->isIntOrIntVectorTy();
@@ -6493,6 +6519,9 @@ Expression_result LLVM_code_generator::translate_compare(
         // matrices or vectors represented by arrays
         llvm::Type *e_tp = a_tp->getElementType();
 
+        // check if target requires a wrapper function call
+        llvm::Function *cmp_func = get_target_compare_function(op, e_tp);
+
         res = ctx.get_constant(op == mi::mdl::IExpression_binary::OK_EQUAL);
         res = ctx->CreateTrunc(res, m_type_mapper.get_predicate_type());
 
@@ -6506,58 +6535,64 @@ Expression_result LLVM_code_generator::translate_compare(
             // only == and != are supported
             llvm::Value *e_res;
 
-            switch (op) {
-            case mi::mdl::IExpression_binary::OK_EQUAL:
-                {
-                    if (e_tp->isIntOrIntVectorTy()) {
-                        e_res = ctx->CreateICmpEQ(l_elem, r_elem);
-                    } else {
-                        e_res = ctx->CreateFCmpOEQ(l_elem, r_elem);
-                    }
-
-                    if (e_tp->isVectorTy()) {
-                        // ... of vectors
-                        llvm::VectorType *v_tp = llvm::cast<llvm::VectorType>(e_tp);
-
-                        // all must be equal
-                        for (unsigned i = 0, n = unsigned(v_tp->getNumElements()); i < n; ++i) {
-                            llvm::Value *idx = ctx.get_constant(int(i));
-
-                            res = ctx->CreateAnd(res, ctx->CreateExtractElement(e_res, idx));
+            if (cmp_func != nullptr) {
+                // create function call
+                llvm::Value *args[] = { l_elem, r_elem };
+                e_res = ctx->CreateCall(cmp_func, args);
+            } else {
+                switch (op) {
+                case mi::mdl::IExpression_binary::OK_EQUAL:
+                    {
+                        if (e_tp->isIntOrIntVectorTy()) {
+                            e_res = ctx->CreateICmpEQ(l_elem, r_elem);
+                        } else {
+                            e_res = ctx->CreateFCmpOEQ(l_elem, r_elem);
                         }
-                    } else {
-                        // ... of scalars
-                        res = ctx->CreateAnd(res, e_res);
-                    }
-                }
-                break;
-            case mi::mdl::IExpression_binary::OK_NOT_EQUAL:
-                {
-                    if (e_tp->isIntOrIntVectorTy()) {
-                        e_res = ctx->CreateICmpNE(l_elem, r_elem);
-                    } else {
-                        e_res = ctx->CreateFCmpUNE(l_elem, r_elem);
-                    }
 
-                    if (e_tp->isVectorTy()) {
-                        // ... of vectors
-                        llvm::VectorType *v_tp = llvm::cast<llvm::VectorType>(e_tp);
+                        if (e_tp->isVectorTy()) {
+                            // ... of vectors
+                            llvm::FixedVectorType *v_tp = llvm::cast<llvm::FixedVectorType>(e_tp);
 
-                        // only one must be not equal
-                        for (unsigned i = 0, n = unsigned(v_tp->getNumElements()); i < n; ++i) {
-                            llvm::Value *idx = ctx.get_constant(int(i));
+                            // all must be equal
+                            for (unsigned j = 0, N = unsigned(v_tp->getNumElements()); j < N; ++j) {
+                                llvm::Value *idx = ctx.get_constant(int(j));
 
-                            res = ctx->CreateOr(res, ctx->CreateExtractElement(e_res, idx));
+                                res = ctx->CreateAnd(res, ctx->CreateExtractElement(e_res, idx));
+                            }
+                        } else {
+                            // ... of scalars
+                            res = ctx->CreateAnd(res, e_res);
                         }
-                    } else {
-                        // ... of scalars
-                        res = ctx->CreateOr(res, e_res);
                     }
+                    break;
+                case mi::mdl::IExpression_binary::OK_NOT_EQUAL:
+                    {
+                        if (e_tp->isIntOrIntVectorTy()) {
+                            e_res = ctx->CreateICmpNE(l_elem, r_elem);
+                        } else {
+                            e_res = ctx->CreateFCmpUNE(l_elem, r_elem);
+                        }
+
+                        if (e_tp->isVectorTy()) {
+                            // ... of vectors
+                            llvm::FixedVectorType *v_tp = llvm::cast<llvm::FixedVectorType>(e_tp);
+
+                            // only one must be not equal
+                            for (unsigned j = 0, N = unsigned(v_tp->getNumElements()); j < N; ++j) {
+                                llvm::Value *idx = ctx.get_constant(int(j));
+
+                                res = ctx->CreateOr(res, ctx->CreateExtractElement(e_res, idx));
+                            }
+                        } else {
+                            // ... of scalars
+                            res = ctx->CreateOr(res, e_res);
+                        }
+                    }
+                    break;
+                default:
+                    MDL_ASSERT(!"comparasion not supported on matrices");
+                    res = llvm::UndefValue::get(m_type_mapper.get_predicate_type());
                 }
-                break;
-            default:
-                MDL_ASSERT(!"comparasion not supported on matrices");
-                res = llvm::UndefValue::get(m_type_mapper.get_predicate_type());
             }
         }
         // map the i1 result to the bool type representation
@@ -6565,7 +6600,7 @@ Expression_result LLVM_code_generator::translate_compare(
         return Expression_result::value(res);
     }
 
-    if (llvm::VectorType *vt = llvm::dyn_cast<llvm::VectorType>(op_type)) {
+    if (llvm::FixedVectorType *vt = llvm::dyn_cast<llvm::FixedVectorType>(op_type)) {
         // convert the scalar one to vector
         if (conv_l) {
             lv = ctx.create_vector_splat(vt, lv);
@@ -6575,57 +6610,68 @@ Expression_result LLVM_code_generator::translate_compare(
         }
     }
 
-    if (op_type->isFPOrFPVectorTy()) {
-        switch (op) {
-        case mi::mdl::IExpression_binary::OK_LESS:
-            res = ctx->CreateFCmp(llvm::FCmpInst::FCMP_OLT, lv, rv);
-            break;
-        case mi::mdl::IExpression_binary::OK_LESS_OR_EQUAL:
-            res = ctx->CreateFCmp(llvm::ICmpInst::FCMP_OLE, lv, rv);
-            break;
-        case mi::mdl::IExpression_binary::OK_GREATER_OR_EQUAL:
-            res = ctx->CreateFCmp(llvm::ICmpInst::FCMP_OGE, lv, rv);
-            break;
-        case mi::mdl::IExpression_binary::OK_GREATER:
-            res = ctx->CreateFCmp(llvm::ICmpInst::FCMP_OGT, lv, rv);
-            break;
-        case mi::mdl::IExpression_binary::OK_EQUAL:
-            res = ctx->CreateFCmp(llvm::ICmpInst::FCMP_OEQ, lv, rv);
-            break;
-        case mi::mdl::IExpression_binary::OK_NOT_EQUAL:
-            res = ctx->CreateFCmp(llvm::ICmpInst::FCMP_UNE, lv, rv);
-            break;
-        default:
-            MDL_ASSERT(!"Unsupported compare operator");
-            return Expression_result::undef(m_type_mapper.get_bool_type());
-        }
+    // check if target requires a wrapper function call
+    llvm::Function *cmp_func = get_target_compare_function(op, op_type);
+
+    if (cmp_func != nullptr) {
+        // create function call
+        llvm::Value *args[] = { lv, rv };
+        res = ctx->CreateCall(cmp_func, args);
     } else {
-        switch (op) {
-        case mi::mdl::IExpression_binary::OK_LESS:
-            res = ctx->CreateICmp(llvm::ICmpInst::ICMP_SLT, lv, rv);
-            break;
-        case mi::mdl::IExpression_binary::OK_LESS_OR_EQUAL:
-            res = ctx->CreateICmp(llvm::ICmpInst::ICMP_SLE, lv, rv);
-            break;
-        case mi::mdl::IExpression_binary::OK_GREATER_OR_EQUAL:
-            res = ctx->CreateICmp(llvm::ICmpInst::ICMP_SGE, lv, rv);
-            break;
-        case mi::mdl::IExpression_binary::OK_GREATER:
-            res = ctx->CreateICmp(llvm::ICmpInst::ICMP_SGT, lv, rv);
-            break;
-        case mi::mdl::IExpression_binary::OK_EQUAL:
-            res = ctx->CreateICmp(llvm::ICmpInst::ICMP_EQ, lv, rv);
-            break;
-        case mi::mdl::IExpression_binary::OK_NOT_EQUAL:
-            res = ctx->CreateICmp(llvm::ICmpInst::ICMP_NE, lv, rv);
-            break;
-        default:
-            MDL_ASSERT(!"Unsupported compare operator");
-            return Expression_result::undef(m_type_mapper.get_bool_type());
+        // create vector compares
+        if (op_type->isFPOrFPVectorTy()) {
+            // create vector compare
+            switch (op) {
+            case mi::mdl::IExpression_binary::OK_LESS:
+                res = ctx->CreateFCmp(llvm::FCmpInst::FCMP_OLT, lv, rv);
+                break;
+            case mi::mdl::IExpression_binary::OK_LESS_OR_EQUAL:
+                res = ctx->CreateFCmp(llvm::ICmpInst::FCMP_OLE, lv, rv);
+                break;
+            case mi::mdl::IExpression_binary::OK_GREATER_OR_EQUAL:
+                res = ctx->CreateFCmp(llvm::ICmpInst::FCMP_OGE, lv, rv);
+                break;
+            case mi::mdl::IExpression_binary::OK_GREATER:
+                res = ctx->CreateFCmp(llvm::ICmpInst::FCMP_OGT, lv, rv);
+                break;
+            case mi::mdl::IExpression_binary::OK_EQUAL:
+                res = ctx->CreateFCmp(llvm::ICmpInst::FCMP_OEQ, lv, rv);
+                break;
+            case mi::mdl::IExpression_binary::OK_NOT_EQUAL:
+                res = ctx->CreateFCmp(llvm::ICmpInst::FCMP_UNE, lv, rv);
+                break;
+            default:
+                MDL_ASSERT(!"Unsupported compare operator");
+                return Expression_result::undef(m_type_mapper.get_bool_type());
+            }
+        } else {
+            switch (op) {
+            case mi::mdl::IExpression_binary::OK_LESS:
+                res = ctx->CreateICmp(llvm::ICmpInst::ICMP_SLT, lv, rv);
+                break;
+            case mi::mdl::IExpression_binary::OK_LESS_OR_EQUAL:
+                res = ctx->CreateICmp(llvm::ICmpInst::ICMP_SLE, lv, rv);
+                break;
+            case mi::mdl::IExpression_binary::OK_GREATER_OR_EQUAL:
+                res = ctx->CreateICmp(llvm::ICmpInst::ICMP_SGE, lv, rv);
+                break;
+            case mi::mdl::IExpression_binary::OK_GREATER:
+                res = ctx->CreateICmp(llvm::ICmpInst::ICMP_SGT, lv, rv);
+                break;
+            case mi::mdl::IExpression_binary::OK_EQUAL:
+                res = ctx->CreateICmp(llvm::ICmpInst::ICMP_EQ, lv, rv);
+                break;
+            case mi::mdl::IExpression_binary::OK_NOT_EQUAL:
+                res = ctx->CreateICmp(llvm::ICmpInst::ICMP_NE, lv, rv);
+                break;
+            default:
+                MDL_ASSERT(!"Unsupported compare operator");
+                return Expression_result::undef(m_type_mapper.get_bool_type());
+            }
         }
     }
 
-    if (llvm::VectorType *vt = llvm::dyn_cast<llvm::VectorType>(op_type)) {
+    if (llvm::FixedVectorType *vt = llvm::dyn_cast<llvm::FixedVectorType>(op_type)) {
         // the result is a vector of bool, but in MDL we support only a single bool result,
         // so condense them here
         if (op == mi::mdl::IExpression_binary::OK_EQUAL) {
@@ -7059,18 +7105,20 @@ Expression_result LLVM_code_generator::translate_call(
         return translate_dag_call_lambda(ctx, call_expr);
 
     case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_ISVALID:
-        if (!m_scene_data_all_pos_avail) {
+        if (m_scene_data_filtered) {
             IValue const *name = call_expr->get_const_argument(0);
             if (name != NULL) {
                 IValue_string const *name_str = as<IValue_string>(name);
                 // is name known to never be available? -> return false
-                if (m_scene_data_names.count(name_str->get_value()) == 0)
+                if (m_scene_data_existing_names.count(name_str->get_value()) == 0) {
                     return Expression_result::value(ctx.get_constant(false));
+                }
             }
         }
 
-        if (m_target_lang != TL_HLSL && m_target_lang != TL_PTX &&
-                !(m_target_lang == TL_NATIVE && !m_has_res_handler)) {
+        if (!target_is_structured_language() &&
+            m_target_lang != ICode_generator::TL_PTX &&
+            !(m_target_lang == ICode_generator::TL_NATIVE && !m_has_res_handler)) {
             // TODO: implement calling renderer runtime. For now just return false
             return Expression_result::value(ctx.get_constant(false));
         }
@@ -7096,18 +7144,20 @@ Expression_result LLVM_code_generator::translate_call(
     case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3:
     case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
     case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
-        if (!m_scene_data_all_pos_avail) {
+        if (m_scene_data_filtered) {
             IValue const *name = call_expr->get_const_argument(0);
             if (name != NULL) {
                 IValue_string const *name_str = as<IValue_string>(name);
                 // is name known to never be available? -> return default value (second argument)
-                if (m_scene_data_names.count(name_str->get_value()) == 0)
+                if (m_scene_data_existing_names.count(name_str->get_value()) == 0) {
                     return call_expr->translate_argument(*this, ctx, 1, return_derivs);
+                }
             }
         }
 
-        if (m_target_lang != TL_HLSL && m_target_lang != TL_PTX &&
-                !(m_target_lang == TL_NATIVE && !m_has_res_handler)) {
+        if (!target_is_structured_language() &&
+            m_target_lang != ICode_generator::TL_PTX &&
+            !(m_target_lang == ICode_generator::TL_NATIVE && !m_has_res_handler)) {
             // TODO: implement calling renderer runtime. For now just return second argument
             return call_expr->translate_argument(*this, ctx, 1, return_derivs);
         }
@@ -7548,7 +7598,7 @@ Expression_result LLVM_code_generator::translate_transform_call(
                 ctx->SetInsertPoint(non_id_bb);
 
                 if (ret_tp->isVectorTy()) {
-                    llvm::VectorType *vec_tp = llvm::cast<llvm::VectorType>(ret_tp);
+                    llvm::FixedVectorType *vec_tp = llvm::cast<llvm::FixedVectorType>(ret_tp);
 
                     // vector mode
                     llvm::Value *worldToObject =
@@ -7647,7 +7697,7 @@ Expression_result LLVM_code_generator::translate_transform_call(
                 ctx->SetInsertPoint(non_id_bb);
 
                 if (ret_tp->isVectorTy()) {
-                    llvm::VectorType *vec_tp = llvm::cast<llvm::VectorType>(ret_tp);
+                    llvm::FixedVectorType *vec_tp = llvm::cast<llvm::FixedVectorType>(ret_tp);
 
                     // vector mode
                     llvm::Value *worldToObject =
@@ -7741,10 +7791,10 @@ Expression_result LLVM_code_generator::translate_transform_call(
                 // || transform_vector(float3(0,0,1), a, b) || == || transform[2] ||
                 float v_z = len_v3(m_world_to_object[2]);
                 // scale *= (v_x + v_y + v_z)/3
-                llvm::Value *res = ctx.get_constant((v_x + v_y + v_z) / 3.0f);
-                res = ctx->CreateFMul(res, scale);
+                llvm::Value *c_res = ctx.get_constant((v_x + v_y + v_z) / 3.0f);
+                res = ctx->CreateFMul(c_res, scale);
 
-                ctx->CreateStore(res, result);
+                ctx->CreateStore(c_res, result);
                 ctx->CreateBr(end_bb);
             }
             ctx->SetInsertPoint(end_bb);
@@ -8070,7 +8120,7 @@ llvm::Value *LLVM_code_generator::translate_matrix_conversion(
         mi::mdl::IType const *t_elem = tv_elem->get_element_type();
         mi::mdl::IType const *s_elem = sv_elem->get_element_type();
 
-        llvm::VectorType *v_tp = llvm::cast<llvm::VectorType>(tgt);
+        llvm::FixedVectorType *v_tp = llvm::cast<llvm::FixedVectorType>(tgt);
         for (int i = 0, n = int(v_tp->getNumElements()); i < n; ++i) {
             llvm::Value *idx  = ctx.get_constant(i);
             llvm::Value *elem = ctx->CreateExtractElement(v, idx);
@@ -8246,7 +8296,7 @@ Expression_result LLVM_code_generator::translate_matrix_elemental_constructor(
                 llvm::Value *vector_dx = llvm::UndefValue::get(vector_type);
                 llvm::Value *vector_dy = llvm::UndefValue::get(vector_type);
 
-                unsigned idx[1];
+                unsigned idxs[1];
 
                 size_t i = 0;
                 for (int c = 0; c < n_col; ++c) {
@@ -8259,10 +8309,10 @@ Expression_result LLVM_code_generator::translate_matrix_elemental_constructor(
                         vector_dx  = ctx->CreateInsertElement(vector_dx,  ctx.get_dual_dx(v),  idx);
                         vector_dy  = ctx->CreateInsertElement(vector_dy,  ctx.get_dual_dy(v),  idx);
                     }
-                    idx[0] = unsigned(c);
-                    matrix_val = ctx->CreateInsertValue(matrix_val, vector_val, idx);
-                    matrix_dx  = ctx->CreateInsertValue(matrix_dx,  vector_dx,  idx);
-                    matrix_dy  = ctx->CreateInsertValue(matrix_dy,  vector_dy,  idx);
+                    idxs[0] = unsigned(c);
+                    matrix_val = ctx->CreateInsertValue(matrix_val, vector_val, idxs);
+                    matrix_dx  = ctx->CreateInsertValue(matrix_dx,  vector_dx,  idxs);
+                    matrix_dy  = ctx->CreateInsertValue(matrix_dy,  vector_dy,  idxs);
                 }
                 matrix = ctx.get_dual(matrix_val, matrix_dx, matrix_dy);
                 return Expression_result::value(matrix);
@@ -8286,7 +8336,7 @@ Expression_result LLVM_code_generator::translate_matrix_elemental_constructor(
                 // matrices are represented as arrays of vectors
                 llvm::Value *vector = llvm::ConstantAggregateZero::get(lookup_type(v_type));
 
-                unsigned idx[1];
+                unsigned idxs[1];
 
                 size_t i = 0;
                 for (int c = 0; c < n_col; ++c) {
@@ -8297,8 +8347,8 @@ Expression_result LLVM_code_generator::translate_matrix_elemental_constructor(
 
                         vector = ctx->CreateInsertElement(vector, v, idx);
                     }
-                    idx[0] = unsigned(c);
-                    matrix = ctx->CreateInsertValue(matrix, vector, idx);
+                    idxs[0] = unsigned(c);
+                    matrix = ctx->CreateInsertValue(matrix, vector, idxs);
                 }
                 return Expression_result::value(matrix);
             }
@@ -8517,7 +8567,7 @@ llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxM(
         llvm::Type      *e_tp   = arr_tp->getElementType();
 
         if (llvm::isa<llvm::VectorType>(e_tp)) {
-            llvm::Type *vt_e_tp = e_tp->getVectorElementType();
+            llvm::Type *vt_e_tp = e_tp->getScalarType();
             for (unsigned k = 0; k < (unsigned)K; ++k) {
                 llvm::Value *res_col = llvm::UndefValue::get(e_tp);
                 llvm::Value *b_col = ctx->CreateExtractValue(r, { unsigned(k) });
@@ -8607,7 +8657,7 @@ llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxM_deriv(
 
         if (llvm::isa<llvm::VectorType>(e_tp)) {
             // small vector mode
-            llvm::Type *vt_e_tp = e_tp->getVectorElementType();
+            llvm::Type *vt_e_tp = e_tp->getScalarType();
             for (unsigned k = 0; k < (unsigned)K; ++k) {
                 unsigned k_idxes[] = { unsigned(k) };
 
@@ -8744,7 +8794,7 @@ llvm::Value *LLVM_code_generator::do_matrix_multiplication_VxM(
         e_tp   = arr_tp->getElementType();
 
         if (llvm::isa<llvm::VectorType>(e_tp)) {
-            llvm::Type *vt_e_tp = e_tp->getVectorElementType();
+            llvm::Type *vt_e_tp = e_tp->getScalarType();
             for (unsigned k = 0; k < (unsigned)K; ++k) {
                 llvm::Value *tmp = llvm::Constant::getNullValue(vt_e_tp);
                 llvm::Value *b_col = ctx->CreateExtractValue(r, { unsigned(k) });
@@ -8804,7 +8854,7 @@ llvm::Value *LLVM_code_generator::do_matrix_multiplication_VxM_deriv(
         e_tp = arr_tp->getElementType();
 
         if (llvm::isa<llvm::VectorType>(e_tp)) {
-            llvm::Type *vt_e_tp = e_tp->getVectorElementType();
+            llvm::Type *vt_e_tp = e_tp->getScalarType();
             for (unsigned k = 0; k < (unsigned)K; ++k) {
                 llvm::Value *tmp = llvm::Constant::getNullValue(vt_e_tp);
                 llvm::Value *b_val_col = ctx->CreateExtractValue(mat_val, { k });
@@ -8868,7 +8918,7 @@ llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxV(
         e_tp = arr_tp->getElementType();
 
         if (llvm::isa<llvm::VectorType>(e_tp)) {
-            llvm::Type *vt_e_tp = e_tp->getVectorElementType();
+            llvm::Type *vt_e_tp = e_tp->getScalarType();
             for (unsigned n = 0; n < (unsigned)N; ++n) {
                 llvm::Value *tmp = llvm::Constant::getNullValue(vt_e_tp);
 
@@ -8929,7 +8979,7 @@ llvm::Value *LLVM_code_generator::do_matrix_multiplication_MxV_deriv(
         e_tp = arr_tp->getElementType();
 
         if (llvm::isa<llvm::VectorType>(e_tp)) {
-            llvm::Type *vt_e_tp = e_tp->getVectorElementType();
+            llvm::Type *vt_e_tp = e_tp->getScalarType();
             for (unsigned n = 0; n < (unsigned)N; ++n) {
                 llvm::Value *tmp = llvm::Constant::getNullValue(vt_e_tp);
 
@@ -9054,36 +9104,42 @@ Expression_result LLVM_code_generator::translate_node(
 }
 
 // Translate a parameter offset into LLVM IR by adding the argument block offset of the state.
-llvm::Value *LLVM_code_generator::translate_parameter_hlsl_offset(
+llvm::Value *LLVM_code_generator::translate_parameter_sl_offset(
     Function_context &ctx,
     int               cur_offs)
 {
     llvm::Value *state = ctx.get_state_parameter();
     llvm::Value *adr   = ctx.create_simple_gep_in_bounds(
-        state, ctx.get_constant(
-        m_type_mapper.get_state_index(Type_mapper::STATE_CORE_ARG_BLOCK_OFFSET)));
+        state,
+        ctx.get_constant(
+            m_type_mapper.get_state_index(Type_mapper::STATE_CORE_ARG_BLOCK_OFFSET)
+        ));
     llvm::Value *arg_block_offs = ctx->CreateLoad(adr);
     return ctx->CreateAdd(arg_block_offs, ctx.get_constant(cur_offs));
 }
 
-// Translate a part of a DAG parameter for HLSL into LLVM IR.
-llvm::Value *LLVM_code_generator::translate_parameter_hlsl_value(
-    Function_context             &ctx,
-    mi::mdl::IType const         *param_type,
-    int                          &cur_offs)
+// Translate a part of a DAG parameter for GLSL/HLSL into LLVM IR.
+llvm::Value *LLVM_code_generator::translate_parameter_sl_value(
+    Function_context     &ctx,
+    mi::mdl::IType const *param_type,
+    int                  &cur_offs)
 {
     llvm::Value *res;
     param_type = param_type->skip_type_alias();
 
     switch (param_type->get_kind()) {
     case mi::mdl::IType::TK_BOOL:
-        res = ctx->CreateCall(m_hlsl_func_argblock_as_bool, translate_parameter_hlsl_offset(ctx, cur_offs));
+        res = ctx->CreateCall(
+            m_sl_funcs.m_argblock_as_bool,
+            translate_parameter_sl_offset(ctx, cur_offs));
         ++cur_offs;
         break;
 
     case mi::mdl::IType::TK_FLOAT:
         cur_offs = (cur_offs + 3) & ~3;
-        res = ctx->CreateCall(m_hlsl_func_argblock_as_float, translate_parameter_hlsl_offset(ctx, cur_offs));
+        res = ctx->CreateCall(
+            m_sl_funcs.m_argblock_as_float,
+            translate_parameter_sl_offset(ctx, cur_offs));
         cur_offs += 4;
         break;
 
@@ -9091,13 +9147,18 @@ llvm::Value *LLVM_code_generator::translate_parameter_hlsl_value(
     case mi::mdl::IType::TK_ENUM:
     case mi::mdl::IType::TK_STRING:
         cur_offs = (cur_offs + 3) & ~3;
-        res = ctx->CreateCall(m_hlsl_func_argblock_as_int, translate_parameter_hlsl_offset(ctx, cur_offs));
+        res = ctx->CreateCall(
+            m_sl_funcs.m_argblock_as_int,
+            translate_parameter_sl_offset(ctx, cur_offs));
         cur_offs += 4;
         break;
 
     case mi::mdl::IType::TK_DOUBLE:
+        // FIXME: check if double exists
         cur_offs = (cur_offs + 7) & ~7;
-        res = ctx->CreateCall(m_hlsl_func_argblock_as_double, translate_parameter_hlsl_offset(ctx, cur_offs));
+        res = ctx->CreateCall(
+            m_sl_funcs.m_argblock_as_double,
+            translate_parameter_sl_offset(ctx, cur_offs));
         cur_offs += 8;
         break;
 
@@ -9118,7 +9179,7 @@ llvm::Value *LLVM_code_generator::translate_parameter_hlsl_value(
                 mi::mdl::IType const *et = ct->get_compound_type(i);
                 res = ctx.create_insert(
                     res,
-                    translate_parameter_hlsl_value(ctx, et, cur_offs),
+                    translate_parameter_sl_value(ctx, et, cur_offs),
                     unsigned(i));
             }
 
@@ -9130,9 +9191,11 @@ llvm::Value *LLVM_code_generator::translate_parameter_hlsl_value(
     case mi::mdl::IType::TK_TEXTURE:
     case mi::mdl::IType::TK_LIGHT_PROFILE:
     case mi::mdl::IType::TK_BSDF_MEASUREMENT:
-        // resources are mapped to integer in HLSL
+        // resources are mapped to integer in GLSL/HLSL
         cur_offs = (cur_offs + 3) & ~3;
-        res = ctx->CreateCall(m_hlsl_func_argblock_as_int, translate_parameter_hlsl_offset(ctx, cur_offs));
+        res = ctx->CreateCall(
+            m_sl_funcs.m_argblock_as_int,
+            translate_parameter_sl_offset(ctx, cur_offs));
         cur_offs += 4;
         break;
 
@@ -9149,14 +9212,14 @@ Expression_result LLVM_code_generator::translate_parameter(
     Function_context             &ctx,
     mi::mdl::DAG_parameter const *param_node)
 {
-    if (m_target_lang == TL_HLSL) {
-        // TODO: Maybe use custom datalayout for HLSL
-        llvm::DataLayout const *dl = get_target_layout_data();
+    if (target_is_structured_language()) {
+        // TODO: Maybe use custom datalayout for GLSL/HLSL
+        llvm::DataLayout const   *dl = get_target_layout_data();
         llvm::StructLayout const *sl = dl->getStructLayout(m_captured_args_type);
         int param_offs = int(sl->getElementOffset(param_node->get_index()));
 
         mi::mdl::IType const *param_type = param_node->get_type();
-        llvm::Value *res = translate_parameter_hlsl_value(ctx, param_type, param_offs);
+        llvm::Value *res = translate_parameter_sl_value(ctx, param_type, param_offs);
         return Expression_result::value(res);
     }
 
@@ -9409,7 +9472,7 @@ void LLVM_code_generator::create_module(char const *mod_name, char const *mod_fn
             directory = filename.substr(0, pos);
             filename  = filename.substr(pos + 1);
         } else {
-            size_t pos = filename.rfind('\\');
+            pos = filename.rfind('\\');
             if (pos != string::npos) {
                 directory = filename.substr(0, pos);
                 filename  = filename.substr(pos + 1);
@@ -9433,8 +9496,9 @@ void LLVM_code_generator::create_module(char const *mod_name, char const *mod_fn
     m_func_pass_manager.reset(new llvm::legacy::FunctionPassManager(m_module));
 
     llvm::PassManagerBuilder builder;
-    builder.OptLevel = m_opt_level;
-    builder.AvoidPointerPHIs = m_target_lang == TL_HLSL;
+    builder.OptLevel         = m_opt_level;
+    builder.AvoidPointerPHIs = target_is_structured_language();
+    builder.EnableVectorizer = !target_is_structured_language();
     builder.populateFunctionPassManager(*m_func_pass_manager);
     m_func_pass_manager->doInitialization();
 }
@@ -9464,12 +9528,13 @@ bool LLVM_code_generator::load_and_link_renderer_module(llvm::Module *llvm_modul
     llvm::NamedMDNode *mod_flags = renderer_mod.get()->getModuleFlagsMetadata();
     if (mod_flags) {
         for (unsigned i = 0, n = mod_flags->getNumOperands(); i < n; ++i) {
-            llvm::MDNode *flag = mod_flags->getOperand(i);
-            llvm::MDString *id = llvm::cast<llvm::MDString>(flag->getOperand(1));
+            llvm::MDNode   *op = mod_flags->getOperand(i);
+            llvm::MDString *id = llvm::cast<llvm::MDString>(op->getOperand(1));
+
             if (id->getString() == "wchar_size") {
                 llvm::Metadata *wchar_size = llvm::ConstantAsMetadata::get(
                     llvm::ConstantInt::get(llvm::IntegerType::get(m_llvm_context, 32), 4));
-                llvm::Metadata *flag_ops[] = { flag->getOperand(0), id, wchar_size };
+                llvm::Metadata *flag_ops[] = { op->getOperand(0), id, wchar_size };
                 llvm::MDNode *flag = llvm::MDNode::get(m_llvm_context, flag_ops);
                 mod_flags->setOperand(i, flag);
             }
@@ -9646,18 +9711,8 @@ MDL_JIT_module_key LLVM_code_generator::jit_compile(llvm::Module *module)
         }
     }
 
-    // the jitted code must take ownership of this module
+    // the jitted code takes ownership of the module
     MDL_JIT_module_key module_key = m_jitted_code->add_llvm_module(module);
-
-    // now JIT compile all functions that are not jitted yet:
-    // we want to do this ahead of time
-    for (auto &func : module->functions()) {
-        if (!func.isDeclaration()) {
-            // jit it
-            m_jitted_code->jit_compile(module_key, &func, *this);
-        }
-    }
-
     return module_key;
 }
 
@@ -9733,7 +9788,8 @@ void LLVM_code_generator::ptx_compile(
     // set the data layout
     module->setDataLayout(target_machine->createDataLayout());
 
-    target_machine->addPassesToEmitFile(pm, Out, nullptr, llvm::TargetMachine::CGFT_AssemblyFile);
+    target_machine->addPassesToEmitFile(
+        pm, Out, nullptr, llvm::CodeGenFileType::CGFT_AssemblyFile);
 
     pm.run(*module);
     }
@@ -9958,16 +10014,16 @@ llvm::Value *LLVM_code_generator::get_o2w_transform_value(Function_context &ctx)
 // Disable array instancing support.
 void LLVM_code_generator::disable_function_instancing()
 {
-    MDL_ASSERT(m_target_lang == TL_NATIVE);
+    MDL_ASSERT(m_target_lang == ICode_generator::TL_NATIVE);
     // FIXME: Currently the non-instancing code path is broken: When arrays are passed, only
-    // the array descriptors are copied, allowing data to be modified, so disbale it
+    // the array descriptors are copied, allowing data to be modified, so disable it
     // m_enable_instancing = false;
 }
 
 // Get the address of a JIT compiled LLVM function.
-void *LLVM_code_generator::get_entry_point(MDL_JIT_module_key module_key, llvm::Function *func)
+void *LLVM_code_generator::get_entry_point(MDL_JIT_module_key module_key, char const* func_name)
 {
-    return m_jitted_code->jit_compile(module_key, func, *this);
+    return m_jitted_code->jit_compile(module_key, func_name, *this);
 }
 
 // Get the number of error messages.
@@ -9994,9 +10050,7 @@ mi::mdl::IDefinition const *LLVM_code_generator::find_stdlib_signature(
     char const *module_name,
     char const *signature) const
 {
-    mi::mdl::Module const *mod = impl_cast<mi::mdl::Module>(tos_module());
-
-    return mod->find_stdlib_signature(module_name, signature);
+    return m_compiler->find_stdlib_signature(module_name, signature);
 }
 
 // Prepare a dummy resource attribute table only containing an invalid resource.
@@ -10065,8 +10119,7 @@ llvm::Value *LLVM_code_generator::get_attribute_table_size(
 void LLVM_code_generator::add_texture_attribute_table(
     Texture_table const &table)
 {
-    size_t n = table.size();
-    if (n == 0) {
+    if (table.empty()) {
         return;
     }
 
@@ -10116,12 +10169,12 @@ void LLVM_code_generator::add_light_profile_attribute_table(
     }
 
     // ensure there is enough space in the light profile table
-    if (m_light_profile_table.size() < table.size()) {
-        m_light_profile_table.resize(table.size());
+    if (m_light_profile_table.size() < n) {
+        m_light_profile_table.resize(n);
     }
 
     // update the light profile table with any valid entries
-    for (size_t i = 0, n = table.size(); i < n; ++i) {
+    for (size_t i = 0; i < n; ++i) {
         if (table[i].valid) {
             m_light_profile_table[i] = table[i];
         }
@@ -10161,12 +10214,12 @@ void LLVM_code_generator::add_bsdf_measurement_attribute_table(
     }
 
     // ensure there is enough space in the bsdf measurement table
-    if (m_bsdf_measurement_table.size() < table.size()) {
-        m_bsdf_measurement_table.resize(table.size());
+    if (m_bsdf_measurement_table.size() < n) {
+        m_bsdf_measurement_table.resize(n);
     }
 
     // update the bsdf measurement table with any valid entries
-    for (size_t i = 0, n = table.size(); i < n; ++i) {
+    for (size_t i = 0; i < n; ++i) {
         if (table[i].valid) {
             m_bsdf_measurement_table[i] = table[i];
         }
@@ -10578,6 +10631,132 @@ mi::mdl::Df_handle_slot_mode LLVM_code_generator::parse_df_handle_slot_mode(char
     }
 
     return mi::mdl::DF_HSM_NONE;
+}
+
+// If the given definition has the since flags set, find the latest MDL version.
+IDefinition const *LLVM_code_generator::promote_to_highest_version(
+    IDefinition const *idef,
+    unsigned          &promote)
+{
+    promote = LLVM_code_generator::PR_NONE;
+
+    Definition const *def = impl_cast<Definition>(idef);
+
+    unsigned ver_flags = def->get_version_flags();
+
+    if (!is_mdl_removed_version(ver_flags)) {
+        // this definition is still current
+        return def;
+    }
+
+    // try to find the latest
+    Definition const *ndef = def->get_next_def();
+    for (; ndef != NULL;) {
+        unsigned n_ver_flags = ndef->get_version_flags();
+
+        if (!is_mdl_removed_version(n_ver_flags)) {
+            // found the latest version
+            break;
+        }
+    }
+
+    if (ndef != NULL) {
+        switch (ndef->get_semantics()) {
+        case IDefinition::DS_INTRINSIC_TEX_WIDTH:
+        case IDefinition::DS_INTRINSIC_TEX_HEIGHT:
+        case IDefinition::DS_INTRINSIC_TEX_DEPTH:
+            {
+                IType_function const *f_tp = cast<IType_function>(def->get_type());
+
+                ISymbol const *dummy;
+                IType const *p_tp;
+                f_tp->get_parameter(0, p_tp, dummy);
+
+                if (is_tex_2d(p_tp)) {
+                    // we have 2 promotions here
+                    if (f_tp->get_parameter_count() < 2) {
+                        // add uv_tile
+                        promote |= LLVM_code_generator::PR_ADD_ZERO_INT2;
+                    }
+                    if (f_tp->get_parameter_count() < 3) {
+                        // add frame
+                        promote |= LLVM_code_generator::PR_ADD_ZERO_FLOAT;
+                    }
+                } else if (is_tex_3d(p_tp)) {
+                    if (f_tp->get_parameter_count() < 2) {
+                        // add frame
+                        promote |= LLVM_code_generator::PR_ADD_ZERO_FLOAT;
+                    }
+                }
+            }
+            break;
+        case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT:
+        case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT2:
+        case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT3:
+        case IDefinition::DS_INTRINSIC_TEX_LOOKUP_FLOAT4:
+        case IDefinition::DS_INTRINSIC_TEX_LOOKUP_COLOR:
+            {
+                IType_function const *f_tp = cast<IType_function>(def->get_type());
+
+                ISymbol const *dummy;
+                IType const *p_tp;
+                f_tp->get_parameter(0, p_tp, dummy);
+
+                if (is_tex_2d(p_tp)) {
+                    // we have 2 promotions here
+                    if (f_tp->get_parameter_count() == 6) {
+                        // add frame
+                        promote |= LLVM_code_generator::PR_ADD_ZERO_FLOAT;
+                    }
+                } else if (is_tex_3d(p_tp)) {
+                    if (f_tp->get_parameter_count() == 8) {
+                        // add frame
+                        promote |= LLVM_code_generator::PR_ADD_ZERO_FLOAT;
+                    }
+                }
+            }
+            break;
+        case IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT:
+        case IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT2:
+        case IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT3:
+        case IDefinition::DS_INTRINSIC_TEX_TEXEL_FLOAT4:
+        case IDefinition::DS_INTRINSIC_TEX_TEXEL_COLOR:
+            {
+                IType_function const *f_tp = cast<IType_function>(def->get_type());
+
+                ISymbol const *dummy;
+                IType const *p_tp;
+                f_tp->get_parameter(0, p_tp, dummy);
+
+                if (is_tex_2d(p_tp)) {
+                    // we have 2 promotions here
+                    if (f_tp->get_parameter_count() < 3) {
+                        // add uv_tile
+                        promote |= LLVM_code_generator::PR_ADD_ZERO_INT2;
+                    }
+                    if (f_tp->get_parameter_count() < 4) {
+                        // add frame
+                        promote |= LLVM_code_generator::PR_ADD_ZERO_FLOAT;
+                    }
+                } else if (is_tex_3d(p_tp)) {
+                    if (f_tp->get_parameter_count() < 3) {
+                        // add frame
+                        promote |= LLVM_code_generator::PR_ADD_ZERO_FLOAT;
+                    }
+                }
+            }
+            break;
+
+        default:
+            break;
+        }
+        MDL_ASSERT(promote != LLVM_code_generator::PR_NONE && "unexpected promotion");
+        if (promote != LLVM_code_generator::PR_NONE) {
+            return ndef;
+        }
+    }
+
+    return def;
 }
 
 // Get a unique string value object used to represent the string of the value.

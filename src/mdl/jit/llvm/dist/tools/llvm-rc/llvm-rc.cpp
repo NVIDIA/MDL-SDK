@@ -1,9 +1,8 @@
 //===-- llvm-rc.cpp - Compile .rc scripts into .res -------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -31,6 +30,7 @@
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include <algorithm>
 #include <system_error>
 
 using namespace llvm;
@@ -85,18 +85,23 @@ int main(int Argc, const char **Argv) {
 
   RcOptTable T;
   unsigned MAI, MAC;
-  ArrayRef<const char *> ArgsArr = makeArrayRef(Argv + 1, Argc - 1);
+  const char **DashDash = std::find_if(
+      Argv + 1, Argv + Argc, [](StringRef Str) { return Str == "--"; });
+  ArrayRef<const char *> ArgsArr = makeArrayRef(Argv + 1, DashDash);
+
   opt::InputArgList InputArgs = T.ParseArgs(ArgsArr, MAI, MAC);
 
   // The tool prints nothing when invoked with no command-line arguments.
-  if (InputArgs.hasArg(OPT_HELP)) {
-    T.PrintHelp(outs(), "rc", "Resource Converter", false);
+  if (InputArgs.hasArg(OPT_help)) {
+    T.PrintHelp(outs(), "rc [options] file...", "Resource Converter", false);
     return 0;
   }
 
-  const bool BeVerbose = InputArgs.hasArg(OPT_VERBOSE);
+  const bool BeVerbose = InputArgs.hasArg(OPT_verbose);
 
   std::vector<std::string> InArgsInfo = InputArgs.getAllArgValues(OPT_INPUT);
+  if (DashDash != Argv + Argc)
+    InArgsInfo.insert(InArgsInfo.end(), DashDash + 1, Argv + Argc);
   if (InArgsInfo.size() != 1) {
     fatalError("Exactly one input file should be provided.");
   }
@@ -136,14 +141,14 @@ int main(int Argc, const char **Argv) {
   SmallString<128> InputFile(InArgsInfo[0]);
   llvm::sys::fs::make_absolute(InputFile);
   Params.InputFilePath = InputFile;
-  Params.Include = InputArgs.getAllArgValues(OPT_INCLUDE);
-  Params.NoInclude = InputArgs.getAllArgValues(OPT_NOINCLUDE);
+  Params.Include = InputArgs.getAllArgValues(OPT_includepath);
+  Params.NoInclude = InputArgs.getAllArgValues(OPT_noinclude);
 
-  if (InputArgs.hasArg(OPT_CODEPAGE)) {
-    if (InputArgs.getLastArgValue(OPT_CODEPAGE)
+  if (InputArgs.hasArg(OPT_codepage)) {
+    if (InputArgs.getLastArgValue(OPT_codepage)
             .getAsInteger(10, Params.CodePage))
       fatalError("Invalid code page: " +
-                 InputArgs.getLastArgValue(OPT_CODEPAGE));
+                 InputArgs.getLastArgValue(OPT_codepage));
     switch (Params.CodePage) {
     case CpAcp:
     case CpWin1252:
@@ -156,14 +161,14 @@ int main(int Argc, const char **Argv) {
   }
 
   std::unique_ptr<ResourceFileWriter> Visitor;
-  bool IsDryRun = InputArgs.hasArg(OPT_DRY_RUN);
+  bool IsDryRun = InputArgs.hasArg(OPT_dry_run);
 
   if (!IsDryRun) {
-    auto OutArgsInfo = InputArgs.getAllArgValues(OPT_FILEOUT);
+    auto OutArgsInfo = InputArgs.getAllArgValues(OPT_fileout);
     if (OutArgsInfo.empty()) {
       SmallString<128> OutputFile = InputFile;
       llvm::sys::path::replace_extension(OutputFile, "res");
-      OutArgsInfo.push_back(OutputFile.str());
+      OutArgsInfo.push_back(std::string(OutputFile.str()));
     }
 
     if (OutArgsInfo.size() != 1)
@@ -171,18 +176,27 @@ int main(int Argc, const char **Argv) {
           "No more than one output file should be provided (using /FO flag).");
 
     std::error_code EC;
-    auto FOut = llvm::make_unique<raw_fd_ostream>(
+    auto FOut = std::make_unique<raw_fd_ostream>(
         OutArgsInfo[0], EC, sys::fs::FA_Read | sys::fs::FA_Write);
     if (EC)
       fatalError("Error opening output file '" + OutArgsInfo[0] +
                  "': " + EC.message());
-    Visitor = llvm::make_unique<ResourceFileWriter>(Params, std::move(FOut));
-    Visitor->AppendNull = InputArgs.hasArg(OPT_ADD_NULL);
+    Visitor = std::make_unique<ResourceFileWriter>(Params, std::move(FOut));
+    Visitor->AppendNull = InputArgs.hasArg(OPT_add_null);
 
     ExitOnErr(NullResource().visit(Visitor.get()));
 
     // Set the default language; choose en-US arbitrarily.
-    ExitOnErr(LanguageResource(0x09, 0x01).visit(Visitor.get()));
+    unsigned PrimaryLangId = 0x09, SubLangId = 0x01;
+    if (InputArgs.hasArg(OPT_lang_id)) {
+      unsigned LangId;
+      if (InputArgs.getLastArgValue(OPT_lang_id).getAsInteger(16, LangId))
+        fatalError("Invalid language id: " +
+                   InputArgs.getLastArgValue(OPT_lang_id));
+      PrimaryLangId = LangId & 0x3ff;
+      SubLangId = LangId >> 10;
+    }
+    ExitOnErr(LanguageResource(PrimaryLangId, SubLangId).visit(Visitor.get()));
   }
 
   rc::RCParser Parser{std::move(Tokens)};

@@ -55,11 +55,17 @@ public:
     mi::Uint32_2 get_first_last_frame() const { return m_first_last_frame; }
 
 protected:
-    // Returns the frame ID for the \p frame parameter.
+    // Returns the (rounded-down) frame ID for the \p frame parameter.
     //
-    // No interpolation. Checks whether there is a frame with frame number 'floor(frame)' and
-    // returns its index. Otherwise returns -1.
+    // Checks whether there is a frame with frame number 'floor(frame)' and returns its index.
+    // Otherwise returns -1.
     mi::Size get_frame_id(mi::Float32 frame) const;
+
+    // Returns the enclosing frame IDs for the \p frame parameter.
+    //
+    // Checks whether there are frames with frame number 'floor(frame)' and 'ceil(frame)' and
+    // returns their indices. Otherwise returns (-1, -1).
+    std::pair<mi::Size, mi::Size> get_frame_ids(mi::Float32 frame) const;
 
     bool m_is_valid = false;
     bool m_is_animated = false;
@@ -142,6 +148,32 @@ public:
         const mi::Sint32_2& coord, const mi::Sint32_2& uv_tile, mi::Float32 frame) const;
 
 private:
+    // Used to implement lookup_float4(). Frame/UV IDs as parameters.
+    mi::Float32_4 lookup_float4_frame(
+        const mi::Float32_3& coords,
+        mi::mdl::stdlib::Tex_wrap_mode wrap_u,
+        mi::mdl::stdlib::Tex_wrap_mode wrap_v,
+        mi::mdl::stdlib::Tex_wrap_mode wrap_w,
+        const mi::Float32_4& crop_uv,
+        const mi::Float32_2& crop_w,
+        mi::Size frame_id,
+        mi::Uint32 u,
+        mi::Uint32 v) const;
+
+    // Used to implement lookup_deriv_float4(). Frame/UV IDs as parameters.
+    mi::Float32_4 lookup_deriv_float4_frame(
+        const mi::Float32_3& coords,
+        const mi::Float32_2& coord_dx,
+        const mi::Float32_2& coord_dy,
+        mi::mdl::stdlib::Tex_wrap_mode wrap_u,
+        mi::mdl::stdlib::Tex_wrap_mode wrap_v,
+        mi::mdl::stdlib::Tex_wrap_mode wrap_w,
+        const mi::Float32_4& crop_uv,
+        const mi::Float32_2& crop_w,
+        mi::Size frame_id,
+        mi::Uint32 u,
+        mi::Uint32 v) const;
+
     bool m_use_derivatives;
     bool m_is_uvtile;
 

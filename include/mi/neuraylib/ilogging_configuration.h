@@ -206,7 +206,7 @@ public:
     virtual bool get_log_locally() const = 0;
 };
 
-/*@}*/ // end group mi_neuray_configuration
+/**@}*/ // end group mi_neuray_configuration
 
 } // namespace neuraylib
 

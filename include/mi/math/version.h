@@ -97,6 +97,8 @@
 #define MI_MATH_VERSION_QUALIFIED_STRING  MI_MATH_VERSION_STRING "-" MI_MATH_VERSION_QUALIFIER
 #endif // MI_MATH_VERSION_QUALIFIER_EMPTY
 
-/*@}*/ // end group mi_math_version
+/**
+@}
+*/ // end group mi_math_version
 
 #endif // MI_MATH_VERSION_H

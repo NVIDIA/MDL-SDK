@@ -1,9 +1,8 @@
 //===-- IntelJITEventsWrapper.h - Intel JIT Events API Wrapper --*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -22,10 +21,18 @@
 
 namespace llvm {
 
+typedef enum {
+  LoadBinaryModule,
+  LoadBinarySection,
+  UnloadBinaryModule,
+  UnloadBinarySection
+} IttEventType;
+
 class IntelJITEventsWrapper {
   // Function pointer types for testing implementation of Intel jitprofiling
   // library
   typedef int (*NotifyEventPtr)(iJIT_JVM_EVENT, void*);
+  typedef int (*IttnotifyInfoPtr)(IttEventType, const char *, unsigned int);
   typedef void (*RegisterCallbackExPtr)(void *, iJIT_ModeChangedEx );
   typedef iJIT_IsProfilingActiveFlags (*IsProfilingActivePtr)(void);
   typedef void (*FinalizeThreadPtr)(void);
@@ -33,6 +40,7 @@ class IntelJITEventsWrapper {
   typedef unsigned int (*GetNewMethodIDPtr)(void);
 
   NotifyEventPtr NotifyEventFunc;
+  IttnotifyInfoPtr IttnotifyInfoFunc;
   RegisterCallbackExPtr RegisterCallbackExFunc;
   IsProfilingActivePtr IsProfilingActiveFunc;
   GetNewMethodIDPtr GetNewMethodIDFunc;
@@ -43,23 +51,22 @@ public:
   }
 
   IntelJITEventsWrapper()
-  : NotifyEventFunc(::iJIT_NotifyEvent),
-    RegisterCallbackExFunc(::iJIT_RegisterCallbackEx),
-    IsProfilingActiveFunc(::iJIT_IsProfilingActive),
-    GetNewMethodIDFunc(::iJIT_GetNewMethodID) {
-  }
+      : NotifyEventFunc(::iJIT_NotifyEvent), IttnotifyInfoFunc(0),
+        RegisterCallbackExFunc(::iJIT_RegisterCallbackEx),
+        IsProfilingActiveFunc(::iJIT_IsProfilingActive),
+        GetNewMethodIDFunc(::iJIT_GetNewMethodID) {}
 
   IntelJITEventsWrapper(NotifyEventPtr NotifyEventImpl,
-                   RegisterCallbackExPtr RegisterCallbackExImpl,
-                   IsProfilingActivePtr IsProfilingActiveImpl,
-                   FinalizeThreadPtr FinalizeThreadImpl,
-                   FinalizeProcessPtr FinalizeProcessImpl,
-                   GetNewMethodIDPtr GetNewMethodIDImpl)
-  : NotifyEventFunc(NotifyEventImpl),
-    RegisterCallbackExFunc(RegisterCallbackExImpl),
-    IsProfilingActiveFunc(IsProfilingActiveImpl),
-    GetNewMethodIDFunc(GetNewMethodIDImpl) {
-  }
+                        IttnotifyInfoPtr IttnotifyInfoImpl,
+                        RegisterCallbackExPtr RegisterCallbackExImpl,
+                        IsProfilingActivePtr IsProfilingActiveImpl,
+                        FinalizeThreadPtr FinalizeThreadImpl,
+                        FinalizeProcessPtr FinalizeProcessImpl,
+                        GetNewMethodIDPtr GetNewMethodIDImpl)
+      : NotifyEventFunc(NotifyEventImpl), IttnotifyInfoFunc(IttnotifyInfoImpl),
+        RegisterCallbackExFunc(RegisterCallbackExImpl),
+        IsProfilingActiveFunc(IsProfilingActiveImpl),
+        GetNewMethodIDFunc(GetNewMethodIDImpl) {}
 
   // Sends an event announcing that a function has been emitted
   //   return values are event-specific.  See Intel documentation for details.
@@ -67,6 +74,13 @@ public:
     if (!NotifyEventFunc)
       return -1;
     return NotifyEventFunc(EventType, EventSpecificData);
+  }
+
+  int iJitIttNotifyInfo(IttEventType EventType, const char *Name,
+                        unsigned int Size) {
+    if (!IttnotifyInfoFunc)
+      return -1;
+    return IttnotifyInfoFunc(EventType, Name, Size);
   }
 
   // Registers a callback function to receive notice of profiling state changes

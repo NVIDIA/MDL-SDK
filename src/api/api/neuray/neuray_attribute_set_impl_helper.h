@@ -96,7 +96,7 @@ public:
         const IDb_element* db_element,
         const char* name);
 
-    /// Returns \c "" in case of errors.
+    /// Returns empty string in case of errors.
     static std::string get_attribute_type_name(
         const ATTR::Attribute_set* attribute_set,
         const IDb_element* db_element,
@@ -282,7 +282,7 @@ private:
     /// itself if it already identifies the top-level attribute).
     ///
     /// Strips off the first '.' or '[' and everything that follows.
-    static std::string get_top_level_name( const char* name);
+    static std::string get_top_level_name( const std::string& name);
 
     /// Compute journal flags for the given attribute and DB element.
     ///

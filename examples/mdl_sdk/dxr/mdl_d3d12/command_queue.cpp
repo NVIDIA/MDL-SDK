@@ -206,6 +206,7 @@ Fence::Fence(Base_application* app, Command_queue* queue)
         "Failed to create fence.", SRC);
 
     m_fence_value = 1;
+    m_wait_value = 0;
     m_fence_event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     if (!m_fence_event)
         log_error("Failed to create fence event.", SRC);
@@ -227,25 +228,33 @@ UINT64 Fence::signal()
     UINT64 handle = m_fence_value++;
     throw_on_failure(m_command_queue->get_queue()->Signal(m_fence.Get(), handle),
         "Failed to signal fence.", SRC);
-
     m_mtx.unlock();
     return handle;
 }
 
 // ------------------------------------------------------------------------------------------------
 
-bool Fence::is_completed(const UINT64& handle) const
+bool Fence::is_completed(UINT64 handle) const
 {
     return m_fence->GetCompletedValue() >= handle;
 }
 
 // ------------------------------------------------------------------------------------------------
 
-bool Fence::wait(const UINT64& handle) const
+bool Fence::wait(UINT64 handle) const
 {
     if (m_fence->GetCompletedValue() < handle)
     {
-        throw_on_failure(m_fence->SetEventOnCompletion(handle, m_fence_event),
+        // Multiple threads might try to set the value on which the fence
+        // signals the event. This is a race condition because a potentially
+        // higher value can be overwritten by lower values, causing the event
+        // to be triggered too early. Making all threads wait for the largest
+        // value encountered so far fixes this.
+        m_mtx.lock();
+        m_wait_value = std::max(m_wait_value, handle);
+        m_mtx.unlock();
+
+        throw_on_failure(m_fence->SetEventOnCompletion(m_wait_value, m_fence_event),
             "Failed to wait on fence", SRC);
 
         WaitForSingleObjectEx(m_fence_event, INFINITE, FALSE);

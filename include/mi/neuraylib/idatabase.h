@@ -482,7 +482,7 @@ public:
 
 mi_static_assert( sizeof( IDatabase::Garbage_collection_priority) == sizeof( Uint32));
 
-/*@}*/ // end group mi_neuray_database_access
+/**@}*/ // end group mi_neuray_database_access
 
 } // namespace neuraylib
 

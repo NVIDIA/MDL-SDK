@@ -1,9 +1,8 @@
 //===- llvm/CodeGen/LiveRegUnits.h - Register Unit Set ----------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -16,7 +15,7 @@
 #define LLVM_CODEGEN_LIVEREGUNITS_H
 
 #include "llvm/ADT/BitVector.h"
-#include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/MachineInstrBundle.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/MC/LaneBitmask.h"
 #include "llvm/MC/MCRegisterInfo.h"
@@ -54,8 +53,8 @@ public:
         ModifiedRegUnits.addRegsInMask(O->getRegMask());
       if (!O->isReg())
         continue;
-      unsigned Reg = O->getReg();
-      if (!TargetRegisterInfo::isPhysicalRegister(Reg))
+      Register Reg = O->getReg();
+      if (!Reg.isPhysical())
         continue;
       if (O->isDef()) {
         // Some architectures (e.g. AArch64 XZR/WZR) have registers that are
@@ -68,7 +67,6 @@ public:
         UsedRegUnits.addReg(Reg);
       }
     }
-    return;
   }
 
   /// Initialize and clear the set.
@@ -85,14 +83,14 @@ public:
   bool empty() const { return Units.none(); }
 
   /// Adds register units covered by physical register \p Reg.
-  void addReg(unsigned Reg) {
+  void addReg(MCPhysReg Reg) {
     for (MCRegUnitIterator Unit(Reg, TRI); Unit.isValid(); ++Unit)
       Units.set(*Unit);
   }
 
   /// Adds register units covered by physical register \p Reg that are
   /// part of the lanemask \p Mask.
-  void addRegMasked(unsigned Reg, LaneBitmask Mask) {
+  void addRegMasked(MCPhysReg Reg, LaneBitmask Mask) {
     for (MCRegUnitMaskIterator Unit(Reg, TRI); Unit.isValid(); ++Unit) {
       LaneBitmask UnitMask = (*Unit).second;
       if (UnitMask.none() || (UnitMask & Mask).any())
@@ -101,7 +99,7 @@ public:
   }
 
   /// Removes all register units covered by physical register \p Reg.
-  void removeReg(unsigned Reg) {
+  void removeReg(MCPhysReg Reg) {
     for (MCRegUnitIterator Unit(Reg, TRI); Unit.isValid(); ++Unit)
       Units.reset(*Unit);
   }
@@ -115,7 +113,7 @@ public:
   void addRegsInMask(const uint32_t *RegMask);
 
   /// Returns true if no part of physical register \p Reg is live.
-  bool available(unsigned Reg) const {
+  bool available(MCPhysReg Reg) const {
     for (MCRegUnitIterator Unit(Reg, TRI); Unit.isValid(); ++Unit) {
       if (Units.test(*Unit))
         return false;
@@ -160,6 +158,19 @@ private:
   /// that are unused in the function.
   void addPristines(const MachineFunction &MF);
 };
+
+/// Returns an iterator range over all physical register and mask operands for
+/// \p MI and bundled instructions. This also skips any debug operands.
+inline iterator_range<filter_iterator<
+    ConstMIBundleOperands, std::function<bool(const MachineOperand &)>>>
+phys_regs_and_masks(const MachineInstr &MI) {
+  std::function<bool(const MachineOperand &)> Pred =
+      [](const MachineOperand &MOP) {
+        return MOP.isRegMask() || (MOP.isReg() && !MOP.isDebug() &&
+                                   Register::isPhysicalRegister(MOP.getReg()));
+      };
+  return make_filter_range(const_mi_bundle_ops(MI), Pred);
+}
 
 } // end namespace llvm
 

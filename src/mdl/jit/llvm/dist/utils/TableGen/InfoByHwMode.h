@@ -1,9 +1,8 @@
 //===--- InfoByHwMode.h -----------------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 // Classes that implement data parameterized by HW modes for instruction
@@ -47,10 +46,12 @@ std::vector<unsigned> union_modes(const InfoByHwMode<InfoT> &A,
   for (const auto &P : B)
     U.insert(P.first);
   // Make sure that the default mode is last on the list.
-  bool HasDefault = U.count(DefaultMode);
+  bool HasDefault = false;
   for (unsigned M : U)
     if (M != DefaultMode)
       V.push_back(M);
+    else
+      HasDefault = true;
   if (HasDefault)
     V.push_back(DefaultMode);
   return V;
@@ -118,6 +119,7 @@ struct InfoByHwMode {
 
 struct ValueTypeByHwMode : public InfoByHwMode<MVT> {
   ValueTypeByHwMode(Record *R, const CodeGenHwModes &CGH);
+  ValueTypeByHwMode(Record *R, MVT T);
   ValueTypeByHwMode(MVT T) { Map.insert({DefaultMode,T}); }
   ValueTypeByHwMode() = default;
 
@@ -133,6 +135,11 @@ struct ValueTypeByHwMode : public InfoByHwMode<MVT> {
   static StringRef getMVTName(MVT T);
   void writeToStream(raw_ostream &OS) const;
   void dump() const;
+
+  unsigned PtrAddrSpace = std::numeric_limits<unsigned>::max();
+  bool isPointer() const {
+    return PtrAddrSpace != std::numeric_limits<unsigned>::max();
+  }
 };
 
 ValueTypeByHwMode getValueTypeByHwMode(Record *Rec,
@@ -176,6 +183,11 @@ struct RegSizeInfoByHwMode : public InfoByHwMode<RegSizeInfo> {
 raw_ostream &operator<<(raw_ostream &OS, const ValueTypeByHwMode &T);
 raw_ostream &operator<<(raw_ostream &OS, const RegSizeInfo &T);
 raw_ostream &operator<<(raw_ostream &OS, const RegSizeInfoByHwMode &T);
+
+struct EncodingInfoByHwMode : public InfoByHwMode<Record*> {
+  EncodingInfoByHwMode(Record *R, const CodeGenHwModes &CGH);
+  EncodingInfoByHwMode() = default;
+};
 
 } // namespace llvm
 

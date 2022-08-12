@@ -279,35 +279,75 @@ std::string evaluate_dred()
 
         ComPtr<ID3D12DeviceRemovedExtendedData> pDred;
         SUCCEEDED(s_dred_device->QueryInterface(IID_PPV_ARGS(&pDred)));
+        
+        const size_t max_nodes_to_print = 128; // arbitrary
+
+        // output breadcrumbs data
         D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT DredAutoBreadcrumbsOutput;
-        D3D12_DRED_PAGE_FAULT_OUTPUT DredPageFaultOutput;
-        SUCCEEDED(pDred->GetAutoBreadcrumbsOutput(&DredAutoBreadcrumbsOutput));
-        SUCCEEDED(pDred->GetPageFaultAllocationOutput(&DredPageFaultOutput));
-
-        size_t max_nodes_to_print = 128; // arbitrary
-        size_t current_node_i = 0;
-        const D3D12_AUTO_BREADCRUMB_NODE* current =
-            DredAutoBreadcrumbsOutput.pHeadAutoBreadcrumbNode;
-
-        while (current && current_node_i < max_nodes_to_print)
+        if (SUCCEEDED(pDred->GetAutoBreadcrumbsOutput(&DredAutoBreadcrumbsOutput)))
         {
-            UINT32 bc_count = current->BreadcrumbCount;
-            UINT32 last_value = *current->pLastBreadcrumbValue;
-            bool crashed = bc_count != last_value;
+            size_t current_node_i = 0;
+            const D3D12_AUTO_BREADCRUMB_NODE* current =
+                DredAutoBreadcrumbsOutput.pHeadAutoBreadcrumbNode;
 
-            output += mi::examples::strings::format("\n[%03d] Node has %d breadcrumbs.",
-                current_node_i, bc_count);
-
-            // ring buffer of size 65536, rest is lost
-            for (UINT32 b = 0; b < (bc_count % 65536); ++b)
+            output += "\nBreadcrumb Nodes:";
+            while (current && current_node_i < max_nodes_to_print)
             {
-                output += mi::examples::strings::format("\n      %-5d %-55s %s",
-                    b,
-                    to_string(current->pCommandHistory[b]).c_str(),
-                    crashed ? (b < last_value ? "COMPLETED" : "NOT COMPLETE (probably)") : "");
+                UINT32 bc_count = current->BreadcrumbCount;
+                UINT32 last_value = *current->pLastBreadcrumbValue;
+                bool crashed = bc_count != last_value;
+
+                output += mi::examples::strings::format("\n[%03d] Node has %d breadcrumbs.",
+                    current_node_i, bc_count);
+
+                // ring buffer of size 65536, rest is lost
+                for (UINT32 b = 0; b < (bc_count % 65536); ++b)
+                {
+                    output += mi::examples::strings::format("\n      %-5d %-55s %s",
+                        b,
+                        to_string(current->pCommandHistory[b]).c_str(),
+                        crashed ? (b < last_value ? "COMPLETED" : "NOT COMPLETE (probably)") : "");
+                }
+                current = current->pNext;
+                current_node_i++;
             }
-            current = current->pNext;
-            current_node_i++;
+        }
+
+        // output page fault data
+        D3D12_DRED_PAGE_FAULT_OUTPUT DredPageFaultOutput;
+        if (SUCCEEDED(pDred->GetPageFaultAllocationOutput(&DredPageFaultOutput)))
+        {
+            output += mi::examples::strings::format("\nPage Fault Virtual Address: 0x%X",
+                DredPageFaultOutput.PageFaultVA);
+
+            size_t current_node_i = 0;
+            const D3D12_DRED_ALLOCATION_NODE* current =
+                DredPageFaultOutput.pHeadExistingAllocationNode;
+
+            output += "\nExisting DRED Allocation Nodes:";
+            while (current && current_node_i < max_nodes_to_print)
+            {
+                output += mi::examples::strings::format("\n[%03d][type=%d] %s",
+                    current_node_i, current->AllocationType, current->ObjectNameA);
+                output += current->ObjectNameA;
+
+                current = current->pNext;
+                current_node_i++;
+            }
+
+            current_node_i = 0;
+            current = DredPageFaultOutput.pHeadRecentFreedAllocationNode;
+
+            output += "\nRecent Freed DRED Allocation Nodes:";
+            while (current && current_node_i < max_nodes_to_print)
+            {
+                output += mi::examples::strings::format("\n[%03d][type=%d] %s",
+                    current_node_i, current->AllocationType, current->ObjectNameA);
+                output += current->ObjectNameA;
+
+                current = current->pNext;
+                current_node_i++;
+            }
         }
 
         // printing this once is enough
@@ -315,7 +355,6 @@ std::string evaluate_dred()
 
     #endif
 
-    // TODO evaluate DredPageFaultOutput
     return output;
 }
 
@@ -396,7 +435,7 @@ bool log_on_failure(
     else
         readable_error = std::to_string(error_code);
 
-    if (error_code == DXGI_ERROR_DEVICE_REMOVED)
+    if (error_code == DXGI_ERROR_DEVICE_REMOVED || error_code == DXGI_ERROR_DEVICE_RESET)
     {
         readable_error += "\n" + evaluate_dred() + "\n";
     }

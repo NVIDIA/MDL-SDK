@@ -543,7 +543,7 @@ std::string get_cwd()
     DWORD size = GetCurrentDirectoryW(0, 0); // return value contains terminating null char
     std::vector<WCHAR> buf(static_cast<size_t>(size), '\0');
 
-    if (!GetCurrentDirectoryW(size, &buf[0])) {
+    if (!GetCurrentDirectoryW(size, buf.data())) {
         set_error(HAL::get_errno());
         return std::string();
     }

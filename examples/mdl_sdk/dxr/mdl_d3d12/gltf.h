@@ -41,14 +41,17 @@ namespace mi { namespace examples { namespace mdl_d3d12
     public:
         virtual ~Loader_gltf() = default;
 
-        bool load(const std::string& file_name, const Scene_options& options) override;
-        const Scene& get_scene() const override { return m_scene; }
+        bool load(Mdl_sdk& sdk, const std::string& file_name, const Scene_options& options) override;
+        std::unique_ptr<const IScene_loader::Scene> move_scene() override
+        {
+            return std::move(m_scene);
+        }
 
         // replace all materials in the scene by one specified on the command line
         void replace_all_materials(const std::string& material_name);
 
     private:
-        Scene m_scene;
+        std::unique_ptr<IScene_loader::Scene> m_scene;
     };
 
 }}} // mi::examples::mdl_d3d12

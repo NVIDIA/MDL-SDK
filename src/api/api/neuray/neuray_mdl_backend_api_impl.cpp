@@ -62,6 +62,7 @@ mi::neuraylib::IMdl_backend* Mdl_backend_api_impl::get_backend(Mdl_backend_kind 
     case MB_LLVM_IR:
     case MB_CUDA_PTX:
     case MB_NATIVE:
+    case MB_GLSL:
     case MB_HLSL: {
         mi::base::Handle<mi::mdl::ICode_generator> generator(
             compiler->load_code_generator("jit"));
@@ -77,7 +78,6 @@ mi::neuraylib::IMdl_backend* Mdl_backend_api_impl::get_backend(Mdl_backend_kind 
             code_cache.get(),
             /*string_ids=*/true);
     }
-    case MB_GLSL:
     case MB_FORCE_32_BIT:
         break;
     }
@@ -140,4 +140,3 @@ mi::Sint32 Mdl_backend_api_impl::shutdown()
 
 } // namespace NEURAY
 } // namespace MI
-

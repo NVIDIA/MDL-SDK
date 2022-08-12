@@ -1,9 +1,8 @@
 //===- ValueEnumerator.cpp - Number values and types for bitcode writer ---===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -12,11 +11,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "ValueEnumerator.h"
-#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/IR/Argument.h"
-#include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/DebugInfoMetadata.h"
@@ -33,7 +30,6 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Use.h"
-#include "llvm/IR/UseListOrder.h"
 #include "llvm/IR/User.h"
 #include "llvm/IR/Value.h"
 #include "llvm/IR/ValueSymbolTable.h"
@@ -43,12 +39,9 @@
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
-#include <cassert>
 #include <cstddef>
 #include <iterator>
 #include <tuple>
-#include <utility>
-#include <vector>
 
 using namespace llvm;
 
@@ -85,15 +78,30 @@ struct OrderMap {
 
 } // end anonymous namespace
 
+/// Look for a value that might be wrapped as metadata, e.g. a value in a
+/// metadata operand. Returns nullptr for a non-wrapped input value if
+/// OnlyWrapped is true, or it returns the input value as-is if false.
+static const Value *skipMetadataWrapper(const Value *V, bool OnlyWrapped) {
+  if (const auto *MAV = dyn_cast<MetadataAsValue>(V))
+    if (const auto *VAM = dyn_cast<ValueAsMetadata>(MAV->getMetadata()))
+      return VAM->getValue();
+  return OnlyWrapped ? nullptr : V;
+}
+
 static void orderValue(const Value *V, OrderMap &OM) {
   if (OM.lookup(V).first)
     return;
 
-  if (const Constant *C = dyn_cast<Constant>(V))
-    if (C->getNumOperands() && !isa<GlobalValue>(C))
+  if (const Constant *C = dyn_cast<Constant>(V)) {
+    if (C->getNumOperands() && !isa<GlobalValue>(C)) {
       for (const Value *Op : C->operands())
         if (!isa<BasicBlock>(Op) && !isa<GlobalValue>(Op))
           orderValue(Op, OM);
+      if (auto *CE = dyn_cast<ConstantExpr>(C))
+        if (CE->getOpcode() == Instruction::ShuffleVector)
+          orderValue(CE->getShuffleMaskForBitcode(), OM);
+    }
+  }
 
   // Note: we cannot cache this lookup above, since inserting into the map
   // changes the map's size, and thus affects the other IDs.
@@ -124,6 +132,25 @@ static OrderMap orderModule(const Module &M) {
     for (const Use &U : F.operands())
       if (!isa<GlobalValue>(U.get()))
         orderValue(U.get(), OM);
+  }
+
+  // As constants used in metadata operands are emitted as module-level
+  // constants, we must order them before other operands. Also, we must order
+  // these before global values, as these will be read before setting the
+  // global values' initializers. The latter matters for constants which have
+  // uses towards other constants that are used as initializers.
+  for (const Function &F : M) {
+    if (F.isDeclaration())
+      continue;
+    for (const BasicBlock &BB : F)
+      for (const Instruction &I : BB)
+        for (const Value *V : I.operands()) {
+          if (const Value *Op = skipMetadataWrapper(V, true)) {
+            if ((isa<Constant>(*Op) && !isa<GlobalValue>(*Op)) ||
+                isa<InlineAsm>(*Op))
+              orderValue(Op, OM);
+          }
+        }
   }
   OM.LastGlobalConstantID = OM.size();
 
@@ -156,11 +183,14 @@ static OrderMap orderModule(const Module &M) {
     for (const Argument &A : F.args())
       orderValue(&A, OM);
     for (const BasicBlock &BB : F)
-      for (const Instruction &I : BB)
+      for (const Instruction &I : BB) {
         for (const Value *Op : I.operands())
           if ((isa<Constant>(*Op) && !isa<GlobalValue>(*Op)) ||
               isa<InlineAsm>(*Op))
             orderValue(Op, OM);
+        if (auto *SVI = dyn_cast<ShuffleVectorInst>(&I))
+          orderValue(SVI->getShuffleMaskForBitcode(), OM);
+      }
     for (const BasicBlock &BB : F)
       for (const Instruction &I : BB)
         orderValue(&I, OM);
@@ -184,7 +214,7 @@ static void predictValueUseListOrderImpl(const Value *V, const Function *F,
     return;
 
   bool IsGlobalValue = OM.isGlobalValue(ID);
-  llvm::sort(List.begin(), List.end(), [&](const Entry &L, const Entry &R) {
+  llvm::sort(List, [&](const Entry &L, const Entry &R) {
     const Use *LU = L.first;
     const Use *RU = R.first;
     if (LU == RU)
@@ -224,9 +254,9 @@ static void predictValueUseListOrderImpl(const Value *V, const Function *F,
     return LU->getOperandNo() > RU->getOperandNo();
   });
 
-  if (std::is_sorted(
-          List.begin(), List.end(),
-          [](const Entry &L, const Entry &R) { return L.second < R.second; }))
+  if (llvm::is_sorted(List, [](const Entry &L, const Entry &R) {
+        return L.second < R.second;
+      }))
     // Order is already correct.
     return;
 
@@ -251,11 +281,17 @@ static void predictValueUseListOrder(const Value *V, const Function *F,
     predictValueUseListOrderImpl(V, F, IDPair.first, OM, Stack);
 
   // Recursive descent into constants.
-  if (const Constant *C = dyn_cast<Constant>(V))
-    if (C->getNumOperands()) // Visit GlobalValues.
+  if (const Constant *C = dyn_cast<Constant>(V)) {
+    if (C->getNumOperands()) { // Visit GlobalValues.
       for (const Value *Op : C->operands())
         if (isa<Constant>(Op)) // Visit GlobalValues.
           predictValueUseListOrder(Op, F, OM, Stack);
+      if (auto *CE = dyn_cast<ConstantExpr>(C))
+        if (CE->getOpcode() == Instruction::ShuffleVector)
+          predictValueUseListOrder(CE->getShuffleMaskForBitcode(), F, OM,
+                                   Stack);
+    }
+  }
 }
 
 static UseListOrderStack predictUseListOrder(const Module &M) {
@@ -280,10 +316,14 @@ static UseListOrderStack predictUseListOrder(const Module &M) {
     for (const Argument &A : F.args())
       predictValueUseListOrder(&A, &F, OM, Stack);
     for (const BasicBlock &BB : F)
-      for (const Instruction &I : BB)
+      for (const Instruction &I : BB) {
         for (const Value *Op : I.operands())
           if (isa<Constant>(*Op) || isa<InlineAsm>(*Op)) // Visit GlobalValues.
             predictValueUseListOrder(Op, &F, OM, Stack);
+        if (auto *SVI = dyn_cast<ShuffleVectorInst>(&I))
+          predictValueUseListOrder(SVI->getShuffleMaskForBitcode(), &F, OM,
+                                   Stack);
+      }
     for (const BasicBlock &BB : F)
       for (const Instruction &I : BB)
         predictValueUseListOrder(&I, &F, OM, Stack);
@@ -414,11 +454,11 @@ ValueEnumerator::ValueEnumerator(const Module &M,
 
           EnumerateMetadata(&F, MD->getMetadata());
         }
+        if (auto *SVI = dyn_cast<ShuffleVectorInst>(&I))
+          EnumerateType(SVI->getShuffleMaskForBitcode()->getType());
         EnumerateType(I.getType());
-        if (const CallInst *CI = dyn_cast<CallInst>(&I))
-          EnumerateAttributes(CI->getAttributes());
-        else if (const InvokeInst *II = dyn_cast<InvokeInst>(&I))
-          EnumerateAttributes(II->getAttributes());
+        if (const auto *Call = dyn_cast<CallBase>(&I))
+          EnumerateAttributes(Call->getAttributes());
 
         // Enumerate metadata attached with this instruction.
         MDs.clear();
@@ -745,14 +785,15 @@ void ValueEnumerator::organizeMetadata() {
   // and then sort by the original/current ID.  Since the IDs are guaranteed to
   // be unique, the result of std::sort will be deterministic.  There's no need
   // for std::stable_sort.
-  llvm::sort(Order.begin(), Order.end(), [this](MDIndex LHS, MDIndex RHS) {
+  llvm::sort(Order, [this](MDIndex LHS, MDIndex RHS) {
     return std::make_tuple(LHS.F, getMetadataTypeOrder(LHS.get(MDs)), LHS.ID) <
            std::make_tuple(RHS.F, getMetadataTypeOrder(RHS.get(MDs)), RHS.ID);
   });
 
   // Rebuild MDs, index the metadata ranges for each function in FunctionMDs,
   // and fix up MetadataMap.
-  std::vector<const Metadata *> OldMDs = std::move(MDs);
+  std::vector<const Metadata *> OldMDs;
+  MDs.swap(OldMDs);
   MDs.reserve(OldMDs.size());
   for (unsigned I = 0, E = Order.size(); I != E && !Order[I].F; ++I) {
     auto *MD = Order[I].get(OldMDs);
@@ -838,6 +879,9 @@ void ValueEnumerator::EnumerateValue(const Value *V) {
            I != E; ++I)
         if (!isa<BasicBlock>(*I)) // Don't enumerate BB operand to BlockAddress.
           EnumerateValue(*I);
+      if (auto *CE = dyn_cast<ConstantExpr>(C))
+        if (CE->getOpcode() == Instruction::ShuffleVector)
+          EnumerateValue(CE->getShuffleMaskForBitcode());
 
       // Finally, add the value.  Doing this could make the ValueID reference be
       // dangling, don't reuse it.
@@ -915,6 +959,9 @@ void ValueEnumerator::EnumerateOperandType(const Value *V) {
 
     EnumerateOperandType(Op);
   }
+  if (auto *CE = dyn_cast<ConstantExpr>(C))
+    if (CE->getOpcode() == Instruction::ShuffleVector)
+      EnumerateOperandType(CE->getShuffleMaskForBitcode());
 }
 
 void ValueEnumerator::EnumerateAttributes(AttributeList PAL) {
@@ -951,18 +998,25 @@ void ValueEnumerator::incorporateFunction(const Function &F) {
   incorporateFunctionMetadata(F);
 
   // Adding function arguments to the value table.
-  for (const auto &I : F.args())
+  for (const auto &I : F.args()) {
     EnumerateValue(&I);
-
+    if (I.hasAttribute(Attribute::ByVal))
+      EnumerateType(I.getParamByValType());
+    else if (I.hasAttribute(Attribute::StructRet))
+      EnumerateType(I.getParamStructRetType());
+  }
   FirstFuncConstantID = Values.size();
 
   // Add all function-level constants to the value table.
   for (const BasicBlock &BB : F) {
-    for (const Instruction &I : BB)
+    for (const Instruction &I : BB) {
       for (const Use &OI : I.operands()) {
         if ((isa<Constant>(OI) && !isa<GlobalValue>(OI)) || isa<InlineAsm>(OI))
           EnumerateValue(OI);
       }
+      if (auto *SVI = dyn_cast<ShuffleVectorInst>(&I))
+        EnumerateValue(SVI->getShuffleMaskForBitcode());
+    }
     BasicBlocks.push_back(&BB);
     ValueMap[&BB] = BasicBlocks.size();
   }

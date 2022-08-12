@@ -49,6 +49,7 @@
 #include <io/scene/lightprofile/i_lightprofile.h>
 #include <io/scene/texture/i_texture.h>
 
+
 namespace MI {
 
 namespace MDL {
@@ -452,11 +453,12 @@ const char* Value_texture::get_file_path( DB::Transaction* transaction) const
         return nullptr;
     DB::Access<TEXTURE::Texture> texture( m_value, transaction);
     DB::Tag image_tag = texture->get_image();
-    if( !image_tag || transaction->get_class_id( image_tag) != DBIMAGE::ID_IMAGE)
-        return nullptr;
-    DB::Access<DBIMAGE::Image> image( image_tag, transaction);
-    m_cached_file_path = image->get_mdl_file_path();
-    return !m_cached_file_path.empty() ?  m_cached_file_path.c_str() : nullptr;
+    if (image_tag && transaction->get_class_id(image_tag) == DBIMAGE::ID_IMAGE) {
+        DB::Access<DBIMAGE::Image> image(image_tag, transaction);
+        m_cached_file_path = image->get_mdl_file_path();
+        return !m_cached_file_path.empty() ? m_cached_file_path.c_str() : nullptr;
+    }
+    return nullptr;
 }
 
 mi::Size Value_texture::get_memory_consumption() const
@@ -1257,7 +1259,7 @@ mi::Sint32 Value_factory::compare_static( const IValue* lhs, const IValue* rhs, 
                 rhs->get_interface<IValue_float>());
             mi::Float32 lhs_value = lhs_float->get_value();
             mi::Float32 rhs_value = rhs_float->get_value();
-            if( epsilon > 0 && fabs( lhs_value-rhs_value) <= epsilon)
+            if( epsilon > 0 && fabsf( lhs_value-rhs_value) <= epsilon)
                 return 0;
             if( lhs_value < rhs_value) return -1;
             if( lhs_value > rhs_value) return +1;
@@ -1398,7 +1400,7 @@ void Value_factory::dump_static(
 
     if( name) {
         std::string type_name = Type_factory::get_type_name_static( type.get());
-        s << type_name << " " << name << " = ";
+        s << type_name << ' ' << name << " = ";
     }
 
     switch( kind) {
@@ -1421,7 +1423,7 @@ void Value_factory::dump_static(
             mi::base::Handle<const IType_enum> type_enum( value_enum->get_type());
             mi::Size index = value_enum->get_index();
             s << type_enum->get_value_name( index)
-              << "(" << type_enum->get_value_code( index) << ")";
+              << '(' << type_enum->get_value_code( index) << ')';
             return;
         }
         case IValue::VK_FLOAT: {
@@ -1440,21 +1442,21 @@ void Value_factory::dump_static(
             mi::base::Handle<const IValue_string_localized> value_string_localized(
                 value->get_interface<IValue_string_localized>());
             if( value_string_localized) {
-                s << "\"" << value_string_localized->get_value() << "\"";
+                s << '\"' << value_string_localized->get_value() << '\"';
                 s << ", ";
-                s << "\"" << value_string_localized->get_original_value() << "\"";
+                s << '\"' << value_string_localized->get_original_value() << '\"';
                 return;
             }
             mi::base::Handle<const IValue_string> value_string(
                 value->get_interface<IValue_string>());
-            s << "\"" << value_string->get_value() << "\"";
+            s << '\"' << value_string->get_value() << '\"';
             return;
         }
         case IValue::VK_VECTOR:
         case IValue::VK_COLOR: {
             mi::base::Handle<const IValue_compound> value_compound(
                 value->get_interface<IValue_compound>());
-            s << "(";
+            s << '(';
             mi::Size n = value_compound->get_size();
             for( mi::Size i = 0; i < n; ++i) {
                 mi::base::Handle<const IValue> element(
@@ -1463,14 +1465,14 @@ void Value_factory::dump_static(
                 if( i < n-1)
                     s << ", ";
             }
-            s << ")";
+            s << ')';
             return;
         }
         case IValue::VK_MATRIX:
         {
             mi::base::Handle<const IValue_matrix> value_matrix(
                 value->get_interface<IValue_matrix>());
-            s << "(";
+            s << '(';
             mi::Size columns = value_matrix->get_size();
             for( mi::Size i = 0; i < columns; ++i) {
                 mi::base::Handle<const IValue_vector> column(
@@ -1483,7 +1485,7 @@ void Value_factory::dump_static(
                         s << ", ";
                 }
             }
-            s << ")";
+            s << ')';
             return;
         }
         case IValue::VK_ARRAY: {
@@ -1520,7 +1522,7 @@ void Value_factory::dump_static(
                 dump_static( transaction, element.get(), field_name, depth+1, s);
                 s << ";\n";
             }
-            s << prefix << "}";
+            s << prefix << '}';
             return;
         }
         case IValue::VK_TEXTURE:
@@ -1534,7 +1536,7 @@ void Value_factory::dump_static(
                 return;
             }
             if( transaction)
-                s << "\"" << transaction->tag_to_name( tag) << "\"";
+                s << '\"' << transaction->tag_to_name( tag) << '\"';
             else
                 s << "tag " << tag.get_uint();
             return;
@@ -1932,3 +1934,4 @@ IValue_list* Value_factory::deserialize_list( SERIAL::Deserializer* deserializer
 } // namespace MDL
 
 } // namespace MI
+

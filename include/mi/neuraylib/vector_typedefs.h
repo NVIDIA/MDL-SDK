@@ -246,7 +246,7 @@ typedef math::Vector_struct<Float64,3> Float64_3_struct;
 typedef math::Vector_struct<Float64,4> Float64_4_struct;
 
 
-/*@}*/ // end group mi_neuray_compounds
+/**@}*/ // end group mi_neuray_compounds
 
 } // namespace mi
 

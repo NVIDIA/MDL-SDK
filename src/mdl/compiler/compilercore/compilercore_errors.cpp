@@ -791,6 +791,8 @@ char const *get_error_template(
             return "linking the user-specified renderer module failed: $0";
         case STATE_MODULE_IS_INCOMPLETE:
             return "user-specified state module is incomplete";
+        case GLSL_SSBO_UNAVAILABLE:
+            return "Shader shared buffer objects are not available in the current GLSL context";
 
         // ------------------------------------------------------------- //
         case INTERNAL_JIT_BACKEND_ERROR:

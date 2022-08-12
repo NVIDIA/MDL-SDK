@@ -29,21 +29,24 @@
 #ifndef MDL_GENERATOR_JIT_LLVM_PASSES_H
 #define MDL_GENERATOR_JIT_LLVM_PASSES_H 1
 
-#include <llvm/ADT/StringMap.h>
-
 namespace llvm {
-    class FunctionPass;
-    class ModulePass;
-    class PassRegistry;
+class FunctionPass;
+class ModulePass;
+class PassRegistry;
 
-    /// Initialize the DeleteUnusedLibDevice pass.
-    void initializeDeleteUnusedLibDevicePass(PassRegistry &);
+/// Initialize the DeleteUnusedLibDevice pass.
+void initializeDeleteUnusedLibDevicePass(PassRegistry &);
 
-    /// Creates the DeleteUnusedLibDevice pass.
-    ModulePass *createDeleteUnusedLibDevicePass();
+/// Creates the DeleteUnusedLibDevice pass.
+///
+/// A very simple pass that removes unused function from libdevice.
+/// All functions starting with "__nv_" and marked with AlwaysInline
+/// will be removed.
+ModulePass *createDeleteUnusedLibDevicePass();
 
-    /// Creates the NVVM reflect pass.
-    FunctionPass *createNVVMReflectPass();
+/// Creates the NVVM reflect pass.
+FunctionPass *createNVVMReflectPass(unsigned int SmVersion);
+
 }  // llvm
 
 #endif // MDL_GENERATOR_JIT_LLVM_PASSES_H

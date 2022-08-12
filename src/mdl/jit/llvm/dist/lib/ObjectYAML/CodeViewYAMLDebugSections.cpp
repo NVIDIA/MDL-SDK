@@ -1,9 +1,8 @@
 //===- CodeViewYAMLDebugSections.cpp - CodeView YAMLIO debug sections -----===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -422,7 +421,7 @@ std::shared_ptr<DebugSubsection> YAMLLinesSubsection::toCodeViewSubsection(
   for (const auto &LC : Lines.Blocks) {
     Result->createBlock(LC.FileName);
     if (Result->hasColumnInfo()) {
-      for (const auto &Item : zip(LC.Lines, LC.Columns)) {
+      for (auto Item : zip(LC.Lines, LC.Columns)) {
         auto &L = std::get<0>(Item);
         auto &C = std::get<1>(Item);
         uint32_t LE = L.LineStart + L.EndDelta;
@@ -511,7 +510,7 @@ std::shared_ptr<DebugSubsection> YAMLFrameDataSubsection::toCodeViewSubsection(
     const codeview::StringsAndChecksums &SC) const {
   assert(SC.hasStrings());
 
-  auto Result = std::make_shared<DebugFrameDataSubsection>();
+  auto Result = std::make_shared<DebugFrameDataSubsection>(true);
   for (const auto &YF : Frames) {
     codeview::FrameData F;
     F.CodeSize = YF.CodeSize;

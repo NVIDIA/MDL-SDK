@@ -71,6 +71,7 @@ void _enable_print_ref_counts(bool enabled)
 using mi::Uint32;
 using mi::IData;
 using mi::base::Uuid;
+using mi::neuraylib::IFunction_definition;
 %}
 
 #if ADD_STANDALONE_SUPPORT
@@ -531,6 +532,7 @@ DICE_INTERFACE(IDeserialized_function_name);
 DICE_INTERFACE(IDeserialized_module_name);
 DICE_INTERFACE(IImage_api);
 DICE_INTERFACE(IMdl_configuration);
+DICE_INTERFACE(IMdl_evaluator_api);
 DICE_INTERFACE(IMessage);
 DICE_INTERFACE(IMdl_execution_context);
 DICE_INTERFACE(IMdl_factory);
@@ -557,10 +559,12 @@ DICE_INTERFACE(IExpression_list)
 DICE_INTERFACE(IExpression_parameter)
 DICE_INTERFACE(IExpression_temporary)
 DICE_INTERFACE(IFunction_call)
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
+DICE_INTERFACE(IMaterial_definition)
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
 DICE_INTERFACE(IFunction_definition)
 DICE_INTERFACE(IImage)
 DICE_INTERFACE(ILightprofile)
-DICE_INTERFACE(IMaterial_definition)
 DICE_INTERFACE(IMaterial_instance)
 DICE_INTERFACE(IModule)
 DICE_INTERFACE(ITexture)
@@ -724,10 +728,6 @@ WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::neuraylib::IExpression_list, get_expression
 %rename(create_direct_call_with_ret) mi::neuraylib::IExpression_factory::create_direct_call(char const*, IExpression_list*, Sint32*) const;
 %ignore mi::neuraylib::IExpression_factory::create_constant(IValue*) const; // omit the const overload
 
-// special handling for: mi::neuraylib::IMaterial_definition
-// ----------------------------------------------------------------------------
-%rename(create_material_instance_with_ret) mi::neuraylib::IMaterial_definition::create_material_instance(IExpression_list const*, Sint32*) const;
-
 // special handling for: mi::neuraylib::IFunction_definition
 // ----------------------------------------------------------------------------
 %rename(create_function_call_with_ret) mi::neuraylib::IFunction_definition::create_function_call(IExpression_list const*, Sint32*) const;
@@ -741,6 +741,11 @@ WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::neuraylib::IExpression_list, get_expression
 // special handling for: mi::neuraylib::ICompiled_material
 // ----------------------------------------------------------------------------
 %rename(get_connected_function_db_name_with_ret) mi::neuraylib::ICompiled_material::get_connected_function_db_name(char const*, Size, Sint32*) const;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
+// special handling for: mi::neuraylib::IMaterial_definition
+%rename(create_material_instance_with_ret) mi::neuraylib::IMaterial_definition::create_material_instance(const IExpression_list*, Sint32*) const;
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
 
 // special handling for: mi::neuraylib::IType
 // ----------------------------------------------------------------------------
@@ -882,12 +887,15 @@ WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::neuraylib::ITransaction, edit)
 %include "mi/neuraylib/ivalue.h"
 %include "mi/neuraylib/iexpression.h"
 %include "mi/neuraylib/ifunction_call.h"
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
+%include "mi/neuraylib/imaterial_definition.h"
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
 %include "mi/neuraylib/ifunction_definition.h"
 %include "mi/neuraylib/iimage.h"
-%include "mi/neuraylib/imaterial_definition.h"
 %include "mi/neuraylib/imaterial_instance.h"
 %include "mi/neuraylib/iimage_api.h"
 %include "mi/neuraylib/imdl_configuration.h"
+%include "mi/neuraylib/imdl_evaluator_api.h"
 %include "mi/neuraylib/imdl_execution_context.h"
 %include "mi/neuraylib/imdl_factory.h"
 %include "mi/neuraylib/imdl_impexp_api.h"
@@ -915,6 +923,7 @@ NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IDeserialized_function_name)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IDeserialized_module_name)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IImage_api)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_configuration)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_evaluator_api)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_execution_context)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_factory)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_impexp_api)
@@ -940,10 +949,12 @@ NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IExpression_list)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IExpression_parameter)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IExpression_temporary)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IFunction_call)
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMaterial_definition)
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IFunction_definition)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IImage)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::ILightprofile)
-NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMaterial_definition)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMaterial_instance)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMessage)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IModule)
@@ -1010,6 +1021,7 @@ NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IDeserialized_function_name)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IDeserialized_module_name)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IImage_api)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_configuration)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_evaluator_api)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_execution_context)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdle_deserialization_callback)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdle_serialization_callback)
@@ -1037,10 +1049,12 @@ NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IExpression_list)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IExpression_parameter)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IExpression_temporary)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IFunction_call)
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMaterial_definition)
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IFunction_definition)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IImage)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, ILightprofile)
-NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMaterial_definition)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMaterial_instance)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, ITexture)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, ITile)

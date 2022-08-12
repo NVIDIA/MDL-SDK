@@ -81,24 +81,26 @@ public:
 
     /// Supported type mapping modes.
     enum Type_mapping_mode {
-        TM_ALL_SCALAR        =  0,    ///< Do not use vector types at all, MDL vectors and matrices
+        TM_ALL_SCALAR         =   0,  ///< Do not use vector types at all, MDL vectors and matrices
                                       ///  are translated to arrays of scalar type.
-        TM_SMALL_VECTORS     =  1,    ///< Use LLVM vector types only for MDL vector types, MDL
+        TM_SMALL_VECTORS      =   1,  ///< Use LLVM vector types only for MDL vector types, MDL
                                       ///  matrices are translated into arrays of vectors.
-        TM_BIG_VECTORS       =  2,    ///< Use LLVM vector types for MDL vector and matrix types,
+        TM_BIG_VECTORS        =   2,  ///< Use LLVM vector types for MDL vector and matrix types,
                                       ///  creating vectors of up to 16 elements.
 
-        TM_VECTOR_MASK       =  3,    ///< The mask for vector modes.
+        TM_VECTOR_MASK        =   3,  ///< The mask for vector modes.
 
-        TM_BOOL1_SUPPORTED   =  4,    ///< If set, backend supports automatic conversions from i1
+        TM_BOOL1_SUPPORTED    =   4,  ///< If set, backend supports automatic conversions from i1
 
-        TM_BIG_VECTOR_RETURN =  8,    ///< If set, backend supports return of vectors > 4
+        TM_BIG_VECTOR_RETURN  =   8,  ///< If set, backend supports return of vectors > 4
 
-        TM_STRINGS_ARE_IDS   = 16,    ///< Map strings to IDs
+        TM_STRINGS_ARE_IDS    =  16,  ///< Map strings to IDs
 
-        TM_NO_REFERENCE      = 32,    ///< never pass-by-reference/reference return
+        TM_NO_REFERENCE       =  32,  ///< never pass-by-reference/reference return
 
-        TM_NO_POINTER_SUPPORT = 64,   ///< The target does not support pointers
+        TM_NO_POINTER_SUPPORT =  64,  ///< The target does not support pointers
+
+        TM_NO_DOUBLE          = 128,  ///< The target does not support double fp
 
         /// The mode for native x86 compilation.
         TM_NATIVE_X86 = TM_BIG_VECTORS | TM_BIG_VECTOR_RETURN | TM_BOOL1_SUPPORTED,
@@ -108,7 +110,11 @@ public:
 
         /// The mode for HLSL compilation.
         TM_HLSL       = TM_SMALL_VECTORS | TM_NO_REFERENCE | TM_NO_POINTER_SUPPORT |
-                        TM_BOOL1_SUPPORTED
+                        TM_BOOL1_SUPPORTED,
+
+        /// The mode for GLSL compilation.
+        TM_GLSL       = TM_SMALL_VECTORS | TM_NO_REFERENCE | TM_NO_POINTER_SUPPORT |
+                        TM_BOOL1_SUPPORTED,
     };
 
     /// array_desc<T> access indexes.
@@ -142,8 +148,10 @@ public:
         STATE_CORE_METERS_PER_SCENE_UNIT,   ///< Result of state::meters_per_scene_unit()
                                             ///< and reciprocal of state::scene_units_per_meter().
 
-        // only available for HLSL
+        // only available for GLSL/HLSL
         STATE_CORE_ARG_BLOCK_OFFSET,        ///< The argument block offset.
+
+        STATE_FIELD_LAST = STATE_CORE_ARG_BLOCK_OFFSET
     };
 
     /// Exception state access index.
@@ -285,12 +293,17 @@ public:
         return (m_state_mapping & SM_INCLUDE_ARG_BLOCK_OFFS) != 0;
     }
 
+    /// Returns true if the double type is used.
+    bool use_double_type() const {
+        return (m_tm_mode & TM_NO_DOUBLE) == 0;
+    }
+
     /// Get the index of a state field in the current state struct.
     ///
     /// \param state_field  the requested state field
     ///
     /// \return the index of the state field inside the state struct depending on state options
-    int get_state_index(State_field state_field);
+    int get_state_index(State_field state_field) const { return m_state_field[state_field]; }
 
     /// Get an LLVM type for an MDL type.
     ///
@@ -382,6 +395,15 @@ public:
     /// Get the LLVM bool type.
     llvm::IntegerType *get_bool_type() const { return m_type_bool; }
 
+    /// Get the LLVM bool2 type.
+    llvm::Type *get_bool2_type() const { return m_type_bool2; }
+
+    /// Get the LLVM bool3 type.
+    llvm::Type *get_bool3_type() const { return m_type_bool3; }
+
+    /// Get the LLVM bool4 type.
+    llvm::Type *get_bool4_type() const { return m_type_bool4; }
+
     // map the i1 result to the bool type representation
     llvm::IntegerType *get_predicate_type() const { return m_type_predicate; };
 
@@ -405,6 +427,15 @@ public:
 
     /// Get the LLVM double type.
     llvm::Type *get_double_type() const { return m_type_double; }
+
+    /// Get the LLVM double2 type.
+    llvm::Type *get_double2_type() const { return m_type_double2; }
+
+    /// Get the LLVM double3 type.
+    llvm::Type *get_double3_type() const { return m_type_double3; }
+
+    /// Get the LLVM double4 type.
+    llvm::Type *get_double4_type() const { return m_type_double4; }
 
     /// Get the LLVM color type.
     llvm::Type *get_color_type() const { return m_type_color; }
@@ -843,6 +874,9 @@ private:
 
     /// The array type map cache: Stores mappings from MDL array types to LLVM ones.
     mutable Type_array_map m_type_arr_cache;
+
+    /// Indexes for the state fields.
+    int m_state_field[STATE_FIELD_LAST + 1];
 };
 
 }  // mdl

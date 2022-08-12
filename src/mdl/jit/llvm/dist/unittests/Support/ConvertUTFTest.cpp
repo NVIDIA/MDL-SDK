@@ -1,9 +1,8 @@
 //===- llvm/unittest/Support/ConvertUTFTest.cpp - ConvertUTF tests --------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -17,7 +16,7 @@ using namespace llvm;
 
 TEST(ConvertUTFTest, ConvertUTF16LittleEndianToUTF8String) {
   // Src is the look of disapproval.
-  static const char Src[] = "\xff\xfe\xa0\x0c_\x00\xa0\x0c";
+  alignas(UTF16) static const char Src[] = "\xff\xfe\xa0\x0c_\x00\xa0\x0c";
   ArrayRef<char> Ref(Src, sizeof(Src) - 1);
   std::string Result;
   bool Success = convertUTF16ToUTF8String(Ref, Result);
@@ -28,7 +27,7 @@ TEST(ConvertUTFTest, ConvertUTF16LittleEndianToUTF8String) {
 
 TEST(ConvertUTFTest, ConvertUTF16BigEndianToUTF8String) {
   // Src is the look of disapproval.
-  static const char Src[] = "\xfe\xff\x0c\xa0\x00_\x0c\xa0";
+  alignas(UTF16) static const char Src[] = "\xfe\xff\x0c\xa0\x00_\x0c\xa0";
   ArrayRef<char> Ref(Src, sizeof(Src) - 1);
   std::string Result;
   bool Success = convertUTF16ToUTF8String(Ref, Result);
@@ -81,7 +80,7 @@ TEST(ConvertUTFTest, HasUTF16BOM) {
 
 TEST(ConvertUTFTest, UTF16WrappersForConvertUTF16ToUTF8String) {
   // Src is the look of disapproval.
-  static const char Src[] = "\xff\xfe\xa0\x0c_\x00\xa0\x0c";
+  alignas(UTF16) static const char Src[] = "\xff\xfe\xa0\x0c_\x00\xa0\x0c";
   ArrayRef<UTF16> SrcRef = makeArrayRef((const UTF16 *)Src, 4);
   std::string Result;
   bool Success = convertUTF16ToUTF8String(SrcRef, Result);

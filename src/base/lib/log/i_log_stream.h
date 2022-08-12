@@ -113,8 +113,7 @@ using Warning = DETAIL::Base_t<mi::base::MESSAGE_SEVERITY_WARNING>;
 using Info = DETAIL::Base_t<mi::base::MESSAGE_SEVERITY_INFO>;
 using Progress = DETAIL::Base_t<mi::base::MESSAGE_SEVERITY_INFO>;
 using Debug = DETAIL::Base_t<mi::base::MESSAGE_SEVERITY_DEBUG>;
-using Stat = DETAIL::Base_t<mi::base::MESSAGE_SEVERITY_DEBUG>;
-using Vstat = DETAIL::Base_t<mi::base::MESSAGE_SEVERITY_DEBUG>;
+using Stat = DETAIL::Base_t<mi::base::MESSAGE_SEVERITY_VERBOSE>;
 using Vdebug = DETAIL::Base_t<mi::base::MESSAGE_SEVERITY_DEBUG>;
 
 

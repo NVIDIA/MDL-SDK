@@ -88,7 +88,7 @@ function adjust_widths() {
 }
 
 function text_width(element) {
-    var text = element.text()
+    var text = element.text();
     var html = $('<span style="position:absolute;width:auto;left:-9999px">' + (text || element.html()) + '</span>');
     if (!text) {
 	html.css("font-family", element.css("font-family"));

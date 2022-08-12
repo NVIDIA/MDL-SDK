@@ -708,7 +708,7 @@ int Module::get_type_constructor_count(IType const *type) const
 }
 
 // Get the i'th constructor of a type or NULL.
-IDefinition const *Module::get_type_constructor(IType const *type, int index) const
+Definition const *Module::get_type_constructor(IType const *type, int index) const
 {
     if (index < 0)
         return NULL;
@@ -735,7 +735,7 @@ int Module::get_conversion_operator_count(IType const *type) const
 }
 
 // Get the i'th conversion operator of a type or NULL.
-IDefinition const *Module::get_conversion_operator(IType const *type, int index) const
+Definition const *Module::get_conversion_operator(IType const *type, int index) const
 {
     if (index < 0)
         return NULL;
@@ -4489,7 +4489,7 @@ static IType_name *construct_type_name(
 
             printer->print(type);
 
-            char *name = buffer->get_data();
+            char const *name = buffer->get_data();
 
             Name_factory *nf = owner->get_name_factory();
 
@@ -4505,13 +4505,13 @@ static IType_name *construct_type_name(
             Symbol_table &st = owner->get_symbol_table();
 
             for (;;) {
-                char *p = strstr(name, "::");
-                if (p == NULL)
+                char const *p = strstr(name, "::");
+                if (p == NULL) {
                     break;
+                }
+                string buf(name, p, alloc);
 
-                *p = '\0';
-
-                ISymbol const      *sym   = st.get_symbol(name);
+                ISymbol const      *sym   = st.get_symbol(buf.c_str());
                 ISimple_name const *sname = nf->create_simple_name(sym);
 
                 qname->add_component(sname);

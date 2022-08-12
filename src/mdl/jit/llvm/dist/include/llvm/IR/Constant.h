@@ -1,9 +1,8 @@
 //===-- llvm/Constant.h - Constant class definition -------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -44,6 +43,8 @@ protected:
   Constant(Type *ty, ValueTy vty, Use *Ops, unsigned NumOps)
     : User(ty, vty, Ops, NumOps) {}
 
+  ~Constant() = default;
+
 public:
   void operator=(const Constant &) = delete;
   Constant(const Constant &) = delete;
@@ -53,6 +54,10 @@ public:
 
   /// Returns true if the value is one.
   bool isOneValue() const;
+
+  /// Return true if the value is not the one value, or,
+  /// for vectors, does not contain one value elements.
+  bool isNotOneValue() const;
 
   /// Return true if this is the value that would be returned by
   /// getAllOnesValue.
@@ -65,18 +70,21 @@ public:
   /// Return true if the value is negative zero or null value.
   bool isZeroValue() const;
 
-  /// Return true if the value is not the smallest signed value.
+  /// Return true if the value is not the smallest signed value, or,
+  /// for vectors, does not contain smallest signed value elements.
   bool isNotMinSignedValue() const;
 
   /// Return true if the value is the smallest signed value.
   bool isMinSignedValue() const;
 
   /// Return true if this is a finite and non-zero floating-point scalar
-  /// constant or a vector constant with all finite and non-zero elements.
+  /// constant or a fixed width vector constant with all finite and non-zero
+  /// elements.
   bool isFiniteNonZeroFP() const;
 
-  /// Return true if this is a normal (as opposed to denormal) floating-point
-  /// scalar constant or a vector constant with all normal elements.
+  /// Return true if this is a normal (as opposed to denormal, infinity, nan,
+  /// or zero) floating-point scalar constant or a vector constant with all
+  /// normal elements. See APFloat::isNormal.
   bool isNormalFP() const;
 
   /// Return true if this scalar has an exact multiplicative inverse or this
@@ -87,9 +95,25 @@ public:
   /// floating-point constant with all NaN elements.
   bool isNaN() const;
 
-  /// Return true if this is a vector constant that includes any undefined
+  /// Return true if this constant and a constant 'Y' are element-wise equal.
+  /// This is identical to just comparing the pointers, with the exception that
+  /// for vectors, if only one of the constants has an `undef` element in some
+  /// lane, the constants still match.
+  bool isElementWiseEqual(Value *Y) const;
+
+  /// Return true if this is a vector constant that includes any undef or
+  /// poison elements. Since it is impossible to inspect a scalable vector
+  /// element- wise at compile time, this function returns true only if the
+  /// entire vector is undef or poison.
+  bool containsUndefOrPoisonElement() const;
+
+  /// Return true if this is a vector constant that includes any poison
   /// elements.
-  bool containsUndefElement() const;
+  bool containsPoisonElement() const;
+
+  /// Return true if this is a fixed width vector constant that includes
+  /// any constant expressions.
+  bool containsConstantExpression() const;
 
   /// Return true if evaluation of this constant could trap. This is true for
   /// things like constant expressions that could divide by zero.
@@ -114,13 +138,15 @@ public:
 
   /// For aggregates (struct/array/vector) return the constant that corresponds
   /// to the specified element if possible, or null if not. This can return null
-  /// if the element index is a ConstantExpr, or if 'this' is a constant expr.
+  /// if the element index is a ConstantExpr, if 'this' is a constant expr or
+  /// if the constant does not fit into an uint64_t.
   Constant *getAggregateElement(unsigned Elt) const;
   Constant *getAggregateElement(Constant *Elt) const;
 
-  /// If this is a splat vector constant, meaning that all of the elements have
-  /// the same value, return that value. Otherwise return 0.
-  Constant *getSplatValue() const;
+  /// If all elements of the vector constant have the same value, return that
+  /// value. Otherwise, return nullptr. Ignore undefined elements by setting
+  /// AllowUndefs to true.
+  Constant *getSplatValue(bool AllowUndefs = false) const;
 
   /// If C is a constant integer then return its value, otherwise C must be a
   /// vector of constant integers, all equal, and the common value is returned.
@@ -178,6 +204,20 @@ public:
     return const_cast<Constant*>(
                       static_cast<const Constant *>(this)->stripPointerCasts());
   }
+
+  /// Try to replace undefined constant C or undefined elements in C with
+  /// Replacement. If no changes are made, the constant C is returned.
+  static Constant *replaceUndefsWith(Constant *C, Constant *Replacement);
+
+  /// Merges undefs of a Constant with another Constant, along with the
+  /// undefs already present. Other doesn't have to be the same type as C, but
+  /// both must either be scalars or vectors with the same element count. If no
+  /// changes are made, the constant C is returned.
+  static Constant *mergeUndefsWith(Constant *C, Constant *Other);
+
+  /// Return true if a constant is ConstantData or a ConstantAggregate or
+  /// ConstantExpr that contain only ConstantData.
+  bool isManifestConstant() const;
 };
 
 } // end namespace llvm

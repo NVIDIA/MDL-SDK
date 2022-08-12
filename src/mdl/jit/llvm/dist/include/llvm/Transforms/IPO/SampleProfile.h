@@ -1,9 +1,8 @@
 //===- SampleProfile.h - SamplePGO pass ---------- --------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -25,14 +24,18 @@ class Module;
 /// The sample profiler data loader pass.
 class SampleProfileLoaderPass : public PassInfoMixin<SampleProfileLoaderPass> {
 public:
-  SampleProfileLoaderPass(std::string File = "", bool IsThinLTOPreLink = false)
-      : ProfileFileName(File), IsThinLTOPreLink(IsThinLTOPreLink) {}
+  SampleProfileLoaderPass(
+      std::string File = "", std::string RemappingFile = "",
+      ThinOrFullLTOPhase LTOPhase = ThinOrFullLTOPhase::None)
+      : ProfileFileName(File), ProfileRemappingFileName(RemappingFile),
+        LTOPhase(LTOPhase) {}
 
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
 
 private:
   std::string ProfileFileName;
-  bool IsThinLTOPreLink;
+  std::string ProfileRemappingFileName;
+  ThinOrFullLTOPhase LTOPhase;
 };
 
 } // end namespace llvm

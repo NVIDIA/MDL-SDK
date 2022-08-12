@@ -1,9 +1,8 @@
 //===--- AliasAnalysisTest.cpp - Mixed TBAA unit tests --------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -19,6 +18,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Support/SourceMgr.h"
 #include "gtest/gtest.h"
 
@@ -55,8 +55,8 @@ struct AATestPass : FunctionPass {
 
     for (Value *P1 : Pointers)
       for (Value *P2 : Pointers)
-        (void)AA.alias(P1, MemoryLocation::UnknownSize, P2,
-                       MemoryLocation::UnknownSize);
+        (void)AA.alias(P1, LocationSize::beforeOrAfterPointer(), P2,
+                       LocationSize::beforeOrAfterPointer());
 
     return false;
   }
@@ -86,7 +86,8 @@ struct TestCustomAAResult : AAResultBase<TestCustomAAResult> {
 
   bool invalidate(Function &, const PreservedAnalyses &) { return false; }
 
-  AliasResult alias(const MemoryLocation &LocA, const MemoryLocation &LocB) {
+  AliasResult alias(const MemoryLocation &LocA, const MemoryLocation &LocB,
+                    AAQueryInfo &AAQI) {
     CB();
     return MayAlias;
   }
@@ -167,24 +168,25 @@ TEST_F(AliasAnalysisTest, getModRefInfo) {
   // Setup function.
   FunctionType *FTy =
       FunctionType::get(Type::getVoidTy(C), std::vector<Type *>(), false);
-  auto *F = cast<Function>(M.getOrInsertFunction("f", FTy));
+  auto *F = Function::Create(FTy, Function::ExternalLinkage, "f", M);
   auto *BB = BasicBlock::Create(C, "entry", F);
   auto IntType = Type::getInt32Ty(C);
   auto PtrType = Type::getInt32PtrTy(C);
   auto *Value = ConstantInt::get(IntType, 42);
   auto *Addr = ConstantPointerNull::get(PtrType);
+  auto Alignment = Align(IntType->getBitWidth() / 8);
 
   auto *Store1 = new StoreInst(Value, Addr, BB);
-  auto *Load1 = new LoadInst(Addr, "load", BB);
+  auto *Load1 = new LoadInst(IntType, Addr, "load", BB);
   auto *Add1 = BinaryOperator::CreateAdd(Value, Value, "add", BB);
   auto *VAArg1 = new VAArgInst(Addr, PtrType, "vaarg", BB);
   auto *CmpXChg1 = new AtomicCmpXchgInst(
       Addr, ConstantInt::get(IntType, 0), ConstantInt::get(IntType, 1),
-      AtomicOrdering::Monotonic, AtomicOrdering::Monotonic,
+      Alignment, AtomicOrdering::Monotonic, AtomicOrdering::Monotonic,
       SyncScope::System, BB);
-  auto *AtomicRMW =
-      new AtomicRMWInst(AtomicRMWInst::Xchg, Addr, ConstantInt::get(IntType, 1),
-                        AtomicOrdering::Monotonic, SyncScope::System, BB);
+  auto *AtomicRMW = new AtomicRMWInst(
+      AtomicRMWInst::Xchg, Addr, ConstantInt::get(IntType, 1), Alignment,
+      AtomicOrdering::Monotonic, SyncScope::System, BB);
 
   ReturnInst::Create(C, nullptr, BB);
 
@@ -203,6 +205,97 @@ TEST_F(AliasAnalysisTest, getModRefInfo) {
   EXPECT_EQ(AA.getModRefInfo(CmpXChg1, None), ModRefInfo::ModRef);
   EXPECT_EQ(AA.getModRefInfo(AtomicRMW, MemoryLocation()), ModRefInfo::ModRef);
   EXPECT_EQ(AA.getModRefInfo(AtomicRMW, None), ModRefInfo::ModRef);
+}
+
+static Instruction *getInstructionByName(Function &F, StringRef Name) {
+  for (auto &I : instructions(F))
+    if (I.getName() == Name)
+      return &I;
+  llvm_unreachable("Expected to find instruction!");
+}
+
+TEST_F(AliasAnalysisTest, BatchAAPhiCycles) {
+  LLVMContext C;
+  SMDiagnostic Err;
+  std::unique_ptr<Module> M = parseAssemblyString(R"(
+    define void @f(i8* noalias %a, i1 %c) {
+    entry:
+      br label %loop
+
+    loop:
+      %phi = phi i8* [ null, %entry ], [ %a2, %loop ]
+      %offset1 = phi i64 [ 0, %entry ], [ %offset2, %loop]
+      %offset2 = add i64 %offset1, 1
+      %a1 = getelementptr i8, i8* %a, i64 %offset1
+      %a2 = getelementptr i8, i8* %a, i64 %offset2
+      %s1 = select i1 %c, i8* %a1, i8* %phi
+      %s2 = select i1 %c, i8* %a2, i8* %a1
+      br label %loop
+    }
+  )", Err, C);
+
+  Function *F = M->getFunction("f");
+  Instruction *Phi = getInstructionByName(*F, "phi");
+  Instruction *A1 = getInstructionByName(*F, "a1");
+  Instruction *A2 = getInstructionByName(*F, "a2");
+  Instruction *S1 = getInstructionByName(*F, "s1");
+  Instruction *S2 = getInstructionByName(*F, "s2");
+  MemoryLocation PhiLoc(Phi, LocationSize::precise(1));
+  MemoryLocation A1Loc(A1, LocationSize::precise(1));
+  MemoryLocation A2Loc(A2, LocationSize::precise(1));
+  MemoryLocation S1Loc(S1, LocationSize::precise(1));
+  MemoryLocation S2Loc(S2, LocationSize::precise(1));
+
+  auto &AA = getAAResults(*F);
+  EXPECT_EQ(NoAlias, AA.alias(A1Loc, A2Loc));
+  EXPECT_EQ(MayAlias, AA.alias(PhiLoc, A1Loc));
+  EXPECT_EQ(MayAlias, AA.alias(S1Loc, S2Loc));
+
+  BatchAAResults BatchAA(AA);
+  EXPECT_EQ(NoAlias, BatchAA.alias(A1Loc, A2Loc));
+  EXPECT_EQ(MayAlias, BatchAA.alias(PhiLoc, A1Loc));
+  EXPECT_EQ(MayAlias, BatchAA.alias(S1Loc, S2Loc));
+
+  BatchAAResults BatchAA2(AA);
+  EXPECT_EQ(NoAlias, BatchAA2.alias(A1Loc, A2Loc));
+  EXPECT_EQ(MayAlias, BatchAA2.alias(S1Loc, S2Loc));
+  EXPECT_EQ(MayAlias, BatchAA2.alias(PhiLoc, A1Loc));
+}
+
+TEST_F(AliasAnalysisTest, BatchAAPhiAssumption) {
+  LLVMContext C;
+  SMDiagnostic Err;
+  std::unique_ptr<Module> M = parseAssemblyString(R"(
+    define void @f(i8* %a.base, i8* %b.base, i1 %c) {
+    entry:
+      br label %loop
+
+    loop:
+      %a = phi i8* [ %a.next, %loop ], [ %a.base, %entry ]
+      %b = phi i8* [ %b.next, %loop ], [ %b.base, %entry ]
+      %a.next = getelementptr i8, i8* %a, i64 1
+      %b.next = getelementptr i8, i8* %b, i64 1
+      br label %loop
+    }
+  )", Err, C);
+
+  Function *F = M->getFunction("f");
+  Instruction *A = getInstructionByName(*F, "a");
+  Instruction *B = getInstructionByName(*F, "b");
+  Instruction *ANext = getInstructionByName(*F, "a.next");
+  Instruction *BNext = getInstructionByName(*F, "b.next");
+  MemoryLocation ALoc(A, LocationSize::precise(1));
+  MemoryLocation BLoc(B, LocationSize::precise(1));
+  MemoryLocation ANextLoc(ANext, LocationSize::precise(1));
+  MemoryLocation BNextLoc(BNext, LocationSize::precise(1));
+
+  auto &AA = getAAResults(*F);
+  EXPECT_EQ(MayAlias, AA.alias(ALoc, BLoc));
+  EXPECT_EQ(MayAlias, AA.alias(ANextLoc, BNextLoc));
+
+  BatchAAResults BatchAA(AA);
+  EXPECT_EQ(MayAlias, BatchAA.alias(ALoc, BLoc));
+  EXPECT_EQ(MayAlias, BatchAA.alias(ANextLoc, BNextLoc));
 }
 
 class AAPassInfraTest : public testing::Test {

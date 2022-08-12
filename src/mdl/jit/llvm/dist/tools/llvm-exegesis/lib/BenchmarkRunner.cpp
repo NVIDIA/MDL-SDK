@@ -1,229 +1,279 @@
 //===-- BenchmarkRunner.cpp -------------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include <array>
+#include <memory>
 #include <string>
 
 #include "Assembler.h"
 #include "BenchmarkRunner.h"
+#include "Error.h"
 #include "MCInstrDescView.h"
+#include "PerfHelper.h"
+#include "Target.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
+#include "llvm/Support/CrashRecoveryContext.h"
+#include "llvm/Support/Error.h"
 #include "llvm/Support/FileSystem.h"
-#include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Program.h"
 
+namespace llvm {
 namespace exegesis {
-
-BenchmarkFailure::BenchmarkFailure(const llvm::Twine &S)
-    : llvm::StringError(S, llvm::inconvertibleErrorCode()) {}
 
 BenchmarkRunner::BenchmarkRunner(const LLVMState &State,
                                  InstructionBenchmark::ModeE Mode)
-    : State(State), RATC(State.getRegInfo(),
-                         getFunctionReservedRegs(State.getTargetMachine())),
-      Mode(Mode) {}
+    : State(State), Mode(Mode), Scratch(std::make_unique<ScratchSpace>()) {}
 
 BenchmarkRunner::~BenchmarkRunner() = default;
 
-llvm::Expected<std::vector<InstructionBenchmark>>
-BenchmarkRunner::run(unsigned Opcode, unsigned NumRepetitions) {
-  const llvm::MCInstrDesc &InstrDesc = State.getInstrInfo().get(Opcode);
-  // Ignore instructions that we cannot run.
-  if (InstrDesc.isPseudo())
-    return llvm::make_error<BenchmarkFailure>("Unsupported opcode: isPseudo");
-  if (InstrDesc.isBranch() || InstrDesc.isIndirectBranch())
-    return llvm::make_error<BenchmarkFailure>(
-        "Unsupported opcode: isBranch/isIndirectBranch");
-  if (InstrDesc.isCall() || InstrDesc.isReturn())
-    return llvm::make_error<BenchmarkFailure>(
-        "Unsupported opcode: isCall/isReturn");
+namespace {
+class FunctionExecutorImpl : public BenchmarkRunner::FunctionExecutor {
+public:
+  FunctionExecutorImpl(const LLVMState &State,
+                       object::OwningBinary<object::ObjectFile> Obj,
+                       BenchmarkRunner::ScratchSpace *Scratch)
+      : State(State), Function(State.createTargetMachine(), std::move(Obj)),
+        Scratch(Scratch) {}
 
-  llvm::Expected<std::vector<BenchmarkConfiguration>> ConfigurationOrError =
-      generateConfigurations(Opcode);
+private:
+  Expected<int64_t> runAndMeasure(const char *Counters) const override {
+    auto ResultOrError = runAndSample(Counters);
+    if (ResultOrError)
+      return ResultOrError.get()[0];
+    return ResultOrError.takeError();
+  }
 
-  if (llvm::Error E = ConfigurationOrError.takeError())
-    return std::move(E);
+  static void
+  accumulateCounterValues(const llvm::SmallVector<int64_t, 4> &NewValues,
+                          llvm::SmallVector<int64_t, 4> *Result) {
+    const size_t NumValues = std::max(NewValues.size(), Result->size());
+    if (NumValues > Result->size())
+      Result->resize(NumValues, 0);
+    for (size_t I = 0, End = NewValues.size(); I < End; ++I)
+      (*Result)[I] += NewValues[I];
+  }
 
-  std::vector<InstructionBenchmark> InstrBenchmarks;
-  for (const BenchmarkConfiguration &Conf : ConfigurationOrError.get())
-    InstrBenchmarks.push_back(runOne(Conf, Opcode, NumRepetitions));
-  return InstrBenchmarks;
-}
+  Expected<llvm::SmallVector<int64_t, 4>>
+  runAndSample(const char *Counters) const override {
+    // We sum counts when there are several counters for a single ProcRes
+    // (e.g. P23 on SandyBridge).
+    llvm::SmallVector<int64_t, 4> CounterValues;
+    int Reserved = 0;
+    SmallVector<StringRef, 2> CounterNames;
+    StringRef(Counters).split(CounterNames, '+');
+    char *const ScratchPtr = Scratch->ptr();
+    const ExegesisTarget &ET = State.getExegesisTarget();
+    for (auto &CounterName : CounterNames) {
+      CounterName = CounterName.trim();
+      auto CounterOrError = ET.createCounter(CounterName, State);
 
-InstructionBenchmark
-BenchmarkRunner::runOne(const BenchmarkConfiguration &Configuration,
-                        unsigned Opcode, unsigned NumRepetitions) const {
+      if (!CounterOrError)
+        return CounterOrError.takeError();
+
+      pfm::Counter *Counter = CounterOrError.get().get();
+      if (Reserved == 0) {
+        Reserved = Counter->numValues();
+        CounterValues.reserve(Reserved);
+      } else if (Reserved != Counter->numValues())
+        // It'd be wrong to accumulate vectors of different sizes.
+        return make_error<Failure>(
+            llvm::Twine("Inconsistent number of values for counter ")
+                .concat(CounterName)
+                .concat(std::to_string(Counter->numValues()))
+                .concat(" vs expected of ")
+                .concat(std::to_string(Reserved)));
+      Scratch->clear();
+      {
+        auto PS = ET.withSavedState();
+        CrashRecoveryContext CRC;
+        CrashRecoveryContext::Enable();
+        const bool Crashed = !CRC.RunSafely([this, Counter, ScratchPtr]() {
+          Counter->start();
+          this->Function(ScratchPtr);
+          Counter->stop();
+        });
+        CrashRecoveryContext::Disable();
+        PS.reset();
+        if (Crashed) {
+          std::string Msg = "snippet crashed while running";
+#ifdef LLVM_ON_UNIX
+          // See "Exit Status for Commands":
+          // https://pubs.opengroup.org/onlinepubs/9699919799/xrat/V4_xcu_chap02.html
+          constexpr const int kSigOffset = 128;
+          if (const char *const SigName = strsignal(CRC.RetCode - kSigOffset)) {
+            Msg += ": ";
+            Msg += SigName;
+          }
+#endif
+          return make_error<SnippetCrash>(std::move(Msg));
+        }
+      }
+
+      auto ValueOrError = Counter->readOrError(Function.getFunctionBytes());
+      if (!ValueOrError)
+        return ValueOrError.takeError();
+      accumulateCounterValues(ValueOrError.get(), &CounterValues);
+    }
+    return CounterValues;
+  }
+
+  const LLVMState &State;
+  const ExecutableFunction Function;
+  BenchmarkRunner::ScratchSpace *const Scratch;
+};
+} // namespace
+
+Expected<InstructionBenchmark> BenchmarkRunner::runConfiguration(
+    const BenchmarkCode &BC, unsigned NumRepetitions,
+    ArrayRef<std::unique_ptr<const SnippetRepetitor>> Repetitors,
+    bool DumpObjectToDisk) const {
   InstructionBenchmark InstrBenchmark;
   InstrBenchmark.Mode = Mode;
-  InstrBenchmark.CpuName = State.getTargetMachine().getTargetCPU();
+  InstrBenchmark.CpuName = std::string(State.getTargetMachine().getTargetCPU());
   InstrBenchmark.LLVMTriple =
       State.getTargetMachine().getTargetTriple().normalize();
   InstrBenchmark.NumRepetitions = NumRepetitions;
-  InstrBenchmark.Info = Configuration.Info;
+  InstrBenchmark.Info = BC.Info;
 
-  const std::vector<llvm::MCInst> &Snippet = Configuration.Snippet;
-  if (Snippet.empty()) {
-    InstrBenchmark.Error = "Empty snippet";
-    return InstrBenchmark;
-  }
+  const std::vector<MCInst> &Instructions = BC.Key.Instructions;
 
-  InstrBenchmark.Key.Instructions = Snippet;
+  InstrBenchmark.Key = BC.Key;
 
-  // Repeat the snippet until there are at least NumInstructions in the
-  // resulting code. The snippet is always repeated at least once.
-  const auto GenerateInstructions = [&Configuration](
-                                        const int MinInstructions) {
-    std::vector<llvm::MCInst> Code = Configuration.Snippet;
-    for (int I = 0; I < MinInstructions; ++I)
-      Code.push_back(Configuration.Snippet[I % Configuration.Snippet.size()]);
-    return Code;
+  // If we end up having an error, and we've previously succeeded with
+  // some other Repetitor, we want to discard the previous measurements.
+  struct ClearBenchmarkOnReturn {
+    ClearBenchmarkOnReturn(InstructionBenchmark *IB) : IB(IB) {}
+    ~ClearBenchmarkOnReturn() {
+      if (Clear)
+        IB->Measurements.clear();
+    }
+    void disarm() { Clear = false; }
+
+  private:
+    InstructionBenchmark *const IB;
+    bool Clear = true;
   };
+  ClearBenchmarkOnReturn CBOR(&InstrBenchmark);
 
-  // Assemble at least kMinInstructionsForSnippet instructions by repeating the
-  // snippet for debug/analysis. This is so that the user clearly understands
-  // that the inside instructions are repeated.
-  constexpr const int kMinInstructionsForSnippet = 16;
-  {
-    auto ObjectFilePath =
-        writeObjectFile(Configuration.SnippetSetup,
-                        GenerateInstructions(kMinInstructionsForSnippet));
-    if (llvm::Error E = ObjectFilePath.takeError()) {
-      InstrBenchmark.Error = llvm::toString(std::move(E));
+  for (const std::unique_ptr<const SnippetRepetitor> &Repetitor : Repetitors) {
+    // Assemble at least kMinInstructionsForSnippet instructions by repeating
+    // the snippet for debug/analysis. This is so that the user clearly
+    // understands that the inside instructions are repeated.
+    constexpr const int kMinInstructionsForSnippet = 16;
+    {
+      SmallString<0> Buffer;
+      raw_svector_ostream OS(Buffer);
+      if (Error E = assembleToStream(
+              State.getExegesisTarget(), State.createTargetMachine(),
+              BC.LiveIns, BC.Key.RegisterInitialValues,
+              Repetitor->Repeat(Instructions, kMinInstructionsForSnippet),
+              OS)) {
+        return std::move(E);
+      }
+      const ExecutableFunction EF(State.createTargetMachine(),
+                                  getObjectFromBuffer(OS.str()));
+      const auto FnBytes = EF.getFunctionBytes();
+      llvm::append_range(InstrBenchmark.AssembledSnippet, FnBytes);
+    }
+
+    // Assemble NumRepetitions instructions repetitions of the snippet for
+    // measurements.
+    const auto Filler =
+        Repetitor->Repeat(Instructions, InstrBenchmark.NumRepetitions);
+
+    object::OwningBinary<object::ObjectFile> ObjectFile;
+    if (DumpObjectToDisk) {
+      auto ObjectFilePath = writeObjectFile(BC, Filler);
+      if (Error E = ObjectFilePath.takeError()) {
+        InstrBenchmark.Error = toString(std::move(E));
+        return InstrBenchmark;
+      }
+      outs() << "Check generated assembly with: /usr/bin/objdump -d "
+             << *ObjectFilePath << "\n";
+      ObjectFile = getObjectFromFile(*ObjectFilePath);
+    } else {
+      SmallString<0> Buffer;
+      raw_svector_ostream OS(Buffer);
+      if (Error E = assembleToStream(
+              State.getExegesisTarget(), State.createTargetMachine(),
+              BC.LiveIns, BC.Key.RegisterInitialValues, Filler, OS)) {
+        return std::move(E);
+      }
+      ObjectFile = getObjectFromBuffer(OS.str());
+    }
+
+    const FunctionExecutorImpl Executor(State, std::move(ObjectFile),
+                                        Scratch.get());
+    auto NewMeasurements = runMeasurements(Executor);
+    if (Error E = NewMeasurements.takeError()) {
+      if (!E.isA<SnippetCrash>())
+        return std::move(E);
+      InstrBenchmark.Error = toString(std::move(E));
       return InstrBenchmark;
     }
-    const ExecutableFunction EF(State.createTargetMachine(),
-                                getObjectFromFile(*ObjectFilePath));
-    const auto FnBytes = EF.getFunctionBytes();
-    InstrBenchmark.AssembledSnippet.assign(FnBytes.begin(), FnBytes.end());
+    assert(InstrBenchmark.NumRepetitions > 0 && "invalid NumRepetitions");
+    for (BenchmarkMeasure &BM : *NewMeasurements) {
+      // Scale the measurements by instruction.
+      BM.PerInstructionValue /= InstrBenchmark.NumRepetitions;
+      // Scale the measurements by snippet.
+      BM.PerSnippetValue *= static_cast<double>(Instructions.size()) /
+                            InstrBenchmark.NumRepetitions;
+    }
+    if (InstrBenchmark.Measurements.empty()) {
+      InstrBenchmark.Measurements = std::move(*NewMeasurements);
+      continue;
+    }
+
+    assert(Repetitors.size() > 1 && !InstrBenchmark.Measurements.empty() &&
+           "We're in an 'min' repetition mode, and need to aggregate new "
+           "result to the existing result.");
+    assert(InstrBenchmark.Measurements.size() == NewMeasurements->size() &&
+           "Expected to have identical number of measurements.");
+    for (auto I : zip(InstrBenchmark.Measurements, *NewMeasurements)) {
+      BenchmarkMeasure &Measurement = std::get<0>(I);
+      BenchmarkMeasure &NewMeasurement = std::get<1>(I);
+      assert(Measurement.Key == NewMeasurement.Key &&
+             "Expected measurements to be symmetric");
+
+      Measurement.PerInstructionValue = std::min(
+          Measurement.PerInstructionValue, NewMeasurement.PerInstructionValue);
+      Measurement.PerSnippetValue =
+          std::min(Measurement.PerSnippetValue, NewMeasurement.PerSnippetValue);
+    }
   }
 
-  // Assemble NumRepetitions instructions repetitions of the snippet for
-  // measurements.
-  auto ObjectFilePath =
-      writeObjectFile(Configuration.SnippetSetup,
-                      GenerateInstructions(InstrBenchmark.NumRepetitions));
-  if (llvm::Error E = ObjectFilePath.takeError()) {
-    InstrBenchmark.Error = llvm::toString(std::move(E));
-    return InstrBenchmark;
-  }
-  llvm::outs() << "Check generated assembly with: /usr/bin/objdump -d "
-               << *ObjectFilePath << "\n";
-  const ExecutableFunction EF(State.createTargetMachine(),
-                              getObjectFromFile(*ObjectFilePath));
-  InstrBenchmark.Measurements = runMeasurements(EF, NumRepetitions);
-
+  // We successfully measured everything, so don't discard the results.
+  CBOR.disarm();
   return InstrBenchmark;
 }
 
-llvm::Expected<std::vector<BenchmarkConfiguration>>
-BenchmarkRunner::generateConfigurations(unsigned Opcode) const {
-  if (auto E = generatePrototype(Opcode)) {
-    SnippetPrototype &Prototype = E.get();
-    // TODO: Generate as many configurations as needed here.
-    BenchmarkConfiguration Configuration;
-    Configuration.Info = Prototype.Explanation;
-    for (InstructionInstance &II : Prototype.Snippet) {
-      II.randomizeUnsetVariables();
-      Configuration.Snippet.push_back(II.build());
-    }
-    Configuration.SnippetSetup.RegsToDef = computeRegsToDef(Prototype.Snippet);
-    return std::vector<BenchmarkConfiguration>{Configuration};
-  } else
-    return E.takeError();
-}
-
-std::vector<unsigned> BenchmarkRunner::computeRegsToDef(
-    const std::vector<InstructionInstance> &Snippet) const {
-  // Collect all register uses and create an assignment for each of them.
-  // Loop invariant: DefinedRegs[i] is true iif it has been set at least once
-  // before the current instruction.
-  llvm::BitVector DefinedRegs = RATC.emptyRegisters();
-  std::vector<unsigned> RegsToDef;
-  for (const InstructionInstance &II : Snippet) {
-    // Returns the register that this Operand sets or uses, or 0 if this is not
-    // a register.
-    const auto GetOpReg = [&II](const Operand &Op) -> unsigned {
-      if (Op.ImplicitReg) {
-        return *Op.ImplicitReg;
-      } else if (Op.IsExplicit && II.getValueFor(Op).isReg()) {
-        return II.getValueFor(Op).getReg();
-      }
-      return 0;
-    };
-    // Collect used registers that have never been def'ed.
-    for (const Operand &Op : II.Instr.Operands) {
-      if (!Op.IsDef) {
-        const unsigned Reg = GetOpReg(Op);
-        if (Reg > 0 && !DefinedRegs.test(Reg)) {
-          RegsToDef.push_back(Reg);
-          DefinedRegs.set(Reg);
-        }
-      }
-    }
-    // Mark defs as having been def'ed.
-    for (const Operand &Op : II.Instr.Operands) {
-      if (Op.IsDef) {
-        const unsigned Reg = GetOpReg(Op);
-        if (Reg > 0) {
-          DefinedRegs.set(Reg);
-        }
-      }
-    }
-  }
-  return RegsToDef;
-}
-
-llvm::Expected<std::string>
-BenchmarkRunner::writeObjectFile(const BenchmarkConfiguration::Setup &Setup,
-                                 llvm::ArrayRef<llvm::MCInst> Code) const {
+Expected<std::string>
+BenchmarkRunner::writeObjectFile(const BenchmarkCode &BC,
+                                 const FillFunction &FillFunction) const {
   int ResultFD = 0;
-  llvm::SmallString<256> ResultPath;
-  if (llvm::Error E = llvm::errorCodeToError(llvm::sys::fs::createTemporaryFile(
-          "snippet", "o", ResultFD, ResultPath)))
+  SmallString<256> ResultPath;
+  if (Error E = errorCodeToError(
+          sys::fs::createTemporaryFile("snippet", "o", ResultFD, ResultPath)))
     return std::move(E);
-  llvm::raw_fd_ostream OFS(ResultFD, true /*ShouldClose*/);
-  assembleToStream(State.getExegesisTarget(), State.createTargetMachine(),
-                   Setup.RegsToDef, Code, OFS);
-  return ResultPath.str();
+  raw_fd_ostream OFS(ResultFD, true /*ShouldClose*/);
+  if (Error E = assembleToStream(
+          State.getExegesisTarget(), State.createTargetMachine(), BC.LiveIns,
+          BC.Key.RegisterInitialValues, FillFunction, OFS)) {
+    return std::move(E);
+  }
+  return std::string(ResultPath.str());
 }
 
-llvm::Expected<SnippetPrototype>
-BenchmarkRunner::generateSelfAliasingPrototype(const Instruction &Instr) const {
-  const AliasingConfigurations SelfAliasing(Instr, Instr);
-  if (SelfAliasing.empty()) {
-    return llvm::make_error<BenchmarkFailure>("empty self aliasing");
-  }
-  SnippetPrototype Prototype;
-  InstructionInstance II(Instr);
-  if (SelfAliasing.hasImplicitAliasing()) {
-    Prototype.Explanation = "implicit Self cycles, picking random values.";
-  } else {
-    Prototype.Explanation =
-        "explicit self cycles, selecting one aliasing Conf.";
-    // This is a self aliasing instruction so defs and uses are from the same
-    // instance, hence twice II in the following call.
-    setRandomAliasing(SelfAliasing, II, II);
-  }
-  Prototype.Snippet.push_back(std::move(II));
-  return std::move(Prototype);
-}
+BenchmarkRunner::FunctionExecutor::~FunctionExecutor() {}
 
-llvm::Expected<SnippetPrototype>
-BenchmarkRunner::generateUnconstrainedPrototype(const Instruction &Instr,
-                                                llvm::StringRef Msg) const {
-  SnippetPrototype Prototype;
-  Prototype.Explanation =
-      llvm::formatv("{0}, repeating an unconstrained assignment", Msg);
-  Prototype.Snippet.emplace_back(Instr);
-  return std::move(Prototype);
-}
 } // namespace exegesis
+} // namespace llvm

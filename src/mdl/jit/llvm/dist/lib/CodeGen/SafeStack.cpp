@@ -1,9 +1,8 @@
 //===- SafeStack.cpp - Safe Stack Insertion -------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -15,10 +14,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "SafeStackColoring.h"
 #include "SafeStackLayout.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
@@ -28,14 +27,13 @@
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
+#include "llvm/Analysis/StackLifetime.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
-#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Attributes.h"
-#include "llvm/IR/CallSite.h"
 #include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DIBuilder.h"
@@ -55,6 +53,7 @@
 #include "llvm/IR/Use.h"
 #include "llvm/IR/User.h"
 #include "llvm/IR/Value.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Debug.h"
@@ -64,6 +63,7 @@
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -96,6 +96,10 @@ static cl::opt<bool>
     SafeStackUsePointerAddress("safestack-use-pointer-address",
                                   cl::init(false), cl::Hidden);
 
+// Disabled by default due to PR32143.
+static cl::opt<bool> ClColoring("safe-stack-coloring",
+                                cl::desc("enable safe stack coloring"),
+                                cl::Hidden, cl::init(false));
 
 namespace {
 
@@ -147,7 +151,7 @@ class SafeStack {
   Value *getStackGuard(IRBuilder<> &IRB, Function &F);
 
   /// Load stack guard from the frame and check if it has changed.
-  void checkStackGuard(IRBuilder<> &IRB, Function &F, ReturnInst &RI,
+  void checkStackGuard(IRBuilder<> &IRB, Function &F, Instruction &RI,
                        AllocaInst *StackGuardSlot, Value *StackGuard);
 
   /// Find all static allocas, dynamic allocas, return instructions and
@@ -156,7 +160,7 @@ class SafeStack {
   void findInsts(Function &F, SmallVectorImpl<AllocaInst *> &StaticAllocas,
                  SmallVectorImpl<AllocaInst *> &DynamicAllocas,
                  SmallVectorImpl<Argument *> &ByValArguments,
-                 SmallVectorImpl<ReturnInst *> &Returns,
+                 SmallVectorImpl<Instruction *> &Returns,
                  SmallVectorImpl<Instruction *> &StackRestorePoints);
 
   /// Calculate the allocation size of a given alloca. Returns 0 if the
@@ -164,15 +168,13 @@ class SafeStack {
   uint64_t getStaticAllocaAllocationSize(const AllocaInst* AI);
 
   /// Allocate space for all static allocas in \p StaticAllocas,
-  /// replace allocas with pointers into the unsafe stack and generate code to
-  /// restore the stack pointer before all return instructions in \p Returns.
+  /// replace allocas with pointers into the unsafe stack.
   ///
   /// \returns A pointer to the top of the unsafe stack after all unsafe static
   /// allocas are allocated.
   Value *moveStaticAllocasToUnsafeStack(IRBuilder<> &IRB, Function &F,
                                         ArrayRef<AllocaInst *> StaticAllocas,
                                         ArrayRef<Argument *> ByValArguments,
-                                        ArrayRef<ReturnInst *> Returns,
                                         Instruction *BasePointer,
                                         AllocaInst *StackGuardSlot);
 
@@ -200,7 +202,7 @@ class SafeStack {
   bool IsAccessSafe(Value *Addr, uint64_t Size, const Value *AllocaPtr,
                     uint64_t AllocaSize);
 
-  bool ShouldInlinePointerAddress(CallSite &CS);
+  bool ShouldInlinePointerAddress(CallInst &CI);
   void TryInlinePointerAddress();
 
 public:
@@ -260,8 +262,14 @@ bool SafeStack::IsAccessSafe(Value *Addr, uint64_t AccessSize,
 bool SafeStack::IsMemIntrinsicSafe(const MemIntrinsic *MI, const Use &U,
                                    const Value *AllocaPtr,
                                    uint64_t AllocaSize) {
-  // All MemIntrinsics have destination address in Arg0 and size in Arg2.
-  if (MI->getRawDest() != U) return true;
+  if (auto MTI = dyn_cast<MemTransferInst>(MI)) {
+    if (MTI->getRawSource() != U && MTI->getRawDest() != U)
+      return true;
+  } else {
+    if (MI->getRawDest() != U)
+      return true;
+  }
+
   const auto *Len = dyn_cast<ConstantInt>(MI->getLength());
   // Non-constant size => unsafe. FIXME: try SCEV getRange.
   if (!Len) return false;
@@ -316,13 +324,10 @@ bool SafeStack::IsSafeStackAlloca(const Value *AllocaPtr, uint64_t AllocaSize) {
 
       case Instruction::Call:
       case Instruction::Invoke: {
-        ImmutableCallSite CS(I);
+        const CallBase &CS = *cast<CallBase>(I);
 
-        if (const IntrinsicInst *II = dyn_cast<IntrinsicInst>(I)) {
-          if (II->getIntrinsicID() == Intrinsic::lifetime_start ||
-              II->getIntrinsicID() == Intrinsic::lifetime_end)
-            continue;
-        }
+        if (I->isLifetimeStartOrEnd())
+          continue;
 
         if (const MemIntrinsic *MI = dyn_cast<MemIntrinsic>(I)) {
           if (!IsMemIntrinsicSafe(MI, UI, AllocaPtr, AllocaSize)) {
@@ -341,8 +346,8 @@ bool SafeStack::IsSafeStackAlloca(const Value *AllocaPtr, uint64_t AllocaSize) {
         // FIXME: a more precise solution would require an interprocedural
         // analysis here, which would look at all uses of an argument inside
         // the function being called.
-        ImmutableCallSite::arg_iterator B = CS.arg_begin(), E = CS.arg_end();
-        for (ImmutableCallSite::arg_iterator A = B; A != E; ++A)
+        auto B = CS.arg_begin(), E = CS.arg_end();
+        for (auto A = B; A != E; ++A)
           if (A->get() == V)
             if (!(CS.doesNotCapture(A - B) && (CS.doesNotAccessMemory(A - B) ||
                                                CS.doesNotAccessMemory()))) {
@@ -369,14 +374,14 @@ Value *SafeStack::getStackGuard(IRBuilder<> &IRB, Function &F) {
   if (!StackGuardVar)
     StackGuardVar =
         F.getParent()->getOrInsertGlobal("__stack_chk_guard", StackPtrTy);
-  return IRB.CreateLoad(StackGuardVar, "StackGuard");
+  return IRB.CreateLoad(StackPtrTy, StackGuardVar, "StackGuard");
 }
 
 void SafeStack::findInsts(Function &F,
                           SmallVectorImpl<AllocaInst *> &StaticAllocas,
                           SmallVectorImpl<AllocaInst *> &DynamicAllocas,
                           SmallVectorImpl<Argument *> &ByValArguments,
-                          SmallVectorImpl<ReturnInst *> &Returns,
+                          SmallVectorImpl<Instruction *> &Returns,
                           SmallVectorImpl<Instruction *> &StackRestorePoints) {
   for (Instruction &I : instructions(&F)) {
     if (auto AI = dyn_cast<AllocaInst>(&I)) {
@@ -394,7 +399,10 @@ void SafeStack::findInsts(Function &F,
         DynamicAllocas.push_back(AI);
       }
     } else if (auto RI = dyn_cast<ReturnInst>(&I)) {
-      Returns.push_back(RI);
+      if (CallInst *CI = I.getParent()->getTerminatingMustTailCall())
+        Returns.push_back(CI);
+      else
+        Returns.push_back(RI);
     } else if (auto CI = dyn_cast<CallInst>(&I)) {
       // setjmps require stack restore.
       if (CI->getCalledFunction() && CI->canReturnTwice())
@@ -450,16 +458,17 @@ SafeStack::createStackRestorePoints(IRBuilder<> &IRB, Function &F,
     ++NumUnsafeStackRestorePoints;
 
     IRB.SetInsertPoint(I->getNextNode());
-    Value *CurrentTop = DynamicTop ? IRB.CreateLoad(DynamicTop) : StaticTop;
+    Value *CurrentTop =
+        DynamicTop ? IRB.CreateLoad(StackPtrTy, DynamicTop) : StaticTop;
     IRB.CreateStore(CurrentTop, UnsafeStackPtr);
   }
 
   return DynamicTop;
 }
 
-void SafeStack::checkStackGuard(IRBuilder<> &IRB, Function &F, ReturnInst &RI,
+void SafeStack::checkStackGuard(IRBuilder<> &IRB, Function &F, Instruction &RI,
                                 AllocaInst *StackGuardSlot, Value *StackGuard) {
-  Value *V = IRB.CreateLoad(StackGuardSlot);
+  Value *V = IRB.CreateLoad(StackPtrTy, StackGuardSlot);
   Value *Cmp = IRB.CreateICmpNE(StackGuard, V);
 
   auto SuccessProb = BranchProbabilityInfo::getBranchProbStackProtector(true);
@@ -472,8 +481,8 @@ void SafeStack::checkStackGuard(IRBuilder<> &IRB, Function &F, ReturnInst &RI,
                                 /* Unreachable */ true, Weights);
   IRBuilder<> IRBFail(CheckTerm);
   // FIXME: respect -fsanitize-trap / -ftrap-function here?
-  Constant *StackChkFail = F.getParent()->getOrInsertFunction(
-      "__stack_chk_fail", IRB.getVoidTy());
+  FunctionCallee StackChkFail =
+      F.getParent()->getOrInsertFunction("__stack_chk_fail", IRB.getVoidTy());
   IRBFail.CreateCall(StackChkFail, {});
 }
 
@@ -482,16 +491,25 @@ void SafeStack::checkStackGuard(IRBuilder<> &IRB, Function &F, ReturnInst &RI,
 /// prologue into a local variable and restore it in the epilogue.
 Value *SafeStack::moveStaticAllocasToUnsafeStack(
     IRBuilder<> &IRB, Function &F, ArrayRef<AllocaInst *> StaticAllocas,
-    ArrayRef<Argument *> ByValArguments, ArrayRef<ReturnInst *> Returns,
-    Instruction *BasePointer, AllocaInst *StackGuardSlot) {
+    ArrayRef<Argument *> ByValArguments, Instruction *BasePointer,
+    AllocaInst *StackGuardSlot) {
   if (StaticAllocas.empty() && ByValArguments.empty())
     return BasePointer;
 
   DIBuilder DIB(*F.getParent());
 
-  StackColoring SSC(F, StaticAllocas);
-  SSC.run();
-  SSC.removeAllMarkers();
+  StackLifetime SSC(F, StaticAllocas, StackLifetime::LivenessType::May);
+  static const StackLifetime::LiveRange NoColoringRange(1, true);
+  if (ClColoring)
+    SSC.run();
+
+  for (auto *I : SSC.getMarkers()) {
+    auto *Op = dyn_cast<Instruction>(I->getOperand(1));
+    const_cast<IntrinsicInst *>(I)->eraseFromParent();
+    // Remove the operand bitcast, too, if it has no more uses left.
+    if (Op && Op->use_empty())
+      Op->eraseFromParent();
+  }
 
   // Unsafe stack always grows down.
   StackLayout SSL(StackAlignment);
@@ -525,7 +543,8 @@ Value *SafeStack::moveStaticAllocasToUnsafeStack(
     unsigned Align =
         std::max((unsigned)DL.getPrefTypeAlignment(Ty), AI->getAlignment());
 
-    SSL.addObject(AI, Size, Align, SSC.getLiveRange(AI));
+    SSL.addObject(AI, Size, Align,
+                  ClColoring ? SSC.getLiveRange(AI) : NoColoringRange);
   }
 
   SSL.computeLayout();
@@ -547,7 +566,7 @@ Value *SafeStack::moveStaticAllocasToUnsafeStack(
 
   if (StackGuardSlot) {
     unsigned Offset = SSL.getObjectOffset(StackGuardSlot);
-    Value *Off = IRB.CreateGEP(BasePointer, // BasePointer is i8*
+    Value *Off = IRB.CreateGEP(Int8Ty, BasePointer, // BasePointer is i8*
                                ConstantInt::get(Int32Ty, -Offset));
     Value *NewAI =
         IRB.CreateBitCast(Off, StackGuardSlot->getType(), "StackGuardSlot");
@@ -559,24 +578,24 @@ Value *SafeStack::moveStaticAllocasToUnsafeStack(
 
   for (Argument *Arg : ByValArguments) {
     unsigned Offset = SSL.getObjectOffset(Arg);
-    unsigned Align = SSL.getObjectAlignment(Arg);
+    MaybeAlign Align(SSL.getObjectAlignment(Arg));
     Type *Ty = Arg->getType()->getPointerElementType();
 
     uint64_t Size = DL.getTypeStoreSize(Ty);
     if (Size == 0)
       Size = 1; // Don't create zero-sized stack objects.
 
-    Value *Off = IRB.CreateGEP(BasePointer, // BasePointer is i8*
+    Value *Off = IRB.CreateGEP(Int8Ty, BasePointer, // BasePointer is i8*
                                ConstantInt::get(Int32Ty, -Offset));
     Value *NewArg = IRB.CreateBitCast(Off, Arg->getType(),
                                      Arg->getName() + ".unsafe-byval");
 
     // Replace alloc with the new location.
-    replaceDbgDeclare(Arg, BasePointer, BasePointer->getNextNode(), DIB,
-                      DIExpression::NoDeref, -Offset, DIExpression::NoDeref);
+    replaceDbgDeclare(Arg, BasePointer, DIB, DIExpression::ApplyOffset,
+                      -Offset);
     Arg->replaceAllUsesWith(NewArg);
     IRB.SetInsertPoint(cast<Instruction>(NewArg)->getNextNode());
-    IRB.CreateMemCpy(Off, Align, Arg, Arg->getParamAlignment(), Size);
+    IRB.CreateMemCpy(Off, Align, Arg, Arg->getParamAlign(), Size);
   }
 
   // Allocate space for every unsafe static AllocaInst on the unsafe stack.
@@ -584,12 +603,7 @@ Value *SafeStack::moveStaticAllocasToUnsafeStack(
     IRB.SetInsertPoint(AI);
     unsigned Offset = SSL.getObjectOffset(AI);
 
-    uint64_t Size = getStaticAllocaAllocationSize(AI);
-    if (Size == 0)
-      Size = 1; // Don't create zero-sized stack objects.
-
-    replaceDbgDeclareForAlloca(AI, BasePointer, DIB, DIExpression::NoDeref,
-                               -Offset, DIExpression::NoDeref);
+    replaceDbgDeclare(AI, BasePointer, DIB, DIExpression::ApplyOffset, -Offset);
     replaceDbgValueForAlloca(AI, BasePointer, DIB, -Offset);
 
     // Replace uses of the alloca with the new location.
@@ -606,20 +620,16 @@ Value *SafeStack::moveStaticAllocasToUnsafeStack(
         InsertBefore = User;
 
       IRBuilder<> IRBUser(InsertBefore);
-      Value *Off = IRBUser.CreateGEP(BasePointer, // BasePointer is i8*
+      Value *Off = IRBUser.CreateGEP(Int8Ty, BasePointer, // BasePointer is i8*
                                      ConstantInt::get(Int32Ty, -Offset));
       Value *Replacement = IRBUser.CreateBitCast(Off, AI->getType(), Name);
 
-      if (auto *PHI = dyn_cast<PHINode>(User)) {
+      if (auto *PHI = dyn_cast<PHINode>(User))
         // PHI nodes may have multiple incoming edges from the same BB (why??),
         // all must be updated at once with the same incoming value.
-        auto *BB = PHI->getIncomingBlock(U);
-        for (unsigned I = 0; I < PHI->getNumIncomingValues(); ++I)
-          if (PHI->getIncomingBlock(I) == BB)
-            PHI->setIncomingValue(I, Replacement);
-      } else {
+        PHI->setIncomingValueForBlock(PHI->getIncomingBlock(U), Replacement);
+      else
         U.set(Replacement);
-      }
     }
 
     AI->eraseFromParent();
@@ -634,7 +644,7 @@ Value *SafeStack::moveStaticAllocasToUnsafeStack(
   IRB.SetInsertPoint(BasePointer->getNextNode());
 
   Value *StaticTop =
-      IRB.CreateGEP(BasePointer, ConstantInt::get(Int32Ty, -FrameSize),
+      IRB.CreateGEP(Int8Ty, BasePointer, ConstantInt::get(Int32Ty, -FrameSize),
                     "unsafe_stack_static_top");
   IRB.CreateStore(StaticTop, UnsafeStackPtr);
   return StaticTop;
@@ -657,7 +667,8 @@ void SafeStack::moveDynamicAllocasToUnsafeStack(
     uint64_t TySize = DL.getTypeAllocSize(Ty);
     Value *Size = IRB.CreateMul(ArraySize, ConstantInt::get(IntPtrTy, TySize));
 
-    Value *SP = IRB.CreatePtrToInt(IRB.CreateLoad(UnsafeStackPtr), IntPtrTy);
+    Value *SP = IRB.CreatePtrToInt(IRB.CreateLoad(StackPtrTy, UnsafeStackPtr),
+                                   IntPtrTy);
     SP = IRB.CreateSub(SP, Size);
 
     // Align the SP value to satisfy the AllocaInst, type and stack alignments.
@@ -679,8 +690,7 @@ void SafeStack::moveDynamicAllocasToUnsafeStack(
     if (AI->hasName() && isa<Instruction>(NewAI))
       NewAI->takeName(AI);
 
-    replaceDbgDeclareForAlloca(AI, NewAI, DIB, DIExpression::NoDeref, 0,
-                               DIExpression::NoDeref);
+    replaceDbgDeclare(AI, NewAI, DIB, DIExpression::ApplyOffset, 0);
     AI->replaceAllUsesWith(NewAI);
     AI->eraseFromParent();
   }
@@ -695,7 +705,7 @@ void SafeStack::moveDynamicAllocasToUnsafeStack(
 
       if (II->getIntrinsicID() == Intrinsic::stacksave) {
         IRBuilder<> IRB(II);
-        Instruction *LI = IRB.CreateLoad(UnsafeStackPtr);
+        Instruction *LI = IRB.CreateLoad(StackPtrTy, UnsafeStackPtr);
         LI->takeName(II);
         II->replaceAllUsesWith(LI);
         II->eraseFromParent();
@@ -710,33 +720,34 @@ void SafeStack::moveDynamicAllocasToUnsafeStack(
   }
 }
 
-bool SafeStack::ShouldInlinePointerAddress(CallSite &CS) {
-  Function *Callee = CS.getCalledFunction();
-  if (CS.hasFnAttr(Attribute::AlwaysInline) && isInlineViable(*Callee))
+bool SafeStack::ShouldInlinePointerAddress(CallInst &CI) {
+  Function *Callee = CI.getCalledFunction();
+  if (CI.hasFnAttr(Attribute::AlwaysInline) &&
+      isInlineViable(*Callee).isSuccess())
     return true;
   if (Callee->isInterposable() || Callee->hasFnAttribute(Attribute::NoInline) ||
-      CS.isNoInline())
+      CI.isNoInline())
     return false;
   return true;
 }
 
 void SafeStack::TryInlinePointerAddress() {
-  if (!isa<CallInst>(UnsafeStackPtr))
+  auto *CI = dyn_cast<CallInst>(UnsafeStackPtr);
+  if (!CI)
     return;
 
-  if(F.hasFnAttribute(Attribute::OptimizeNone))
+  if(F.hasOptNone())
     return;
 
-  CallSite CS(UnsafeStackPtr);
-  Function *Callee = CS.getCalledFunction();
+  Function *Callee = CI->getCalledFunction();
   if (!Callee || Callee->isDeclaration())
     return;
 
-  if (!ShouldInlinePointerAddress(CS))
+  if (!ShouldInlinePointerAddress(*CI))
     return;
 
   InlineFunctionInfo IFI;
-  InlineFunction(CS, IFI);
+  InlineFunction(*CI, IFI);
 }
 
 bool SafeStack::run() {
@@ -749,7 +760,7 @@ bool SafeStack::run() {
   SmallVector<AllocaInst *, 16> StaticAllocas;
   SmallVector<AllocaInst *, 4> DynamicAllocas;
   SmallVector<Argument *, 4> ByValArguments;
-  SmallVector<ReturnInst *, 4> Returns;
+  SmallVector<Instruction *, 4> Returns;
 
   // Collect all points where stack gets unwound and needs to be restored
   // This is only necessary because the runtime (setjmp and unwind code) is
@@ -775,8 +786,13 @@ bool SafeStack::run() {
     ++NumUnsafeStackRestorePointsFunctions;
 
   IRBuilder<> IRB(&F.front(), F.begin()->getFirstInsertionPt());
+  // Calls must always have a debug location, or else inlining breaks. So
+  // we explicitly set a artificial debug location here.
+  if (DISubprogram *SP = F.getSubprogram())
+    IRB.SetCurrentDebugLocation(
+        DILocation::get(SP->getContext(), SP->getScopeLine(), 0, SP));
   if (SafeStackUsePointerAddress) {
-    Value *Fn = F.getParent()->getOrInsertFunction(
+    FunctionCallee Fn = F.getParent()->getOrInsertFunction(
         "__safestack_pointer_address", StackPtrTy->getPointerTo(0));
     UnsafeStackPtr = IRB.CreateCall(Fn);
   } else {
@@ -786,7 +802,7 @@ bool SafeStack::run() {
   // Load the current stack pointer (we'll also use it as a base pointer).
   // FIXME: use a dedicated register for it ?
   Instruction *BasePointer =
-      IRB.CreateLoad(UnsafeStackPtr, false, "unsafe_stack_ptr");
+      IRB.CreateLoad(StackPtrTy, UnsafeStackPtr, false, "unsafe_stack_ptr");
   assert(BasePointer->getType() == StackPtrTy);
 
   AllocaInst *StackGuardSlot = nullptr;
@@ -798,7 +814,7 @@ bool SafeStack::run() {
     StackGuardSlot = IRB.CreateAlloca(StackPtrTy, nullptr);
     IRB.CreateStore(StackGuard, StackGuardSlot);
 
-    for (ReturnInst *RI : Returns) {
+    for (Instruction *RI : Returns) {
       IRBuilder<> IRBRet(RI);
       checkStackGuard(IRBRet, F, *RI, StackGuardSlot, StackGuard);
     }
@@ -806,9 +822,8 @@ bool SafeStack::run() {
 
   // The top of the unsafe stack after all unsafe static allocas are
   // allocated.
-  Value *StaticTop =
-      moveStaticAllocasToUnsafeStack(IRB, F, StaticAllocas, ByValArguments,
-                                     Returns, BasePointer, StackGuardSlot);
+  Value *StaticTop = moveStaticAllocasToUnsafeStack(
+      IRB, F, StaticAllocas, ByValArguments, BasePointer, StackGuardSlot);
 
   // Safe stack object that stores the current unsafe stack top. It is updated
   // as unsafe dynamic (non-constant-sized) allocas are allocated and freed.
@@ -824,7 +839,7 @@ bool SafeStack::run() {
                                   DynamicAllocas);
 
   // Restore the unsafe stack pointer before each return.
-  for (ReturnInst *RI : Returns) {
+  for (Instruction *RI : Returns) {
     IRB.SetInsertPoint(RI);
     IRB.CreateStore(BasePointer, UnsafeStackPtr);
   }
@@ -872,7 +887,7 @@ public:
       report_fatal_error("TargetLowering instance is required");
 
     auto *DL = &F.getParent()->getDataLayout();
-    auto &TLI = getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
+    auto &TLI = getAnalysis<TargetLibraryInfoWrapperPass>().getTLI(F);
     auto &ACT = getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F);
 
     // Compute DT and LI only for functions that have the attribute.

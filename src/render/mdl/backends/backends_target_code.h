@@ -156,7 +156,6 @@ public:
         bool use_builtin_resource_handler,
         mi::neuraylib::IMdl_backend_api::Mdl_backend_kind be_kind);
 
-
     /// Constructor for link mode.
     ///
     /// \param string_ids  True if string arguments inside target argument blocks
@@ -170,7 +169,6 @@ public:
     void finalize( mi::mdl::IGenerated_code_executable* code,
         MI::DB::Transaction* transaction,
         bool use_derivatives);
-
 
     // API methods
 
@@ -1102,4 +1100,3 @@ private:
 } // namespace MI
 
 #endif // RENDER_MDL_BACKENDS_BACKENDS_TARGET_CODE_H
-

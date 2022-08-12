@@ -429,8 +429,14 @@ public:
         const char* name,
         const std::vector<const char*>& parameter_types) const;
 
+    /// Does not contain all/any resources if context options
+    /// MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS or MDL_CTX_OPTION_RESOLVE_RESOURCES are
+    /// set.
     mi::Size get_resources_count() const;
 
+    /// Does not contain all/any resources if context options
+    /// MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS or MDL_CTX_OPTION_RESOLVE_RESOURCES are
+    /// set.
     const IValue_resource* get_resource( mi::Size index) const;
 
     mi::Sint32 reload(
@@ -524,16 +530,12 @@ public:
     ///
     /// Returns \c NULL for invalid indices.
     ///
-    /// \see #get_resource_count(), #get_resource()
-    const Resource_tag_tuple* get_resource_tag_tuple( mi::Size index) const;
-
-    /// Returns the AST index for a given resource (low-level access to the resource
-    /// vector).
-    ///
-    /// Returns -1 for invalid indices.
+    /// Does not contain all/any resources if context options
+    /// MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS or MDL_CTX_OPTION_RESOLVE_RESOURCES are
+    /// set.
     ///
     /// \see #get_resource_count(), #get_resource()
-    mi::Size get_resource_ast_index( mi::Size index) const;
+    const Resource_tag_tuple_ext* get_resource_tag_tuple( mi::Size index) const;
 
     /// Factory (public, takes an mi::mdl::IModule and creates the DB element if needed).
     ///
@@ -584,7 +586,7 @@ private:
         const std::vector<Mdl_tag_ident>& functions,
         const std::vector<Mdl_tag_ident>& materials,
         const std::vector<DB::Tag>& annotation_proxies,
-        bool load_resources);
+        Execution_context* context);
 
     /// Performs a post-order DFS traversal of the DAG of imports and invokes reload() on all nodes.
     ///
@@ -629,9 +631,10 @@ private:
     ///
     /// Contains code shared by the constructor and reload_module_internal().
     ///
-    /// \param transaction     The DB transaction to use.
-    /// \param load_resources  If \c true, resources are loaded into the database.
-    void init_module( DB::Transaction* transaction, bool load_resources);
+    /// \param transaction       The DB transaction to use.
+    /// \param[inout] context    Execution context used to pass options to and store messages from
+    ///                          the compiler.
+    void init_module( DB::Transaction* transaction, Execution_context* context);
 
     /// The main MDL interface.
     mi::base::Handle<mi::mdl::IMDL> m_mdl;
@@ -672,8 +675,8 @@ private:
     std::vector<Mdl_tag_ident> m_materials;     ///< Tags of the contained material definitions.
     std::vector<DB::Tag> m_annotation_proxies;  ///< Tags of the contained annotation def. proxies.
 
-    /// Resources of this module (including corresponding AST index).
-    std::vector<std::pair<Resource_tag_tuple, mi::Size>> m_resources;
+    /// Resources of this module.
+    std::vector<Resource_tag_tuple_ext> m_resources;
 
     /// Maps functions definition DB names to indices as used in #m_functions.
     std::map <std::string, mi::Size> m_function_name_to_index;

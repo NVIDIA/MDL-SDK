@@ -47,6 +47,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
     class Mdl_material;
     class Scene;
     struct Update_args;
+    struct Mdl_string_constant;
 }}}
 
 namespace mi { namespace examples { namespace dxr
@@ -160,6 +161,7 @@ namespace mi { namespace examples { namespace dxr
         const Example_dxr_options* m_options;
         bool m_group_class_compilation;
         bool m_created_shader_cache_folder;
+
     };
 
     // --------------------------------------------------------------------------------------------
@@ -171,6 +173,7 @@ namespace mi { namespace examples { namespace dxr
     class Gui_section_edit_material
         : public mi::examples::gui::Section
         , private mi::examples::gui::Section_material_resource_handler
+        , private mi::examples::gui::Section_material_string_handler
     {
     public:
         explicit Gui_section_edit_material(
@@ -197,10 +200,11 @@ namespace mi { namespace examples { namespace dxr
         std::vector<std::string> m_scene_materials_names;
         uint32_t m_bound_material_index;
 
-    private: // mi::examples::gui::Section_material_resource_handler
+    private:
 
-        void init_resource_handling(mdl_d3d12::Mdl_material* material);
+        void init_handlers(mdl_d3d12::Mdl_material* material);
 
+        // mi::examples::gui::Section_material_resource_handler
         mi::Size get_available_resource_count(
             mi::neuraylib::IValue::Kind kind) override;
 
@@ -216,9 +220,24 @@ namespace mi { namespace examples { namespace dxr
             mi::neuraylib::IValue::Kind kind,
             const char* db_name) override;
 
+        // mi::examples::gui::Section_material_string_handler
+        mi::Size get_string_count() const override;
+
+        mi::Uint32 get_string_id(mi::Size index) const override;
+
+        const char* get_string_name(mi::Size index) const override;
+
+        mi::Uint32 get_string_id_by_name(const char* string_name) const override;
+
+        size_t get_max_string_name_length() const override;
+
         std::vector<std::pair<mi::Uint32, std::string>> m_texture_2ds;
         // std::vector<std::pair<mi::Uint32, std::string>> m_light_profiles;
         // std::vector<std::pair<mi::Uint32, std::string>> m_mbsdfs;
+
+        std::vector<mdl_d3d12::Mdl_string_constant> m_string_constants;
+        std::unordered_map<std::string, mi::Uint32> m_string_constants_map_inv;
+        size_t m_string_constant_max_length;
 
         std::vector<char> m_last_assign_input_buffer;
         std::string m_last_assign_new_material_name;
@@ -264,3 +283,4 @@ namespace mi { namespace examples { namespace dxr
 }}}
 
 #endif
+

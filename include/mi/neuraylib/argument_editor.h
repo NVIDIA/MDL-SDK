@@ -127,7 +127,7 @@ public:
     ///
     /// \return    If \ref mi_mdl_materials_are_functions is enabled:
     ///            #mi::neuraylib::ELEMENT_TYPE_FUNCTION_DEFINITION, or undefined if #is_valid()
-    ///            returns \c false. Otherwise: #mi::neuraylib::ELEMENT_TYPE_MATERIAL_DEFINITION,
+    ///            returns \c false. Otherwise: mi::neuraylib::ELEMENT_TYPE_MATERIAL_DEFINITION,
     ///            or #mi::neuraylib::ELEMENT_TYPE_FUNCTION_DEFINITION, or undefined if #is_valid()
     ///            returns \c false.
     Element_type get_type() const;
@@ -168,12 +168,12 @@ public:
     /// Returns the types of all parameters.
     const IType_list* get_parameter_types() const;
 
-    /// Checks the enable_if condition of the given parameter.
+    /// Checks the \c enable_if condition of the given parameter.
     ///
     /// \param index      The index of the parameter.
     /// \param evaluator  A pointer to the API component #mi::neuraylib::IMdl_evaluator_api.
-    /// \return           false if the enable_if condition of this parameter evaluated to false,
-    ///                   true otherwise
+    /// \return           \c false if the \c enable_if condition of this parameter evaluated to
+    ///                   \c false, \c true otherwise
     bool is_parameter_enabled( Size index, IMdl_evaluator_api* evaluator) const;
 
     /// Returns all arguments.
@@ -602,7 +602,7 @@ private:
     std::string m_name;
 };
 
-/*@}*/ // end group mi_neuray_mdl_elements
+/**@}*/ // end group mi_neuray_mdl_elements
 
 inline Argument_editor::Argument_editor(
     ITransaction* transaction, const char* name, IMdl_factory* mdl_factory, bool intent_to_edit)
@@ -631,39 +631,52 @@ inline Argument_editor::Argument_editor(
 
 inline bool Argument_editor::is_valid() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     return m_access
         && (m_type == ELEMENT_TYPE_MATERIAL_INSTANCE ||  m_type == ELEMENT_TYPE_FUNCTION_CALL);
+#else // MI_NEURAYLIB_DEPRECATED_13_0
+    return m_access
+        && (m_type == ELEMENT_TYPE_FUNCTION_CALL);
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
 }
 
-inline bool Argument_editor::is_valid_instance(IMdl_execution_context* context) const
+inline bool Argument_editor::is_valid_instance( IMdl_execution_context* context) const
 {
-    if (m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
-        base::Handle<const IMaterial_instance> mi(m_access->get_interface<IMaterial_instance>());
+        base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
         return mi->is_valid(context);
-    }
-    else if (m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
-        base::Handle<const IFunction_call> fc(m_access->get_interface<IFunction_call>());
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+
+        base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         return fc->is_valid(context);
     }
     else
         return false;
 }
 
-inline mi::Sint32 Argument_editor::repair(mi::Uint32 flags, IMdl_execution_context* context)
+inline mi::Sint32 Argument_editor::repair( mi::Uint32 flags, IMdl_execution_context* context)
 {
     promote_to_edit_if_needed();
-    if (m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
-        base::Handle<IMaterial_instance> mi(m_edit->get_interface<IMaterial_instance>());
-        return mi->repair(flags, context);
-    }
-    else if (m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
-        base::Handle<IFunction_call> fc(m_edit->get_interface<IFunction_call>());
-        return fc->repair(flags, context);
-    }
-    else
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
+
+        base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
+        return mi->repair(flags, context);
+
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+
+        base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
+        return fc->repair( flags, context);
+
+    } else
         return -1;
 }
 
@@ -674,12 +687,15 @@ inline Element_type Argument_editor::get_type() const
 
 inline const char* Argument_editor::get_definition() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
         return mi->get_material_definition();
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         return fc->get_function_definition();
@@ -690,12 +706,15 @@ inline const char* Argument_editor::get_definition() const
 
 inline const char* Argument_editor::get_mdl_definition() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
         return mi->get_mdl_material_definition();
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         return fc->get_mdl_function_definition();
@@ -706,11 +725,14 @@ inline const char* Argument_editor::get_mdl_definition() const
 
 inline bool Argument_editor::is_array_constructor() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         return false;
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         return fc->is_array_constructor();
@@ -721,21 +743,34 @@ inline bool Argument_editor::is_array_constructor() const
 
 inline bool Argument_editor::is_material() const
 {
-    if( !m_access)
-        return false;
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
-    base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
-    return mi.is_valid_interface();
+        return true;
+
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+
+        base::Handle<const IFunction_call> fc(
+            m_access->get_interface<IFunction_call>());
+        return fc->is_material();
+
+    } else
+        return false;
 }
 
 inline Size Argument_editor::get_parameter_count() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
         return mi->get_parameter_count();
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         return fc->get_parameter_count();
@@ -746,12 +781,15 @@ inline Size Argument_editor::get_parameter_count() const
 
 inline const char* Argument_editor::get_parameter_name( Size parameter_index) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
         return mi->get_parameter_name( parameter_index);
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         return fc->get_parameter_name( parameter_index);
@@ -762,12 +800,15 @@ inline const char* Argument_editor::get_parameter_name( Size parameter_index) co
 
 inline Size Argument_editor::get_parameter_index( const char* name) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
         return mi->get_parameter_index( name);
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         return fc->get_parameter_index( name);
@@ -778,11 +819,14 @@ inline Size Argument_editor::get_parameter_index( const char* name) const
 
 inline const IType* Argument_editor::get_return_type() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         return 0;
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         return fc->get_return_type();
@@ -793,12 +837,15 @@ inline const IType* Argument_editor::get_return_type() const
 
 inline const IType_list* Argument_editor::get_parameter_types() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
         return mi->get_parameter_types();
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         return fc->get_parameter_types();
@@ -812,21 +859,24 @@ inline bool Argument_editor::is_parameter_enabled( Size index, IMdl_evaluator_ap
     if( !evaluator)
         return true;
 
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
-        base::Handle<IValue_bool const> b(evaluator->is_material_parameter_enabled(
+        base::Handle<const IValue_bool> b(evaluator->is_material_parameter_enabled(
             m_transaction.get(), m_value_factory.get(), mi.get(), index, /*error*/ NULL));
         if (!b)
             return true;
         return b->get_value();
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
-        base::Handle<IValue_bool const> b( evaluator->is_function_parameter_enabled(
+        base::Handle<const IValue_bool> b( evaluator->is_function_parameter_enabled(
             m_transaction.get(), m_value_factory.get(), fc.get(), index, /*error*/ NULL));
-        if (!b)
+        if( !b)
             return true;
         return b->get_value();
 
@@ -838,12 +888,15 @@ inline Sint32 Argument_editor::reset_argument( Size index)
 {
     promote_to_edit_if_needed();
 
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
         return mi->reset_argument( index);
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
         return fc->reset_argument( index);
@@ -856,12 +909,15 @@ inline Sint32 Argument_editor::reset_argument( const char* name)
 {
     promote_to_edit_if_needed();
 
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
         return mi->reset_argument( name);
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
         return fc->reset_argument( name);
@@ -873,12 +929,15 @@ inline Sint32 Argument_editor::reset_argument( const char* name)
 
 inline const IExpression_list* Argument_editor::get_arguments() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
         return mi->get_arguments();
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         return fc->get_arguments();
@@ -889,6 +948,7 @@ inline const IExpression_list* Argument_editor::get_arguments() const
 
 inline IExpression::Kind Argument_editor::get_argument_kind( Size parameter_index) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
@@ -896,7 +956,9 @@ inline IExpression::Kind Argument_editor::get_argument_kind( Size parameter_inde
         base::Handle<const IExpression> argument( arguments->get_expression( parameter_index));
         return argument ? argument->get_kind() : static_cast<IExpression::Kind>( 0);
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         base::Handle<const IExpression_list> arguments( fc->get_arguments());
@@ -909,6 +971,7 @@ inline IExpression::Kind Argument_editor::get_argument_kind( Size parameter_inde
 
 inline IExpression::Kind Argument_editor::get_argument_kind( const char* parameter_name) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
@@ -916,7 +979,9 @@ inline IExpression::Kind Argument_editor::get_argument_kind( const char* paramet
         base::Handle<const IExpression> argument( arguments->get_expression( parameter_name));
         return argument ? argument->get_kind() : static_cast<IExpression::Kind>( 0);
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         base::Handle<const IExpression_list> arguments( fc->get_arguments());
@@ -930,6 +995,7 @@ inline IExpression::Kind Argument_editor::get_argument_kind( const char* paramet
 template <class T>
 Sint32 Argument_editor::get_value( Size parameter_index, T& value) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
@@ -945,7 +1011,9 @@ Sint32 Argument_editor::get_value( Size parameter_index, T& value) const
         Sint32 result = neuraylib::get_value( argument_value.get(), value);
         return result == 0 ? 0 : -5;
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         base::Handle<const IExpression_list> arguments( fc->get_arguments());
@@ -967,6 +1035,7 @@ Sint32 Argument_editor::get_value( Size parameter_index, T& value) const
 template <class T>
 Sint32 Argument_editor::get_value( const char* name, T& value) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
@@ -982,7 +1051,9 @@ Sint32 Argument_editor::get_value( const char* name, T& value) const
         Sint32 result = neuraylib::get_value( argument_value.get(), value);
         return result == 0 ? 0 : -5;
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc(
             m_access->get_interface<IFunction_call>());
@@ -1005,6 +1076,7 @@ Sint32 Argument_editor::get_value( const char* name, T& value) const
 template <class T>
 Sint32 Argument_editor::get_value( Size parameter_index, Size component_index, T& value) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
@@ -1020,7 +1092,9 @@ Sint32 Argument_editor::get_value( Size parameter_index, Size component_index, T
         Sint32 result = neuraylib::get_value( argument_value.get(), component_index, value);
         return result == 0 ? 0 : (result == -3 ? -3 : -5);
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         base::Handle<const IExpression_list> arguments( fc->get_arguments());
@@ -1042,6 +1116,7 @@ Sint32 Argument_editor::get_value( Size parameter_index, Size component_index, T
 template <class T>
 Sint32 Argument_editor::get_value( const char* parameter_name, Size component_index, T& value) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
@@ -1057,7 +1132,9 @@ Sint32 Argument_editor::get_value( const char* parameter_name, Size component_in
         Sint32 result = neuraylib::get_value( argument_value.get(), component_index, value);
         return result == 0 ? 0 : (result == -3 ? -3 : -5);
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         base::Handle<const IExpression_list> arguments( fc->get_arguments());
@@ -1080,6 +1157,7 @@ template <class T>
 Sint32 Argument_editor::get_value(
     Size parameter_index, const char* field_name, T& value) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
@@ -1095,7 +1173,9 @@ Sint32 Argument_editor::get_value(
         Sint32 result = neuraylib::get_value( argument_value.get(), field_name, value);
         return result == 0 ? 0 : (result == -3 ? -3 : -5);
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         base::Handle<const IExpression_list> arguments( fc->get_arguments());
@@ -1118,6 +1198,7 @@ template <class T>
 Sint32 Argument_editor::get_value(
     const char* parameter_name, const char* field_name, T& value) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
@@ -1133,7 +1214,9 @@ Sint32 Argument_editor::get_value(
         Sint32 result = neuraylib::get_value( argument_value.get(), field_name, value);
         return result == 0 ? 0 : (result == -3 ? -3 : -5);
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         base::Handle<const IExpression_list> arguments( fc->get_arguments());
@@ -1157,6 +1240,7 @@ Sint32 Argument_editor::set_value( Size parameter_index, const T& value)
 {
     promote_to_edit_if_needed();
 
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
@@ -1177,7 +1261,9 @@ Sint32 Argument_editor::set_value( Size parameter_index, const T& value)
         mi_neuray_assert( result == 0);
         return result;
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
         if( fc->is_default())
@@ -1206,6 +1292,7 @@ Sint32 Argument_editor::set_value( const char* parameter_name, const T& value)
 {
     promote_to_edit_if_needed();
 
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
@@ -1226,7 +1313,9 @@ Sint32 Argument_editor::set_value( const char* parameter_name, const T& value)
         mi_neuray_assert( result == 0);
         return result;
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
         if( fc->is_default())
@@ -1255,6 +1344,7 @@ Sint32 Argument_editor::set_value( Size parameter_index, Size component_index, c
 {
     promote_to_edit_if_needed();
 
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
@@ -1290,7 +1380,9 @@ Sint32 Argument_editor::set_value( Size parameter_index, Size component_index, c
             return result;
         }
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
         if( fc->is_default())
@@ -1334,6 +1426,7 @@ Sint32 Argument_editor::set_value( const char* parameter_name, Size component_in
 {
     promote_to_edit_if_needed();
 
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
@@ -1369,7 +1462,9 @@ Sint32 Argument_editor::set_value( const char* parameter_name, Size component_in
             return result;
         }
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
         if( fc->is_default())
@@ -1414,6 +1509,7 @@ Sint32 Argument_editor::set_value(
 {
     promote_to_edit_if_needed();
 
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
@@ -1449,7 +1545,9 @@ Sint32 Argument_editor::set_value(
             return result;
         }
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
         if( fc->is_default())
@@ -1494,6 +1592,7 @@ Sint32 Argument_editor::set_value(
 {
     promote_to_edit_if_needed();
 
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
@@ -1529,7 +1628,9 @@ Sint32 Argument_editor::set_value(
             return result;
         }
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
         if( fc->is_default())
@@ -1570,6 +1671,7 @@ Sint32 Argument_editor::set_value(
 
 inline Sint32 Argument_editor::get_array_length( Uint32 parameter_index, Size& size) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
@@ -1587,7 +1689,9 @@ inline Sint32 Argument_editor::get_array_length( Uint32 parameter_index, Size& s
         size = value->get_size();
         return 0;
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         base::Handle<const IExpression_list> arguments( fc->get_arguments());
@@ -1610,6 +1714,7 @@ inline Sint32 Argument_editor::get_array_length( Uint32 parameter_index, Size& s
 
 inline Sint32 Argument_editor::get_array_length( const char* parameter_name, Size& size) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
@@ -1627,7 +1732,9 @@ inline Sint32 Argument_editor::get_array_length( const char* parameter_name, Siz
         size = value->get_size();
         return 0;
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         base::Handle<const IExpression_list> arguments( fc->get_arguments());
@@ -1652,6 +1759,7 @@ inline Sint32 Argument_editor::set_array_size( Uint32 parameter_index, Size size
 {
     promote_to_edit_if_needed();
 
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
@@ -1693,7 +1801,9 @@ inline Sint32 Argument_editor::set_array_size( Uint32 parameter_index, Size size
             return result;
         }
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
         if( fc->is_default())
@@ -1742,6 +1852,7 @@ inline Sint32 Argument_editor::set_array_size( const char* parameter_name, Size 
 {
     promote_to_edit_if_needed();
 
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
@@ -1783,7 +1894,9 @@ inline Sint32 Argument_editor::set_array_size( const char* parameter_name, Size 
             return result;
         }
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<IFunction_call> fc( m_edit->get_interface<IFunction_call>());
         if( fc->is_default())
@@ -1830,6 +1943,7 @@ inline Sint32 Argument_editor::set_array_size( const char* parameter_name, Size 
 
 inline const char* Argument_editor::get_call( Size parameter_index) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
@@ -1840,7 +1954,9 @@ inline const char* Argument_editor::get_call( Size parameter_index) const
             return 0;
         return argument->get_call();
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         base::Handle<const IExpression_list> arguments( fc->get_arguments());
@@ -1856,6 +1972,7 @@ inline const char* Argument_editor::get_call( Size parameter_index) const
 
 inline const char* Argument_editor::get_call( const char* parameter_name) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<const IMaterial_instance> mi( m_access->get_interface<IMaterial_instance>());
@@ -1866,7 +1983,9 @@ inline const char* Argument_editor::get_call( const char* parameter_name) const
             return 0;
         return argument->get_call();
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<const IFunction_call> fc( m_access->get_interface<IFunction_call>());
         base::Handle<const IExpression_list> arguments( fc->get_arguments());
@@ -1884,6 +2003,7 @@ inline Sint32 Argument_editor::set_call( Size parameter_index, const char* call_
 {
     promote_to_edit_if_needed();
 
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<IExpression_call> new_argument( m_expression_factory->create_call( call_name));
@@ -1892,7 +2012,9 @@ inline Sint32 Argument_editor::set_call( Size parameter_index, const char* call_
         base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
         return mi->set_argument( parameter_index, new_argument.get());
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<IExpression_call> new_argument( m_expression_factory->create_call( call_name));
         if( !new_argument)
@@ -1908,6 +2030,7 @@ inline Sint32 Argument_editor::set_call( const char* parameter_name, const char*
 {
     promote_to_edit_if_needed();
 
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_INSTANCE) {
 
         base::Handle<IExpression_call> new_argument( m_expression_factory->create_call( call_name));
@@ -1916,7 +2039,9 @@ inline Sint32 Argument_editor::set_call( const char* parameter_name, const char*
         base::Handle<IMaterial_instance> mi( m_edit->get_interface<IMaterial_instance>());
         return mi->set_argument( parameter_name, new_argument.get());
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_CALL) {
 
         base::Handle<IExpression_call> new_argument( m_expression_factory->create_call( call_name));
         if( !new_argument)

@@ -33,7 +33,7 @@
 #define BASE_DATA_ATTR_ATTR_MODULE_H
 
 #include "attr.h"
-#include <unordered_map>
+#include <base/lib/robin_hood/robin_hood.h>
 #include <string>
 #include <vector>
 
@@ -134,7 +134,7 @@ class Attr_module_impl : public Attr_module
     DB::Journal_type m_user_attr_journal_flags;	///< the default journal-flags for all user attrs
 
     /// Mapping from type name to type code, used in \c get_type_code.
-    typedef std::unordered_map<std::string, ATTR::Type_code> Map_name_to_code;
+    typedef robin_hood::unordered_map<std::string, ATTR::Type_code> Map_name_to_code;
     Map_name_to_code m_map_name_to_code;
 
     /// List of installed attribute filters.

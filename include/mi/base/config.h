@@ -339,11 +339,20 @@
 
 #ifdef __CUDACC__
 #define MI_HOST_DEVICE_INLINE __host__ __device__ __forceinline__
+#ifndef MI_DEVICE_INLINE
+#define MI_DEVICE_INLINE __device__ __forceinline__
+#endif
 #else
 #ifdef __cplusplus
 #define MI_HOST_DEVICE_INLINE MI_FORCE_INLINE
+#ifndef MI_DEVICE_INLINE
+#define MI_DEVICE_INLINE MI_FORCE_INLINE
+#endif
 #else
 #define MI_HOST_DEVICE_INLINE
+#ifndef MI_DEVICE_INLINE
+#define MI_DEVICE_INLINE
+#endif
 #endif
 #endif
 
@@ -360,6 +369,6 @@
 #define MI_CXX_FEATURE_RVALUE_REFERENCES
 #endif
 
-/*@}*/ // end group mi_base_config
+/**@}*/ // end group mi_base_config
 
 #endif // MI_BASE_CONFIG_H

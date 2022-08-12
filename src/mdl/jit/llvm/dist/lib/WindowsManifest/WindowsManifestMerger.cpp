@@ -1,9 +1,8 @@
 //===-- WindowsManifestMerger.cpp ------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===---------------------------------------------------------------------===//
 //
@@ -17,7 +16,7 @@
 
 #include <map>
 
-#if LLVM_LIBXML2_ENABLED
+#if LLVM_ENABLE_LIBXML2
 #include <libxml/xmlreader.h>
 #endif
 
@@ -42,7 +41,7 @@ public:
 private:
   static void errorCallback(void *Ctx, const char *Format, ...);
   Error getParseError();
-#if LLVM_LIBXML2_ENABLED
+#if LLVM_ENABLE_LIBXML2
   xmlDocPtr CombinedDoc = nullptr;
   std::vector<xmlDocPtr> MergedDocs;
 
@@ -57,9 +56,9 @@ private:
   bool ParseErrorOccurred = false;
 };
 
-#if LLVM_LIBXML2_ENABLED
+#if LLVM_ENABLE_LIBXML2
 
-static const std::pair<StringRef, StringRef> MtNsHrefsPrefixes[] = {
+static constexpr std::pair<StringLiteral, StringLiteral> MtNsHrefsPrefixes[] = {
     {"urn:schemas-microsoft-com:asm.v1", "ms_asmv1"},
     {"urn:schemas-microsoft-com:asm.v2", "ms_asmv2"},
     {"urn:schemas-microsoft-com:asm.v3", "ms_asmv3"},
@@ -705,7 +704,7 @@ bool windows_manifest::isAvailable() { return false; }
 #endif
 
 WindowsManifestMerger::WindowsManifestMerger()
-    : Impl(make_unique<WindowsManifestMergerImpl>()) {}
+    : Impl(std::make_unique<WindowsManifestMergerImpl>()) {}
 
 WindowsManifestMerger::~WindowsManifestMerger() {}
 

@@ -39,6 +39,12 @@
 #include <cstdlib>             // declare abs
 #include <cmath>               // declare abs overloads
 
+#if defined(__has_include) && (!defined(_WIN32) || (defined(_HAS_CXX20) && _HAS_CXX20) || _MSVC_LANG >= 202002L)
+#if __has_include(<bit>)
+#include <bit>
+#endif
+#endif
+
 #ifndef MI_BASE_NO_STL
 #include <algorithm>           // define  min, max
 #endif // MI_BASE_NO_STL
@@ -349,8 +355,7 @@ namespace {
 ///     float  fval( 0.0f );
 ///     Uint32 uval( binary_cast<Uint32>(fval) );
 /// \endcode
-#if (defined(_WIN32) && defined(_HAS_CXX20) && _HAS_CXX20) || (defined(__GNUC__) && (__GNUC__ >= 11 ))
-#include <bit>
+#ifdef  __cpp_lib_bit_cast
 template<class T, class S> constexpr T binary_cast(const S& src) noexcept { return std::bit_cast<T,S>(src); }
 #else
 template <class Target, class Source>

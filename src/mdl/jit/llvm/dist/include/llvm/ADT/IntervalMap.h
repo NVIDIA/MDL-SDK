@@ -1,9 +1,8 @@
 //===- llvm/ADT/IntervalMap.h - A sorted interval map -----------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -101,6 +100,7 @@
 
 #include "llvm/ADT/PointerIntPair.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/bit.h"
 #include "llvm/Support/AlignOf.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/RecyclingAllocator.h"
@@ -491,7 +491,7 @@ class NodeRef {
   struct CacheAlignedPointerTraits {
     static inline void *getAsVoidPointer(void *P) { return P; }
     static inline void *getFromVoidPointer(void *P) { return P; }
-    enum { NumLowBitsAvailable = Log2CacheLine };
+    static constexpr int NumLowBitsAvailable = Log2CacheLine;
   };
   PointerIntPair<void*, Log2CacheLine, unsigned, CacheAlignedPointerTraits> pip;
 
@@ -823,7 +823,7 @@ public:
   }
 
   /// reset - Reset cached information about node(Level) from subtree(Level -1).
-  /// @param Level 1..height. THe node to update after parent node changed.
+  /// @param Level 1..height. The node to update after parent node changed.
   void reset(unsigned Level) {
     path[Level] = Entry(subtree(Level - 1), offset(Level));
   }
@@ -884,7 +884,7 @@ public:
   }
 
   /// getLeftSibling - Get the left sibling node at Level, or a null NodeRef.
-  /// @param Level Get the sinbling to node(Level).
+  /// @param Level Get the sibling to node(Level).
   /// @return Left sibling, or NodeRef().
   NodeRef getRightSibling(unsigned Level) const;
 
@@ -977,16 +977,8 @@ private:
   // Allocator used for creating external nodes.
   Allocator &allocator;
 
-  /// dataAs - Represent data as a node type without breaking aliasing rules.
-  template <typename T>
-  T &dataAs() const {
-    union {
-      const char *d;
-      T *t;
-    } u;
-    u.d = data.buffer;
-    return *u.t;
-  }
+  /// Represent data as a node type without breaking aliasing rules.
+  template <typename T> T &dataAs() const { return *bit_cast<T *>(&data); }
 
   const RootLeaf &rootLeaf() const {
     assert(!branched() && "Cannot acces leaf data in branched root");
@@ -1044,7 +1036,7 @@ private:
 
 public:
   explicit IntervalMap(Allocator &a) : height(0), rootSize(0), allocator(a) {
-    assert((uintptr_t(data.buffer) & (alignof(RootLeaf) - 1)) == 0 &&
+    assert((uintptr_t(&data) & (alignof(RootLeaf) - 1)) == 0 &&
            "Insufficient alignment");
     new(&rootLeaf()) RootLeaf();
   }
@@ -1136,6 +1128,19 @@ public:
     iterator I(*this);
     I.find(x);
     return I;
+  }
+
+  /// overlaps(a, b) - Return true if the intervals in this map overlap with the
+  /// interval [a;b].
+  bool overlaps(KeyT a, KeyT b) {
+    assert(Traits::nonEmpty(a, b));
+    const_iterator I = find(a);
+    if (!I.valid())
+      return false;
+    // [a;b] and [x;y] overlap iff x<=b and a<=y. The find() call guarantees the
+    // second part (y = find(a).stop()), so it is sufficient to check the first
+    // one.
+    return !Traits::stopLess(b, I.start());
   }
 };
 
@@ -1387,7 +1392,7 @@ public:
     setRoot(map->rootSize);
   }
 
-  /// preincrement - move to the next interval.
+  /// preincrement - Move to the next interval.
   const_iterator &operator++() {
     assert(valid() && "Cannot increment end()");
     if (++path.leafOffset() == path.leafSize() && branched())
@@ -1395,14 +1400,14 @@ public:
     return *this;
   }
 
-  /// postincrement - Dont do that!
+  /// postincrement - Don't do that!
   const_iterator operator++(int) {
     const_iterator tmp = *this;
     operator++();
     return tmp;
   }
 
-  /// predecrement - move to the previous interval.
+  /// predecrement - Move to the previous interval.
   const_iterator &operator--() {
     if (path.leafOffset() && (valid() || !branched()))
       --path.leafOffset();
@@ -1411,7 +1416,7 @@ public:
     return *this;
   }
 
-  /// postdecrement - Dont do that!
+  /// postdecrement - Don't do that!
   const_iterator operator--(int) {
     const_iterator tmp = *this;
     operator--();

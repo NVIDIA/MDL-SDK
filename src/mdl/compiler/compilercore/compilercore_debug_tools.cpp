@@ -298,7 +298,7 @@ private:
 
 void *DebugMallocAllocator::malloc(mi::Size size)
 {
-    return DebugMallocAllocator::objalloc(NULL, size);
+    return DebugMallocAllocator::objalloc(/*clsname=*/NULL, size);
 }
 
 void DebugMallocAllocator::free(void *memory)

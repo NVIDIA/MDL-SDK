@@ -1,9 +1,8 @@
 //===-- llvm/Instruction.h - Instruction class definition -------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -16,6 +15,7 @@
 #define LLVM_IR_INSTRUCTION_H
 
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/Bitfields.h"
 #include "llvm/ADT/None.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/ilist_node.h"
@@ -23,6 +23,7 @@
 #include "llvm/IR/SymbolTableListTraits.h"
 #include "llvm/IR/User.h"
 #include "llvm/IR/Value.h"
+#include "llvm/Support/AtomicOrdering.h"
 #include "llvm/Support/Casting.h"
 #include <algorithm>
 #include <cassert>
@@ -46,11 +47,37 @@ class Instruction : public User,
   BasicBlock *Parent;
   DebugLoc DbgLoc;                         // 'dbg' Metadata cache.
 
-  enum {
-    /// This is a bit stored in the SubClassData field which indicates whether
-    /// this instruction has metadata attached to it or not.
-    HasMetadataBit = 1 << 15
-  };
+  /// Relative order of this instruction in its parent basic block. Used for
+  /// O(1) local dominance checks between instructions.
+  mutable unsigned Order = 0;
+
+protected:
+  // The 15 first bits of `Value::SubclassData` are available for subclasses of
+  // `Instruction` to use.
+  using OpaqueField = Bitfield::Element<uint16_t, 0, 15>;
+
+  // Template alias so that all Instruction storing alignment use the same
+  // definiton.
+  // Valid alignments are powers of two from 2^0 to 2^MaxAlignmentExponent =
+  // 2^29. We store them as Log2(Alignment), so we need 5 bits to encode the 30
+  // possible values.
+  template <unsigned Offset>
+  using AlignmentBitfieldElementT =
+      typename Bitfield::Element<unsigned, Offset, 5,
+                                 Value::MaxAlignmentExponent>;
+
+  template <unsigned Offset>
+  using BoolBitfieldElementT = typename Bitfield::Element<bool, Offset, 1>;
+
+  template <unsigned Offset>
+  using AtomicOrderingBitfieldElementT =
+      typename Bitfield::Element<AtomicOrdering, Offset, 3,
+                                 AtomicOrdering::LAST>;
+
+private:
+  // The last bit is used to store whether the instruction has metadata attached
+  // or not.
+  using HasMetadataField = Bitfield::Element<bool, 15, 1>;
 
 protected:
   ~Instruction(); // Use deleteValue() to delete a generic Instruction.
@@ -118,6 +145,13 @@ public:
   /// the basic block that MovePos lives in, right after MovePos.
   void moveAfter(Instruction *MovePos);
 
+  /// Given an instruction Other in the same basic block as this instruction,
+  /// return true if this instruction comes before Other. In this worst case,
+  /// this takes linear time in the number of instructions in the block. The
+  /// results are cached, so in common cases when the block remains unmodified,
+  /// it takes constant time.
+  bool comesBefore(const Instruction *Other) const;
+
   //===--------------------------------------------------------------------===//
   // Subclass classification.
   //===--------------------------------------------------------------------===//
@@ -127,11 +161,18 @@ public:
 
   const char *getOpcodeName() const { return getOpcodeName(getOpcode()); }
   bool isTerminator() const { return isTerminator(getOpcode()); }
+  bool isUnaryOp() const { return isUnaryOp(getOpcode()); }
   bool isBinaryOp() const { return isBinaryOp(getOpcode()); }
   bool isIntDivRem() const { return isIntDivRem(getOpcode()); }
-  bool isShift() { return isShift(getOpcode()); }
+  bool isShift() const { return isShift(getOpcode()); }
   bool isCast() const { return isCast(getOpcode()); }
   bool isFuncletPad() const { return isFuncletPad(getOpcode()); }
+  bool isExceptionalTerminator() const {
+    return isExceptionalTerminator(getOpcode());
+  }
+  bool isIndirectTerminator() const {
+    return isIndirectTerminator(getOpcode());
+  }
 
   static const char* getOpcodeName(unsigned OpCode);
 
@@ -139,6 +180,9 @@ public:
     return OpCode >= TermOpsBegin && OpCode < TermOpsEnd;
   }
 
+  static inline bool isUnaryOp(unsigned Opcode) {
+    return Opcode >= UnaryOpsBegin && Opcode < UnaryOpsEnd;
+  }
   static inline bool isBinaryOp(unsigned Opcode) {
     return Opcode >= BinaryOpsBegin && Opcode < BinaryOpsEnd;
   }
@@ -182,17 +226,50 @@ public:
     return OpCode >= FuncletPadOpsBegin && OpCode < FuncletPadOpsEnd;
   }
 
+  /// Returns true if the OpCode is a terminator related to exception handling.
+  static inline bool isExceptionalTerminator(unsigned OpCode) {
+    switch (OpCode) {
+    case Instruction::CatchSwitch:
+    case Instruction::CatchRet:
+    case Instruction::CleanupRet:
+    case Instruction::Invoke:
+    case Instruction::Resume:
+      return true;
+    default:
+      return false;
+    }
+  }
+
+  /// Returns true if the OpCode is a terminator with indirect targets.
+  static inline bool isIndirectTerminator(unsigned OpCode) {
+    switch (OpCode) {
+    case Instruction::IndirectBr:
+    case Instruction::CallBr:
+      return true;
+    default:
+      return false;
+    }
+  }
+
   //===--------------------------------------------------------------------===//
   // Metadata manipulation.
   //===--------------------------------------------------------------------===//
 
   /// Return true if this instruction has any metadata attached to it.
-  bool hasMetadata() const { return DbgLoc || hasMetadataHashEntry(); }
+  bool hasMetadata() const { return DbgLoc || Value::hasMetadata(); }
 
   /// Return true if this instruction has metadata attached to it other than a
   /// debug location.
-  bool hasMetadataOtherThanDebugLoc() const {
-    return hasMetadataHashEntry();
+  bool hasMetadataOtherThanDebugLoc() const { return Value::hasMetadata(); }
+
+  /// Return true if this instruction has the given type of metadata attached.
+  bool hasMetadata(unsigned KindID) const {
+    return getMetadata(KindID) != nullptr;
+  }
+
+  /// Return true if this instruction has the given type of metadata attached.
+  bool hasMetadata(StringRef Kind) const {
+    return getMetadata(Kind) != nullptr;
   }
 
   /// Get the metadata of given kind attached to this Instruction.
@@ -222,8 +299,7 @@ public:
   /// debug location.
   void getAllMetadataOtherThanDebugLoc(
       SmallVectorImpl<std::pair<unsigned, MDNode *>> &MDs) const {
-    if (hasMetadataOtherThanDebugLoc())
-      getAllMetadataOtherThanDebugLocImpl(MDs);
+    Value::getAllMetadata(MDs);
   }
 
   /// Fills the AAMDNodes structure with AA metadata from this instruction.
@@ -264,6 +340,11 @@ public:
   }
   /// @}
 
+  /// Adds an !annotation metadata node with \p Annotation to this instruction.
+  /// If this instruction already has !annotation metadata, append \p Annotation
+  /// to the existing node.
+  void addAnnotationMetadata(StringRef Annotation);
+
   /// Sets the metadata on this instruction from the AAMDNodes structure.
   void setAAMetadata(const AAMDNodes &N);
 
@@ -276,12 +357,6 @@ public:
   /// Returns true on success with profile total weights filled in.
   /// Returns false if no metadata was found.
   bool extractProfTotalWeight(uint64_t &TotalVal) const;
-
-  /// Updates branch_weights metadata by scaling it by \p S / \p T.
-  void updateProfWeight(uint64_t S, uint64_t T);
-
-  /// Sets the branch_weights metadata to \p W for CallInst.
-  void setProfWeight(uint64_t W);
 
   /// Set the debug location information for this instruction.
   void setDebugLoc(DebugLoc Loc) { DbgLoc = std::move(Loc); }
@@ -343,6 +418,11 @@ public:
   /// an operator which supports this flag. See LangRef.html for the meaning of
   /// this flag.
   void setHasAllowReciprocal(bool B);
+
+  /// Set or clear the allow-contract flag on this instruction, which must be
+  /// an operator which supports this flag. See LangRef.html for the meaning of
+  /// this flag.
+  void setHasAllowContract(bool B);
 
   /// Set or clear the approximate-math-functions flag on this instruction,
   /// which must be an operator which supports this flag. See LangRef.html for
@@ -414,21 +494,26 @@ public:
   /// merged DebugLoc.
   void applyMergedLocation(const DILocation *LocA, const DILocation *LocB);
 
-private:
-  /// Return true if we have an entry in the on-the-side metadata hash.
-  bool hasMetadataHashEntry() const {
-    return (getSubclassDataFromValue() & HasMetadataBit) != 0;
-  }
+  /// Updates the debug location given that the instruction has been hoisted
+  /// from a block to a predecessor of that block.
+  /// Note: it is undefined behavior to call this on an instruction not
+  /// currently inserted into a function.
+  void updateLocationAfterHoist();
 
+  /// Drop the instruction's debug location. This does not guarantee removal
+  /// of the !dbg source location attachment, as it must set a line 0 location
+  /// with scope information attached on call instructions. To guarantee
+  /// removal of the !dbg attachment, use the \ref setDebugLoc() API.
+  /// Note: it is undefined behavior to call this on an instruction not
+  /// currently inserted into a function.
+  void dropLocation();
+
+private:
   // These are all implemented in Metadata.cpp.
   MDNode *getMetadataImpl(unsigned KindID) const;
   MDNode *getMetadataImpl(StringRef Kind) const;
   void
   getAllMetadataImpl(SmallVectorImpl<std::pair<unsigned, MDNode *>> &) const;
-  void getAllMetadataOtherThanDebugLocImpl(
-      SmallVectorImpl<std::pair<unsigned, MDNode *>> &) const;
-  /// Clear all hashtable-based metadata from this instruction.
-  void clearMetadataHashEntries();
 
 public:
   //===--------------------------------------------------------------------===//
@@ -454,7 +539,7 @@ public:
   /// In LLVM, these are the commutative operators, plus SetEQ and SetNE, when
   /// applied to any type.
   ///
-  bool isCommutative() const { return isCommutative(getOpcode()); }
+  bool isCommutative() const LLVM_READONLY;
   static bool isCommutative(unsigned Opcode) {
     switch (Opcode) {
     case Add: case FAdd:
@@ -548,6 +633,10 @@ public:
   /// generated program.
   bool isSafeToRemove() const;
 
+  /// Return true if the instruction will return (unwinding is considered as
+  /// a form of returning control flow here).
+  bool willReturn() const;
+
   /// Return true if the instruction is a variety of EH-block.
   bool isEHPad() const {
     switch (getOpcode()) {
@@ -561,12 +650,33 @@ public:
     }
   }
 
+  /// Return true if the instruction is a llvm.lifetime.start or
+  /// llvm.lifetime.end marker.
+  bool isLifetimeStartOrEnd() const;
+
+  /// Return true if the instruction is a DbgInfoIntrinsic or PseudoProbeInst.
+  bool isDebugOrPseudoInst() const;
+
   /// Return a pointer to the next non-debug instruction in the same basic
-  /// block as 'this', or nullptr if no such instruction exists.
-  const Instruction *getNextNonDebugInstruction() const;
-  Instruction *getNextNonDebugInstruction() {
+  /// block as 'this', or nullptr if no such instruction exists. Skip any pseudo
+  /// operations if \c SkipPseudoOp is true.
+  const Instruction *
+  getNextNonDebugInstruction(bool SkipPseudoOp = false) const;
+  Instruction *getNextNonDebugInstruction(bool SkipPseudoOp = false) {
     return const_cast<Instruction *>(
-        static_cast<const Instruction *>(this)->getNextNonDebugInstruction());
+        static_cast<const Instruction *>(this)->getNextNonDebugInstruction(
+            SkipPseudoOp));
+  }
+
+  /// Return a pointer to the previous non-debug instruction in the same basic
+  /// block as 'this', or nullptr if no such instruction exists. Skip any pseudo
+  /// operations if \c SkipPseudoOp is true.
+  const Instruction *
+  getPrevNonDebugInstruction(bool SkipPseudoOp = false) const;
+  Instruction *getPrevNonDebugInstruction(bool SkipPseudoOp = false) {
+    return const_cast<Instruction *>(
+        static_cast<const Instruction *>(this)->getPrevNonDebugInstruction(
+            SkipPseudoOp));
   }
 
   /// Create a copy of 'this' instruction that is identical in all ways except
@@ -611,6 +721,20 @@ public:
   /// operands in the corresponding predecessor block.
   bool isUsedOutsideOfBlock(const BasicBlock *BB) const;
 
+  /// Return the number of successors that this instruction has. The instruction
+  /// must be a terminator.
+  unsigned getNumSuccessors() const;
+
+  /// Return the specified successor. This instruction must be a terminator.
+  BasicBlock *getSuccessor(unsigned Idx) const;
+
+  /// Update the specified successor to point at the provided block. This
+  /// instruction must be a terminator.
+  void setSuccessor(unsigned Idx, BasicBlock *BB);
+
+  /// Replace specified successor OldBB to point at the provided block.
+  /// This instruction must be a terminator.
+  void replaceSuccessorWith(BasicBlock *OldBB, BasicBlock *NewBB);
 
   /// Methods for support type inquiry through isa, cast, and dyn_cast:
   static bool classof(const Value *V) {
@@ -624,6 +748,13 @@ public:
 #define  FIRST_TERM_INST(N)             TermOpsBegin = N,
 #define HANDLE_TERM_INST(N, OPC, CLASS) OPC = N,
 #define   LAST_TERM_INST(N)             TermOpsEnd = N+1
+#include "llvm/IR/Instruction.def"
+  };
+
+  enum UnaryOps {
+#define  FIRST_UNARY_INST(N)             UnaryOpsBegin = N,
+#define HANDLE_UNARY_INST(N, OPC, CLASS) OPC = N,
+#define   LAST_UNARY_INST(N)             UnaryOpsEnd = N+1
 #include "llvm/IR/Instruction.def"
   };
 
@@ -664,6 +795,7 @@ public:
 
 private:
   friend class SymbolTableListTraits<Instruction>;
+  friend class BasicBlock; // For renumbering.
 
   // Shadow Value::setValueSubclassData with a private forwarding method so that
   // subclasses cannot accidentally use it.
@@ -675,25 +807,30 @@ private:
     return Value::getSubclassDataFromValue();
   }
 
-  void setHasMetadataHashEntry(bool V) {
-    setValueSubclassData((getSubclassDataFromValue() & ~HasMetadataBit) |
-                         (V ? HasMetadataBit : 0));
-  }
-
   void setParent(BasicBlock *P);
 
 protected:
   // Instruction subclasses can stick up to 15 bits of stuff into the
   // SubclassData field of instruction with these members.
 
-  // Verify that only the low 15 bits are used.
-  void setInstructionSubclassData(unsigned short D) {
-    assert((D & HasMetadataBit) == 0 && "Out of range value put into field");
-    setValueSubclassData((getSubclassDataFromValue() & HasMetadataBit) | D);
+  template <typename BitfieldElement>
+  typename BitfieldElement::Type getSubclassData() const {
+    static_assert(
+        std::is_same<BitfieldElement, HasMetadataField>::value ||
+            !Bitfield::isOverlapping<BitfieldElement, HasMetadataField>(),
+        "Must not overlap with the metadata bit");
+    return Bitfield::get<BitfieldElement>(getSubclassDataFromValue());
   }
 
-  unsigned getSubclassDataFromInstruction() const {
-    return getSubclassDataFromValue() & ~HasMetadataBit;
+  template <typename BitfieldElement>
+  void setSubclassData(typename BitfieldElement::Type Value) {
+    static_assert(
+        std::is_same<BitfieldElement, HasMetadataField>::value ||
+            !Bitfield::isOverlapping<BitfieldElement, HasMetadataField>(),
+        "Must not overlap with the metadata bit");
+    auto Storage = getSubclassDataFromValue();
+    Bitfield::set<BitfieldElement>(Storage, Value);
+    setValueSubclassData(Storage);
   }
 
   Instruction(Type *Ty, unsigned iType, Use *Ops, unsigned NumOps,

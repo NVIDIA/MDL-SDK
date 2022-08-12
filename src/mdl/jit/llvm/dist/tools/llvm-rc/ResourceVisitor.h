@@ -1,9 +1,8 @@
 //===-- ResourceVisitor.h ---------------------------------------*- C++-*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===---------------------------------------------------------------------===//
 //
@@ -24,6 +23,7 @@ class RCResource;
 class CaptionStmt;
 class ClassStmt;
 class CharacteristicsStmt;
+class ExStyleStmt;
 class FontStmt;
 class LanguageResource;
 class StyleStmt;
@@ -46,6 +46,7 @@ public:
   virtual Error visitCaptionStmt(const CaptionStmt *) = 0;
   virtual Error visitClassStmt(const ClassStmt *) = 0;
   virtual Error visitCharacteristicsStmt(const CharacteristicsStmt *) = 0;
+  virtual Error visitExStyleStmt(const ExStyleStmt *) = 0;
   virtual Error visitFontStmt(const FontStmt *) = 0;
   virtual Error visitLanguageStmt(const LanguageResource *) = 0;
   virtual Error visitStyleStmt(const StyleStmt *) = 0;

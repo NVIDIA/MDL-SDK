@@ -65,7 +65,7 @@ public:
     using ICompound::set_value;
 };
 
-/*@}*/ // end group mi_neuray_compounds
+/**@}*/ // end group mi_neuray_compounds
 
 } // namespace mi
 

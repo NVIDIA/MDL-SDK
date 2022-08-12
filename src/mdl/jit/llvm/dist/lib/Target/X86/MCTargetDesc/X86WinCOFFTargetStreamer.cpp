@@ -1,9 +1,8 @@
 //===-- X86WinCOFFTargetStreamer.cpp ----------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -38,6 +37,7 @@ public:
   bool emitFPOData(const MCSymbol *ProcSym, SMLoc L) override;
   bool emitFPOPushReg(unsigned Reg, SMLoc L) override;
   bool emitFPOStackAlloc(unsigned StackAlloc, SMLoc L) override;
+  bool emitFPOStackAlign(unsigned Align, SMLoc L) override;
   bool emitFPOSetFrame(unsigned Reg, SMLoc L) override;
 };
 
@@ -47,6 +47,7 @@ struct FPOInstruction {
   enum Operation {
     PushReg,
     StackAlloc,
+    StackAlign,
     SetFrame,
   } Op;
   unsigned RegOrOffset;
@@ -90,6 +91,7 @@ public:
   bool emitFPOData(const MCSymbol *ProcSym, SMLoc L) override;
   bool emitFPOPushReg(unsigned Reg, SMLoc L) override;
   bool emitFPOStackAlloc(unsigned StackAlloc, SMLoc L) override;
+  bool emitFPOStackAlign(unsigned Align, SMLoc L) override;
   bool emitFPOSetFrame(unsigned Reg, SMLoc L) override;
 };
 } // end namespace
@@ -133,6 +135,11 @@ bool X86WinCOFFAsmTargetStreamer::emitFPOStackAlloc(unsigned StackAlloc,
   return false;
 }
 
+bool X86WinCOFFAsmTargetStreamer::emitFPOStackAlign(unsigned Align, SMLoc L) {
+  OS << "\t.cv_fpo_stackalign\t" << Align << '\n';
+  return false;
+}
+
 bool X86WinCOFFAsmTargetStreamer::emitFPOSetFrame(unsigned Reg, SMLoc L) {
   OS << "\t.cv_fpo_setframe\t";
   InstPrinter.printRegName(OS, Reg);
@@ -152,7 +159,7 @@ bool X86WinCOFFTargetStreamer::checkInFPOPrologue(SMLoc L) {
 
 MCSymbol *X86WinCOFFTargetStreamer::emitFPOLabel() {
   MCSymbol *Label = getContext().createTempSymbol("cfi", true);
-  getStreamer().EmitLabel(Label);
+  getStreamer().emitLabel(Label);
   return Label;
 }
 
@@ -163,7 +170,7 @@ bool X86WinCOFFTargetStreamer::emitFPOProc(const MCSymbol *ProcSym,
         L, "opening new .cv_fpo_proc before closing previous frame");
     return true;
   }
-  CurFPOData = llvm::make_unique<FPOData>();
+  CurFPOData = std::make_unique<FPOData>();
   CurFPOData->Function = ProcSym;
   CurFPOData->Begin = emitFPOLabel();
   CurFPOData->ParamsSize = ParamsSize;
@@ -226,6 +233,24 @@ bool X86WinCOFFTargetStreamer::emitFPOStackAlloc(unsigned StackAlloc, SMLoc L) {
   return false;
 }
 
+bool X86WinCOFFTargetStreamer::emitFPOStackAlign(unsigned Align, SMLoc L) {
+  if (checkInFPOPrologue(L))
+    return true;
+  if (!llvm::any_of(CurFPOData->Instructions, [](const FPOInstruction &Inst) {
+        return Inst.Op == FPOInstruction::SetFrame;
+      })) {
+    getContext().reportError(
+        L, "a frame register must be established before aligning the stack");
+    return true;
+  }
+  FPOInstruction Inst;
+  Inst.Label = emitFPOLabel();
+  Inst.Op = FPOInstruction::StackAlign;
+  Inst.RegOrOffset = Align;
+  CurFPOData->Instructions.push_back(Inst);
+  return false;
+}
+
 bool X86WinCOFFTargetStreamer::emitFPOEndPrologue(SMLoc L) {
   if (checkInFPOPrologue(L))
     return true;
@@ -250,6 +275,8 @@ struct FPOStateMachine {
   unsigned CurOffset = 0;
   unsigned LocalSize = 0;
   unsigned SavedRegSize = 0;
+  unsigned StackOffsetBeforeAlign = 0;
+  unsigned StackAlign = 0;
   unsigned Flags = 0; // FIXME: Set HasSEH / HasEH.
 
   SmallString<128> FrameFunc;
@@ -291,24 +318,39 @@ void FPOStateMachine::emitFrameDataRecord(MCStreamer &OS, MCSymbol *Label) {
   FrameFunc.clear();
   raw_svector_ostream FuncOS(FrameFunc);
   const MCRegisterInfo *MRI = OS.getContext().getRegisterInfo();
+  assert((StackAlign == 0 || FrameReg != 0) &&
+         "cannot align stack without frame reg");
+  StringRef CFAVar = StackAlign == 0 ? "$T0" : "$T1";
+
   if (FrameReg) {
     // CFA is FrameReg + FrameRegOff.
-    FuncOS << "$T0 " << printFPOReg(MRI, FrameReg) << " " << FrameRegOff
+    FuncOS << CFAVar << ' ' << printFPOReg(MRI, FrameReg) << ' ' << FrameRegOff
            << " + = ";
+
+    // Assign $T0, the VFRAME register, the value of ESP after it is aligned.
+    // Starting from the CFA, we subtract the size of all pushed registers, and
+    // align the result. While we don't store any CSRs in this area, $T0 is used
+    // by S_DEFRANGE_FRAMEPOINTER_REL records to find local variables.
+    if (StackAlign) {
+      FuncOS << "$T0 " << CFAVar << ' ' << StackOffsetBeforeAlign << " - "
+             << StackAlign << " @ = ";
+    }
   } else {
     // The address of return address is ESP + CurOffset, but we use .raSearch to
     // match MSVC. This seems to ask the debugger to subtract some combination
     // of LocalSize and SavedRegSize from ESP and grovel around in that memory
     // to find the address of a plausible return address.
-    FuncOS << "$T0 .raSearch = ";
+    FuncOS << CFAVar << " .raSearch = ";
   }
 
   // Caller's $eip should be dereferenced CFA, and $esp should be CFA plus 4.
-  FuncOS << "$eip $T0 ^ = $esp $T0 4 + = ";
+  FuncOS << "$eip " << CFAVar << " ^ = ";
+  FuncOS << "$esp " << CFAVar << " 4 + = ";
 
   // Each saved register is stored at an unchanging negative CFA offset.
   for (RegSaveOffset RO : RegSaveOffsets)
-    FuncOS << printFPOReg(MRI, RO.Reg) << " $T0 " << RO.Offset << " - ^ = ";
+    FuncOS << printFPOReg(MRI, RO.Reg) << ' ' << CFAVar << ' ' << RO.Offset
+           << " - ^ = ";
 
   // Add it to the CV string table.
   CodeViewContext &CVCtx = OS.getContext().getCVContext();
@@ -330,13 +372,13 @@ void FPOStateMachine::emitFrameDataRecord(MCStreamer &OS, MCSymbol *Label) {
 
   OS.emitAbsoluteSymbolDiff(Label, FPO->Begin, 4); // RvaStart
   OS.emitAbsoluteSymbolDiff(FPO->End, Label, 4);   // CodeSize
-  OS.EmitIntValue(LocalSize, 4);
-  OS.EmitIntValue(FPO->ParamsSize, 4);
-  OS.EmitIntValue(MaxStackSize, 4);
-  OS.EmitIntValue(FrameFuncStrTabOff, 4); // FrameFunc
+  OS.emitInt32(LocalSize);
+  OS.emitInt32(FPO->ParamsSize);
+  OS.emitInt32(MaxStackSize);
+  OS.emitInt32(FrameFuncStrTabOff); // FrameFunc
   OS.emitAbsoluteSymbolDiff(FPO->PrologueEnd, Label, 2);
-  OS.EmitIntValue(SavedRegSize, 2);
-  OS.EmitIntValue(CurFlags, 4);
+  OS.emitInt16(SavedRegSize);
+  OS.emitInt32(CurFlags);
 }
 
 /// Compute and emit the real CodeView FrameData subsection.
@@ -356,12 +398,12 @@ bool X86WinCOFFTargetStreamer::emitFPOData(const MCSymbol *ProcSym, SMLoc L) {
   MCSymbol *FrameBegin = Ctx.createTempSymbol(),
            *FrameEnd = Ctx.createTempSymbol();
 
-  OS.EmitIntValue(unsigned(DebugSubsectionKind::FrameData), 4);
+  OS.emitInt32(unsigned(DebugSubsectionKind::FrameData));
   OS.emitAbsoluteSymbolDiff(FrameEnd, FrameBegin, 4);
-  OS.EmitLabel(FrameBegin);
+  OS.emitLabel(FrameBegin);
 
   // Start with the RVA of the function in question.
-  OS.EmitValue(MCSymbolRefExpr::create(FPO->Function,
+  OS.emitValue(MCSymbolRefExpr::create(FPO->Function,
                                        MCSymbolRefExpr::VK_COFF_IMGREL32, Ctx),
                4);
 
@@ -380,6 +422,10 @@ bool X86WinCOFFTargetStreamer::emitFPOData(const MCSymbol *ProcSym, SMLoc L) {
       FSM.FrameReg = Inst.RegOrOffset;
       FSM.FrameRegOff = FSM.CurOffset;
       break;
+    case FPOInstruction::StackAlign:
+      FSM.StackOffsetBeforeAlign = FSM.CurOffset;
+      FSM.StackAlign = Inst.RegOrOffset;
+      break;
     case FPOInstruction::StackAlloc:
       FSM.CurOffset += Inst.RegOrOffset;
       FSM.LocalSize += Inst.RegOrOffset;
@@ -391,8 +437,8 @@ bool X86WinCOFFTargetStreamer::emitFPOData(const MCSymbol *ProcSym, SMLoc L) {
     FSM.emitFrameDataRecord(OS, Inst.Label);
   }
 
-  OS.EmitValueToAlignment(4, 0);
-  OS.EmitLabel(FrameEnd);
+  OS.emitValueToAlignment(4, 0);
+  OS.emitLabel(FrameEnd);
   return false;
 }
 

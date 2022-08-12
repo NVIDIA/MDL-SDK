@@ -1,9 +1,8 @@
 //===- IndirectionUtils.h - Utilities for adding indirections ---*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -16,9 +15,9 @@
 
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/Twine.h"
 #include "llvm/ExecutionEngine/JITSymbol.h"
 #include "llvm/ExecutionEngine/Orc/Core.h"
+#include "llvm/ExecutionEngine/Orc/OrcABISupport.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/Memory.h"
 #include "llvm/Support/Process.h"
@@ -27,6 +26,7 @@
 #include <cassert>
 #include <cstdint>
 #include <functional>
+#include <future>
 #include <map>
 #include <memory>
 #include <system_error>
@@ -43,22 +43,159 @@ class GlobalVariable;
 class Module;
 class PointerType;
 class Triple;
+class Twine;
 class Value;
 
 namespace orc {
+
+/// Base class for pools of compiler re-entry trampolines.
+/// These trampolines are callable addresses that save all register state
+/// before calling a supplied function to return the trampoline landing
+/// address, then restore all state before jumping to that address. They
+/// are used by various ORC APIs to support lazy compilation
+class TrampolinePool {
+public:
+  using NotifyLandingResolvedFunction =
+      unique_function<void(JITTargetAddress) const>;
+
+  using ResolveLandingFunction = unique_function<void(
+      JITTargetAddress TrampolineAddr,
+      NotifyLandingResolvedFunction OnLandingResolved) const>;
+
+  virtual ~TrampolinePool();
+
+  /// Get an available trampoline address.
+  /// Returns an error if no trampoline can be created.
+  Expected<JITTargetAddress> getTrampoline() {
+    std::lock_guard<std::mutex> Lock(TPMutex);
+    if (AvailableTrampolines.empty()) {
+      if (auto Err = grow())
+        return std::move(Err);
+    }
+    assert(!AvailableTrampolines.empty() && "Failed to grow trampoline pool");
+    auto TrampolineAddr = AvailableTrampolines.back();
+    AvailableTrampolines.pop_back();
+    return TrampolineAddr;
+  }
+
+  /// Returns the given trampoline to the pool for re-use.
+  void releaseTrampoline(JITTargetAddress TrampolineAddr) {
+    std::lock_guard<std::mutex> Lock(TPMutex);
+    AvailableTrampolines.push_back(TrampolineAddr);
+  }
+
+protected:
+  virtual Error grow() = 0;
+
+  std::mutex TPMutex;
+  std::vector<JITTargetAddress> AvailableTrampolines;
+};
+
+/// A trampoline pool for trampolines within the current process.
+template <typename ORCABI> class LocalTrampolinePool : public TrampolinePool {
+public:
+  /// Creates a LocalTrampolinePool with the given RunCallback function.
+  /// Returns an error if this function is unable to correctly allocate, write
+  /// and protect the resolver code block.
+  static Expected<std::unique_ptr<LocalTrampolinePool>>
+  Create(ResolveLandingFunction ResolveLanding) {
+    Error Err = Error::success();
+
+    auto LTP = std::unique_ptr<LocalTrampolinePool>(
+        new LocalTrampolinePool(std::move(ResolveLanding), Err));
+
+    if (Err)
+      return std::move(Err);
+    return std::move(LTP);
+  }
+
+private:
+  static JITTargetAddress reenter(void *TrampolinePoolPtr, void *TrampolineId) {
+    LocalTrampolinePool<ORCABI> *TrampolinePool =
+        static_cast<LocalTrampolinePool *>(TrampolinePoolPtr);
+
+    std::promise<JITTargetAddress> LandingAddressP;
+    auto LandingAddressF = LandingAddressP.get_future();
+
+    TrampolinePool->ResolveLanding(pointerToJITTargetAddress(TrampolineId),
+                                   [&](JITTargetAddress LandingAddress) {
+                                     LandingAddressP.set_value(LandingAddress);
+                                   });
+    return LandingAddressF.get();
+  }
+
+  LocalTrampolinePool(ResolveLandingFunction ResolveLanding, Error &Err)
+      : ResolveLanding(std::move(ResolveLanding)) {
+
+    ErrorAsOutParameter _(&Err);
+
+    /// Try to set up the resolver block.
+    std::error_code EC;
+    ResolverBlock = sys::OwningMemoryBlock(sys::Memory::allocateMappedMemory(
+        ORCABI::ResolverCodeSize, nullptr,
+        sys::Memory::MF_READ | sys::Memory::MF_WRITE, EC));
+    if (EC) {
+      Err = errorCodeToError(EC);
+      return;
+    }
+
+    ORCABI::writeResolverCode(static_cast<char *>(ResolverBlock.base()),
+                              pointerToJITTargetAddress(ResolverBlock.base()),
+                              pointerToJITTargetAddress(&reenter),
+                              pointerToJITTargetAddress(this));
+
+    EC = sys::Memory::protectMappedMemory(ResolverBlock.getMemoryBlock(),
+                                          sys::Memory::MF_READ |
+                                              sys::Memory::MF_EXEC);
+    if (EC) {
+      Err = errorCodeToError(EC);
+      return;
+    }
+  }
+
+  Error grow() override {
+    assert(AvailableTrampolines.empty() && "Growing prematurely?");
+
+    std::error_code EC;
+    auto TrampolineBlock =
+        sys::OwningMemoryBlock(sys::Memory::allocateMappedMemory(
+            sys::Process::getPageSizeEstimate(), nullptr,
+            sys::Memory::MF_READ | sys::Memory::MF_WRITE, EC));
+    if (EC)
+      return errorCodeToError(EC);
+
+    unsigned NumTrampolines =
+        (sys::Process::getPageSizeEstimate() - ORCABI::PointerSize) /
+        ORCABI::TrampolineSize;
+
+    char *TrampolineMem = static_cast<char *>(TrampolineBlock.base());
+    ORCABI::writeTrampolines(
+        TrampolineMem, pointerToJITTargetAddress(TrampolineMem),
+        pointerToJITTargetAddress(ResolverBlock.base()), NumTrampolines);
+
+    for (unsigned I = 0; I < NumTrampolines; ++I)
+      AvailableTrampolines.push_back(pointerToJITTargetAddress(
+          TrampolineMem + (I * ORCABI::TrampolineSize)));
+
+    if (auto EC = sys::Memory::protectMappedMemory(
+                    TrampolineBlock.getMemoryBlock(),
+                    sys::Memory::MF_READ | sys::Memory::MF_EXEC))
+      return errorCodeToError(EC);
+
+    TrampolineBlocks.push_back(std::move(TrampolineBlock));
+    return Error::success();
+  }
+
+  ResolveLandingFunction ResolveLanding;
+
+  sys::OwningMemoryBlock ResolverBlock;
+  std::vector<sys::OwningMemoryBlock> TrampolineBlocks;
+};
 
 /// Target-independent base class for compile callback management.
 class JITCompileCallbackManager {
 public:
   using CompileFunction = std::function<JITTargetAddress()>;
-
-  /// Construct a JITCompileCallbackManager.
-  /// @param ErrorHandlerAddress The address of an error handler in the target
-  ///                            process to be used if a compile callback fails.
-  JITCompileCallbackManager(ExecutionSession &ES,
-                            JITTargetAddress ErrorHandlerAddress)
-      : ES(ES), CallbacksVSO(ES.createVSO("<Callbacks>")),
-        ErrorHandlerAddress(ErrorHandlerAddress) {}
 
   virtual ~JITCompileCallbackManager() = default;
 
@@ -70,103 +207,68 @@ public:
   JITTargetAddress executeCompileCallback(JITTargetAddress TrampolineAddr);
 
 protected:
-  std::vector<JITTargetAddress> AvailableTrampolines;
+  /// Construct a JITCompileCallbackManager.
+  JITCompileCallbackManager(std::unique_ptr<TrampolinePool> TP,
+                            ExecutionSession &ES,
+                            JITTargetAddress ErrorHandlerAddress)
+      : TP(std::move(TP)), ES(ES),
+        CallbacksJD(ES.createBareJITDylib("<Callbacks>")),
+        ErrorHandlerAddress(ErrorHandlerAddress) {}
 
-private:
-  Expected<JITTargetAddress> getAvailableTrampolineAddr() {
-    if (this->AvailableTrampolines.empty())
-      if (auto Err = grow())
-        return std::move(Err);
-    assert(!this->AvailableTrampolines.empty() &&
-           "Failed to grow available trampolines.");
-    JITTargetAddress TrampolineAddr = this->AvailableTrampolines.back();
-    this->AvailableTrampolines.pop_back();
-    return TrampolineAddr;
+  void setTrampolinePool(std::unique_ptr<TrampolinePool> TP) {
+    this->TP = std::move(TP);
   }
 
-  // Create new trampolines - to be implemented in subclasses.
-  virtual Error grow() = 0;
-
-  virtual void anchor();
-
+private:
   std::mutex CCMgrMutex;
+  std::unique_ptr<TrampolinePool> TP;
   ExecutionSession &ES;
-  VSO &CallbacksVSO;
+  JITDylib &CallbacksJD;
   JITTargetAddress ErrorHandlerAddress;
   std::map<JITTargetAddress, SymbolStringPtr> AddrToSymbol;
   size_t NextCallbackId = 0;
 };
 
 /// Manage compile callbacks for in-process JITs.
-template <typename TargetT>
+template <typename ORCABI>
 class LocalJITCompileCallbackManager : public JITCompileCallbackManager {
 public:
+  /// Create a new LocalJITCompileCallbackManager.
+  static Expected<std::unique_ptr<LocalJITCompileCallbackManager>>
+  Create(ExecutionSession &ES, JITTargetAddress ErrorHandlerAddress) {
+    Error Err = Error::success();
+    auto CCMgr = std::unique_ptr<LocalJITCompileCallbackManager>(
+        new LocalJITCompileCallbackManager(ES, ErrorHandlerAddress, Err));
+    if (Err)
+      return std::move(Err);
+    return std::move(CCMgr);
+  }
+
+private:
   /// Construct a InProcessJITCompileCallbackManager.
   /// @param ErrorHandlerAddress The address of an error handler in the target
   ///                            process to be used if a compile callback fails.
   LocalJITCompileCallbackManager(ExecutionSession &ES,
-                                 JITTargetAddress ErrorHandlerAddress)
-      : JITCompileCallbackManager(ES, ErrorHandlerAddress) {
-    /// Set up the resolver block.
-    std::error_code EC;
-    ResolverBlock = sys::OwningMemoryBlock(sys::Memory::allocateMappedMemory(
-        TargetT::ResolverCodeSize, nullptr,
-        sys::Memory::MF_READ | sys::Memory::MF_WRITE, EC));
-    assert(!EC && "Failed to allocate resolver block");
+                                 JITTargetAddress ErrorHandlerAddress,
+                                 Error &Err)
+      : JITCompileCallbackManager(nullptr, ES, ErrorHandlerAddress) {
+    using NotifyLandingResolvedFunction =
+        TrampolinePool::NotifyLandingResolvedFunction;
 
-    TargetT::writeResolverCode(static_cast<uint8_t *>(ResolverBlock.base()),
-                               &reenter, this);
+    ErrorAsOutParameter _(&Err);
+    auto TP = LocalTrampolinePool<ORCABI>::Create(
+        [this](JITTargetAddress TrampolineAddr,
+               NotifyLandingResolvedFunction NotifyLandingResolved) {
+          NotifyLandingResolved(executeCompileCallback(TrampolineAddr));
+        });
 
-    EC = sys::Memory::protectMappedMemory(ResolverBlock.getMemoryBlock(),
-                                          sys::Memory::MF_READ |
-                                              sys::Memory::MF_EXEC);
-    assert(!EC && "Failed to mprotect resolver block");
+    if (!TP) {
+      Err = TP.takeError();
+      return;
+    }
+
+    setTrampolinePool(std::move(*TP));
   }
-
-private:
-  static JITTargetAddress reenter(void *CCMgr, void *TrampolineId) {
-    JITCompileCallbackManager *Mgr =
-        static_cast<JITCompileCallbackManager *>(CCMgr);
-    return Mgr->executeCompileCallback(
-        static_cast<JITTargetAddress>(
-            reinterpret_cast<uintptr_t>(TrampolineId)));
-  }
-
-  Error grow() override {
-    assert(this->AvailableTrampolines.empty() && "Growing prematurely?");
-
-    std::error_code EC;
-    auto TrampolineBlock =
-        sys::OwningMemoryBlock(sys::Memory::allocateMappedMemory(
-            sys::Process::getPageSize(), nullptr,
-            sys::Memory::MF_READ | sys::Memory::MF_WRITE, EC));
-    if (EC)
-      return errorCodeToError(EC);
-
-    unsigned NumTrampolines =
-        (sys::Process::getPageSize() - TargetT::PointerSize) /
-        TargetT::TrampolineSize;
-
-    uint8_t *TrampolineMem = static_cast<uint8_t *>(TrampolineBlock.base());
-    TargetT::writeTrampolines(TrampolineMem, ResolverBlock.base(),
-                              NumTrampolines);
-
-    for (unsigned I = 0; I < NumTrampolines; ++I)
-      this->AvailableTrampolines.push_back(
-          static_cast<JITTargetAddress>(reinterpret_cast<uintptr_t>(
-              TrampolineMem + (I * TargetT::TrampolineSize))));
-
-    if (auto EC = sys::Memory::protectMappedMemory(
-                    TrampolineBlock.getMemoryBlock(),
-                    sys::Memory::MF_READ | sys::Memory::MF_EXEC))
-      return errorCodeToError(EC);
-
-    TrampolineBlocks.push_back(std::move(TrampolineBlock));
-    return Error::success();
-  }
-
-  sys::OwningMemoryBlock ResolverBlock;
-  std::vector<sys::OwningMemoryBlock> TrampolineBlocks;
 };
 
 /// Base class for managing collections of named indirect stubs.
@@ -200,6 +302,61 @@ private:
   virtual void anchor();
 };
 
+template <typename ORCABI> class LocalIndirectStubsInfo {
+public:
+  LocalIndirectStubsInfo(unsigned NumStubs, sys::OwningMemoryBlock StubsMem)
+      : NumStubs(NumStubs), StubsMem(std::move(StubsMem)) {}
+
+  static Expected<LocalIndirectStubsInfo> create(unsigned MinStubs,
+                                                 unsigned PageSize) {
+    auto ISAS = getIndirectStubsBlockSizes<ORCABI>(MinStubs, PageSize);
+
+    assert((ISAS.StubBytes % PageSize == 0) &&
+           "StubBytes is not a page size multiple");
+    uint64_t PointerAlloc = alignTo(ISAS.PointerBytes, PageSize);
+
+    // Allocate memory for stubs and pointers in one call.
+    std::error_code EC;
+    auto StubsAndPtrsMem =
+        sys::OwningMemoryBlock(sys::Memory::allocateMappedMemory(
+            ISAS.StubBytes + PointerAlloc, nullptr,
+            sys::Memory::MF_READ | sys::Memory::MF_WRITE, EC));
+    if (EC)
+      return errorCodeToError(EC);
+
+    sys::MemoryBlock StubsBlock(StubsAndPtrsMem.base(), ISAS.StubBytes);
+    auto StubsBlockMem = static_cast<char *>(StubsAndPtrsMem.base());
+    auto PtrBlockAddress =
+        pointerToJITTargetAddress(StubsBlockMem) + ISAS.StubBytes;
+
+    ORCABI::writeIndirectStubsBlock(StubsBlockMem,
+                                    pointerToJITTargetAddress(StubsBlockMem),
+                                    PtrBlockAddress, ISAS.NumStubs);
+
+    if (auto EC = sys::Memory::protectMappedMemory(
+            StubsBlock, sys::Memory::MF_READ | sys::Memory::MF_EXEC))
+      return errorCodeToError(EC);
+
+    return LocalIndirectStubsInfo(ISAS.NumStubs, std::move(StubsAndPtrsMem));
+  }
+
+  unsigned getNumStubs() const { return NumStubs; }
+
+  void *getStub(unsigned Idx) const {
+    return static_cast<char *>(StubsMem.base()) + Idx * ORCABI::StubSize;
+  }
+
+  void **getPtr(unsigned Idx) const {
+    char *PtrsBase =
+        static_cast<char *>(StubsMem.base()) + NumStubs * ORCABI::StubSize;
+    return reinterpret_cast<void **>(PtrsBase) + Idx;
+  }
+
+private:
+  unsigned NumStubs = 0;
+  sys::OwningMemoryBlock StubsMem;
+};
+
 /// IndirectStubsManager implementation for the host architecture, e.g.
 ///        OrcX86_64. (See OrcArchitectureSupport.h).
 template <typename TargetT>
@@ -207,6 +364,7 @@ class LocalIndirectStubsManager : public IndirectStubsManager {
 public:
   Error createStub(StringRef StubName, JITTargetAddress StubAddr,
                    JITSymbolFlags StubFlags) override {
+    std::lock_guard<std::mutex> Lock(StubsMutex);
     if (auto Err = reserveStubs(1))
       return Err;
 
@@ -216,6 +374,7 @@ public:
   }
 
   Error createStubs(const StubInitsMap &StubInits) override {
+    std::lock_guard<std::mutex> Lock(StubsMutex);
     if (auto Err = reserveStubs(StubInits.size()))
       return Err;
 
@@ -227,6 +386,7 @@ public:
   }
 
   JITEvaluatedSymbol findStub(StringRef Name, bool ExportedStubsOnly) override {
+    std::lock_guard<std::mutex> Lock(StubsMutex);
     auto I = StubIndexes.find(Name);
     if (I == StubIndexes.end())
       return nullptr;
@@ -242,6 +402,7 @@ public:
   }
 
   JITEvaluatedSymbol findPointer(StringRef Name) override {
+    std::lock_guard<std::mutex> Lock(StubsMutex);
     auto I = StubIndexes.find(Name);
     if (I == StubIndexes.end())
       return nullptr;
@@ -254,11 +415,15 @@ public:
   }
 
   Error updatePointer(StringRef Name, JITTargetAddress NewAddr) override {
+    using AtomicIntPtr = std::atomic<uintptr_t>;
+
+    std::lock_guard<std::mutex> Lock(StubsMutex);
     auto I = StubIndexes.find(Name);
     assert(I != StubIndexes.end() && "No stub pointer for symbol");
     auto Key = I->second.first;
-    *IndirectStubsInfos[Key.first].getPtr(Key.second) =
-        reinterpret_cast<void *>(static_cast<uintptr_t>(NewAddr));
+    AtomicIntPtr *AtomicStubPtr = reinterpret_cast<AtomicIntPtr *>(
+        IndirectStubsInfos[Key.first].getPtr(Key.second));
+    *AtomicStubPtr = static_cast<uintptr_t>(NewAddr);
     return Error::success();
   }
 
@@ -269,13 +434,13 @@ private:
 
     unsigned NewStubsRequired = NumStubs - FreeStubs.size();
     unsigned NewBlockId = IndirectStubsInfos.size();
-    typename TargetT::IndirectStubsInfo ISI;
-    if (auto Err =
-            TargetT::emitIndirectStubsBlock(ISI, NewStubsRequired, nullptr))
-      return Err;
-    for (unsigned I = 0; I < ISI.getNumStubs(); ++I)
+    auto ISI =
+        LocalIndirectStubsInfo<TargetT>::create(NewStubsRequired, PageSize);
+    if (!ISI)
+      return ISI.takeError();
+    for (unsigned I = 0; I < ISI->getNumStubs(); ++I)
       FreeStubs.push_back(std::make_pair(NewBlockId, I));
-    IndirectStubsInfos.push_back(std::move(ISI));
+    IndirectStubsInfos.push_back(std::move(*ISI));
     return Error::success();
   }
 
@@ -284,11 +449,13 @@ private:
     auto Key = FreeStubs.back();
     FreeStubs.pop_back();
     *IndirectStubsInfos[Key.first].getPtr(Key.second) =
-        reinterpret_cast<void *>(static_cast<uintptr_t>(InitAddr));
+        jitTargetAddressToPointer<void *>(InitAddr);
     StubIndexes[StubName] = std::make_pair(Key, StubFlags);
   }
 
-  std::vector<typename TargetT::IndirectStubsInfo> IndirectStubsInfos;
+  unsigned PageSize = sys::Process::getPageSizeEstimate();
+  std::mutex StubsMutex;
+  std::vector<LocalIndirectStubsInfo<TargetT>> IndirectStubsInfos;
   using StubKey = std::pair<uint16_t, uint16_t>;
   std::vector<StubKey> FreeStubs;
   StringMap<std::pair<StubKey, JITSymbolFlags>> StubIndexes;
@@ -299,7 +466,7 @@ private:
 /// The given target triple will determine the ABI, and the given
 /// ErrorHandlerAddress will be used by the resulting compile callback
 /// manager if a compile callback fails.
-std::unique_ptr<JITCompileCallbackManager>
+Expected<std::unique_ptr<JITCompileCallbackManager>>
 createLocalCompileCallbackManager(const Triple &T, ExecutionSession &ES,
                                   JITTargetAddress ErrorHandlerAddress);
 
@@ -325,12 +492,18 @@ GlobalVariable *createImplPointer(PointerType &PT, Module &M, const Twine &Name,
 ///        indirect call using the given function pointer.
 void makeStub(Function &F, Value &ImplPointer);
 
-/// Raise linkage types and rename as necessary to ensure that all
-///        symbols are accessible for other modules.
-///
-///   This should be called before partitioning a module to ensure that the
-/// partitions retain access to each other's symbols.
-void makeAllSymbolsExternallyAccessible(Module &M);
+/// Promotes private symbols to global hidden, and renames to prevent clashes
+/// with other promoted symbols. The same SymbolPromoter instance should be
+/// used for all symbols to be added to a single JITDylib.
+class SymbolLinkagePromoter {
+public:
+  /// Promote symbols in the given module. Returns the set of global values
+  /// that have been renamed/promoted.
+  std::vector<GlobalValue *> operator()(Module &M);
+
+private:
+  unsigned NextId = 0;
+};
 
 /// Clone a function declaration into a new module.
 ///

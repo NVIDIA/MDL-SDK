@@ -144,4 +144,3 @@ MI_HOST_DEVICE_INLINE T quantize(const float x)
 
 }}
 
-

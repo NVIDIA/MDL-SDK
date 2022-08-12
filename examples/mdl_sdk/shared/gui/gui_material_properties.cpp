@@ -115,27 +115,14 @@ public:
         const mi::neuraylib::ITarget_code* target_code,
         const char* material_instance_db_name,
         const char* material_definition_db_name,
-        Section_material_resource_handler* resource_handler)
+        Section_material_resource_handler* resource_handler,
+        Section_material_string_handler* string_handler)
         : m_class_compilation(class_compilation)
-        , m_string_table()
-        , m_string_table_inv()
-        , m_string_max_value_length(0)
         , m_material_instance_db_name(material_instance_db_name)
         , m_material_definition_db_name(material_definition_db_name)
         , m_resource_handler(resource_handler)
+        , m_string_handler(string_handler)
     {
-        mi::Size string_count = target_code->get_string_constant_count();
-        m_string_table.resize(string_count);
-        m_string_table_inv.reserve(string_count);
-        m_string_max_value_length = 0;
-        for (mi::Uint32 i = 0; i < string_count; ++i)
-        {
-            m_string_table[i] = target_code->get_string_constant(i);
-            m_string_max_value_length =
-                std::max(m_string_max_value_length, m_string_table[i].length());
-
-            m_string_table_inv[m_string_table[i]] = i;
-        }
     }
 
     // --------------------------------------------------------------------------------------------
@@ -143,7 +130,7 @@ public:
     /// Get the number of string present in the target code.
     size_t get_string_count() const
     {
-        return m_string_table.size();
+        return m_string_handler->get_string_count();
     }
 
     // --------------------------------------------------------------------------------------------
@@ -151,9 +138,7 @@ public:
     /// Get the i`th string present in the target code.
     const char* get_string(size_t index) const
     {
-        if (index >= m_string_table.size())
-            return nullptr;
-        return m_string_table[index].c_str();
+        return m_string_handler->get_string_name(index);
     }
 
     // --------------------------------------------------------------------------------------------
@@ -162,18 +147,15 @@ public:
     /// Used to limit text input buffers.
     size_t get_max_string_length() const
     {
-        return m_string_max_value_length;
+        return m_string_handler->get_max_string_name_length();
     }
 
     // --------------------------------------------------------------------------------------------
 
     /// Get the ID for a given string, return 0 if the string does not exist in the table.
-    mi::Uint32 get_id_for_string(const std::string& string) const
+    mi::Uint32 get_string_id_by_name(const std::string& string) const
     {
-        auto found = m_string_table_inv.find(string);
-        if (found == m_string_table_inv.end())
-            return 0;
-        return found->second;
+        return m_string_handler->get_string_id_by_name(string.c_str());
     }
 
     // --------------------------------------------------------------------------------------------
@@ -235,12 +217,10 @@ public:
 
 private:
     bool m_class_compilation;
-    std::vector<std::string> m_string_table;
-    std::unordered_map<std::string, mi::Uint32> m_string_table_inv;
-    size_t m_string_max_value_length;
     std::string m_material_instance_db_name;
     std::string m_material_definition_db_name;
     Section_material_resource_handler* m_resource_handler;
+    Section_material_string_handler* m_string_handler;
     std::unordered_map<std::string, Argument_block_field_info> m_argument_block_infos;
 };
 
@@ -1960,7 +1940,7 @@ void Parameter_node_constant_string_cc::read_value(
     const mi::neuraylib::IValue_string* source,
     mi::Uint32& target)
 {
-    target = m_context->get_id_for_string(source->get_value());
+    target = m_context->get_string_id_by_name(source->get_value());
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -1989,7 +1969,7 @@ bool Parameter_node_constant_string_cc::update_value()
             ? mi::examples::gui::Control::Flags::Disabled
             : mi::examples::gui::Control::Flags::None))
     {
-        mi::Uint32 index = m_context->get_id_for_string(buf.data());
+        mi::Uint32 index = m_context->get_string_id_by_name(buf.data());
         if (*value == index)
             return false;
 
@@ -2152,7 +2132,8 @@ void Section_material::bind_material(
     const mi::neuraylib::ITarget_code* target_code,
     const mi::neuraylib::ITarget_value_layout* argument_block_layout,
     char* argument_block,
-    Section_material_resource_handler* resource_handler)
+    Section_material_resource_handler* resource_handler,
+    Section_material_string_handler* string_handler)
 {
     mi::base::Handle<const mi::neuraylib::IFunction_call> material_instance(
         transaction->access<const mi::neuraylib::IFunction_call>(
@@ -2163,7 +2144,8 @@ void Section_material::bind_material(
         target_code,
         material_instance_db_name,
         material_instance->get_function_definition(),
-        resource_handler);
+        resource_handler,
+        string_handler);
 
     // iterate over all parameters exposed in the compiled material
     for (mi::Size j = 0, n = compiled_material->get_parameter_count(); j < n; ++j)

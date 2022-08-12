@@ -53,7 +53,7 @@
 /// of the interfaces offered through the shared library have changed.
 ///
 /// Despite the name, this number tracks \em ABI changes, not \em API changes.
-#define MI_NEURAYLIB_API_VERSION  47
+#define MI_NEURAYLIB_API_VERSION  48
 
 // The following three to four macros define the API version.
 // The macros thereafter are defined in terms of the first four.
@@ -97,11 +97,11 @@
 #endif // MI_NEURAYLIB_VERSION_QUALIFIER_EMPTY
 
 /// \NeurayProductName product version number in a string representation, such as \c "2.0".
-#define MI_NEURAYLIB_PRODUCT_VERSION_STRING  "2021.1.4"
+#define MI_NEURAYLIB_PRODUCT_VERSION_STRING  "2022.0"
 
 /// Type of plugins for the \NeurayApiName.
 /// \see #mi::base::Plugin::get_type().
-#define MI_NEURAYLIB_PLUGIN_TYPE "neuray API v39"
+#define MI_NEURAYLIB_PLUGIN_TYPE "neuray API v40"
 
 // Enables features that were deprecated with version 11.1.
 // #define MI_NEURAYLIB_DEPRECATED_11_1
@@ -133,6 +133,16 @@
 #define MI_NEURAYLIB_DEPRECATED_METHOD_12_1(X) deprecated_##X
 #endif
 
+
+// Enables features that were deprecated with version 13.0.
+// #define MI_NEURAYLIB_DEPRECATED_13_0
+
+// Prefixes names of deprecated methods unless deprecated features are enabled.
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
+#define MI_NEURAYLIB_DEPRECATED_METHOD_13_0(X) X
+#else
+#define MI_NEURAYLIB_DEPRECATED_METHOD_13_0(X) deprecated_##X
+#endif
 
 #ifdef MI_NEURAYLIB_DEPRECATED_LEGACY_MDL_API
 #ifdef MI_PLATFORM_WINDOWS
@@ -232,6 +242,6 @@
 #endif
 #endif
 
-/*@}*/ // end group mi_neuray_version
+/**@}*/ // end group mi_neuray_version
 
 #endif // MI_NEURAYLIB_VERSION_H

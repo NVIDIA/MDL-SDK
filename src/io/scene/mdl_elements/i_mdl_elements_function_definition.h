@@ -90,7 +90,7 @@ public:
     /// \param function_index         The index of this definition in the module.
     /// \param module_filename        The filename of the module.
     /// \param module_mdl_name        The MDL module name.
-    /// \param load_resources         True, if resources are supposed to be loaded into the DB
+    /// \param resolve_resources      \c  true, if resources are supposed to be loaded into the DB
     ///                               (if referenced in the parameter defaults).
     Mdl_function_definition(
         DB::Transaction* transaction,
@@ -102,7 +102,7 @@ public:
         mi::Size function_index,
         const char* module_filename,
         const char* module_mdl_name,
-        bool load_resources);
+        bool resolve_resources);
 
     Mdl_function_definition& operator=( const Mdl_function_definition&) = delete;
 

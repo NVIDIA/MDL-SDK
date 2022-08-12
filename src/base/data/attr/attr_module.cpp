@@ -207,7 +207,7 @@ bool Attr_module_impl::add_custom_attr_filter(const std::string& filter)
     if (p != m_custom_attr_filters.end()) {
         return false;
     }
-    const std::string filter_expr = (m_custom_attr_filters.size() == 0 ? "(" : " | (")  + filter + ")";
+    const std::string filter_expr = (m_custom_attr_filters.size() == 0 ? "(" : " | (")  + filter + ')';
     if (!build_regex(
         m_custom_attr_filter + filter_expr, m_custom_attr_regex)) {
         return false;
@@ -228,9 +228,9 @@ bool Attr_module_impl::remove_custom_attr_filter(const std::string& filter)
         m_custom_attr_regex = std::wregex();
 
         if (!m_custom_attr_filters.empty()) {
-            m_custom_attr_filter += "(" + m_custom_attr_filters[0] + ")";
+            m_custom_attr_filter += '(' + m_custom_attr_filters[0] + ')';
             for (size_t i = 1; i < m_custom_attr_filters.size(); ++i) {
-                m_custom_attr_filter += "| (" + m_custom_attr_filters[i] + ")";
+                m_custom_attr_filter += "| (" + m_custom_attr_filters[i] + ')';
             }
             build_regex(m_custom_attr_filter, m_custom_attr_regex);
         }

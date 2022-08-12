@@ -347,7 +347,7 @@ public:
         const IType* type,
         DB::Tag module_tag,
         const Mdl_tag_ident& definition_ident,
-        const std::string& definition_db_name,
+        const char* definition_db_name,
         IExpression_list* arguments) const = 0;
 
     virtual IExpression_temporary* create_temporary( const IType* type, mi::Size index) const = 0;

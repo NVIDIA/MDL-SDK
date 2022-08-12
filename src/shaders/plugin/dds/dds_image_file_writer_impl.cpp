@@ -88,7 +88,7 @@ Image_file_writer_impl::~Image_file_writer_impl()
 
     for( mi::Size i = 0; i < m_miplevels; ++i) {
 
-        Surface surface( width, height, depth, bytes_per_level, &m_level[i][0]);
+        Surface surface( width, height, depth, bytes_per_level, m_level[i].data());
         texture.add_surface( surface);
 
         width  = std::max( width  / 2, 1u);
@@ -183,10 +183,10 @@ bool Image_file_writer_impl::write(
     mi::Uint32 image_width     = get_resolution_x( level);
     mi::Uint32 image_height    = get_resolution_y( level);
     mi::Uint32 bytes_per_pixel = IMAGE::get_bytes_per_pixel( m_pixel_type);
-    mi::Uint32 bytes_per_layer = image_width * image_height * bytes_per_pixel;
+    mi::Size bytes_per_layer = (mi::Size)image_width * image_height * bytes_per_pixel;
 
     copy_from_tile_to_dds(
-        tile, &m_level[level][0] + z * bytes_per_layer, image_width, image_height);
+        tile, m_level[level].data() + z * bytes_per_layer, image_width, image_height);
 
     return true;
 }

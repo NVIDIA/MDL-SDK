@@ -40,6 +40,7 @@
 
 #include <map>
 #include <string>
+#include <vector>
 
 #include <boost/core/noncopyable.hpp>
 #include <base/data/serial/i_serial_classid.h>
@@ -415,7 +416,7 @@ public:
     }
 
     /// Converts \p uuid into a string.
-    std::string uuid_to_string( const mi::base::Uuid& uuid);
+    static std::string uuid_to_string( const mi::base::Uuid& uuid);
 
     /// Returns the MDL type factory for a given transaction.
     Type_factory* create_type_factory( mi::neuraylib::ITransaction* transaction) const;

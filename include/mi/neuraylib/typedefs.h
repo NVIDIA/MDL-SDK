@@ -92,7 +92,7 @@ typedef math::Bbox_struct<Float32,3> Bbox3_struct;
 
 
 
-/*@}*/ // end group mi_neuray_compounds
+/**@}*/ // end group mi_neuray_compounds
 
 } // namespace mi
 

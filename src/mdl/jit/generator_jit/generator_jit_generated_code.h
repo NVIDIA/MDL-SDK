@@ -46,6 +46,8 @@
 #include "generator_jit_generated_code_value_layout.h"
 #include "generator_jit_res_manager.h"
 
+#include <llvm/ExecutionEngine/Orc/Core.h>
+
 namespace llvm {
     class Module;
 }
@@ -56,7 +58,7 @@ namespace mdl {
 class IModule_cache;
 class LLVM_code_generator;
 
-using MDL_JIT_module_key = uint64_t;
+typedef llvm::orc::ResourceTrackerSP MDL_JIT_module_key;
 
 
 /// The exception state.
@@ -135,9 +137,14 @@ class Generated_code_executable_base : public Allocator_interface_implement<Inte
 {
     typedef Allocator_interface_implement<Interface> Base;
 public:
+    /// Constructor.
+    ///
+    /// \param alloc  the allocator
     Generated_code_executable_base(IAllocator *alloc)
     : Base(alloc)
     , m_func_infos(alloc)
+    , m_captured_arguments_layouts(alloc)
+    , m_mappend_strings(alloc)
     {}
 
     // ------------------- from IGenerated_code_executable -------------------
@@ -182,7 +189,7 @@ public:
     /// \return The prototype or NULL if \p index is out of bounds or \p lang cannot be used
     ///         for this target code.
     char const *get_function_prototype(
-        size_t index,
+        size_t                                         index,
         IGenerated_code_executable::Prototype_language lang) const MDL_FINAL;
 
     /// Set a function prototype for a function.
@@ -191,9 +198,9 @@ public:
     /// \param lang   the language of the prototype being set
     /// \param proto  the function prototype
     void set_function_prototype(
-        size_t index,
+        size_t                                         index,
         IGenerated_code_executable::Prototype_language lang,
-        char const *prototype) MDL_FINAL;
+        char const                                     *prototype) MDL_FINAL;
 
     /// Add a function to the given target code, also registering the function prototypes
     /// applicable for the used backend.
@@ -206,11 +213,11 @@ public:
     ///
     /// \returns the function index of the added function
     size_t add_function_info(
-        char const *name,
+        char const                                    *name,
         IGenerated_code_executable::Distribution_kind dist_kind,
-        IGenerated_code_executable::Function_kind func_kind,
-        size_t arg_block_index,
-        IGenerated_code_executable::State_usage state_usage) MDL_FINAL;
+        IGenerated_code_executable::Function_kind     func_kind,
+        size_t                                        arg_block_index,
+        IGenerated_code_executable::State_usage       state_usage) MDL_FINAL;
 
     /// Get the number of distribution function handles referenced by a function.
     ///
@@ -227,7 +234,9 @@ public:
     ///
     /// \return The name of the distribution function handle or \c NULL, if the
     ///         function is not a distribution function or \p index is invalid.
-    char const *get_function_df_handle(size_t func_index, size_t handle_index) const MDL_FINAL;
+    char const *get_function_df_handle(
+        size_t func_index,
+        size_t handle_index) const MDL_FINAL;
 
     /// Add the name of a distribution function handle referenced by a function.
     ///
@@ -236,7 +245,7 @@ public:
     ///
     /// \return The index of the added handle.
     size_t add_function_df_handle(
-        size_t func_index,
+        size_t     func_index,
         char const *handle_name) MDL_FINAL;
 
     /// Get the state properties used by a function.
@@ -244,81 +253,8 @@ public:
     /// \param func_index     The index of the function.
     ///
     /// \return The state usage or 0, if the \p func_index was invalid.
-    IGenerated_code_executable::State_usage get_function_state_usage(size_t func_index) const MDL_FINAL;
-
-private:
-    typedef vector<Generated_code_function_info>::Type Func_info_vec;
-
-    /// Function infos of all externally visible functions inside this generated code object.
-    Func_info_vec m_func_infos;
-};
-
-
-///
-/// Implementation of generated executable code.
-///
-class Generated_code_jit : public Generated_code_executable_base<IGenerated_code_executable>
-{
-    typedef Generated_code_executable_base<IGenerated_code_executable> Base;
-
-    friend class JIT_code_printer;
-public:
-    // The code generator produces compiler errors.
-    static char const MESSAGE_CLASS = 'C';
-
-    /// Constructor.
-    ///
-    /// \param alloc         The allocator.
-    /// \param jitted_code   The jitted code singleton.
-    /// \param filename      The file name for generated messages.
-    explicit Generated_code_jit(
-        IAllocator  *alloc,
-        Jitted_code *jitted_code,
-        char const  *filename);
-
-    /// Get the kind of code generated.
-    /// \returns    The kind of generated code.
-    IGenerated_code::Kind get_kind() const MDL_FINAL;
-
-    /// Get the target language.
-    /// \returns    The name of the target language for which this code was generated.
-    char const *get_target_language() const MDL_FINAL;
-
-    /// Check if the code contents are valid.
-    bool is_valid() const MDL_FINAL;
-
-    /// Access messages.
-    Messages const &access_messages() const MDL_FINAL;
-
-    /// Acquires a const interface.
-    ///
-    /// If this interface is derived from or is the interface with the passed
-    /// \p interface_id, then return a non-\c NULL \c const #mi::base::IInterface* that
-    /// can be casted via \c static_cast to an interface pointer of the interface type
-    /// corresponding to the passed \p interface_id. Otherwise return \c NULL.
-    ///
-    /// In the case of a non-\c NULL return value, the caller receives ownership of the 
-    /// new interface pointer, whose reference count has been retained once. The caller 
-    /// must release the returned interface pointer at the end to prevent a memory leak.
-    mi::base::IInterface const *get_interface(
-        mi::base::Uuid const &interface_id) const MDL_FINAL;
-
-    /// Returns the source code of the module if available.
-    ///
-    /// \param size  will be assigned to the length of the source code
-    /// \returns the source code or NULL if no source is available.
-    ///
-    /// \note The source code might be generated lazily.
-    char const *get_source_code(size_t &size) const MDL_FINAL;
-
-    /// Get the data for the read-only data segment if available.
-    ///
-    /// \param size  will be assigned to the length of the RO data segment
-    /// \returns the data segment or NULL if no RO data segment is available.
-    char const *get_ro_data_segment(size_t &size) const MDL_FINAL;
-
-    /// Get the used state properties of  the generated lambda function code.
-    State_usage get_state_usage() const MDL_FINAL;
+    IGenerated_code_executable::State_usage get_function_state_usage(
+        size_t func_index) const MDL_FINAL;
 
     /// Get the number of captured argument block layouts.
     size_t get_captured_argument_layouts_count() const MDL_FINAL;
@@ -328,8 +264,8 @@ public:
     /// \param i   the index of the block layout
     ///
     /// \returns the layout or NULL if no arguments were captured or the index is invalid.
-    IGenerated_code_value_layout const *get_captured_arguments_layout(size_t i)
-        const MDL_FINAL;
+    IGenerated_code_value_layout const *get_captured_arguments_layout(
+        size_t i) const MDL_FINAL;
 
     /// Get the number of mapped string constants used inside the generated code.
     size_t get_string_constant_count() const MDL_FINAL;
@@ -344,85 +280,47 @@ public:
     /// \note that the id 0 is ALWAYS mapped to the empty string ""
     char const *get_string_constant(size_t id) const MDL_FINAL;
 
-    // non-interface methods
-
-    /// Compile a whole MDL module into LLVM-IR.
-    ///
-    /// \param module             The MDL module to generate code from.
-    /// \param module_cache       The module cache if any.
-    /// \param options            The backend options.
-    void compile_module_to_llvm(
-        mi::mdl::IModule const *module,
-        IModule_cache          *module_cache,
-        Options_impl const     &options);
-
-    /// Compile a whole MDL module into PTX.
-    ///
-    /// \param module             The MDL module to generate code from.
-    /// \param module_cache       The module cache if any.
-    /// \param options            The backend options.
-    void compile_module_to_ptx(
-        mi::mdl::IModule const *module,
-        IModule_cache          *module_cache,
-        Options_impl const     &options);
-
-    /// Compile a whole MDL module into HLSL.
-    ///
-    /// \param module             The MDL module to generate code from.
-    /// \param module_cache       The module cache if any.
-    /// \param options            The backend options.
-    void compile_module_to_hlsl(
-        mi::mdl::IModule const *module,
-        IModule_cache          *module_cache,
-        Options_impl const     &options);
-
-    /// Retrieve the LLVM context of this jitted code.
-    llvm::LLVMContext &get_llvm_context() { return m_llvm_context; }
+public:
+    /// Add a captured arguments layout.
+    void add_captured_arguments_layout(
+        IGenerated_code_value_layout const *layout)
+    {
+        m_captured_arguments_layouts.push_back(mi::base::make_handle_dup(layout));
+    }
 
     /// Add a mapped string.
     ///
     /// \param s   the string constant
     /// \param id  the assigned id for this constant
-    void add_mapped_string(char const *s, size_t id);
+    void add_mapped_string(
+        char const *s,
+        size_t     id)
+    {
+        if (id >= m_mappend_strings.size()) {
+            m_mappend_strings.resize(id + 1, string(this->get_allocator()));
+        }
+        m_mappend_strings[id] = string(s, this->get_allocator());
+    }
+
 
 private:
+    typedef vector<Generated_code_function_info>::Type Func_info_vec;
 
-    /// Destructor.
-    ~Generated_code_jit() MDL_OVERRIDE;
+    /// Function infos of all externally visible functions inside this generated code object.
+    Func_info_vec m_func_infos;
 
-    // no copy constructor.
-    Generated_code_jit(Generated_code_jit const &) MDL_DELETED_FUNCTION;
+    typedef vector<mi::base::Handle<IGenerated_code_value_layout const> >::Type Layout_vec;
 
-    // no assignment operator
-    Generated_code_jit const &operator=(Generated_code_jit const &) MDL_DELETED_FUNCTION;
+    /// The list of captured arguments block layouts.
+    Layout_vec m_captured_arguments_layouts;
 
-    /// Retrieve the source code.
-    char const *get_source_code() const { return m_source_code.c_str(); }
 
-private:
-    /// The allocator builder.
-    mutable Allocator_builder m_builder;
-
-    /// The context of the module, its life time must include the module ...
-    llvm::LLVMContext m_llvm_context;
-
-    /// A Reference to the jitted code singleton.
-    mi::base::Handle<Jitted_code> m_jitted_code;
-
-    /// The messages if any.
-    Messages_impl m_messages;
-
-    /// Generated source code if any.
-    string m_source_code;
-
-    /// The render state usage.
-    State_usage m_render_state_usage;
-
-    typedef vector<string>::Type Mapped_string_vector;
+    typedef vector<string>::Type Mappend_string_vector;
 
     /// The mapped strings
-    Mapped_string_vector m_mapped_strings;
+    Mappend_string_vector m_mappend_strings;
 };
+
 
 /// The implementation of a source code, used for PTX, LLVM-IR and HLSL.
 class Generated_code_source :
@@ -431,6 +329,9 @@ class Generated_code_source :
     typedef Generated_code_executable_base<IGenerated_code_executable> Base;
     friend class Allocator_builder;
 public:
+    // The code generator produces compiler errors.
+    static char const MESSAGE_CLASS = 'C';
+
     typedef vector<size_t>::Type Offset_vec;
 
     /// The resource manager for generated source code.
@@ -497,6 +398,19 @@ public:
     };
 
 public:
+    /// Acquires a const interface.
+    ///
+    /// If this interface is derived from or is the interface with the passed
+    /// \p interface_id, then return a non-\c NULL \c const #mi::base::IInterface* that
+    /// can be casted via \c static_cast to an interface pointer of the interface type
+    /// corresponding to the passed \p interface_id. Otherwise return \c NULL.
+    ///
+    /// In the case of a non-\c NULL return value, the caller receives ownership of the
+    /// new interface pointer, whose reference count has been retained once. The caller
+    /// must release the returned interface pointer at the end to prevent a memory leak.
+    mi::base::IInterface const *get_interface(
+        mi::base::Uuid const &interface_id) const MDL_FINAL;
+
     // ------------------- from IGenerated_code -------------------
 
     /// Get the kind of code generated.
@@ -519,38 +433,17 @@ public:
     /// \note The source code might be generated lazily.
     char const *get_source_code(size_t &size) const MDL_FINAL;
 
-    /// Get the data for the read-only data segment if available.
+    /// Get the number of data segments associated with this code.
+    size_t get_data_segment_count() const MDL_FINAL;
+
+    /// Get the i'th data segment if available.
     ///
-    /// \param size  will be assigned to the length of the RO data segment
-    /// \returns the data segment or NULL if no RO data segment is available.
-    char const *get_ro_data_segment(size_t &size) const MDL_FINAL;
+    /// \param i  the index of the data segment
+    /// \returns the data segment descriptor or NULL if data segment is available.
+    Segment const *get_data_segment(size_t i) const MDL_FINAL;
 
     /// Get the used state properties of  the generated lambda function code.
     State_usage get_state_usage() const MDL_FINAL;
-
-    /// Get the number of captured argument block layouts.
-    size_t get_captured_argument_layouts_count() const MDL_FINAL;
-
-    /// Get a captured arguments block layout if available.
-    ///
-    /// \param i   the index of the block layout
-    ///
-    /// \returns the layout or NULL if no arguments were captured or the index is invalid.
-    IGenerated_code_value_layout const *get_captured_arguments_layout(
-        size_t i) const MDL_FINAL;
-
-    /// Get the number of mapped string constants used inside the generated code.
-    size_t get_string_constant_count() const MDL_FINAL;
-
-    /// Get the mapped string constant for a given id.
-    ///
-    /// \param id  the string id (as used in the generated code)
-    ///
-    /// \return the MDL string constant that corresponds to the given id or NULL
-    ///         if id is out of range
-    ///
-    /// \note that the id 0 is ALWAYS mapped to the empty string ""
-    char const *get_string_constant(size_t id) const MDL_FINAL;
 
     // -------------------- non-interface methods --------------------
 
@@ -560,28 +453,14 @@ public:
     /// Write access to the messages.
     Messages_impl &access_messages() { return m_messages; }
 
-    /// Set the Read-Only data segment.
-    void set_ro_segment(char const *data, size_t size) {
-        m_ro_segment.assign(data, data + size);
-    }
+    /// Add an data segment.
+    size_t add_data_segment(char const *name, unsigned char const *data, size_t size);
 
     /// Set the render state usage.
     void set_render_state_usage(IGenerated_code_lambda_function::State_usage usage)
     {
         m_render_state_usage = usage;
     }
-
-    /// Add a captured arguments layout.
-    void add_captured_arguments_layout(IGenerated_code_value_layout const *layout)
-    {
-        m_captured_arguments_layouts.push_back(mi::base::make_handle_dup(layout));
-    }
-
-    /// Add a mapped string.
-    ///
-    /// \param s   the string constant
-    /// \param id  the assigned id for this constant
-    void add_mapped_string(char const *s, size_t id);
 
 private:
     /// Constructor.
@@ -614,20 +493,18 @@ private:
     /// The source code.
     string m_src_code;
 
-    typedef vector<char>::Type Byte_vec;
+    typedef vector<unsigned char>::Type Byte_vec;
 
-    /// The RO data segment.
-    Byte_vec m_ro_segment;
+    /// Helper struct to carry one data segment.
+    struct Source_segment {
+        Segment       desc;       ///< the segment descriptor
+        unsigned char data[1];    ///< the binary data (blob)
+    };
 
-    typedef vector<mi::base::Handle<IGenerated_code_value_layout const> >::Type Layout_vec;
+    typedef vector<Source_segment *>::Type Segment_vec;
 
-    /// The list of captured arguments block layouts.
-    Layout_vec m_captured_arguments_layouts;
-
-    typedef vector<string>::Type Mappend_string_vector;
-
-    /// The mapped strings
-    Mappend_string_vector m_mappend_strings;
+    /// The data segments.
+    Segment_vec m_data_segments;
 };
 
 /// The implementation of a compiled lambda function.
@@ -707,10 +584,10 @@ public:
         /// Constructor.
         ///
         /// \param lambda        The compiled lambda function.
-        /// \param resource_map  If non-NULL, use this map to resolve resources
+        /// \param resource_map  If non-NULL, use this map to resolve/collect resources
         Lambda_res_manag(
             Generated_code_lambda_function &lambda,
-            Resource_attr_map const       *resource_map);
+            Resource_attr_map              *resource_map);
 
         /// Returns the resource index for the given resource usable by the target code resource
         /// handler for the corresponding resource type.
@@ -747,7 +624,7 @@ public:
         Generated_code_lambda_function &m_lambda;
 
         /// The resource-attribute-map if given.
-        Resource_attr_map const        *m_resource_map;
+        Resource_attr_map             *m_resource_map;
 
         /// Lookup-table for resource indexes.
         Tag_index_map                  m_res_indexes;
@@ -841,38 +718,17 @@ public:
     /// \note The source code might be generated lazily.
     char const *get_source_code(size_t &size) const MDL_FINAL;
 
-    /// Get the data for the read-only data segment if available.
+    /// Get the number of data segments associated with this code.
+    size_t get_data_segment_count() const MDL_FINAL;
+
+    /// Get the i'th data segment if available.
     ///
-    /// \param size  will be assigned to the length of the RO data segment
-    /// \returns the data segment or NULL if no RO data segment is available.
-    char const *get_ro_data_segment(size_t &size) const MDL_FINAL;
+    /// \param i  the index of the data segment
+    /// \returns the data segment descriptor or NULL if data segment is available.
+    Segment const *get_data_segment(size_t i) const MDL_FINAL;
 
     /// Get the used state properties of  the generated lambda function code.
     State_usage get_state_usage() const MDL_FINAL;
-
-    /// Get the number of captured argument block layouts.
-    size_t get_captured_argument_layouts_count() const MDL_FINAL;
-
-    /// Get a captured arguments block layout if available.
-    ///
-    /// \param i   the index of the block layout
-    ///
-    /// \returns the layout or NULL if no arguments were captured or the index is invalid.
-    IGenerated_code_value_layout const *get_captured_arguments_layout(size_t i)
-        const MDL_FINAL;
-
-    /// Get the number of mapped string constants used inside the generated code.
-    size_t get_string_constant_count() const MDL_FINAL;
-
-    /// Get the mapped string constant for a given id.
-    ///
-    /// \param id  the string id (as used in the generated code)
-    ///
-    /// \return the MDL string constant that corresponds to the given id or NULL
-    ///         if id is out of range
-    ///
-    /// \note that the id 0 is ALWAYS mapped to the empty string ""
-    char const *get_string_constant(size_t id) const MDL_FINAL;
 
     // ------------------- own methods -------------------
 
@@ -1089,16 +945,11 @@ public:
     /// Get the LLVM context.
     llvm::LLVMContext &get_llvm_context() { return m_context; }
 
-    /// Get the LLVM module.
-    llvm::Module *get_llvm_module() { return m_module; }
-
     /// Set the LLVM module.
     ///
     /// \param module_key  the JIT module key
-    /// \param module      the LLVM module
-    void set_llvm_module(MDL_JIT_module_key module_key, llvm::Module *module) {
+    void set_llvm_module(MDL_JIT_module_key module_key) {
         m_module_key = module_key;
-        m_module = module;
     }
 
     /// Add an entry point of a JIT compiled function.
@@ -1114,18 +965,6 @@ public:
     {
         m_render_state_usage = usage;
     }
-
-    /// Add a captured arguments layout.
-    void add_captured_arguments_layout(IGenerated_code_value_layout const *layout)
-    {
-        m_captured_arguments_layouts.push_back(mi::base::make_handle_dup(layout));
-    }
-
-    /// Add a mapped string.
-    ///
-    /// \param s   the string constant
-    /// \param id  the assigned id for this constant
-    void add_mapped_string(char const *s, size_t id);
 
 private:
     /// Register a new non-texture resource tag.
@@ -1175,9 +1014,6 @@ private:
 
     /// The LLVM context of the LLVM module.
     llvm::LLVMContext m_context;
-
-    /// The LLVM module of the environment function.
-    llvm::Module      *m_module;
 
     /// The JIT module key of the LLVM module.
     MDL_JIT_module_key m_module_key;
@@ -1394,24 +1230,14 @@ private:
     /// If set non-zero, this function will not be executed anymore.
     mi::base::Atom32        m_aborted;
 
-    /// The RO data segment if any.
-    char *m_ro_segment;
+    /// The one and only RO segment descriptor.
+    Segment m_ro_segment_desc;
 
-    /// The length of the RO segment.
-    size_t m_ro_length;
+    /// The allocated RO data segment if any (might be different from desc.data due to alignment).
+    char *m_ro_segment;
 
     /// The potential render state usage of the generated code.
     IGenerated_code_lambda_function::State_usage m_render_state_usage;
-
-    typedef vector<mi::base::Handle<IGenerated_code_value_layout const> >::Type Layout_vec;
-
-    /// The list of captured arguments block layouts.
-    Layout_vec m_captured_arguments_layouts;
-
-    typedef vector<string>::Type Mappend_string_vector;
-
-    /// The mapped strings
-    Mappend_string_vector m_mappend_strings;
 };
 
 }  // mdl

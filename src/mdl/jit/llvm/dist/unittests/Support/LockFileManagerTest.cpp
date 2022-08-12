@@ -1,29 +1,27 @@
 //===- unittests/LockFileManagerTest.cpp - LockFileManager tests ----------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Support/LockFileManager.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Testing/Support/SupportHelpers.h"
 #include "gtest/gtest.h"
 #include <memory>
 
 using namespace llvm;
+using llvm::unittest::TempDir;
 
 namespace {
 
 TEST(LockFileManagerTest, Basic) {
-  SmallString<64> TmpDir;
-  std::error_code EC;
-  EC = sys::fs::createUniqueDirectory("LockFileManagerTestDir", TmpDir);
-  ASSERT_FALSE(EC);
+  TempDir TmpDir("LockFileManagerTestDir", /*Unique*/ true);
 
-  SmallString<64> LockedFile(TmpDir);
+  SmallString<64> LockedFile(TmpDir.path());
   sys::path::append(LockedFile, "file.lock");
 
   {
@@ -39,28 +37,22 @@ TEST(LockFileManagerTest, Basic) {
 
   // Now that the lock is out of scope, the file should be gone.
   EXPECT_FALSE(sys::fs::exists(StringRef(LockedFile)));
-
-  EC = sys::fs::remove(StringRef(TmpDir));
-  ASSERT_FALSE(EC);
 }
 
 TEST(LockFileManagerTest, LinkLockExists) {
-  SmallString<64> TmpDir;
-  std::error_code EC;
-  EC = sys::fs::createUniqueDirectory("LockFileManagerTestDir", TmpDir);
-  ASSERT_FALSE(EC);
+  TempDir LockFileManagerTestDir("LockFileManagerTestDir", /*Unique*/ true);
 
-  SmallString<64> LockedFile(TmpDir);
+  SmallString<64> LockedFile(LockFileManagerTestDir.path());
   sys::path::append(LockedFile, "file");
 
-  SmallString<64> FileLocK(TmpDir);
+  SmallString<64> FileLocK(LockFileManagerTestDir.path());
   sys::path::append(FileLocK, "file.lock");
 
-  SmallString<64> TmpFileLock(TmpDir);
+  SmallString<64> TmpFileLock(LockFileManagerTestDir.path());
   sys::path::append(TmpFileLock, "file.lock-000");
 
   int FD;
-  EC = sys::fs::openFileForWrite(StringRef(TmpFileLock), FD);
+  std::error_code EC = sys::fs::openFileForWrite(StringRef(TmpFileLock), FD);
   ASSERT_FALSE(EC);
 
   int Ret = close(FD);
@@ -81,24 +73,18 @@ TEST(LockFileManagerTest, LinkLockExists) {
 
   // Now that the lock is out of scope, the file should be gone.
   EXPECT_FALSE(sys::fs::exists(StringRef(LockedFile)));
-
-  EC = sys::fs::remove(StringRef(TmpDir));
-  ASSERT_FALSE(EC);
 }
 
 
 TEST(LockFileManagerTest, RelativePath) {
-  SmallString<64> TmpDir;
-  std::error_code EC;
-  EC = sys::fs::createUniqueDirectory("LockFileManagerTestDir", TmpDir);
-  ASSERT_FALSE(EC);
+  TempDir LockFileManagerTestDir("LockFileManagerTestDir", /*Unique*/ true);
 
   char PathBuf[1024];
   const char *OrigPath = getcwd(PathBuf, 1024);
-  ASSERT_FALSE(chdir(TmpDir.c_str()));
+  ASSERT_FALSE(chdir(LockFileManagerTestDir.c_str()));
 
-  sys::fs::create_directory("inner");
-  SmallString<64> LockedFile("inner");
+  TempDir inner("inner");
+  SmallString<64> LockedFile(inner.path());
   sys::path::append(LockedFile, "file");
 
   SmallString<64> FileLock(LockedFile);
@@ -115,13 +101,7 @@ TEST(LockFileManagerTest, RelativePath) {
   EXPECT_FALSE(sys::fs::exists(LockedFile.str()));
   EXPECT_FALSE(sys::fs::exists(FileLock.str()));
 
-  EC = sys::fs::remove("inner");
-  ASSERT_FALSE(EC);
-
   ASSERT_FALSE(chdir(OrigPath));
-
-  EC = sys::fs::remove(StringRef(TmpDir));
-  ASSERT_FALSE(EC);
 }
 
 } // end anonymous namespace

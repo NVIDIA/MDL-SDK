@@ -1,9 +1,8 @@
 //===- Dominators.h - Dominator Info Calculation ----------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -37,15 +36,21 @@ extern template class DomTreeNodeBase<BasicBlock>;
 extern template class DominatorTreeBase<BasicBlock, false>; // DomTree
 extern template class DominatorTreeBase<BasicBlock, true>; // PostDomTree
 
+extern template class cfg::Update<BasicBlock *>;
+
 namespace DomTreeBuilder {
 using BBDomTree = DomTreeBase<BasicBlock>;
 using BBPostDomTree = PostDomTreeBase<BasicBlock>;
 
-extern template struct Update<BasicBlock *>;
+using BBUpdates = ArrayRef<llvm::cfg::Update<BasicBlock *>>;
 
-using BBUpdates = ArrayRef<Update<BasicBlock *>>;
+using BBDomTreeGraphDiff = GraphDiff<BasicBlock *, false>;
+using BBPostDomTreeGraphDiff = GraphDiff<BasicBlock *, true>;
 
 extern template void Calculate<BBDomTree>(BBDomTree &DT);
+extern template void CalculateWithUpdates<BBDomTree>(BBDomTree &DT,
+                                                     BBUpdates U);
+
 extern template void Calculate<BBPostDomTree>(BBPostDomTree &DT);
 
 extern template void InsertEdge<BBDomTree>(BBDomTree &DT, BasicBlock *From,
@@ -60,8 +65,12 @@ extern template void DeleteEdge<BBPostDomTree>(BBPostDomTree &DT,
                                                BasicBlock *From,
                                                BasicBlock *To);
 
-extern template void ApplyUpdates<BBDomTree>(BBDomTree &DT, BBUpdates);
-extern template void ApplyUpdates<BBPostDomTree>(BBPostDomTree &DT, BBUpdates);
+extern template void ApplyUpdates<BBDomTree>(BBDomTree &DT,
+                                             BBDomTreeGraphDiff &,
+                                             BBDomTreeGraphDiff *);
+extern template void ApplyUpdates<BBPostDomTree>(BBPostDomTree &DT,
+                                                 BBPostDomTreeGraphDiff &,
+                                                 BBPostDomTreeGraphDiff *);
 
 extern template bool Verify<BBDomTree>(const BBDomTree &DT,
                                        BBDomTree::VerificationLevel VL);
@@ -145,6 +154,9 @@ class DominatorTree : public DominatorTreeBase<BasicBlock, false> {
 
   DominatorTree() = default;
   explicit DominatorTree(Function &F) { recalculate(F); }
+  explicit DominatorTree(DominatorTree &DT, DomTreeBuilder::BBUpdates U) {
+    recalculate(*DT.Parent, U);
+  }
 
   /// Handle invalidation explicitly.
   bool invalidate(Function &F, const PreservedAnalyses &PA,
@@ -153,12 +165,21 @@ class DominatorTree : public DominatorTreeBase<BasicBlock, false> {
   // Ensure base-class overloads are visible.
   using Base::dominates;
 
-  /// Return true if Def dominates a use in User.
+  /// Return true if value Def dominates use U, in the sense that Def is
+  /// available at U, and could be substituted as the used value without
+  /// violating the SSA dominance requirement.
   ///
-  /// This performs the special checks necessary if Def and User are in the same
-  /// basic block. Note that Def doesn't dominate a use in Def itself!
-  bool dominates(const Instruction *Def, const Use &U) const;
-  bool dominates(const Instruction *Def, const Instruction *User) const;
+  /// In particular, it is worth noting that:
+  ///  * Non-instruction Defs dominate everything.
+  ///  * Def does not dominate a use in Def itself (outside of degenerate cases
+  ///    like unreachable code or trivial phi cycles).
+  ///  * Invoke/callbr Defs only dominate uses in their default destination.
+  bool dominates(const Value *Def, const Use &U) const;
+  /// Return true if value Def dominates all possible uses inside instruction
+  /// User. Same comments as for the Use-based API apply.
+  bool dominates(const Value *Def, const Instruction *User) const;
+  // Does not accept Value to avoid ambiguity with dominance checks between
+  // two basic blocks.
   bool dominates(const Instruction *Def, const BasicBlock *BB) const;
 
   /// Return true if an edge dominates a use.
@@ -167,6 +188,8 @@ class DominatorTree : public DominatorTreeBase<BasicBlock, false> {
   /// never dominate the use.
   bool dominates(const BasicBlockEdge &BBE, const Use &U) const;
   bool dominates(const BasicBlockEdge &BBE, const BasicBlock *BB) const;
+  /// Returns true if edge \p BBE1 dominates edge \p BBE2.
+  bool dominates(const BasicBlockEdge &BBE1, const BasicBlockEdge &BBE2) const;
 
   // Ensure base class overloads are visible.
   using Base::isReachableFromEntry;
@@ -201,7 +224,8 @@ template <class Node, class ChildIterator> struct DomTreeGraphTraitsBase {
 
 template <>
 struct GraphTraits<DomTreeNode *>
-    : public DomTreeGraphTraitsBase<DomTreeNode, DomTreeNode::iterator> {};
+    : public DomTreeGraphTraitsBase<DomTreeNode, DomTreeNode::const_iterator> {
+};
 
 template <>
 struct GraphTraits<const DomTreeNode *>
@@ -257,9 +281,7 @@ class DominatorTreeWrapperPass : public FunctionPass {
 public:
   static char ID;
 
-  DominatorTreeWrapperPass() : FunctionPass(ID) {
-    initializeDominatorTreeWrapperPassPass(*PassRegistry::getPassRegistry());
-  }
+  DominatorTreeWrapperPass();
 
   DominatorTree &getDomTree() { return DT; }
   const DominatorTree &getDomTree() const { return DT; }
@@ -272,98 +294,10 @@ public:
     AU.setPreservesAll();
   }
 
-  void releaseMemory() override { DT.releaseMemory(); }
+  void releaseMemory() override { DT.reset(); }
 
   void print(raw_ostream &OS, const Module *M = nullptr) const override;
 };
-
-//===-------------------------------------
-/// Class to defer updates to a DominatorTree.
-///
-/// Definition: Applying updates to every edge insertion and deletion is
-/// expensive and not necessary. When one needs the DominatorTree for analysis
-/// they can request a flush() to perform a larger batch update. This has the
-/// advantage of the DominatorTree inspecting the set of updates to find
-/// duplicates or unnecessary subtree updates.
-///
-/// The scope of DeferredDominance operates at a Function level.
-///
-/// It is not necessary for the user to scrub the updates for duplicates or
-/// updates that point to the same block (Delete, BB_A, BB_A). Performance
-/// can be gained if the caller attempts to batch updates before submitting
-/// to applyUpdates(ArrayRef) in cases where duplicate edge requests will
-/// occur.
-///
-/// It is required for the state of the LLVM IR to be applied *before*
-/// submitting updates. The update routines must analyze the current state
-/// between a pair of (From, To) basic blocks to determine if the update
-/// needs to be queued.
-/// Example (good):
-///     TerminatorInstructionBB->removeFromParent();
-///     DDT->deleteEdge(BB, Successor);
-/// Example (bad):
-///     DDT->deleteEdge(BB, Successor);
-///     TerminatorInstructionBB->removeFromParent();
-class DeferredDominance {
-public:
-  DeferredDominance(DominatorTree &DT_) : DT(DT_) {}
-
-  /// Queues multiple updates and discards duplicates.
-  void applyUpdates(ArrayRef<DominatorTree::UpdateType> Updates);
-
-  /// Helper method for a single edge insertion. It's almost always
-  /// better to batch updates and call applyUpdates to quickly remove duplicate
-  /// edges. This is best used when there is only a single insertion needed to
-  /// update Dominators.
-  void insertEdge(BasicBlock *From, BasicBlock *To);
-
-  /// Helper method for a single edge deletion. It's almost always better
-  /// to batch updates and call applyUpdates to quickly remove duplicate edges.
-  /// This is best used when there is only a single deletion needed to update
-  /// Dominators.
-  void deleteEdge(BasicBlock *From, BasicBlock *To);
-
-  /// Delays the deletion of a basic block until a flush() event.
-  void deleteBB(BasicBlock *DelBB);
-
-  /// Returns true if DelBB is awaiting deletion at a flush() event.
-  bool pendingDeletedBB(BasicBlock *DelBB);
-
-  /// Returns true if pending DT updates are queued for a flush() event.
-  bool pending();
-
-  /// Flushes all pending updates and block deletions. Returns a
-  /// correct DominatorTree reference to be used by the caller for analysis.
-  DominatorTree &flush();
-
-  /// Drops all internal state and forces a (slow) recalculation of the
-  /// DominatorTree based on the current state of the LLVM IR in F. This should
-  /// only be used in corner cases such as the Entry block of F being deleted.
-  void recalculate(Function &F);
-
-  /// Debug method to help view the state of pending updates.
-  LLVM_DUMP_METHOD void dump() const;
-
-private:
-  DominatorTree &DT;
-  SmallVector<DominatorTree::UpdateType, 16> PendUpdates;
-  SmallPtrSet<BasicBlock *, 8> DeletedBBs;
-
-  /// Apply an update (Kind, From, To) to the internal queued updates. The
-  /// update is only added when determined to be necessary. Checks for
-  /// self-domination, unnecessary updates, duplicate requests, and balanced
-  /// pairs of requests are all performed. Returns true if the update is
-  /// queued and false if it is discarded.
-  bool applyUpdate(DominatorTree::UpdateKind Kind, BasicBlock *From,
-                   BasicBlock *To);
-
-  /// Performs all pending basic block deletions. We have to defer the deletion
-  /// of these blocks until after the DominatorTree updates are applied. The
-  /// internal workings of the DominatorTree code expect every update's From
-  /// and To blocks to exist and to be a member of the same Function.
-  bool flushDelBB();
-};
-
 } // end namespace llvm
 
 #endif // LLVM_IR_DOMINATORS_H

@@ -1,9 +1,8 @@
 //=- llvm/CodeGen/ScheduleHazardRecognizer.h - Scheduling Support -*- C++ -*-=//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -58,7 +57,7 @@ public:
   ///     other instruction is available, issue it first.
   ///  * NoopHazard: issuing this instruction would break the program.  If
   ///     some other instruction can be issued, do so, otherwise issue a noop.
-  virtual HazardType getHazardType(SUnit *m, int Stalls = 0) {
+  virtual HazardType getHazardType(SUnit *, int Stalls = 0) {
     return NoHazard;
   }
 
@@ -114,6 +113,14 @@ public:
   virtual void EmitNoop() {
     // Default implementation: count it as a cycle.
     AdvanceCycle();
+  }
+
+  /// EmitNoops - This callback is invoked when noops were added to the
+  /// instruction stream.
+  virtual void EmitNoops(unsigned Quantity) {
+    // Default implementation: count it as a cycle.
+    for (unsigned i = 0; i < Quantity; ++i)
+      EmitNoop();
   }
 };
 

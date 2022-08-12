@@ -188,9 +188,6 @@ mi_static_assert( sizeof( Propagation_type) == sizeof( Uint32));
 /// - bool \b important \n
 ///   A light flagged with this attribute will be given preference before other lights in the case
 ///   that a render mode does not handle all lights.
-/// - bool \b light_portal \n
-///   A light flagged with this attribute does not emit any light by itself but acts as hint that
-///   light is coming from its direction.
 /// \par
 /// The following attribute is only meaningful for instances of #mi::neuraylib::ITriangle_mesh,
 /// #mi::neuraylib::IPolygon_mesh, #mi::neuraylib::ISubdivision_surface, and
@@ -581,7 +578,7 @@ public:
     virtual const char* enumerate_attributes( Sint32 index) const = 0;
 };
 
-/*@}*/ // end group mi_neuray_scene_element
+/**@}*/ // end group mi_neuray_scene_element
 
 } // namespace neuraylib
 

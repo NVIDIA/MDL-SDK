@@ -317,8 +317,12 @@ Printer::Printer(IAllocator *alloc, IOutput_stream *ostr)
 , m_ostr(ostr, mi::base::DUP_INTERFACE)
 , m_c_ostr()
 , m_color_stack(Syntax_elements_stack::container_type(alloc))
-, m_string_quote("\"", alloc)
 {
+    ::memset(m_string_quote, 0, sizeof(m_string_quote));
+
+    m_string_quote[0] = '"';
+    m_string_quote[1] = '\0';
+
     ::memset(m_priority_map, 0, sizeof(m_priority_map));
 
     int prio = 1;
@@ -406,7 +410,11 @@ Printer::Printer(IAllocator *alloc, IOutput_stream *ostr)
 // Set the string used to quote string values, default is "\"".
 void Printer::set_string_quote(char const *quote)
 {
-    m_string_quote = quote != NULL ? quote : "\"";
+    if (quote == NULL) {
+        quote = "\"";
+    }
+    ::strncpy(m_string_quote, quote, sizeof(m_string_quote));
+    m_string_quote[sizeof(m_string_quote) - 1] = '\0';
 }
 
 // Hidden destructor.
@@ -569,13 +577,13 @@ void Printer::print_utf8(char const *utf8_string, bool escapes)
 // Print character.
 void Printer::print(char c)
 {
-    printf("%c", c);
+    m_ostr->write_char(c);
 }
 
 // Print boolean.
 void Printer::print(bool b)
 {
-    print(b ? "true" : "false");
+    m_ostr->write(b ? "true" : "false");
 }
 
 // Print long.
@@ -723,7 +731,7 @@ restart:
             IType const        *e_type = v_type->get_element_type();
 
             print_type(e_type);
-            print(long(v_type->get_size()));
+            print("01234"[v_type->get_size()]);
             break;
         }
     case IType::TK_MATRIX:
@@ -733,9 +741,9 @@ restart:
             IType_atomic const *a_type = e_type->get_element_type();
 
             print_type(a_type);
-            print(long(m_type->get_columns()));
-            print("x");
-            print(long(e_type->get_size()));
+            print("01234"[m_type->get_columns()]);
+            print('x');
+            print("01234"[e_type->get_size()]);
             break;
         }
     case IType::TK_ARRAY:
@@ -744,7 +752,7 @@ restart:
             IType const       *e_type = a_type->get_element_type();
 
             print_type(e_type);
-            print("[");
+            print('[');
             if (a_type->is_immediate_sized()) {
                 color(C_LITERAL);
                 print(long(a_type->get_size()));
@@ -752,7 +760,7 @@ restart:
             } else {
                 print(a_type->get_deferred_size()->get_size_symbol());
             }
-            print("]");
+            print(']');
             break;
         }
     case IType::TK_FUNCTION:
@@ -767,13 +775,13 @@ restart:
                 print("void");
             }
 
-            print(" ");
+            print(' ');
             if (name != NULL) {
                 print(name);
             } else {
                 print("(*)");
             }
-            print("(");
+            print('(');
 
             for (size_t i = 0, n = f_type->get_parameter_count(); i < n; ++i) {
                 if (i > 0) {
@@ -784,33 +792,31 @@ restart:
                 ISymbol const *sym;
                 f_type->get_parameter(i, p_type, sym);
                 print(p_type);
-                print(" ");
+                print(' ');
                 print(sym);
             }
-            print(")");
+            print(')');
             break;
         }
     case IType::TK_TEXTURE:
         {
             IType_texture const *t_type = cast<IType_texture>(type);
 
-            print("texture_");
-
             switch (t_type->get_shape()) {
             case IType_texture::TS_2D:
-                print("2d");
+                print("texture_2d");
                 break;
             case IType_texture::TS_3D:
-                print("3d");
+                print("texture_3d");
                 break;
             case IType_texture::TS_CUBE:
-                print("cube");
+                print("texture_cube");
                 break;
             case IType_texture::TS_PTEX:
-                print("ptex");
+                print("texture_ptex");
                 break;
             case IType_texture::TS_BSDF_DATA:
-                print("bsdf_data");
+                print("texture_bsdf_data");
                 break;
             }
             break;
@@ -878,10 +884,10 @@ void Printer::print_resource(IValue_resource const *res)
             IType_texture  const *tex_type = tex->get_type();
 
             print_type(tex_type);
-            print("(");
-            print(m_string_quote.c_str());
+            print('(');
+            print(m_string_quote);
             print_utf8(tex->get_string_value(), /*escape=*/true);
-            print(m_string_quote.c_str());
+            print(m_string_quote);
             if (tex->get_tag_value() != 0) {
                 printf(" /* tag %d, version %u */", tex->get_tag_value(), tex->get_tag_version());
             }
@@ -904,26 +910,26 @@ void Printer::print_resource(IValue_resource const *res)
             if (is_tex_2d(tex_type) || is_tex_3d(tex_type)) {
                 // 2D and 3D textures have a selector
                 print(", ");
-                print(m_string_quote.c_str());
+                print(m_string_quote);
                 print_utf8(tex->get_selector(), /*escape=*/true);
-                print(m_string_quote.c_str());
+                print(m_string_quote);
             }
-            print(")");
+            print(')');
             break;
         }
     case IValue::VK_LIGHT_PROFILE:
     case IValue::VK_BSDF_MEASUREMENT:
         {
             print_type(res->get_type());
-            print("(");
-            print(m_string_quote.c_str());
+            print('(');
+            print(m_string_quote);
             print_utf8(res->get_string_value(), /*escape=*/true);
-            print(m_string_quote.c_str());
+            print(m_string_quote);
 
             if (res->get_tag_value() != 0) {
                 printf(" /* tag %d, version %u */", res->get_tag_value(), res->get_tag_version());
             }
-            print(")");
+            print(')');
             break;
         }
     default:
@@ -974,9 +980,9 @@ void Printer::print(IValue const *value)
                 // should not happen
                 MDL_ASSERT(!"could not find enum value name");
                 print(e_type);
-                print("(");
+                print('(');
                 print(long(idx));
-                print(")");
+                print(')');
             }
             break;
         }
@@ -1022,16 +1028,16 @@ void Printer::print(IValue const *value)
         {
             IValue_string const *v = cast<IValue_string>(value);
 
-            print(m_string_quote.c_str());
+            print(m_string_quote);
             print_utf8(v->get_value(), /*escape=*/true);
-            print(m_string_quote.c_str());
+            print(m_string_quote);
             break;
         }
     case IValue::VK_VECTOR:
         {
             IValue_vector const *v = cast<IValue_vector>(value);
             print_type(v->get_type());
-            print("(");
+            print('(');
 
             // check if all are the same
             bool all_same = true;
@@ -1055,14 +1061,14 @@ void Printer::print(IValue const *value)
                     print(v->get_value(i));
                 }
             }
-            print(")");
+            print(')');
             break;
         }
     case IValue::VK_MATRIX:
         {
             IValue_matrix const *v = cast<IValue_matrix>(value);
             print_type(v->get_type());
-            print("(");
+            print('(');
 
             // check for diag constructor.
             bool                is_diag    = true;
@@ -1106,7 +1112,7 @@ void Printer::print(IValue const *value)
                     print(v->get_value(i));
                 }
             }
-            print(")");
+            print(')');
             break;
         }
     case IValue::VK_ARRAY:
@@ -1123,21 +1129,21 @@ void Printer::print(IValue const *value)
                 }
                 print(v->get_value(i));
             }
-            print(")");
+            print(')');
             break;
         }
     case IValue::VK_RGB_COLOR:
         {
             IValue_rgb_color const *color = cast<IValue_rgb_color>(value);
             print_type(color->get_type());
-            print("(");
+            print('(');
             for (size_t i = 0, n = color->get_component_count(); i < n; ++i) {
                 if (i > 0) {
                     print(", ");
                 }
                 print(color->get_value(i));
             }
-            print(")");
+            print(')');
         }
         break;
     case IValue::VK_STRUCT:
@@ -1146,7 +1152,7 @@ void Printer::print(IValue const *value)
             IType_struct const  *type = cast<IType_struct>(v->get_type()->skip_type_alias());
 
             print_type(type);
-            print("(");
+            print('(');
 
             size_t n = type->get_field_count();
             IType_struct::Predefined_id pid = type->get_predefined_id();
@@ -1176,7 +1182,7 @@ void Printer::print(IValue const *value)
                 print(": ");
                 print(field_value);
             }
-            print(")");
+            print(')');
             break;
         }
     case IValue::VK_INVALID_REF:
@@ -1196,11 +1202,11 @@ void Printer::print(IValue const *value)
 void Printer::print(IExpression const *expr)
 {
     if (expr->in_parenthesis()) {
-        print("(");
+        print('(');
     }
     print(expr, /*priority=*/0);
     if (expr->in_parenthesis()) {
-        print(")");
+        print(')');
     }
 }
 
@@ -1235,7 +1241,7 @@ void Printer::print(IExpression const *expr, int priority)
             IExpression const           *arg = u->get_argument();
 
             if (op_priority < priority) {
-                print("(");
+                print('(');
             }
 
             char const *prefix = NULL, *postfix = NULL;
@@ -1325,7 +1331,7 @@ void Printer::print(IExpression const *expr, int priority)
             }
 
             if (op_priority < priority) {
-                print(")");
+                print(')');
             }
             break;
         }
@@ -1336,7 +1342,7 @@ void Printer::print(IExpression const *expr, int priority)
             int                          op_priority = get_priority(op);
 
             if (op_priority < priority) {
-                print("(");
+                print('(');
             }
 
             IExpression const *lhs = b->get_left_argument();
@@ -1417,11 +1423,11 @@ void Printer::print(IExpression const *expr, int priority)
             if (infix != NULL) {
                 print(infix);
             } else {
-                print(" ");
+                print(' ');
                 push_color(C_ERROR);
                 print("<ERROR>");
                 pop_color();
-                print(" ");
+                print(' ');
             }
 
             IExpression const *rhs = b->get_right_argument();
@@ -1433,7 +1439,7 @@ void Printer::print(IExpression const *expr, int priority)
             }
 
             if (op_priority < priority) {
-                print(")");
+                print(')');
             }
             break;
         }
@@ -1443,7 +1449,7 @@ void Printer::print(IExpression const *expr, int priority)
             int                           op_priority = get_priority(IExpression::OK_TERNARY);
 
             if (op_priority < priority) {
-                print("(");
+                print('(');
             }
             
             print(c->get_condition(), op_priority);
@@ -1457,7 +1463,7 @@ void Printer::print(IExpression const *expr, int priority)
             print(c->get_false(), op_priority);
 
             if (op_priority < priority) {
-                print(")");
+                print(')');
             }
             break;
         }
@@ -1467,7 +1473,7 @@ void Printer::print(IExpression const *expr, int priority)
             int                    op_priority = get_priority(IExpression::OK_CALL);
 
             if (op_priority < priority) {
-                print("(");
+                print('(');
             }
 
             print(c->get_reference(), op_priority);
@@ -1478,7 +1484,7 @@ void Printer::print(IExpression const *expr, int priority)
             if (vertical) {
                 ++m_indent;
             }
-            print("(");
+            print('(');
             if (vertical) {
                 nl();
             }
@@ -1489,17 +1495,17 @@ void Printer::print(IExpression const *expr, int priority)
                     if (vertical) {
                         nl();
                     } else {
-                        print(" ");
+                        print(' ');
                     }
                 }
             }
-            print(")");
+            print(')');
             if (vertical) {
                 --m_indent;
             }
 
             if (op_priority < priority) {
-                print(")");
+                print(')');
             }
             break;
         }
@@ -1554,19 +1560,19 @@ void Printer::print(IStatement const *stmt, bool is_toplevel)
         push_color(C_ERROR);
         print("<ERROR>");
         pop_color();
-        print(";");
+        print(';');
         break;
     case IStatement::SK_COMPOUND:
         {
             IStatement_compound const *blk = cast<IStatement_compound>(stmt);
-            print("{");
+            print('{');
             ++m_indent;
             for (size_t i = 0, n = blk->get_statement_count(); i < n; ++i) {
                 print(blk->get_statement(i));
             }
             --m_indent;
             nl();
-            print("}");
+            print('}');
             break;
         }
     case IStatement::SK_DECLARATION:
@@ -1581,7 +1587,7 @@ void Printer::print(IStatement const *stmt, bool is_toplevel)
             if (IExpression const *expr = e->get_expression()) {
                 print(expr);
             }
-            print(";");
+            print(';');
             break;
         }
     case IStatement::SK_IF:
@@ -1591,13 +1597,13 @@ void Printer::print(IStatement const *stmt, bool is_toplevel)
             keyword("if");
             print(" (");
             print(i->get_condition());
-            print(")");
+            print(')');
 
             IStatement const *t_stmt = i->get_then_statement();
             bool is_block = is<IStatement_compound>(t_stmt);
 
             if (is_block) {
-                print(" ");
+                print(' ');
                 print(t_stmt, /*is_toplevel=*/false);
             } else {
                 bool need_extra_block = false;
@@ -1616,13 +1622,13 @@ void Printer::print(IStatement const *stmt, bool is_toplevel)
 
             if (IStatement const *e_stmt = i->get_else_statement()) {
                 if (is_block) {
-                    print(" ");
+                    print(' ');
                 } else {
                     nl();
                 }
                 keyword("else");
                 if (is<IStatement_compound>(e_stmt) || is<IStatement_if>(e_stmt)) {
-                    print(" ");
+                    print(' ');
                     print(e_stmt, /*is_toplevel=*/false);
                 } else {
                     ++m_indent;
@@ -1638,12 +1644,12 @@ void Printer::print(IStatement const *stmt, bool is_toplevel)
 
             if (IExpression const *label = c->get_label()) {
                 keyword("case");
-                print(" ");
+                print(' ');
                 print(label);
-                print(":");
+                print(':');
             } else {
                 keyword("default");
-                print(":");
+                print(':');
             }
             ++m_indent;
             for (size_t i = 0, n = c->get_statement_count(); i < n; ++i) {
@@ -1668,7 +1674,7 @@ void Printer::print(IStatement const *stmt, bool is_toplevel)
                 print(c);
             }
             nl();
-            print("}");
+            print('}');
             break;
         }
     case IStatement::SK_WHILE:
@@ -1678,12 +1684,12 @@ void Printer::print(IStatement const *stmt, bool is_toplevel)
             keyword("while");
             print(" (");
             print(w->get_condition());
-            print(")");
+            print(')');
 
             IStatement const *body = w->get_body();
 
             if (is<IStatement_compound>(body)) {
-                print(" ");
+                print(' ');
                 print(body, /*is_toplevel=*/false);
             } else {
                 ++m_indent;
@@ -1700,9 +1706,9 @@ void Printer::print(IStatement const *stmt, bool is_toplevel)
 
             IStatement const *body = dw->get_body();
             if (is<IStatement_compound>(body)) {
-                print(" ");
+                print(' ');
                 print(body, /*is_toplevel=*/false);
-                print(" ");
+                print(' ');
                 keyword("while");
             } else {
                 ++m_indent;
@@ -1726,24 +1732,24 @@ void Printer::print(IStatement const *stmt, bool is_toplevel)
                 // includes the ;
                 print(init, /*is_toplevel=*/false);
             } else
-                print(";");
+                print(';');
 
             if (IExpression const *cond = f->get_condition()) {
-                print(" ");
+                print(' ');
                 print(cond);
             }
-            print(";");
+            print(';');
 
             if (IExpression const *upd = f->get_update()) {
-                print(" ");
+                print(' ');
                 print(upd);
             }
 
-            print(")");
+            print(')');
 
             IStatement const *body = f->get_body();
             if (is<IStatement_compound>(body)) {
-                print(" ");
+                print(' ');
                 print(body, /*is_toplevel=*/false);
             } else {
                 ++m_indent;
@@ -1754,21 +1760,21 @@ void Printer::print(IStatement const *stmt, bool is_toplevel)
         }
     case IStatement::SK_BREAK:
         keyword("break");
-        print(";");
+        print(';');
         break;
     case IStatement::SK_CONTINUE:
         keyword("continue");
-        print(";");
+        print(';');
         break;
     case IStatement::SK_RETURN:
         {
             IStatement_return const *r = cast<IStatement_return>(stmt);
             keyword("return");
             if (IExpression const *expr = r->get_expression()) {
-                print(" ");
+                print(' ');
                 print(expr);
             }
-            print(";");
+            print(';');
             break;
         }
     }
@@ -1871,7 +1877,7 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
     }
     if (decl->is_exported()) {
         keyword("export");
-        print(" ");
+        print(' ');
     }
     switch (decl->get_kind()) {
     case IDeclaration::DK_INVALID:
@@ -1884,11 +1890,11 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
             IDeclaration_import const *d = cast<IDeclaration_import>(decl);
             if (d->get_module_name()) {
                 keyword("using");
-                print(" ");
+                print(' ');
                 push_color(C_LITERAL);
                 print(d->get_module_name());
                 pop_color();
-                print(" ");
+                print(' ');
             }
             keyword("import");
             push_color(C_ENTITY);
@@ -1897,11 +1903,11 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                 if (i > 0) {
                     print(",");
                 }
-                print(" ");
+                print(' ');
                 print(d->get_name(i));
             }
             pop_color();
-            print(";");
+            print(';');
             break;
         }
     case IDeclaration::DK_ANNOTATION:
@@ -1909,11 +1915,11 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
             IDeclaration_annotation const *d = cast<IDeclaration_annotation>(decl);
             print_mdl_versions(d->get_definition());
             keyword("annotation");
-            print(" ");
+            print(' ');
             push_color(C_ANNOTATION);
             print(d->get_name());
             pop_color();
-            print("(");
+            print('(');
 
             for (size_t i = 0, n = d->get_parameter_count(); i < n; ++i) {
                 IParameter const *parameter = d->get_parameter(i);
@@ -1922,20 +1928,20 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                 }
                 print(parameter);
             }
-            print(")");
+            print(')');
 
             print_anno_block(d->get_annotations(), " ");
 
-            print(";");
+            print(';');
             break;
         }
     case IDeclaration::DK_CONSTANT:
         {
             IDeclaration_constant const *d = cast<IDeclaration_constant>(decl);
             typepart("const");
-            print(" ");
+            print(' ');
             print(d->get_type_name());
-            print(" ");
+            print(' ');
 
             for (size_t i = 0, n = d->get_constant_count(); i < n; ++i) {
                 if (i > 0) {
@@ -1962,7 +1968,7 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                             /*ignore_named=*/true);
                     } else if (arg_count > 0) {
                         bool vertical = 1 < arg_count;
-                        print("(");
+                        print('(');
                         if (vertical) {
                             ++m_indent;
                             nl();
@@ -1974,11 +1980,11 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                                 if (vertical) {
                                     nl();
                                 } else {
-                                    print(" ");
+                                    print(' ');
                                 }
                             }
                         }
-                        print(")");
+                        print(')');
                         if (vertical) {
                             --m_indent;
                         }
@@ -1990,25 +1996,25 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
 
                 print_anno_block(d->get_annotations(i), " ");
             }
-            print(";");
+            print(';');
             break;
         }
     case IDeclaration::DK_TYPE_ALIAS:
         {
             IDeclaration_type_alias const *d = cast<IDeclaration_type_alias>(decl);
             keyword("typedef");
-            print(" ");
+            print(' ');
             print(d->get_type_name());
-            print(" ");
+            print(' ');
             print(d->get_alias_name());
-            print(";");
+            print(';');
             break;
         }
     case IDeclaration::DK_TYPE_STRUCT:
         {
             IDeclaration_type_struct const *d = cast<IDeclaration_type_struct>(decl);
             typepart("struct");
-            print(" ");
+            print(' ');
             print(d->get_name());
             print_anno_block(d->get_annotations(), " ");
             print(" {");
@@ -2019,7 +2025,7 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
 
                 IType_name const *tname = d->get_field_type_name(i);
                 print(tname);
-                print(" ");
+                print(' ');
 
                 // Get the name of the field at index.
                 ISimple_name const *fname = d->get_field_name(i);
@@ -2033,7 +2039,7 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
 
                 // Get the annotations of the field at index.
                 print_anno_block(d->get_annotations(i), " ");
-                print(";");
+                print(';');
             }
             --m_indent;
             nl();
@@ -2044,10 +2050,10 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
         {
             IDeclaration_type_enum const *d = cast<IDeclaration_type_enum>(decl);
             typepart("enum");
-            print(" ");
+            print(' ');
             if (d->is_enum_class()) {
                 typepart("class");
-                print(" ");
+                print(' ');
             }
             print(d->get_name());
             print_anno_block(d->get_annotations(), " ");
@@ -2082,7 +2088,7 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
         {
             IDeclaration_variable const *d = cast<IDeclaration_variable>(decl);
             print(d->get_type_name());
-            print(" ");
+            print(' ');
             for (size_t i = 0, n = d->get_variable_count(); i < n; ++i) {
                 if (i > 0) {
                     print(", ");
@@ -2106,7 +2112,7 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                                 /*ignore_named=*/true);
                         } else if (arg_count > 0) {
                             bool vertical = 3 < arg_count;
-                            print("(");
+                            print('(');
                             if (vertical) {
                                 ++m_indent;
                                 nl();
@@ -2118,11 +2124,11 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                                     if (vertical) {
                                         nl();
                                     } else {
-                                        print(" ");
+                                        print(' ');
                                     }
                                 }
                             }
-                            print(")");
+                            print(')');
                             if (vertical) {
                                 --m_indent;
                             }
@@ -2135,7 +2141,7 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
 
                 print_anno_block(d->get_annotations(i), " ");
             }
-            print(";");
+            print(';');
             break;
         }
     case IDeclaration::DK_FUNCTION:
@@ -2144,7 +2150,7 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
             print_mdl_versions(d->get_definition());
             print(d->get_return_type_name());
             print_anno_block(d->get_return_annotations(), " ");
-            print(" ");
+            print(' ');
             push_color(C_ENTITY);
             print(d->get_name());
             pop_color();
@@ -2159,7 +2165,7 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                         vertical = true;
                     }
                 }
-                print("(");
+                print('(');
                 if (vertical) {
                     ++m_indent;
                     nl();
@@ -2172,11 +2178,11 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                         if (vertical) {
                             nl();
                         } else {
-                            print(" ");
+                            print(' ');
                         }
                     }
                 }
-                print(")");
+                print(')');
                 switch (d->get_qualifier()) {
                 case FQ_NONE:
                     break;
@@ -2207,10 +2213,10 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                     } else {
                         print(expr, get_priority(IExpression::OK_ASSIGN));
                     }
-                    print(";");
+                    print(';');
                 }
             } else {
-                print(";");
+                print(';');
             }
             break;
         }
@@ -2221,18 +2227,18 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
             if (IAnnotation_block const *block = d->get_annotations()) {
                 print_anno_block(block, " ");
             }
-            print(";");
+            print(';');
             break;
         }
     case IDeclaration::DK_NAMESPACE_ALIAS:
         {
             IDeclaration_namespace_alias const *d = cast<IDeclaration_namespace_alias>(decl);
             keyword("using");
-            print(" ");
+            print(' ');
             print(d->get_alias());
             print(" = ");
             print_namespace(d->get_namespace());
-            print(";");
+            print(';');
             break;
         }
     }
@@ -2253,7 +2259,7 @@ void Printer::print(IParameter const *parameter)
 {
     IType_name const *tname = parameter->get_type_name();
     print(tname);
-    print(" ");
+    print(' ');
 
     ISimple_name const *pname = parameter->get_name();
     push_color(C_ENTITY);
@@ -2272,7 +2278,7 @@ void Printer::print(IParameter const *parameter)
 void Printer::print(IAnnotation const *anno)
 {
     print(anno->get_name());
-    print("(");
+    print('(');
     for (size_t i = 0, n = anno->get_argument_count(); i < n; ++i) {
         if (i > 0) {
             print(", ");
@@ -2281,7 +2287,7 @@ void Printer::print(IAnnotation const *anno)
         IArgument const *arg = anno->get_argument(i);
         print(arg);
     }
-    print(")");
+    print(')');
 }
 
 // Print enable_if annotation.
@@ -2374,11 +2380,11 @@ void Printer::print(IModule const *module)
     int major, minor;
     module->get_version(major, minor);
     keyword("mdl");
-    print(" ");
+    print(' ');
     color(C_LITERAL);
     printf("%d.%d", major, minor);
     color(C_DEFAULT);
-    print(";");
+    print(';');
 
     IDeclaration::Kind last_kind = IDeclaration::Kind(-1);
     for (size_t i = 0, n = module->get_declaration_count(); i < n; ++i) {
@@ -2435,7 +2441,7 @@ void Printer::print(IModule const *module)
                 typepart("light_profile"); print("    ");
                 break;
             case IType_texture::TK_BSDF_MEASUREMENT:
-                typepart("bsdf_measurement"); print(" ");
+                typepart("bsdf_measurement"); print(' ');
                 break;
             default:
                 MDL_ASSERT(!"unsupported type kind");
@@ -2503,7 +2509,7 @@ void Printer::print(IModule const *module)
                     for (size_t i = 0, n = dimension_of(hash->hash); i < n; ++i) {
                         m_printer.printf("%02x", hash->hash[i]);
                     }
-                    m_printer.print(" ");
+                    m_printer.print(' ');
                     m_printer.print_type(def->get_type(), def->get_symbol());
                     m_printer.nl();
                 }
@@ -2540,11 +2546,11 @@ void Printer::print_message(IMessage const *message, IMessage::Severity sev)
     int line = pos->get_start_line();
     int column = pos->get_start_column();
     if (line > 0) {
-        print("(");
+        print('(');
         print(long(line));
         print(",");
         print(long(column));
-        print(")");
+        print(')');
         has_prefix = true;
     }
     if (has_prefix) {
@@ -2623,7 +2629,7 @@ void Printer::print(IGenerated_code const *code)
         return;
     }
 
-    printf("/*** Unsupported code ***/\n");
+    print("/*** Unsupported code ***/\n");
 }
 
 // Print material instance.
@@ -2644,13 +2650,13 @@ void Printer::print_position(IStatement const *stmt)
         Position const &pos = stmt->access_position();
         print("// ");
         print(long(pos.get_start_line()));
-        print("(");
+        print('(');
         print(long(pos.get_start_column()));
         print(") - ");
         print(long(pos.get_end_line()));
-        print("(");
+        print('(');
         print(long(pos.get_end_column()));
-        print(")");
+        print(')');
         nl();
     }
 }
@@ -2661,13 +2667,13 @@ void Printer::print_position(IDeclaration const *decl)
         Position const &pos = decl->access_position();
         print("// ");
         print(long(pos.get_start_line()));
-        print("(");
+        print('(');
         print(long(pos.get_start_column()));
         print(") - ");
         print(long(pos.get_end_line()));
-        print("(");
+        print('(');
         print(long(pos.get_end_column()));
-        print(")");
+        print(')');
         nl();
     }
 }
@@ -3130,7 +3136,7 @@ void Sema_printer::print_resource(IValue_resource const *res)
                 Base::print_utf8(tex->get_selector(), /*escape=*/true);
                 Base::print("\"");
             }
-            Base::print(")");
+            Base::print(')');
             break;
         }
     case IValue::VK_LIGHT_PROFILE:
@@ -3175,9 +3181,9 @@ void Sema_printer::print_import_scope_name(IDefinition const *idef)
         if (first) {
             first = false;
         } else {
-            printf("::");
+            Base::print("::");
         }
-        printf("%s", sym->get_name());
+        Base::print(sym->get_name());
 
         m_sym_stack.pop();
     }

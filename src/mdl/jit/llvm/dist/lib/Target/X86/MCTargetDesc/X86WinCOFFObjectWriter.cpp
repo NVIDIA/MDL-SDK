@@ -1,9 +1,8 @@
 //===-- X86WinCOFFObjectWriter.cpp - X86 Win COFF Writer ------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -79,7 +78,8 @@ unsigned X86WinCOFFObjectWriter::getRelocType(MCContext &Ctx,
     case FK_SecRel_4:
       return COFF::IMAGE_REL_AMD64_SECREL;
     default:
-      llvm_unreachable("unsupported relocation type");
+      Ctx.reportError(Fixup.getLoc(), "unsupported relocation type");
+      return COFF::IMAGE_REL_AMD64_ADDR32;
     }
   } else if (getMachine() == COFF::IMAGE_FILE_MACHINE_I386) {
     switch (FixupKind) {
@@ -100,7 +100,8 @@ unsigned X86WinCOFFObjectWriter::getRelocType(MCContext &Ctx,
     case FK_SecRel_4:
       return COFF::IMAGE_REL_I386_SECREL;
     default:
-      llvm_unreachable("unsupported relocation type");
+      Ctx.reportError(Fixup.getLoc(), "unsupported relocation type");
+      return COFF::IMAGE_REL_I386_DIR32;
     }
   } else
     llvm_unreachable("Unsupported COFF machine type.");
@@ -108,5 +109,5 @@ unsigned X86WinCOFFObjectWriter::getRelocType(MCContext &Ctx,
 
 std::unique_ptr<MCObjectTargetWriter>
 llvm::createX86WinCOFFObjectWriter(bool Is64Bit) {
-  return llvm::make_unique<X86WinCOFFObjectWriter>(Is64Bit);
+  return std::make_unique<X86WinCOFFObjectWriter>(Is64Bit);
 }

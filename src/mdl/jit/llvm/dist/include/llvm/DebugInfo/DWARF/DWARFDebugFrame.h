@@ -1,9 +1,8 @@
 //===- DWARFDebugFrame.h - Parsing of .debug_frame --------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -13,6 +12,7 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/iterator.h"
 #include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/Triple.h"
 #include "llvm/DebugInfo/DWARF/DWARFDataExtractor.h"
 #include "llvm/DebugInfo/DWARF/DWARFExpression.h"
 #include "llvm/Support/Error.h"
@@ -59,23 +59,26 @@ public:
   unsigned size() const { return (unsigned)Instructions.size(); }
   bool empty() const { return Instructions.empty(); }
 
-  CFIProgram(uint64_t CodeAlignmentFactor, int64_t DataAlignmentFactor)
+  CFIProgram(uint64_t CodeAlignmentFactor, int64_t DataAlignmentFactor,
+             Triple::ArchType Arch)
       : CodeAlignmentFactor(CodeAlignmentFactor),
-        DataAlignmentFactor(DataAlignmentFactor) {}
+        DataAlignmentFactor(DataAlignmentFactor),
+        Arch(Arch) {}
 
   /// Parse and store a sequence of CFI instructions from Data,
   /// starting at *Offset and ending at EndOffset. *Offset is updated
   /// to EndOffset upon successful parsing, or indicates the offset
   /// where a problem occurred in case an error is returned.
-  Error parse(DataExtractor Data, uint32_t *Offset, uint32_t EndOffset);
+  Error parse(DWARFDataExtractor Data, uint64_t *Offset, uint64_t EndOffset);
 
-  void dump(raw_ostream &OS, const MCRegisterInfo *MRI, bool IsEH,
-            unsigned IndentLevel = 1) const;
+  void dump(raw_ostream &OS, DIDumpOptions DumpOpts, const MCRegisterInfo *MRI,
+            bool IsEH, unsigned IndentLevel = 1) const;
 
 private:
   std::vector<Instruction> Instructions;
   const uint64_t CodeAlignmentFactor;
   const int64_t DataAlignmentFactor;
+  Triple::ArchType Arch;
 
   /// Convenience method to add a new instruction with the given opcode.
   void addInstruction(uint8_t Opcode) {
@@ -118,7 +121,8 @@ private:
   static ArrayRef<OperandType[2]> getOperandTypes();
 
   /// Print \p Opcode's operand number \p OperandIdx which has value \p Operand.
-  void printOperand(raw_ostream &OS, const MCRegisterInfo *MRI, bool IsEH,
+  void printOperand(raw_ostream &OS, DIDumpOptions DumpOpts,
+                    const MCRegisterInfo *MRI, bool IsEH,
                     const Instruction &Instr, unsigned OperandIdx,
                     uint64_t Operand) const;
 };
@@ -129,9 +133,10 @@ class FrameEntry {
 public:
   enum FrameKind { FK_CIE, FK_FDE };
 
-  FrameEntry(FrameKind K, uint64_t Offset, uint64_t Length, uint64_t CodeAlign,
-             int64_t DataAlign)
-      : Kind(K), Offset(Offset), Length(Length), CFIs(CodeAlign, DataAlign) {}
+  FrameEntry(FrameKind K, bool IsDWARF64, uint64_t Offset, uint64_t Length,
+             uint64_t CodeAlign, int64_t DataAlign, Triple::ArchType Arch)
+      : Kind(K), IsDWARF64(IsDWARF64), Offset(Offset), Length(Length),
+        CFIs(CodeAlign, DataAlign, Arch) {}
 
   virtual ~FrameEntry() {}
 
@@ -142,11 +147,13 @@ public:
   CFIProgram &cfis() { return CFIs; }
 
   /// Dump the instructions in this CFI fragment
-  virtual void dump(raw_ostream &OS, const MCRegisterInfo *MRI,
-                    bool IsEH) const = 0;
+  virtual void dump(raw_ostream &OS, DIDumpOptions DumpOpts,
+                    const MCRegisterInfo *MRI, bool IsEH) const = 0;
 
 protected:
   const FrameKind Kind;
+
+  const bool IsDWARF64;
 
   /// Offset of this entry in the section.
   const uint64_t Offset;
@@ -162,15 +169,15 @@ class CIE : public FrameEntry {
 public:
   // CIEs (and FDEs) are simply container classes, so the only sensible way to
   // create them is by providing the full parsed contents in the constructor.
-  CIE(uint64_t Offset, uint64_t Length, uint8_t Version,
+  CIE(bool IsDWARF64, uint64_t Offset, uint64_t Length, uint8_t Version,
       SmallString<8> Augmentation, uint8_t AddressSize,
       uint8_t SegmentDescriptorSize, uint64_t CodeAlignmentFactor,
       int64_t DataAlignmentFactor, uint64_t ReturnAddressRegister,
       SmallString<8> AugmentationData, uint32_t FDEPointerEncoding,
       uint32_t LSDAPointerEncoding, Optional<uint64_t> Personality,
-      Optional<uint32_t> PersonalityEnc)
-      : FrameEntry(FK_CIE, Offset, Length, CodeAlignmentFactor,
-                   DataAlignmentFactor),
+      Optional<uint32_t> PersonalityEnc, Triple::ArchType Arch)
+      : FrameEntry(FK_CIE, IsDWARF64, Offset, Length, CodeAlignmentFactor,
+                   DataAlignmentFactor, Arch),
         Version(Version), Augmentation(std::move(Augmentation)),
         AddressSize(AddressSize), SegmentDescriptorSize(SegmentDescriptorSize),
         CodeAlignmentFactor(CodeAlignmentFactor),
@@ -195,7 +202,7 @@ public:
 
   uint32_t getLSDAPointerEncoding() const { return LSDAPointerEncoding; }
 
-  void dump(raw_ostream &OS, const MCRegisterInfo *MRI,
+  void dump(raw_ostream &OS, DIDumpOptions DumpOpts, const MCRegisterInfo *MRI,
             bool IsEH) const override;
 
 private:
@@ -219,16 +226,14 @@ private:
 /// DWARF Frame Description Entry (FDE)
 class FDE : public FrameEntry {
 public:
-  // Each FDE has a CIE it's "linked to". Our FDE contains is constructed with
-  // an offset to the CIE (provided by parsing the FDE header). The CIE itself
-  // is obtained lazily once it's actually required.
-  FDE(uint64_t Offset, uint64_t Length, int64_t LinkedCIEOffset,
+  FDE(bool IsDWARF64, uint64_t Offset, uint64_t Length, uint64_t CIEPointer,
       uint64_t InitialLocation, uint64_t AddressRange, CIE *Cie,
-      Optional<uint64_t> LSDAAddress)
-      : FrameEntry(FK_FDE, Offset, Length,
+      Optional<uint64_t> LSDAAddress, Triple::ArchType Arch)
+      : FrameEntry(FK_FDE, IsDWARF64, Offset, Length,
                    Cie ? Cie->getCodeAlignmentFactor() : 0,
-                   Cie ? Cie->getDataAlignmentFactor() : 0),
-        LinkedCIEOffset(LinkedCIEOffset), InitialLocation(InitialLocation),
+                   Cie ? Cie->getDataAlignmentFactor() : 0,
+                   Arch),
+        CIEPointer(CIEPointer), InitialLocation(InitialLocation),
         AddressRange(AddressRange), LinkedCIE(Cie), LSDAAddress(LSDAAddress) {}
 
   ~FDE() override = default;
@@ -238,14 +243,17 @@ public:
   uint64_t getAddressRange() const { return AddressRange; }
   Optional<uint64_t> getLSDAAddress() const { return LSDAAddress; }
 
-  void dump(raw_ostream &OS, const MCRegisterInfo *MRI,
+  void dump(raw_ostream &OS, DIDumpOptions DumpOpts, const MCRegisterInfo *MRI,
             bool IsEH) const override;
 
   static bool classof(const FrameEntry *FE) { return FE->getKind() == FK_FDE; }
 
 private:
-  /// The following fields are defined in section 6.4.1 of the DWARF standard v3
-  const uint64_t LinkedCIEOffset;
+  /// The following fields are defined in section 6.4.1 of the DWARFv3 standard.
+  /// Note that CIE pointers in EH FDEs, unlike DWARF FDEs, contain relative
+  /// offsets to the linked CIEs. See the following link for more info:
+  /// https://refspecs.linuxfoundation.org/LSB_5.0.0/LSB-Core-generic/LSB-Core-generic/ehframechpt.html
+  const uint64_t CIEPointer;
   const uint64_t InitialLocation;
   const uint64_t AddressRange;
   const CIE *LinkedCIE;
@@ -256,6 +264,7 @@ private:
 
 /// A parsed .debug_frame or .eh_frame section
 class DWARFDebugFrame {
+  const Triple::ArchType Arch;
   // True if this is parsing an eh_frame section.
   const bool IsEH;
   // Not zero for sane pointer values coming out of eh_frame
@@ -272,16 +281,17 @@ public:
   // it is a .debug_frame section. EHFrameAddress should be different
   // than zero for correct parsing of .eh_frame addresses when they
   // use a PC-relative encoding.
-  DWARFDebugFrame(bool IsEH = false, uint64_t EHFrameAddress = 0);
+  DWARFDebugFrame(Triple::ArchType Arch,
+                  bool IsEH = false, uint64_t EHFrameAddress = 0);
   ~DWARFDebugFrame();
 
   /// Dump the section data into the given stream.
-  void dump(raw_ostream &OS, const MCRegisterInfo *MRI,
+  void dump(raw_ostream &OS, DIDumpOptions DumpOpts, const MCRegisterInfo *MRI,
             Optional<uint64_t> Offset) const;
 
   /// Parse the section from raw data. \p Data is assumed to contain the whole
   /// frame section contents to be parsed.
-  void parse(DWARFDataExtractor Data);
+  Error parse(DWARFDataExtractor Data);
 
   /// Return whether the section has any entries.
   bool empty() const { return Entries.empty(); }

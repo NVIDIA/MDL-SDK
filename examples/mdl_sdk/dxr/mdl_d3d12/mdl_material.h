@@ -112,8 +112,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// can be used with the material library for instance.
         size_t get_target_code_id() const override;
 
-        /// get the scene data names mapped to IDs that will be requested in the shader.
-        const std::unordered_map<std::string, uint32_t>& get_scene_data_name_map() const override;
+        /// register scene data names that appear on the geometry data at the material for
+        /// making them accessible in the shader.
+        uint32_t register_scene_data_name(const std::string& name) override;
 
         /// get the target code that contains this material.
         Mdl_material_target* get_target_code() const { return m_target; }
@@ -147,6 +148,12 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// get the resources used by this material
         const std::vector<Mdl_resource_assignment>& get_resources(Mdl_resource_kind kind) const;
 
+        /// Called by the target to register per material string constants.
+        uint32_t map_string_constant(const std::string& string_value);
+
+        /// get the string constants used by this material
+        const std::vector<Mdl_string_constant>& get_string_constants() const;
+
         /// Get the functions indices and argument layout index for the generated target code.
         const Mdl_material_target_interface& get_target_interface() const {
             return m_material_target_interface;
@@ -155,7 +162,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
     private:
         Base_application* m_app;
         Mdl_sdk* m_sdk;
-        uint32_t m_material_id;
+        const uint32_t m_material_id;
 
         // Description including definition and parameter set of this material.
         Mdl_material_description m_description;
@@ -185,9 +192,6 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// contains the actual shader code for material.
         Mdl_material_target* m_target;
 
-        /// scene data names and their ID in the generated target code used by this material.
-        std::unordered_map<std::string, uint32_t> m_scene_data_name_map;
-
         /// constant buffer for function indices, material id and flags.
         Constant_buffer<Constants> m_constants;
 
@@ -210,6 +214,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// references to the resources used by the material
         /// resources are owned by the material library to avoid duplications
         std::map<Mdl_resource_kind, std::vector<Mdl_resource_assignment>> m_resources;
+
+        /// list of string constants used by the material
+        std::vector<Mdl_string_constant> m_string_constants;
     };
 
 }}} // mi::examples::mdl_d3d12

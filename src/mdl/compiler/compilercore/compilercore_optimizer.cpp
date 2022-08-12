@@ -305,6 +305,26 @@ void Optimizer::run_on_function(
     }
 }
 
+// Remove unused function definition from the definition table.
+void Optimizer::remove_unused_function(
+    Definition const *def)
+{
+    Definition *dead_def = const_cast<Definition *>(def);
+
+    if (Scope *dead_scope = dead_def->get_own_scope()) {
+        dead_scope->remove_from_parent();
+    }
+
+    // remove the scope of the function
+    dead_def->remove_own_scope();
+
+    // remove the reference to the AST
+    dead_def->set_declaration(NULL);
+
+    // remove the definition itself
+    dead_def->remove_from_parent();
+}
+
 // Remove unused functions from the AST.
 void Optimizer::remove_unused_functions()
 {
@@ -319,13 +339,13 @@ void Optimizer::remove_unused_functions()
         if (IDeclaration_function const *fdecl = as<IDeclaration_function>(decl)) {
             Definition const *def     = impl_cast<Definition>(fdecl->get_definition());
             Definition const *def_def = def->get_definite_definition();
-            if (def_def != NULL) {
-                def = def_def;
+            if (def_def == NULL) {
+                def_def = def;
             }
 
-            if (!def->has_flag(Definition::DEF_IS_USED)) {
-                // remove the reference
-                const_cast<Definition*>(def)->set_declaration(NULL);
+            if (!def_def->has_flag(Definition::DEF_IS_USED)) {
+                // remove the definition
+                remove_unused_function(def);
                 continue;
             }
         }

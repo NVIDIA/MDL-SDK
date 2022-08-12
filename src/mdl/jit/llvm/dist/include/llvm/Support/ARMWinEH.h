@@ -1,9 +1,8 @@
-//===-- llvm/Support/WinARMEH.h - Windows on ARM EH Constants ---*- C++ -*-===//
+//===-- llvm/Support/ARMWinEH.h - Windows on ARM EH Constants ---*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -31,6 +30,9 @@ enum class ReturnType {
 };
 
 /// RuntimeFunction - An entry in the table of procedure data (.pdata)
+///
+/// This is ARM specific, but the Function Start RVA, Flag and
+/// ExceptionInformationRVA fields work identically for ARM64.
 ///
 ///  3 3 2 2 2 2 2 2 2 2 2 2 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0
 ///  1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0
@@ -205,13 +207,104 @@ inline uint16_t StackAdjustment(const RuntimeFunction &RF) {
 /// purpose (r0-r15) and VFP (d0-d31) registers.
 std::pair<uint16_t, uint32_t> SavedRegisterMask(const RuntimeFunction &RF);
 
+/// RuntimeFunctionARM64 - An entry in the table of procedure data (.pdata)
+///
+///  3 3 2 2 2 2 2 2 2 2 2 2 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0
+///  1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0
+/// +---------------------------------------------------------------+
+/// |                     Function Start RVA                        |
+/// +-----------------+---+-+-------+-----+---------------------+---+
+/// |    Frame Size   |CR |H| RegI  |RegF |   Function Length   |Flg|
+/// +-----------------+---+-+-------+-----+---------------------+---+
+///
+/// See https://docs.microsoft.com/en-us/cpp/build/arm64-exception-handling
+/// for the full reference for this struct.
+
+class RuntimeFunctionARM64 {
+public:
+  const support::ulittle32_t BeginAddress;
+  const support::ulittle32_t UnwindData;
+
+  RuntimeFunctionARM64(const support::ulittle32_t *Data)
+      : BeginAddress(Data[0]), UnwindData(Data[1]) {}
+
+  RuntimeFunctionARM64(const support::ulittle32_t BeginAddress,
+                       const support::ulittle32_t UnwindData)
+      : BeginAddress(BeginAddress), UnwindData(UnwindData) {}
+
+  RuntimeFunctionFlag Flag() const {
+    return RuntimeFunctionFlag(UnwindData & 0x3);
+  }
+
+  uint32_t ExceptionInformationRVA() const {
+    assert(Flag() == RuntimeFunctionFlag::RFF_Unpacked &&
+           "unpacked form required for this operation");
+    return (UnwindData & ~0x3);
+  }
+
+  uint32_t PackedUnwindData() const {
+    assert((Flag() == RuntimeFunctionFlag::RFF_Packed ||
+            Flag() == RuntimeFunctionFlag::RFF_PackedFragment) &&
+           "packed form required for this operation");
+    return (UnwindData & ~0x3);
+  }
+  uint32_t FunctionLength() const {
+    assert((Flag() == RuntimeFunctionFlag::RFF_Packed ||
+            Flag() == RuntimeFunctionFlag::RFF_PackedFragment) &&
+           "packed form required for this operation");
+    return (((UnwindData & 0x00001ffc) >> 2) << 2);
+  }
+  uint8_t RegF() const {
+    assert((Flag() == RuntimeFunctionFlag::RFF_Packed ||
+            Flag() == RuntimeFunctionFlag::RFF_PackedFragment) &&
+           "packed form required for this operation");
+    return ((UnwindData & 0x0000e000) >> 13);
+  }
+  uint8_t RegI() const {
+    assert((Flag() == RuntimeFunctionFlag::RFF_Packed ||
+            Flag() == RuntimeFunctionFlag::RFF_PackedFragment) &&
+           "packed form required for this operation");
+    return ((UnwindData & 0x000f0000) >> 16);
+  }
+  bool H() const {
+    assert((Flag() == RuntimeFunctionFlag::RFF_Packed ||
+            Flag() == RuntimeFunctionFlag::RFF_PackedFragment) &&
+           "packed form required for this operation");
+    return ((UnwindData & 0x00100000) >> 20);
+  }
+  uint8_t CR() const {
+    assert((Flag() == RuntimeFunctionFlag::RFF_Packed ||
+            Flag() == RuntimeFunctionFlag::RFF_PackedFragment) &&
+           "packed form required for this operation");
+    return ((UnwindData & 0x600000) >> 21);
+  }
+  uint16_t FrameSize() const {
+    assert((Flag() == RuntimeFunctionFlag::RFF_Packed ||
+            Flag() == RuntimeFunctionFlag::RFF_PackedFragment) &&
+           "packed form required for this operation");
+    return ((UnwindData & 0xff800000) >> 23);
+  }
+};
+
 /// ExceptionDataRecord - An entry in the table of exception data (.xdata)
+///
+/// The format on ARM is:
 ///
 ///  3 3 2 2 2 2 2 2 2 2 2 2 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0
 ///  1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0
 /// +-------+---------+-+-+-+---+-----------------------------------+
 /// | C Wrd | Epi Cnt |F|E|X|Ver|         Function Length           |
 /// +-------+--------+'-'-'-'---'---+-------------------------------+
+/// |    Reserved    |Ex. Code Words|   (Extended Epilogue Count)   |
+/// +-------+--------+--------------+-------------------------------+
+///
+/// The format on ARM64 is:
+///
+///  3 3 2 2 2 2 2 2 2 2 2 2 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0
+///  1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0
+/// +---------+---------+-+-+---+-----------------------------------+
+/// |  C Wrd  | Epi Cnt |E|X|Ver|         Function Length           |
+/// +---------+------+--'-'-'---'---+-------------------------------+
 /// |    Reserved    |Ex. Code Words|   (Extended Epilogue Count)   |
 /// +-------+--------+--------------+-------------------------------+
 ///
@@ -225,7 +318,7 @@ std::pair<uint16_t, uint32_t> SavedRegisterMask(const RuntimeFunction &RF);
 ///     header
 /// F : 1-bit field indicating that the record describes a function fragment
 ///     (implies that no prologue is present, and prologue processing should be
-///     skipped)
+///     skipped) (ARM only)
 /// Epilogue Count : 5-bit field that differs in meaning based on the E field.
 ///
 ///                  If E is set, then this field specifies the index of the
@@ -235,15 +328,17 @@ std::pair<uint16_t, uint32_t> SavedRegisterMask(const RuntimeFunction &RF);
 ///                  scopes.  If more than 31 scopes exist, then this field and
 ///                  the Code Words field must both be set to 0 to indicate that
 ///                  an extension word is required.
-/// Code Words : 4-bit field that species the number of 32-bit words needed to
-///              contain all the unwind codes.  If more than 15 words (63 code
-///              bytes) are required, then this field and the Epilogue Count
-///              field must both be set to 0 to indicate that an extension word
-///              is required.
+/// Code Words : 4-bit (5-bit on ARM64) field that specifies the number of
+///              32-bit words needed to contain all the unwind codes.  If more
+///              than 15 words (31 words on ARM64) are required, then this field
+///              and the Epilogue Count field must both be set to 0 to indicate
+///              that an extension word is required.
 /// Extended Epilogue Count, Extended Code Words :
 ///                          Valid only if Epilog Count and Code Words are both
 ///                          set to 0.  Provides an 8-bit extended code word
 ///                          count and 16-bits for epilogue count
+///
+/// The epilogue scope format on ARM is:
 ///
 ///  3 3 2 2 2 2 2 2 2 2 2 2 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0
 ///  1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0
@@ -251,17 +346,25 @@ std::pair<uint16_t, uint32_t> SavedRegisterMask(const RuntimeFunction &RF);
 /// |  Ep Start Idx  | Cond |Res|       Epilogue Start Offset       |
 /// +----------------+------+---+-----------------------------------+
 ///
+/// The epilogue scope format on ARM64 is:
+///
+///  3 3 2 2 2 2 2 2 2 2 2 2 1 1 1 1 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0
+///  1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0
+/// +-------------------+-------+---+-------------------------------+
+/// |  Ep Start Idx     |  Res  |   Epilogue Start Offset           |
+/// +-------------------+-------+-----------------------------------+
+///
 /// If the E bit is unset in the header, the header is followed by a series of
 /// epilogue scopes, which are sorted by their offset.
 ///
 /// Epilogue Start Offset: 18-bit field encoding the offset of epilogue relative
 ///                        to the start of the function in bytes divided by two
 /// Res : 2-bit field reserved for future expansion (must be set to 0)
-/// Condition : 4-bit field providing the condition under which the epilogue is
-///             executed.  Unconditional epilogues should set this field to 0xe.
-///             Epilogues must be entirely conditional or unconditional, and in
-///             Thumb-2 mode.  The epilogue beings with the first instruction
-///             after the IT opcode.
+/// Condition : (ARM only) 4-bit field providing the condition under which the
+///             epilogue is executed.  Unconditional epilogues should set this
+///             field to 0xe. Epilogues must be entirely conditional or
+///             unconditional, and in Thumb-2 mode.  The epilogue begins with
+///             the first instruction after the IT opcode.
 /// Epilogue Start Index : 8-bit field indicating the byte index of the first
 ///                        unwind code describing the epilogue
 ///
@@ -293,17 +396,32 @@ struct EpilogueScope {
   const support::ulittle32_t ES;
 
   EpilogueScope(const support::ulittle32_t Data) : ES(Data) {}
+  // Same for both ARM and AArch64.
   uint32_t EpilogueStartOffset() const {
     return (ES & 0x0003ffff);
   }
-  uint8_t Res() const {
+
+  // Different implementations for ARM and AArch64.
+  uint8_t ResARM() const {
     return ((ES & 0x000c0000) >> 18);
   }
+
+  uint8_t ResAArch64() const {
+    return ((ES & 0x000f0000) >> 18);
+  }
+
+  // Condition is only applicable to ARM.
   uint8_t Condition() const {
     return ((ES & 0x00f00000) >> 20);
   }
-  uint8_t EpilogueStartIndex() const {
+
+  // Different implementations for ARM and AArch64.
+  uint8_t EpilogueStartIndexARM() const {
     return ((ES & 0xff000000) >> 24);
+  }
+
+  uint16_t EpilogueStartIndexAArch64() const {
+    return ((ES & 0xffc00000) >> 22);
   }
 };
 
@@ -312,11 +430,21 @@ inline size_t HeaderWords(const ExceptionDataRecord &XR);
 
 struct ExceptionDataRecord {
   const support::ulittle32_t *Data;
+  bool isAArch64;
 
-  ExceptionDataRecord(const support::ulittle32_t *Data) : Data(Data) {}
+  ExceptionDataRecord(const support::ulittle32_t *Data, bool isAArch64) :
+    Data(Data), isAArch64(isAArch64) {}
 
   uint32_t FunctionLength() const {
     return (Data[0] & 0x0003ffff);
+  }
+
+  uint32_t FunctionLengthInBytesARM() const {
+    return FunctionLength() << 1;
+  }
+
+  uint32_t FunctionLengthInBytesAArch64() const {
+    return FunctionLength() << 2;
   }
 
   uint8_t Vers() const {
@@ -332,18 +460,25 @@ struct ExceptionDataRecord {
   }
 
   bool F() const {
+    assert(!isAArch64 && "Fragments are only supported on ARMv7 WinEH");
     return ((Data[0] & 0x00400000) >> 22);
   }
 
-  uint8_t EpilogueCount() const {
-    if (HeaderWords(*this) == 1)
+  uint16_t EpilogueCount() const {
+    if (HeaderWords(*this) == 1) {
+      if (isAArch64)
+        return (Data[0] & 0x07C00000) >> 22;
       return (Data[0] & 0x0f800000) >> 23;
+    }
     return Data[1] & 0x0000ffff;
   }
 
   uint8_t CodeWords() const {
-    if (HeaderWords(*this) == 1)
+    if (HeaderWords(*this) == 1) {
+      if (isAArch64)
+        return (Data[0] & 0xf8000000) >> 27;
       return (Data[0] & 0xf0000000) >> 28;
+    }
     return (Data[1] & 0x00ff0000) >> 16;
   }
 
@@ -363,16 +498,19 @@ struct ExceptionDataRecord {
 
   uint32_t ExceptionHandlerRVA() const {
     assert(X() && "Exception Handler RVA is only valid if the X bit is set");
-    return Data[HeaderWords(*this) + EpilogueCount() + CodeWords()];
+    return Data[HeaderWords(*this) + (E() ? 0 : EpilogueCount()) + CodeWords()];
   }
 
   uint32_t ExceptionHandlerParameter() const {
     assert(X() && "Exception Handler RVA is only valid if the X bit is set");
-    return Data[HeaderWords(*this) + EpilogueCount() + CodeWords() + 1];
+    return Data[HeaderWords(*this) + (E() ? 0 : EpilogueCount()) + CodeWords() +
+                1];
   }
 };
 
 inline size_t HeaderWords(const ExceptionDataRecord &XR) {
+  if (XR.isAArch64)
+    return (XR.Data[0] & 0xffc00000) ? 1 : 2;
   return (XR.Data[0] & 0xff800000) ? 1 : 2;
 }
 }

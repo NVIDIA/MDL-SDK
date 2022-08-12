@@ -1,9 +1,8 @@
 //===- llvm/MC/MCAsmLexer.h - Abstract Asm Lexer Interface ------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -50,9 +49,13 @@ protected: // Can only create subclasses.
   bool SkipSpace = true;
   bool AllowAtInIdentifier;
   bool IsAtStartOfStatement = true;
+  bool LexMasmHexFloats = false;
+  bool LexMasmIntegers = false;
+  bool LexMasmStrings = false;
+  bool UseMasmDefaultRadix = false;
+  unsigned DefaultRadix = 10;
   AsmCommentConsumer *CommentConsumer = nullptr;
 
-  bool AltMacroMode;
   MCAsmLexer();
 
   virtual AsmToken LexToken() = 0;
@@ -67,17 +70,9 @@ public:
   MCAsmLexer &operator=(const MCAsmLexer &) = delete;
   virtual ~MCAsmLexer();
 
-  bool IsaAltMacroMode() {
-    return AltMacroMode;
-  }
-
-  void SetAltMacroMode(bool AltMacroSet) {
-    AltMacroMode = AltMacroSet;
-  }
-
   /// Consume the next token from the input stream and return it.
   ///
-  /// The lexer will continuosly return the end-of-file token once the end of
+  /// The lexer will continuously return the end-of-file token once the end of
   /// the main input file has been reached.
   const AsmToken &Lex() {
     assert(!CurTok.empty());
@@ -155,6 +150,24 @@ public:
   void setCommentConsumer(AsmCommentConsumer *CommentConsumer) {
     this->CommentConsumer = CommentConsumer;
   }
+
+  /// Set whether to lex masm-style binary (e.g., 0b1101) and radix-specified
+  /// literals (e.g., 0ABCh [hex], 576t [decimal], 77o [octal], 1101y [binary]).
+  void setLexMasmIntegers(bool V) { LexMasmIntegers = V; }
+
+  /// Set whether to use masm-style default-radix integer literals. If disabled,
+  /// assume decimal unless prefixed (e.g., 0x2c [hex], 077 [octal]).
+  void useMasmDefaultRadix(bool V) { UseMasmDefaultRadix = V; }
+
+  unsigned getMasmDefaultRadix() const { return DefaultRadix; }
+  void setMasmDefaultRadix(unsigned Radix) { DefaultRadix = Radix; }
+
+  /// Set whether to lex masm-style hex float literals, such as 3f800000r.
+  void setLexMasmHexFloats(bool V) { LexMasmHexFloats = V; }
+
+  /// Set whether to lex masm-style string literals, such as 'Can''t find file'
+  /// and "This ""value"" not found".
+  void setLexMasmStrings(bool V) { LexMasmStrings = V; }
 };
 
 } // end namespace llvm

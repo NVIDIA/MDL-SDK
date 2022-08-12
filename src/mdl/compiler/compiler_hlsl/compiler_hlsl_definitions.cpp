@@ -237,6 +237,7 @@ Def_member::Def_member(
     Definition     *outer,
     size_t         id)
 : Base(sym, type, loc, parent_scope, outer, id)
+, m_field_index(~size_t(0))
 {
 }
 
@@ -686,16 +687,19 @@ Def_param *Definition_table::enter_parameter_definition(
 // Enter a new member definition.
 Def_member *Definition_table::enter_member_definition(
     Symbol         *symbol,
-    Type           *type,
+    Type *type,
+    size_t         field_index,
     Location const *loc)
 {
-    return cast<Def_member>(
+    Def_member *mem_def = cast<Def_member>(
         enter_definition(
             Definition::DK_MEMBER,
             symbol,
             type,
             Def_function::DS_UNKNOWN,
             loc));
+    mem_def->set_field_index(field_index);
+    return mem_def;
 }
 
 // Enter a new operator definition.

@@ -1,9 +1,8 @@
 //===- DIASectionContrib.cpp - DIA impl. of IPDBSectionContrib ---- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -24,8 +23,8 @@ std::unique_ptr<PDBSymbolCompiland> DIASectionContrib::getCompiland() const {
   if (FAILED(Section->get_compiland(&Symbol)))
     return nullptr;
 
-  auto RawSymbol = llvm::make_unique<DIARawSymbol>(Session, Symbol);
-  return llvm::make_unique<PDBSymbolCompiland>(Session, std::move(RawSymbol));
+  auto RawSymbol = std::make_unique<DIARawSymbol>(Session, Symbol);
+  return PDBSymbol::createAs<PDBSymbolCompiland>(Session, std::move(RawSymbol));
 }
 
 template <typename ArgType>

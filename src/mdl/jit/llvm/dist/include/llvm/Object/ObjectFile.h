@@ -1,9 +1,8 @@
 //===- ObjectFile.h - File format independent object file -------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -14,17 +13,16 @@
 #ifndef LLVM_OBJECT_OBJECTFILE_H
 #define LLVM_OBJECT_OBJECTFILE_H
 
+#include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/BinaryFormat/Magic.h"
-#include "llvm/MC/SubtargetFeature.h"
 #include "llvm/Object/Binary.h"
 #include "llvm/Object/Error.h"
 #include "llvm/Object/SymbolicFile.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Error.h"
-#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include <cassert>
 #include <cstdint>
@@ -34,6 +32,7 @@
 namespace llvm {
 
 class ARMAttributeParser;
+class SubtargetFeatures;
 
 namespace object {
 
@@ -94,22 +93,37 @@ public:
 
   void moveNext();
 
-  std::error_code getName(StringRef &Result) const;
+  Expected<StringRef> getName() const;
   uint64_t getAddress() const;
   uint64_t getIndex() const;
   uint64_t getSize() const;
-  std::error_code getContents(StringRef &Result) const;
+  Expected<StringRef> getContents() const;
 
   /// Get the alignment of this section as the actual value (not log 2).
   uint64_t getAlignment() const;
 
   bool isCompressed() const;
+  /// Whether this section contains instructions.
   bool isText() const;
+  /// Whether this section contains data, not instructions.
   bool isData() const;
+  /// Whether this section contains BSS uninitialized data.
   bool isBSS() const;
   bool isVirtual() const;
   bool isBitcode() const;
   bool isStripped() const;
+
+  /// Whether this section will be placed in the text segment, according to the
+  /// Berkeley size format. This is true if the section is allocatable, and
+  /// contains either code or readonly data.
+  bool isBerkeleyText() const;
+  /// Whether this section will be placed in the data segment, according to the
+  /// Berkeley size format. This is true if the section is allocatable and
+  /// contains data (e.g. PROGBITS), but is not text.
+  bool isBerkeleyData() const;
+
+  /// Whether this section is a debug section.
+  bool isDebugSection(StringRef SectionName) const;
 
   bool containsSymbol(SymbolRef S) const;
 
@@ -118,11 +132,32 @@ public:
   iterator_range<relocation_iterator> relocations() const {
     return make_range(relocation_begin(), relocation_end());
   }
-  section_iterator getRelocatedSection() const;
+  Expected<section_iterator> getRelocatedSection() const;
 
   DataRefImpl getRawDataRefImpl() const;
   const ObjectFile *getObject() const;
 };
+
+struct SectionedAddress {
+  const static uint64_t UndefSection = UINT64_MAX;
+
+  uint64_t Address = 0;
+  uint64_t SectionIndex = UndefSection;
+};
+
+inline bool operator<(const SectionedAddress &LHS,
+                      const SectionedAddress &RHS) {
+  return std::tie(LHS.SectionIndex, LHS.Address) <
+         std::tie(RHS.SectionIndex, RHS.Address);
+}
+
+inline bool operator==(const SectionedAddress &LHS,
+                       const SectionedAddress &RHS) {
+  return std::tie(LHS.SectionIndex, LHS.Address) ==
+         std::tie(RHS.SectionIndex, RHS.Address);
+}
+
+raw_ostream &operator<<(raw_ostream &OS, const SectionedAddress &Addr);
 
 /// This is a value type class that represents a single symbol in the list of
 /// symbols in the object file.
@@ -152,7 +187,7 @@ public:
 
   /// Return the value of the symbol depending on the object this can be an
   /// offset or a virtual address.
-  uint64_t getValue() const;
+  Expected<uint64_t> getValue() const;
 
   /// Get the alignment of this symbol as the actual value (not log 2).
   uint32_t getAlignment() const;
@@ -208,7 +243,7 @@ protected:
   friend class SymbolRef;
 
   virtual Expected<StringRef> getSymbolName(DataRefImpl Symb) const = 0;
-  std::error_code printSymbolName(raw_ostream &OS,
+  Error printSymbolName(raw_ostream &OS,
                                   DataRefImpl Symb) const override;
   virtual Expected<uint64_t> getSymbolAddress(DataRefImpl Symb) const = 0;
   virtual uint64_t getSymbolValueImpl(DataRefImpl Symb) const = 0;
@@ -222,13 +257,12 @@ protected:
   friend class SectionRef;
 
   virtual void moveSectionNext(DataRefImpl &Sec) const = 0;
-  virtual std::error_code getSectionName(DataRefImpl Sec,
-                                         StringRef &Res) const = 0;
+  virtual Expected<StringRef> getSectionName(DataRefImpl Sec) const = 0;
   virtual uint64_t getSectionAddress(DataRefImpl Sec) const = 0;
   virtual uint64_t getSectionIndex(DataRefImpl Sec) const = 0;
   virtual uint64_t getSectionSize(DataRefImpl Sec) const = 0;
-  virtual std::error_code getSectionContents(DataRefImpl Sec,
-                                             StringRef &Res) const = 0;
+  virtual Expected<ArrayRef<uint8_t>>
+  getSectionContents(DataRefImpl Sec) const = 0;
   virtual uint64_t getSectionAlignment(DataRefImpl Sec) const = 0;
   virtual bool isSectionCompressed(DataRefImpl Sec) const = 0;
   virtual bool isSectionText(DataRefImpl Sec) const = 0;
@@ -238,9 +272,12 @@ protected:
   virtual bool isSectionVirtual(DataRefImpl Sec) const = 0;
   virtual bool isSectionBitcode(DataRefImpl Sec) const;
   virtual bool isSectionStripped(DataRefImpl Sec) const;
+  virtual bool isBerkeleyText(DataRefImpl Sec) const;
+  virtual bool isBerkeleyData(DataRefImpl Sec) const;
+  virtual bool isDebugSection(StringRef SectionName) const;
   virtual relocation_iterator section_rel_begin(DataRefImpl Sec) const = 0;
   virtual relocation_iterator section_rel_end(DataRefImpl Sec) const = 0;
-  virtual section_iterator getRelocatedSection(DataRefImpl Sec) const;
+  virtual Expected<section_iterator> getRelocatedSection(DataRefImpl Sec) const;
 
   // Same as above for RelocationRef.
   friend class RelocationRef;
@@ -251,14 +288,18 @@ protected:
   virtual void getRelocationTypeName(DataRefImpl Rel,
                                      SmallVectorImpl<char> &Result) const = 0;
 
-  uint64_t getSymbolValue(DataRefImpl Symb) const;
+  Expected<uint64_t> getSymbolValue(DataRefImpl Symb) const;
 
 public:
   ObjectFile() = delete;
   ObjectFile(const ObjectFile &other) = delete;
 
   uint64_t getCommonSymbolSize(DataRefImpl Symb) const {
-    assert(getSymbolFlags(Symb) & SymbolRef::SF_Common);
+    Expected<uint32_t> SymbolFlagsOrErr = getSymbolFlags(Symb);
+    if (!SymbolFlagsOrErr)
+      // TODO: Actually report errors helpfully.
+      report_fatal_error(SymbolFlagsOrErr.takeError());
+    assert(*SymbolFlagsOrErr & SymbolRef::SF_Common);
     return getCommonSymbolSizeImpl(Symb);
   }
 
@@ -286,6 +327,7 @@ public:
   virtual StringRef getFileFormatName() const = 0;
   virtual Triple::ArchType getArch() const = 0;
   virtual SubtargetFeatures getFeatures() const = 0;
+  virtual Optional<StringRef> tryGetCPUName() const { return None; };
   virtual void setARMSubArch(Triple &TheTriple) const { }
   virtual Expected<uint64_t> getStartAddress() const {
     return errorCodeToError(object_error::parse_failed);
@@ -293,11 +335,6 @@ public:
 
   /// Create a triple from the data in this object file.
   Triple makeTriple() const;
-
-  virtual std::error_code
-    getBuildAttributes(ARMAttributeParser &Attributes) const {
-      return std::error_code();
-    }
 
   /// Maps a debug section name to a standard DWARF section name.
   virtual StringRef mapDebugSectionName(StringRef Name) const { return Name; }
@@ -313,7 +350,8 @@ public:
   createObjectFile(StringRef ObjectPath);
 
   static Expected<std::unique_ptr<ObjectFile>>
-  createObjectFile(MemoryBufferRef Object, llvm::file_magic Type);
+  createObjectFile(MemoryBufferRef Object, llvm::file_magic Type,
+                   bool InitContent = true);
   static Expected<std::unique_ptr<ObjectFile>>
   createObjectFile(MemoryBufferRef Object) {
     return createObjectFile(Object, llvm::file_magic::unknown);
@@ -327,7 +365,10 @@ public:
   createCOFFObjectFile(MemoryBufferRef Object);
 
   static Expected<std::unique_ptr<ObjectFile>>
-  createELFObjectFile(MemoryBufferRef Object);
+  createXCOFFObjectFile(MemoryBufferRef Object, unsigned FileType);
+
+  static Expected<std::unique_ptr<ObjectFile>>
+  createELFObjectFile(MemoryBufferRef Object, bool InitContent = true);
 
   static Expected<std::unique_ptr<MachOObjectFile>>
   createMachOObjectFile(MemoryBufferRef Object,
@@ -350,7 +391,7 @@ inline Expected<uint64_t> SymbolRef::getAddress() const {
   return getObject()->getSymbolAddress(getRawDataRefImpl());
 }
 
-inline uint64_t SymbolRef::getValue() const {
+inline Expected<uint64_t> SymbolRef::getValue() const {
   return getObject()->getSymbolValue(getRawDataRefImpl());
 }
 
@@ -382,14 +423,16 @@ inline SectionRef::SectionRef(DataRefImpl SectionP,
   , OwningObject(Owner) {}
 
 inline bool SectionRef::operator==(const SectionRef &Other) const {
-  return SectionPimpl == Other.SectionPimpl;
+  return OwningObject == Other.OwningObject &&
+         SectionPimpl == Other.SectionPimpl;
 }
 
 inline bool SectionRef::operator!=(const SectionRef &Other) const {
-  return SectionPimpl != Other.SectionPimpl;
+  return !(*this == Other);
 }
 
 inline bool SectionRef::operator<(const SectionRef &Other) const {
+  assert(OwningObject == Other.OwningObject);
   return SectionPimpl < Other.SectionPimpl;
 }
 
@@ -397,8 +440,8 @@ inline void SectionRef::moveNext() {
   return OwningObject->moveSectionNext(SectionPimpl);
 }
 
-inline std::error_code SectionRef::getName(StringRef &Result) const {
-  return OwningObject->getSectionName(SectionPimpl, Result);
+inline Expected<StringRef> SectionRef::getName() const {
+  return OwningObject->getSectionName(SectionPimpl);
 }
 
 inline uint64_t SectionRef::getAddress() const {
@@ -413,8 +456,12 @@ inline uint64_t SectionRef::getSize() const {
   return OwningObject->getSectionSize(SectionPimpl);
 }
 
-inline std::error_code SectionRef::getContents(StringRef &Result) const {
-  return OwningObject->getSectionContents(SectionPimpl, Result);
+inline Expected<StringRef> SectionRef::getContents() const {
+  Expected<ArrayRef<uint8_t>> Res =
+      OwningObject->getSectionContents(SectionPimpl);
+  if (!Res)
+    return Res.takeError();
+  return StringRef(reinterpret_cast<const char *>(Res->data()), Res->size());
 }
 
 inline uint64_t SectionRef::getAlignment() const {
@@ -449,6 +496,18 @@ inline bool SectionRef::isStripped() const {
   return OwningObject->isSectionStripped(SectionPimpl);
 }
 
+inline bool SectionRef::isBerkeleyText() const {
+  return OwningObject->isBerkeleyText(SectionPimpl);
+}
+
+inline bool SectionRef::isBerkeleyData() const {
+  return OwningObject->isBerkeleyData(SectionPimpl);
+}
+
+inline bool SectionRef::isDebugSection(StringRef SectionName) const {
+  return OwningObject->isDebugSection(SectionName);
+}
+
 inline relocation_iterator SectionRef::relocation_begin() const {
   return OwningObject->section_rel_begin(SectionPimpl);
 }
@@ -457,7 +516,7 @@ inline relocation_iterator SectionRef::relocation_end() const {
   return OwningObject->section_rel_end(SectionPimpl);
 }
 
-inline section_iterator SectionRef::getRelocatedSection() const {
+inline Expected<section_iterator> SectionRef::getRelocatedSection() const {
   return OwningObject->getRelocatedSection(SectionPimpl);
 }
 
@@ -508,6 +567,25 @@ inline const ObjectFile *RelocationRef::getObject() const {
 }
 
 } // end namespace object
+
+template <> struct DenseMapInfo<object::SectionRef> {
+  static bool isEqual(const object::SectionRef &A,
+                      const object::SectionRef &B) {
+    return A == B;
+  }
+  static object::SectionRef getEmptyKey() {
+    return object::SectionRef({}, nullptr);
+  }
+  static object::SectionRef getTombstoneKey() {
+    object::DataRefImpl TS;
+    TS.p = (uintptr_t)-1;
+    return object::SectionRef(TS, nullptr);
+  }
+  static unsigned getHashValue(const object::SectionRef &Sec) {
+    object::DataRefImpl Raw = Sec.getRawDataRefImpl();
+    return hash_combine(Raw.p, Raw.d.a, Raw.d.b);
+  }
+};
 
 } // end namespace llvm
 

@@ -106,6 +106,22 @@ mi::IArray* Image_api_impl::create_mipmaps(
     return nullptr;
 }
 
+mi::neuraylib::ITile* Image_api_impl::clone_tile( const mi::neuraylib::ITile* tile) const
+{
+    if( !tile)
+        return nullptr;
+
+    return m_image_module->copy_tile( tile);
+}
+
+mi::neuraylib::ICanvas* Image_api_impl::clone_canvas( const mi::neuraylib::ICanvas* canvas) const
+{
+    if( !canvas)
+        return nullptr;
+
+    return m_image_module->copy_canvas( canvas);
+}
+
 mi::Sint32 Image_api_impl::read_raw_pixels(
     mi::Uint32 width,
     mi::Uint32 height,
@@ -222,6 +238,27 @@ bool Image_api_impl::supports_format_for_encoding( const char* image_format) con
     return plugin != nullptr;
 }
 
+void Image_api_impl::adjust_gamma(
+    mi::neuraylib::ITile* tile, mi::Float32 old_gamma, mi::Float32 new_gamma) const
+{
+    m_image_module->adjust_gamma( tile, old_gamma, new_gamma);
+}
+
+void Image_api_impl::adjust_gamma( mi::neuraylib::ICanvas* canvas, mi::Float32 new_gamma) const
+{
+    m_image_module->adjust_gamma( canvas, new_gamma);
+}
+
+mi::neuraylib::ITile* Image_api_impl::convert(
+    const mi::neuraylib::ITile* tile, const char* pixel_type) const
+{
+    const IMAGE::Pixel_type pixel_type_enum = IMAGE::convert_pixel_type_string_to_enum( pixel_type);
+    if( pixel_type_enum == IMAGE::PT_UNDEF)
+        return nullptr;
+
+    return m_image_module->convert_tile( tile, pixel_type_enum);
+}
+
 mi::neuraylib::ICanvas* Image_api_impl::convert(
     const mi::neuraylib::ICanvas* canvas, const char* pixel_type) const
 {
@@ -230,11 +267,6 @@ mi::neuraylib::ICanvas* Image_api_impl::convert(
         return nullptr;
 
     return m_image_module->convert_canvas( canvas, pixel_type_enum);
-}
-
-void Image_api_impl::adjust_gamma( mi::neuraylib::ICanvas* canvas, mi::Float32 new_gamma) const
-{
-    m_image_module->adjust_gamma( canvas, new_gamma);
 }
 
 mi::Uint32 Image_api_impl::get_components_per_pixel( const char* pixel_type) const

@@ -1,9 +1,8 @@
 //===- LoopLoadElimination.cpp - Loop Load Elimination Pass ---------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -28,14 +27,16 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
-#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/AssumptionCache.h"
+#include "llvm/Analysis/BlockFrequencyInfo.h"
 #include "llvm/Analysis/GlobalsModRef.h"
+#include "llvm/Analysis/LazyBlockFrequencyInfo.h"
 #include "llvm/Analysis/LoopAccessAnalysis.h"
 #include "llvm/Analysis/LoopAnalysisManager.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Analysis/MemorySSA.h"
+#include "llvm/Analysis/ProfileSummaryInfo.h"
 #include "llvm/Analysis/ScalarEvolution.h"
-#include "llvm/Analysis/ScalarEvolutionExpander.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
@@ -46,6 +47,7 @@
 #include "llvm/IR/PassManager.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
@@ -53,7 +55,10 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils.h"
+#include "llvm/Transforms/Utils/LoopSimplify.h"
 #include "llvm/Transforms/Utils/LoopVersioning.h"
+#include "llvm/Transforms/Utils/ScalarEvolutionExpander.h"
+#include "llvm/Transforms/Utils/SizeOpts.h"
 #include <algorithm>
 #include <cassert>
 #include <forward_list>
@@ -159,8 +164,9 @@ namespace {
 class LoadEliminationForLoop {
 public:
   LoadEliminationForLoop(Loop *L, LoopInfo *LI, const LoopAccessInfo &LAI,
-                         DominatorTree *DT)
-      : L(L), LI(LI), LAI(LAI), DT(DT), PSE(LAI.getPSE()) {}
+                         DominatorTree *DT, BlockFrequencyInfo *BFI,
+                         ProfileSummaryInfo* PSI)
+      : L(L), LI(LI), LAI(LAI), DT(DT), BFI(BFI), PSI(PSI), PSE(LAI.getPSE()) {}
 
   /// Look through the loop-carried and loop-independent dependences in
   /// this loop and find store->load dependences.
@@ -302,8 +308,8 @@ public:
   /// We need a check if one is a pointer for a candidate load and the other is
   /// a pointer for a possibly intervening store.
   bool needsChecking(unsigned PtrIdx1, unsigned PtrIdx2,
-                     const SmallPtrSet<Value *, 4> &PtrsWrittenOnFwdingPath,
-                     const std::set<Value *> &CandLoadPtrs) {
+                     const SmallPtrSetImpl<Value *> &PtrsWrittenOnFwdingPath,
+                     const SmallPtrSetImpl<Value *> &CandLoadPtrs) {
     Value *Ptr1 =
         LAI.getRuntimePointerChecking()->getPointerInfo(PtrIdx1).PointerValue;
     Value *Ptr2 =
@@ -371,24 +377,22 @@ public:
 
   /// Determine the pointer alias checks to prove that there are no
   /// intervening stores.
-  SmallVector<RuntimePointerChecking::PointerCheck, 4> collectMemchecks(
+  SmallVector<RuntimePointerCheck, 4> collectMemchecks(
       const SmallVectorImpl<StoreToLoadForwardingCandidate> &Candidates) {
 
     SmallPtrSet<Value *, 4> PtrsWrittenOnFwdingPath =
         findPointersWrittenOnForwardingPath(Candidates);
 
     // Collect the pointers of the candidate loads.
-    // FIXME: SmallPtrSet does not work with std::inserter.
-    std::set<Value *> CandLoadPtrs;
-    transform(Candidates,
-                   std::inserter(CandLoadPtrs, CandLoadPtrs.begin()),
-                   std::mem_fn(&StoreToLoadForwardingCandidate::getLoadPtr));
+    SmallPtrSet<Value *, 4> CandLoadPtrs;
+    for (const auto &Candidate : Candidates)
+      CandLoadPtrs.insert(Candidate.getLoadPtr());
 
     const auto &AllChecks = LAI.getRuntimePointerChecking()->getChecks();
-    SmallVector<RuntimePointerChecking::PointerCheck, 4> Checks;
+    SmallVector<RuntimePointerCheck, 4> Checks;
 
     copy_if(AllChecks, std::back_inserter(Checks),
-            [&](const RuntimePointerChecking::PointerCheck &Check) {
+            [&](const RuntimePointerCheck &Check) {
               for (auto PtrIdx1 : Check.first->Members)
                 for (auto PtrIdx2 : Check.second->Members)
                   if (needsChecking(PtrIdx1, PtrIdx2, PtrsWrittenOnFwdingPath,
@@ -426,11 +430,12 @@ public:
     Value *Ptr = Cand.Load->getPointerOperand();
     auto *PtrSCEV = cast<SCEVAddRecExpr>(PSE.getSCEV(Ptr));
     auto *PH = L->getLoopPreheader();
+    assert(PH && "Preheader should exist!");
     Value *InitialPtr = SEE.expandCodeFor(PtrSCEV->getStart(), Ptr->getType(),
                                           PH->getTerminator());
-    Value *Initial =
-        new LoadInst(InitialPtr, "load_initial", /* isVolatile */ false,
-                     Cand.Load->getAlignment(), PH->getTerminator());
+    Value *Initial = new LoadInst(
+        Cand.Load->getType(), InitialPtr, "load_initial",
+        /* isVolatile */ false, Cand.Load->getAlign(), PH->getTerminator());
 
     PHINode *PHI = PHINode::Create(Initial->getType(), 2, "store_forwarded",
                                    &L->getHeader()->front());
@@ -481,8 +486,7 @@ public:
 
     // Filter the candidates further.
     SmallVector<StoreToLoadForwardingCandidate, 4> Candidates;
-    unsigned NumForwarding = 0;
-    for (const StoreToLoadForwardingCandidate Cand : StoreToLoadDependences) {
+    for (const StoreToLoadForwardingCandidate &Cand : StoreToLoadDependences) {
       LLVM_DEBUG(dbgs() << "Candidate " << Cand);
 
       // Make sure that the stored values is available everywhere in the loop in
@@ -501,20 +505,24 @@ public:
       if (!Cand.isDependenceDistanceOfOne(PSE, L))
         continue;
 
-      ++NumForwarding;
+      assert(isa<SCEVAddRecExpr>(PSE.getSCEV(Cand.Load->getPointerOperand())) &&
+             "Loading from something other than indvar?");
+      assert(
+          isa<SCEVAddRecExpr>(PSE.getSCEV(Cand.Store->getPointerOperand())) &&
+          "Storing to something other than indvar?");
+
+      Candidates.push_back(Cand);
       LLVM_DEBUG(
           dbgs()
-          << NumForwarding
+          << Candidates.size()
           << ". Valid store-to-load forwarding across the loop backedge\n");
-      Candidates.push_back(Cand);
     }
     if (Candidates.empty())
       return false;
 
     // Check intervening may-alias stores.  These need runtime checks for alias
     // disambiguation.
-    SmallVector<RuntimePointerChecking::PointerCheck, 4> Checks =
-        collectMemchecks(Candidates);
+    SmallVector<RuntimePointerCheck, 4> Checks = collectMemchecks(Candidates);
 
     // Too many checks are likely to outweigh the benefits of forwarding.
     if (Checks.size() > Candidates.size() * CheckPerElim) {
@@ -528,26 +536,46 @@ public:
       return false;
     }
 
+    if (!L->isLoopSimplifyForm()) {
+      LLVM_DEBUG(dbgs() << "Loop is not is loop-simplify form");
+      return false;
+    }
+
     if (!Checks.empty() || !LAI.getPSE().getUnionPredicate().isAlwaysTrue()) {
-      if (L->getHeader()->getParent()->optForSize()) {
+      if (LAI.hasConvergentOp()) {
+        LLVM_DEBUG(dbgs() << "Versioning is needed but not allowed with "
+                             "convergent calls\n");
+        return false;
+      }
+
+      auto *HeaderBB = L->getHeader();
+      auto *F = HeaderBB->getParent();
+      bool OptForSize = F->hasOptSize() ||
+                        llvm::shouldOptimizeForSize(HeaderBB, PSI, BFI,
+                                                    PGSOQueryType::IRPass);
+      if (OptForSize) {
         LLVM_DEBUG(
             dbgs() << "Versioning is needed but not allowed when optimizing "
                       "for size.\n");
         return false;
       }
 
-      if (!L->isLoopSimplifyForm()) {
-        LLVM_DEBUG(dbgs() << "Loop is not is loop-simplify form");
-        return false;
-      }
-
       // Point of no-return, start the transformation.  First, version the loop
       // if necessary.
 
-      LoopVersioning LV(LAI, L, LI, DT, PSE.getSE(), false);
-      LV.setAliasChecks(std::move(Checks));
-      LV.setSCEVChecks(LAI.getPSE().getUnionPredicate());
+      LoopVersioning LV(LAI, Checks, L, LI, DT, PSE.getSE());
       LV.versionLoop();
+
+      // After versioning, some of the candidates' pointers could stop being
+      // SCEVAddRecs. We need to filter them out.
+      auto NoLongerGoodCandidate = [this](
+          const StoreToLoadForwardingCandidate &Cand) {
+        return !isa<SCEVAddRecExpr>(
+                    PSE.getSCEV(Cand.Load->getPointerOperand())) ||
+               !isa<SCEVAddRecExpr>(
+                    PSE.getSCEV(Cand.Store->getPointerOperand()));
+      };
+      llvm::erase_if(Candidates, NoLongerGoodCandidate);
     }
 
     // Next, propagate the value stored by the store to the users of the load.
@@ -556,7 +584,7 @@ public:
                      "storeforward");
     for (const auto &Cand : Candidates)
       propagateStoredValueToLoadUsers(Cand, SEE);
-    NumLoopLoadEliminted += NumForwarding;
+    NumLoopLoadEliminted += Candidates.size();
 
     return true;
   }
@@ -572,6 +600,8 @@ private:
   LoopInfo *LI;
   const LoopAccessInfo &LAI;
   DominatorTree *DT;
+  BlockFrequencyInfo *BFI;
+  ProfileSummaryInfo *PSI;
   PredicatedScalarEvolution PSE;
 };
 
@@ -579,6 +609,8 @@ private:
 
 static bool
 eliminateLoadsAcrossLoops(Function &F, LoopInfo &LI, DominatorTree &DT,
+                          BlockFrequencyInfo *BFI, ProfileSummaryInfo *PSI,
+                          ScalarEvolution *SE, AssumptionCache *AC,
                           function_ref<const LoopAccessInfo &(Loop &)> GetLAI) {
   // Build up a worklist of inner-loops to transform to avoid iterator
   // invalidation.
@@ -587,17 +619,23 @@ eliminateLoadsAcrossLoops(Function &F, LoopInfo &LI, DominatorTree &DT,
   // which merely optimizes the use of loads in a loop.
   SmallVector<Loop *, 8> Worklist;
 
+  bool Changed = false;
+
   for (Loop *TopLevelLoop : LI)
-    for (Loop *L : depth_first(TopLevelLoop))
+    for (Loop *L : depth_first(TopLevelLoop)) {
+      Changed |= simplifyLoop(L, &DT, &LI, SE, AC, /*MSSAU*/ nullptr, false);
       // We only handle inner-most loops.
-      if (L->empty())
+      if (L->isInnermost())
         Worklist.push_back(L);
+    }
 
   // Now walk the identified inner loops.
-  bool Changed = false;
   for (Loop *L : Worklist) {
+    // Match historical behavior
+    if (!L->isRotatedForm() || !L->getExitingBlock())
+      continue;
     // The actual work is performed by LoadEliminationForLoop.
-    LoadEliminationForLoop LEL(L, &LI, GetLAI(*L), &DT);
+    LoadEliminationForLoop LEL(L, &LI, GetLAI(*L), &DT, BFI, PSI);
     Changed |= LEL.processLoop();
   }
   return Changed;
@@ -622,10 +660,14 @@ public:
     auto &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
     auto &LAA = getAnalysis<LoopAccessLegacyAnalysis>();
     auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+    auto *PSI = &getAnalysis<ProfileSummaryInfoWrapperPass>().getPSI();
+    auto *BFI = (PSI && PSI->hasProfileSummary()) ?
+                &getAnalysis<LazyBlockFrequencyInfoPass>().getBFI() :
+                nullptr;
 
     // Process each loop nest in the function.
     return eliminateLoadsAcrossLoops(
-        F, LI, DT,
+        F, LI, DT, BFI, PSI, /*SE*/ nullptr, /*AC*/ nullptr,
         [&LAA](Loop &L) -> const LoopAccessInfo & { return LAA.getInfo(&L); });
   }
 
@@ -638,6 +680,8 @@ public:
     AU.addRequired<DominatorTreeWrapperPass>();
     AU.addPreserved<DominatorTreeWrapperPass>();
     AU.addPreserved<GlobalsAAWrapperPass>();
+    AU.addRequired<ProfileSummaryInfoWrapperPass>();
+    LazyBlockFrequencyInfoPass::getLazyBFIAnalysisUsage(AU);
   }
 };
 
@@ -653,6 +697,8 @@ INITIALIZE_PASS_DEPENDENCY(LoopAccessLegacyAnalysis)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(ScalarEvolutionWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(LoopSimplify)
+INITIALIZE_PASS_DEPENDENCY(ProfileSummaryInfoWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(LazyBlockFrequencyInfoPass)
 INITIALIZE_PASS_END(LoopLoadElimination, LLE_OPTION, LLE_name, false, false)
 
 FunctionPass *llvm::createLoopLoadEliminationPass() {
@@ -668,12 +714,19 @@ PreservedAnalyses LoopLoadEliminationPass::run(Function &F,
   auto &TLI = AM.getResult<TargetLibraryAnalysis>(F);
   auto &AA = AM.getResult<AAManager>(F);
   auto &AC = AM.getResult<AssumptionAnalysis>(F);
+  auto &MAMProxy = AM.getResult<ModuleAnalysisManagerFunctionProxy>(F);
+  auto *PSI = MAMProxy.getCachedResult<ProfileSummaryAnalysis>(*F.getParent());
+  auto *BFI = (PSI && PSI->hasProfileSummary()) ?
+      &AM.getResult<BlockFrequencyAnalysis>(F) : nullptr;
+  MemorySSA *MSSA = EnableMSSALoopDependency
+                        ? &AM.getResult<MemorySSAAnalysis>(F).getMSSA()
+                        : nullptr;
 
   auto &LAM = AM.getResult<LoopAnalysisManagerFunctionProxy>(F).getManager();
   bool Changed = eliminateLoadsAcrossLoops(
-      F, LI, DT, [&](Loop &L) -> const LoopAccessInfo & {
-        LoopStandardAnalysisResults AR = {AA, AC,  DT,  LI,
-                                          SE, TLI, TTI, nullptr};
+      F, LI, DT, BFI, PSI, &SE, &AC, [&](Loop &L) -> const LoopAccessInfo & {
+        LoopStandardAnalysisResults AR = {AA,  AC,  DT,      LI,  SE,
+                                          TLI, TTI, nullptr, MSSA};
         return LAM.getResult<LoopAccessAnalysis>(L, AR);
       });
 

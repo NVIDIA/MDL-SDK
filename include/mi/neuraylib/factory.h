@@ -131,6 +131,8 @@ T* mi_factory( void* symbol)
 }
 
 }
-/*@}*/ // end group mi_neuray_ineuray
+/**
+@}
+*/ // end group mi_neuray_ineuray
 
 #endif // MI_NEURAYLIB_FACTORY_H

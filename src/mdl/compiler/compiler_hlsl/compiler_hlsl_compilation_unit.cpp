@@ -31,6 +31,7 @@
 #include "mdl/compiler/compilercore/compilercore_memory_arena.h"
 
 #include "compiler_hlsl_compilation_unit.h"
+#include "compiler_hlsl_intrinsics.h"
 #include "compiler_hlsl_optimizer.h"
 #include "compiler_hlsl_tools.h"
 
@@ -57,6 +58,7 @@ Compilation_unit::Compilation_unit(
 , m_decls()
 , m_ref_files(alloc)
 {
+    enter_hlsl_intrinsics(*this);
 }
 
 // Get the absolute name of the file from which this unit was loaded.

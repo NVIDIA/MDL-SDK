@@ -1,9 +1,8 @@
 //===-- llvm/ADT/APSInt.h - Arbitrary Precision Signed Int -----*- C++ -*--===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -19,6 +18,7 @@
 
 namespace llvm {
 
+/// An arbitrary precision integer that knows its signedness.
 class LLVM_NODISCARD APSInt : public APInt {
   bool IsUnsigned;
 
@@ -26,8 +26,7 @@ public:
   /// Default constructor that creates an uninitialized APInt.
   explicit APSInt() : IsUnsigned(false) {}
 
-  /// APSInt ctor - Create an APSInt with the specified width, default to
-  /// unsigned.
+  /// Create an APSInt with the specified width, default to unsigned.
   explicit APSInt(uint32_t BitWidth, bool isUnsigned = true)
    : APInt(BitWidth, 0), IsUnsigned(isUnsigned) {}
 
@@ -42,6 +41,24 @@ public:
   ///
   /// \param Str the string to be interpreted.
   explicit APSInt(StringRef Str);
+
+  /// Determine sign of this APSInt.
+  ///
+  /// \returns true if this APSInt is negative, false otherwise
+  bool isNegative() const { return isSigned() && APInt::isNegative(); }
+
+  /// Determine if this APSInt Value is non-negative (>= 0)
+  ///
+  /// \returns true if this APSInt is non-negative, false otherwise
+  bool isNonNegative() const { return !isNegative(); }
+
+  /// Determine if this APSInt Value is positive.
+  ///
+  /// This tests if the value of this APSInt is positive (> 0). Note
+  /// that 0 is not a positive value.
+  ///
+  /// \returns true if this APSInt is positive.
+  bool isStrictlyPositive() const { return isNonNegative() && !isNullValue(); }
 
   APSInt &operator=(APInt RHS) {
     // Retain our current sign.
@@ -61,11 +78,11 @@ public:
   void setIsUnsigned(bool Val) { IsUnsigned = Val; }
   void setIsSigned(bool Val) { IsUnsigned = !Val; }
 
-  /// toString - Append this APSInt to the specified SmallString.
+  /// Append this APSInt to the specified SmallString.
   void toString(SmallVectorImpl<char> &Str, unsigned Radix = 10) const {
     APInt::toString(Str, Radix, isSigned());
   }
-  /// toString - Converts an APInt to a std::string.  This is an inefficient
+  /// Converts an APInt to a std::string.  This is an inefficient
   /// method; you should prefer passing in a SmallString instead.
   std::string toString(unsigned Radix) const {
     return APInt::toString(Radix, isSigned());
@@ -265,15 +282,15 @@ public:
     return APSInt(~static_cast<const APInt&>(*this), IsUnsigned);
   }
 
-  /// getMaxValue - Return the APSInt representing the maximum integer value
-  ///  with the given bit width and signedness.
+  /// Return the APSInt representing the maximum integer value with the given
+  /// bit width and signedness.
   static APSInt getMaxValue(uint32_t numBits, bool Unsigned) {
     return APSInt(Unsigned ? APInt::getMaxValue(numBits)
                            : APInt::getSignedMaxValue(numBits), Unsigned);
   }
 
-  /// getMinValue - Return the APSInt representing the minimum integer value
-  ///  with the given bit width and signedness.
+  /// Return the APSInt representing the minimum integer value with the given
+  /// bit width and signedness.
   static APSInt getMinValue(uint32_t numBits, bool Unsigned) {
     return APSInt(Unsigned ? APInt::getMinValue(numBits)
                            : APInt::getSignedMinValue(numBits), Unsigned);
@@ -314,8 +331,8 @@ public:
   static APSInt get(int64_t X) { return APSInt(APInt(64, X), false); }
   static APSInt getUnsigned(uint64_t X) { return APSInt(APInt(64, X), true); }
 
-  /// Profile - Used to insert APSInt objects, or objects that contain APSInt
-  ///  objects, into FoldingSets.
+  /// Used to insert APSInt objects, or objects that contain APSInt objects,
+  /// into FoldingSets.
   void Profile(FoldingSetNodeID& ID) const;
 };
 

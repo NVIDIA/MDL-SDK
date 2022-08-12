@@ -176,6 +176,13 @@ public:
     /// If true, derivatives should be calculated.
     bool get_calc_derivatives() const { return m_calc_derivatives; }
 
+    // Target is as structured language language.
+    bool target_is_structured_language() const {
+        return
+            m_kind == mi::neuraylib::IMdl_backend_api::MB_GLSL ||
+            m_kind == mi::neuraylib::IMdl_backend_api::MB_HLSL;
+    }
+
 private:
     /// The backend kind.
     mi::neuraylib::IMdl_backend_api::Mdl_backend_kind m_kind;
@@ -216,7 +223,6 @@ private:
     /// If true, use the builtin resource handler when running native code
     bool m_use_builtin_resource_handler;
 };
-
 
 /// Implementation of #mi::neuraylib::ITarget_argument_block.
 class Target_argument_block : public

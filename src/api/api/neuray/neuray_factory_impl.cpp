@@ -418,7 +418,7 @@ mi::Uint32 Factory_impl::assign_from_to(
 
                 // for untyped maps use the type name of the source element
                 std::string element_name = target_element_name;
-                if( element_name == "Interface") {
+                if( target_element_name == "Interface") {
                     mi::base::Handle<const mi::IData> source_value_data(
                         source->get_value<mi::IData>( key));
                     if( source_value_data.is_valid_interface())
@@ -501,7 +501,7 @@ mi::Uint32 Factory_impl::assign_from_to( const mi::INumber* source, mi::INumber*
 {
     ASSERT( M_NEURAY_API, source && target);
 
-    std::string target_type_name = target->get_type_name();
+    const std::string target_type_name = target->get_type_name();
 
     if( target_type_name == "Boolean")
         target->set_value( source->get_value<bool>());
@@ -1368,13 +1368,18 @@ mi::base::IInterface* Factory_impl::create_with_transaction(
     return transaction->create( type_name, argc, argv);
 }
 
+namespace {
+
 std::string get_prefix( mi::Size depth)
 {
     std::string prefix;
+    prefix.reserve( 4*depth);
     for( mi::Size i = 0; i < depth; i++)
         prefix += "    ";
     return prefix;
 }
+
+} // namespace 
 
 void Factory_impl::dump(
     mi::neuraylib::ITransaction* transaction,
@@ -1388,7 +1393,7 @@ void Factory_impl::dump(
 
     if( name) {
         const char* type_name = data->get_type_name();
-        s << type_name << " " << name << " = ";
+        s << type_name << ' ' << name << " = ";
     }
 
     switch( uuid_hash32( data->get_iid())) {
@@ -1496,7 +1501,7 @@ void Factory_impl::dump(
 
         case mi::IString::IID::hash32: {
             mi::base::Handle<const mi::IString> string( data->get_interface<mi::IString>());
-            s << "\"" << string->get_c_str() << "\"";
+            s << '\"' << string->get_c_str() << '\"';
             return;
         }
 
@@ -1504,7 +1509,7 @@ void Factory_impl::dump(
             mi::base::Handle<const mi::IRef> ref( data->get_interface<mi::IRef>());
             const char* reference_name = ref->get_reference_name();
             if( reference_name)
-                s << "points to \"" << reference_name << "\"";
+                s << "points to \"" << reference_name << '\"';
             else
                 s << "(unset)";
             return;
@@ -1512,7 +1517,7 @@ void Factory_impl::dump(
 
         case mi::IEnum::IID::hash32: {
             mi::base::Handle<const mi::IEnum> e( data->get_interface<mi::IEnum>());
-            s << e->get_value_by_name() << "(" << e->get_value() << ")";
+            s << e->get_value_by_name() << '(' << e->get_value() << ')';
             return;
         }
 
@@ -1524,29 +1529,29 @@ void Factory_impl::dump(
         case mi::IColor::IID::hash32: {
             mi::base::Handle<const mi::IColor> color( data->get_interface<mi::IColor>());
             mi::math::Color c = color->get_value();
-            s << "(" << c.r << ", " << c.g << ", " << c.b << ")";
+            s << '(' << c.r << ", " << c.g << ", " << c.b << ')';
             return;
         }
 
         case mi::IColor3::IID::hash32: {
             mi::base::Handle<const mi::IColor3> color( data->get_interface<mi::IColor3>());
             mi::math::Color c = color->get_value();
-            s << "(" << c.r << ", " << c.g << ", " << c.b << ")";
+            s << '(' << c.r << ", " << c.g << ", " << c.b << ')';
             return;
         }
 
         case mi::ISpectrum::IID::hash32: {
             mi::base::Handle<const mi::ISpectrum> spectrum( data->get_interface<mi::ISpectrum>());
             mi::math::Spectrum sp = spectrum->get_value();
-            s << "(" << sp.get( 0) << ", " << sp.get( 1) << ", " << sp.get( 2) << ")";
+            s << '(' << sp.get( 0) << ", " << sp.get( 1) << ", " << sp.get( 2) << ')';
             return;
         }
 
         case mi::IBbox3::IID::hash32: {
             mi::base::Handle<const mi::IBbox3> bbox( data->get_interface<mi::IBbox3>());
             mi::Bbox3 b = bbox->get_value();
-            s << "(" << b.min[0] << ", " << b.min[1] << ", " << b.min[2] << ") - "
-              << "(" << b.max[0] << ", " << b.max[1] << ", " << b.max[2] << ")";
+            s << '(' << b.min[0] << ", " << b.min[1] << ", " << b.min[2] << ") - "
+              << '(' << b.max[0] << ", " << b.max[1] << ", " << b.max[2] << ')';
             return;
         }
 
@@ -1562,13 +1567,13 @@ void Factory_impl::dump(
         case mi::IBoolean_4_2::IID::hash32:
         case mi::IBoolean_4_3::IID::hash32:
         case mi::IBoolean_4_4::IID::hash32: {
-            s << "(";
+            s << '(';
             for( mi::Size i = 0; i < collection->get_length(); i++) {
                 mi::base::Handle<const mi::IBoolean> field(
                     collection->get_value<mi::IBoolean>( i));
                 s << (i > 0 ? ", " : "") << field->get_value<bool>();
             }
-            s << ")";
+            s << ')';
             return;
         }
 
@@ -1584,13 +1589,13 @@ void Factory_impl::dump(
         case mi::ISint32_4_2::IID::hash32:
         case mi::ISint32_4_3::IID::hash32:
         case mi::ISint32_4_4::IID::hash32: {
-            s << "(";
+            s << '(';
             for( mi::Size i = 0; i < collection->get_length(); i++) {
                 mi::base::Handle<const mi::ISint32> field(
                     collection->get_value<mi::ISint32>( i));
                 s << (i > 0 ? ", " : "") << field->get_value<mi::Sint32>();
             }
-            s << ")";
+            s << ')';
             return;
         }
 
@@ -1606,13 +1611,13 @@ void Factory_impl::dump(
         case mi::IUint32_4_2::IID::hash32:
         case mi::IUint32_4_3::IID::hash32:
         case mi::IUint32_4_4::IID::hash32: {
-            s << "(";
+            s << '(';
             for( mi::Size i = 0; i < collection->get_length(); i++) {
                 mi::base::Handle<const mi::IUint32> field(
                     collection->get_value<mi::IUint32>( i));
                 s << (i > 0 ? ", " : "") << field->get_value<mi::Uint32>();
             }
-            s << ")";
+            s << ')';
             return;
         }
 
@@ -1628,13 +1633,13 @@ void Factory_impl::dump(
         case mi::IFloat32_4_2::IID::hash32:
         case mi::IFloat32_4_3::IID::hash32:
         case mi::IFloat32_4_4::IID::hash32: {
-            s << "(";
+            s << '(';
             for( mi::Size i = 0; i < collection->get_length(); i++) {
                 mi::base::Handle<const mi::IFloat32> field(
                     collection->get_value<mi::IFloat32>( i));
                 s << (i > 0 ? ", " : "") << field->get_value<mi::Float32>();
             }
-            s << ")";
+            s << ')';
             return;
         }
 
@@ -1650,24 +1655,24 @@ void Factory_impl::dump(
         case mi::IFloat64_4_2::IID::hash32:
         case mi::IFloat64_4_3::IID::hash32:
         case mi::IFloat64_4_4::IID::hash32: {
-            s << "(";
+            s << '(';
             for( mi::Size i = 0; i < collection->get_length(); i++) {
                 mi::base::Handle<const mi::IFloat64> field(
                     collection->get_value<mi::IFloat64>( i));
                 s << (i > 0 ? ", " : "") << field->get_value<mi::Float64>();
             }
-            s << ")";
+            s << ')';
             return;
         }
 
         case mi::IMap::IID::hash32:
         case mi::IStructure::IID::hash32: {
-            s << "{";
+            s << '{';
             mi::Size length = collection->get_length();
             if( length > 0)
                 s << std::endl;
             else
-                s << " ";
+                s << ' ';
             for( mi::Size i = 0; i < length; i++) {
                 s << get_prefix( depth+1);
                 const char* key = collection->get_key( i);
@@ -1677,24 +1682,24 @@ void Factory_impl::dump(
                     dump( transaction, key, field_data.get(), depth+1, s);
                 else
                     dump_non_idata( transaction, key, field.get(), depth+1, s);
-                s << ";" << std::endl;
+                s << ';' << std::endl;
             }
             if( length > 0)
                 s << get_prefix( depth);
-            s << "}";
+            s << '}';
             return;
         }
 
         case mi::IDynamic_array::IID::hash32:
         case mi::IArray::IID::hash32: {
-            s << "{";
+            s << '{';
             mi::Size length =  collection->get_length();
             if( length > 0)
                 s << std::endl;
             else
-                s << " ";
+                s << ' ';
             for( mi::Size i = 0; i < length; i++) {
-                s << get_prefix( depth+1) << "[" << i << "] = ";
+                s << get_prefix( depth+1) << '[' << i << "] = ";
                 const char* key = collection->get_key( i);
                 mi::base::Handle<const mi::base::IInterface> field( collection->get_value( i));
                 mi::base::Handle<const mi::IData> field_data( field->get_interface<mi::IData>());
@@ -1702,11 +1707,11 @@ void Factory_impl::dump(
                     dump( transaction, key, field_data.get(), depth+1, s);
                 else
                     dump_non_idata( transaction, key, field.get(), depth+1, s);
-                s << ";" << std::endl;
+                s << ';' << std::endl;
             }
             if( length > 0)
                 s << get_prefix( depth);
-            s << "}";
+            s << '}';
             return;
         }
 

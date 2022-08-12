@@ -22,21 +22,22 @@ Compiling CUDA Code
 Prerequisites
 -------------
 
-CUDA is supported in llvm 3.9, but it's still in active development, so we
-recommend you `compile clang/LLVM from HEAD
-<http://llvm.org/docs/GettingStarted.html>`_.
+CUDA is supported since llvm 3.9. Clang currently supports CUDA 7.0 through
+10.1. If clang detects a newer CUDA version, it will issue a warning and will
+attempt to use detected CUDA SDK it as if it were CUDA-10.1.
 
-Before you build CUDA code, you'll need to have installed the appropriate
-driver for your nvidia GPU and the CUDA SDK.  See `NVIDIA's CUDA installation
-guide <https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html>`_
-for details.  Note that clang `does not support
-<https://llvm.org/bugs/show_bug.cgi?id=26966>`_ the CUDA toolkit as installed
-by many Linux package managers; you probably need to install nvidia's package.
+Before you build CUDA code, you'll need to have installed the CUDA SDK.  See
+`NVIDIA's CUDA installation guide
+<https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html>`_ for
+details.  Note that clang `maynot support
+<https://bugs.llvm.org/show_bug.cgi?id=26966>`_ the CUDA toolkit as installed by
+some Linux package managers. Clang does attempt to deal with specific details of
+CUDA installation on a handful of common Linux distributions, but in general the
+most reliable way to make it work is to install CUDA in a single directory from
+NVIDIA's `.run` package and specify its location via `--cuda-path=...` argument.
 
-You will need CUDA 7.0, 7.5, or 8.0 to compile with clang.
-
-CUDA compilation is supported on Linux, on MacOS as of 2016-11-18, and on
-Windows as of 2017-01-05.
+CUDA compilation is supported on Linux. Compilation on MacOS and Windows may or
+may not work and currently have no maintainers.
 
 Invoking clang
 --------------
@@ -73,7 +74,9 @@ run your program.
   Pass e.g. ``-L/usr/local/cuda/lib64`` if compiling in 64-bit mode; otherwise,
   pass e.g. ``-L/usr/local/cuda/lib``.  (In CUDA, the device code and host code
   always have the same pointer widths, so if you're compiling 64-bit code for
-  the host, you're also compiling 64-bit code for the device.)
+  the host, you're also compiling 64-bit code for the device.) Note that as of
+  v10.0 CUDA SDK `no longer supports compilation of 32-bit
+  applications <https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html#deprecated-features>`_.
 
 * ``<GPU arch>`` -- the `compute capability
   <https://developer.nvidia.com/cuda-gpus>`_ of your GPU. For example, if you
@@ -89,8 +92,7 @@ run your program.
 
 The `-L` and `-l` flags only need to be passed when linking.  When compiling,
 you may also need to pass ``--cuda-path=/path/to/cuda`` if you didn't install
-the CUDA SDK into ``/usr/local/cuda``, ``/usr/local/cuda-7.0``, or
-``/usr/local/cuda-7.5``.
+the CUDA SDK into ``/usr/local/cuda`` or ``/usr/local/cuda-X.Y``.
 
 Flags that control numerical code
 ---------------------------------
@@ -142,9 +144,9 @@ device side.
 ----------------------------
 
 In clang, ``math.h`` and ``cmath`` are available and `pass
-<https://github.com/llvm-mirror/test-suite/blob/master/External/CUDA/math_h.cu>`_
+<https://github.com/llvm/llvm-test-suite/blob/master/External/CUDA/math_h.cu>`_
 `tests
-<https://github.com/llvm-mirror/test-suite/blob/master/External/CUDA/cmath.cu>`_
+<https://github.com/llvm/llvm-test-suite/blob/master/External/CUDA/cmath.cu>`_
 adapted from libc++'s test suite.
 
 In nvcc ``math.h`` and ``cmath`` are mostly available.  Versions of ``::foof``
@@ -340,7 +342,7 @@ HD functions cannot be overloaded by H or D functions with the same signature:
 When resolving an overloaded function, clang considers the host/device
 attributes of the caller and callee.  These are used as a tiebreaker during
 overload resolution.  See `IdentifyCUDAPreference
-<http://clang.llvm.org/doxygen/SemaCUDA_8cpp.html>`_ for the full set of rules,
+<https://clang.llvm.org/doxygen/SemaCUDA_8cpp.html>`_ for the full set of rules,
 but at a high level they are:
 
  * D functions prefer to call other Ds.  HDs are given lower priority.
@@ -505,13 +507,13 @@ LLVM to make it generate good GPU code.  Among these changes are:
   reduce redundancy within straight-line code.
 
 * `Aggressive speculative execution
-  <http://llvm.org/docs/doxygen/html/SpeculativeExecution_8cpp_source.html>`_
+  <https://llvm.org/docs/doxygen/html/SpeculativeExecution_8cpp_source.html>`_
   -- This is mainly for promoting straight-line scalar optimizations, which are
   most effective on code along dominator paths.
 
 * `Memory space inference
-  <http://llvm.org/doxygen/NVPTXInferAddressSpaces_8cpp_source.html>`_ --
-  In PTX, we can operate on pointers that are in a paricular "address space"
+  <https://llvm.org/doxygen/NVPTXInferAddressSpaces_8cpp_source.html>`_ --
+  In PTX, we can operate on pointers that are in a particular "address space"
   (global, shared, constant, or local), or we can operate on pointers in the
   "generic" address space, which can point to anything.  Operations in a
   non-generic address space are faster, but pointers in CUDA are not explicitly
@@ -519,7 +521,7 @@ LLVM to make it generate good GPU code.  Among these changes are:
   possible.
 
 * `Bypassing 64-bit divides
-  <http://llvm.org/docs/doxygen/html/BypassSlowDivision_8cpp_source.html>`_ --
+  <https://llvm.org/docs/doxygen/html/BypassSlowDivision_8cpp_source.html>`_ --
   This was an existing optimization that we enabled for the PTX backend.
 
   64-bit integer divides are much slower than 32-bit ones on NVIDIA GPUs.
@@ -527,14 +529,14 @@ LLVM to make it generate good GPU code.  Among these changes are:
   which fit in 32-bits at runtime. This optimization provides a fast path for
   this common case.
 
-* Aggressive loop unrooling and function inlining -- Loop unrolling and
+* Aggressive loop unrolling and function inlining -- Loop unrolling and
   function inlining need to be more aggressive for GPUs than for CPUs because
   control flow transfer in GPU is more expensive. More aggressive unrolling and
   inlining also promote other optimizations, such as constant propagation and
   SROA, which sometimes speed up code by over 10x.
 
   (Programmers can force unrolling and inline using clang's `loop unrolling pragmas
-  <http://clang.llvm.org/docs/AttributeReference.html#pragma-unroll-pragma-nounroll>`_
+  <https://clang.llvm.org/docs/AttributeReference.html#pragma-unroll-pragma-nounroll>`_
   and ``__attribute__((always_inline))``.)
 
 Publication
@@ -548,12 +550,12 @@ The relevant tools are now just vanilla clang/LLVM.
 | Jingyue Wu, Artem Belevich, Eli Bendersky, Mark Heffernan, Chris Leary, Jacques Pienaar, Bjarke Roune, Rob Springer, Xuetian Weng, Robert Hundt
 | *Proceedings of the 2016 International Symposium on Code Generation and Optimization (CGO 2016)*
 |
-| `Slides from the CGO talk <http://wujingyue.com/docs/gpucc-talk.pdf>`_
+| `Slides from the CGO talk <http://wujingyue.github.io/docs/gpucc-talk.pdf>`_
 |
-| `Tutorial given at CGO <http://wujingyue.com/docs/gpucc-tutorial.pdf>`_
+| `Tutorial given at CGO <http://wujingyue.github.io/docs/gpucc-tutorial.pdf>`_
 
 Obtaining Help
 ==============
 
 To obtain help on LLVM in general and its CUDA support, see `the LLVM
-community <http://llvm.org/docs/#mailing-lists>`_.
+community <https://llvm.org/docs/#mailing-lists>`_.

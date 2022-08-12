@@ -1305,7 +1305,7 @@ template<> struct Matrix_type_traits<mi::Float64, 4, 3>
 template<> struct Matrix_type_traits<mi::Float64, 4, 4>
 { typedef mi::IFloat64_4_4 Interface_type; };
 
-/*@}*/ // end group mi_neuray_types
+/**@}*/ // end group mi_neuray_types
 
 } // namespace mi
 

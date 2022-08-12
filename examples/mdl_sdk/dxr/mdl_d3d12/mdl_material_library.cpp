@@ -292,7 +292,11 @@ bool Mdl_material_library::reload_material(
     std::string scene_directory = mi::examples::io::dirname(m_app->get_scene_path());
     const char* code = desc.regenerate_source_code(*m_sdk, scene_directory, context.get());
 
-    return reload_module(desc.get_module_db_name(), code, targets_changed);
+    const std::vector<std::string>& modules = desc.get_module_db_names();
+    bool success = true;
+    for(const auto& module_db_name : modules)
+        success &= reload_module(module_db_name, code, targets_changed);
+    return success;
 }
 
 // ------------------------------------------------------------------------------------------------

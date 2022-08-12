@@ -1,9 +1,8 @@
 //===-- llvm-jitlistener.cpp - Utility for testing MCJIT event listener ---===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -89,6 +88,46 @@ int NotifyEvent(iJIT_JVM_EVENT EventType, void *EventSpecificData) {
   return 0;
 }
 
+int ittNotifyInfo(IttEventType EventType, const char *Name, unsigned int Size) {
+  switch (EventType) {
+  case LoadBinaryModule: {
+    if (!Name) {
+      errs() << "Error: The IttNotify event listener did not provide a module "
+                "name.";
+      return -1;
+    }
+    outs() << "Module loaded : Name = " << Name << ", Size = " << Size << "\n";
+  } break;
+  case LoadBinarySection: {
+    if (!Name) {
+      errs() << "Error: The IttNotify event listener did not provide a section "
+                "name.";
+      return -1;
+    }
+    outs() << "Loaded section : Name = " << Name << ", Size = " << Size << "\n";
+  } break;
+  case UnloadBinaryModule: {
+    if (!Name) {
+      errs() << "Error: The IttNotify event listener did not provide a module "
+                "name.";
+      return -1;
+    }
+    outs() << "Module unloaded : Name = " << Name << ", Size = " << Size
+           << "\n";
+  } break;
+  case UnloadBinarySection: {
+    if (!Name) {
+      errs() << "Error: The IttNotify event listener did not provide a section "
+                "name.";
+      return -1;
+    }
+    outs() << "Unloaded section : Name = " << Name << ", Size = " << Size
+           << "\n";
+  } break;
+  }
+  return 0;
+}
+
 iJIT_IsProfilingActiveFlags IsProfilingActive(void) {
   // for testing, pretend we have an Intel Parallel Amplifier XE 2011
   // instance attached
@@ -156,7 +195,8 @@ public:
 
     std::unique_ptr<llvm::JITEventListener> Listener(
         JITEventListener::createIntelJITEventListener(new IntelJITEventsWrapper(
-            NotifyEvent, 0, IsProfilingActive, 0, 0, GetNewMethodID)));
+            NotifyEvent, ittNotifyInfo, 0, IsProfilingActive, 0, 0,
+            GetNewMethodID)));
 
     TheJIT->RegisterJITEventListener(Listener.get());
 

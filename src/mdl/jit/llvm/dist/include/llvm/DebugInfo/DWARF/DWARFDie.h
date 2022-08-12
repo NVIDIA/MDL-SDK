@@ -1,9 +1,8 @@
 //===- DWARFDie.h -----------------------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -19,6 +18,7 @@
 #include "llvm/DebugInfo/DWARF/DWARFAddressRange.h"
 #include "llvm/DebugInfo/DWARF/DWARFAttribute.h"
 #include "llvm/DebugInfo/DWARF/DWARFDebugInfoEntry.h"
+#include "llvm/DebugInfo/DWARF/DWARFDebugLoc.h"
 #include <cassert>
 #include <cstdint>
 #include <iterator>
@@ -64,7 +64,7 @@ public:
   /// Get the absolute offset into the debug info or types section.
   ///
   /// \returns the DIE offset or -1U if invalid.
-  uint32_t getOffset() const {
+  uint64_t getOffset() const {
     assert(isValid() && "must check validity prior to calling");
     return Die->getOffset();
   }
@@ -180,6 +180,7 @@ public:
   /// \returns a valid DWARFDie instance if the attribute exists, or an invalid
   /// DWARFDie object if it doesn't.
   DWARFDie getAttributeValueAsReferencedDie(dwarf::Attribute Attr) const;
+  DWARFDie getAttributeValueAsReferencedDie(const DWARFFormValue &V) const;
 
   /// Extract the range base attribute from this DIE as absolute section offset.
   ///
@@ -188,6 +189,7 @@ public:
   ///
   /// \returns anm optional absolute section offset value for the attribute.
   Optional<uint64_t> getRangesBaseAttribute() const;
+  Optional<uint64_t> getLocBaseAttribute() const;
 
   /// Get the DW_AT_high_pc attribute value as an address.
   ///
@@ -230,21 +232,37 @@ public:
 
   bool addressRangeContainsAddress(const uint64_t Address) const;
 
+  Expected<DWARFLocationExpressionsVector>
+  getLocations(dwarf::Attribute Attr) const;
+
   /// If a DIE represents a subprogram (or inlined subroutine), returns its
   /// mangled name (or short name, if mangled is missing). This name may be
   /// fetched from specification or abstract origin for this subprogram.
   /// Returns null if no name is found.
   const char *getSubroutineName(DINameKind Kind) const;
 
-  /// Return the DIE name resolving DW_AT_sepcification or DW_AT_abstract_origin
-  /// references if necessary. Returns null if no name is found.
+  /// Return the DIE name resolving DW_AT_specification or DW_AT_abstract_origin
+  /// references if necessary. For the LinkageName case it additionaly searches
+  /// for ShortName if LinkageName is not found.
+  /// Returns null if no name is found.
   const char *getName(DINameKind Kind) const;
+
+  /// Return the DIE short name resolving DW_AT_specification or
+  /// DW_AT_abstract_origin references if necessary. Returns null if no name
+  /// is found.
+  const char *getShortName() const;
+
+  /// Return the DIE linkage name resolving DW_AT_specification or
+  /// DW_AT_abstract_origin references if necessary. Returns null if no name
+  /// is found.
+  const char *getLinkageName() const;
 
   /// Returns the declaration line (start line) for a DIE, assuming it specifies
   /// a subprogram. This may be fetched from specification or abstract origin
   /// for this subprogram by resolving DW_AT_sepcification or
   /// DW_AT_abstract_origin references if necessary.
   uint64_t getDeclLine() const;
+  std::string getDeclFile(DILineInfoSpecifier::FileLineInfoKind Kind) const;
 
   /// Retrieves values of DW_AT_call_file, DW_AT_call_line and DW_AT_call_column
   /// from DIE (or zeroes if they are missing). This function looks for
@@ -364,11 +382,6 @@ inline bool operator==(const DWARFDie::iterator &LHS,
   return LHS.Die == RHS.Die;
 }
 
-inline bool operator!=(const DWARFDie::iterator &LHS,
-                       const DWARFDie::iterator &RHS) {
-  return !(LHS == RHS);
-}
-
 // These inline functions must follow the DWARFDie::iterator definition above
 // as they use functions from that class.
 inline DWARFDie::iterator DWARFDie::begin() const {
@@ -402,6 +415,10 @@ public:
       : Die(It.Die), AtEnd(!It.Die.getPreviousSibling()) {
     if (!AtEnd)
       Die = Die.getPreviousSibling();
+  }
+
+  llvm::DWARFDie::iterator base() const {
+    return llvm::DWARFDie::iterator(AtEnd ? Die : Die.getSibling());
   }
 
   reverse_iterator<llvm::DWARFDie::iterator> &operator++() {

@@ -257,7 +257,7 @@ std::string Ospath::normpath_v2(const std::string& path)
     }
 
     // convert result_components into a string
-    std::string result = result_components.empty() ? "" : result_components[0];
+    std::string result = result_components.empty() ? std::string() : result_components[0];
     for (size_t i = 1; i < result_components.size(); ++i)
         result += separator + result_components[i];
 
@@ -450,11 +450,12 @@ std::string get_known_folder(const KNOWNFOLDERID& id)
         return std::string();
     
     // convert from wstring to UTF8 string
-    std::wstring s(knownFolderPath);
-    int slength = (int)s.length();
-    int len = WideCharToMultiByte(CP_UTF8, 0, s.c_str(), slength, 0, 0, 0, 0);
-    std::string result = std::string(len, '\0');
-    WideCharToMultiByte(CP_UTF8, 0, s.c_str(), slength, &result[0], len, 0, 0);
+    const std::wstring s(knownFolderPath);
+    const int slength = (int)s.length();
+    const int len = WideCharToMultiByte(CP_UTF8, 0, s.c_str(), slength, 0, 0, 0, 0);
+    std::string result;
+    result.resize(len, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, s.c_str(), slength, result.data(), len, 0, 0);
     CoTaskMemFree(static_cast<void*>(knownFolderPath));
 
     return result;

@@ -1,9 +1,8 @@
 //===- TpiStreamBuilder.h - PDB Tpi Stream Creation -------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -55,16 +54,20 @@ public:
 
   void setVersionHeader(PdbRaw_TpiVer Version);
   void addTypeRecord(ArrayRef<uint8_t> Type, Optional<uint32_t> Hash);
+  void addTypeRecords(ArrayRef<uint8_t> Types, ArrayRef<uint16_t> Sizes,
+                      ArrayRef<uint32_t> Hashes);
 
   Error finalizeMsfLayout();
 
-  uint32_t getRecordCount() const { return TypeRecords.size(); }
+  uint32_t getRecordCount() const { return TypeRecordCount; }
 
   Error commit(const msf::MSFLayout &Layout, WritableBinaryStreamRef Buffer);
 
   uint32_t calculateSerializedLength();
 
 private:
+  void updateTypeIndexOffsets(ArrayRef<uint16_t> Sizes);
+
   uint32_t calculateHashBufferSize() const;
   uint32_t calculateIndexOffsetSize() const;
   Error finalize();
@@ -72,10 +75,11 @@ private:
   msf::MSFBuilder &Msf;
   BumpPtrAllocator &Allocator;
 
+  uint32_t TypeRecordCount = 0;
   size_t TypeRecordBytes = 0;
 
   PdbRaw_TpiVer VerHeader = PdbRaw_TpiVer::PdbTpiV80;
-  std::vector<ArrayRef<uint8_t>> TypeRecords;
+  std::vector<ArrayRef<uint8_t>> TypeRecBuffers;
   std::vector<uint32_t> TypeHashes;
   std::vector<codeview::TypeIndexOffset> TypeIndexOffsets;
   uint32_t HashStreamIndex = kInvalidStreamIndex;

@@ -243,6 +243,7 @@ mi::Sint32 Neuray_impl::start( bool blocking)
     result = m_mdl_configuration_impl->start();     CHECK_RESULT;
     result = m_mdl_discovery_api_impl->start();     CHECK_RESULT;
     result = m_mdl_evaluator_api_impl->start();     CHECK_RESULT;
+    result = m_mdl_factory_impl->start();           CHECK_RESULT;
     result = m_mdl_i18n_configuration_impl->start();CHECK_RESULT;
     result = m_mdl_impexp_api_impl->start();        CHECK_RESULT;
     result = m_mdle_api_impl->start();              CHECK_RESULT;
@@ -306,6 +307,7 @@ mi::Sint32 Neuray_impl::shutdown( bool blocking)
     result = m_mdl_configuration_impl->shutdown();      CHECK_RESULT;
     result = m_mdl_discovery_api_impl->shutdown();      CHECK_RESULT;
     result = m_mdl_evaluator_api_impl->shutdown();      CHECK_RESULT;
+    result = m_mdl_factory_impl->shutdown();            CHECK_RESULT;
     result = m_mdl_i18n_configuration_impl->shutdown(); CHECK_RESULT;
     result = m_mdl_impexp_api_impl->shutdown();         CHECK_RESULT;
     result = m_mdle_api_impl->shutdown();               CHECK_RESULT;

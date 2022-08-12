@@ -173,6 +173,7 @@ public:
 
     /// Set the literal value.
     void set_value(IValue const *value) MDL_FINAL {
+        MDL_ASSERT(value != NULL && !is<IValue_bad>(value));
         m_value = value;
         Base::set_type(value->get_type());
     }
@@ -205,6 +206,7 @@ public:
     : Base()
     , m_value(value)
     {
+        MDL_ASSERT(value != NULL && !is<IValue_bad>(value));
         // automatically set the type
         Base::set_type(value->get_type());
     }

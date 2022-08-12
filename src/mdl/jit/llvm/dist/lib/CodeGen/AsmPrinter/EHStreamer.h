@@ -1,9 +1,8 @@
 //===- EHStreamer.h - Exception Handling Directive Streamer -----*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -14,8 +13,8 @@
 #ifndef LLVM_LIB_CODEGEN_ASMPRINTER_EHSTREAMER_H
 #define LLVM_LIB_CODEGEN_ASMPRINTER_EHSTREAMER_H
 
-#include "AsmPrinterHandler.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/CodeGen/AsmPrinterHandler.h"
 #include "llvm/Support/Compiler.h"
 
 namespace llvm {
@@ -70,24 +69,50 @@ protected:
     unsigned Action;
   };
 
+  /// Structure describing a contiguous range of call-sites which reside
+  /// in the same procedure fragment. With -fbasic-block-sections, there will
+  /// be one call site range per basic block section. Otherwise, we will have
+  /// one call site range containing all the call sites in the function.
+  struct CallSiteRange {
+    // Symbol marking the beginning of the precedure fragment.
+    MCSymbol *FragmentBeginLabel = nullptr;
+    // Symbol marking the end of the procedure fragment.
+    MCSymbol *FragmentEndLabel = nullptr;
+    // LSDA symbol for this call-site range.
+    MCSymbol *ExceptionLabel = nullptr;
+    // Index of the first call-site entry in the call-site table which
+    // belongs to this range.
+    size_t CallSiteBeginIdx = 0;
+    // Index just after the last call-site entry in the call-site table which
+    // belongs to this range.
+    size_t CallSiteEndIdx = 0;
+    // Whether this is the call-site range containing all the landing pads.
+    bool IsLPRange = false;
+  };
+
   /// Compute the actions table and gather the first action index for each
   /// landing pad site.
-  void computeActionsTable(const SmallVectorImpl<const LandingPadInfo *> &LandingPads,
-                           SmallVectorImpl<ActionEntry> &Actions,
-                           SmallVectorImpl<unsigned> &FirstActions);
+  void computeActionsTable(
+      const SmallVectorImpl<const LandingPadInfo *> &LandingPads,
+      SmallVectorImpl<ActionEntry> &Actions,
+      SmallVectorImpl<unsigned> &FirstActions);
 
   void computePadMap(const SmallVectorImpl<const LandingPadInfo *> &LandingPads,
                      RangeMapType &PadMap);
 
-  /// Compute the call-site table.  The entry for an invoke has a try-range
-  /// containing the call, a non-zero landing pad and an appropriate action.
-  /// The entry for an ordinary call has a try-range containing the call and
-  /// zero for the landing pad and the action.  Calls marked 'nounwind' have
-  /// no entry and must not be contained in the try-range of any entry - they
-  /// form gaps in the table.  Entries must be ordered by try-range address.
-  void computeCallSiteTable(SmallVectorImpl<CallSiteEntry> &CallSites,
-                            const SmallVectorImpl<const LandingPadInfo *> &LandingPads,
-                            const SmallVectorImpl<unsigned> &FirstActions);
+  /// Compute the call-site table and the call-site ranges. The entry for an
+  /// invoke has a try-range containing the call, a non-zero landing pad and an
+  /// appropriate action. The entry for an ordinary call has a try-range
+  /// containing the call and zero for the landing pad and the action.  Calls
+  /// marked 'nounwind' have no entry and must not be contained in the try-range
+  /// of any entry - they form gaps in the table.  Entries must be ordered by
+  /// try-range address. CallSiteRanges vector is only populated for Itanium
+  /// exception handling.
+  virtual void computeCallSiteTable(
+      SmallVectorImpl<CallSiteEntry> &CallSites,
+      SmallVectorImpl<CallSiteRange> &CallSiteRanges,
+      const SmallVectorImpl<const LandingPadInfo *> &LandingPads,
+      const SmallVectorImpl<unsigned> &FirstActions);
 
   /// Emit landing pads and actions.
   ///
@@ -108,7 +133,9 @@ protected:
   ///     found the frame is unwound and handling continues.
   ///  3. Type id table contains references to all the C++ typeinfo for all
   ///     catches in the function.  This tables is reversed indexed base 1.
-  void emitExceptionTable();
+  ///
+  /// Returns the starting symbol of an exception table.
+  MCSymbol *emitExceptionTable();
 
   virtual void emitTypeInfos(unsigned TTypeEncoding, MCSymbol *TTBaseLabel);
 

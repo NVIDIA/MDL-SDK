@@ -1,9 +1,8 @@
 //===----- SchedulePostRAList.cpp - list scheduler ------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -18,11 +17,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "AggressiveAntiDepBreaker.h"
-#include "AntiDepBreaker.h"
-#include "CriticalAntiDepBreaker.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/CodeGen/AntiDepBreaker.h"
 #include "llvm/CodeGen/LatencyPriorityQueue.h"
 #include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -39,6 +36,7 @@
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/Config/llvm-config.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -78,7 +76,7 @@ AntiDepBreaker::~AntiDepBreaker() { }
 
 namespace {
   class PostRAScheduler : public MachineFunctionPass {
-    const TargetInstrInfo *TII;
+    const TargetInstrInfo *TII = nullptr;
     RegisterClassInfo RegClassInfo;
 
   public:
@@ -220,11 +218,11 @@ SchedulePostRATDList::SchedulePostRATDList(
   assert((AntiDepMode == TargetSubtargetInfo::ANTIDEP_NONE ||
           MRI.tracksLiveness()) &&
          "Live-ins must be accurate for anti-dependency breaking");
-  AntiDepBreak =
-    ((AntiDepMode == TargetSubtargetInfo::ANTIDEP_ALL) ?
-     (AntiDepBreaker *)new AggressiveAntiDepBreaker(MF, RCI, CriticalPathRCs) :
-     ((AntiDepMode == TargetSubtargetInfo::ANTIDEP_CRITICAL) ?
-      (AntiDepBreaker *)new CriticalAntiDepBreaker(MF, RCI) : nullptr));
+  AntiDepBreak = ((AntiDepMode == TargetSubtargetInfo::ANTIDEP_ALL)
+                      ? createAggressiveAntiDepBreaker(MF, RCI, CriticalPathRCs)
+                      : ((AntiDepMode == TargetSubtargetInfo::ANTIDEP_CRITICAL)
+                             ? createCriticalAntiDepBreaker(MF, RCI)
+                             : nullptr));
 }
 
 SchedulePostRATDList::~SchedulePostRATDList() {
@@ -256,7 +254,7 @@ void SchedulePostRATDList::exitRegion() {
 LLVM_DUMP_METHOD void SchedulePostRATDList::dumpSchedule() const {
   for (unsigned i = 0, e = Sequence.size(); i != e; i++) {
     if (SUnit *SU = Sequence[i])
-      SU->dump(this);
+      dumpNode(*SU);
     else
       dbgs() << "**** NOOP ****\n";
   }
@@ -414,11 +412,7 @@ void SchedulePostRATDList::schedule() {
   postprocessDAG();
 
   LLVM_DEBUG(dbgs() << "********** List Scheduling **********\n");
-  LLVM_DEBUG(for (const SUnit &SU
-                  : SUnits) {
-    SU.dumpAll(this);
-    dbgs() << '\n';
-  });
+  LLVM_DEBUG(dump());
 
   AvailableQueue.initNodes(SUnits);
   ListScheduleTopDown();
@@ -465,7 +459,7 @@ void SchedulePostRATDList::ReleaseSucc(SUnit *SU, SDep *SuccEdge) {
 #ifndef NDEBUG
   if (SuccSU->NumPredsLeft == 0) {
     dbgs() << "*** Scheduling failed! ***\n";
-    SuccSU->dump(this);
+    dumpNode(*SuccSU);
     dbgs() << " has been released too many times!\n";
     llvm_unreachable(nullptr);
   }
@@ -502,7 +496,7 @@ void SchedulePostRATDList::ReleaseSuccessors(SUnit *SU) {
 /// the Available queue.
 void SchedulePostRATDList::ScheduleNodeTopDown(SUnit *SU, unsigned CurCycle) {
   LLVM_DEBUG(dbgs() << "*** Scheduling [" << CurCycle << "]: ");
-  LLVM_DEBUG(SU->dump(this));
+  LLVM_DEBUG(dumpNode(*SU));
 
   Sequence.push_back(SU);
   assert(CurCycle >= SU->getDepth() &&

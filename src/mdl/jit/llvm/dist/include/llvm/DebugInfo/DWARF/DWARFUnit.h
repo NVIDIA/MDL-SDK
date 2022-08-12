@@ -1,9 +1,8 @@
 //===- DWARFUnit.h ----------------------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -17,6 +16,7 @@
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/DebugInfo/DWARF/DWARFDebugInfoEntry.h"
+#include "llvm/DebugInfo/DWARF/DWARFDebugLoc.h"
 #include "llvm/DebugInfo/DWARF/DWARFDebugRangeList.h"
 #include "llvm/DebugInfo/DWARF/DWARFDebugRnglists.h"
 #include "llvm/DebugInfo/DWARF/DWARFDie.h"
@@ -46,10 +46,10 @@ class DWARFUnit;
 /// parse the header before deciding what specific kind of unit to construct.
 class DWARFUnitHeader {
   // Offset within section.
-  uint32_t Offset = 0;
+  uint64_t Offset = 0;
   // Version, address size, and DWARF format.
   dwarf::FormParams FormParams;
-  uint32_t Length = 0;
+  uint64_t Length = 0;
   uint64_t AbbrOffset = 0;
 
   // For DWO units only.
@@ -57,7 +57,7 @@ class DWARFUnitHeader {
 
   // For type units only.
   uint64_t TypeHash = 0;
-  uint32_t TypeOffset = 0;
+  uint64_t TypeOffset = 0;
 
   // For v5 split or skeleton compile units only.
   Optional<uint64_t> DWOId;
@@ -70,10 +70,15 @@ class DWARFUnitHeader {
 
 public:
   /// Parse a unit header from \p debug_info starting at \p offset_ptr.
+  /// Note that \p SectionKind is used as a hint to guess the unit type
+  /// for DWARF formats prior to DWARFv5. In DWARFv5 the unit type is
+  /// explicitly defined in the header and the hint is ignored.
   bool extract(DWARFContext &Context, const DWARFDataExtractor &debug_info,
-               uint32_t *offset_ptr, DWARFSectionKind Kind = DW_SECT_INFO,
-               const DWARFUnitIndex *Index = nullptr);
-  uint32_t getOffset() const { return Offset; }
+               uint64_t *offset_ptr, DWARFSectionKind SectionKind);
+  // For units in DWARF Package File, remember the index entry and update
+  // the abbreviation offset read by extract().
+  bool applyIndexEntry(const DWARFUnitIndex::Entry *Entry);
+  uint64_t getOffset() const { return Offset; }
   const dwarf::FormParams &getFormParams() const { return FormParams; }
   uint16_t getVersion() const { return FormParams.Version; }
   dwarf::DwarfFormat getFormat() const { return FormParams.Format; }
@@ -82,7 +87,7 @@ public:
   uint8_t getDwarfOffsetByteSize() const {
     return FormParams.getDwarfOffsetByteSize();
   }
-  uint32_t getLength() const { return Length; }
+  uint64_t getLength() const { return Length; }
   uint64_t getAbbrOffset() const { return AbbrOffset; }
   Optional<uint64_t> getDWOId() const { return DWOId; }
   void setDWOId(uint64_t Id) {
@@ -91,143 +96,85 @@ public:
   }
   const DWARFUnitIndex::Entry *getIndexEntry() const { return IndexEntry; }
   uint64_t getTypeHash() const { return TypeHash; }
-  uint32_t getTypeOffset() const { return TypeOffset; }
+  uint64_t getTypeOffset() const { return TypeOffset; }
   uint8_t getUnitType() const { return UnitType; }
   bool isTypeUnit() const {
     return UnitType == dwarf::DW_UT_type || UnitType == dwarf::DW_UT_split_type;
   }
   uint8_t getSize() const { return Size; }
-  // FIXME: Support DWARF64.
-  uint32_t getNextUnitOffset() const { return Offset + Length + 4; }
-};
-
-/// Base class for all DWARFUnitSection classes. This provides the
-/// functionality common to all unit types.
-class DWARFUnitSectionBase {
-public:
-  /// Returns the Unit that contains the given section offset in the
-  /// same section this Unit originated from.
-  virtual DWARFUnit *getUnitForOffset(uint32_t Offset) const = 0;
-  virtual DWARFUnit *getUnitForIndexEntry(const DWARFUnitIndex::Entry &E) = 0;
-
-  void parse(DWARFContext &C, const DWARFSection &Section);
-  void parseDWO(DWARFContext &C, const DWARFSection &DWOSection,
-                bool Lazy = false);
-
-protected:
-  ~DWARFUnitSectionBase() = default;
-
-  virtual void parseImpl(DWARFContext &Context, const DWARFObject &Obj,
-                         const DWARFSection &Section,
-                         const DWARFDebugAbbrev *DA, const DWARFSection *RS,
-                         StringRef SS, const DWARFSection &SOS,
-                         const DWARFSection *AOS, const DWARFSection &LS,
-                         bool isLittleEndian, bool isDWO, bool Lazy) = 0;
+  uint8_t getUnitLengthFieldByteSize() const {
+    return dwarf::getUnitLengthFieldByteSize(FormParams.Format);
+  }
+  uint64_t getNextUnitOffset() const {
+    return Offset + Length + getUnitLengthFieldByteSize();
+  }
 };
 
 const DWARFUnitIndex &getDWARFUnitIndex(DWARFContext &Context,
                                         DWARFSectionKind Kind);
 
-/// Concrete instance of DWARFUnitSection, specialized for one Unit type.
-template<typename UnitType>
-class DWARFUnitSection final : public SmallVector<std::unique_ptr<UnitType>, 1>,
-                               public DWARFUnitSectionBase {
-  bool Parsed = false;
-  std::function<std::unique_ptr<UnitType>(uint32_t)> Parser;
+bool isCompileUnit(const std::unique_ptr<DWARFUnit> &U);
+
+/// Describe a collection of units. Intended to hold all units either from
+/// .debug_info and .debug_types, or from .debug_info.dwo and .debug_types.dwo.
+class DWARFUnitVector final : public SmallVector<std::unique_ptr<DWARFUnit>, 1> {
+  std::function<std::unique_ptr<DWARFUnit>(uint64_t, DWARFSectionKind,
+                                           const DWARFSection *,
+                                           const DWARFUnitIndex::Entry *)>
+      Parser;
+  int NumInfoUnits = -1;
 
 public:
-  using UnitVector = SmallVectorImpl<std::unique_ptr<UnitType>>;
+  using UnitVector = SmallVectorImpl<std::unique_ptr<DWARFUnit>>;
   using iterator = typename UnitVector::iterator;
   using iterator_range = llvm::iterator_range<typename UnitVector::iterator>;
 
-  UnitType *getUnitForOffset(uint32_t Offset) const override {
-    auto *CU = std::upper_bound(
-        this->begin(), this->end(), Offset,
-        [](uint32_t LHS, const std::unique_ptr<UnitType> &RHS) {
-          return LHS < RHS->getNextUnitOffset();
-        });
-    if (CU != this->end() && (*CU)->getOffset() <= Offset)
-      return CU->get();
-    return nullptr;
+  using compile_unit_range =
+      decltype(make_filter_range(std::declval<iterator_range>(), isCompileUnit));
+
+  DWARFUnit *getUnitForOffset(uint64_t Offset) const;
+  DWARFUnit *getUnitForIndexEntry(const DWARFUnitIndex::Entry &E);
+
+  /// Read units from a .debug_info or .debug_types section.  Calls made
+  /// before finishedInfoUnits() are assumed to be for .debug_info sections,
+  /// calls after finishedInfoUnits() are for .debug_types sections.  Caller
+  /// must not mix calls to addUnitsForSection and addUnitsForDWOSection.
+  void addUnitsForSection(DWARFContext &C, const DWARFSection &Section,
+                          DWARFSectionKind SectionKind);
+  /// Read units from a .debug_info.dwo or .debug_types.dwo section.  Calls
+  /// made before finishedInfoUnits() are assumed to be for .debug_info.dwo
+  /// sections, calls after finishedInfoUnits() are for .debug_types.dwo
+  /// sections.  Caller must not mix calls to addUnitsForSection and
+  /// addUnitsForDWOSection.
+  void addUnitsForDWOSection(DWARFContext &C, const DWARFSection &DWOSection,
+                             DWARFSectionKind SectionKind, bool Lazy = false);
+
+  /// Add an existing DWARFUnit to this UnitVector. This is used by the DWARF
+  /// verifier to process unit separately.
+  DWARFUnit *addUnit(std::unique_ptr<DWARFUnit> Unit);
+
+  /// Returns number of all units held by this instance.
+  unsigned getNumUnits() const { return size(); }
+  /// Returns number of units from all .debug_info[.dwo] sections.
+  unsigned getNumInfoUnits() const {
+    return NumInfoUnits == -1 ? size() : NumInfoUnits;
   }
-  UnitType *getUnitForIndexEntry(const DWARFUnitIndex::Entry &E) override {
-    const auto *CUOff = E.getOffset(DW_SECT_INFO);
-    if (!CUOff)
-      return nullptr;
-
-    auto Offset = CUOff->Offset;
-
-    auto *CU = std::upper_bound(
-        this->begin(), this->end(), CUOff->Offset,
-        [](uint32_t LHS, const std::unique_ptr<UnitType> &RHS) {
-          return LHS < RHS->getNextUnitOffset();
-        });
-    if (CU != this->end() && (*CU)->getOffset() <= Offset)
-      return CU->get();
-
-    if (!Parser)
-      return nullptr;
-
-    auto U = Parser(Offset);
-    if (!U)
-      U = nullptr;
-
-    auto *NewCU = U.get();
-    this->insert(CU, std::move(U));
-    return NewCU;
-  }
+  /// Returns number of units from all .debug_types[.dwo] sections.
+  unsigned getNumTypesUnits() const { return size() - NumInfoUnits; }
+  /// Indicate that parsing .debug_info[.dwo] is done, and remaining units
+  /// will be from .debug_types[.dwo].
+  void finishedInfoUnits() { NumInfoUnits = size(); }
 
 private:
-  void parseImpl(DWARFContext &Context, const DWARFObject &Obj,
-                 const DWARFSection &Section, const DWARFDebugAbbrev *DA,
-                 const DWARFSection *RS, StringRef SS, const DWARFSection &SOS,
-                 const DWARFSection *AOS, const DWARFSection &LS, bool LE,
-                 bool IsDWO, bool Lazy) override {
-    if (Parsed)
-      return;
-    DWARFDataExtractor Data(Obj, Section, LE, 0);
-    if (!Parser) {
-      const DWARFUnitIndex *Index = nullptr;
-      if (IsDWO)
-        Index = &getDWARFUnitIndex(Context, UnitType::Section);
-      Parser = [=, &Context, &Section, &SOS,
-                &LS](uint32_t Offset) -> std::unique_ptr<UnitType> {
-        if (!Data.isValidOffset(Offset))
-          return nullptr;
-        DWARFUnitHeader Header;
-        if (!Header.extract(Context, Data, &Offset, UnitType::Section, Index))
-          return nullptr;
-        auto U = llvm::make_unique<UnitType>(
-            Context, Section, Header, DA, RS, SS, SOS, AOS, LS, LE, IsDWO,
-            *this);
-        return U;
-      };
-    }
-    if (Lazy)
-      return;
-    auto I = this->begin();
-    uint32_t Offset = 0;
-    while (Data.isValidOffset(Offset)) {
-      if (I != this->end() && (*I)->getOffset() == Offset) {
-        ++I;
-        continue;
-      }
-      auto U = Parser(Offset);
-      if (!U)
-        break;
-      Offset = U->getNextUnitOffset();
-      I = std::next(this->insert(I, std::move(U)));
-    }
-    Parsed = true;
-  }
+  void addUnitsImpl(DWARFContext &Context, const DWARFObject &Obj,
+                    const DWARFSection &Section, const DWARFDebugAbbrev *DA,
+                    const DWARFSection *RS, const DWARFSection *LocSection,
+                    StringRef SS, const DWARFSection &SOS,
+                    const DWARFSection *AOS, const DWARFSection &LS, bool LE,
+                    bool IsDWO, bool Lazy, DWARFSectionKind SectionKind);
 };
 
 /// Represents base address of the CU.
-struct BaseAddress {
-  uint64_t Address;
-  uint64_t SectionIndex;
-};
-
 /// Represents a unit's contribution to the string offsets table.
 struct StrOffsetsContributionDescriptor {
   uint64_t Base = 0;
@@ -239,6 +186,7 @@ struct StrOffsetsContributionDescriptor {
   StrOffsetsContributionDescriptor(uint64_t Base, uint64_t Size,
                                    uint8_t Version, dwarf::DwarfFormat Format)
       : Base(Base), Size(Size), FormParams({Version, 0, Format}) {}
+  StrOffsetsContributionDescriptor() = default;
 
   uint8_t getVersion() const { return FormParams.Version; }
   dwarf::DwarfFormat getFormat() const { return FormParams.Format; }
@@ -248,7 +196,7 @@ struct StrOffsetsContributionDescriptor {
   /// Determine whether a contribution to the string offsets table is
   /// consistent with the relevant section size and that its length is
   /// a multiple of the size of one of its entries.
-  Optional<StrOffsetsContributionDescriptor>
+  Expected<StrOffsetsContributionDescriptor>
   validateContributionSize(DWARFDataExtractor &DA);
 };
 
@@ -260,25 +208,27 @@ class DWARFUnit {
   DWARFUnitHeader Header;
   const DWARFDebugAbbrev *Abbrev;
   const DWARFSection *RangeSection;
-  uint32_t RangeSectionBase;
+  uint64_t RangeSectionBase;
+  uint64_t LocSectionBase;
+
+  /// Location table of this unit.
+  std::unique_ptr<DWARFLocationTable> LocTable;
+
   const DWARFSection &LineSection;
   StringRef StringSection;
   const DWARFSection &StringOffsetSection;
   const DWARFSection *AddrOffsetSection;
-  uint32_t AddrOffsetSectionBase = 0;
+  Optional<uint64_t> AddrOffsetSectionBase;
   bool isLittleEndian;
-  bool isDWO;
-  const DWARFUnitSectionBase &UnitSection;
+  bool IsDWO;
+  const DWARFUnitVector &UnitVector;
 
   /// Start, length, and DWARF format of the unit's contribution to the string
   /// offsets table (DWARF v5).
   Optional<StrOffsetsContributionDescriptor> StringOffsetsTableContribution;
 
-  /// A table of range lists (DWARF v5 and later).
-  Optional<DWARFDebugRnglistTable> RngListTable;
-
   mutable const DWARFAbbreviationDeclarationSet *Abbrevs;
-  llvm::Optional<BaseAddress> BaseAddr;
+  llvm::Optional<object::SectionedAddress> BaseAddr;
   /// The compile unit debug information entry items.
   std::vector<DWARFDebugInfoEntry> DieArray;
 
@@ -307,30 +257,30 @@ protected:
   /// Find the unit's contribution to the string offsets table and determine its
   /// length and form. The given offset is expected to be derived from the unit
   /// DIE's DW_AT_str_offsets_base attribute.
-  Optional<StrOffsetsContributionDescriptor>
-  determineStringOffsetsTableContribution(DWARFDataExtractor &DA,
-                                          uint64_t Offset);
+  Expected<Optional<StrOffsetsContributionDescriptor>>
+  determineStringOffsetsTableContribution(DWARFDataExtractor &DA);
 
   /// Find the unit's contribution to the string offsets table and determine its
   /// length and form. The given offset is expected to be 0 in a dwo file or,
   /// in a dwp file, the start of the unit's contribution to the string offsets
   /// table section (as determined by the index table).
-  Optional<StrOffsetsContributionDescriptor>
-  determineStringOffsetsTableContributionDWO(DWARFDataExtractor &DA,
-                                             uint64_t Offset);
+  Expected<Optional<StrOffsetsContributionDescriptor>>
+  determineStringOffsetsTableContributionDWO(DWARFDataExtractor &DA);
 
 public:
   DWARFUnit(DWARFContext &Context, const DWARFSection &Section,
-            const DWARFUnitHeader &Header,
-            const DWARFDebugAbbrev *DA, const DWARFSection *RS, StringRef SS,
-            const DWARFSection &SOS, const DWARFSection *AOS,
+            const DWARFUnitHeader &Header, const DWARFDebugAbbrev *DA,
+            const DWARFSection *RS, const DWARFSection *LocSection,
+            StringRef SS, const DWARFSection &SOS, const DWARFSection *AOS,
             const DWARFSection &LS, bool LE, bool IsDWO,
-            const DWARFUnitSectionBase &UnitSection);
+            const DWARFUnitVector &UnitVector);
 
   virtual ~DWARFUnit();
 
+  bool isDWOUnit() const { return IsDWO; }
   DWARFContext& getContext() const { return Context; }
-  uint32_t getOffset() const { return Header.getOffset(); }
+  const DWARFSection &getInfoSection() const { return InfoSection; }
+  uint64_t getOffset() const { return Header.getOffset(); }
   const dwarf::FormParams &getFormParams() const {
     return Header.getFormParams();
   }
@@ -340,16 +290,19 @@ public:
   uint8_t getDwarfOffsetByteSize() const {
     return Header.getDwarfOffsetByteSize();
   }
-  uint32_t getLength() const { return Header.getLength(); }
+  uint64_t getLength() const { return Header.getLength(); }
+  dwarf::DwarfFormat getFormat() const { return Header.getFormat(); }
   uint8_t getUnitType() const { return Header.getUnitType(); }
-  uint32_t getNextUnitOffset() const { return Header.getNextUnitOffset(); }
+  bool isTypeUnit() const { return Header.isTypeUnit(); }
+  uint64_t getAbbrOffset() const { return Header.getAbbrOffset(); }
+  uint64_t getNextUnitOffset() const { return Header.getNextUnitOffset(); }
   const DWARFSection &getLineSection() const { return LineSection; }
   StringRef getStringSection() const { return StringSection; }
   const DWARFSection &getStringOffsetSection() const {
     return StringOffsetSection;
   }
 
-  void setAddrOffsetSection(const DWARFSection *AOS, uint32_t Base) {
+  void setAddrOffsetSection(const DWARFSection *AOS, uint64_t Base) {
     AddrOffsetSection = AOS;
     AddrOffsetSectionBase = Base;
   }
@@ -357,13 +310,18 @@ public:
   /// Recursively update address to Die map.
   void updateAddressDieMap(DWARFDie Die);
 
-  void setRangesSection(const DWARFSection *RS, uint32_t Base) {
+  void setRangesSection(const DWARFSection *RS, uint64_t Base) {
     RangeSection = RS;
     RangeSectionBase = Base;
   }
 
-  bool getAddrOffsetSectionItem(uint32_t Index, uint64_t &Result) const;
-  bool getStringOffsetSectionItem(uint32_t Index, uint64_t &Result) const;
+  uint64_t getLocSectionBase() const {
+    return LocSectionBase;
+  }
+
+  Optional<object::SectionedAddress>
+  getAddrOffsetSectionItem(uint32_t Index) const;
+  Optional<uint64_t> getStringOffsetSectionItem(uint32_t Index) const;
 
   DWARFDataExtractor getDebugInfoExtractor() const;
 
@@ -371,11 +329,13 @@ public:
     return DataExtractor(StringSection, false, 0);
   }
 
+  const DWARFLocationTable &getLocationTable() { return *LocTable; }
+
   /// Extract the range list referenced by this compile unit from the
   /// .debug_ranges section. If the extraction is unsuccessful, an error
   /// is returned. Successful extraction requires that the compile unit
   /// has already been extracted.
-  Error extractRangeList(uint32_t RangeListOffset,
+  Error extractRangeList(uint64_t RangeListOffset,
                          DWARFDebugRangeList &RangeList) const;
   void clear();
 
@@ -413,33 +373,20 @@ public:
     return false;
   }
 
-  /// Return the number of bytes for the header of a unit of
-  /// UnitType type.
-  ///
-  /// This function must be called with a valid unit type which in
-  /// DWARF5 is defined as one of the following six types.
-  static uint32_t getDWARF5HeaderSize(uint8_t UnitType) {
-    switch (UnitType) {
-    case dwarf::DW_UT_compile:
-    case dwarf::DW_UT_partial:
-      return 12;
-    case dwarf::DW_UT_skeleton:
-    case dwarf::DW_UT_split_compile:
-      return 20;
-    case dwarf::DW_UT_type:
-    case dwarf::DW_UT_split_type:
-      return 24;
-    }
-    llvm_unreachable("Invalid UnitType.");
-  }
-
-  llvm::Optional<BaseAddress> getBaseAddress();
+  llvm::Optional<object::SectionedAddress> getBaseAddress();
 
   DWARFDie getUnitDIE(bool ExtractUnitDIEOnly = true) {
     extractDIEsIfNeeded(ExtractUnitDIEOnly);
     if (DieArray.empty())
       return DWARFDie();
     return DWARFDie(this, &DieArray[0]);
+  }
+
+  DWARFDie getNonSkeletonUnitDIE(bool ExtractUnitDIEOnly = true) {
+    parseDWO();
+    if (DWO)
+      return DWO->getUnitDIE(ExtractUnitDIEOnly);
+    return getUnitDIE(ExtractUnitDIEOnly);
   }
 
   const char *getCompilationDir();
@@ -451,7 +398,7 @@ public:
 
   /// Return a vector of address ranges resulting from a (possibly encoded)
   /// range list starting at a given offset in the appropriate ranges section.
-  Expected<DWARFAddressRangesVector> findRnglistFromOffset(uint32_t Offset);
+  Expected<DWARFAddressRangesVector> findRnglistFromOffset(uint64_t Offset);
 
   /// Return a vector of address ranges retrieved from an encoded range
   /// list whose offset is found via a table lookup given an index (DWARF v5
@@ -461,13 +408,14 @@ public:
   /// Return a rangelist's offset based on an index. The index designates
   /// an entry in the rangelist table's offset array and is supplied by
   /// DW_FORM_rnglistx.
-  Optional<uint32_t> getRnglistOffset(uint32_t Index) {
-    if (RngListTable)
-      return RngListTable->getOffsetEntry(Index);
-    return None;
-  }
+  Optional<uint64_t> getRnglistOffset(uint32_t Index);
 
-  void collectAddressRanges(DWARFAddressRangesVector &CURanges);
+  Optional<uint64_t> getLoclistOffset(uint32_t Index);
+
+  Expected<DWARFAddressRangesVector> collectAddressRanges();
+
+  Expected<DWARFLocationExpressionsVector>
+  findLoclistFromOffset(uint64_t Offset);
 
   /// Returns subprogram DIE with address range encompassing the provided
   /// address. The pointer is alive as long as parsed compile unit DIEs are not
@@ -480,8 +428,8 @@ public:
   void getInlinedChainForAddress(uint64_t Address,
                                  SmallVectorImpl<DWARFDie> &InlinedChain);
 
-  /// getUnitSection - Return the DWARFUnitSection containing this unit.
-  const DWARFUnitSectionBase &getUnitSection() const { return UnitSection; }
+  /// Return the DWARFUnitVector containing this unit.
+  const DWARFUnitVector &getUnitVector() const { return UnitVector; }
 
   /// Returns the number of DIEs in the unit. Parses the unit
   /// if necessary.
@@ -516,22 +464,20 @@ public:
   /// unit's DIE vector.
   ///
   /// The unit needs to have its DIEs extracted for this method to work.
-  DWARFDie getDIEForOffset(uint32_t Offset) {
+  DWARFDie getDIEForOffset(uint64_t Offset) {
     extractDIEsIfNeeded(false);
-    assert(!DieArray.empty());
-    auto it = std::lower_bound(
-        DieArray.begin(), DieArray.end(), Offset,
-        [](const DWARFDebugInfoEntry &LHS, uint32_t Offset) {
-          return LHS.getOffset() < Offset;
+    auto It =
+        llvm::partition_point(DieArray, [=](const DWARFDebugInfoEntry &DIE) {
+          return DIE.getOffset() < Offset;
         });
-    if (it != DieArray.end() && it->getOffset() == Offset)
-      return DWARFDie(this, &*it);
+    if (It != DieArray.end() && It->getOffset() == Offset)
+      return DWARFDie(this, &*It);
     return DWARFDie();
   }
 
   uint32_t getLineTableOffset() const {
     if (auto IndexEntry = Header.getIndexEntry())
-      if (const auto *Contrib = IndexEntry->getOffset(DW_SECT_LINE))
+      if (const auto *Contrib = IndexEntry->getContribution(DW_SECT_LINE))
         return Contrib->Offset;
     return 0;
   }
@@ -541,15 +487,20 @@ public:
     return die_iterator_range(DieArray.begin(), DieArray.end());
   }
 
+  virtual void dump(raw_ostream &OS, DIDumpOptions DumpOpts) = 0;
+
+  Error tryExtractDIEsIfNeeded(bool CUDieOnly);
+
 private:
   /// Size in bytes of the .debug_info data associated with this compile unit.
   size_t getDebugInfoSize() const {
-    return Header.getLength() + 4 - getHeaderSize();
+    return Header.getLength() + Header.getUnitLengthFieldByteSize() -
+           getHeaderSize();
   }
 
   /// extractDIEsIfNeeded - Parses a compile unit and indexes its DIEs if it
-  /// hasn't already been done. Returns the number of DIEs parsed at this call.
-  size_t extractDIEsIfNeeded(bool CUDieOnly);
+  /// hasn't already been done
+  void extractDIEsIfNeeded(bool CUDieOnly);
 
   /// extractDIEsToVector - Appends all parsed DIEs to a vector.
   void extractDIEsToVector(bool AppendCUDie, bool AppendNonCUDIEs,
@@ -562,6 +513,10 @@ private:
   /// it was actually constructed.
   bool parseDWO();
 };
+
+inline bool isCompileUnit(const std::unique_ptr<DWARFUnit> &U) {
+  return !U->isTypeUnit();
+}
 
 } // end namespace llvm
 

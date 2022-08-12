@@ -1,9 +1,8 @@
 //===-- RecordSerialization.cpp -------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -35,7 +34,7 @@ StringRef llvm::codeview::getBytesAsCString(ArrayRef<uint8_t> LeafData) {
 }
 
 Error llvm::codeview::consume(BinaryStreamReader &Reader, APSInt &Num) {
-  // Used to avoid overload ambiguity on APInt construtor.
+  // Used to avoid overload ambiguity on APInt constructor.
   bool FalseVal = false;
   uint16_t Short;
   if (auto EC = Reader.readInteger(Short))

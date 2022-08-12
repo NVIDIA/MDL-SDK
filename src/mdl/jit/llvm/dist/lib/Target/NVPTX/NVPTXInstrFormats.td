@@ -1,9 +1,8 @@
 //===- NVPTXInstrFormats.td - NVPTX Instruction Formats-------*- tblgen -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -32,14 +31,14 @@ class NVPTXInst<dag outs, dag ins, string asmstr, list<dag> pattern>
 
   // TSFlagFields
   bits<4> VecInstType = VecNOP.Value;
-  bit IsSimpleMove = 0;
-  bit IsLoad = 0;
-  bit IsStore = 0;
+  bit IsSimpleMove = false;
+  bit IsLoad = false;
+  bit IsStore = false;
 
-  bit IsTex = 0;
-  bit IsSust = 0;
-  bit IsSurfTexQuery = 0;
-  bit IsTexModeUnified = 0;
+  bit IsTex = false;
+  bit IsSust = false;
+  bit IsSurfTexQuery = false;
+  bit IsTexModeUnified = false;
 
   // The following field is encoded as log2 of the vector size minus one,
   // with 0 meaning the operation is not a surface instruction.  For example,
@@ -47,13 +46,13 @@ class NVPTXInst<dag outs, dag ins, string asmstr, list<dag> pattern>
   // 2**(2-1) = 2.
   bits<2> IsSuld = 0;
 
-  let TSFlags{3-0}   = VecInstType;
-  let TSFlags{4-4}   = IsSimpleMove;
-  let TSFlags{5-5}   = IsLoad;
-  let TSFlags{6-6}   = IsStore;
-  let TSFlags{7}     = IsTex;
-  let TSFlags{9-8}   = IsSuld;
-  let TSFlags{10}    = IsSust;
-  let TSFlags{11}    = IsSurfTexQuery;
-  let TSFlags{12}    = IsTexModeUnified;
+  let TSFlags{3...0}   = VecInstType;
+  let TSFlags{4...4}   = IsSimpleMove;
+  let TSFlags{5...5}   = IsLoad;
+  let TSFlags{6...6}   = IsStore;
+  let TSFlags{7}       = IsTex;
+  let TSFlags{9...8}   = IsSuld;
+  let TSFlags{10}      = IsSust;
+  let TSFlags{11}      = IsSurfTexQuery;
+  let TSFlags{12}      = IsTexModeUnified;
 }

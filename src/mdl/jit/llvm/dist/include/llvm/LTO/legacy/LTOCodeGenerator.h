@@ -1,9 +1,8 @@
 //===-LTOCodeGenerator.h - LLVM Link Time Optimizer -----------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -36,17 +35,22 @@
 #define LLVM_LTO_LTOCODEGENERATOR_H
 
 #include "llvm-c/lto.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/Module.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 #include <string>
 #include <vector>
+
+/// Enable global value internalization in LTO.
+extern llvm::cl::opt<bool> EnableLTOInternalization;
 
 namespace llvm {
 template <typename T> class ArrayRef;
@@ -85,11 +89,11 @@ struct LTOCodeGenerator {
   void setCodePICModel(Optional<Reloc::Model> Model) { RelocModel = Model; }
 
   /// Set the file type to be emitted (assembly or object code).
-  /// The default is TargetMachine::CGFT_ObjectFile.
-  void setFileType(TargetMachine::CodeGenFileType FT) { FileType = FT; }
+  /// The default is CGFT_ObjectFile.
+  void setFileType(CodeGenFileType FT) { FileType = FT; }
 
-  void setCpu(StringRef MCpu) { this->MCpu = MCpu; }
-  void setAttr(StringRef MAttr) { this->MAttr = MAttr; }
+  void setCpu(StringRef MCpu) { this->MCpu = std::string(MCpu); }
+  void setAttrs(std::vector<std::string> MAttrs) { this->MAttrs = MAttrs; }
   void setOptLevel(unsigned OptLevel);
 
   void setShouldInternalize(bool Value) { ShouldInternalize = Value; }
@@ -111,7 +115,7 @@ struct LTOCodeGenerator {
     ShouldRestoreGlobalsLinkage = Value;
   }
 
-  void addMustPreserveSymbol(StringRef Sym) { MustPreserveSymbols[Sym] = 1; }
+  void addMustPreserveSymbol(StringRef Sym) { MustPreserveSymbols.insert(Sym); }
 
   /// Pass options to the driver and optimization passes.
   ///
@@ -119,7 +123,7 @@ struct LTOCodeGenerator {
   /// name is misleading).  This function should be called before
   /// LTOCodeGenerator::compilexxx(), and
   /// LTOCodeGenerator::writeMergedModules().
-  void setCodeGenDebugOptions(StringRef Opts);
+  void setCodeGenDebugOptions(ArrayRef<StringRef> Opts);
 
   /// Parse the options set in setCodeGenDebugOptions.
   ///
@@ -141,9 +145,7 @@ struct LTOCodeGenerator {
   /// \note It is up to the linker to remove the intermediate output file.  Do
   /// not try to remove the object file in LTOCodeGenerator's destructor as we
   /// don't who (LTOCodeGenerator or the output file) will last longer.
-  bool compile_to_file(const char **Name, bool DisableVerify,
-                       bool DisableInline, bool DisableGVNLoadPRE,
-                       bool DisableVectorization);
+  bool compile_to_file(const char **Name);
 
   /// As with compile_to_file(), this function compiles the merged module into
   /// single output file. Instead of returning the output file path to the
@@ -151,15 +153,12 @@ struct LTOCodeGenerator {
   /// to the caller. This function should delete the intermediate file once
   /// its content is brought to memory. Return NULL if the compilation was not
   /// successful.
-  std::unique_ptr<MemoryBuffer> compile(bool DisableVerify, bool DisableInline,
-                                        bool DisableGVNLoadPRE,
-                                        bool DisableVectorization);
+  std::unique_ptr<MemoryBuffer> compile();
 
   /// Optimizes the merged module.  Returns true on success.
   ///
   /// Calls \a verifyMergedModuleOnce().
-  bool optimize(bool DisableVerify, bool DisableInline, bool DisableGVNLoadPRE,
-                bool DisableVectorization);
+  bool optimize();
 
   /// Compiles the merged optimized module into a single output file. It brings
   /// the output to a buffer, and returns the buffer to the caller. Return NULL
@@ -178,6 +177,8 @@ struct LTOCodeGenerator {
   /// Enable the Freestanding mode: indicate that the optimizer should not
   /// assume builtins are present on the target.
   void setFreestanding(bool Enabled) { Freestanding = Enabled; }
+
+  void setDisableVerify(bool Value) { DisableVerify = Value; }
 
   void setDiagnosticHandler(lto_diagnostic_handler_t, void *);
 
@@ -224,7 +225,7 @@ private:
   std::vector<std::string> CodegenOptions;
   std::string FeatureStr;
   std::string MCpu;
-  std::string MAttr;
+  std::vector<std::string> MAttrs;
   std::string NativeObjectPath;
   TargetOptions Options;
   CodeGenOpt::Level CGOptLevel = CodeGenOpt::Default;
@@ -233,12 +234,14 @@ private:
   unsigned OptLevel = 2;
   lto_diagnostic_handler_t DiagHandler = nullptr;
   void *DiagContext = nullptr;
-  bool ShouldInternalize = true;
+  bool ShouldInternalize = EnableLTOInternalization;
   bool ShouldEmbedUselists = false;
   bool ShouldRestoreGlobalsLinkage = false;
-  TargetMachine::CodeGenFileType FileType = TargetMachine::CGFT_ObjectFile;
+  CodeGenFileType FileType = CGFT_ObjectFile;
   std::unique_ptr<ToolOutputFile> DiagnosticOutputFile;
   bool Freestanding = false;
+  std::unique_ptr<ToolOutputFile> StatsFile = nullptr;
+  bool DisableVerify = false;
 };
 }
 #endif

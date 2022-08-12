@@ -1,14 +1,14 @@
 //===- DIASession.cpp - DIA implementation of IPDBSession -------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 #include "llvm/DebugInfo/PDB/DIA/DIASession.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/DebugInfo/PDB/DIA/DIAEnumDebugStreams.h"
+#include "llvm/DebugInfo/PDB/DIA/DIAEnumFrameData.h"
 #include "llvm/DebugInfo/PDB/DIA/DIAEnumInjectedSources.h"
 #include "llvm/DebugInfo/PDB/DIA/DIAEnumLineNumbers.h"
 #include "llvm/DebugInfo/PDB/DIA/DIAEnumSectionContribs.h"
@@ -42,7 +42,7 @@ static Error ErrorFromHResult(HRESULT Result, const char *Str, Ts &&... Args) {
 
   switch (Result) {
   case E_PDB_NOT_FOUND:
-    return make_error<GenericError>(generic_error_code::invalid_path, Context);
+    return errorCodeToError(std::error_code(ENOENT, std::generic_category()));
   case E_PDB_FORMAT:
     return make_error<DIAError>(dia_error_code::invalid_file_format, Context);
   case E_INVALIDARG:
@@ -71,18 +71,9 @@ static Error LoadDIA(CComPtr<IDiaDataSource> &DiaDataSource) {
 // If the CoCreateInstance call above failed, msdia*.dll is not registered.
 // Try loading the DLL corresponding to the #included DIA SDK.
 #if !defined(_MSC_VER)
-  return llvm::make_error<GenericError>(
-      "DIA is only supported when using MSVC.");
+  return llvm::make_error<PDBError>(pdb_error_code::dia_failed_loading);
 #else
-  const wchar_t *msdia_dll = nullptr;
-#if _MSC_VER >= 1900 && _MSC_VER < 2000
-  msdia_dll = L"msdia140.dll"; // VS2015
-#elif _MSC_VER >= 1800
-  msdia_dll = L"msdia120.dll"; // VS2013
-#else
-#error "Unknown Visual Studio version."
-#endif
-
+  const wchar_t *msdia_dll = L"msdia140.dll";
   HRESULT HR;
   if (FAILED(HR = NoRegCoCreate(msdia_dll, CLSID_DiaSource, IID_IDiaDataSource,
                                 reinterpret_cast<LPVOID *>(&DiaDataSource))))
@@ -104,7 +95,7 @@ Error DIASession::createFromPdb(StringRef Path,
 
   llvm::SmallVector<UTF16, 128> Path16;
   if (!llvm::convertUTF8ToUTF16String(Path, Path16))
-    return make_error<GenericError>(generic_error_code::invalid_path);
+    return make_error<PDBError>(pdb_error_code::invalid_utf8_path, Path);
 
   const wchar_t *Path16Str = reinterpret_cast<const wchar_t *>(Path16.data());
   HRESULT HR;
@@ -130,7 +121,7 @@ Error DIASession::createFromExe(StringRef Path,
 
   llvm::SmallVector<UTF16, 128> Path16;
   if (!llvm::convertUTF8ToUTF16String(Path, Path16))
-    return make_error<GenericError>(generic_error_code::invalid_path, Path);
+    return make_error<PDBError>(pdb_error_code::invalid_utf8_path, Path);
 
   const wchar_t *Path16Str = reinterpret_cast<const wchar_t *>(Path16.data());
   HRESULT HR;
@@ -159,7 +150,7 @@ std::unique_ptr<PDBSymbolExe> DIASession::getGlobalScope() {
   if (S_OK != Session->get_globalScope(&GlobalScope))
     return nullptr;
 
-  auto RawSymbol = llvm::make_unique<DIARawSymbol>(*this, GlobalScope);
+  auto RawSymbol = std::make_unique<DIARawSymbol>(*this, GlobalScope);
   auto PdbSymbol(PDBSymbol::create(*this, std::move(RawSymbol)));
   std::unique_ptr<PDBSymbolExe> ExeSymbol(
       static_cast<PDBSymbolExe *>(PdbSymbol.release()));
@@ -188,17 +179,18 @@ bool DIASession::addressForRVA(uint32_t RVA, uint32_t &Section,
   return false;
 }
 
-std::unique_ptr<PDBSymbol> DIASession::getSymbolById(uint32_t SymbolId) const {
+std::unique_ptr<PDBSymbol>
+DIASession::getSymbolById(SymIndexId SymbolId) const {
   CComPtr<IDiaSymbol> LocatedSymbol;
   if (S_OK != Session->symbolById(SymbolId, &LocatedSymbol))
     return nullptr;
 
-  auto RawSymbol = llvm::make_unique<DIARawSymbol>(*this, LocatedSymbol);
+  auto RawSymbol = std::make_unique<DIARawSymbol>(*this, LocatedSymbol);
   return PDBSymbol::create(*this, std::move(RawSymbol));
 }
 
-std::unique_ptr<PDBSymbol>
-DIASession::findSymbolByAddress(uint64_t Address, PDB_SymType Type) const {
+std::unique_ptr<PDBSymbol> DIASession::findSymbolByAddress(uint64_t Address,
+                                                           PDB_SymType Type) {
   enum SymTagEnum EnumVal = static_cast<enum SymTagEnum>(Type);
 
   CComPtr<IDiaSymbol> Symbol;
@@ -210,32 +202,32 @@ DIASession::findSymbolByAddress(uint64_t Address, PDB_SymType Type) const {
     if (S_OK != Session->findSymbolByRVA(RVA, EnumVal, &Symbol))
       return nullptr;
   }
-  auto RawSymbol = llvm::make_unique<DIARawSymbol>(*this, Symbol);
+  auto RawSymbol = std::make_unique<DIARawSymbol>(*this, Symbol);
   return PDBSymbol::create(*this, std::move(RawSymbol));
 }
 
 std::unique_ptr<PDBSymbol> DIASession::findSymbolByRVA(uint32_t RVA,
-                                                       PDB_SymType Type) const {
+                                                       PDB_SymType Type) {
   enum SymTagEnum EnumVal = static_cast<enum SymTagEnum>(Type);
 
   CComPtr<IDiaSymbol> Symbol;
   if (S_OK != Session->findSymbolByRVA(RVA, EnumVal, &Symbol))
     return nullptr;
 
-  auto RawSymbol = llvm::make_unique<DIARawSymbol>(*this, Symbol);
+  auto RawSymbol = std::make_unique<DIARawSymbol>(*this, Symbol);
   return PDBSymbol::create(*this, std::move(RawSymbol));
 }
 
 std::unique_ptr<PDBSymbol>
 DIASession::findSymbolBySectOffset(uint32_t Sect, uint32_t Offset,
-                                   PDB_SymType Type) const {
+                                   PDB_SymType Type) {
   enum SymTagEnum EnumVal = static_cast<enum SymTagEnum>(Type);
 
   CComPtr<IDiaSymbol> Symbol;
   if (S_OK != Session->findSymbolByAddr(Sect, Offset, EnumVal, &Symbol))
     return nullptr;
 
-  auto RawSymbol = llvm::make_unique<DIARawSymbol>(*this, Symbol);
+  auto RawSymbol = std::make_unique<DIARawSymbol>(*this, Symbol);
   return PDBSymbol::create(*this, std::move(RawSymbol));
 }
 
@@ -251,7 +243,7 @@ DIASession::findLineNumbers(const PDBSymbolCompiland &Compiland,
                                  RawFile.getDiaFile(), &LineNumbers))
     return nullptr;
 
-  return llvm::make_unique<DIAEnumLineNumbers>(LineNumbers);
+  return std::make_unique<DIAEnumLineNumbers>(LineNumbers);
 }
 
 std::unique_ptr<IPDBEnumLineNumbers>
@@ -265,7 +257,7 @@ DIASession::findLineNumbersByAddress(uint64_t Address, uint32_t Length) const {
     if (S_OK != Session->findLinesByRVA(RVA, Length, &LineNumbers))
       return nullptr;
   }
-  return llvm::make_unique<DIAEnumLineNumbers>(LineNumbers);
+  return std::make_unique<DIAEnumLineNumbers>(LineNumbers);
 }
 
 std::unique_ptr<IPDBEnumLineNumbers>
@@ -274,7 +266,7 @@ DIASession::findLineNumbersByRVA(uint32_t RVA, uint32_t Length) const {
   if (S_OK != Session->findLinesByRVA(RVA, Length, &LineNumbers))
     return nullptr;
 
-  return llvm::make_unique<DIAEnumLineNumbers>(LineNumbers);
+  return std::make_unique<DIAEnumLineNumbers>(LineNumbers);
 }
 
 std::unique_ptr<IPDBEnumLineNumbers>
@@ -284,7 +276,7 @@ DIASession::findLineNumbersBySectOffset(uint32_t Section, uint32_t Offset,
   if (S_OK != Session->findLinesByAddr(Section, Offset, Length, &LineNumbers))
     return nullptr;
 
-  return llvm::make_unique<DIAEnumLineNumbers>(LineNumbers);
+  return std::make_unique<DIAEnumLineNumbers>(LineNumbers);
 }
 
 std::unique_ptr<IPDBEnumSourceFiles>
@@ -306,7 +298,7 @@ DIASession::findSourceFiles(const PDBSymbolCompiland *Compiland,
   if (S_OK !=
       Session->findFile(DiaCompiland, Utf16Pattern.m_str, Flags, &SourceFiles))
     return nullptr;
-  return llvm::make_unique<DIAEnumSourceFiles>(*this, SourceFiles);
+  return std::make_unique<DIAEnumSourceFiles>(*this, SourceFiles);
 }
 
 std::unique_ptr<IPDBSourceFile>
@@ -342,7 +334,7 @@ std::unique_ptr<IPDBEnumSourceFiles> DIASession::getAllSourceFiles() const {
   if (S_OK != Session->findFile(nullptr, nullptr, nsNone, &Files))
     return nullptr;
 
-  return llvm::make_unique<DIAEnumSourceFiles>(*this, Files);
+  return std::make_unique<DIAEnumSourceFiles>(*this, Files);
 }
 
 std::unique_ptr<IPDBEnumSourceFiles> DIASession::getSourceFilesForCompiland(
@@ -355,7 +347,7 @@ std::unique_ptr<IPDBEnumSourceFiles> DIASession::getSourceFilesForCompiland(
       Session->findFile(RawSymbol.getDiaSymbol(), nullptr, nsNone, &Files))
     return nullptr;
 
-  return llvm::make_unique<DIAEnumSourceFiles>(*this, Files);
+  return std::make_unique<DIAEnumSourceFiles>(*this, Files);
 }
 
 std::unique_ptr<IPDBSourceFile>
@@ -364,7 +356,7 @@ DIASession::getSourceFileById(uint32_t FileId) const {
   if (S_OK != Session->findFileById(FileId, &LocatedFile))
     return nullptr;
 
-  return llvm::make_unique<DIASourceFile>(*this, LocatedFile);
+  return std::make_unique<DIASourceFile>(*this, LocatedFile);
 }
 
 std::unique_ptr<IPDBEnumDataStreams> DIASession::getDebugStreams() const {
@@ -372,7 +364,7 @@ std::unique_ptr<IPDBEnumDataStreams> DIASession::getDebugStreams() const {
   if (S_OK != Session->getEnumDebugStreams(&DiaEnumerator))
     return nullptr;
 
-  return llvm::make_unique<DIAEnumDebugStreams>(DiaEnumerator);
+  return std::make_unique<DIAEnumDebugStreams>(DiaEnumerator);
 }
 
 std::unique_ptr<IPDBEnumTables> DIASession::getEnumTables() const {
@@ -380,7 +372,7 @@ std::unique_ptr<IPDBEnumTables> DIASession::getEnumTables() const {
   if (S_OK != Session->getEnumTables(&DiaEnumerator))
     return nullptr;
 
-  return llvm::make_unique<DIAEnumTables>(DiaEnumerator);
+  return std::make_unique<DIAEnumTables>(DiaEnumerator);
 }
 
 template <class T> static CComPtr<T> getTableEnumerator(IDiaSession &Session) {
@@ -407,7 +399,7 @@ DIASession::getInjectedSources() const {
   if (!Files)
     return nullptr;
 
-  return llvm::make_unique<DIAEnumInjectedSources>(*this, Files);
+  return std::make_unique<DIAEnumInjectedSources>(Files);
 }
 
 std::unique_ptr<IPDBEnumSectionContribs>
@@ -417,5 +409,15 @@ DIASession::getSectionContribs() const {
   if (!Sections)
     return nullptr;
 
-  return llvm::make_unique<DIAEnumSectionContribs>(*this, Sections);
+  return std::make_unique<DIAEnumSectionContribs>(*this, Sections);
+}
+
+std::unique_ptr<IPDBEnumFrameData>
+DIASession::getFrameData() const {
+  CComPtr<IDiaEnumFrameData> FD =
+      getTableEnumerator<IDiaEnumFrameData>(*Session);
+  if (!FD)
+    return nullptr;
+
+  return std::make_unique<DIAEnumFrameData>(FD);
 }

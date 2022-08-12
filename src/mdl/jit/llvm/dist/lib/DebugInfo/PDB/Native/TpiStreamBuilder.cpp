@@ -1,9 +1,8 @@
 //===- TpiStreamBuilder.cpp -   -------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -26,6 +25,7 @@
 #include "llvm/Support/Error.h"
 #include <algorithm>
 #include <cstdint>
+#include <numeric>
 
 using namespace llvm;
 using namespace llvm::msf;
@@ -42,22 +42,56 @@ void TpiStreamBuilder::setVersionHeader(PdbRaw_TpiVer Version) {
   VerHeader = Version;
 }
 
+void TpiStreamBuilder::updateTypeIndexOffsets(ArrayRef<uint16_t> Sizes) {
+  // If we just crossed an 8KB threshold, add a type index offset.
+  for (uint16_t Size : Sizes) {
+    size_t NewSize = TypeRecordBytes + Size;
+    constexpr size_t EightKB = 8 * 1024;
+    if (NewSize / EightKB > TypeRecordBytes / EightKB || TypeRecordCount == 0) {
+      TypeIndexOffsets.push_back(
+          {codeview::TypeIndex(codeview::TypeIndex::FirstNonSimpleIndex +
+                               TypeRecordCount),
+           ulittle32_t(TypeRecordBytes)});
+    }
+    ++TypeRecordCount;
+    TypeRecordBytes = NewSize;
+  }
+}
+
 void TpiStreamBuilder::addTypeRecord(ArrayRef<uint8_t> Record,
                                      Optional<uint32_t> Hash) {
-  // If we just crossed an 8KB threshold, add a type index offset.
-  size_t NewSize = TypeRecordBytes + Record.size();
-  constexpr size_t EightKB = 8 * 1024;
-  if (NewSize / EightKB > TypeRecordBytes / EightKB || TypeRecords.empty()) {
-    TypeIndexOffsets.push_back(
-        {codeview::TypeIndex(codeview::TypeIndex::FirstNonSimpleIndex +
-                             TypeRecords.size()),
-         ulittle32_t(TypeRecordBytes)});
-  }
-  TypeRecordBytes = NewSize;
+  assert(((Record.size() & 3) == 0) &&
+         "The type record's size is not a multiple of 4 bytes which will "
+         "cause misalignment in the output TPI stream!");
+  assert(Record.size() <= codeview::MaxRecordLength);
+  uint16_t OneSize = (uint16_t)Record.size();
+  updateTypeIndexOffsets(makeArrayRef(&OneSize, 1));
 
-  TypeRecords.push_back(Record);
+  TypeRecBuffers.push_back(Record);
+  // FIXME: Require it.
   if (Hash)
     TypeHashes.push_back(*Hash);
+}
+
+void TpiStreamBuilder::addTypeRecords(ArrayRef<uint8_t> Types,
+                                      ArrayRef<uint16_t> Sizes,
+                                      ArrayRef<uint32_t> Hashes) {
+  // Ignore empty type buffers. There should be no hashes or sizes in this case.
+  if (Types.empty()) {
+    assert(Sizes.empty() && Hashes.empty());
+    return;
+  }
+
+  assert(((Types.size() & 3) == 0) &&
+         "The type record's size is not a multiple of 4 bytes which will "
+         "cause misalignment in the output TPI stream!");
+  assert(Sizes.size() == Hashes.size() && "sizes and hashes should be in sync");
+  assert(std::accumulate(Sizes.begin(), Sizes.end(), 0U) == Types.size() &&
+         "sizes of type records should sum to the size of the types");
+  updateTypeIndexOffsets(Sizes);
+
+  TypeRecBuffers.push_back(Types);
+  llvm::append_range(TypeHashes, Hashes);
 }
 
 Error TpiStreamBuilder::finalize() {
@@ -66,18 +100,16 @@ Error TpiStreamBuilder::finalize() {
 
   TpiStreamHeader *H = Allocator.Allocate<TpiStreamHeader>();
 
-  uint32_t Count = TypeRecords.size();
-
   H->Version = VerHeader;
   H->HeaderSize = sizeof(TpiStreamHeader);
   H->TypeIndexBegin = codeview::TypeIndex::FirstNonSimpleIndex;
-  H->TypeIndexEnd = H->TypeIndexBegin + Count;
+  H->TypeIndexEnd = H->TypeIndexBegin + TypeRecordCount;
   H->TypeRecordBytes = TypeRecordBytes;
 
   H->HashStreamIndex = HashStreamIndex;
   H->HashAuxStreamIndex = kInvalidStreamIndex;
   H->HashKeySize = sizeof(ulittle32_t);
-  H->NumHashBuckets = MinTpiHashBuckets;
+  H->NumHashBuckets = MaxTpiHashBuckets - 1;
 
   // Recall that hash values go into a completely different stream identified by
   // the `HashStreamIndex` field of the `TpiStreamHeader`.  Therefore, the data
@@ -102,7 +134,7 @@ uint32_t TpiStreamBuilder::calculateSerializedLength() {
 }
 
 uint32_t TpiStreamBuilder::calculateHashBufferSize() const {
-  assert((TypeRecords.size() == TypeHashes.size() || TypeHashes.empty()) &&
+  assert((TypeRecordCount == TypeHashes.size() || TypeHashes.empty()) &&
          "either all or no type records should have hashes");
   return TypeHashes.size() * sizeof(ulittle32_t);
 }
@@ -130,13 +162,13 @@ Error TpiStreamBuilder::finalizeMsfLayout() {
     ulittle32_t *H = Allocator.Allocate<ulittle32_t>(TypeHashes.size());
     MutableArrayRef<ulittle32_t> HashBuffer(H, TypeHashes.size());
     for (uint32_t I = 0; I < TypeHashes.size(); ++I) {
-      HashBuffer[I] = TypeHashes[I] % MinTpiHashBuckets;
+      HashBuffer[I] = TypeHashes[I] % (MaxTpiHashBuckets - 1);
     }
     ArrayRef<uint8_t> Bytes(
         reinterpret_cast<const uint8_t *>(HashBuffer.data()),
         calculateHashBufferSize());
     HashValueStream =
-        llvm::make_unique<BinaryByteStream>(Bytes, llvm::support::little);
+        std::make_unique<BinaryByteStream>(Bytes, llvm::support::little);
   }
   return Error::success();
 }
@@ -153,9 +185,15 @@ Error TpiStreamBuilder::commit(const msf::MSFLayout &Layout,
   if (auto EC = Writer.writeObject(*Header))
     return EC;
 
-  for (auto Rec : TypeRecords)
+  for (auto Rec : TypeRecBuffers) {
+    assert(!Rec.empty() && "Attempting to write an empty type record shifts "
+                           "all offsets in the TPI stream!");
+    assert(((Rec.size() & 3) == 0) &&
+           "The type record's size is not a multiple of 4 bytes which will "
+           "cause misalignment in the output TPI stream!");
     if (auto EC = Writer.writeBytes(Rec))
       return EC;
+  }
 
   if (HashStreamIndex != kInvalidStreamIndex) {
     auto HVS = WritableMappedBlockStream::createIndexedStream(

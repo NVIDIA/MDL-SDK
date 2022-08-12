@@ -41,7 +41,6 @@ namespace MI {
 namespace MDL {
 
 Mdl_annotation_definition_proxy::Mdl_annotation_definition_proxy()
-  : m_module_db_name()
 {
 }
 
@@ -73,7 +72,7 @@ SERIAL::Serializable* Mdl_annotation_definition_proxy::deserialize(
 void Mdl_annotation_definition_proxy::dump() const
 {
     std::ostringstream s;
-    s << "Module DB name: \"" << m_module_db_name << "\"" << std::endl;
+    s << "Module DB name: \"" << m_module_db_name << '\"' << std::endl;
     LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_DATABASE, "%s", s.str().c_str());
 }
 

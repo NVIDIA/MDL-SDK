@@ -482,7 +482,7 @@ mi::Sint32 get_value( const mi::IData* data, const char* key, T& value)
     return -1;
 }
 
-/*@}*/ // end group mi_neuray_types
+/**@}*/ // end group mi_neuray_types
 
 /** \addtogroup mi_neuray_scene_element
 @{
@@ -625,7 +625,7 @@ mi::Sint32 get_value(
     return get_value( data.get(), key, value);
 }
 
-/*@}*/ // end group mi_neuray_types
+/**@}*/ // end group mi_neuray_types
 
 } // namespace mi
 

@@ -485,8 +485,20 @@ public:
         const mi::neuraylib::ITile* tile,
         Pixel_type pixel_type) const = 0;
 
-    // Methods to adjust gamma value of canvases
-    // =========================================
+    // Methods to adjust gamma value of tiles and canvases
+    // ===================================================
+
+    /// Sets the gamma value of a tile and adjusts the pixel data accordingly.
+    ///
+    /// \note Gamma adjustments are always done in pixel type "Color" or "Rgb_fp". If necessary,
+    ///       the pixel data is converted forth and back automatically (which needs temporary
+    ///       buffers).
+    ///
+    /// \param tile             The tile whose pixel data is to adjust.
+    /// \param new_gamma        The new gamma value.
+    /// \param old_gamma        The old gamma value.
+    virtual void adjust_gamma(
+        mi::neuraylib::ITile* tile, mi::Float32 old_gamma, mi::Float32 new_gamma) const = 0;
 
     /// Sets the gamma value of a canvas and adjusts the pixel data accordingly.
     ///

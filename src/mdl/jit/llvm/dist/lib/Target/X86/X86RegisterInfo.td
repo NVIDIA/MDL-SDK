@@ -1,9 +1,8 @@
 //===- X86RegisterInfo.td - Describe the X86 Register File --*- tablegen -*-==//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -29,6 +28,8 @@ let Namespace = "X86" in {
   def sub_32bit    : SubRegIndex<32>;
   def sub_xmm      : SubRegIndex<128>;
   def sub_ymm      : SubRegIndex<256>;
+  def sub_mask_0   : SubRegIndex<-1>;
+  def sub_mask_1   : SubRegIndex<-1, -1>;
 }
 
 //===----------------------------------------------------------------------===//
@@ -264,6 +265,19 @@ let SubRegIndices = [sub_ymm] in {
   }
 }
 
+// Tile config registers.
+def TMMCFG: X86Reg<"tmmcfg", 0>;
+
+// Tile "registers".
+def TMM0:  X86Reg<"tmm0",   0>;
+def TMM1:  X86Reg<"tmm1",   1>;
+def TMM2:  X86Reg<"tmm2",   2>;
+def TMM3:  X86Reg<"tmm3",   3>;
+def TMM4:  X86Reg<"tmm4",   4>;
+def TMM5:  X86Reg<"tmm5",   5>;
+def TMM6:  X86Reg<"tmm6",   6>;
+def TMM7:  X86Reg<"tmm7",   7>;
+
 // Mask Registers, used by AVX-512 instructions.
 def K0 : X86Reg<"k0", 0>, DwarfRegNum<[118,  93,  93]>;
 def K1 : X86Reg<"k1", 1>, DwarfRegNum<[119,  94,  94]>;
@@ -278,7 +292,7 @@ def K7 : X86Reg<"k7", 7>, DwarfRegNum<[125, 100, 100]>;
 // pseudo registers, but we still mark them as aliasing FP registers. That
 // way both kinds can be live without exceeding the stack depth. ST registers
 // are only live around inline assembly.
-def ST0 : X86Reg<"st(0)", 0>, DwarfRegNum<[33, 12, 11]>;
+def ST0 : X86Reg<"st", 0>, DwarfRegNum<[33, 12, 11]>;
 def ST1 : X86Reg<"st(1)", 1>, DwarfRegNum<[34, 13, 12]>;
 def ST2 : X86Reg<"st(2)", 2>, DwarfRegNum<[35, 14, 13]>;
 def ST3 : X86Reg<"st(3)", 3>, DwarfRegNum<[36, 15, 14]>;
@@ -288,7 +302,15 @@ def ST6 : X86Reg<"st(6)", 6>, DwarfRegNum<[39, 18, 17]>;
 def ST7 : X86Reg<"st(7)", 7>, DwarfRegNum<[40, 19, 18]>;
 
 // Floating-point status word
-def FPSW : X86Reg<"fpsw", 0>;
+def FPSW : X86Reg<"fpsr", 0>;
+
+// Floating-point control word
+def FPCW : X86Reg<"fpcr", 0>;
+
+// SIMD Floating-point control register.
+// Note: We only model the "Uses" of the control bits: current rounding modes,
+// DAZ, FTZ and exception masks. We don't model the "Defs" of flag bits.
+def MXCSR : X86Reg<"mxcsr", 0>;
 
 // Status flags register.
 //
@@ -436,11 +458,12 @@ def GR8_ABCD_H : RegisterClass<"X86", [i8], 8, (add AH, CH, DH, BH)>;
 def GR16_ABCD : RegisterClass<"X86", [i16], 16, (add AX, CX, DX, BX)>;
 def GR32_ABCD : RegisterClass<"X86", [i32], 32, (add EAX, ECX, EDX, EBX)>;
 def GR64_ABCD : RegisterClass<"X86", [i64], 64, (add RAX, RCX, RDX, RBX)>;
-def GR32_TC   : RegisterClass<"X86", [i32], 32, (add EAX, ECX, EDX)>;
+def GR32_TC   : RegisterClass<"X86", [i32], 32, (add EAX, ECX, EDX, ESP)>;
 def GR64_TC   : RegisterClass<"X86", [i64], 64, (add RAX, RCX, RDX, RSI, RDI,
-                                                     R8, R9, R11, RIP)>;
+                                                     R8, R9, R11, RIP, RSP)>;
 def GR64_TCW64 : RegisterClass<"X86", [i64], 64, (add RAX, RCX, RDX,
-                                                      R8, R9, R10, R11, RIP)>;
+                                                      R8, R9, R10, R11,
+                                                      RIP, RSP)>;
 
 // GR8_NOREX - GR8 registers which do not require a REX prefix.
 def GR8_NOREX : RegisterClass<"X86", [i8], 8,
@@ -488,7 +511,7 @@ def GR64_NOREX_NOSP : RegisterClass<"X86", [i64], 64,
 // which we do not have right now.
 def LOW32_ADDR_ACCESS : RegisterClass<"X86", [i32], 32, (add GR32, RIP)>;
 
-// When RBP is used as a base pointer in a 32-bit addresses environement,
+// When RBP is used as a base pointer in a 32-bit addresses environment,
 // this is also safe to use the full register to access addresses.
 // Since RBP will never be spilled, stick to a 32 alignment to save
 // on memory consumption.
@@ -498,6 +521,16 @@ def LOW32_ADDR_ACCESS_RBP : RegisterClass<"X86", [i32], 32,
 // A class to support the 'A' assembler constraint: [ER]AX then [ER]DX.
 def GR32_AD : RegisterClass<"X86", [i32], 32, (add EAX, EDX)>;
 def GR64_AD : RegisterClass<"X86", [i64], 64, (add RAX, RDX)>;
+
+// Classes to support the 64-bit assembler constraint tied to a fixed
+// register in 32-bit mode. The second register is always the next in
+// the list. Wrap around causes an error.
+def GR32_DC : RegisterClass<"X86", [i32], 32, (add EDX, ECX)>;
+def GR32_CB : RegisterClass<"X86", [i32], 32, (add ECX, EBX)>;
+def GR32_BSI : RegisterClass<"X86", [i32], 32, (add EBX, ESI)>;
+def GR32_SIDI : RegisterClass<"X86", [i32], 32, (add ESI, EDI)>;
+def GR32_DIBP : RegisterClass<"X86", [i32], 32, (add EDI, EBP)>;
+def GR32_BPSP : RegisterClass<"X86", [i32], 32, (add EBP, ESP)>;
 
 // Scalar SSE2 floating point registers.
 def FR32 : RegisterClass<"X86", [f32], 32, (sequence "XMM%u", 0, 15)>;
@@ -511,9 +544,15 @@ def FR64 : RegisterClass<"X86", [f64], 64, (add FR32)>;
 // faster on common hardware.  In reality, this should be controlled by a
 // command line option or something.
 
+
 def RFP32 : RegisterClass<"X86",[f32], 32, (sequence "FP%u", 0, 6)>;
 def RFP64 : RegisterClass<"X86",[f64], 32, (add RFP32)>;
 def RFP80 : RegisterClass<"X86",[f80], 32, (add RFP32)>;
+
+// st(7) may be is not allocatable.
+def RFP80_7 : RegisterClass<"X86",[f80], 32, (add FP7)> {
+  let isAllocatable = 0;
+}
 
 // Floating point stack registers (these are not allocatable by the
 // register allocator - the floating point stackifier is responsible
@@ -522,6 +561,9 @@ def RST : RegisterClass<"X86", [f80, f64, f32], 32, (sequence "ST%u", 0, 7)> {
   let isAllocatable = 0;
 }
 
+// Helper to allow %st to print as %st(0) when its encoded in the instruction.
+def RSTi : RegisterOperand<RST, "printSTiRegOperand">;
+
 // Generic vector registers: VR64 and VR128.
 // Ensure that float types are declared first - only float is legal on SSE1.
 def VR64: RegisterClass<"X86", [x86mmx], 64, (sequence "MM%u", 0, 7)>;
@@ -529,17 +571,6 @@ def VR128 : RegisterClass<"X86", [v4f32, v2f64, v16i8, v8i16, v4i32, v2i64, f128
                           128, (add FR32)>;
 def VR256 : RegisterClass<"X86", [v8f32, v4f64, v32i8, v16i16, v8i32, v4i64],
                           256, (sequence "YMM%u", 0, 15)>;
-
-// Special classes that help the assembly parser choose some alternate
-// instructions to favor 2-byte VEX encodings.
-def VR128L : RegisterClass<"X86", [v4f32, v2f64, v16i8, v8i16, v4i32, v2i64, f128],
-                           128, (sequence "XMM%u", 0, 7)>;
-def VR128H : RegisterClass<"X86", [v4f32, v2f64, v16i8, v8i16, v4i32, v2i64, f128],
-                           128, (sequence "XMM%u", 8, 15)>;
-def VR256L : RegisterClass<"X86", [v8f32, v4f64, v32i8, v16i16, v8i32, v4i64],
-                           256, (sequence "YMM%u", 0, 7)>;
-def VR256H : RegisterClass<"X86", [v8f32, v4f64, v32i8, v16i16, v8i32, v4i64],
-                           256, (sequence "YMM%u", 8, 15)>;
 
 // Status flags registers.
 def CCR : RegisterClass<"X86", [i32], 32, (add EFLAGS)> {
@@ -558,6 +589,10 @@ def DFCCR : RegisterClass<"X86", [i32], 32, (add DF)> {
 // AVX-512 vector/mask registers.
 def VR512 : RegisterClass<"X86", [v16f32, v8f64, v64i8, v32i16, v16i32, v8i64],
                           512, (sequence "ZMM%u", 0, 31)>;
+
+// Represents the lower 16 registers that have VEX/legacy encodable subregs.
+def VR512_0_15 : RegisterClass<"X86", [v16f32, v8f64, v64i8, v32i16, v16i32, v8i64],
+                               512, (sequence "ZMM%u", 0, 15)>;
 
 // Scalar AVX-512 floating point registers.
 def FR32X : RegisterClass<"X86", [f32], 32, (sequence "XMM%u", 0, 31)>;
@@ -579,6 +614,16 @@ def VK16    : RegisterClass<"X86", [v16i1], 16, (add VK8)> {let Size = 16;}
 def VK32    : RegisterClass<"X86", [v32i1], 32, (add VK16)> {let Size = 32;}
 def VK64    : RegisterClass<"X86", [v64i1], 64, (add VK32)> {let Size = 64;}
 
+// Mask register pairs
+def KPAIRS : RegisterTuples<[sub_mask_0, sub_mask_1],
+                             [(add K0, K2, K4, K6), (add K1, K3, K5, K7)]>;
+
+def VK1PAIR   : RegisterClass<"X86", [untyped], 16, (add KPAIRS)> {let Size = 32;}
+def VK2PAIR   : RegisterClass<"X86", [untyped], 16, (add KPAIRS)> {let Size = 32;}
+def VK4PAIR   : RegisterClass<"X86", [untyped], 16, (add KPAIRS)> {let Size = 32;}
+def VK8PAIR   : RegisterClass<"X86", [untyped], 16, (add KPAIRS)> {let Size = 32;}
+def VK16PAIR  : RegisterClass<"X86", [untyped], 16, (add KPAIRS)> {let Size = 32;}
+
 def VK1WM   : RegisterClass<"X86", [v1i1],  16,  (sub VK1, K0)> {let Size = 16;}
 def VK2WM   : RegisterClass<"X86", [v2i1],  16,  (sub VK2, K0)> {let Size = 16;}
 def VK4WM   : RegisterClass<"X86", [v4i1],  16,  (sub VK4, K0)> {let Size = 16;}
@@ -589,3 +634,13 @@ def VK64WM  : RegisterClass<"X86", [v64i1], 64, (add VK32WM)> {let Size = 64;}
 
 // Bound registers
 def BNDR : RegisterClass<"X86", [v2i64], 128, (sequence "BND%u", 0, 3)>;
+
+// Tiles
+let CopyCost = -1 in // Don't allow copying of tile registers
+def TILE : RegisterClass<"X86", [x86amx], 8192,
+                         (sequence "TMM%u", 0, 7)> {let Size = 8192;}
+def TILECFG : RegisterClass<"X86", [untyped], 512, (add TMMCFG)> {
+  let CopyCost = -1;  // Don't allow copying of tile config registers.
+  let isAllocatable = 1;
+  let Size = 512;
+}

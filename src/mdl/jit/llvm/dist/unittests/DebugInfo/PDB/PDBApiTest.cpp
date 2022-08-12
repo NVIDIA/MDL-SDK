@@ -1,9 +1,8 @@
 //===- llvm/unittest/DebugInfo/PDB/PDBApiTest.cpp -------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -68,7 +67,7 @@ class MockSession : public IPDBSession {
   uint64_t getLoadAddress() const override { return 0; }
   bool setLoadAddress(uint64_t Address) override { return false; }
   std::unique_ptr<PDBSymbolExe> getGlobalScope() override { return nullptr; }
-  std::unique_ptr<PDBSymbol> getSymbolById(uint32_t SymbolId) const override {
+  std::unique_ptr<PDBSymbol> getSymbolById(SymIndexId SymbolId) const override {
     return nullptr;
   }
   std::unique_ptr<IPDBSourceFile>
@@ -83,17 +82,17 @@ class MockSession : public IPDBSession {
                      uint32_t &Offset) const override {
     return false;
   }
-  std::unique_ptr<PDBSymbol>
-  findSymbolByAddress(uint64_t Address, PDB_SymType Type) const override {
+  std::unique_ptr<PDBSymbol> findSymbolByAddress(uint64_t Address,
+                                                 PDB_SymType Type) override {
     return nullptr;
   }
   std::unique_ptr<PDBSymbol> findSymbolByRVA(uint32_t RVA,
-                                             PDB_SymType Type) const override {
+                                             PDB_SymType Type) override {
     return nullptr;
   }
-  std::unique_ptr<PDBSymbol>
-  findSymbolBySectOffset(uint32_t Sect, uint32_t Offset,
-                         PDB_SymType Type) const override {
+  std::unique_ptr<PDBSymbol> findSymbolBySectOffset(uint32_t Sect,
+                                                    uint32_t Offset,
+                                                    PDB_SymType Type) override {
     return nullptr;
   }
   std::unique_ptr<IPDBEnumLineNumbers>
@@ -159,6 +158,10 @@ class MockSession : public IPDBSession {
   std::unique_ptr<IPDBEnumSectionContribs> getSectionContribs() const override {
     return nullptr;
   }
+
+  std::unique_ptr<IPDBEnumFrameData> getFrameData() const override {
+    return nullptr;
+  }
 };
 
 class MockRawSymbol : public IPDBRawSymbol {
@@ -166,7 +169,8 @@ public:
   MockRawSymbol(PDB_SymType SymType)
       : Type(SymType) {}
 
-  void dump(raw_ostream &OS, int Indent) const override {}
+  void dump(raw_ostream &OS, int Indent, PdbSymbolIdField ShowIdFields,
+    PdbSymbolIdField RecurseIdFields) const override {}
 
   std::unique_ptr<IPDBEnumSymbols>
   findChildren(PDB_SymType Type) const override {
@@ -460,7 +464,7 @@ private:
   std::unique_ptr<IPDBSession> Session;
 
   void InsertItemWithTag(PDB_SymType Tag) {
-    auto RawSymbol = llvm::make_unique<MockRawSymbol>(Tag);
+    auto RawSymbol = std::make_unique<MockRawSymbol>(Tag);
     auto Symbol = PDBSymbol::create(*Session, std::move(RawSymbol));
     SymbolMap.insert(std::make_pair(Tag, std::move(Symbol)));
   }

@@ -67,6 +67,7 @@ public:
     std::string m_backend = "hlsl";
     bool m_use_derivatives = false;
     std::string m_num_texture_results = "16";
+    bool m_dump_metadata = false;
 
     /// MDL qualified material name to generate code for.
     std::string m_qualified_material_name = "::nvidia::sdk_examples::tutorials::example_material";
@@ -118,6 +119,18 @@ void dump_dag(
     s << "    body " << result->get_c_str() << std::endl;
 }
 
+/// Dump generated meta data tables.
+void dump_metadata(mi::base::Handle<const mi::neuraylib::ITarget_code> code, std::ostream& out)
+{
+    out << "/* String table\n";
+    for (mi::Size i = 0, n = code->get_string_constant_count(); i < n; ++i)
+    {
+        const char* c = code->get_string_constant(i);
+        out << "   " << i << ": \"" << c << "\"\n";
+    }
+    out << "*/\n\n";
+}
+
 /// The main content of the example
 void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
 {
@@ -138,7 +151,7 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
 
         // The context is used to pass options to different components and operations.
         // It also carries errors, warnings, and warnings produces by the operations.
-        mi::base::Handle < mi::neuraylib::IMdl_execution_context> context(
+        mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
             mdl_factory->create_execution_context());
 
         // Split the material name passed on the command line into a module
@@ -261,7 +274,9 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
                 neuray->get_api_component<mi::neuraylib::IMdl_backend_api>());
 
             mi::base::Handle<mi::neuraylib::IMdl_backend> backend;
-            if (options.m_backend == "hlsl")
+            if (options.m_backend == "glsl")
+                backend = mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_GLSL);
+            else if (options.m_backend == "hlsl")
                 backend = mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_HLSL);
             else if (options.m_backend == "ptx")
                 backend = mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX);
@@ -341,11 +356,15 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
                 if (file_stream)
                 {
                     file_stream << target_code->get_code();
+                    if (options.m_dump_metadata)
+                        dump_metadata(target_code, file_stream);
                     file_stream.close();
                 }
             }
             else {
                 std::cout << "\n\n\n" << target_code->get_code() << "\n\n\n";
+                if (options.m_dump_metadata)
+                    dump_metadata(target_code, std::cout);
             }
 
             // Serialization is not supported by the LLVM-IR backend.
@@ -461,13 +480,14 @@ options:
   -n|--nostdpath                Prevent adding the MDL system and user search
                                 path(s) to the MDL search path.
   -o|--output <file>            Export the module to this file. Default: stdout
-  -b|--backend <backend>        Select the back-end to generate code for. {DAG, HLSL, PTX, LLVM}
-                                Default: HLSL
+  -b|--backend <backend>        Select the back-end to generate code for. One of
+                                {DAG, GLSL, HLSL, PTX, LLVM}. Default: HLSL
   -e|--expr_path <path>         Add an MDL expression path to generate, like \"surface.scattering\".
                                 Defaults to a set of expression paths.
   -d|--derivatives              Generate code with derivative support.
   -i|--instance_compilation     Use instance compilation instead of class compilation.
   -t|--text_results <num>       Number of float4 texture result slots in the state. Default: 16
+  -M|--dump-meta-data           Print all generated meta data tables.
   --ft                          Fold ternary operators when used on distribution functions.
   --fb                          Fold boolean parameters.
   --fe                          Fold enum parameters.
@@ -497,7 +517,7 @@ bool Options::parse(int argc, char* argv[])
                 m_fold_ternary_on_df = true;
             else if (arg == "--fb")
                 m_fold_all_bool_parameters = true;
-            else if (arg == "--ft")
+            else if (arg == "--fe")
                 m_fold_all_enum_parameters = true;
             else if (arg == "--dian")
                 m_ignore_noinline = false;
@@ -556,6 +576,8 @@ bool Options::parse(int argc, char* argv[])
                 }
                 m_num_texture_results = argv[++i];
             }
+            else if (arg == "-M" || arg == "--dump_meta_data")
+                m_dump_metadata = true;
             else
             {
                 std::cerr << "error: Unknown option \"" << arg << "\"." << std::endl;
@@ -581,7 +603,8 @@ bool Options::parse(int argc, char* argv[])
             return false;
         }
 
-        if (m_backend != "dag" && m_backend != "hlsl" && m_backend != "ptx" && m_backend != "llvm")
+        if (m_backend != "dag" && m_backend != "glsl" && m_backend != "hlsl" &&
+            m_backend != "ptx" && m_backend != "llvm")
         {
             std::cerr << "error: Back-end is missing or invalid." << std::endl;
             return false;

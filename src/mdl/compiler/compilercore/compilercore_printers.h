@@ -487,7 +487,7 @@ protected:
     Syntax_elements_stack m_color_stack;
 
     /// The quote string.
-    string m_string_quote;
+    char m_string_quote[16];
 };
 
 ///

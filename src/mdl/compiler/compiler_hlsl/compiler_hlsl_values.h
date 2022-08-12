@@ -63,6 +63,7 @@ public:
         VK_MIN12INT,            ///< An min12int value.
         VK_MIN16INT,            ///< An min16int value.
         VK_MIN16UINT,           ///< An min16uint value.
+        VK_STRING,              ///< A string value.
         VK_VECTOR,              ///< A vector value.
         VK_MATRIX,              ///< A matrix value.
         VK_ARRAY,               ///< An array value.
@@ -260,6 +261,9 @@ public:
 
     /// Returns true if this value is finite (i.e. neither Inf nor NaN).
     virtual bool is_finite();
+
+    /// Check, if this value is NaN.
+    virtual bool is_nan();
 
 protected:
     /// Constructor.
@@ -615,10 +619,10 @@ class Value_fp : public Value_scalar
 {
     typedef Value_scalar Base;
 public:
-    /// Check if something is a Plus zero, aka +0.0.
+    /// Check if this value is a Plus zero, aka +0.0.
     virtual bool is_plus_zero() = 0;
 
-    /// Check if something is a Minus zero, , aka -0.0.
+    /// Check if this value is a Minus zero, , aka -0.0.
     virtual bool is_minus_zero() = 0;
 
 protected:
@@ -681,11 +685,14 @@ public:
     /// Get the value.
     float get_value() { return m_value; }
 
-    /// Check if something is a Plus zero, aka +0.0.
+    /// Check if this value is a Plus zero, aka +0.0.
     bool is_plus_zero() HLSL_FINAL;
 
-    /// Check if something is a Minus zero, aka -0.0.
+    /// Check if this value is a Minus zero, aka -0.0.
     bool is_minus_zero() HLSL_FINAL;
+
+    /// Check, if this value is NaN.
+    bool is_nan() HLSL_FINAL;
 
 private:
     /// Constructor.
@@ -747,11 +754,14 @@ public:
     /// Get the value.
     float get_value() { return m_value; }
 
-    // Check if something is a Plus zero, aka +0.0.
+    // Check if this value is a Plus zero, aka +0.0.
     bool is_plus_zero() HLSL_FINAL;
 
-    /// Check if something is a Minus zero, aka -0.0.
+    /// Check if this value is a Minus zero, aka -0.0.
     bool is_minus_zero() HLSL_FINAL;
+
+    /// Check if this value is NaN.
+    bool is_nan() HLSL_FINAL;
 
 private:
     /// Constructor.
@@ -813,11 +823,14 @@ public:
     /// Get the value.
     double get_value() { return m_value; }
 
-    // Check if something is a Plus zero, aka +0.0.
+    // Check if this value is a Plus zero, aka +0.0.
     bool is_plus_zero() HLSL_FINAL;
 
-    /// Check if something is a Minus zero, aka -0.0.
+    /// Check if this value is a Minus zero, aka -0.0.
     bool is_minus_zero() HLSL_FINAL;
+
+    /// Check if this value is NaN.
+    bool is_nan() HLSL_FINAL;
 
 private:
     /// Constructor.
@@ -826,6 +839,36 @@ private:
 private:
     /// The value.
     double m_value;
+};
+
+/// A string value.
+class Value_string : public Value
+{
+    typedef Value Base;
+    friend class mi::mdl::Arena_builder;
+public:
+    /// The kind of this subclass.
+    static const Kind s_kind = VK_STRING;
+
+    /// Get the kind of value.
+    Kind get_kind() HLSL_FINAL;
+
+    /// Get the type of this value.
+    Type_string *get_type() HLSL_FINAL;
+
+    /// Returns true if this value is finite (i.e. neither Inf nor NaN).
+    bool is_finite() HLSL_FINAL;
+
+    /// Get the value.
+    char const *get_value() { return m_value; }
+
+private:
+    /// Constructor.
+    explicit Value_string(Memory_arena *arena, Type_string *type, char const *value);
+
+private:
+    /// The value.
+    char const *m_value;
 };
 
 /// A compound value.
@@ -937,6 +980,9 @@ public:
     /// Returns true if all components of this value are ALL ONE.
     bool is_all_one() HLSL_FINAL;
 
+    /// Returns true if any component of this value is NaN.
+    bool is_nan() HLSL_FINAL;
+
 private:
     /// Constructor.
     explicit Value_vector(
@@ -986,6 +1032,10 @@ public:
 
     /// Returns true if the value is the identity matrix (i.e. multiplicative neutral).
     bool is_one() HLSL_FINAL;
+
+    /// Returns true if any component of this value is NaN.
+    bool is_nan() HLSL_FINAL;
+
 private:
     /// Constructor.
     explicit Value_matrix(
@@ -1218,6 +1268,11 @@ public:
     ///
     /// \param value The value of the double.
     Value_double *get_double(double value);
+
+    /// Get a value of type string.
+    ///
+    /// \param value The value of the string
+    Value_string *get_string(char const *value);
 
     /// Get a value of type vector.
     ///

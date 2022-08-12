@@ -119,7 +119,7 @@ private:
     base::Handle<Bsdf_buffer> m_bsdf_buffer;
 };
 
-/*@}*/ // end group mi_neuray_misc
+/**@}*/ // end group mi_neuray_misc
 
 } // namespace neuraylib
 

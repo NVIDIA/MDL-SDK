@@ -207,7 +207,7 @@ public:
 
     mi::Sint32 get_value_code( mi::Size index, mi::Sint32* errors) const;
 
-    mi::Size find_value( char const* name) const { return m_type->find_value( name); }
+    mi::Size find_value( const char* name) const { return m_type->find_value( name); }
 
     mi::Size find_value( mi::Sint32 code) const { return m_type->find_value( code); }
 

@@ -94,7 +94,7 @@ bool Transaction_impl::commit()
 
 void Transaction_impl::abort() { MI_ASSERT(false); }
 
-bool Transaction_impl::is_open() { return m_is_open; }
+bool Transaction_impl::is_open(bool) { return m_is_open; }
 
 DB::Tag Transaction_impl::reserve_tag() { return m_database->allocate_tag(); }
 

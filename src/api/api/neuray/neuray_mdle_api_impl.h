@@ -40,8 +40,8 @@
 
 #include "neuray_mdl_resource_callback.h"
 
-#include <unordered_map>
-#include <unordered_set>
+#include <vector>
+#include <base/lib/robin_hood/robin_hood.h>
 
 namespace mi {
 
@@ -81,7 +81,7 @@ public:
     /// \param support_strict_relative_path  if true, the resource name allows strict relative path
     ///
     /// \return The MDL name of this resource value.
-    char const *get_resource_name(
+    const char* get_resource_name(
         const mi::mdl::IValue_resource* v,
         bool support_strict_relative_path) override;
 
@@ -89,13 +89,13 @@ public:
     size_t get_resource_count() const override;
 
     /// Get the resource path that should be used in the MDLE main module.
-    char const *get_mlde_resource_path(size_t index) const override;
+    const char* get_mlde_resource_path(size_t index) const override;
 
     /// Get a stream reader interface that gives access to the requested resource data.
-    mi::mdl::IMDL_resource_reader *get_resource_reader(size_t index) const override;
+    mi::mdl::IMDL_resource_reader* get_resource_reader(size_t index) const override;
 
     // Get a stream reader interface that gives access to the requested addition data file.
-    mi::mdl::IMDL_resource_reader *get_additional_data_reader(char const* path) override;
+    mi::mdl::IMDL_resource_reader* get_additional_data_reader(const char* path) override;
 
 private:
 
@@ -116,13 +116,13 @@ private:
     MDL::Execution_context* m_context;
 
     // Map from resolved name (result of Base::get_resource_name) to the resource name in the MDLE.
-    std::unordered_map<std::string, std::string> m_resource_names_resolved2mdle;
+    robin_hood::unordered_map<std::string, std::string> m_resource_names_resolved2mdle;
 
     // All resource files that will be added to the MDLE.
     std::vector<Resource_desc> m_resources;
 
     // Keep track of resource names in the MDLE, avoid collision by using 'generate_mdle_name(...)'.
-    std::unordered_set<std::string> m_reserved_mdle_names;
+    robin_hood::unordered_set<std::string> m_reserved_mdle_names;
 };
 
 class Mdle_api_impl final
@@ -137,7 +137,6 @@ public:
     /// Destructor of Mdle_api_impl.
     virtual ~Mdle_api_impl();
 
-public:
     // public API methods
 
     mi::Sint32 export_mdle(
@@ -188,8 +187,7 @@ private:
     Mdle_api_impl(Mdle_api_impl const &) = delete;
     Mdle_api_impl &operator=(Mdle_api_impl const &) = delete;
 
-private:
-    mi::neuraylib::INeuray *m_neuray;
+    mi::neuraylib::INeuray* m_neuray;
 
     SYSTEM::Access_module<MDLC::Mdlc_module> m_mdlc_module;
 };

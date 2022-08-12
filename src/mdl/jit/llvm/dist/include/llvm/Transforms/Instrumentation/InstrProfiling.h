@@ -1,9 +1,8 @@
 //===- Transforms/Instrumentation/InstrProfiling.h --------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 /// \file
@@ -35,17 +34,19 @@ using LoadStorePair = std::pair<Instruction *, Instruction *>;
 /// instrumentation pass.
 class InstrProfiling : public PassInfoMixin<InstrProfiling> {
 public:
-  InstrProfiling() = default;
-  InstrProfiling(const InstrProfOptions &Options) : Options(Options) {}
+  InstrProfiling() : IsCS(false) {}
+  InstrProfiling(const InstrProfOptions &Options, bool IsCS = false)
+      : Options(Options), IsCS(IsCS) {}
 
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
-  bool run(Module &M, const TargetLibraryInfo &TLI);
+  bool run(Module &M,
+           std::function<const TargetLibraryInfo &(Function &F)> GetTLI);
 
 private:
   InstrProfOptions Options;
   Module *M;
   Triple TT;
-  const TargetLibraryInfo *TLI;
+  std::function<const TargetLibraryInfo &(Function &F)> GetTLI;
   struct PerFunctionProfileData {
     uint32_t NumValueSites[IPVK_Last + 1];
     GlobalVariable *RegionCounters = nullptr;
@@ -61,13 +62,11 @@ private:
   GlobalVariable *NamesVar;
   size_t NamesSize;
 
+  // Is this lowering for the context-sensitive instrumentation.
+  bool IsCS;
+
   // vector of counter load/store pairs to be register promoted.
   std::vector<LoadStorePair> PromotionCandidates;
-
-  // The start value of precise value profile range for memory intrinsic sizes.
-  int64_t MemOPSizeRangeStart;
-  // The end value of precise value profile range for memory intrinsic sizes.
-  int64_t MemOPSizeRangeLast;
 
   int64_t TotalCountersPromoted = 0;
 
@@ -77,6 +76,9 @@ private:
 
   /// Register-promote counter loads and stores in loops.
   void promoteCounterLoadStores(Function *F);
+
+  /// Returns true if relocating counters at runtime is enabled.
+  bool isRuntimeCounterRelocationEnabled() const;
 
   /// Returns true if profile counter update register promotion is enabled.
   bool isCounterPromotionEnabled() const;

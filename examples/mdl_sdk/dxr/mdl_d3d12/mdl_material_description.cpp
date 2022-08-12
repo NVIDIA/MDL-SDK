@@ -54,14 +54,16 @@ const std::string Mdl_material_description::Invalid_material_identifier = "::dxr
 
 // ------------------------------------------------------------------------------------------------
 
-Mdl_material_description::Mdl_material_description(const std::string& unique_material_identifier)
-    : m_parameters()
+Mdl_material_description::Mdl_material_description(
+    const std::string& unique_material_identifier)
+    : m_scene(nullptr)
+    , m_scene_material()
     , m_is_loaded(false)
     , m_is_fallback(false)
     , m_supports_reloading(false)
     , m_loader(nullptr)
     , m_parameter_list(nullptr)
-    , m_module_db_name("")
+    , m_module_db_names(1, "")
     , m_material_definition_db_name("")
     , m_qualified_module_name("")
     , m_material_name("")
@@ -70,7 +72,7 @@ Mdl_material_description::Mdl_material_description(const std::string& unique_mat
     , m_flags(IMaterial::Flags::None)
     , m_unique_id(s_material_desc_id_counter.fetch_add(1))
 {
-    m_parameters.name = unique_material_identifier;
+    m_scene_material.name = unique_material_identifier;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -82,10 +84,13 @@ Mdl_material_description::Mdl_material_description()
 
 // ------------------------------------------------------------------------------------------------
 
-Mdl_material_description::Mdl_material_description(const IScene_loader::Material& description)
+Mdl_material_description::Mdl_material_description(
+    const IScene_loader::Scene* scene,
+    const IScene_loader::Material& material)
     : Mdl_material_description()
 {
-    m_parameters = description;
+    m_scene = scene;
+    m_scene_material = material;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -97,9 +102,16 @@ Mdl_material_description::~Mdl_material_description()
 
 // ------------------------------------------------------------------------------------------------
 
-const IScene_loader::Material& Mdl_material_description::get_material_parameters() const
+const IScene_loader::Scene* Mdl_material_description::get_scene() const
 {
-    return m_parameters;
+    return m_scene;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+const IScene_loader::Material& Mdl_material_description::get_scene_material() const
+{
+    return m_scene_material;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -114,9 +126,9 @@ bool Mdl_material_description::load_material_definition(
         return true;
 
     // special case: the invalid material is requested directly
-    if (m_parameters.name == Invalid_material_identifier)
+    if (m_scene_material.name == Invalid_material_identifier)
     {
-        if (!load_material_definition_fallback(sdk, scene_directory , context))
+        if (!load_material_definition_fallback(sdk, scene_directory, context))
         {
             log_error("[FATAL] Invalid (fall-back) material can not be loaded.", SRC);
             return false;
@@ -130,10 +142,10 @@ bool Mdl_material_description::load_material_definition(
     bool skip_glft_material_as_first_fall_back = false;
 
     // handle mdl (by convention when the name starts with '::')
-    if (!m_is_loaded && mi::examples::strings::starts_with(m_parameters.name, "::"))
+    if (!m_is_loaded && mi::examples::strings::starts_with(m_scene_material.name, "::"))
     {
         log_info("Material name matches the convention for overriding by an MDL material: " +
-            m_parameters.name);
+            m_scene_material.name);
 
         m_is_loaded = load_material_definition_mdl(sdk, scene_directory, context);
         skip_glft_material_as_first_fall_back = true;
@@ -141,11 +153,11 @@ bool Mdl_material_description::load_material_definition(
 
     // handle mdle
     if (!m_is_loaded && (
-        mi::examples::strings::ends_with(m_parameters.name, ".mdle") ||
-        mi::examples::strings::ends_with(m_parameters.name, ".mdle::main")))
+        mi::examples::strings::ends_with(m_scene_material.name, ".mdle") ||
+        mi::examples::strings::ends_with(m_scene_material.name, ".mdle::main")))
     {
         log_info("Material name matches the convention for overriding by an MDLE material: " +
-            m_parameters.name);
+            m_scene_material.name);
 
         m_is_loaded = load_material_definition_mdle(sdk, scene_directory, context);
         skip_glft_material_as_first_fall_back = true;
@@ -158,14 +170,13 @@ bool Mdl_material_description::load_material_definition(
             [&](const IMdl_material_description_loader* loader)
             {
                 // load if there is a match
-                if (loader->match_gltf_name(m_parameters.name))
+                if (loader->match_gltf_name(m_scene_material.name))
                 {
                     log_info("Material name matches the convention for overriding: " +
-                        m_parameters.name);
+                        m_scene_material.name);
 
                     m_loader = loader; // keep the loader for reloading
-                    m_is_loaded = load_material_definition_loader(
-                        sdk, scene_directory, context, loader);
+                    m_is_loaded = load_material_definition_loader(sdk, scene_directory, context, loader);
 
                     // do not use the gltf support as fall-back (pink instead)
                     skip_glft_material_as_first_fall_back = true;
@@ -180,7 +191,7 @@ bool Mdl_material_description::load_material_definition(
     {
         m_is_loaded = load_material_definition_gltf_support(sdk, scene_directory, context);
         log_info("Material name does not match any convention, "
-            "so the GLTF support material is used: " + m_parameters.name);
+            "so the GLTF support material is used: " + m_scene_material.name);
     }
 
     // fall-back
@@ -189,16 +200,16 @@ bool Mdl_material_description::load_material_definition(
 
     if (m_is_loaded)
     {
-        m_material_definition_db_name = m_module_db_name + "::" + m_material_name;
+        m_material_definition_db_name = m_module_db_names[0] + "::" + m_material_name;
 
         // reflect changed imports
-        sdk.get_library()->update_module_dependencies(m_module_db_name);
+        sdk.get_library()->update_module_dependencies(m_module_db_names[0]);
 
         return true;
     }
 
     log_error("[FATAL] Material definition can't be loaded and fall-back solutions failed for: "
-        + m_parameters.name, SRC);
+        + m_scene_material.name, SRC);
     return false;
 }
 
@@ -207,31 +218,6 @@ bool Mdl_material_description::load_material_definition(
 bool Mdl_material_description::is_loaded() const
 {
     return m_is_loaded;
-}
-
-// ------------------------------------------------------------------------------------------------
-
-const mi::neuraylib::IExpression_list* Mdl_material_description::get_parameters() const
-{
-    if (!m_parameter_list)
-        return nullptr;
-
-    m_parameter_list->retain();
-    return m_parameter_list.get();
-}
-
-// ------------------------------------------------------------------------------------------------
-
-const char* Mdl_material_description::get_qualified_module_name() const
-{
-    return m_is_loaded ? m_qualified_module_name.c_str() : nullptr;
-}
-
-// ------------------------------------------------------------------------------------------------
-
-const char* Mdl_material_description::get_material_name() const
-{
-    return m_is_loaded ? m_material_name.c_str() : nullptr;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -264,16 +250,993 @@ bool Mdl_material_description::supports_reloading() const
 
 // ------------------------------------------------------------------------------------------------
 
-const char* Mdl_material_description::get_module_db_name() const
+const std::vector<std::string>& Mdl_material_description::get_module_db_names() const
 {
-    return m_is_loaded ? m_module_db_name.c_str() : nullptr;
+    return m_module_db_names;
 }
 
 // ------------------------------------------------------------------------------------------------
 
-const char* Mdl_material_description::get_material_definition_db_name() const
+std::string Mdl_material_description::build_material_graph(
+    Mdl_sdk& sdk,
+    const std::string& scene_directory,
+    const std::string& unique_db_prefix,
+    mi::neuraylib::IMdl_execution_context* context)
 {
-    return m_is_loaded ? m_material_definition_db_name.c_str() : nullptr;
+    // check if available and process materials specified using the NV_materials_mdl extension
+    size_t root_call = m_scene_material.ext_NV_materials_mdl.functionCall;
+    if (root_call != static_cast<int32_t>(-1) &&
+        m_scene && m_scene->ext_NV_materials_mdl.functionCalls.size() > root_call)
+    {
+        std::string graph_root_db_name = build_material_graph_NV_materials_mdl(
+            sdk, scene_directory, unique_db_prefix, context);
+        if (!graph_root_db_name.empty())
+            return graph_root_db_name;
+    }
+
+    // fall-back to naming conventions, glTF PBR materials or the invalid material as last resort
+
+    // load the definitions
+    load_material_definition(sdk, scene_directory, context);
+    if (!is_loaded())
+        return ""; // error case, no fall-back
+
+    // get the material definition from the database
+    mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
+        sdk.get_transaction().access<mi::neuraylib::IFunction_definition>(
+            m_material_definition_db_name.c_str()));
+
+    // create a material instance with the provided parameters and store it in the database
+    mi::Sint32 ret = 0;
+    mi::base::Handle<mi::neuraylib::IFunction_call> material_instance(
+        material_definition->create_function_call(m_parameter_list.get(), &ret));
+    if (ret != 0 || !material_instance)
+    {
+        log_error("Instantiating material '" + m_name_in_scene + "' failed", SRC);
+        return ""; // error case, no fall-back
+    }
+
+    // store the instance in the DB
+    sdk.get_transaction().store(material_instance.get(), unique_db_prefix.c_str());
+    return unique_db_prefix;
+}
+// ------------------------------------------------------------------------------------------------
+
+namespace // anonymous
+{
+    // repeatedly used functions
+    const mi::neuraylib::IModule* access_module(
+        Mdl_sdk& sdk,
+        const char* qualified_module_name,
+        std::string& db_name,
+        mi::neuraylib::IMdl_execution_context* context)
+    {
+        // assuming here we do not store encoded names in the glTF files
+        mi::base::Handle<const mi::IString> encoded_qualified_module_name(
+            sdk.get_factory().encode_module_name(qualified_module_name));
+        qualified_module_name = encoded_qualified_module_name->get_c_str();
+
+        // expected database name of the module to load
+        mi::base::Handle<const mi::IString> module_db_name(
+            sdk.get_factory().get_db_module_name(qualified_module_name));
+
+        // check if the module and thereby the material definition is already loaded
+        mi::base::Handle<const mi::neuraylib::IModule> module(
+            sdk.get_transaction().access<mi::neuraylib::IModule>(module_db_name->get_c_str()));
+
+        // if not, load it
+        if (!module)
+        {
+            // Load the module that contains the material.
+            // This functions supports multi-threading. It blocks when the requested module
+            // or a dependency is loaded by a different thread.
+            sdk.get_impexp_api().load_module(
+                sdk.get_transaction().get(), qualified_module_name, context);
+
+            // loading failed
+            if (!sdk.log_messages(
+                "Loading the module failed: " + std::string(qualified_module_name), context))
+            {
+                return nullptr;
+            }
+            // access the module for overload resolution
+            module = sdk.get_transaction().access<mi::neuraylib::IModule>(
+                module_db_name->get_c_str());
+        }
+        db_name = module_db_name->get_c_str();
+        module->retain();
+        return module.get();
+    };
+
+    struct function_call_data
+    {
+        std::string db_name;
+        std::unique_ptr<mi::neuraylib::Argument_editor> ae;
+    };
+
+    struct type_data
+    {
+        mi::base::Handle<const mi::neuraylib::IType> type;
+    };
+
+    struct texture_data
+    {
+        std::string db_name_image;
+        std::string db_name_texture_srgb;
+        std::string db_name_texture_linear;
+    };
+
+
+    std::string convert_module_uri_to_package(const std::string& uri)
+    {
+        // remove .mdl
+        std::string result = (uri.rfind(".mdl") != std::string::npos)
+            ? uri.substr(0, uri.size() - 4) : uri;
+
+        // remove mdl://
+        if (result.find("mdl://") != std::string::npos)
+            result = result.substr(6);
+
+        // remove preceding . and ..
+        if (result[0] == '.')
+        {
+            if (result[1] == '.')
+                result = result.substr(2);
+            else
+                result = result.substr(1);
+        }
+
+        // prepend slash (/) if missing
+        if (result[0] != '/')
+            result = '/' + result;
+
+        // replace all slashes (/) with a double colon (::)
+        for (size_t pos = 0; pos < result.size(); pos++)
+        {
+            if (result[pos] != '/')
+                continue;
+
+            // find end of multi slash
+            size_t end = pos + 1;
+            while (end < result.size() && result[end] == '/')
+                end++;
+
+            result.replace(pos, end - pos, "::");
+        }
+
+        return result;
+    }
+
+    const mi::neuraylib::IType* create_type_from_gltf(
+        Mdl_sdk& sdk,
+        const IScene_loader::Scene* scene,
+        const fx::gltf::NV_MaterialsMDL::Type& gltf_type,
+        std::unordered_map<int32_t, type_data>& types,
+        mi::neuraylib::IType_factory* tf,
+        mi::neuraylib::IMdl_execution_context* context
+    )
+    {
+        mi::base::Handle<const mi::neuraylib::IType> type;
+
+        size_t vector_element_count = 0;
+        size_t matrix_column_count = 0;
+        mi::base::Handle<const mi::neuraylib::IType_atomic> vector_element_type;
+
+        // handle builtin types as defined in the MDL specification Appendix A
+        if (gltf_type.kind == fx::gltf::NV_MaterialsMDL::Type::Kind::BuiltinType)
+        {
+            // booleans, numeric types, strings, ...
+            if (gltf_type.builtinType == "bool")
+            {
+                type = tf->create_bool();
+            }
+            else if (gltf_type.builtinType == "bool2")
+            {
+                vector_element_type = tf->create_bool();
+                vector_element_count = 2;
+            }
+            else if (gltf_type.builtinType == "bool3")
+            {
+                vector_element_type = tf->create_bool();
+                vector_element_count = 3;
+            }
+            else if (gltf_type.builtinType == "bool4")
+            {
+                vector_element_type = tf->create_bool();
+                vector_element_count = 4;
+            }
+            else if (gltf_type.builtinType == "color")
+            {
+                type = tf->create_color();
+            }
+            else if (gltf_type.builtinType == "double")
+            {
+                type = tf->create_double();
+            }
+            else if (gltf_type.builtinType == "double2")
+            {
+                vector_element_type = tf->create_double();
+                vector_element_count = 2;
+            }
+            else if (gltf_type.builtinType == "double3")
+            {
+                vector_element_type = tf->create_double();
+                vector_element_count = 3;
+            }
+            else if (gltf_type.builtinType == "double4")
+            {
+                vector_element_type = tf->create_double();
+                vector_element_count = 4;
+            }
+            else if (gltf_type.builtinType == "double2x2")
+            {
+                vector_element_type = tf->create_double();
+                vector_element_count = 2;
+                matrix_column_count = 2;
+            }
+            else if (gltf_type.builtinType == "double2x3")
+            {
+                vector_element_type = tf->create_double();
+                vector_element_count = 3;
+                matrix_column_count = 2;
+            }
+            else if (gltf_type.builtinType == "double2x4")
+            {
+                vector_element_type = tf->create_double();
+                vector_element_count = 4;
+                matrix_column_count = 2;
+            }
+            else if (gltf_type.builtinType == "double3x2")
+            {
+                vector_element_type = tf->create_double();
+                vector_element_count = 2;
+                matrix_column_count = 3;
+            }
+            else if (gltf_type.builtinType == "double3x3")
+            {
+                vector_element_type = tf->create_double();
+                vector_element_count = 3;
+                matrix_column_count = 3;
+            }
+            else if (gltf_type.builtinType == "double3x4")
+            {
+                vector_element_type = tf->create_double();
+                vector_element_count = 4;
+                matrix_column_count = 3;
+            }
+            else if (gltf_type.builtinType == "double4x2")
+            {
+                vector_element_type = tf->create_double();
+                vector_element_count = 2;
+                matrix_column_count = 4;
+            }
+            else if (gltf_type.builtinType == "double4x3")
+            {
+                vector_element_type = tf->create_double();
+                vector_element_count = 3;
+                matrix_column_count = 4;
+            }
+            else if (gltf_type.builtinType == "double4x4")
+            {
+                vector_element_type = tf->create_double();
+                vector_element_count = 4;
+                matrix_column_count = 4;
+            }
+            else if (gltf_type.builtinType == "float")
+            {
+                type = tf->create_float();
+            }
+            else if (gltf_type.builtinType == "float2")
+            {
+                vector_element_type = tf->create_float();
+                vector_element_count = 2;
+            }
+            else if (gltf_type.builtinType == "float3")
+            {
+                vector_element_type = tf->create_float();
+                vector_element_count = 3;
+            }
+            else if (gltf_type.builtinType == "float4")
+            {
+                vector_element_type = tf->create_float();
+                vector_element_count = 4;
+            }
+            else if (gltf_type.builtinType == "float2x2")
+            {
+                vector_element_type = tf->create_float();
+                vector_element_count = 2;
+                matrix_column_count = 2;
+            }
+            else if (gltf_type.builtinType == "float2x3")
+            {
+                vector_element_type = tf->create_float();
+                vector_element_count = 3;
+                matrix_column_count = 2;
+            }
+            else if (gltf_type.builtinType == "float2x4")
+            {
+                vector_element_type = tf->create_float();
+                vector_element_count = 4;
+                matrix_column_count = 2;
+            }
+            else if (gltf_type.builtinType == "float3x2")
+            {
+                vector_element_type = tf->create_float();
+                vector_element_count = 2;
+                matrix_column_count = 3;
+            }
+            else if (gltf_type.builtinType == "float3x3")
+            {
+                vector_element_type = tf->create_float();
+                vector_element_count = 3;
+                matrix_column_count = 3;
+            }
+            else if (gltf_type.builtinType == "float3x4")
+            {
+                vector_element_type = tf->create_float();
+                vector_element_count = 4;
+                matrix_column_count = 3;
+            }
+            else if (gltf_type.builtinType == "float4x2")
+            {
+                vector_element_type = tf->create_float();
+                vector_element_count = 2;
+                matrix_column_count = 4;
+            }
+            else if (gltf_type.builtinType == "float4x3")
+            {
+                vector_element_type = tf->create_float();
+                vector_element_count = 3;
+                matrix_column_count = 4;
+            }
+            else if (gltf_type.builtinType == "float4x4")
+            {
+                vector_element_type = tf->create_float();
+                vector_element_count = 4;
+                matrix_column_count = 4;
+            }
+            else if (gltf_type.builtinType == "int")
+            {
+                type = tf->create_int();
+            }
+            else if (gltf_type.builtinType == "int2")
+            {
+                vector_element_type = tf->create_int();
+                vector_element_count = 2;
+            }
+            else if (gltf_type.builtinType == "int3")
+            {
+                vector_element_type = tf->create_int();
+                vector_element_count = 3;
+            }
+            else if (gltf_type.builtinType == "int4")
+            {
+                vector_element_type = tf->create_int();
+                vector_element_count = 4;
+            }
+            else if (gltf_type.builtinType == "string")
+            {
+                type = tf->create_string();
+            }
+            // resources
+            else if (gltf_type.builtinType == "texture_2d")
+            {
+                type = tf->create_texture(mi::neuraylib::IType_texture::TS_2D);
+            }
+            else if (gltf_type.builtinType == "light_profile")
+            {
+                type = tf->create_light_profile();
+            }
+            else if (gltf_type.builtinType == "bsdf_measurement")
+            {
+                type = tf->create_bsdf_measurement();
+            }
+            // builtinType structures
+            else if (
+                gltf_type.builtinType == "material" ||
+                gltf_type.builtinType == "material_emission" ||
+                gltf_type.builtinType == "material_geometry" ||
+                gltf_type.builtinType == "material_surface" ||
+                gltf_type.builtinType == "material_volume")
+            {
+                type = tf->create_struct(("::" + gltf_type.builtinType).c_str());
+            }
+            // builtinType enums
+            else if (gltf_type.builtinType == "intensity_mode")
+            {
+                type = tf->create_enum(("::" + gltf_type.builtinType).c_str());
+            }
+            else
+            {
+                log_error("NV_materials_ext: builtin type '" + gltf_type.builtinType +
+                    "' unknown or not handled. Do you intend to use a userType?", SRC);
+            }
+
+            // handle vectors
+            if (matrix_column_count == 0 && vector_element_count > 0)
+            {
+                type = tf->create_vector(vector_element_type.get(), vector_element_count);
+            }
+
+            // handle matrices
+            if (matrix_column_count > 0 && vector_element_count > 0)
+            {
+                mi::base::Handle<const mi::neuraylib::IType_vector> col_type(
+                    tf->create_vector(vector_element_type.get(), vector_element_count));
+
+                type = tf->create_matrix(col_type.get(), matrix_column_count);
+            }
+        }
+        else
+        {
+            // type already processed?
+            auto it = types.find(gltf_type.userType);
+            if (it == types.end())
+            {
+                const auto& gltf_user_type =
+                    scene->ext_NV_materials_mdl.userTypes[gltf_type.userType];
+
+                // load/get the module that contains the type definition
+                const std::string& type_module_name =
+                    gltf_user_type.module == static_cast<int32_t>(-1)
+                    ? "::<builtins>"
+                    : convert_module_uri_to_package(scene->ext_NV_materials_mdl.modules[gltf_user_type.module].uri);
+
+                std::string type_module_db_name;
+                mi::base::Handle<const mi::neuraylib::IModule> type_module(
+                    access_module(sdk, type_module_name.c_str(), type_module_db_name, context));
+                if (!type_module)
+                    return nullptr;
+
+                // get the user type by name
+                mi::base::Handle<const mi::neuraylib::IType_list> module_type_list(
+                    type_module->get_types());
+                const std::string user_type_name =
+                    type_module_name + "::" + gltf_user_type.typeName;
+                type = module_type_list->get_type(user_type_name.c_str());
+                if (!type)
+                {
+                    log_error(
+                        "User gltf_type '" + gltf_user_type.typeName +
+                        "' not found in found in module '" + type_module_name.c_str() + "'.");
+                    return nullptr;
+                }
+
+                it = types.insert({ gltf_type.userType, type_data{} }).first;
+                it->second.type = mi::base::make_handle_dup(type.get());
+            }
+            else
+            {
+                type = it->second.type;
+            }
+        }
+
+        type->retain();
+        return type.get();
+    }
+
+    mi::neuraylib::IValue* create_value_from_gltf(
+        const mi::neuraylib::IType* mdl_type,
+        const fx::gltf::NV_MaterialsMDL::Argument& gltf_arg,
+        std::unordered_map<int32_t, type_data>& types,
+        mi::neuraylib::IType_factory* tf,
+        mi::neuraylib::IValue_factory* vf,
+        size_t array_offset
+    )
+    {
+        mi::base::Handle<mi::neuraylib::IValue> value;
+
+        switch (mdl_type->get_kind())
+        {
+        case mi::neuraylib::IType::TK_BOOL: {
+            value = vf->create_bool(gltf_arg.value.data[array_offset].boolean);
+            break;
+        }
+        case mi::neuraylib::IType::TK_COLOR: {
+            value = vf->create_color(
+                gltf_arg.value.data[array_offset * 3 + 0].decimal,
+                gltf_arg.value.data[array_offset * 3 + 1].decimal,
+                gltf_arg.value.data[array_offset * 3 + 2].decimal);
+            break;
+        }
+        case mi::neuraylib::IType::TK_DOUBLE: {
+            value = vf->create_double(gltf_arg.value.data[array_offset].decimal);
+            break;
+        }
+        case mi::neuraylib::IType::TK_FLOAT: {
+            value = vf->create_float(gltf_arg.value.data[array_offset].decimal);
+            break;
+        }
+        case mi::neuraylib::IType::TK_INT: {
+            value = vf->create_int(gltf_arg.value.data[array_offset].integer);
+            break;
+        }
+        case mi::neuraylib::IType::TK_STRING: {
+            value = vf->create_string(gltf_arg.value.dataStrings[array_offset].c_str());
+            break;
+        }
+        case mi::neuraylib::IType::TK_TEXTURE: {
+            // create the invalid texture here for the overload resolution only
+            // the actual texture will be created in the texture_2d constructor calls
+            mi::base::Handle<const mi::neuraylib::IType_texture> tex_type(
+                tf->create_texture(mi::neuraylib::IType_texture::TS_2D));
+            value = vf->create_texture(tex_type.get(), nullptr);
+            break;
+        }
+        case mi::neuraylib::IType::TK_LIGHT_PROFILE: {
+            // same here, invalid (empty) light profile
+            value = vf->create_light_profile(nullptr);
+            break;
+        }
+        case mi::neuraylib::IType::TK_BSDF_MEASUREMENT: {
+            // same here, invalid (empty) measured BSDF
+            value = vf->create_bsdf_measurement(nullptr);
+            break;
+        }
+        case mi::neuraylib::IType::TK_VECTOR: {
+            mi::base::Handle<const mi::neuraylib::IType_vector> vec_type(
+                mdl_type->get_interface<mi::neuraylib::IType_vector>());
+            mi::base::Handle<const mi::neuraylib::IType_atomic> elment_type(
+                vec_type->get_element_type());
+            mi::Size element_count = vec_type->get_size();
+
+            value = vf->create_vector(vec_type.get());
+            mi::base::Handle<mi::neuraylib::IValue_vector> vector_value(
+                value->get_interface<mi::neuraylib::IValue_vector>());
+            for (mi::Size i = 0; i < element_count; ++i)
+            {
+                mi::base::Handle<mi::neuraylib::IValue_atomic> scalar;
+                switch (elment_type->get_kind())
+                {
+                case mi::neuraylib::IType::TK_BOOL:
+                    scalar = vf->create_bool(
+                        gltf_arg.value.data[array_offset * element_count + i].boolean);
+                    break;
+                case mi::neuraylib::IType::TK_DOUBLE:
+                    scalar = vf->create_double(
+                        gltf_arg.value.data[array_offset * element_count + i].decimal);
+                    break;
+                case mi::neuraylib::IType::TK_FLOAT:
+                    scalar = vf->create_float(
+                        gltf_arg.value.data[array_offset * element_count + i].decimal);
+                    break;
+                case mi::neuraylib::IType::TK_INT:
+                    scalar = vf->create_int(
+                        gltf_arg.value.data[array_offset * element_count + i].integer);
+                    break;
+                }
+                vector_value->set_value(i, scalar.get());
+            }
+            break;
+        }
+        case mi::neuraylib::IType::TK_MATRIX: {
+
+            mi::base::Handle<const mi::neuraylib::IType_matrix> mat_type(
+                mdl_type->get_interface<mi::neuraylib::IType_matrix>());
+            mi::base::Handle<const mi::neuraylib::IType_vector> vec_type(
+                mat_type->get_element_type());
+            mi::base::Handle<const mi::neuraylib::IType_atomic> elment_type(
+                vec_type->get_element_type());
+            mi::Size row_count = vec_type->get_size();
+            mi::Size col_count = mat_type->get_size();
+            size_t mat_size = row_count * col_count;
+
+            value = vf->create_matrix(mat_type.get());
+            mi::base::Handle<mi::neuraylib::IValue_matrix> mat_value(
+                value->get_interface<mi::neuraylib::IValue_matrix>());
+
+            for (mi::Size c = 0; c < col_count; ++c)
+            {
+                mi::base::Handle<mi::neuraylib::IValue_vector> col_value(
+                    vf->create_vector(vec_type.get()));
+
+                for (mi::Size r = 0; r < row_count; ++r)
+                {
+                    size_t col_major_index = c * row_count + r;
+                    mi::base::Handle<mi::neuraylib::IValue_atomic> scalar;
+                    switch (elment_type->get_kind())
+                    {
+                    case mi::neuraylib::IType::TK_DOUBLE:
+                        scalar = vf->create_double(
+                            gltf_arg.value.data[array_offset * mat_size + col_major_index].decimal);
+                        break;
+                    case mi::neuraylib::IType::TK_FLOAT:
+                        scalar = vf->create_float(
+                            gltf_arg.value.data[array_offset * mat_size + col_major_index].decimal);
+                        break;
+                    }
+                    col_value->set_value(r, scalar.get());
+                }
+                mat_value->set_value(c, col_value.get());
+            }
+            break;
+        }
+        case mi::neuraylib::IType::TK_STRUCT: {
+            // create a struct with default values here
+            // the actual fields will be created in the constructor calls
+            value = vf->create(mdl_type);
+            break;
+        }
+        case mi::neuraylib::IType::TK_ENUM: {
+            value = vf->create(mdl_type);
+            mi::base::Handle<mi::neuraylib::IValue_enum> value_enum(
+                value->get_interface<mi::neuraylib::IValue_enum>());
+            if (value_enum->set_name(gltf_arg.value.dataStrings[array_offset].c_str()) != 0)
+            {
+                log_error(
+                    "Enum value '" + gltf_arg.value.dataStrings[array_offset] +
+                    "' not found for the specified gltf_type.");
+                return nullptr;
+            }
+            break;
+        }
+        default:
+            assert(false);
+            break;
+        }
+
+        value->retain();
+        return value.get();
+    }
+}
+
+std::string Mdl_material_description::build_material_graph_NV_materials_mdl(
+    Mdl_sdk& sdk,
+    const std::string& scene_directory,
+    const std::string& unique_db_prefix,
+    mi::neuraylib::IMdl_execution_context* context)
+{
+    // traverse the graph for this material, create the nodes, collect the modules
+
+    // collect modules used by this material, for reloading
+    std::unordered_set<std::string> modules_used;
+
+    std::unordered_map<int32_t, function_call_data> nodes;
+    std::unordered_map<int32_t, type_data> types;
+    std::unordered_map<int32_t, texture_data> textures;
+
+    mi::base::Handle<mi::neuraylib::IExpression_factory> ef(
+        sdk.get_factory().create_expression_factory(sdk.get_transaction().get()));
+    mi::base::Handle<mi::neuraylib::IValue_factory> vf(
+        sdk.get_factory().create_value_factory(sdk.get_transaction().get()));
+    mi::base::Handle<mi::neuraylib::IType_factory> tf(
+        sdk.get_factory().create_type_factory(sdk.get_transaction().get()));
+
+    std::stack<int32_t> to_process;
+    to_process.push(m_scene_material.ext_NV_materials_mdl.functionCall);
+    while (!to_process.empty())
+    {
+        int32_t current_function_call_index = to_process.top();
+        to_process.pop();
+
+        // node processed already, can appear at multiple locations of the graph
+        if (nodes.find(current_function_call_index) != nodes.end())
+            continue;
+
+        // the function call to process
+        const auto& gltf_function_call =
+            m_scene->ext_NV_materials_mdl.functionCalls[current_function_call_index];
+
+        // load/get the module that contains the function call definition
+        // NOTE: The MDL glTF extension uses URIs for modules, which the SDK doesn't support yet.
+        //       For now convert URI to the old package style names.
+        std::string module_name = gltf_function_call.module == static_cast<int32_t>(-1)
+            ? "::<builtins>"
+            : convert_module_uri_to_package(m_scene->ext_NV_materials_mdl.modules[gltf_function_call.module].uri);
+
+        std::string module_db_name;
+        mi::base::Handle<const mi::neuraylib::IModule> module(
+            access_module(sdk, module_name.c_str(), module_db_name, context));
+        if (!module)
+            return "";
+
+        // overload resolution
+        // therefore, create an argument list with known parameters
+        mi::base::Handle<mi::neuraylib::IExpression_list> arguments(ef->create_expression_list());
+        for (const auto& gltf_arg : gltf_function_call.arguments)
+        {
+            fx::gltf::NV_MaterialsMDL::Type type;
+            bool is_call = false;
+            if (gltf_arg.kind == fx::gltf::NV_MaterialsMDL::Argument::Kind::Value)
+            {
+                type = gltf_arg.type;
+            }
+            else
+            {
+                type = m_scene->ext_NV_materials_mdl.functionCalls[gltf_arg.functionCall].type;
+                is_call = true;
+                to_process.push(gltf_arg.functionCall);
+            }
+
+            // convert the gltf argument to an neuray type...
+            mi::base::Handle<const mi::neuraylib::IType> mdl_type(
+                create_type_from_gltf(sdk, m_scene, type, types, tf.get(), context));
+
+            // ... and convert the values
+            mi::base::Handle<mi::neuraylib::IValue> value;
+            if (type.arraySize == static_cast<int32_t>(-1))
+            {
+                // non-array values
+                if (is_call)
+                    value = vf->create(mdl_type.get());
+                else
+                    value = create_value_from_gltf(
+                        mdl_type.get(), gltf_arg, types, tf.get(), vf.get(), 0);
+            }
+            else
+            {
+                // array values
+                mi::base::Handle<const mi::neuraylib::IType_array> array_type(
+                    tf->create_immediate_sized_array(mdl_type.get(), type.arraySize));
+                value = vf->create_array(array_type.get());
+
+                if (!is_call)
+                {
+                    mi::base::Handle<mi::neuraylib::IValue_array> array_value(
+                        value->get_interface<mi::neuraylib::IValue_array>());
+                    for (size_t i = 0; i < type.arraySize; ++i)
+                    {
+                        mi::base::Handle<mi::neuraylib::IValue> element(
+                            create_value_from_gltf(
+                                mdl_type.get(), gltf_arg, types, tf.get(), vf.get(), i));
+                        array_value->set_value(i, element.get());
+                    }
+                }
+            }
+
+            // add an expression with the value of the builtin or user type the argument list
+            if (value)
+            {
+                mi::base::Handle<mi::neuraylib::IExpression> expr(ef->create_constant(value.get()));
+                arguments->add_expression(gltf_arg.name.c_str(), expr.get());
+            }
+        }
+
+        // compute the database name of the material or function
+        // .. without the argument list
+        std::string function_definition_name;
+        if (gltf_function_call.module != static_cast<int32_t>(-1))
+            function_definition_name = module_name;
+        function_definition_name += "::" + gltf_function_call.functionName;
+
+        // special handling for resources in glTF
+        if (function_definition_name == "::texture_2d")
+        {
+            // as arguments we get the texture name (in form of an image array index)
+            // we can also get a value for gamma and a selector
+            // the API handles resources a differently and for that we replace the constructor
+            // call here.
+
+            std::string texture_db_name;
+            mi::base::Handle<const mi::neuraylib::IImage> image;
+            mi::base::Handle<mi::neuraylib::IValue_texture> tex_value;
+
+            bool load_image_from_uri = true; // hard coded for now
+            if (load_image_from_uri)
+            {
+                // read back the arguments parsed
+
+                // the index of the image in the glTF image array
+                mi::base::Handle<const mi::neuraylib::IExpression_constant> name_expr(
+                    arguments->get_expression<mi::neuraylib::IExpression_constant>("name"));
+                mi::base::Handle<const mi::neuraylib::IValue_int> name_value(
+                    name_expr->get_value<mi::neuraylib::IValue_int>());
+
+                // images are loaded to the db while parsing the glTF file
+                const std::string& image_db_name =
+                    m_scene->resources[name_value->get_value()].resource_db_name;
+
+                // gamma is optional
+                float gamma = 0.0f;
+                mi::base::Handle<const mi::neuraylib::IExpression_constant> gamma_expr(
+                    arguments->get_expression<mi::neuraylib::IExpression_constant>("gamma"));
+                if (gamma_expr)
+                {
+                    mi::base::Handle<const mi::neuraylib::IValue_enum> gamma_value(
+                        gamma_expr->get_value<mi::neuraylib::IValue_enum>());
+                    switch (gamma_value->get_index())
+                    {
+                    case 1:
+                        gamma = 1.0f;
+                        break;
+                    case 2:
+                        gamma = 2.2f;
+                        break;
+                    default:
+                        gamma = 0.0f;
+                        break;
+                    }
+                }
+
+                // compute new database name
+                std::string gamma_str = std::to_string(int(gamma * 100));
+                texture_db_name = image_db_name + "_texture2d_" + gamma_str;
+
+                // if the texture does not exist yet, create it
+                mi::base::Handle<const mi::neuraylib::ITexture> texture(
+                    sdk.get_transaction().access<mi::neuraylib::ITexture>(texture_db_name.c_str()));
+                if (!texture)
+                {
+                    mi::base::Handle<mi::neuraylib::ITexture> new_texture(
+                        sdk.get_transaction().create<mi::neuraylib::ITexture>("Texture"));
+                    new_texture->set_image(image_db_name.c_str());
+                    new_texture->set_gamma(gamma);
+                    sdk.get_transaction().store(new_texture.get(), texture_db_name.c_str());
+                }
+
+                // create a value
+                mi::base::Handle<const mi::neuraylib::IType_texture> tex_type(
+                    tf->create_texture(mi::neuraylib::IType_texture::TS_2D));
+                tex_value = vf->create_texture(tex_type.get(), texture_db_name.c_str());
+            }
+
+            // replace the entire constructor call by the copy constructor
+            // that takes the texture_2d object we just created
+            mi::base::Handle<mi::neuraylib::IExpression> tex_expr(
+                ef->create_constant(tex_value.get()));
+            arguments = ef->create_expression_list();
+            arguments->add_expression("value", tex_expr.get());
+        }
+
+        // special handling for template functions, since overload resolution
+        // doesn't work for them without the template parameter list
+        if (function_definition_name == "::T[]")
+        {
+            function_definition_name += "(...)";
+        }
+        else if (function_definition_name == "::operator[]")
+        {
+            function_definition_name += "(<0>[],int)";
+        }
+        else if (function_definition_name == "::operator_len")
+        {
+            function_definition_name += "(<0>[])";
+        }
+        else if (function_definition_name == "::operator?")
+        {
+            function_definition_name += "(bool,<0>,<0>)";
+        }
+        else if (function_definition_name == "::operator_cast")
+        {
+            function_definition_name += "(<0>)";
+
+            // the cast operator takes a second special expression which is used to
+            // determine the return type of the call
+            fx::gltf::NV_MaterialsMDL::Type return_type = gltf_function_call.type;
+            mi::base::Handle<const mi::neuraylib::IType> mdl_type(
+                create_type_from_gltf(sdk, m_scene, return_type, types, tf.get(), context));
+            mi::base::Handle<mi::neuraylib::IValue> value(
+                vf->create(mdl_type.get()));
+
+            mi::base::Handle<mi::neuraylib::IExpression> cast_return_expr(
+                ef->create_constant(value.get()));
+            arguments->add_expression("cast_return", cast_return_expr.get());
+        }
+        
+        mi::base::Handle<const mi::IString> definition_db_name(
+            sdk.get_factory().get_db_definition_name(function_definition_name.c_str()));
+
+        mi::base::Handle<const mi::IArray> overloads(
+            module->get_function_overloads(
+                definition_db_name->get_c_str(), arguments.get()));
+
+        if (overloads->get_length() == 0)
+        {
+            log_error(
+                "No matching overload for function '" + gltf_function_call.functionName +
+                "' found in module '" + module_name + "' for material: " + m_scene_material.name +
+                "\nUsing a fall-back material.");
+            return "";
+        }
+
+        if (overloads->get_length() > 1)
+        {
+            log_warning(
+                "No unique overload for function '" + gltf_function_call.functionName +
+                "' found in module '" + module_name + "' for material: " + m_scene_material.name +
+                "\nUsing the first one.");
+        }
+        // now with argument list
+        definition_db_name = overloads->get_element<mi::IString>(0);
+
+        // find the MDL definition
+        mi::neuraylib::Definition_wrapper dw(
+            sdk.get_transaction().get(), definition_db_name->get_c_str(), &sdk.get_factory());
+
+        if (!dw.is_valid())
+        {
+            log_error(
+                "Module was loaded but the material/function name could not be found: " +
+                m_scene_material.name + "\nUsing a fall-back material.");
+            return "";
+        }
+        // create a call with default arguments, we will edit them later
+        mi::Sint32 ret = 0;
+        mi::base::Handle<mi::neuraylib::IScene_element> scene_element(
+            dw.create_instance(arguments.get(), &ret));
+        if (!scene_element || ret != 0)
+        {
+            log_error(
+                "Function call could not be created: " + m_scene_material.name +
+                "\nUsing a fall-back material.");
+            return "";
+        }
+
+        // store to DB
+        std::string call_db_name =
+            unique_db_prefix + "_" + std::to_string(current_function_call_index);
+        if (!gltf_function_call.name.empty()) // attach the name if available
+            call_db_name += "_" + gltf_function_call.name;
+
+        if (sdk.get_transaction().store(scene_element.get(), call_db_name.c_str()) != 0)
+        {
+            log_error(
+                "Function call could not be stored in DB: " + m_scene_material.name +
+                "\nUsing a fall-back material.");
+            return "";
+        }
+        scene_element = nullptr;
+
+        // create a node
+        nodes.insert({ current_function_call_index, function_call_data{} });
+        auto& node = nodes[current_function_call_index];
+        node.db_name = call_db_name;
+        node.ae = std::make_unique<mi::neuraylib::Argument_editor>(
+            sdk.get_transaction().get(), call_db_name.c_str(), &sdk.get_factory(), true);
+        if (!node.ae->is_valid())
+        {
+            log_error(
+                "Function call could be edited in DB: " + m_scene_material.name +
+                "\nUsing a fall-back material.");
+            return "";
+        }
+
+        // add the module to the used modules list if not yet in it
+        if(modules_used.find(module_db_name.c_str()) == modules_used.end())
+            modules_used.insert(module_db_name.c_str());
+    }
+
+    // construct the actual graph by making connections
+    for (auto& node : nodes)
+    {
+        // source infos
+        const auto& gltf_function_call =
+            m_scene->ext_NV_materials_mdl.functionCalls[node.first];
+
+        // target node
+        mi::neuraylib::Argument_editor* ae = node.second.ae.get();
+
+        // covert arguments
+        for (const auto& arg : gltf_function_call.arguments)
+        {
+            // only edit the calls, we already set the constants
+            if (arg.kind == fx::gltf::NV_MaterialsMDL::Argument::Kind::FunctionCall)
+            {
+                if (ae->set_call(arg.name.c_str(), nodes[arg.functionCall].db_name.c_str()) != 0)
+                {
+                    log_error(
+                        "Setting parameter `" + arg.name + "` failed: "+ m_scene_material.name);
+                    return "";
+                }
+            }
+        }
+
+        // destructing the argument editor stores the changes
+        // we synchronize this because other DB stores could happen on different threads
+        sdk.get_transaction().execute<void>([&node](mi::neuraylib::ITransaction*) {
+            node.second.ae.reset();
+        });
+    }
+
+    m_name_in_scene = "[mdl] " + m_scene_material.name + " (" + std::to_string(m_unique_id) + ")";
+    m_module_db_names.insert(m_module_db_names.end(), modules_used.begin(), modules_used.end());
+    m_is_loaded = true;
+    m_is_fallback = false;
+    m_flags = IMaterial::Flags::None;
+    m_supports_reloading = true;
+
+    // db name of the root node
+    return nodes[m_scene_material.ext_NV_materials_mdl.functionCall].db_name;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -292,7 +1255,7 @@ const char* Mdl_material_description::regenerate_source_code(
 
     // handle loader
     if (m_loader)
-        generated_code = m_loader->generate_mdl_source_code(m_parameters.name, scene_directory);
+        generated_code = m_loader->generate_mdl_source_code(m_scene_material.name, scene_directory);
 
     // code was generated successfully
     if (!generated_code.empty())
@@ -314,20 +1277,20 @@ bool Mdl_material_description::load_material_definition_mdle(
     mi::neuraylib::IMdl_execution_context* context)
 {
     // drop the optional module name
-    if (mi::examples::strings::ends_with(m_parameters.name, ".mdle::main"))
-        m_parameters.name = m_parameters.name.substr(0, m_parameters.name.length() - 6);
+    if (mi::examples::strings::ends_with(m_scene_material.name, ".mdle::main"))
+        m_scene_material.name = m_scene_material.name.substr(0, m_scene_material.name.length() - 6);
 
     // resolve relative paths within the scene directory
-    if (mi::examples::io::is_absolute_path(m_parameters.name))
-        m_qualified_module_name = m_parameters.name;
+    if (mi::examples::io::is_absolute_path(m_scene_material.name))
+        m_qualified_module_name = m_scene_material.name;
     else
-        m_qualified_module_name = scene_directory + "/" + m_parameters.name;
+        m_qualified_module_name = scene_directory + "/" + m_scene_material.name;
 
     // check if the file exists
     if (!mi::examples::io::file_exists(m_qualified_module_name))
     {
         log_warning(
-            "The referenced MDLE file does not exist: " + m_parameters.name +
+            "The referenced MDLE file does not exist: " + m_scene_material.name +
             "\nUsing a fall-back material instead.");
         return false;
     }
@@ -345,7 +1308,7 @@ bool Mdl_material_description::load_material_definition_mdle(
         return false;
 
     // check if the mdle contains a material
-    std::string material_db_name = m_module_db_name + "::" + m_material_name;
+    std::string material_db_name = m_module_db_names[0] + "::" + m_material_name;
     mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
         sdk.get_transaction().access<const mi::neuraylib::IFunction_definition>(
             material_db_name.c_str()));
@@ -375,10 +1338,10 @@ bool Mdl_material_description::load_material_definition_mdl(
     // split module and material name
     // [::<package>]::<module>::<material>
     if (!mi::examples::mdl::parse_cmd_argument_material_name(
-        m_parameters.name, m_qualified_module_name, m_material_name, false))
+        m_scene_material.name, m_qualified_module_name, m_material_name, false))
     {
         log_warning(
-            "Material name is not a fully qualified material name: " + m_parameters.name +
+            "Material name is not a fully qualified material name: " + m_scene_material.name +
             "\nUsing a fall-back material instead.");
         return false;
     }
@@ -391,7 +1354,7 @@ bool Mdl_material_description::load_material_definition_mdl(
         return false;
 
     // database name of the material
-    std::string material_definition_db_name = m_module_db_name + "::" + m_material_name;
+    std::string material_definition_db_name = m_module_db_names[0] + "::" + m_material_name;
 
     // check if the module contains the requested material
     mi::base::Handle<const mi::neuraylib::IFunction_definition> definition(
@@ -399,7 +1362,10 @@ bool Mdl_material_description::load_material_definition_mdl(
             material_definition_db_name.c_str()));
     if (!definition)
     {
-        m_module_db_name = "";
+        log_error(
+            "Module was loaded but the material name could not be found: " + m_scene_material.name +
+            "\nUsing a fall-back material instead.");
+        m_module_db_names[0] = "";
         return false;
     }
 
@@ -448,14 +1414,14 @@ bool Mdl_material_description::load_material_definition_gltf_support(
     m_qualified_module_name = "::nvidia::sdk_examples::gltf_support";
 
     // .. but it will be disabled for opaque material instances
-    if (m_parameters.alpha_mode == IScene_loader::Material::Alpha_mode::Opaque)
+    if (m_scene_material.alpha_mode == IScene_loader::Material::Alpha_mode::Opaque)
         m_flags = mi::examples::enums::set_flag(m_flags, IMaterial::Flags::Opaque);
 
-    if (m_parameters.single_sided == true)
+    if (m_scene_material.single_sided == true)
         m_flags = mi::examples::enums::set_flag(m_flags, IMaterial::Flags::SingleSided);
 
     // model dependent support material name
-    switch (m_parameters.pbr_model)
+    switch (m_scene_material.pbr_model)
     {
         case IScene_loader::Material::Pbr_model::Khr_specular_glossiness:
             m_material_name = "gltf_material_khr_specular_glossiness";
@@ -468,7 +1434,7 @@ bool Mdl_material_description::load_material_definition_gltf_support(
     }
 
     // name only for display
-    m_name_in_scene = "[gltf] " + m_parameters.name + " (" + std::to_string(m_unique_id) + ")";
+    m_name_in_scene = "[gltf] " + m_scene_material.name + " (" + std::to_string(m_unique_id) + ")";
 
     // load the module
     if (!load_mdl_module(sdk, scene_directory, context))
@@ -512,7 +1478,8 @@ bool Mdl_material_description::load_mdl_module(
                 return false;
     }
 
-    m_module_db_name = module_db_name->get_c_str();
+    m_module_db_names.resize(1);
+    m_module_db_names[0] = module_db_name->get_c_str();
     return true;
 }
 
@@ -562,7 +1529,8 @@ bool Mdl_material_description::load_material_definition_fallback(
         }
 
         // module is loaded now
-        m_module_db_name = module_db_name->get_c_str();
+        m_module_db_names.resize(1);
+        m_module_db_names[0] = module_db_name->get_c_str();
         m_name_in_scene = "[mdl] invalid material (" + std::to_string(m_unique_id) + ")";
 
         m_supports_reloading = false;
@@ -902,51 +1870,51 @@ void Mdl_material_description::parameterize_gltf_support_material(
 
         // add the actual parameters to the parameter list
         add_texture(m_parameter_list.get(), "normal_texture",
-            m_parameters.normal_texture, 1.0f, true, m_parameters.normal_scale_factor);
+            m_scene_material.normal_texture, 1.0f, true, m_scene_material.normal_scale_factor);
 
         add_texture(m_parameter_list.get(), "occlusion_texture",
-            m_parameters.occlusion_texture, 1.0f);
-        add_float(m_parameter_list.get(), "occlusion_strength", m_parameters.occlusion_strength);
+            m_scene_material.occlusion_texture, 1.0f);
+        add_float(m_parameter_list.get(), "occlusion_strength", m_scene_material.occlusion_strength);
 
         add_texture(m_parameter_list.get(), "emissive_texture",
-            m_parameters.emissive_texture, 2.2f);
-        add_color(m_parameter_list.get(), "emissive_factor", m_parameters.emissive_factor.x,
-            m_parameters.emissive_factor.y, m_parameters.emissive_factor.z);
+            m_scene_material.emissive_texture, 2.2f);
+        add_color(m_parameter_list.get(), "emissive_factor", m_scene_material.emissive_factor.x,
+            m_scene_material.emissive_factor.y, m_scene_material.emissive_factor.z);
 
         add_enum(m_parameter_list.get(), "alpha_mode",
             "::nvidia::sdk_examples::gltf_support::gltf_alpha_mode",
-            static_cast<mi::Sint32>(m_parameters.alpha_mode));
-        add_float(m_parameter_list.get(), "alpha_cutoff", m_parameters.alpha_cutoff);
+            static_cast<mi::Sint32>(m_scene_material.alpha_mode));
+        add_float(m_parameter_list.get(), "alpha_cutoff", m_scene_material.alpha_cutoff);
 
         // general extensions
         add_float(m_parameter_list.get(), "emissive_strength",
-            m_parameters.emissive_strength.emissive_strength);
+            m_scene_material.emissive_strength.emissive_strength);
 
         // model dependent parameters
-        switch (m_parameters.pbr_model)
+        switch (m_scene_material.pbr_model)
             {
             case IScene_loader::Material::Pbr_model::Khr_specular_glossiness:
             {
                 add_texture(m_parameter_list.get(), "diffuse_texture",
-                            m_parameters.khr_specular_glossiness.diffuse_texture, 2.2f);
+                            m_scene_material.khr_specular_glossiness.diffuse_texture, 2.2f);
 
                 add_color(m_parameter_list.get(), "diffuse_factor",
-                            m_parameters.khr_specular_glossiness.diffuse_factor.x,
-                            m_parameters.khr_specular_glossiness.diffuse_factor.y,
-                            m_parameters.khr_specular_glossiness.diffuse_factor.z);
+                            m_scene_material.khr_specular_glossiness.diffuse_factor.x,
+                            m_scene_material.khr_specular_glossiness.diffuse_factor.y,
+                            m_scene_material.khr_specular_glossiness.diffuse_factor.z);
 
                 add_float(m_parameter_list.get(), "base_alpha",
-                            m_parameters.khr_specular_glossiness.diffuse_factor.w);
+                            m_scene_material.khr_specular_glossiness.diffuse_factor.w);
 
                 add_texture(m_parameter_list.get(), "specular_glossiness_texture",
-                            m_parameters.khr_specular_glossiness.specular_glossiness_texture, 2.2f);
+                            m_scene_material.khr_specular_glossiness.specular_glossiness_texture, 2.2f);
 
                 add_color(m_parameter_list.get(), "specular_factor",
-                            m_parameters.khr_specular_glossiness.specular_factor.x,
-                            m_parameters.khr_specular_glossiness.specular_factor.y,
-                            m_parameters.khr_specular_glossiness.specular_factor.z);
+                            m_scene_material.khr_specular_glossiness.specular_factor.x,
+                            m_scene_material.khr_specular_glossiness.specular_factor.y,
+                            m_scene_material.khr_specular_glossiness.specular_factor.z);
                 add_float(m_parameter_list.get(), "glossiness_factor",
-                            m_parameters.khr_specular_glossiness.glossiness_factor);
+                            m_scene_material.khr_specular_glossiness.glossiness_factor);
                 return;
             }
 
@@ -954,31 +1922,31 @@ void Mdl_material_description::parameterize_gltf_support_material(
             default:
             {
                 add_texture(m_parameter_list.get(), "base_color_texture",
-                            m_parameters.metallic_roughness.base_color_texture, 2.2f);
+                            m_scene_material.metallic_roughness.base_color_texture, 2.2f);
 
                 add_color(m_parameter_list.get(), "base_color_factor",
-                            m_parameters.metallic_roughness.base_color_factor.x,
-                            m_parameters.metallic_roughness.base_color_factor.y,
-                            m_parameters.metallic_roughness.base_color_factor.z);
+                            m_scene_material.metallic_roughness.base_color_factor.x,
+                            m_scene_material.metallic_roughness.base_color_factor.y,
+                            m_scene_material.metallic_roughness.base_color_factor.z);
 
                 add_float(m_parameter_list.get(), "base_alpha",
-                            m_parameters.metallic_roughness.base_color_factor.w);
+                            m_scene_material.metallic_roughness.base_color_factor.w);
 
                 add_texture(m_parameter_list.get(), "metallic_roughness_texture",
-                            m_parameters.metallic_roughness.metallic_roughness_texture, 1.0f);
+                            m_scene_material.metallic_roughness.metallic_roughness_texture, 1.0f);
 
                 add_float(m_parameter_list.get(), "metallic_factor",
-                            m_parameters.metallic_roughness.metallic_factor);
+                            m_scene_material.metallic_roughness.metallic_factor);
 
                 add_float(m_parameter_list.get(), "roughness_factor",
-                            m_parameters.metallic_roughness.roughness_factor);
+                            m_scene_material.metallic_roughness.roughness_factor);
 
-                add_transmission(m_parameters.metallic_roughness.transmission);
-                add_clearcoat(m_parameters.metallic_roughness.clearcoat);
-                add_sheen(m_parameters.metallic_roughness.sheen);
-                add_specular(m_parameters.metallic_roughness.specular);
-                add_float(m_parameter_list.get(), "ior", m_parameters.metallic_roughness.ior.ior);
-                add_volume(m_parameters.metallic_roughness.volume);
+                add_transmission(m_scene_material.metallic_roughness.transmission);
+                add_clearcoat(m_scene_material.metallic_roughness.clearcoat);
+                add_sheen(m_scene_material.metallic_roughness.sheen);
+                add_specular(m_scene_material.metallic_roughness.specular);
+                add_float(m_parameter_list.get(), "ior", m_scene_material.metallic_roughness.ior.ior);
+                add_volume(m_scene_material.metallic_roughness.volume);
                 return;
             }
         }
@@ -994,7 +1962,7 @@ bool Mdl_material_description::load_material_definition_loader(
     const IMdl_material_description_loader* loader)
 {
     // naming convention using the gltf material name attribute
-    std::string gltf_name = m_parameters.name;
+    std::string gltf_name = m_scene_material.name;
 
     // generate the source code
     m_source_code = loader->generate_mdl_source_code(gltf_name, scene_directory);
@@ -1021,14 +1989,15 @@ bool Mdl_material_description::load_material_definition_loader(
                 context);
         });
     if (!sdk.log_messages(
-        "Loading generated material (from materialX) failed: " + m_parameters.name,
+        "Loading generated material (from materialX) failed: " + m_scene_material.name,
         context, SRC))
             return false;
 
     // expected database name of the module to load
     mi::base::Handle<const mi::IString> module_db_name(
         sdk.get_factory().get_db_module_name(m_qualified_module_name.c_str()));
-    m_module_db_name = module_db_name->get_c_str();
+    m_module_db_names.resize(1);
+    m_module_db_names[0] = module_db_name->get_c_str();
 
     // get the loaded module
     mi::base::Handle<const mi::neuraylib::IModule> module(
@@ -1037,7 +2006,7 @@ bool Mdl_material_description::load_material_definition_loader(
 
     if (module->get_material_count() == 0)
     {
-        log_error("Generated MDL exports no material: " + m_parameters.name, SRC);
+        log_error("Generated MDL exports no material: " + m_scene_material.name, SRC);
         return false;
     }
 

@@ -1,9 +1,8 @@
 //===- lib/MC/MCSectionMachO.cpp - MachO Code Section Representation ------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -84,7 +83,7 @@ ENTRY("" /*FIXME*/,          S_ATTR_LOC_RELOC)
 MCSectionMachO::MCSectionMachO(StringRef Segment, StringRef Section,
                                unsigned TAA, unsigned reserved2, SectionKind K,
                                MCSymbol *Begin)
-    : MCSection(SV_MachO, K, Begin), TypeAndAttributes(TAA),
+    : MCSection(SV_MachO, Section, K, Begin), TypeAndAttributes(TAA),
       Reserved2(reserved2) {
   assert(Segment.size() <= 16 && Section.size() <= 16 &&
          "Segment or section string too long");
@@ -93,18 +92,13 @@ MCSectionMachO::MCSectionMachO(StringRef Segment, StringRef Section,
       SegmentName[i] = Segment[i];
     else
       SegmentName[i] = 0;
-
-    if (i < Section.size())
-      SectionName[i] = Section[i];
-    else
-      SectionName[i] = 0;
   }
 }
 
 void MCSectionMachO::PrintSwitchToSection(const MCAsmInfo &MAI, const Triple &T,
                                           raw_ostream &OS,
                                           const MCExpr *Subsection) const {
-  OS << "\t.section\t" << getSegmentName() << ',' << getSectionName();
+  OS << "\t.section\t" << getSegmentName() << ',' << getName();
 
   // Get the section type and attributes.
   unsigned TAA = getTypeAndAttributes();
@@ -221,11 +215,11 @@ std::string MCSectionMachO::ParseSectionSpecifier(StringRef Spec,        // In.
     return "";
 
   // Figure out which section type it is.
-  auto TypeDescriptor = std::find_if(
-      std::begin(SectionTypeDescriptors), std::end(SectionTypeDescriptors),
-      [&](decltype(*SectionTypeDescriptors) &Descriptor) {
-        return SectionType == Descriptor.AssemblerName;
-      });
+  auto TypeDescriptor =
+      llvm::find_if(SectionTypeDescriptors,
+                    [&](decltype(*SectionTypeDescriptors) &Descriptor) {
+                      return SectionType == Descriptor.AssemblerName;
+                    });
 
   // If we didn't find the section type, reject it.
   if (TypeDescriptor == std::end(SectionTypeDescriptors))
@@ -249,11 +243,11 @@ std::string MCSectionMachO::ParseSectionSpecifier(StringRef Spec,        // In.
   Attrs.split(SectionAttrs, '+', /*MaxSplit=*/-1, /*KeepEmpty=*/false);
 
   for (StringRef &SectionAttr : SectionAttrs) {
-    auto AttrDescriptorI = std::find_if(
-        std::begin(SectionAttrDescriptors), std::end(SectionAttrDescriptors),
-        [&](decltype(*SectionAttrDescriptors) &Descriptor) {
-          return SectionAttr.trim() == Descriptor.AssemblerName;
-        });
+    auto AttrDescriptorI =
+        llvm::find_if(SectionAttrDescriptors,
+                      [&](decltype(*SectionAttrDescriptors) &Descriptor) {
+                        return SectionAttr.trim() == Descriptor.AssemblerName;
+                      });
     if (AttrDescriptorI == std::end(SectionAttrDescriptors))
       return "mach-o section specifier has invalid attribute";
 

@@ -35,6 +35,10 @@
 
 namespace mi {
 
+/** \addtogroup mi_neuray_compounds
+@{
+*/
+
 /// 2 x 2 matrix of bool.
 ///
 /// \see #mi::Boolean_2_2_struct for the corresponding POD type and
@@ -665,7 +669,7 @@ typedef math::Matrix_struct<Float64,4,3> Float64_4_3_struct;
 ///      #mi::Float64 for the type of the matrix components
 typedef math::Matrix_struct<Float64,4,4> Float64_4_4_struct;
 
-/*@}*/ // end group mi_neuray_compounds
+/**@}*/ // end group mi_neuray_compounds
 
 } // namespace mi
 

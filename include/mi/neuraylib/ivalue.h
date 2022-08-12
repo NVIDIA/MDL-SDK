@@ -1441,7 +1441,7 @@ mi::Sint32 get_value( const mi::neuraylib::IValue* value, const char* name, T& v
     return -1;
 }
 
-/*@}*/ // end group mi_neuray_mdl_types
+/**@}*/ // end group mi_neuray_mdl_types
 
 }  // namespace neuraylib
 

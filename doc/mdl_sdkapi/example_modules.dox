@@ -59,7 +59,7 @@ This example loads an MDL module and inspects it contents.
         have to be loaded explicitly via #mi::neuraylib::IPlugin_configuration::load_plugin_library().
         
         In this and most other examples the configuration is done within the utility function
-        \c configure(). Here, we set the module search path to the MDL directory shipped wit
+        \c configure(). Here, we set the module search path to the MDL directory shipped with
         the examples. We also load the \c FreeImage plugin which comes with the \neurayProductName
         and is capable of handling \c .png files.
         <!-- Workaround to prevent a layout problem after dd tags. -->

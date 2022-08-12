@@ -63,7 +63,6 @@ public:
     /// Destructor of Mdl_backend_api_impl.
     virtual ~Mdl_backend_api_impl();
 
-public:
     // public API methods
 
     mi::neuraylib::IMdl_backend* get_backend(Mdl_backend_kind kind) final;
@@ -97,7 +96,6 @@ private:
     Mdl_backend_api_impl(Mdl_backend_api_impl const &) = delete;
     Mdl_backend_api_impl &operator=(Mdl_backend_api_impl const &) = delete;
 
-private:
     mi::neuraylib::INeuray *m_neuray;
 
     SYSTEM::Access_module<MDLC::Mdlc_module> m_mdlc_module;

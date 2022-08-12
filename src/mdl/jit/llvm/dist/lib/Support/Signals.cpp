@@ -1,9 +1,8 @@
 //===- Signals.cpp - Signal Handling support --------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -16,17 +15,19 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Config/llvm-config.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorOr.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/FileUtilities.h"
 #include "llvm/Support/Format.h"
+#include "llvm/Support/FormatAdapters.h"
+#include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Mutex.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/StringSaver.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/Options.h"
 #include <vector>
 
 //===----------------------------------------------------------------------===//
@@ -42,6 +43,9 @@ static cl::opt<bool, true>
     DisableSymbolication("disable-symbolication",
                          cl::desc("Disable symbolizing crash backtraces."),
                          cl::location(DisableSymbolicationFlag), cl::Hidden);
+
+constexpr char DisableSymbolizationEnv[] = "LLVM_DISABLE_SYMBOLIZATION";
+constexpr char LLVMSymbolizerPathEnv[] = "LLVM_SYMBOLIZER_PATH";
 
 // Callbacks to run in signal handler must be lock-free because a signal handler
 // could be running as we add new callbacks. We don't add unbounded numbers of
@@ -104,7 +108,7 @@ static FormattedNumber format_ptr(void *PC) {
 LLVM_ATTRIBUTE_USED
 static bool printSymbolizedStackTrace(StringRef Argv0, void **StackTrace,
                                       int Depth, llvm::raw_ostream &OS) {
-  if (DisableSymbolicationFlag)
+  if (DisableSymbolicationFlag || getenv(DisableSymbolizationEnv))
     return false;
 
   // Don't recursively invoke the llvm-symbolizer binary.
@@ -116,7 +120,9 @@ static bool printSymbolizedStackTrace(StringRef Argv0, void **StackTrace,
   // Use llvm-symbolizer tool to symbolize the stack traces. First look for it
   // alongside our binary, then in $PATH.
   ErrorOr<std::string> LLVMSymbolizerPathOrErr = std::error_code();
-  if (!Argv0.empty()) {
+  if (const char *Path = getenv(LLVMSymbolizerPathEnv)) {
+    LLVMSymbolizerPathOrErr = sys::findProgramByName(Path);
+  } else if (!Argv0.empty()) {
     StringRef Parent = llvm::sys::path::parent_path(Argv0);
     if (!Parent.empty())
       LLVMSymbolizerPathOrErr = sys::findProgramByName("llvm-symbolizer", Parent);
@@ -130,8 +136,8 @@ static bool printSymbolizedStackTrace(StringRef Argv0, void **StackTrace,
   // If we don't know argv0 or the address of main() at this point, try
   // to guess it anyway (it's possible on some platforms).
   std::string MainExecutableName =
-      Argv0.empty() ? sys::fs::getMainExecutable(nullptr, nullptr)
-                    : (std::string)Argv0;
+      sys::fs::exists(Argv0) ? (std::string)std::string(Argv0)
+                             : sys::fs::getMainExecutable(nullptr, nullptr);
   BumpPtrAllocator Allocator;
   StringSaver StrPool(Allocator);
   std::vector<const char *> Modules(Depth, nullptr);
@@ -155,7 +161,7 @@ static bool printSymbolizedStackTrace(StringRef Argv0, void **StackTrace,
   }
 
   Optional<StringRef> Redirects[] = {StringRef(InputFile),
-                                     StringRef(OutputFile), llvm::None};
+                                     StringRef(OutputFile), StringRef("")};
   StringRef Args[] = {"llvm-symbolizer", "--functions=linkage", "--inlining",
 #ifdef _WIN32
                       // Pass --relative-address on Windows so that we don't
@@ -180,8 +186,14 @@ static bool printSymbolizedStackTrace(StringRef Argv0, void **StackTrace,
   auto CurLine = Lines.begin();
   int frame_no = 0;
   for (int i = 0; i < Depth; i++) {
+    auto PrintLineHeader = [&]() {
+      OS << right_justify(formatv("#{0}", frame_no++).str(),
+                          std::log10(Depth) + 2)
+         << ' ' << format_ptr(StackTrace[i]) << ' ';
+    };
     if (!Modules[i]) {
-      OS << '#' << frame_no++ << ' ' << format_ptr(StackTrace[i]) << '\n';
+      PrintLineHeader();
+      OS << '\n';
       continue;
     }
     // Read pairs of lines (function name and file/line info) until we
@@ -192,7 +204,7 @@ static bool printSymbolizedStackTrace(StringRef Argv0, void **StackTrace,
       StringRef FunctionName = *CurLine++;
       if (FunctionName.empty())
         break;
-      OS << '#' << frame_no++ << ' ' << format_ptr(StackTrace[i]) << ' ';
+      PrintLineHeader();
       if (!FunctionName.startswith("??"))
         OS << FunctionName << ' ';
       if (CurLine == Lines.end())

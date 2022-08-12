@@ -477,7 +477,52 @@ BSDF_API void diffuse_transmission_bsdf_auxiliary(
 // )
 /////////////////////////////////////////////////////////////////////
 
+// no Fresnel effect
+class Fresnel_function_none {
+public:
+    Fresnel_function_none(){}
+    float3 eval(float &f, const float2 &ior, const float kh) const {
+        f = 1.0f;
+        return make<float3>(1.0f);
+    }
+};
+
+// dielectric Fresnel
+class Fresnel_function_default {
+public:
+    Fresnel_function_default(){}
+    float3 eval(float &f, const float2 &ior, const float kh) const {
+        f = ior_fresnel(ior.y / ior.x, kh);
+        return make<float3>(f);
+    }
+};
+
+// thin-film-coated dielectric Fresnel
+class Fresnel_function_coated{
+public:
+    Fresnel_function_coated(const float coat_thickness, const float3 &coat_ior) :
+        m_coat_thickness(coat_thickness),
+        m_coat_ior(math::average(coat_ior)) { // using scalar IOR for simplicity
+    }
+
+    float3 eval(float &f, const float2 &ior, const float kh) const {
+        if (m_coat_thickness <= 0.0f || m_coat_ior == 1.0f) {
+            f = ior_fresnel(ior.y / ior.x, kh);
+            return make<float3>(f);
+        } else {
+            const float3 val = thin_film_factor(
+                m_coat_thickness, m_coat_ior, ior.y, ior.x, kh);
+            f = math::average(val);
+            return val;
+        }
+    }
+private:
+    float m_coat_ior, m_coat_thickness;
+};
+
+template <typename Fresnel_function>
 BSDF_INLINE void specular_sample(
+    const Fresnel_function &fresnel_function,
     BSDF_sample_data *data,
     State *state,
     const Normals &n,
@@ -493,17 +538,35 @@ BSDF_INLINE void specular_sample(
         return;
     }
 
-    data->bsdf_over_pdf = tint;
     data->pdf = 0.0f;
 
+    // compute probability of selection refraction over reflection
+    float f_refl;
+    float3 f_refl_c;
+    switch (mode) {
+        case scatter_reflect:
+            f_refl_c = make<float3>(1.0f);
+            f_refl = 1.0f;
+            break;
+        case scatter_transmit:
+            f_refl_c = make<float3>(0.0f);
+            f_refl = 0.0f;
+            break;
+        case scatter_reflect_transmit:
+            f_refl_c = fresnel_function.eval(f_refl, ior, nk1);
+            break;
+    }
+    
     // reflection
     if ((mode == scatter_reflect) ||
         ((mode == scatter_reflect_transmit) &&
-         data->xi.x < ior_fresnel(ior.y / ior.x,  nk1)))
+         data->xi.x < f_refl))
     {
         data->k2 = (nk1 + nk1) * n.shading_normal - data->k1;
 
         data->event_type = BSDF_EVENT_SPECULAR_REFLECTION;
+
+        data->bsdf_over_pdf = tint * f_refl_c / f_refl;
     } else {
         // refraction
         // total internal reflection should only be triggered for scatter_transmit
@@ -515,6 +578,8 @@ BSDF_INLINE void specular_sample(
             data->k2 = refract(data->k1, n.shading_normal, ior.x / ior.y, nk1, tir);
 
         data->event_type = tir ? BSDF_EVENT_SPECULAR_REFLECTION : BSDF_EVENT_SPECULAR_TRANSMISSION;
+
+        data->bsdf_over_pdf = tint * (make<float3>(1.0f) - f_refl_c) / (1.0f - f_refl);
     }
 
     // check if the resulting direction is on the correct side of the actual geometry
@@ -542,7 +607,8 @@ BSDF_API void specular_bsdf_sample(
     const float2 ior = process_ior(data, state);
     const bool thin_walled = get_material_thin_walled(state);
 
-    specular_sample(data, state, n, ior, thin_walled, math::saturate(tint), mode, handle);
+    const Fresnel_function_default fresnel_function;
+    specular_sample(fresnel_function, data, state, n, ior, thin_walled, math::saturate(tint), mode, handle);
 }
 
 BSDF_API void specular_bsdf_evaluate(
@@ -580,6 +646,80 @@ BSDF_API void specular_bsdf_auxiliary(
     elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
 }
 
+/////////////////////////////////////////////////////////////////////
+// bsdf thin_film(
+//     float coating_thickness,
+//     color coating_ior,
+//     bsdf base = specular_bsdf(
+//         color           tint = color(1.0),
+//         scatter_mode    mode = scatter_reflect,
+//         uniform string  handle = ""
+//     )
+// )
+/////////////////////////////////////////////////////////////////////
+
+BSDF_API void thin_film_specular_bsdf_sample(
+    BSDF_sample_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &tint,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    Normals n;
+    get_oriented_normals(
+        n.shading_normal, n.geometry_normal, inherited_normal, state->geometry_normal(), data->k1);
+
+    const float2 ior = process_ior(data, state);
+    const bool thin_walled = get_material_thin_walled(state);
+
+    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+    specular_sample(fresnel_function, data, state, n, ior, thin_walled, math::saturate(tint), mode, handle);
+}
+
+BSDF_API void thin_film_specular_bsdf_evaluate(
+    BSDF_evaluate_data *data,
+    const State *state,
+    const float3 &inherited_normal,
+    const float3 &inherited_weight,
+    const float3 &tint,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    absorb(data);
+}
+
+BSDF_API void thin_film_specular_bsdf_pdf(
+    BSDF_pdf_data *data,
+    const State *state,
+    const float3 &inherited_normal,
+    const float3 &tint,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    absorb(data);
+}
+
+BSDF_API void thin_film_specular_bsdf_auxiliary(
+    BSDF_auxiliary_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &inherited_weight,
+    const float3 &tint,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+}
+
 
 //
 // Most glossy BSDF models in MDL are microfacet-theory based along the lines of
@@ -593,10 +733,13 @@ BSDF_API void specular_bsdf_auxiliary(
 // mask():        compute masking
 // shadow_mask(): combine masking for incoming and outgoing directions
 //
+// It further uses "Fresnel_function" which encapsulates the Fresnel-effect (if any)
+//
 
-template <typename Distribution>
+template <typename Distribution, typename Fresnel_function>
 BSDF_INLINE void microfacet_sample(
     const Distribution &ph,
+    const Fresnel_function &fresnel_function,
     BSDF_sample_data *data,
     State *state,
     const Geometry &g,
@@ -632,15 +775,18 @@ BSDF_INLINE void microfacet_sample(
 
     // compute probability of selection refraction over reflection
     float f_refl;
+    float3 f_refl_c;
     switch (mode) {
         case scatter_reflect:
+            f_refl_c = make<float3>(1.0f);
             f_refl = 1.0f;
             break;
         case scatter_transmit:
+            f_refl_c = make<float3>(0.0f);
             f_refl = 0.0f;
             break;
         case scatter_reflect_transmit:
-            f_refl = ior_fresnel(ior.y / ior.x, kh);
+            f_refl_c = fresnel_function.eval(f_refl, ior, kh);
             break;
     }
 
@@ -654,6 +800,8 @@ BSDF_INLINE void microfacet_sample(
         data->k2 = (2.0f * kh) * h - data->k1;
         data->event_type = BSDF_EVENT_GLOSSY_REFLECTION;
         data->xi.z /= f_refl;
+
+        data->bsdf_over_pdf = f_refl_c / f_refl;
     } else {
         prob = 1.0f - f_refl;
         bool tir = false;
@@ -668,6 +816,8 @@ BSDF_INLINE void microfacet_sample(
         }
         data->event_type = tir ? BSDF_EVENT_GLOSSY_REFLECTION : BSDF_EVENT_GLOSSY_TRANSMISSION;
         data->xi.z = (data->xi.z - f_refl) / prob;
+
+        data->bsdf_over_pdf = (make<float3>(1.0f) - f_refl_c) / prob;
     }
 
     // check if the resulting direction is on the correct side of the actual geometry
@@ -679,9 +829,6 @@ BSDF_INLINE void microfacet_sample(
     }
 
     const bool refraction = !thin_walled && (data->event_type == BSDF_EVENT_GLOSSY_TRANSMISSION);
-
-    // compute weight
-    data->bsdf_over_pdf = make<float3>(1.0f);
 
     const float nk2 = math::abs(math::dot(data->k2, g.n.shading_normal));
     const float k2h = math::abs(math::dot(data->k2, h));
@@ -713,9 +860,10 @@ BSDF_INLINE void microfacet_sample(
     data->handle = handle;
 }
 
-template <typename Distribution, typename Data>
-BSDF_INLINE float microfacet_evaluate(
+template <typename Distribution, typename Data, typename Fresnel_function>
+BSDF_INLINE float3 microfacet_evaluate(
     const Distribution &ph,
+    const Fresnel_function &fresnel_function,
     Data *data,
     State *state,
     const Geometry &g,
@@ -734,7 +882,7 @@ BSDF_INLINE float microfacet_evaluate(
     // nothing to evaluate for given directions?
     if (backside_eval && (mode == scatter_reflect)) {
         absorb(data);
-        return 0.0f;
+        return make<float3>(0.0f);
     }
 
     const float3 h = compute_half_vector(
@@ -747,22 +895,33 @@ BSDF_INLINE float microfacet_evaluate(
     const float k2h = math::dot(data->k2, h) * (backside_eval ? -1.0f : 1.0f);
     if (nh < 0.0f || k1h < 0.0f || k2h < 0.0f) {
         absorb(data);
-        return 0.0f;
+        return make<float3>(0.0f);
     }
 
-    const float fresnel_refl = ior_fresnel(ior.y / ior.x, k1h);
-
-    // for scatter_transmit: only allow TIR (fresnel_refl == 1) with BRDF eval
-    if (!backside_eval && (mode == scatter_transmit) && (fresnel_refl < 1.0f)) {
-        absorb(data);
-        return 0.0f;
+    float f_refl;
+    float3 f_refl_c;
+    switch (mode) {
+        case scatter_reflect:
+            f_refl_c = make<float3>(1.0f);
+            f_refl = 1.0f;
+            break;
+        case scatter_transmit:
+            if (!backside_eval) {
+                // for scatter_transmit: only allow TIR with BRDF eval
+                if (!is_tir(ior, k1h)) {
+                    absorb(data);
+                    return make<float3>(0.0f);
+                }
+            }
+            f_refl_c = make<float3>(0.0f);
+            f_refl = 0.0f;
+            break;
+        case scatter_reflect_transmit:
+            f_refl_c = fresnel_function.eval(f_refl, ior, k1h);
+            break;
     }
 
     // compute BSDF and pdf
-    const float weight = mode == scatter_reflect_transmit ?
-                         (backside_eval ? (1.0f - fresnel_refl) : fresnel_refl) :
-                         1.0f;
-
     data->pdf = ph.eval(make_float3(math::dot(g.x_axis, h), nh, math::dot(g.z_axis, h)));
 
     float G1, G2;
@@ -783,15 +942,16 @@ BSDF_INLINE float microfacet_evaluate(
         data->pdf *= 0.25f / (nk1 * nh);
     }
 
-    data->pdf *= weight;
-    const float bsdf = data->pdf * G12;
-    data->pdf *= G1;
+    const float3 bsdf = (backside_eval ? (make<float3>(1.0f) - f_refl_c) : f_refl_c) * (G12 * data->pdf);
+    data->pdf *= (backside_eval ? (1.0f - f_refl) : f_refl) * G1;
+
     return bsdf;
 }
 
-template <typename Distribution>
+template <typename Distribution, typename Fresnel_function>
 BSDF_INLINE void microfacet_sample(
     const Distribution &ph,
+    const Fresnel_function &fresnel_function,
     BSDF_sample_data *data,
     State *state,
     const Geometry& g,
@@ -828,7 +988,7 @@ BSDF_INLINE void microfacet_sample(
         if (data->xi.z < rho1)
         {
             data->xi.z /= rho1;
-            microfacet_sample(ph, data, state, g, ior, thin_walled, mode, handle, nk1);
+            microfacet_sample(ph, fresnel_function, data, state, g, ior, thin_walled, mode, handle, nk1);
             if (data->event_type == BSDF_EVENT_ABSORB)
                 return;
 
@@ -847,7 +1007,7 @@ BSDF_INLINE void microfacet_sample(
 
             BSDF_pdf_data pdf_data = to_pdf_data(data);
             float nk2 = -1.0f;
-            microfacet_evaluate(ph, &pdf_data, state, g, ior, thin_walled, mode, nk1, nk2);
+            microfacet_evaluate(ph, fresnel_function, &pdf_data, state, g, ior, thin_walled, mode, nk1, nk2);
             if (nk2 < 0.0f) // compute nk2 in case it hasn't been computed
                 nk2 = math::abs(math::dot(g.n.shading_normal, data->k2));
             
@@ -865,7 +1025,7 @@ BSDF_INLINE void microfacet_sample(
     
     // sample the single scattering (glossy) BSDF
     float nk1;
-    microfacet_sample(ph, data, state, g, ior, thin_walled, mode, handle, nk1);
+    microfacet_sample(ph, fresnel_function, data, state, g, ior, thin_walled, mode, handle, nk1);
 
     if (multiscatter_texture_id == 0 || mode == scatter_transmit) {
         data->bsdf_over_pdf *= tint;
@@ -883,16 +1043,17 @@ BSDF_INLINE void microfacet_sample(
     {
         BSDF_pdf_data pdf_data = to_pdf_data(data);
         float nk2;
-        microfacet_evaluate(ph, &pdf_data, state, g, ior, thin_walled, mode, nk1, nk2);
+        microfacet_evaluate(ph, fresnel_function, &pdf_data, state, g, ior, thin_walled, mode, nk1, nk2);
 
         // incorporate multi-scatter part to pdf for the new k2
         multiscatter::sample_update_single_scatter_probability(data, pdf_data.pdf, rho1);
     }
 }
 
-template <typename Distribution>
+template <typename Distribution, typename Fresnel_function>
 BSDF_INLINE void microfacet_sample(
     const Distribution &ph,
+    const Fresnel_function &fresnel_function,
     BSDF_sample_data *data,
     State *state,
     const float3 &normal,
@@ -915,13 +1076,19 @@ BSDF_INLINE void microfacet_sample(
     }
 
     microfacet_sample(
-        ph, data, state, g, tint, multiscatter_tint, mode, handle, type,
+        ph, fresnel_function, data, state, g, tint, multiscatter_tint, mode, handle, type,
         roughness_u, roughness_v, multiscatter_texture_id, multiscatter);
 }
 
-template <typename Distribution>
-BSDF_INLINE float2 microfacet_evaluate(
+struct float3_float {
+    float3 x;
+    float y;
+};
+
+template <typename Distribution, typename Fresnel_function>
+BSDF_INLINE float3_float microfacet_evaluate(
     const Distribution &ph,
+    const Fresnel_function &fresnel_function,
     BSDF_evaluate_data *data,
     State *state,
     const Geometry& g,
@@ -936,11 +1103,11 @@ BSDF_INLINE float2 microfacet_evaluate(
     const float2 ior = process_ior(data, state);
     const bool thin_walled = get_material_thin_walled(state);
 
-    const float contrib_single = 
-        microfacet_evaluate(ph, data, state, g, ior, thin_walled, mode, nk1, nk2);
+    const float3 contrib_single = 
+        microfacet_evaluate(ph, fresnel_function, data, state, g, ior, thin_walled, mode, nk1, nk2);
 
     if (multiscatter_texture_id == 0 || mode == scatter_transmit)
-        return make<float2>(contrib_single, 0.0f);
+        return float3_float{contrib_single, 0.0f};
 
     float2 contrib_multi = multiscatter::evaluate(
         state, type, roughness_u, roughness_v, nk1, nk2,
@@ -954,12 +1121,13 @@ BSDF_INLINE float2 microfacet_evaluate(
     else
         contrib_multi.y = 0.0f; // backside eval
 
-    return make<float2>(contrib_single, contrib_multi.y);
+    return float3_float{contrib_single, contrib_multi.y};
 }
 
-template <typename Distribution>
-BSDF_INLINE float2 microfacet_evaluate(
+template <typename Distribution, typename Fresnel_function>
+BSDF_INLINE float3_float microfacet_evaluate(
     const Distribution &ph,
+    const Fresnel_function &fresnel_function,
     BSDF_evaluate_data *data,
     State *state,
     const float3 &normal,
@@ -973,16 +1141,17 @@ BSDF_INLINE float2 microfacet_evaluate(
     Geometry g;
     if (!get_geometry(g, normal, tangent_u, data->k1, state)) {
         absorb(data);
-        return make<float2>(0.0f);
+        return float3_float{make<float3>(0.0f), 0.0f};
     }
     float nk1, nk2;
     return microfacet_evaluate(
-        ph, data, state, g, mode, type, roughness_u, roughness_v, multiscatter_texture_id, nk1, nk2);
+        ph, fresnel_function, data, state, g, mode, type, roughness_u, roughness_v, multiscatter_texture_id, nk1, nk2);
 }
 
-template <typename Distribution>
-BSDF_INLINE float2 microfacet_evaluate(
+template <typename Distribution, typename Fresnel_function>
+BSDF_INLINE float3_float microfacet_evaluate(
     const Distribution &ph,
+    const Fresnel_function &fresnel_function,
     BSDF_evaluate_data *data,
     State *state,
     const float3 &normal,
@@ -997,16 +1166,17 @@ BSDF_INLINE float2 microfacet_evaluate(
     Geometry g;
     if (!get_geometry(g, normal, tangent_u, data->k1, state)) {
         absorb(data);
-        return make<float2>(0.0f);
+        return float3_float{make<float3>(0.0f), 0.0f};
     }
     return microfacet_evaluate(
-        ph, data, state, g, mode, type, roughness_u, roughness_v, multiscatter_texture_id, nk1, nk2);
+        ph, fresnel_function, data, state, g, mode, type, roughness_u, roughness_v, multiscatter_texture_id, nk1, nk2);
 }
 
 
-template <typename Distribution>
+template <typename Distribution, typename Fresnel_function>
 BSDF_INLINE void microfacet_pdf(
     const Distribution &ph,
+    const Fresnel_function &fresnel_function,
     BSDF_pdf_data *data,
     State *state,
     const Geometry& g,
@@ -1021,7 +1191,7 @@ BSDF_INLINE void microfacet_pdf(
     const bool thin_walled = get_material_thin_walled(state);
 
     float nk2;
-    microfacet_evaluate(ph, data, state, g, ior, thin_walled, mode, nk1, nk2);
+    microfacet_evaluate(ph, fresnel_function, data, state, g, ior, thin_walled, mode, nk1, nk2);
 
     if (multiscatter_texture_id == 0 || mode == scatter_transmit)
         return;
@@ -1032,9 +1202,10 @@ BSDF_INLINE void microfacet_pdf(
         (!thin_walled && (mode != scatter_reflect)) ? (ior.x / ior.y) : -1.0f, multiscatter_texture_id);
 }
 
-template <typename Distribution>
+template <typename Distribution, typename Fresnel_function>
 BSDF_INLINE void microfacet_pdf(
     const Distribution &ph,
+    const Fresnel_function &fresnel_function,
     BSDF_pdf_data *data,
     State *state,
     const float3 &normal,
@@ -1053,12 +1224,13 @@ BSDF_INLINE void microfacet_pdf(
     }
     float nk1;
     microfacet_pdf(
-        ph, data, state, g, mode, type, roughness_u, roughness_v, multiscatter_texture_id, nk1);
+        ph, fresnel_function, data, state, g, mode, type, roughness_u, roughness_v, multiscatter_texture_id, nk1);
 }
 
-template <typename Distribution>
+template <typename Distribution, typename Fresnel_function>
 BSDF_INLINE void microfacet_pdf(
     const Distribution &ph,
+    const Fresnel_function &fresnel_function,
     BSDF_pdf_data *data,
     State *state,
     const float3 &normal,
@@ -1073,7 +1245,7 @@ BSDF_INLINE void microfacet_pdf(
     get_oriented_normals(
         g.n.shading_normal, g.n.geometry_normal, normal, state->geometry_normal(), data->k1);
     microfacet_pdf(
-        ph, data, state, g, mode, type, roughness_u, roughness_v, multiscatter_texture_id, nk1);
+        ph, fresnel_function, data, state, g, mode, type, roughness_u, roughness_v, multiscatter_texture_id, nk1);
 }
 
 /////////////////////////////////////////////////////////////////////
@@ -1160,13 +1332,14 @@ BSDF_API void simple_glossy_bsdf_sample(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_phong_vcavities ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_default fresnel_function;
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_SIMPLE_GLOSSY_MULTISCATTER);
 
     microfacet_sample(
-        ph, data, state, inherited_normal, tangent_u, 
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, 
         math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
         SIMPLE_GLOSSY_BSDF,
         adapted_roughness.x, adapted_roughness.y,
@@ -1190,13 +1363,14 @@ BSDF_API void simple_glossy_bsdf_evaluate(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_phong_vcavities ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_default fresnel_function;
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_SIMPLE_GLOSSY_MULTISCATTER);
 
-    const float2 contrib = microfacet_evaluate(
-        ph, data, state, inherited_normal, tangent_u, mode,
+    const float3_float contrib = microfacet_evaluate(
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
         SIMPLE_GLOSSY_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -1224,12 +1398,13 @@ BSDF_API void simple_glossy_bsdf_pdf(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_phong_vcavities ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_default fresnel_function;
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_SIMPLE_GLOSSY_MULTISCATTER);
 
-    microfacet_pdf(ph, data, state, inherited_normal, tangent_u, mode,
+    microfacet_pdf(ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
         SIMPLE_GLOSSY_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -1247,6 +1422,140 @@ BSDF_API void simple_glossy_bsdf_auxiliary(
     const float3 &tangent_u,
     const scatter_mode mode,
     const int handle)
+{
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+}
+
+/////////////////////////////////////////////////////////////////////
+// bsdf thin_film(
+//     float coating_thickness,
+//     color coating_ior,
+//     bsdf base = simple_glossy_bsdf(
+//         float           roughness_u,
+//         float           roughness_v       = roughness_u,
+//         color           tint              = color(1.0),
+//         color           multiscatter_tint = color(0.0),
+//         float3          tangent_u         = state->texture_tangent_u(0),
+//         scatter_mode    mode              = scatter_reflect,
+//         uniform string  handle            = ""
+//    )
+// )
+/////////////////////////////////////////////////////////////////////
+
+BSDF_API void thin_film_simple_glossy_bsdf_sample(
+    BSDF_sample_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 &tint,
+    const float3 &multiscatter_tint,
+    const float3 &tangent_u,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_phong_vcavities ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+
+    const unsigned int multiscatter_texture_id = 
+        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+        state->get_bsdf_data_texture_id(BDK_SIMPLE_GLOSSY_MULTISCATTER);
+
+    microfacet_sample(
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, 
+        math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
+        SIMPLE_GLOSSY_BSDF,
+        adapted_roughness.x, adapted_roughness.y,
+        multiscatter_texture_id);
+}
+
+BSDF_API void thin_film_simple_glossy_bsdf_evaluate(
+    BSDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &inherited_weight,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 &tint,
+    const float3 &multiscatter_tint,
+    const float3 &tangent_u,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_phong_vcavities ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+
+    const unsigned int multiscatter_texture_id = 
+        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+        state->get_bsdf_data_texture_id(BDK_SIMPLE_GLOSSY_MULTISCATTER);
+
+    const float3_float contrib = microfacet_evaluate(
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        SIMPLE_GLOSSY_BSDF,
+        adapted_roughness.x, adapted_roughness.y,
+        multiscatter_texture_id);
+
+    add_elemental_bsdf_evaluate_contribution(
+        data, handle, 
+        contrib.y * math::saturate(multiscatter_tint) * inherited_weight,
+        contrib.x * math::saturate(tint) * inherited_weight);
+}
+
+
+BSDF_API void thin_film_simple_glossy_bsdf_pdf(
+    BSDF_pdf_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 &tint,
+    const float3 &multiscatter_tint,
+    const float3 &tangent_u,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_phong_vcavities ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+
+    const unsigned int multiscatter_texture_id = 
+        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+        state->get_bsdf_data_texture_id(BDK_SIMPLE_GLOSSY_MULTISCATTER);
+
+    microfacet_pdf(ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        SIMPLE_GLOSSY_BSDF,
+        adapted_roughness.x, adapted_roughness.y,
+        multiscatter_texture_id);
+}
+
+BSDF_API void thin_film_simple_glossy_bsdf_auxiliary(
+    BSDF_auxiliary_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &inherited_weight,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 &tint,
+    const float3 &multiscatter_tint,
+    const float3 &tangent_u,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
 {
     elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
 }
@@ -1299,6 +1608,7 @@ BSDF_API void sheen_bsdf_sample(
     const float adapted_roughness = state->adapt_microfacet_roughness(
         make_float2(roughness, roughness)).x;
     const Distribution_sheen_vcavities ph(adapted_roughness);
+    const Fresnel_function_none fresnel_function;
 
     const bool has_multiscatter =
         !multiscatter.is_black() &&
@@ -1307,7 +1617,7 @@ BSDF_API void sheen_bsdf_sample(
         has_multiscatter ? state->get_bsdf_data_texture_id(BDK_SHEEN_MULTISCATTER) : 0;
 
     microfacet_sample(
-        ph, data, state, inherited_normal, state->texture_tangent_u(0), math::saturate(tint), math::saturate(multiscatter_tint),
+        ph, fresnel_function, data, state, inherited_normal, state->texture_tangent_u(0), math::saturate(tint), math::saturate(multiscatter_tint),
         scatter_reflect, handle, SHEEN_BSDF, adapted_roughness, adapted_roughness, multiscatter_texture_id, multiscatter.is_default_diffuse_reflection() ? nullptr : &multiscatter);
 }
 
@@ -1325,6 +1635,7 @@ BSDF_API void sheen_bsdf_evaluate(
     const float adapted_roughness = state->adapt_microfacet_roughness(
         make_float2(roughness, roughness)).x;
     const Distribution_sheen_vcavities ph(adapted_roughness);
+    const Fresnel_function_none fresnel_function;
 
     const bool has_multiscatter =
         !multiscatter.is_black() &&
@@ -1335,8 +1646,8 @@ BSDF_API void sheen_bsdf_evaluate(
     const bool diffuse_multiscatter = multiscatter.is_default_diffuse_reflection();
 
     float nk1, nk2;
-    const float2 contrib = microfacet_evaluate(
-        ph, data, state, inherited_normal, state->texture_tangent_u(0), scatter_reflect,
+    const float3_float contrib = microfacet_evaluate(
+        ph, fresnel_function, data, state, inherited_normal, state->texture_tangent_u(0), scatter_reflect,
         SHEEN_BSDF, adapted_roughness, adapted_roughness, diffuse_multiscatter ? multiscatter_texture_id : 0, nk1, nk2);
 
     add_elemental_bsdf_evaluate_contribution(
@@ -1378,6 +1689,7 @@ BSDF_API void sheen_bsdf_pdf(
     const float adapted_roughness = state->adapt_microfacet_roughness(
         make_float2(roughness, roughness)).x;
     const Distribution_sheen_vcavities ph(adapted_roughness);
+    const Fresnel_function_none fresnel_function;
 
     const bool has_multiscatter =
         !multiscatter.is_black() &&
@@ -1389,7 +1701,7 @@ BSDF_API void sheen_bsdf_pdf(
 
     float nk1;
     microfacet_pdf(
-        ph, data, state, inherited_normal, scatter_reflect,
+        ph, fresnel_function, data, state, inherited_normal, scatter_reflect,
         SHEEN_BSDF, adapted_roughness, adapted_roughness,
         diffuse_multiscatter ? multiscatter_texture_id : 0, nk1);
 
@@ -1821,13 +2133,14 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_sample(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_beckmann_vcavities ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_default fresnel_function;
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BECKMANN_VC_MULTISCATTER);
 
     microfacet_sample(
-        ph, data, state, inherited_normal, tangent_u, 
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, 
         math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
         MICROFACET_BECKMANN_VCAVITIES_BSDF,
         adapted_roughness.x, adapted_roughness.y,
@@ -1851,13 +2164,14 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_evaluate(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_beckmann_vcavities ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_default fresnel_function;
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BECKMANN_VC_MULTISCATTER);
 
-    const float2 contrib = microfacet_evaluate(
-        ph, data, state, inherited_normal, tangent_u, mode,
+    const float3_float contrib = microfacet_evaluate(
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
         MICROFACET_BECKMANN_VCAVITIES_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -1885,13 +2199,14 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_pdf(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_beckmann_vcavities ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_default fresnel_function;
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BECKMANN_VC_MULTISCATTER);
 
     microfacet_pdf(
-        ph, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
         MICROFACET_BECKMANN_VCAVITIES_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -1909,6 +2224,141 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_auxiliary(
     const float3 &tangent_u,
     const scatter_mode mode,
     const int handle)
+{
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+}
+
+/////////////////////////////////////////////////////////////////////
+// bsdf thin_film(
+//     float coating_thickness,
+//     color coating_ior,
+//     bsdf base = microfacet_beckmann_vcavities_bsdf(
+//         float           roughness_u,
+//         float           roughness_v       = roughness_u,
+//         color           tint              = color(1.0),
+//         color           multiscatter_tint = color(0.0),
+//         float3          tangent_u         = state->texture_tangent_u(0),
+//         scatter_mode    mode              = scatter_reflect,
+//         uniform string  handle            = ""
+//     )
+// )
+/////////////////////////////////////////////////////////////////////
+
+BSDF_API void thin_film_microfacet_beckmann_vcavities_bsdf_sample(
+    BSDF_sample_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 &tint,
+    const float3 &multiscatter_tint,
+    const float3 &tangent_u,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_beckmann_vcavities ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+
+    const unsigned int multiscatter_texture_id = 
+        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+        state->get_bsdf_data_texture_id(BDK_BECKMANN_VC_MULTISCATTER);
+
+    microfacet_sample(
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, 
+        math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
+        MICROFACET_BECKMANN_VCAVITIES_BSDF,
+        adapted_roughness.x, adapted_roughness.y,
+        multiscatter_texture_id);
+}
+
+BSDF_API void thin_film_microfacet_beckmann_vcavities_bsdf_evaluate(
+    BSDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &inherited_weight,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 &tint,
+    const float3 &multiscatter_tint,
+    const float3 &tangent_u,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_beckmann_vcavities ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+
+    const unsigned int multiscatter_texture_id = 
+        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+        state->get_bsdf_data_texture_id(BDK_BECKMANN_VC_MULTISCATTER);
+
+    const float3_float contrib = microfacet_evaluate(
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        MICROFACET_BECKMANN_VCAVITIES_BSDF,
+        adapted_roughness.x, adapted_roughness.y,
+        multiscatter_texture_id);
+
+    add_elemental_bsdf_evaluate_contribution(
+        data, handle,
+        contrib.y * math::saturate(multiscatter_tint) * inherited_weight,
+        contrib.x * math::saturate(tint) * inherited_weight);
+}
+
+
+BSDF_API void thin_film_microfacet_beckmann_vcavities_bsdf_pdf(
+    BSDF_pdf_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 &tint,
+    const float3 &multiscatter_tint,
+    const float3 &tangent_u,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_beckmann_vcavities ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+
+    const unsigned int multiscatter_texture_id = 
+        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+        state->get_bsdf_data_texture_id(BDK_BECKMANN_VC_MULTISCATTER);
+
+    microfacet_pdf(
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        MICROFACET_BECKMANN_VCAVITIES_BSDF,
+        adapted_roughness.x, adapted_roughness.y,
+        multiscatter_texture_id);
+}
+
+BSDF_API void thin_film_microfacet_beckmann_vcavities_bsdf_auxiliary(
+    BSDF_auxiliary_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &inherited_weight,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 &tint,
+    const float3 &multiscatter_tint,
+    const float3 &tangent_u,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
 {
     elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
 }
@@ -1961,13 +2411,14 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_sample(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_ggx_vcavities ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_default fresnel_function;
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_GGX_VC_MULTISCATTER);
 
     microfacet_sample(
-        ph, data, state, inherited_normal, tangent_u, 
+        ph, fresnel_function,data, state, inherited_normal, tangent_u, 
         math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
         MICROFACET_GGX_VCAVITIES_BSDF,
         adapted_roughness.x, adapted_roughness.y,
@@ -1991,13 +2442,14 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_evaluate(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_ggx_vcavities ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_default fresnel_function;
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_GGX_VC_MULTISCATTER);
 
-    const float2 contrib = microfacet_evaluate(
-        ph, data, state, inherited_normal, tangent_u, mode,
+    const float3_float contrib = microfacet_evaluate(
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
         MICROFACET_GGX_VCAVITIES_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -2025,13 +2477,14 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_pdf(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_ggx_vcavities ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_default fresnel_function;
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_GGX_VC_MULTISCATTER);
     
     microfacet_pdf(
-        ph, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
         MICROFACET_GGX_VCAVITIES_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -2053,6 +2506,140 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_auxiliary(
     elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
 }
 
+/////////////////////////////////////////////////////////////////////
+// bsdf thin_film(
+//     float coating_thickness,
+//     color coating_ior,
+//     bsdf base = microfacet_ggx_vcavities_bsdf(
+//         float           roughness_u,
+//         float           roughness_v       = roughness_u,
+//         color           tint              = color(1.0),
+//         color           multiscatter_tint = color(0.0),
+//         float3          tangent_u         = state->texture_tangent_u(0),
+//         scatter_mode    mode              = scatter_reflect,
+//         uniform string  handle            = ""
+//     )
+// )
+/////////////////////////////////////////////////////////////////////
+
+BSDF_API void thin_film_microfacet_ggx_vcavities_bsdf_sample(
+    BSDF_sample_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 tint,
+    const float3 &multiscatter_tint,
+    const float3 &tangent_u,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_ggx_vcavities ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+
+    const unsigned int multiscatter_texture_id = 
+        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+        state->get_bsdf_data_texture_id(BDK_GGX_VC_MULTISCATTER);
+
+    microfacet_sample(
+        ph, fresnel_function,data, state, inherited_normal, tangent_u, 
+        math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
+        MICROFACET_GGX_VCAVITIES_BSDF,
+        adapted_roughness.x, adapted_roughness.y,
+        multiscatter_texture_id);
+}
+
+BSDF_API void thin_film_microfacet_ggx_vcavities_bsdf_evaluate(
+    BSDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &inherited_weight,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 &tint,
+    const float3 &multiscatter_tint,
+    const float3 &tangent_u,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_ggx_vcavities ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+
+    const unsigned int multiscatter_texture_id = 
+        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+        state->get_bsdf_data_texture_id(BDK_GGX_VC_MULTISCATTER);
+
+    const float3_float contrib = microfacet_evaluate(
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        MICROFACET_GGX_VCAVITIES_BSDF,
+        adapted_roughness.x, adapted_roughness.y,
+        multiscatter_texture_id);
+
+    add_elemental_bsdf_evaluate_contribution(
+        data, handle,
+        contrib.y * math::saturate(multiscatter_tint) * inherited_weight,
+        contrib.x * math::saturate(tint) * inherited_weight);
+}
+
+
+BSDF_API void thin_film_microfacet_ggx_vcavities_bsdf_pdf(
+    BSDF_pdf_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 &tint,
+    const float3 &multiscatter_tint,
+    const float3 &tangent_u,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_ggx_vcavities ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+
+    const unsigned int multiscatter_texture_id = 
+        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+        state->get_bsdf_data_texture_id(BDK_GGX_VC_MULTISCATTER);
+    
+    microfacet_pdf(
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        MICROFACET_GGX_VCAVITIES_BSDF,
+        adapted_roughness.x, adapted_roughness.y,
+        multiscatter_texture_id);
+}
+
+BSDF_API void thin_film_microfacet_ggx_vcavities_bsdf_auxiliary(
+    BSDF_auxiliary_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &inherited_weight,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 &tint,
+    const float3 &multiscatter_tint,
+    const float3 &tangent_u,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+}
 
 /////////////////////////////////////////////////////////////////////
 // bsdf microfacet_beckmann_smith_bsdf(
@@ -2114,13 +2701,14 @@ BSDF_API void microfacet_beckmann_smith_bsdf_sample(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_beckmann_smith ph(adapted_roughness.x, adapted_roughness.y);
-    
+    const Fresnel_function_default fresnel_function;
+
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BECKMANN_SMITH_MULTISCATTER);
 
     microfacet_sample(
-        ph, data, state, inherited_normal, tangent_u, 
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, 
         math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
         MICROFACET_BECKMANN_SMITH_BSDF,
         adapted_roughness.x, adapted_roughness.y,
@@ -2144,13 +2732,14 @@ BSDF_API void microfacet_beckmann_smith_bsdf_evaluate(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_beckmann_smith ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_default fresnel_function;
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BECKMANN_SMITH_MULTISCATTER);
 
-    const float2 contrib = microfacet_evaluate(
-        ph, data, state, inherited_normal, tangent_u, mode,
+    const float3_float contrib = microfacet_evaluate(
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
         MICROFACET_BECKMANN_SMITH_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -2178,13 +2767,14 @@ BSDF_API void microfacet_beckmann_smith_bsdf_pdf(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_beckmann_smith ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_default fresnel_function;
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_BECKMANN_SMITH_MULTISCATTER);
 
     microfacet_pdf(
-        ph, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
         MICROFACET_BECKMANN_SMITH_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -2206,6 +2796,140 @@ BSDF_API void microfacet_beckmann_smith_bsdf_auxiliary(
     elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
 }
 
+/////////////////////////////////////////////////////////////////////
+// bsdf thin_film(
+//     float coating_thickness,
+//     color coating_ior,
+//     bsdf microfacet_beckmann_smith_bsdf(
+//         float           roughness_u,
+//         float           roughness_v       = roughness_u,
+//         color           tint              = color(1.0),
+//         color           multiscatter_tint = color(0.0),
+//         float3          tangent_u         = state->texture_tangent_u(0),
+//         scatter_mode    mode              = scatter_reflect,
+//         uniform string  handle            = ""
+//     )
+// )
+/////////////////////////////////////////////////////////////////////
+
+BSDF_API void thin_film_microfacet_beckmann_smith_bsdf_sample(
+    BSDF_sample_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 tint,
+    const float3 &multiscatter_tint,
+    const float3 &tangent_u,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_beckmann_smith ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+
+    const unsigned int multiscatter_texture_id = 
+        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+        state->get_bsdf_data_texture_id(BDK_BECKMANN_SMITH_MULTISCATTER);
+
+    microfacet_sample(
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, 
+        math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
+        MICROFACET_BECKMANN_SMITH_BSDF,
+        adapted_roughness.x, adapted_roughness.y,
+        multiscatter_texture_id);
+}
+
+BSDF_API void thin_film_microfacet_beckmann_smith_bsdf_evaluate(
+    BSDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &inherited_weight,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 &tint,
+    const float3 &multiscatter_tint,
+    const float3 &tangent_u,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_beckmann_smith ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+
+    const unsigned int multiscatter_texture_id = 
+        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+        state->get_bsdf_data_texture_id(BDK_BECKMANN_SMITH_MULTISCATTER);
+
+    const float3_float contrib = microfacet_evaluate(
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        MICROFACET_BECKMANN_SMITH_BSDF,
+        adapted_roughness.x, adapted_roughness.y,
+        multiscatter_texture_id);
+
+    add_elemental_bsdf_evaluate_contribution(
+        data, handle,
+        contrib.y * math::saturate(multiscatter_tint) * inherited_weight,
+        contrib.x * math::saturate(tint) * inherited_weight);
+}
+
+
+BSDF_API void thin_film_microfacet_beckmann_smith_bsdf_pdf(
+    BSDF_pdf_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 &tint,
+    const float3 &multiscatter_tint,
+    const float3 &tangent_u,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_beckmann_smith ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+
+    const unsigned int multiscatter_texture_id = 
+        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+        state->get_bsdf_data_texture_id(BDK_BECKMANN_SMITH_MULTISCATTER);
+
+    microfacet_pdf(
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        MICROFACET_BECKMANN_SMITH_BSDF,
+        adapted_roughness.x, adapted_roughness.y,
+        multiscatter_texture_id);
+}
+
+BSDF_API void thin_film_microfacet_beckmann_smith_bsdf_auxiliary(
+    BSDF_auxiliary_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &inherited_weight,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 &tint,
+    const float3 &multiscatter_tint,
+    const float3 &tangent_u,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+}
 
 /////////////////////////////////////////////////////////////////////
 // bsdf microfacet_ggx_smith_bsdf(
@@ -2267,13 +2991,14 @@ BSDF_API void microfacet_ggx_smith_bsdf_sample(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_ggx_smith ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_default fresnel_function;
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_GGX_SMITH_MULTISCATTER);
     
     microfacet_sample(
-        ph, data, state, inherited_normal, tangent_u, 
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, 
         math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
         MICROFACET_GGX_SMITH_BSDF,
         adapted_roughness.x, adapted_roughness.y,
@@ -2297,13 +3022,14 @@ BSDF_API void microfacet_ggx_smith_bsdf_evaluate(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_ggx_smith ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_default fresnel_function;
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_GGX_SMITH_MULTISCATTER);
 
-    const float2 contrib = microfacet_evaluate(
-        ph, data, state, inherited_normal, tangent_u, mode,
+    const float3_float contrib = microfacet_evaluate(
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
         MICROFACET_GGX_SMITH_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -2331,13 +3057,14 @@ BSDF_API void microfacet_ggx_smith_bsdf_pdf(
         make_float2(roughness_u, roughness_v));
 
     const Distribution_ggx_smith ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_default fresnel_function;
 
     const unsigned int multiscatter_texture_id = 
         (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
         state->get_bsdf_data_texture_id(BDK_GGX_SMITH_MULTISCATTER);
 
     microfacet_pdf(
-        ph, data, state, inherited_normal, tangent_u, mode,
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
         MICROFACET_GGX_SMITH_BSDF,
         adapted_roughness.x, adapted_roughness.y,
         multiscatter_texture_id);
@@ -2355,6 +3082,141 @@ BSDF_API void microfacet_ggx_smith_bsdf_auxiliary(
     const float3 &tangent_u,
     const scatter_mode mode,
     const int handle)
+{
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+}
+
+/////////////////////////////////////////////////////////////////////
+// bsdf thin_film(
+//     float coating_thickness,
+//     color coating_ior,
+//     bsdf base = microfacet_ggx_smith_bsdf(
+//         float           roughness_u,
+//         float           roughness_v       = roughness_u,
+//         color           tint              = color(1.0),
+//         color           multiscatter_tint = color(0.0),
+//         float3          tangent_u         = state->texture_tangent_u(0),
+//         scatter_mode    mode              = scatter_reflect,
+//         uniform string  handle            = ""
+//     )
+// )
+/////////////////////////////////////////////////////////////////////
+
+BSDF_API void thin_film_microfacet_ggx_smith_bsdf_sample(
+    BSDF_sample_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 tint,
+    const float3 &multiscatter_tint,
+    const float3 &tangent_u,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_ggx_smith ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+
+    const unsigned int multiscatter_texture_id = 
+        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+        state->get_bsdf_data_texture_id(BDK_GGX_SMITH_MULTISCATTER);
+    
+    microfacet_sample(
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, 
+        math::saturate(tint), math::saturate(multiscatter_tint), mode, handle,
+        MICROFACET_GGX_SMITH_BSDF,
+        adapted_roughness.x, adapted_roughness.y,
+        multiscatter_texture_id);
+}
+
+BSDF_API void thin_film_microfacet_ggx_smith_bsdf_evaluate(
+    BSDF_evaluate_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &inherited_weight,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 &tint,
+    const float3 &multiscatter_tint,
+    const float3 &tangent_u,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_ggx_smith ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+
+    const unsigned int multiscatter_texture_id = 
+        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+        state->get_bsdf_data_texture_id(BDK_GGX_SMITH_MULTISCATTER);
+
+    const float3_float contrib = microfacet_evaluate(
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        MICROFACET_GGX_SMITH_BSDF,
+        adapted_roughness.x, adapted_roughness.y,
+        multiscatter_texture_id);
+
+    add_elemental_bsdf_evaluate_contribution(
+        data, handle,
+        contrib.y * math::saturate(multiscatter_tint) * inherited_weight,
+        contrib.x * math::saturate(tint) * inherited_weight);
+}
+
+
+BSDF_API void thin_film_microfacet_ggx_smith_bsdf_pdf(
+    BSDF_pdf_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 &tint,
+    const float3 &multiscatter_tint,
+    const float3 &tangent_u,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
+{
+    const float2 adapted_roughness = state->adapt_microfacet_roughness(
+        make_float2(roughness_u, roughness_v));
+
+    const Distribution_ggx_smith ph(adapted_roughness.x, adapted_roughness.y);
+    const Fresnel_function_coated fresnel_function(coating_thickness, coating_ior);
+
+    const unsigned int multiscatter_texture_id = 
+        (multiscatter_tint.x <= 0.0f && multiscatter_tint.y <= 0.0f && multiscatter_tint.z <= 0.0f) ? 0 :
+        state->get_bsdf_data_texture_id(BDK_GGX_SMITH_MULTISCATTER);
+
+    microfacet_pdf(
+        ph, fresnel_function, data, state, inherited_normal, tangent_u, mode,
+        MICROFACET_GGX_SMITH_BSDF,
+        adapted_roughness.x, adapted_roughness.y,
+        multiscatter_texture_id);
+}
+
+BSDF_API void thin_film_microfacet_ggx_smith_bsdf_auxiliary(
+    BSDF_auxiliary_data *data,
+    State *state,
+    const float3 &inherited_normal,
+    const float3 &inherited_weight,
+    const float roughness_u,
+    const float roughness_v,
+    const float3 &tint,
+    const float3 &multiscatter_tint,
+    const float3 &tangent_u,
+    const scatter_mode mode,
+    const int handle,
+    const float coating_thickness,
+    const float3 &coating_ior)
 {
     elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
 }

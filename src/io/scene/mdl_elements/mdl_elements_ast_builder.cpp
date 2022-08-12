@@ -220,10 +220,7 @@ Mdl_ast_builder::Mdl_ast_builder(
 , m_tf(*m_owner->get_type_factory())
 , m_st(m_owner->get_symbol_table())
 , m_tmp_idx(0u)
-, m_param_map()
-, m_param_vector()
 , m_args(args, mi::base::DUP_INTERFACE)
-, m_used_user_types()
 , m_owner_version(m_owner->get_mdl_version())
 , m_name_mangler(name_mangler)
 , m_avoid_resource_urls(avoid_resource_urls)
@@ -458,11 +455,11 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
                 mi::mdl::IExpression_unary::Operator(op), arg);
 
             if (op == mi::mdl::IExpression::OK_CAST) {
-                const mi::mdl::IType* type = int_type_to_mdl_type(
+                const mi::mdl::IType* tp = int_type_to_mdl_type(
                     ret_type,
                     m_tf);
 
-                const mi::mdl::IType_name* tn = type_to_type_name(m_owner, type, &m_name_mangler);
+                const mi::mdl::IType_name* tn = type_to_type_name(m_owner, tp, &m_name_mangler);
                 res->set_type_name(tn);
             }
             return res;

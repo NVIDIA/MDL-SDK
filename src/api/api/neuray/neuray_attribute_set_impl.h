@@ -38,7 +38,7 @@
 
 #include "neuray_attribute_set_impl_helper.h"
 
-#include <map>
+#include <base/lib/robin_hood/robin_hood.h>
 #include <base/lib/log/i_log_assert.h>
 
 // disable C4505: <class::method>: unreferenced local function has been removed
@@ -151,13 +151,13 @@ private:
     /// valid.
     mutable const mi::base::IInterface* m_owner;
 
-    /// Caches the return values of get_attribute_type_name(). The signature requires us to
+    /// Stores the return values of get_attribute_type_name(). The signature requires us to
     /// return a const char*, but the strings are not constant (e.g., in case of arrays).
     ///
-    /// The map does not guarantee that all strings remain valid. Since we guarantee only that the
-    /// last one remains valid we need only to cache the last string. But since the implementation
+    /// The map does not guarantee that all string-addresses remain valid. Since we guarantee only that the
+    /// last one remains valid we'd need only to cache the last string. But since the implementation
     /// cached all strings and these strings might still be valid, leave it now as is.
-    mutable std::map<std::string, std::string> m_cached_type_names;
+    mutable robin_hood::unordered_map<std::string, std::string> m_cached_type_names;
 };
 
 template <typename T>
@@ -217,12 +217,15 @@ template <typename T>
 const char* Attribute_set_impl<T>::get_attribute_type_name( const char* name) const
 {
     const ATTR::Attribute_set* attribute_set = get_attribute_set();
-    std::string result =
+    const std::string result =
         Attribute_set_impl_helper::get_attribute_type_name( attribute_set, this, name);
     if( result.empty())
         return nullptr;
-    m_cached_type_names[name] = result;
-    return m_cached_type_names[name].c_str();
+#ifdef __clang__
+    return m_cached_type_names.insert(robin_hood::pair<std::string,std::string>(name, result)).first->second.c_str();
+#else
+    return m_cached_type_names.insert(robin_hood::pair<const std::string,std::string>(name, result)).first->second.c_str();
+#endif
 }
 
 template <typename T>

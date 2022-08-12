@@ -76,7 +76,7 @@ Map_impl::Map_impl( mi::neuraylib::ITransaction* transaction, const char* value_
     ASSERT( M_NEURAY_API, value_type_name);
     m_value_type_name = value_type_name;
 
-    m_type_name = "Map<" + m_value_type_name + ">";
+    m_type_name = "Map<" + m_value_type_name + '>';
 
     std::string mangled_value_type_name
         = (m_value_type_name == "Interface") ? "Void" : m_value_type_name;
@@ -105,11 +105,8 @@ mi::Size Map_impl::get_length() const
 
 const char* Map_impl::get_key( mi::Size index) const
 {
-    std::string key;
-    if( !index_to_key( index, key))
+    if( !index_to_key( index, m_cached_key))
         return nullptr;
-
-    m_cached_key = key;
     return m_cached_key.c_str();
 }
 

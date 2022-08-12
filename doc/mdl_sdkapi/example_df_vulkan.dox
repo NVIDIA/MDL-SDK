@@ -1,0 +1,228 @@
+/******************************************************************************
+ * Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_df_vulkan Example for Compiled Distribution Functions (GLSL)
+
+<div align="right">
+    [\link mi_neuray_example_df_native Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_derivatives Next\endlink]
+</div>
+
+This example illustrates generating target code for BSDFs using the GLSL backend and using it
+to implement a small physically-based path tracer in Vulkan
+using a compute shader. The renderer illuminates a sphere with a HDR environment map and supports
+MDL materials using the following expressions:
+
+  - scattering.surface
+  - scattering.backface
+  - scattering.emission
+  - thin_walled
+  - volume.absorbtion
+  - geometry.cutout_opacity
+
+\section example_df_vulkan_new New Topics
+
+  - Generating target code for distribution functions (GLSL)
+  - Using generated distribution functions (GLSL)
+
+\section example_df_vulkan_descr Detailed Description
+
+<dl>
+<dt><b>Generating target code for distribution functions (GLSL)</b></dt>
+<dd><br>
+Generating GLSL code for distribution functions involves the following steps:
+
+  - Load the module in which the material is contained
+  - Instantiate a material instance and compile it
+  - Using the GLSL backend to generate target code from the compiled material
+
+The first two steps have been covered in previous examples, so let's focus on generating the target code.
+
+Before generating GLSL code the backend has to be optained and configured using #mi::neuraylib::IMdl_backend::set_option().
+For a list of possible options (e.g. enabling auxiliary outputs) see the documentation of the \c set_option method.
+For a more in depth guide on how to configure the backend for Vulkan please refer to \ref example_execution_glsl_vk_descr.
+
+\code
+mi::base::Handle<mi::neuraylib::IMdl_backend> be_glsl(
+    mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_GLSL));
+
+be_glsl->set_option("glsl_version", "450");
+be_glsl->set_option("glsl_place_uniforms_into_ssbo", "on");
+be_glsl->set_option("glsl_max_const_data", "0");
+be_glsl->set_option("glsl_uniform_ssbo_binding", "1");
+be_glsl->set_option("glsl_uniform_ssbo_set", "0");
+...
+\endcode
+
+The functions can be generated with #mi::neuraylib::IMdl_backend::translate_material_df(), #mi::neuraylib::ILink_unit::add_material_df()
+or #mi::neuraylib::ILink_unit::add_material(). When generating code for multiple materials or simply many DFs, it's generally advisable
+to use a link unit so no duplicate code is generated and the compiler can employ better optimizations. Using
+#mi::neuraylib::ILink_unit::add_material() provides the most information on success, such as argument block and
+function indices which are, however, not needed here, so either of the link unit's functions are fine in this example.
+
+GLSL does not support function pointers, so instead of keeping track of different BSDF functions with indicies
+as in previous examples, we must choose unique names for each subexpression that will be used in the renderer's
+GLSL code to call the generated functions. By default these function base names are "lambda0", "lambda1", and so on.
+We will choose more descriptive names to make the renderer's code more readable by specifying \c base_fname. 
+The final function names that are generated will be suffixed by \c _init, \c _sample, \c _evaluate, and \c _pdf.
+For expressions that are not DFs, such as \c thin_walled and \c geometry.cutout_opacity the \c base_fname is simply the
+final name of the generated function.
+
+Lastly, the three functions have a parameter \c include_geometry_normal that can be specified using the execution context
+to make the initialization function replace \c state->normal by the result of the expression connected to \c geometry.normal
+of the material. By default \c include_geometry_normal is set to true.
+
+\code
+std::vector<mi::neuraylib::Target_function_description> function_descs;
+function_descs.emplace_back("surface.scattering", "mdl_bsdf"); // Generate BSDF
+function_descs.emplace_back("surface.emission.emission", "mdl_emission"); // Generate EDF
+function_descs.emplace_back("thin_walled", "mdl_thin_walled"); // non-DF expression
+...
+
+context->set_option("include_geometry_normal", true); // Optional, defaults to true anyway
+
+link_unit->add_material(compiled_material, function_descs.data(), function_descs.size(), context);
+
+mi::base::Handle<const mi::neuraylib::ITarget_code> glsl_code(
+        be_glsl->translate_link_unit(link_unit.get(), context));
+\endcode
+</dd>
+
+<dt><b>Using generated distribution functions (GLSL)</b></dt>
+<dd><br>
+The generated code will contain the generated functions, for example \c mdl_bsdf_init, \c mdl_bsdf_sample, \c mdl_bsdf_evaluate,
+and \c mdl_bsdf_pdf, which can be called directly in the renderer's shader:
+
+\code
+// Init
+mdl_bsdf_init(state);
+
+// Sample
+Bsdf_sample_data bsdf_sample_data;
+bsdf_sample_data.ior1 = ior1;
+bsdf_sample_data.ior2 = ior2;
+bsdf_sample_data.k1 = -ray_state.dir;
+bsdf_sample_data.xi = vec4(rnd(seed), rnd(seed), rnd(seed), rnd(seed));
+
+mdl_bsdf_sample(bsdf_sample_data, state);
+
+// Evaluate
+Bsdf_evaluate_data bsdf_eval_data;
+bsdf_eval_data.ior1 = ior1;
+bsdf_eval_data.ior2 = ior2;
+bsdf_eval_data.k1 = -ray_state.dir;
+bsdf_eval_data.k2 = to_light;
+
+mdl_bsdf_evaluate(bsdf_eval_data, state);
+\endcode
+
+Each function takes in the current material shading state and a data structure that contains
+input values as well as the computed output values (the init function only takes the shading state).
+
+As an example the \c Bsdf_sample_data and \c Bsdf_evaluate_data structures are defined as follows:
+\code
+struct Bsdf_sample_data
+{
+    /*Input*/ vec3 ior1;           // IOR current med
+    /*Input*/ vec3 ior2;           // IOR other side
+    /*Input*/ vec3 k1;             // outgoing direction
+    /*Output*/ vec3 k2;            // incoming direction
+    /*Input*/ vec4 xi;             // pseudo-random sample number
+    /*Output*/ float pdf;          // pdf (non-projected hemisphere)
+    /*Output*/ vec3 bsdf_over_pdf; // bsdf * dot(normal, k2) / pdf
+    /*Output*/ int event_type;     // the type of event for the generated sample
+    /*Output*/ int handle;         // handle of the sampled elemental BSDF (lobe)
+};
+
+struct Bsdf_evaluate_data
+{
+    /*Input*/ vec3 ior1;          // IOR current medium
+    /*Input*/ vec3 ior2;          // IOR other side
+    /*Input*/ vec3 k1;            // outgoing direction
+    /*Input*/ vec3 k2;            // incoming direction
+    /*Output*/ vec3 bsdf_diffuse; // bsdf_diffuse * dot(normal, k2)
+    /*Output*/ vec3 bsdf_glossy;  // bsdf_glossy * dot(normal, k2)
+    /*Output*/ float pdf;         // pdf (non-projected hemisphere)
+};
+\endcode
+
+For the definitions of all structures and function prototypes see the top of \c examples/mdl_sdk/df_vulkan/mdl_runtime.glsl or
+look at the generated GLSL code for your material. Also for more information on how to use the distribution functions refer to
+\ref example_df_cuda_descr.
+</dd>
+</dl>
+
+\section example_df_vulkan Example Source
+
+To compile the source code, you require a recent version of the Vulkan SDK and GLFW.
+For detailed instructions, please refer to the \link mi_neuray_getting_started Getting Started \endlink section.
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/df_vulkan/example_df_vulkan.cpp</tt>
+
+\include df_vulkan/example_df_vulkan.cpp
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/df_vulkan/path_trace.comp</tt>
+
+\include df_vulkan/path_trace.comp
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/df_vulkan/mdl_runtime.glsl</tt>
+
+\include df_vulkan/mdl_runtime.glsl
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/df_vulkan/display.vert</tt>
+
+\include df_vulkan/display.frag
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/df_vulkan/display.vert</tt>
+
+\include df_vulkan/display.frag
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/shared/example_vulkan_shared.h</tt>
+
+\include shared/example_vulkan_shared.h
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/shared/example_vulkan_shared.cpp</tt>
+
+\include shared/example_vulkan_shared.cpp
+
+
+<div align="right">
+    [\link mi_neuray_example_df_native Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_derivatives Next\endlink]
+</div>
+
+*/

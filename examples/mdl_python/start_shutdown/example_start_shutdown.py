@@ -30,6 +30,7 @@ import sys
 import os
 import gc
 import traceback
+import time
 
 print("Current working directory: " + os.getcwd())
 print("\n")
@@ -106,6 +107,9 @@ if __name__ == "__main__":
         # unreachable = gc.collect()
         # print("\n%d unreachable objects detected during garbage collection.\n" % unreachable)
         # pymdlsdk._print_open_handle_statistic()
+
+        # sleep to be able to read the output when starting from VS
+        time.sleep(2.0)
 
     except Exception as e:
         print("Unexpected error: ", sys.exc_info()[0])

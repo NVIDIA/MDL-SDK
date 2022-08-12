@@ -1,9 +1,8 @@
 //===- xray-converter.cpp: XRay Trace Conversion --------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -44,23 +43,20 @@ static cl::opt<ConvertFormats> ConvertOutputFormat(
                           "May be visualized with the Catapult trace viewer.")),
     cl::sub(Convert));
 static cl::alias ConvertOutputFormat2("f", cl::aliasopt(ConvertOutputFormat),
-                                      cl::desc("Alias for -output-format"),
-                                      cl::sub(Convert));
+                                      cl::desc("Alias for -output-format"));
 static cl::opt<std::string>
     ConvertOutput("output", cl::value_desc("output file"), cl::init("-"),
                   cl::desc("output file; use '-' for stdout"),
                   cl::sub(Convert));
 static cl::alias ConvertOutput2("o", cl::aliasopt(ConvertOutput),
-                                cl::desc("Alias for -output"),
-                                cl::sub(Convert));
+                                cl::desc("Alias for -output"));
 
 static cl::opt<bool>
     ConvertSymbolize("symbolize",
                      cl::desc("symbolize function ids from the input log"),
                      cl::init(false), cl::sub(Convert));
 static cl::alias ConvertSymbolize2("y", cl::aliasopt(ConvertSymbolize),
-                                   cl::desc("Alias for -symbolize"),
-                                   cl::sub(Convert));
+                                   cl::desc("Alias for -symbolize"));
 
 static cl::opt<std::string>
     ConvertInstrMap("instr_map",
@@ -69,15 +65,13 @@ static cl::opt<std::string>
                     cl::value_desc("binary with xray_instr_map"),
                     cl::sub(Convert), cl::init(""));
 static cl::alias ConvertInstrMap2("m", cl::aliasopt(ConvertInstrMap),
-                                  cl::desc("Alias for -instr_map"),
-                                  cl::sub(Convert));
+                                  cl::desc("Alias for -instr_map"));
 static cl::opt<bool> ConvertSortInput(
     "sort",
     cl::desc("determines whether to sort input log records by timestamp"),
     cl::sub(Convert), cl::init(true));
 static cl::alias ConvertSortInput2("s", cl::aliasopt(ConvertSortInput),
-                                   cl::desc("Alias for -sort"),
-                                   cl::sub(Convert));
+                                   cl::desc("Alias for -sort"));
 
 using llvm::yaml::Output;
 
@@ -91,9 +85,10 @@ void TraceConverter::exportAsYAML(const Trace &Records, raw_ostream &OS) {
     Trace.Records.push_back({R.RecordType, R.CPU, R.Type, R.FuncId,
                              Symbolize ? FuncIdHelper.SymbolOrNumber(R.FuncId)
                                        : llvm::to_string(R.FuncId),
-                             R.TSC, R.TId, R.PId, R.CallArgs});
+                             R.TSC, R.TId, R.PId, R.CallArgs, R.Data});
   }
   Output Out(OS, nullptr, 0);
+  Out.setWriteDefaultValues(false);
   Out << Trace;
 }
 
@@ -122,21 +117,27 @@ void TraceConverter::exportAsRAWv1(const Trace &Records, raw_ostream &OS) {
   // Then write out the rest of the records, still in an endian-appropriate
   // format.
   for (const auto &R : Records) {
-    Writer.write(R.RecordType);
-    // The on disk naive raw format uses 8 bit CPUs, but the record has 16.
-    // There's no choice but truncation.
-    Writer.write(static_cast<uint8_t>(R.CPU));
     switch (R.Type) {
     case RecordTypes::ENTER:
     case RecordTypes::ENTER_ARG:
+      Writer.write(R.RecordType);
+      Writer.write(static_cast<uint8_t>(R.CPU));
       Writer.write(uint8_t{0});
       break;
     case RecordTypes::EXIT:
+      Writer.write(R.RecordType);
+      Writer.write(static_cast<uint8_t>(R.CPU));
       Writer.write(uint8_t{1});
       break;
     case RecordTypes::TAIL_EXIT:
+      Writer.write(R.RecordType);
+      Writer.write(static_cast<uint8_t>(R.CPU));
       Writer.write(uint8_t{2});
       break;
+    case RecordTypes::CUSTOM_EVENT:
+    case RecordTypes::TYPED_EVENT:
+      // Skip custom and typed event records for v1 logs.
+      continue;
     }
     Writer.write(R.FuncId);
     Writer.write(R.TSC);
@@ -292,6 +293,10 @@ void TraceConverter::exportAsChromeTraceEventFormat(const Trace &Records,
     double EventTimestampUs = double(1000000) / CycleFreq * double(R.TSC);
     StackTrieNode *&StackCursor = StackCursorByThreadId[R.TId];
     switch (R.Type) {
+    case RecordTypes::CUSTOM_EVENT:
+    case RecordTypes::TYPED_EVENT:
+      // TODO: Support typed and custom event rendering on Chrome Trace Viewer.
+      break;
     case RecordTypes::ENTER:
     case RecordTypes::ENTER_ARG:
       StackCursor = findOrCreateStackNode(StackCursor, R.FuncId, R.TId,
@@ -370,17 +375,15 @@ static CommandRegistration Unused(&Convert, []() -> Error {
   }
 
   const auto &FunctionAddresses = Map.getFunctionAddresses();
-  symbolize::LLVMSymbolizer::Options Opts(
-      symbolize::FunctionNameKind::LinkageName, true, true, false, "");
-  symbolize::LLVMSymbolizer Symbolizer(Opts);
+  symbolize::LLVMSymbolizer Symbolizer;
   llvm::xray::FuncIdConversionHelper FuncIdHelper(ConvertInstrMap, Symbolizer,
                                                   FunctionAddresses);
   llvm::xray::TraceConverter TC(FuncIdHelper, ConvertSymbolize);
   std::error_code EC;
   raw_fd_ostream OS(ConvertOutput, EC,
                     ConvertOutputFormat == ConvertFormats::BINARY
-                        ? sys::fs::OpenFlags::F_None
-                        : sys::fs::OpenFlags::F_Text);
+                        ? sys::fs::OpenFlags::OF_None
+                        : sys::fs::OpenFlags::OF_Text);
   if (EC)
     return make_error<StringError>(
         Twine("Cannot open file '") + ConvertOutput + "' for writing.", EC);

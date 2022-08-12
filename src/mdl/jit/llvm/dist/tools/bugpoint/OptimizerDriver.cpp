@@ -1,9 +1,8 @@
 //===- OptimizerDriver.cpp - Allow BugPoint to run passes safely ----------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -16,6 +15,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "BugDriver.h"
+#include "ToolRunner.h"
 #include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Module.h"
@@ -79,7 +79,7 @@ bool BugDriver::writeProgramToFile(int FD, const Module &M) const {
 bool BugDriver::writeProgramToFile(const std::string &Filename,
                                    const Module &M) const {
   std::error_code EC;
-  ToolOutputFile Out(Filename, EC, sys::fs::F_None);
+  ToolOutputFile Out(Filename, EC, sys::fs::OF_None);
   if (!EC)
     return writeProgramToFileAux(Out, M);
   return true;
@@ -130,8 +130,7 @@ static cl::list<std::string> OptArgs("opt-args", cl::Positional,
 bool BugDriver::runPasses(Module &Program,
                           const std::vector<std::string> &Passes,
                           std::string &OutputFilename, bool DeleteOutput,
-                          bool Quiet, unsigned NumExtraArgs,
-                          const char *const *ExtraArgs) const {
+                          bool Quiet, ArrayRef<std::string> ExtraArgs) const {
   // setup the output file name
   outs().flush();
   SmallString<128> UniqueFilename;
@@ -142,7 +141,7 @@ bool BugDriver::runPasses(Module &Program,
            << ": Error making unique filename: " << EC.message() << "\n";
     return 1;
   }
-  OutputFilename = UniqueFilename.str();
+  OutputFilename = std::string(UniqueFilename.str());
 
   // set up the input file name
   Expected<sys::fs::TempFile> Temp =
@@ -166,7 +165,8 @@ bool BugDriver::runPasses(Module &Program,
 
   std::string tool = OptCmd;
   if (OptCmd.empty()) {
-    if (ErrorOr<std::string> Path = sys::findProgramByName("opt"))
+    if (ErrorOr<std::string> Path =
+            FindProgramByName("opt", getToolName(), &OutputPrefix))
       tool = *Path;
     else
       errs() << Path.getError().message() << "\n";
@@ -205,6 +205,9 @@ bool BugDriver::runPasses(Module &Program,
 
   for (unsigned i = 0, e = OptArgs.size(); i != e; ++i)
     Args.push_back(OptArgs[i]);
+  // Pin to legacy PM since bugpoint has lots of infra and hacks revolving
+  // around the legacy PM.
+  Args.push_back("-enable-new-pm=0");
   Args.push_back("-disable-symbolication");
   Args.push_back("-o");
   Args.push_back(OutputFilename);
@@ -222,8 +225,7 @@ bool BugDriver::runPasses(Module &Program,
        I != E; ++I)
     Args.push_back(I->c_str());
   Args.push_back(Temp->TmpName.c_str());
-  for (unsigned i = 0; i < NumExtraArgs; ++i)
-    Args.push_back(*ExtraArgs);
+  Args.append(ExtraArgs.begin(), ExtraArgs.end());
 
   LLVM_DEBUG(errs() << "\nAbout to run:\t";
              for (unsigned i = 0, e = Args.size() - 1; i != e; ++i) errs()
@@ -267,10 +269,10 @@ bool BugDriver::runPasses(Module &Program,
 
 std::unique_ptr<Module>
 BugDriver::runPassesOn(Module *M, const std::vector<std::string> &Passes,
-                       unsigned NumExtraArgs, const char *const *ExtraArgs) {
+                       ArrayRef<std::string> ExtraArgs) {
   std::string BitcodeResult;
   if (runPasses(*M, Passes, BitcodeResult, false /*delete*/, true /*quiet*/,
-                NumExtraArgs, ExtraArgs)) {
+                ExtraArgs)) {
     return nullptr;
   }
 

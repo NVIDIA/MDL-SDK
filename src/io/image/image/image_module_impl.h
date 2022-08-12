@@ -165,6 +165,9 @@ public:
     mi::neuraylib::ITile* convert_tile(
         const mi::neuraylib::ITile* tile, Pixel_type pixel_type) const;
 
+    void adjust_gamma(
+        mi::neuraylib::ITile* tile, mi::Float32 old_gamma, mi::Float32 new_gamma) const;
+
     void adjust_gamma( mi::neuraylib::ICanvas* canvas, mi::Float32 new_gamma) const;
 
     Pixel_type get_pixel_type_for_channel(

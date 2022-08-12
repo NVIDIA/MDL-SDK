@@ -56,6 +56,9 @@
 #include <mi/mdl/mdl_module_transformer.h>
 
 
+#if defined(MDLC_WITH_BACKENDS)
+#include <mi/mdl/mdl_generated_executable.h>
+#endif
 
 #include <string>
 #include <algorithm>
@@ -92,7 +95,6 @@ using mi::mdl::IOutput_stream;
 using mi::mdl::IInput_stream;
 using mi::mdl::IThread_context;
 using mi::mdl::IMDL_module_transformer;
-
 
 using namespace std;
 
@@ -175,6 +177,12 @@ void Mdlc::usage()
         "\t\tMDL\n"
         "\t\tDAG\n"
         "\t\tDAGTM\n"
+#if defined(MDLC_WITH_BACKENDS)
+        "\t\tGLSL\n"
+        "\t\tHLSL\n"
+        "\t\tJIT\n"
+        "\t\tPTX\n"
+#endif
         "\t\tBIN\n"
         "  --dump <option>\n"
         "  -d <option>\n"
@@ -319,6 +327,16 @@ int Mdlc::run(int argc, char *argv[])
                 m_target_lang = TL_DAG;
             } else if (strcasecmp(mi::getopt::optarg, "dagtm") == 0) {
                 m_target_lang = TL_DAGTM;
+#if defined(MDLC_WITH_BACKENDS)
+            } else if (strcasecmp(mi::getopt::optarg, "glsl") == 0) {
+                m_target_lang = TL_GLSL;
+            } else if (strcasecmp(mi::getopt::optarg, "hlsl") == 0) {
+                m_target_lang = TL_HLSL;
+            } else if (strcasecmp(mi::getopt::optarg, "jit") == 0) {
+                m_target_lang = TL_JIT;
+            } else if (strcasecmp(mi::getopt::optarg, "ptx") == 0) {
+                m_target_lang = TL_PTX;
+#endif
             } else if (strcasecmp(mi::getopt::optarg, "bin") == 0) {
                 m_target_lang = TL_BIN;
             } else {
@@ -635,6 +653,68 @@ bool Mdlc::backend(IModule const *module)
             }
         }
         break;
+#if defined(MDLC_WITH_BACKENDS)
+    case TL_HLSL:
+    case TL_GLSL:
+    case TL_JIT:
+    case TL_PTX:
+        if (module->is_valid()) {
+            mi::base::Handle<ICode_generator_jit> generator =
+                mi::base::make_handle(m_imdl->load_code_generator("jit"))
+                    .get_interface<ICode_generator_jit>();
+            if (!generator.is_valid_interface()) {
+                fprintf(stderr,"%s error: failed to load JIT code generator\n", m_program);
+                return false;
+            }
+
+            mi::mdl::Options &jit_opts = generator->access_options();
+
+            jit_opts.set_option(MDL_CG_OPTION_INTERNAL_SPACE, m_internal_space.c_str());
+            jit_opts.set_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT, "true");
+            jit_opts.set_option(MDL_JIT_OPTION_USE_BITANGENT, "true");
+
+            apply_backend_options(jit_opts);
+
+            ICode_generator::Target_language be_target_lang;
+            switch (m_target_lang) {
+            case TL_JIT:
+                be_target_lang = ICode_generator::TL_NATIVE;
+                break;
+            case TL_PTX:
+                be_target_lang = ICode_generator::TL_PTX;
+                break;
+            case TL_HLSL:
+                be_target_lang = ICode_generator::TL_HLSL;
+                break;
+            case TL_GLSL:
+                be_target_lang = ICode_generator::TL_GLSL;
+                break;
+            default:
+                return false;
+            }
+
+            mi::base::Handle<IGenerated_code_executable> exe_code(
+                generator->compile(module, /*module_cache=*/NULL, be_target_lang, /*ctx=*/NULL));
+            if (!exe_code.is_valid_interface()) {
+                fprintf(stderr, "%s error: failed to generate executable code for module %s\n",
+                    m_program, module->get_name());
+                return false;
+            }
+
+            Messages const &msgs = exe_code->access_messages();
+            print_messages(msgs, printer.get());
+
+            size_t err_count = msgs.get_error_message_count();
+            if (0 < err_count) {
+                fprintf(stderr, "%s: %u errors detected in generated code for module %s\n",
+                    m_program, unsigned(err_count), module->get_name());
+                return false;
+            } else {
+                print_generated_code(exe_code.get());
+            }
+        }
+        break;
+#else
     case TL_GLSL:
         break;
     case TL_HLSL:
@@ -643,6 +723,7 @@ bool Mdlc::backend(IModule const *module)
         break;
     case TL_PTX:
         break;
+#endif // defined(MDLC_WITH_BACKENDS)
     case TL_BIN:
         if (module->is_valid()) {
             mi::base::Handle<IOutput_stream> os(m_imdl->create_file_output_stream("output.bin"));

@@ -1,9 +1,8 @@
 //===- PhiValues.h - Phi Value Analysis -------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -22,7 +21,7 @@
 
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
-#include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/IR/ValueHandle.h"
@@ -30,7 +29,6 @@
 
 namespace llvm {
 
-class Use;
 class Value;
 class PHINode;
 class Function;
@@ -42,7 +40,7 @@ class Function;
 /// it is queried.
 class PhiValues {
 public:
-  using ValueSet = SmallPtrSet<Value *, 4>;
+  using ValueSet = SmallSetVector<Value *, 4>;
 
   /// Construct an empty PhiValues.
   PhiValues(const Function &F) : F(F) {}
@@ -72,8 +70,7 @@ public:
                   FunctionAnalysisManager::Invalidator &);
 
 private:
-  using PhiSet = SmallPtrSet<const PHINode *, 4>;
-  using ConstValueSet = SmallPtrSet<const Value *, 4>;
+  using ConstValueSet = SmallSetVector<const Value *, 4>;
 
   /// The next depth number to be used by processPhi.
   unsigned int NextDepthNumber = 1;
@@ -88,12 +85,28 @@ private:
   /// All values reachable from each component.
   DenseMap<unsigned int, ConstValueSet> ReachableMap;
 
+  /// A CallbackVH to notify PhiValues when a value is deleted or replaced, so
+  /// that the cached information for that value can be cleared to avoid
+  /// dangling pointers to invalid values.
+  class PhiValuesCallbackVH final : public CallbackVH {
+    PhiValues *PV;
+    void deleted() override;
+    void allUsesReplacedWith(Value *New) override;
+
+  public:
+    PhiValuesCallbackVH(Value *V, PhiValues *PV = nullptr)
+        : CallbackVH(V), PV(PV) {}
+  };
+
+  /// A set of callbacks to the values that processPhi has seen.
+  DenseSet<PhiValuesCallbackVH, DenseMapInfo<Value *>> TrackedValues;
+
   /// The function that the PhiValues is for.
   const Function &F;
 
   /// Process a phi so that its entries in the depth and reachable maps are
   /// fully populated.
-  void processPhi(const PHINode *PN, SmallVector<const PHINode *, 8> &Stack);
+  void processPhi(const PHINode *PN, SmallVectorImpl<const PHINode *> &Stack);
 };
 
 /// The analysis pass which yields a PhiValues

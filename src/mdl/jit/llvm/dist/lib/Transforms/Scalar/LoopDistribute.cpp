@@ -1,9 +1,8 @@
 //===- LoopDistribute.cpp - Loop Distribution Pass ------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -34,7 +33,6 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/ADT/iterator_range.h"
-#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/LoopAccessAnalysis.h"
@@ -56,6 +54,7 @@
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/IR/Value.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
@@ -77,6 +76,18 @@ using namespace llvm;
 
 #define LDIST_NAME "loop-distribute"
 #define DEBUG_TYPE LDIST_NAME
+
+/// @{
+/// Metadata attribute names
+static const char *const LLVMLoopDistributeFollowupAll =
+    "llvm.loop.distribute.followup_all";
+static const char *const LLVMLoopDistributeFollowupCoincident =
+    "llvm.loop.distribute.followup_coincident";
+static const char *const LLVMLoopDistributeFollowupSequential =
+    "llvm.loop.distribute.followup_sequential";
+static const char *const LLVMLoopDistributeFollowupFallback =
+    "llvm.loop.distribute.followup_fallback";
+/// @}
 
 static cl::opt<bool>
     LDistVerify("loop-distribute-verify", cl::Hidden,
@@ -186,7 +197,7 @@ public:
   /// Returns the loop where this partition ends up after distribution.
   /// If this partition is mapped to the original loop then use the block from
   /// the loop.
-  const Loop *getDistributedLoop() const {
+  Loop *getDistributedLoop() const {
     return ClonedLoop ? ClonedLoop : OrigLoop;
   }
 
@@ -443,6 +454,9 @@ public:
     assert(&*OrigPH->begin() == OrigPH->getTerminator() &&
            "preheader not empty");
 
+    // Preserve the original loop ID for use after the transformation.
+    MDNode *OrigLoopID = L->getLoopID();
+
     // Create a loop for each partition except the last.  Clone the original
     // loop before PH along with adding a preheader for the cloned loop.  Then
     // update PH to point to the newly added preheader.
@@ -457,8 +471,12 @@ public:
 
       Part->getVMap()[ExitBlock] = TopPH;
       Part->remapInstructions();
+      setNewLoopID(OrigLoopID, Part);
     }
     Pred->getTerminator()->replaceUsesOfWith(OrigPH, TopPH);
+
+    // Also set a new loop ID for the last loop.
+    setNewLoopID(OrigLoopID, &PartitionContainer.back());
 
     // Now go in forward order and update the immediate dominator for the
     // preheaders with the exiting block of the previous loop.  Dominance
@@ -575,6 +593,19 @@ private:
       }
     }
   }
+
+  /// Assign new LoopIDs for the partition's cloned loop.
+  void setNewLoopID(MDNode *OrigLoopID, InstPartition *Part) {
+    Optional<MDNode *> PartitionID = makeFollowupLoopID(
+        OrigLoopID,
+        {LLVMLoopDistributeFollowupAll,
+         Part->hasDepCycle() ? LLVMLoopDistributeFollowupSequential
+                             : LLVMLoopDistributeFollowupCoincident});
+    if (PartitionID.hasValue()) {
+      Loop *NewLoop = Part->getDistributedLoop();
+      NewLoop->setLoopID(PartitionID.getValue());
+    }
+  }
 };
 
 /// For each memory instruction, this class maintains difference of the
@@ -632,21 +663,23 @@ public:
 
   /// Try to distribute an inner-most loop.
   bool processLoop(std::function<const LoopAccessInfo &(Loop &)> &GetLAA) {
-    assert(L->empty() && "Only process inner loops.");
+    assert(L->isInnermost() && "Only process inner loops.");
 
     LLVM_DEBUG(dbgs() << "\nLDist: In \""
                       << L->getHeader()->getParent()->getName()
                       << "\" checking " << *L << "\n");
 
+    // Having a single exit block implies there's also one exiting block.
     if (!L->getExitBlock())
       return fail("MultipleExitBlocks", "multiple exit blocks");
     if (!L->isLoopSimplifyForm())
       return fail("NotLoopSimplifyForm",
                   "loop is not in loop-simplify form");
+    if (!L->isRotatedForm())
+      return fail("NotBottomTested", "loop is not bottom tested");
 
     BasicBlock *PH = L->getLoopPreheader();
 
-    // LAA will check that we only have a single exiting block.
     LAI = &GetLAA(*L);
 
     // Currently, we only distribute to isolate the part of the loop with
@@ -735,24 +768,27 @@ public:
                     "cannot isolate unsafe dependencies");
     }
 
-    // Don't distribute the loop if we need too many SCEV run-time checks.
+    // Don't distribute the loop if we need too many SCEV run-time checks, or
+    // any if it's illegal.
     const SCEVUnionPredicate &Pred = LAI->getPSE().getUnionPredicate();
+    if (LAI->hasConvergentOp() && !Pred.isAlwaysTrue()) {
+      return fail("RuntimeCheckWithConvergent",
+                  "may not insert runtime check with convergent operation");
+    }
+
     if (Pred.getComplexity() > (IsForced.getValueOr(false)
                                     ? PragmaDistributeSCEVCheckThreshold
                                     : DistributeSCEVCheckThreshold))
       return fail("TooManySCEVRuntimeChecks",
                   "too many SCEV run-time checks needed.\n");
 
+    if (!IsForced.getValueOr(false) && hasDisableAllTransformsHint(L))
+      return fail("HeuristicDisabled", "distribution heuristic disabled");
+
     LLVM_DEBUG(dbgs() << "\nDistributing loop: " << *L << "\n");
     // We're done forming the partitions set up the reverse mapping from
     // instructions to partitions.
     Partitions.setupPartitionIdOnInstructions();
-
-    // To keep things simple have an empty preheader before we version or clone
-    // the loop.  (Also split if this has no predecessor, i.e. entry, because we
-    // rely on PH having a predecessor.)
-    if (!PH->getSinglePredecessor() || &*PH->begin() != PH->getTerminator())
-      SplitBlock(PH, PH->getTerminator(), DT, LI);
 
     // If we need run-time checks, version the loop now.
     auto PtrToPartition = Partitions.computePartitionSetForPointers(*LAI);
@@ -761,14 +797,38 @@ public:
     auto Checks = includeOnlyCrossPartitionChecks(AllChecks, PtrToPartition,
                                                   RtPtrChecking);
 
+    if (LAI->hasConvergentOp() && !Checks.empty()) {
+      return fail("RuntimeCheckWithConvergent",
+                  "may not insert runtime check with convergent operation");
+    }
+
+    // To keep things simple have an empty preheader before we version or clone
+    // the loop.  (Also split if this has no predecessor, i.e. entry, because we
+    // rely on PH having a predecessor.)
+    if (!PH->getSinglePredecessor() || &*PH->begin() != PH->getTerminator())
+      SplitBlock(PH, PH->getTerminator(), DT, LI);
+
     if (!Pred.isAlwaysTrue() || !Checks.empty()) {
+      assert(!LAI->hasConvergentOp() && "inserting illegal loop versioning");
+
+      MDNode *OrigLoopID = L->getLoopID();
+
       LLVM_DEBUG(dbgs() << "\nPointers:\n");
       LLVM_DEBUG(LAI->getRuntimePointerChecking()->printChecks(dbgs(), Checks));
-      LoopVersioning LVer(*LAI, L, LI, DT, SE, false);
-      LVer.setAliasChecks(std::move(Checks));
-      LVer.setSCEVChecks(LAI->getPSE().getUnionPredicate());
+      LoopVersioning LVer(*LAI, Checks, L, LI, DT, SE);
       LVer.versionLoop(DefsUsedOutside);
       LVer.annotateLoopWithNoAlias();
+
+      // The unversioned loop will not be changed, so we inherit all attributes
+      // from the original loop, but remove the loop distribution metadata to
+      // avoid to distribute it again.
+      MDNode *UnversionedLoopID =
+          makeFollowupLoopID(OrigLoopID,
+                             {LLVMLoopDistributeFollowupAll,
+                              LLVMLoopDistributeFollowupFallback},
+                             "llvm.loop.distribute.", true)
+              .getValue();
+      LVer.getNonVersionedLoop()->setLoopID(UnversionedLoopID);
     }
 
     // Create identical copies of the original loop for each partition and hook
@@ -842,15 +902,14 @@ private:
   /// \p PtrToPartition contains the partition number for pointers.  Partition
   /// number -1 means that the pointer is used in multiple partitions.  In this
   /// case we can't safely omit the check.
-  SmallVector<RuntimePointerChecking::PointerCheck, 4>
-  includeOnlyCrossPartitionChecks(
-      const SmallVectorImpl<RuntimePointerChecking::PointerCheck> &AllChecks,
+  SmallVector<RuntimePointerCheck, 4> includeOnlyCrossPartitionChecks(
+      const SmallVectorImpl<RuntimePointerCheck> &AllChecks,
       const SmallVectorImpl<int> &PtrToPartition,
       const RuntimePointerChecking *RtPtrChecking) {
-    SmallVector<RuntimePointerChecking::PointerCheck, 4> Checks;
+    SmallVector<RuntimePointerCheck, 4> Checks;
 
     copy_if(AllChecks, std::back_inserter(Checks),
-            [&](const RuntimePointerChecking::PointerCheck &Check) {
+            [&](const RuntimePointerCheck &Check) {
               for (unsigned PtrIdx1 : Check.first->Members)
                 for (unsigned PtrIdx2 : Check.second->Members)
                   // Only include this check if there is a pair of pointers
@@ -922,7 +981,7 @@ static bool runImpl(Function &F, LoopInfo *LI, DominatorTree *DT,
   for (Loop *TopLevelLoop : *LI)
     for (Loop *L : depth_first(TopLevelLoop))
       // We only handle inner-most loops.
-      if (L->empty())
+      if (L->isInnermost())
         Worklist.push_back(L);
 
   // Now walk the identified inner loops.
@@ -998,7 +1057,8 @@ PreservedAnalyses LoopDistributePass::run(Function &F,
   auto &LAM = AM.getResult<LoopAnalysisManagerFunctionProxy>(F).getManager();
   std::function<const LoopAccessInfo &(Loop &)> GetLAA =
       [&](Loop &L) -> const LoopAccessInfo & {
-    LoopStandardAnalysisResults AR = {AA, AC, DT, LI, SE, TLI, TTI, nullptr};
+    LoopStandardAnalysisResults AR = {AA,  AC,  DT,      LI,     SE,
+                                      TLI, TTI, nullptr, nullptr};
     return LAM.getResult<LoopAccessAnalysis>(L, AR);
   };
 

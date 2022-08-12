@@ -118,9 +118,6 @@ public:
     ///
     static void array_to_vector(int ac, char *av[], std::vector<std::string> & v);
 
-    /// Valid MDL identifier
-    static bool is_valid_mdl_identifier(const std::string & identifier);
-
     static bool equivalent(const std::string & file1, const std::string & file2);
     static std::string path_appends(const std::string & path, const std::string & end);
     static std::string stem(const std::string & path);

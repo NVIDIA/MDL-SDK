@@ -82,7 +82,7 @@ public:
     virtual base::IPlugin_descriptor* get_plugin_descriptor( Size index) const = 0;
 };
 
-/*@}*/ // end group mi_neuray_configuration
+/**@}*/ // end group mi_neuray_configuration
 
 } // namespace neuraylib
 

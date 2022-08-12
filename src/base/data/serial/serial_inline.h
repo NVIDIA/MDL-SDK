@@ -346,7 +346,7 @@ inline void read(D* deser, std::string* value_pointer)
     Uint64 size;
     read(deser,&size);
     value_pointer->resize(size-1);      // silly, only for backwards compatibility
-    deser->read(reinterpret_cast<mi::Uint8*>(&((*value_pointer)[0])),size-1);
+    deser->read(reinterpret_cast<mi::Uint8*>((*value_pointer).data()),size-1);
 }
 
 template <typename D, typename>

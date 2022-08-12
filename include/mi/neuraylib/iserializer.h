@@ -302,7 +302,7 @@ public:
     virtual bool write( const Tag_struct* value, Size count = 1) = 0;
 };
 
-/*@}*/ // end group mi_neuray_plugins / mi_neuray_dice
+/**@}*/ // end group mi_neuray_plugins / mi_neuray_dice
 
 } // namespace neuraylib
 

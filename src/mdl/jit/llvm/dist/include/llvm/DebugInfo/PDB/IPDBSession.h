@@ -1,9 +1,8 @@
 //===- IPDBSession.h - base interface for a PDB symbol context --*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -30,7 +29,8 @@ public:
   virtual uint64_t getLoadAddress() const = 0;
   virtual bool setLoadAddress(uint64_t Address) = 0;
   virtual std::unique_ptr<PDBSymbolExe> getGlobalScope() = 0;
-  virtual std::unique_ptr<PDBSymbol> getSymbolById(uint32_t SymbolId) const = 0;
+  virtual std::unique_ptr<PDBSymbol>
+  getSymbolById(SymIndexId SymbolId) const = 0;
 
   virtual bool addressForVA(uint64_t VA, uint32_t &Section,
                             uint32_t &Offset) const = 0;
@@ -38,17 +38,16 @@ public:
                              uint32_t &Offset) const = 0;
 
   template <typename T>
-  std::unique_ptr<T> getConcreteSymbolById(uint32_t SymbolId) const {
+  std::unique_ptr<T> getConcreteSymbolById(SymIndexId SymbolId) const {
     return unique_dyn_cast_or_null<T>(getSymbolById(SymbolId));
   }
 
+  virtual std::unique_ptr<PDBSymbol> findSymbolByAddress(uint64_t Address,
+                                                         PDB_SymType Type) = 0;
+  virtual std::unique_ptr<PDBSymbol> findSymbolByRVA(uint32_t RVA,
+                                                     PDB_SymType Type) = 0;
   virtual std::unique_ptr<PDBSymbol>
-  findSymbolByAddress(uint64_t Address, PDB_SymType Type) const = 0;
-  virtual std::unique_ptr<PDBSymbol>
-  findSymbolByRVA(uint32_t RVA, PDB_SymType Type) const = 0;
-  virtual std::unique_ptr<PDBSymbol>
-  findSymbolBySectOffset(uint32_t Sect, uint32_t Offset,
-                         PDB_SymType Type) const = 0;
+  findSymbolBySectOffset(uint32_t Sect, uint32_t Offset, PDB_SymType Type) = 0;
 
   virtual std::unique_ptr<IPDBEnumLineNumbers>
   findLineNumbers(const PDBSymbolCompiland &Compiland,
@@ -90,6 +89,9 @@ public:
 
   virtual std::unique_ptr<IPDBEnumSectionContribs>
   getSectionContribs() const = 0;
+
+  virtual std::unique_ptr<IPDBEnumFrameData>
+  getFrameData() const = 0;
 };
 } // namespace pdb
 } // namespace llvm

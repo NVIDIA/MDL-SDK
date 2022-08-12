@@ -245,7 +245,7 @@ public:
         IMdl_execution_context* context) = 0;
 };
 
-/*@}*/ // end group mi_neuray_mdl_misc
+/**@}*/ // end group mi_neuray_mdl_misc
 
 } // namespace neuraylib
 

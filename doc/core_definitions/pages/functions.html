@@ -15,1493 +15,1559 @@
 <h2 id="blend-colors" class="headerlink"><span class="sectionnumber">3.1</span>Blend colors</h2>
 
 
+<img id="blend-colors" src="pages/img/blend_colors.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
+
 <p id="3001">MDL identifier: <span class="monospace">core_definitions::blend_colors</span></p>
 
 <p id="3002">Allows combining textures and colors in varied ways</p>
 
+<div id="3003" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3003" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3004" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3004" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3005" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Description</td>
 </tr>
 <tr>
-<td id="3005" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;1</td>
-<td id="3006" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3006" class="lhpos tvpos" style="padding:0.33em 0.67em;">Color&#160;1</td>
+<td id="3007" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3007" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;2</td>
-<td id="3008" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3008" class="lhpos tvpos" style="padding:0.33em 0.67em;">Color&#160;2</td>
+<td id="3009" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3009" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blend&#160;mode</td>
-<td id="3010" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Describes how Color 1 and Color 2 are combined</td>
+<td id="3010" class="lhpos tvpos" style="padding:0.33em 0.67em;">Blend&#160;mode</td>
+<td id="3011" class="lhpos tvpos" style="padding:0.33em 0.67em;">Describes how Color 1 and Color 2 are combined</td>
 </tr>
 <tr>
-<td id="3011" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blend&#160;weight</td>
-<td id="3012" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Defines strength of the effect. At weight 0, only color 1 will be visible. At weight 1, the blend function will have full effect.</td>
+<td id="3012" class="lhpos tvpos" style="padding:0.33em 0.67em;">Blend&#160;weight</td>
+<td id="3013" class="lhpos tvpos" style="padding:0.33em 0.67em;">Defines strength of the effect. At weight 0, only color 1 will be visible. At weight 1, the blend function will have full effect.</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3013" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Linear&#160;blend</td>
-<td id="3014" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The blend opperation can either be applied in linear or gamma (2.2) color space</td>
+<td id="3014" class="lhpos tvpos" style="padding:0.33em 0.67em;">Linear&#160;blend</td>
+<td id="3015" class="lhpos tvpos" style="padding:0.33em 0.67em;">The blend opperation can either be applied in linear or gamma (2.2) color space</td>
 </tr>
 </table>
+</div>
 
+<div id="3016" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3015" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3016" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
-<td id="3017" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
-<td id="3018" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3017" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3018" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="3019" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="3020" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Default</td>
 </tr>
 <tr>
-<td id="3019" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;1</td>
-<td id="3020" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
-<td id="3021" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color_1</td>
-<td id="3022" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.0)</td>
+<td id="3021" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Color&#160;1</td>
+<td id="3022" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color</td>
+<td id="3023" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color_1</td>
+<td id="3024" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color(0.0)</td>
 </tr>
 <tr>
-<td id="3023" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;2</td>
-<td id="3024" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
-<td id="3025" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color_2</td>
-<td id="3026" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(1.0)</td>
+<td id="3025" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Color&#160;2</td>
+<td id="3026" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color</td>
+<td id="3027" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color_2</td>
+<td id="3028" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color(1.0)</td>
 </tr>
 <tr>
-<td id="3027" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blend&#160;mode</td>
-<td id="3028" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;color_layer_mode</td>
-<td id="3029" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">mode</td>
-<td id="3030" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color_layer_blend</td>
+<td id="3029" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Blend&#160;mode</td>
+<td id="3030" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;color_layer_mode</td>
+<td id="3031" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">mode</td>
+<td id="3032" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color_layer_blend</td>
 </tr>
 <tr>
-<td id="3031" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blend&#160;weight</td>
-<td id="3032" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
-<td id="3033" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">weight</td>
-<td id="3034" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+<td id="3033" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Blend&#160;weight</td>
+<td id="3034" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float</td>
+<td id="3035" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">weight</td>
+<td id="3036" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">1.0</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3035" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Linear&#160;blend</td>
-<td id="3036" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
-<td id="3037" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">linear_blend</td>
-<td id="3038" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">true</td>
+<td id="3037" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Linear&#160;blend</td>
+<td id="3038" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
+<td id="3039" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">linear_blend</td>
+<td id="3040" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">true</td>
 </tr>
 </table>
-
+</div>
 
 <h2 id="bitmap-texture" class="headerlink"><span class="sectionnumber">3.2</span>Bitmap texture</h2>
 
 
-<p id="3039">MDL identifier: <span class="monospace">core_definitions::file_texture</span></p>
+<img id="file-texture" src="pages/img/file_texture.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
 
-<p id="3040">Allows texturing using image files of various file formats</p>
+<p id="3041">MDL identifier: <span class="monospace">core_definitions::file_texture</span></p>
 
+<p id="3042">Allows texturing using image files of various file formats</p>
+
+<div id="3043" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3041" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3042" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3044" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3045" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Description</td>
 </tr>
 <tr>
-<td id="3043" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bitmap&#160;file</td>
-<td id="3044" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3046" class="lhpos tvpos" style="padding:0.33em 0.67em;">Bitmap&#160;file</td>
+<td id="3047" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3045" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Scalar&#160;mode</td>
-<td id="3046" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Defines how the texture applies to scalar parameters</td>
+<td id="3048" class="lhpos tvpos" style="padding:0.33em 0.67em;">Scalar&#160;mode</td>
+<td id="3049" class="lhpos tvpos" style="padding:0.33em 0.67em;">Defines how the texture applies to scalar parameters</td>
 </tr>
 <tr>
-<td id="3047" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Brightness</td>
-<td id="3048" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3050" class="lhpos tvpos" style="padding:0.33em 0.67em;">Brightness</td>
+<td id="3051" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3049" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Contrast</td>
-<td id="3050" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3052" class="lhpos tvpos" style="padding:0.33em 0.67em;">Contrast</td>
+<td id="3053" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3051" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3052" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
+<td id="3054" class="lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3055" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
 </tr>
 <tr>
-<td id="3053" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3054" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
+<td id="3056" class="lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3057" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
 </tr>
 <tr>
-<td id="3055" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3056" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
+<td id="3058" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3059" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
 </tr>
 <tr>
-<td id="3057" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Clip</td>
-<td id="3058" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If set to true, texture will not repeat. Outside of the texture, color will be black and the scalar value will be 0.</td>
+<td id="3060" class="lhpos tvpos" style="padding:0.33em 0.67em;">Clip</td>
+<td id="3061" class="lhpos tvpos" style="padding:0.33em 0.67em;">If set to true, texture will not repeat. Outside of the texture, color will be black and the scalar value will be 0.</td>
 </tr>
 <tr>
-<td id="3059" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3060" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Selects a specific UV space</td>
+<td id="3062" class="lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3063" class="lhpos tvpos" style="padding:0.33em 0.67em;">Selects a specific UV space</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3061" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Invert&#160;image</td>
-<td id="3062" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Invert image</td>
+<td id="3064" class="lhpos tvpos" style="padding:0.33em 0.67em;">Invert&#160;image</td>
+<td id="3065" class="lhpos tvpos" style="padding:0.33em 0.67em;">Invert image</td>
 </tr>
 </table>
+</div>
 
+<div id="3066" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3063" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3064" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
-<td id="3065" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
-<td id="3066" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3067" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3068" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="3069" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="3070" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Default</td>
 </tr>
 <tr>
-<td id="3067" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bitmap&#160;file</td>
-<td id="3068" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;texture_2d</td>
-<td id="3069" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">texture</td>
-<td id="3070" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3071" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Bitmap&#160;file</td>
+<td id="3072" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;texture_2d</td>
+<td id="3073" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">texture</td>
+<td id="3074" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3071" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Scalar&#160;mode</td>
-<td id="3072" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;mono_mode</td>
-<td id="3073" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">mono_source</td>
-<td id="3074" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">mono_average</td>
+<td id="3075" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Scalar&#160;mode</td>
+<td id="3076" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;mono_mode</td>
+<td id="3077" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">mono_source</td>
+<td id="3078" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">mono_average</td>
 </tr>
 <tr>
-<td id="3075" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Brightness</td>
-<td id="3076" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3077" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">brightness</td>
-<td id="3078" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+<td id="3079" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Brightness</td>
+<td id="3080" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3081" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">brightness</td>
+<td id="3082" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">1.0</td>
 </tr>
 <tr>
-<td id="3079" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Contrast</td>
-<td id="3080" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3081" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">contrast</td>
-<td id="3082" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+<td id="3083" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Contrast</td>
+<td id="3084" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3085" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">contrast</td>
+<td id="3086" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">1.0</td>
 </tr>
 <tr>
-<td id="3083" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3084" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float2</td>
-<td id="3085" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scaling</td>
-<td id="3086" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float2(1.0)</td>
+<td id="3087" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3088" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float2</td>
+<td id="3089" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">scaling</td>
+<td id="3090" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float2(1.0)</td>
 </tr>
 <tr>
-<td id="3087" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3088" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float2</td>
-<td id="3089" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">translation</td>
-<td id="3090" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float2(0.0)</td>
+<td id="3091" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3092" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float2</td>
+<td id="3093" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">translation</td>
+<td id="3094" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float2(0.0)</td>
 </tr>
 <tr>
-<td id="3091" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3092" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3093" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">rotation</td>
-<td id="3094" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+<td id="3095" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3096" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3097" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">rotation</td>
+<td id="3098" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0.0</td>
 </tr>
 <tr>
-<td id="3095" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Clip</td>
-<td id="3096" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
-<td id="3097" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">clip</td>
-<td id="3098" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">false</td>
+<td id="3099" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Clip</td>
+<td id="3100" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
+<td id="3101" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">clip</td>
+<td id="3102" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">false</td>
 </tr>
 <tr>
-<td id="3099" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3100" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;int</td>
-<td id="3101" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">texture_space</td>
-<td id="3102" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0</td>
+<td id="3103" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3104" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;int</td>
+<td id="3105" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">texture_space</td>
+<td id="3106" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3103" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Invert&#160;image</td>
-<td id="3104" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
-<td id="3105" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">invert</td>
-<td id="3106" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">false</td>
+<td id="3107" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Invert&#160;image</td>
+<td id="3108" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
+<td id="3109" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">invert</td>
+<td id="3110" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">false</td>
 </tr>
 </table>
-
+</div>
 
 <h2 id="perlin-noise-texture" class="headerlink"><span class="sectionnumber">3.3</span>Perlin noise texture</h2>
 
 
-<p id="3107">MDL identifier: <span class="monospace">core_definitions::perlin_noise_texture</span></p>
+<img id="perlin-noise-texture" src="pages/img/perlin_noise_texture.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
 
-<p id="3108">Enable texturing with a random noise pattern</p>
+<p id="3111">MDL identifier: <span class="monospace">core_definitions::perlin_noise_texture</span></p>
 
+<p id="3112">Enable texturing with a random noise pattern</p>
+
+<div id="3113" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3109" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3110" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3114" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3115" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Description</td>
 </tr>
 <tr>
-<td id="3111" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;1</td>
-<td id="3112" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3116" class="lhpos tvpos" style="padding:0.33em 0.67em;">Color&#160;1</td>
+<td id="3117" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3113" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;2</td>
-<td id="3114" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3118" class="lhpos tvpos" style="padding:0.33em 0.67em;">Color&#160;2</td>
+<td id="3119" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3115" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
-<td id="3116" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used.</td>
+<td id="3120" class="lhpos tvpos" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
+<td id="3121" class="lhpos tvpos" style="padding:0.33em 0.67em;">If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used.</td>
 </tr>
 <tr>
-<td id="3117" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Levels</td>
-<td id="3118" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Higher amounts will add detail to the noise</td>
+<td id="3122" class="lhpos tvpos" style="padding:0.33em 0.67em;">Levels</td>
+<td id="3123" class="lhpos tvpos" style="padding:0.33em 0.67em;">Higher amounts will add detail to the noise</td>
 </tr>
 <tr>
-<td id="3119" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Billowing&#160;appearance</td>
-<td id="3120" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3124" class="lhpos tvpos" style="padding:0.33em 0.67em;">Billowing&#160;appearance</td>
+<td id="3125" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3121" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Upper&#160;threshold</td>
-<td id="3122" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Lowering this value will create bigger areas uniformly colored with Color 1</td>
+<td id="3126" class="lhpos tvpos" style="padding:0.33em 0.67em;">Upper&#160;threshold</td>
+<td id="3127" class="lhpos tvpos" style="padding:0.33em 0.67em;">Lowering this value will create bigger areas uniformly colored with Color 1</td>
 </tr>
 <tr>
-<td id="3123" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Lower&#160;threshold</td>
-<td id="3124" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Increasing this value will create bigger areas uniformly colored with Color 2</td>
+<td id="3128" class="lhpos tvpos" style="padding:0.33em 0.67em;">Lower&#160;threshold</td>
+<td id="3129" class="lhpos tvpos" style="padding:0.33em 0.67em;">Increasing this value will create bigger areas uniformly colored with Color 2</td>
 </tr>
 <tr>
-<td id="3125" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3126" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
+<td id="3130" class="lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3131" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
 </tr>
 <tr>
-<td id="3127" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3128" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
+<td id="3132" class="lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3133" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
 </tr>
 <tr>
-<td id="3129" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3130" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
+<td id="3134" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3135" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3131" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3132" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Only applies if &#8220;Use object space&#8221; is off. Selects a specific UV space.</td>
+<td id="3136" class="lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3137" class="lhpos tvpos" style="padding:0.33em 0.67em;">Only applies if &#8220;Use object space&#8221; is off. Selects a specific UV space.</td>
 </tr>
 </table>
+</div>
 
+<div id="3138" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3133" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3134" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
-<td id="3135" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
-<td id="3136" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3139" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3140" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="3141" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="3142" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Default</td>
 </tr>
 <tr>
-<td id="3137" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;1</td>
-<td id="3138" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
-<td id="3139" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color1</td>
-<td id="3140" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(1.0)</td>
+<td id="3143" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Color&#160;1</td>
+<td id="3144" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color</td>
+<td id="3145" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color1</td>
+<td id="3146" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color(1.0)</td>
 </tr>
 <tr>
-<td id="3141" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;2</td>
-<td id="3142" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
-<td id="3143" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color2</td>
-<td id="3144" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.0)</td>
+<td id="3147" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Color&#160;2</td>
+<td id="3148" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color</td>
+<td id="3149" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color2</td>
+<td id="3150" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color(0.0)</td>
 </tr>
 <tr>
-<td id="3145" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
-<td id="3146" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
-<td id="3147" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">object_space</td>
-<td id="3148" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">true</td>
+<td id="3151" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
+<td id="3152" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
+<td id="3153" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">object_space</td>
+<td id="3154" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">true</td>
 </tr>
 <tr>
-<td id="3149" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Levels</td>
-<td id="3150" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;int</td>
-<td id="3151" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">noise_levels</td>
-<td id="3152" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">3</td>
+<td id="3155" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Levels</td>
+<td id="3156" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;int</td>
+<td id="3157" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">noise_levels</td>
+<td id="3158" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">3</td>
 </tr>
 <tr>
-<td id="3153" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Billowing&#160;appearance</td>
-<td id="3154" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
-<td id="3155" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">absolute_noise</td>
-<td id="3156" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">false</td>
+<td id="3159" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Billowing&#160;appearance</td>
+<td id="3160" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
+<td id="3161" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">absolute_noise</td>
+<td id="3162" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">false</td>
 </tr>
 <tr>
-<td id="3157" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Upper&#160;threshold</td>
-<td id="3158" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3159" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">noise_threshold_high</td>
-<td id="3160" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+<td id="3163" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Upper&#160;threshold</td>
+<td id="3164" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3165" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">noise_threshold_high</td>
+<td id="3166" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">1.0</td>
 </tr>
 <tr>
-<td id="3161" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Lower&#160;threshold</td>
-<td id="3162" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3163" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">noise_threshold_low</td>
-<td id="3164" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+<td id="3167" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Lower&#160;threshold</td>
+<td id="3168" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3169" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">noise_threshold_low</td>
+<td id="3170" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0.0</td>
 </tr>
 <tr>
-<td id="3165" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3166" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3167" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scaling</td>
-<td id="3168" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(10.0)</td>
+<td id="3171" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3172" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3173" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">scaling</td>
+<td id="3174" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(10.0)</td>
 </tr>
 <tr>
-<td id="3169" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3170" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3171" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">translation</td>
-<td id="3172" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(0.0)</td>
+<td id="3175" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3176" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3177" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">translation</td>
+<td id="3178" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(0.0)</td>
 </tr>
 <tr>
-<td id="3173" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3174" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3175" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">rotation</td>
-<td id="3176" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(0.0)</td>
+<td id="3179" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3180" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3181" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">rotation</td>
+<td id="3182" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(0.0)</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3177" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3178" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;int</td>
-<td id="3179" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">texture_space</td>
-<td id="3180" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0</td>
+<td id="3183" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3184" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;int</td>
+<td id="3185" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">texture_space</td>
+<td id="3186" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0</td>
 </tr>
 </table>
-
+</div>
 
 <h2 id="perlin-noise-texture-bump-mapping" class="headerlink"><span class="sectionnumber">3.4</span>Perlin noise texture &#8211; bump mapping</h2>
 
 
-<p id="3181">MDL identifier: <span class="monospace">core_definitions::perlin_noise_bump_texture</span></p>
+<img id="perlin-noise-bump-texture" src="pages/img/perlin_noise_bump_texture.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
 
-<p id="3182">Enable bump-map texturing with a random noise pattern</p>
+<p id="3187">MDL identifier: <span class="monospace">core_definitions::perlin_noise_bump_texture</span></p>
 
+<p id="3188">Enable bump-map texturing with a random noise pattern</p>
+
+<div id="3189" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3183" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3184" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3190" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3191" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Description</td>
 </tr>
 <tr>
-<td id="3185" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bump&#160;strength</td>
-<td id="3186" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3192" class="lhpos tvpos" style="padding:0.33em 0.67em;">Bump&#160;strength</td>
+<td id="3193" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3187" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3188" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
+<td id="3194" class="lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3195" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
 </tr>
 <tr>
-<td id="3189" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Levels</td>
-<td id="3190" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Higher amounts will add detail to the noise</td>
+<td id="3196" class="lhpos tvpos" style="padding:0.33em 0.67em;">Levels</td>
+<td id="3197" class="lhpos tvpos" style="padding:0.33em 0.67em;">Higher amounts will add detail to the noise</td>
 </tr>
 <tr>
-<td id="3191" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
-<td id="3192" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used.</td>
+<td id="3198" class="lhpos tvpos" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
+<td id="3199" class="lhpos tvpos" style="padding:0.33em 0.67em;">If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used.</td>
 </tr>
 <tr>
-<td id="3193" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Billowing&#160;appearance</td>
-<td id="3194" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3200" class="lhpos tvpos" style="padding:0.33em 0.67em;">Billowing&#160;appearance</td>
+<td id="3201" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3195" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Upper&#160;threshold</td>
-<td id="3196" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Lowering this value will create bigger areas uniformly colored with Color 1</td>
+<td id="3202" class="lhpos tvpos" style="padding:0.33em 0.67em;">Upper&#160;threshold</td>
+<td id="3203" class="lhpos tvpos" style="padding:0.33em 0.67em;">Lowering this value will create bigger areas uniformly colored with Color 1</td>
 </tr>
 <tr>
-<td id="3197" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Lower&#160;threshold</td>
-<td id="3198" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Increasing this value will create bigger areas uniformly colored with Color 2</td>
+<td id="3204" class="lhpos tvpos" style="padding:0.33em 0.67em;">Lower&#160;threshold</td>
+<td id="3205" class="lhpos tvpos" style="padding:0.33em 0.67em;">Increasing this value will create bigger areas uniformly colored with Color 2</td>
 </tr>
 <tr>
-<td id="3199" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3200" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
+<td id="3206" class="lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3207" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
 </tr>
 <tr>
-<td id="3201" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3202" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
+<td id="3208" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3209" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3203" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3204" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Only applies if &#8220;Use object space&#8221; is off. Selects a specific UV space.</td>
+<td id="3210" class="lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3211" class="lhpos tvpos" style="padding:0.33em 0.67em;">Only applies if &#8220;Use object space&#8221; is off. Selects a specific UV space.</td>
 </tr>
 </table>
+</div>
 
+<div id="3212" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3205" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3206" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
-<td id="3207" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
-<td id="3208" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3213" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3214" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="3215" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="3216" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Default</td>
 </tr>
 <tr>
-<td id="3209" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bump&#160;strength</td>
-<td id="3210" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3211" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">factor</td>
-<td id="3212" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+<td id="3217" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Bump&#160;strength</td>
+<td id="3218" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3219" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">factor</td>
+<td id="3220" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">1.0</td>
 </tr>
 <tr>
-<td id="3213" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3214" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3215" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scaling</td>
-<td id="3216" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(10.0)</td>
+<td id="3221" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3222" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3223" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">scaling</td>
+<td id="3224" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(10.0)</td>
 </tr>
 <tr>
-<td id="3217" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Levels</td>
-<td id="3218" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;int</td>
-<td id="3219" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">noise_levels</td>
-<td id="3220" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1</td>
+<td id="3225" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Levels</td>
+<td id="3226" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;int</td>
+<td id="3227" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">noise_levels</td>
+<td id="3228" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">1</td>
 </tr>
 <tr>
-<td id="3221" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
-<td id="3222" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
-<td id="3223" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">object_space</td>
-<td id="3224" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">true</td>
+<td id="3229" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
+<td id="3230" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
+<td id="3231" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">object_space</td>
+<td id="3232" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">true</td>
 </tr>
 <tr>
-<td id="3225" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Billowing&#160;appearance</td>
-<td id="3226" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
-<td id="3227" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">absolute_noise</td>
-<td id="3228" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">false</td>
+<td id="3233" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Billowing&#160;appearance</td>
+<td id="3234" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
+<td id="3235" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">absolute_noise</td>
+<td id="3236" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">false</td>
 </tr>
 <tr>
-<td id="3229" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Upper&#160;threshold</td>
-<td id="3230" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3231" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">noise_threshold_high</td>
-<td id="3232" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+<td id="3237" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Upper&#160;threshold</td>
+<td id="3238" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3239" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">noise_threshold_high</td>
+<td id="3240" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">1.0</td>
 </tr>
 <tr>
-<td id="3233" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Lower&#160;threshold</td>
-<td id="3234" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3235" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">noise_threshold_low</td>
-<td id="3236" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+<td id="3241" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Lower&#160;threshold</td>
+<td id="3242" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3243" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">noise_threshold_low</td>
+<td id="3244" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0.0</td>
 </tr>
 <tr>
-<td id="3237" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3238" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3239" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">translation</td>
-<td id="3240" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(0.0)</td>
+<td id="3245" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3246" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3247" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">translation</td>
+<td id="3248" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(0.0)</td>
 </tr>
 <tr>
-<td id="3241" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3242" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3243" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">rotation</td>
-<td id="3244" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(0.0)</td>
+<td id="3249" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3250" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3251" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">rotation</td>
+<td id="3252" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(0.0)</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3245" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3246" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;int</td>
-<td id="3247" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">texture_space</td>
-<td id="3248" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0</td>
+<td id="3253" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3254" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;int</td>
+<td id="3255" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">texture_space</td>
+<td id="3256" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0</td>
 </tr>
 </table>
-
+</div>
 
 <h2 id="cellular-noise-texture" class="headerlink"><span class="sectionnumber">3.5</span>Cellular noise texture</h2>
 
 
-<p id="3249">MDL identifier: <span class="monospace">core_definitions::worley_noise_texture</span></p>
+<img id="worley-noise-texture" src="pages/img/worley_noise_texture.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
 
-<p id="3250">Allow texturing with a cell forming pattern</p>
+<p id="3257">MDL identifier: <span class="monospace">core_definitions::worley_noise_texture</span></p>
 
+<p id="3258">Allow texturing with a cell forming pattern</p>
+
+<div id="3259" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3251" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3252" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3260" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3261" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Description</td>
 </tr>
 <tr>
-<td id="3253" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;1</td>
-<td id="3254" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3262" class="lhpos tvpos" style="padding:0.33em 0.67em;">Color&#160;1</td>
+<td id="3263" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3255" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;2</td>
-<td id="3256" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3264" class="lhpos tvpos" style="padding:0.33em 0.67em;">Color&#160;2</td>
+<td id="3265" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3257" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
-<td id="3258" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used.</td>
+<td id="3266" class="lhpos tvpos" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
+<td id="3267" class="lhpos tvpos" style="padding:0.33em 0.67em;">If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used.</td>
 </tr>
 <tr>
-<td id="3259" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3260" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Only applies if &#8220;Use object space&#8221; is off. Selects a specific UV space.</td>
+<td id="3268" class="lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3269" class="lhpos tvpos" style="padding:0.33em 0.67em;">Only applies if &#8220;Use object space&#8221; is off. Selects a specific UV space.</td>
 </tr>
 <tr>
-<td id="3261" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Cell&#160;type</td>
-<td id="3262" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Cell pattern type</td>
+<td id="3270" class="lhpos tvpos" style="padding:0.33em 0.67em;">Cell&#160;type</td>
+<td id="3271" class="lhpos tvpos" style="padding:0.33em 0.67em;">Cell pattern type</td>
 </tr>
 <tr>
-<td id="3263" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Cell&#160;shape</td>
-<td id="3264" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The shape of the cell form</td>
+<td id="3272" class="lhpos tvpos" style="padding:0.33em 0.67em;">Cell&#160;shape</td>
+<td id="3273" class="lhpos tvpos" style="padding:0.33em 0.67em;">The shape of the cell form</td>
 </tr>
 <tr>
-<td id="3265" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Upper&#160;threshold</td>
-<td id="3266" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Lowering this value will create bigger areas uniformly colored with Color 1</td>
+<td id="3274" class="lhpos tvpos" style="padding:0.33em 0.67em;">Upper&#160;threshold</td>
+<td id="3275" class="lhpos tvpos" style="padding:0.33em 0.67em;">Lowering this value will create bigger areas uniformly colored with Color 1</td>
 </tr>
 <tr>
-<td id="3267" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Lower&#160;threshold</td>
-<td id="3268" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Increasing this value will create bigger areas uniformly colored with Color 2</td>
+<td id="3276" class="lhpos tvpos" style="padding:0.33em 0.67em;">Lower&#160;threshold</td>
+<td id="3277" class="lhpos tvpos" style="padding:0.33em 0.67em;">Increasing this value will create bigger areas uniformly colored with Color 2</td>
 </tr>
 <tr>
-<td id="3269" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3270" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
+<td id="3278" class="lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3279" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
 </tr>
 <tr>
-<td id="3271" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3272" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
+<td id="3280" class="lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3281" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3273" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3274" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
+<td id="3282" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3283" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
 </tr>
 </table>
+</div>
 
+<div id="3284" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3275" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3276" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
-<td id="3277" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
-<td id="3278" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3285" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3286" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="3287" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="3288" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Default</td>
 </tr>
 <tr>
-<td id="3279" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;1</td>
-<td id="3280" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
-<td id="3281" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color1</td>
-<td id="3282" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(1.0)</td>
+<td id="3289" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Color&#160;1</td>
+<td id="3290" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color</td>
+<td id="3291" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color1</td>
+<td id="3292" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color(1.0)</td>
 </tr>
 <tr>
-<td id="3283" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;2</td>
-<td id="3284" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
-<td id="3285" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color2</td>
-<td id="3286" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.0)</td>
+<td id="3293" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Color&#160;2</td>
+<td id="3294" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color</td>
+<td id="3295" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color2</td>
+<td id="3296" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color(0.0)</td>
 </tr>
 <tr>
-<td id="3287" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
-<td id="3288" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
-<td id="3289" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">object_space</td>
-<td id="3290" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">true</td>
+<td id="3297" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
+<td id="3298" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
+<td id="3299" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">object_space</td>
+<td id="3300" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">true</td>
 </tr>
 <tr>
-<td id="3291" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3292" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;int</td>
-<td id="3293" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">texture_space</td>
-<td id="3294" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0</td>
+<td id="3301" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3302" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;int</td>
+<td id="3303" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">texture_space</td>
+<td id="3304" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0</td>
 </tr>
 <tr>
-<td id="3295" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Cell&#160;type</td>
-<td id="3296" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;cell_type</td>
-<td id="3297" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">mode</td>
-<td id="3298" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">simple_cells</td>
+<td id="3305" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Cell&#160;type</td>
+<td id="3306" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;cell_type</td>
+<td id="3307" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">mode</td>
+<td id="3308" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">simple_cells</td>
 </tr>
 <tr>
-<td id="3299" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Cell&#160;shape</td>
-<td id="3300" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;cell_base</td>
-<td id="3301" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">metric</td>
-<td id="3302" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">circular_cells</td>
+<td id="3309" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Cell&#160;shape</td>
+<td id="3310" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;cell_base</td>
+<td id="3311" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">metric</td>
+<td id="3312" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">circular_cells</td>
 </tr>
 <tr>
-<td id="3303" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Upper&#160;threshold</td>
-<td id="3304" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3305" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">noise_threshold_high</td>
-<td id="3306" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+<td id="3313" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Upper&#160;threshold</td>
+<td id="3314" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3315" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">noise_threshold_high</td>
+<td id="3316" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">1.0</td>
 </tr>
 <tr>
-<td id="3307" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Lower&#160;threshold</td>
-<td id="3308" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3309" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">noise_threshold_low</td>
-<td id="3310" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+<td id="3317" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Lower&#160;threshold</td>
+<td id="3318" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3319" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">noise_threshold_low</td>
+<td id="3320" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0.0</td>
 </tr>
 <tr>
-<td id="3311" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3312" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3313" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scaling</td>
-<td id="3314" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(10.0)</td>
+<td id="3321" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3322" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3323" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">scaling</td>
+<td id="3324" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(10.0)</td>
 </tr>
 <tr>
-<td id="3315" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3316" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3317" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">translation</td>
-<td id="3318" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(0.0)</td>
+<td id="3325" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3326" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3327" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">translation</td>
+<td id="3328" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(0.0)</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3319" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3320" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3321" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">rotation</td>
-<td id="3322" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(0.0)</td>
+<td id="3329" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3330" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3331" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">rotation</td>
+<td id="3332" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(0.0)</td>
 </tr>
 </table>
-
+</div>
 
 <h2 id="cellular-noise-texture-bump-mapping" class="headerlink"><span class="sectionnumber">3.6</span>Cellular noise texture &#8211; bump mapping</h2>
 
 
-<p id="3323">MDL identifier: <span class="monospace">core_definitions::worley_noise_bump_texture</span></p>
+<img id="worley-noise-bump-texture" src="pages/img/worley_noise_bump_texture.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
 
-<p id="3324">Allow texturing with a cell forming pattern</p>
+<p id="3333">MDL identifier: <span class="monospace">core_definitions::worley_noise_bump_texture</span></p>
 
+<p id="3334">Allow texturing with a cell forming pattern</p>
+
+<div id="3335" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3325" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3326" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3336" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3337" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Description</td>
 </tr>
 <tr>
-<td id="3327" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bump&#160;strength</td>
-<td id="3328" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3338" class="lhpos tvpos" style="padding:0.33em 0.67em;">Bump&#160;strength</td>
+<td id="3339" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3329" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Cell&#160;shape</td>
-<td id="3330" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The shape of the cell form</td>
+<td id="3340" class="lhpos tvpos" style="padding:0.33em 0.67em;">Cell&#160;shape</td>
+<td id="3341" class="lhpos tvpos" style="padding:0.33em 0.67em;">The shape of the cell form</td>
 </tr>
 <tr>
-<td id="3331" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
-<td id="3332" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used.</td>
+<td id="3342" class="lhpos tvpos" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
+<td id="3343" class="lhpos tvpos" style="padding:0.33em 0.67em;">If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used.</td>
 </tr>
 <tr>
-<td id="3333" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3334" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Only applies if &#8220;Use object space&#8221; is off. Selects a specific UV space.</td>
+<td id="3344" class="lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3345" class="lhpos tvpos" style="padding:0.33em 0.67em;">Only applies if &#8220;Use object space&#8221; is off. Selects a specific UV space.</td>
 </tr>
 <tr>
-<td id="3335" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Upper&#160;threshold</td>
-<td id="3336" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Lowering this value will create bigger areas uniformly colored with Color 1</td>
+<td id="3346" class="lhpos tvpos" style="padding:0.33em 0.67em;">Upper&#160;threshold</td>
+<td id="3347" class="lhpos tvpos" style="padding:0.33em 0.67em;">Lowering this value will create bigger areas uniformly colored with Color 1</td>
 </tr>
 <tr>
-<td id="3337" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Lower&#160;threshold</td>
-<td id="3338" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Increasing this value will create bigger areas uniformly colored with Color 2</td>
+<td id="3348" class="lhpos tvpos" style="padding:0.33em 0.67em;">Lower&#160;threshold</td>
+<td id="3349" class="lhpos tvpos" style="padding:0.33em 0.67em;">Increasing this value will create bigger areas uniformly colored with Color 2</td>
 </tr>
 <tr>
-<td id="3339" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3340" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
+<td id="3350" class="lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3351" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
 </tr>
 <tr>
-<td id="3341" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3342" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
+<td id="3352" class="lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3353" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3343" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3344" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
+<td id="3354" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3355" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
 </tr>
 </table>
+</div>
 
+<div id="3356" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3345" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3346" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
-<td id="3347" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
-<td id="3348" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3357" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3358" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="3359" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="3360" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Default</td>
 </tr>
 <tr>
-<td id="3349" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bump&#160;strength</td>
-<td id="3350" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3351" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">factor</td>
-<td id="3352" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+<td id="3361" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Bump&#160;strength</td>
+<td id="3362" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3363" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">factor</td>
+<td id="3364" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">1.0</td>
 </tr>
 <tr>
-<td id="3353" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Cell&#160;shape</td>
-<td id="3354" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;cell_base</td>
-<td id="3355" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">metric</td>
-<td id="3356" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">circular_cells</td>
+<td id="3365" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Cell&#160;shape</td>
+<td id="3366" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;cell_base</td>
+<td id="3367" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">metric</td>
+<td id="3368" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">circular_cells</td>
 </tr>
 <tr>
-<td id="3357" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
-<td id="3358" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
-<td id="3359" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">object_space</td>
-<td id="3360" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">true</td>
+<td id="3369" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
+<td id="3370" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
+<td id="3371" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">object_space</td>
+<td id="3372" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">true</td>
 </tr>
 <tr>
-<td id="3361" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3362" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;int</td>
-<td id="3363" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">texture_space</td>
-<td id="3364" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0</td>
+<td id="3373" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3374" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;int</td>
+<td id="3375" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">texture_space</td>
+<td id="3376" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0</td>
 </tr>
 <tr>
-<td id="3365" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Upper&#160;threshold</td>
-<td id="3366" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3367" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">noise_threshold_high</td>
-<td id="3368" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+<td id="3377" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Upper&#160;threshold</td>
+<td id="3378" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3379" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">noise_threshold_high</td>
+<td id="3380" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">1.0</td>
 </tr>
 <tr>
-<td id="3369" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Lower&#160;threshold</td>
-<td id="3370" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3371" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">noise_threshold_low</td>
-<td id="3372" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+<td id="3381" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Lower&#160;threshold</td>
+<td id="3382" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3383" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">noise_threshold_low</td>
+<td id="3384" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0.0</td>
 </tr>
 <tr>
-<td id="3373" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3374" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3375" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scaling</td>
-<td id="3376" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(10.0)</td>
+<td id="3385" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3386" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3387" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">scaling</td>
+<td id="3388" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(10.0)</td>
 </tr>
 <tr>
-<td id="3377" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3378" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3379" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">translation</td>
-<td id="3380" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(0.0)</td>
+<td id="3389" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3390" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3391" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">translation</td>
+<td id="3392" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(0.0)</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3381" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3382" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3383" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">rotation</td>
-<td id="3384" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(0.0)</td>
+<td id="3393" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3394" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3395" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">rotation</td>
+<td id="3396" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(0.0)</td>
 </tr>
 </table>
-
+</div>
 
 <h2 id="flow-noise-texture" class="headerlink"><span class="sectionnumber">3.7</span>Flow noise texture</h2>
 
 
-<p id="3385">MDL identifier: <span class="monospace">core_definitions::flow_noise_texture</span></p>
+<img id="flow-noise-texture" src="pages/img/flow_noise_texture.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
 
-<p id="3386">Allow texturing with a 2D noise pattern suitable for waves</p>
+<p id="3397">MDL identifier: <span class="monospace">core_definitions::flow_noise_texture</span></p>
 
+<p id="3398">Allow texturing with a 2D noise pattern suitable for waves</p>
+
+<div id="3399" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3387" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3388" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3400" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3401" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Description</td>
 </tr>
 <tr>
-<td id="3389" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;1</td>
-<td id="3390" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3402" class="lhpos tvpos" style="padding:0.33em 0.67em;">Color&#160;1</td>
+<td id="3403" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3391" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;2</td>
-<td id="3392" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3404" class="lhpos tvpos" style="padding:0.33em 0.67em;">Color&#160;2</td>
+<td id="3405" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3393" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
-<td id="3394" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used.</td>
+<td id="3406" class="lhpos tvpos" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
+<td id="3407" class="lhpos tvpos" style="padding:0.33em 0.67em;">If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used.</td>
 </tr>
 <tr>
-<td id="3395" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3396" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Only applies if &#8220;Use object space&#8221; is off. Selects a specific UV space.</td>
+<td id="3408" class="lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3409" class="lhpos tvpos" style="padding:0.33em 0.67em;">Only applies if &#8220;Use object space&#8221; is off. Selects a specific UV space.</td>
 </tr>
 <tr>
-<td id="3397" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Levels</td>
-<td id="3398" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Higher amounts will add detail to the noise</td>
+<td id="3410" class="lhpos tvpos" style="padding:0.33em 0.67em;">Levels</td>
+<td id="3411" class="lhpos tvpos" style="padding:0.33em 0.67em;">Higher amounts will add detail to the noise</td>
 </tr>
 <tr>
-<td id="3399" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Billowing&#160;appearance</td>
-<td id="3400" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3412" class="lhpos tvpos" style="padding:0.33em 0.67em;">Billowing&#160;appearance</td>
+<td id="3413" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3401" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Phase&#160;offset</td>
-<td id="3402" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls the third dimension of the function</td>
+<td id="3414" class="lhpos tvpos" style="padding:0.33em 0.67em;">Phase&#160;offset</td>
+<td id="3415" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls the third dimension of the function</td>
 </tr>
 <tr>
-<td id="3403" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Level&#160;intensity&#160;gain</td>
-<td id="3404" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If multiple levels are used, this parameter specifies a weighting factor for subsequent levels</td>
+<td id="3416" class="lhpos tvpos" style="padding:0.33em 0.67em;">Level&#160;intensity&#160;gain</td>
+<td id="3417" class="lhpos tvpos" style="padding:0.33em 0.67em;">If multiple levels are used, this parameter specifies a weighting factor for subsequent levels</td>
 </tr>
 <tr>
-<td id="3405" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Level&#160;scaling</td>
-<td id="3406" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If multiple levels are used, this parameter specifies a global scaling factor for subsequent levels</td>
+<td id="3418" class="lhpos tvpos" style="padding:0.33em 0.67em;">Level&#160;scaling</td>
+<td id="3419" class="lhpos tvpos" style="padding:0.33em 0.67em;">If multiple levels are used, this parameter specifies a global scaling factor for subsequent levels</td>
 </tr>
 <tr>
-<td id="3407" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Progressive&#160;u&#160;scale</td>
-<td id="3408" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If multiple levels are used, this parameter specifies an additional scaling factor in the &#8220;u&#8221; direction</td>
+<td id="3420" class="lhpos tvpos" style="padding:0.33em 0.67em;">Progressive&#160;u&#160;scale</td>
+<td id="3421" class="lhpos tvpos" style="padding:0.33em 0.67em;">If multiple levels are used, this parameter specifies an additional scaling factor in the &#8220;u&#8221; direction</td>
 </tr>
 <tr>
-<td id="3409" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Progressive&#160;v&#160;offset</td>
-<td id="3410" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If multiple levels are used, this parameter specifies an offset for subsequent levels in the &#8220;v&#8221; direction</td>
+<td id="3422" class="lhpos tvpos" style="padding:0.33em 0.67em;">Progressive&#160;v&#160;offset</td>
+<td id="3423" class="lhpos tvpos" style="padding:0.33em 0.67em;">If multiple levels are used, this parameter specifies an offset for subsequent levels in the &#8220;v&#8221; direction</td>
 </tr>
 <tr>
-<td id="3411" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3412" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
+<td id="3424" class="lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3425" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
 </tr>
 <tr>
-<td id="3413" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3414" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
+<td id="3426" class="lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3427" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3415" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3416" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
+<td id="3428" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3429" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
 </tr>
 </table>
+</div>
 
+<div id="3430" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3417" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3418" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
-<td id="3419" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
-<td id="3420" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3431" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3432" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="3433" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="3434" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Default</td>
 </tr>
 <tr>
-<td id="3421" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;1</td>
-<td id="3422" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
-<td id="3423" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color1</td>
-<td id="3424" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(1.0)</td>
+<td id="3435" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Color&#160;1</td>
+<td id="3436" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color</td>
+<td id="3437" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color1</td>
+<td id="3438" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color(1.0)</td>
 </tr>
 <tr>
-<td id="3425" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;2</td>
-<td id="3426" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
-<td id="3427" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color2</td>
-<td id="3428" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.0)</td>
+<td id="3439" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Color&#160;2</td>
+<td id="3440" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color</td>
+<td id="3441" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color2</td>
+<td id="3442" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color(0.0)</td>
 </tr>
 <tr>
-<td id="3429" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
-<td id="3430" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
-<td id="3431" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">object_space</td>
-<td id="3432" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">false</td>
+<td id="3443" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
+<td id="3444" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
+<td id="3445" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">object_space</td>
+<td id="3446" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">false</td>
 </tr>
 <tr>
-<td id="3433" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3434" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;int</td>
-<td id="3435" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">texture_space</td>
-<td id="3436" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0</td>
+<td id="3447" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3448" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;int</td>
+<td id="3449" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">texture_space</td>
+<td id="3450" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0</td>
 </tr>
 <tr>
-<td id="3437" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Levels</td>
-<td id="3438" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;int</td>
-<td id="3439" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">noise_levels</td>
-<td id="3440" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">3</td>
+<td id="3451" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Levels</td>
+<td id="3452" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;int</td>
+<td id="3453" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">noise_levels</td>
+<td id="3454" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">3</td>
 </tr>
 <tr>
-<td id="3441" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Billowing&#160;appearance</td>
-<td id="3442" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
-<td id="3443" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">absolute_noise</td>
-<td id="3444" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">false</td>
+<td id="3455" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Billowing&#160;appearance</td>
+<td id="3456" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
+<td id="3457" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">absolute_noise</td>
+<td id="3458" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">false</td>
 </tr>
 <tr>
-<td id="3445" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Phase&#160;offset</td>
-<td id="3446" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3447" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">phase</td>
-<td id="3448" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+<td id="3459" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Phase&#160;offset</td>
+<td id="3460" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3461" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">phase</td>
+<td id="3462" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0.0</td>
 </tr>
 <tr>
-<td id="3449" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Level&#160;intensity&#160;gain</td>
-<td id="3450" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3451" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">level_gain</td>
-<td id="3452" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.5</td>
+<td id="3463" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Level&#160;intensity&#160;gain</td>
+<td id="3464" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3465" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">level_gain</td>
+<td id="3466" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0.5</td>
 </tr>
 <tr>
-<td id="3453" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Level&#160;scaling</td>
-<td id="3454" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3455" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">level_scale</td>
-<td id="3456" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">2.0</td>
+<td id="3467" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Level&#160;scaling</td>
+<td id="3468" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3469" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">level_scale</td>
+<td id="3470" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">2.0</td>
 </tr>
 <tr>
-<td id="3457" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Progressive&#160;u&#160;scale</td>
-<td id="3458" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3459" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">level_progressive_u_scale</td>
-<td id="3460" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+<td id="3471" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Progressive&#160;u&#160;scale</td>
+<td id="3472" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3473" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">level_progressive_u_scale</td>
+<td id="3474" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">1.0</td>
 </tr>
 <tr>
-<td id="3461" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Progressive&#160;v&#160;offset</td>
-<td id="3462" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3463" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">level_progressive_v_motion</td>
-<td id="3464" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+<td id="3475" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Progressive&#160;v&#160;offset</td>
+<td id="3476" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3477" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">level_progressive_v_motion</td>
+<td id="3478" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0.0</td>
 </tr>
 <tr>
-<td id="3465" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3466" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3467" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scaling</td>
-<td id="3468" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(10.0)</td>
+<td id="3479" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3480" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3481" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">scaling</td>
+<td id="3482" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(10.0)</td>
 </tr>
 <tr>
-<td id="3469" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3470" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3471" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">translation</td>
-<td id="3472" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(0.0)</td>
+<td id="3483" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3484" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3485" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">translation</td>
+<td id="3486" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(0.0)</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3473" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3474" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3475" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">rotation</td>
-<td id="3476" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(0.0)</td>
+<td id="3487" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3488" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3489" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">rotation</td>
+<td id="3490" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(0.0)</td>
 </tr>
 </table>
-
+</div>
 
 <h2 id="flow-noise-texture-bump-mapping" class="headerlink"><span class="sectionnumber">3.8</span>Flow noise texture &#8211; bump mapping</h2>
 
 
-<p id="3477">MDL identifier: <span class="monospace">core_definitions::flow_noise_bump_texture</span></p>
+<img id="flow-noise-bump-texture" src="pages/img/flow_noise_bump_texture.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
 
-<p id="3478">Allow texturing with a 2D noise pattern suitable for waves</p>
+<p id="3491">MDL identifier: <span class="monospace">core_definitions::flow_noise_bump_texture</span></p>
 
+<p id="3492">Allow texturing with a 2D noise pattern suitable for waves</p>
+
+<div id="3493" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3479" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3480" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3494" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3495" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Description</td>
 </tr>
 <tr>
-<td id="3481" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bump&#160;strength</td>
-<td id="3482" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3496" class="lhpos tvpos" style="padding:0.33em 0.67em;">Bump&#160;strength</td>
+<td id="3497" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3483" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3484" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
+<td id="3498" class="lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3499" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
 </tr>
 <tr>
-<td id="3485" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Levels</td>
-<td id="3486" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Higher amounts will add detail to the noise</td>
+<td id="3500" class="lhpos tvpos" style="padding:0.33em 0.67em;">Levels</td>
+<td id="3501" class="lhpos tvpos" style="padding:0.33em 0.67em;">Higher amounts will add detail to the noise</td>
 </tr>
 <tr>
-<td id="3487" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
-<td id="3488" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used.</td>
+<td id="3502" class="lhpos tvpos" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
+<td id="3503" class="lhpos tvpos" style="padding:0.33em 0.67em;">If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used.</td>
 </tr>
 <tr>
-<td id="3489" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3490" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Only applies if &#8220;Use object space&#8221; is off. Selects a specific UV space.</td>
+<td id="3504" class="lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3505" class="lhpos tvpos" style="padding:0.33em 0.67em;">Only applies if &#8220;Use object space&#8221; is off. Selects a specific UV space.</td>
 </tr>
 <tr>
-<td id="3491" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Billowing&#160;appearance</td>
-<td id="3492" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3506" class="lhpos tvpos" style="padding:0.33em 0.67em;">Billowing&#160;appearance</td>
+<td id="3507" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3493" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Phase&#160;offset</td>
-<td id="3494" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls the 3rd dimension of the function</td>
+<td id="3508" class="lhpos tvpos" style="padding:0.33em 0.67em;">Phase&#160;offset</td>
+<td id="3509" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls the 3rd dimension of the function</td>
 </tr>
 <tr>
-<td id="3495" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Level&#160;intensity&#160;gain</td>
-<td id="3496" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If multiple levels are used, this parameter specifies a weighting factor for subsequent levels</td>
+<td id="3510" class="lhpos tvpos" style="padding:0.33em 0.67em;">Level&#160;intensity&#160;gain</td>
+<td id="3511" class="lhpos tvpos" style="padding:0.33em 0.67em;">If multiple levels are used, this parameter specifies a weighting factor for subsequent levels</td>
 </tr>
 <tr>
-<td id="3497" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Level&#160;scaling</td>
-<td id="3498" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If multiple levels are used, this parameter specifies a global scaling factor for subsequent levels</td>
+<td id="3512" class="lhpos tvpos" style="padding:0.33em 0.67em;">Level&#160;scaling</td>
+<td id="3513" class="lhpos tvpos" style="padding:0.33em 0.67em;">If multiple levels are used, this parameter specifies a global scaling factor for subsequent levels</td>
 </tr>
 <tr>
-<td id="3499" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Progressive&#160;u&#160;scale</td>
-<td id="3500" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If multiple levels are used, this parameter specifies an additional scaling factor in the &#8220;u&#8221; direction</td>
+<td id="3514" class="lhpos tvpos" style="padding:0.33em 0.67em;">Progressive&#160;u&#160;scale</td>
+<td id="3515" class="lhpos tvpos" style="padding:0.33em 0.67em;">If multiple levels are used, this parameter specifies an additional scaling factor in the &#8220;u&#8221; direction</td>
 </tr>
 <tr>
-<td id="3501" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Progressive&#160;v&#160;offset</td>
-<td id="3502" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If multiple levels are used, this parameter specifies an offset for subsequent levels in the &#8220;v&#8221; direction</td>
+<td id="3516" class="lhpos tvpos" style="padding:0.33em 0.67em;">Progressive&#160;v&#160;offset</td>
+<td id="3517" class="lhpos tvpos" style="padding:0.33em 0.67em;">If multiple levels are used, this parameter specifies an offset for subsequent levels in the &#8220;v&#8221; direction</td>
 </tr>
 <tr>
-<td id="3503" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3504" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
+<td id="3518" class="lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3519" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3505" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3506" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
+<td id="3520" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3521" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
 </tr>
 </table>
+</div>
 
+<div id="3522" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3507" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3508" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
-<td id="3509" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
-<td id="3510" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3523" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3524" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="3525" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="3526" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Default</td>
 </tr>
 <tr>
-<td id="3511" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bump&#160;strength</td>
-<td id="3512" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3513" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">factor</td>
-<td id="3514" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+<td id="3527" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Bump&#160;strength</td>
+<td id="3528" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3529" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">factor</td>
+<td id="3530" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">1.0</td>
 </tr>
 <tr>
-<td id="3515" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3516" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3517" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scaling</td>
-<td id="3518" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(10.0)</td>
+<td id="3531" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3532" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3533" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">scaling</td>
+<td id="3534" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(10.0)</td>
 </tr>
 <tr>
-<td id="3519" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Levels</td>
-<td id="3520" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;int</td>
-<td id="3521" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">noise_levels</td>
-<td id="3522" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1</td>
+<td id="3535" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Levels</td>
+<td id="3536" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;int</td>
+<td id="3537" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">noise_levels</td>
+<td id="3538" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">1</td>
 </tr>
 <tr>
-<td id="3523" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
-<td id="3524" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
-<td id="3525" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">object_space</td>
-<td id="3526" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">false</td>
+<td id="3539" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
+<td id="3540" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
+<td id="3541" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">object_space</td>
+<td id="3542" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">false</td>
 </tr>
 <tr>
-<td id="3527" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3528" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;int</td>
-<td id="3529" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">texture_space</td>
-<td id="3530" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0</td>
+<td id="3543" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3544" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;int</td>
+<td id="3545" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">texture_space</td>
+<td id="3546" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0</td>
 </tr>
 <tr>
-<td id="3531" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Billowing&#160;appearance</td>
-<td id="3532" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
-<td id="3533" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">absolute_noise</td>
-<td id="3534" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">false</td>
+<td id="3547" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Billowing&#160;appearance</td>
+<td id="3548" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
+<td id="3549" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">absolute_noise</td>
+<td id="3550" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">false</td>
 </tr>
 <tr>
-<td id="3535" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Phase&#160;offset</td>
-<td id="3536" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3537" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">phase</td>
-<td id="3538" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+<td id="3551" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Phase&#160;offset</td>
+<td id="3552" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3553" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">phase</td>
+<td id="3554" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0.0</td>
 </tr>
 <tr>
-<td id="3539" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Level&#160;intensity&#160;gain</td>
-<td id="3540" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3541" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">level_gain</td>
-<td id="3542" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.5</td>
+<td id="3555" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Level&#160;intensity&#160;gain</td>
+<td id="3556" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3557" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">level_gain</td>
+<td id="3558" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0.5</td>
 </tr>
 <tr>
-<td id="3543" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Level&#160;scaling</td>
-<td id="3544" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3545" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">level_scale</td>
-<td id="3546" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">2.0</td>
+<td id="3559" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Level&#160;scaling</td>
+<td id="3560" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3561" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">level_scale</td>
+<td id="3562" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">2.0</td>
 </tr>
 <tr>
-<td id="3547" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Progressive&#160;u&#160;scale</td>
-<td id="3548" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3549" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">level_progressive_u_scale</td>
-<td id="3550" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+<td id="3563" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Progressive&#160;u&#160;scale</td>
+<td id="3564" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3565" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">level_progressive_u_scale</td>
+<td id="3566" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">1.0</td>
 </tr>
 <tr>
-<td id="3551" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Progressive&#160;v&#160;offset</td>
-<td id="3552" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3553" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">level_progressive_v_motion</td>
-<td id="3554" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+<td id="3567" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Progressive&#160;v&#160;offset</td>
+<td id="3568" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3569" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">level_progressive_v_motion</td>
+<td id="3570" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0.0</td>
 </tr>
 <tr>
-<td id="3555" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3556" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3557" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">translation</td>
-<td id="3558" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(0.0)</td>
+<td id="3571" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3572" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3573" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">translation</td>
+<td id="3574" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(0.0)</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3559" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3560" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3561" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">rotation</td>
-<td id="3562" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(0.0)</td>
+<td id="3575" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3576" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3577" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">rotation</td>
+<td id="3578" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(0.0)</td>
 </tr>
 </table>
-
+</div>
 
 <h2 id="3d-checker-texture" class="headerlink"><span class="sectionnumber">3.9</span>3D checker texture</h2>
 
 
-<p id="3563">MDL identifier: <span class="monospace">core_definitions::checker_texture</span></p>
+<img id="checker-texture" src="pages/img/checker_texture.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
 
-<p id="3564">Allows texturing a checkerboard pattern</p>
+<p id="3579">MDL identifier: <span class="monospace">core_definitions::checker_texture</span></p>
 
+<p id="3580">Allows texturing a checkerboard pattern</p>
+
+<div id="3581" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3565" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3566" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3582" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3583" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Description</td>
 </tr>
 <tr>
-<td id="3567" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;1</td>
-<td id="3568" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3584" class="lhpos tvpos" style="padding:0.33em 0.67em;">Color&#160;1</td>
+<td id="3585" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3569" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;2</td>
-<td id="3570" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3586" class="lhpos tvpos" style="padding:0.33em 0.67em;">Color&#160;2</td>
+<td id="3587" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3571" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3572" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
+<td id="3588" class="lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3589" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
 </tr>
 <tr>
-<td id="3573" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3574" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
+<td id="3590" class="lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3591" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
 </tr>
 <tr>
-<td id="3575" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
-<td id="3576" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used.</td>
+<td id="3592" class="lhpos tvpos" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
+<td id="3593" class="lhpos tvpos" style="padding:0.33em 0.67em;">If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used.</td>
 </tr>
 <tr>
-<td id="3577" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blur</td>
-<td id="3578" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3594" class="lhpos tvpos" style="padding:0.33em 0.67em;">Blur</td>
+<td id="3595" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3579" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3580" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
+<td id="3596" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3597" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3581" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3582" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Only applies if &#8220;Use object space&#8221; is off. Selects a specific UV space.</td>
+<td id="3598" class="lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3599" class="lhpos tvpos" style="padding:0.33em 0.67em;">Only applies if &#8220;Use object space&#8221; is off. Selects a specific UV space.</td>
 </tr>
 </table>
+</div>
 
+<div id="3600" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3583" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3584" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
-<td id="3585" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
-<td id="3586" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3601" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3602" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="3603" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="3604" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Default</td>
 </tr>
 <tr>
-<td id="3587" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;1</td>
-<td id="3588" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
-<td id="3589" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color1</td>
-<td id="3590" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(1.0)</td>
+<td id="3605" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Color&#160;1</td>
+<td id="3606" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color</td>
+<td id="3607" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color1</td>
+<td id="3608" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color(1.0)</td>
 </tr>
 <tr>
-<td id="3591" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Color&#160;2</td>
-<td id="3592" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color</td>
-<td id="3593" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color2</td>
-<td id="3594" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">color(0.0)</td>
+<td id="3609" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Color&#160;2</td>
+<td id="3610" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color</td>
+<td id="3611" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color2</td>
+<td id="3612" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">color(0.0)</td>
 </tr>
 <tr>
-<td id="3595" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3596" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3597" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scaling</td>
-<td id="3598" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(10.0)</td>
+<td id="3613" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3614" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3615" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">scaling</td>
+<td id="3616" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(10.0)</td>
 </tr>
 <tr>
-<td id="3599" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3600" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3601" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">translation</td>
-<td id="3602" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(0.0)</td>
+<td id="3617" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3618" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3619" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">translation</td>
+<td id="3620" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(0.0)</td>
 </tr>
 <tr>
-<td id="3603" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
-<td id="3604" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
-<td id="3605" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">object_space</td>
-<td id="3606" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">false</td>
+<td id="3621" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
+<td id="3622" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
+<td id="3623" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">object_space</td>
+<td id="3624" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">false</td>
 </tr>
 <tr>
-<td id="3607" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blur</td>
-<td id="3608" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3609" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">blur</td>
-<td id="3610" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0</td>
+<td id="3625" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Blur</td>
+<td id="3626" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3627" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">blur</td>
+<td id="3628" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0</td>
 </tr>
 <tr>
-<td id="3611" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3612" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3613" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">rotation</td>
-<td id="3614" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(0.0)</td>
+<td id="3629" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3630" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3631" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">rotation</td>
+<td id="3632" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(0.0)</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3615" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3616" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;int</td>
-<td id="3617" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">texture_space</td>
-<td id="3618" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0</td>
+<td id="3633" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3634" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;int</td>
+<td id="3635" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">texture_space</td>
+<td id="3636" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0</td>
 </tr>
 </table>
-
+</div>
 
 <h2 id="3d-checker-texture-bump-mapping" class="headerlink"><span class="sectionnumber">3.10</span>3D checker texture &#8211; bump mapping</h2>
 
 
-<p id="3619">MDL identifier: <span class="monospace">core_definitions::checker_bump_texture</span></p>
+<img id="checker-bump-texture" src="pages/img/checker_bump_texture.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
 
-<p id="3620">Allows texturing a checkerboard pattern</p>
+<p id="3637">MDL identifier: <span class="monospace">core_definitions::checker_bump_texture</span></p>
 
+<p id="3638">Allows texturing a checkerboard pattern</p>
+
+<div id="3639" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3621" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3622" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3640" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3641" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Description</td>
 </tr>
 <tr>
-<td id="3623" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bump&#160;strength</td>
-<td id="3624" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3642" class="lhpos tvpos" style="padding:0.33em 0.67em;">Bump&#160;strength</td>
+<td id="3643" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3625" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blur</td>
-<td id="3626" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3644" class="lhpos tvpos" style="padding:0.33em 0.67em;">Blur</td>
+<td id="3645" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3627" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
-<td id="3628" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used.</td>
+<td id="3646" class="lhpos tvpos" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
+<td id="3647" class="lhpos tvpos" style="padding:0.33em 0.67em;">If off, UV space will be used. If on, 3D texturing in object space will apply. For applications that do not support object space, world space will be used.</td>
 </tr>
 <tr>
-<td id="3629" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3630" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
+<td id="3648" class="lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3649" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
 </tr>
 <tr>
-<td id="3631" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3632" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
+<td id="3650" class="lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3651" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
 </tr>
 <tr>
-<td id="3633" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3634" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
+<td id="3652" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3653" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3635" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3636" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Only applies if &#8220;Use object space&#8221; is off. Selects a specific UV space.</td>
+<td id="3654" class="lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3655" class="lhpos tvpos" style="padding:0.33em 0.67em;">Only applies if &#8220;Use object space&#8221; is off. Selects a specific UV space.</td>
 </tr>
 </table>
+</div>
 
+<div id="3656" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3637" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3638" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
-<td id="3639" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
-<td id="3640" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3657" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3658" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="3659" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="3660" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Default</td>
 </tr>
 <tr>
-<td id="3641" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bump&#160;strength</td>
-<td id="3642" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3643" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">factor</td>
-<td id="3644" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0</td>
+<td id="3661" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Bump&#160;strength</td>
+<td id="3662" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3663" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">factor</td>
+<td id="3664" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">1.0</td>
 </tr>
 <tr>
-<td id="3645" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Blur</td>
-<td id="3646" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3647" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">blur</td>
-<td id="3648" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0</td>
+<td id="3665" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Blur</td>
+<td id="3666" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3667" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">blur</td>
+<td id="3668" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0</td>
 </tr>
 <tr>
-<td id="3649" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
-<td id="3650" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
-<td id="3651" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">object_space</td>
-<td id="3652" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">false</td>
+<td id="3669" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Use&#160;object&#160;space</td>
+<td id="3670" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
+<td id="3671" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">object_space</td>
+<td id="3672" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">false</td>
 </tr>
 <tr>
-<td id="3653" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3654" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3655" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scaling</td>
-<td id="3656" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(10.0)</td>
+<td id="3673" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3674" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3675" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">scaling</td>
+<td id="3676" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(10.0)</td>
 </tr>
 <tr>
-<td id="3657" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3658" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3659" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">translation</td>
-<td id="3660" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(0.0)</td>
+<td id="3677" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3678" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3679" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">translation</td>
+<td id="3680" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(0.0)</td>
 </tr>
 <tr>
-<td id="3661" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3662" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
-<td id="3663" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">rotation</td>
-<td id="3664" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3(0.0)</td>
+<td id="3681" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3682" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float3</td>
+<td id="3683" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">rotation</td>
+<td id="3684" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3(0.0)</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3665" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3666" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;int</td>
-<td id="3667" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">texture_space</td>
-<td id="3668" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0</td>
+<td id="3685" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3686" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;int</td>
+<td id="3687" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">texture_space</td>
+<td id="3688" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0</td>
 </tr>
 </table>
-
+</div>
 
 <h2 id="bitmap-texture-bump" class="headerlink"><span class="sectionnumber">3.11</span>Bitmap texture, bump</h2>
 
 
-<p id="3669">MDL identifier: <span class="monospace">core_definitions::file_bump_texture</span></p>
+<img id="file-bump-texture" src="pages/img/file_bump_texture.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
 
-<p id="3670">Allows texturing using image files of various file formats</p>
+<p id="3689">MDL identifier: <span class="monospace">core_definitions::file_bump_texture</span></p>
 
+<p id="3690">Allows texturing using image files of various file formats</p>
+
+<div id="3691" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3671" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3672" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3692" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3693" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Description</td>
 </tr>
 <tr>
-<td id="3673" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bitmap&#160;file</td>
-<td id="3674" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3694" class="lhpos tvpos" style="padding:0.33em 0.67em;">Bitmap&#160;file</td>
+<td id="3695" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3675" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bump&#160;mode</td>
-<td id="3676" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Defines how the texture is evaluated to create the bumps</td>
+<td id="3696" class="lhpos tvpos" style="padding:0.33em 0.67em;">Bump&#160;mode</td>
+<td id="3697" class="lhpos tvpos" style="padding:0.33em 0.67em;">Defines how the texture is evaluated to create the bumps</td>
 </tr>
 <tr>
-<td id="3677" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3678" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
+<td id="3698" class="lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3699" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
 </tr>
 <tr>
-<td id="3679" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3680" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
+<td id="3700" class="lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3701" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
 </tr>
 <tr>
-<td id="3681" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3682" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
+<td id="3702" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3703" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
 </tr>
 <tr>
-<td id="3683" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Clip</td>
-<td id="3684" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If set to true, texture will not repeat. Outside of the texture the surface will be flat</td>
+<td id="3704" class="lhpos tvpos" style="padding:0.33em 0.67em;">Clip</td>
+<td id="3705" class="lhpos tvpos" style="padding:0.33em 0.67em;">If set to true, texture will not repeat. Outside of the texture the surface will be flat</td>
 </tr>
 <tr>
-<td id="3685" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bump&#160;strength</td>
-<td id="3686" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3706" class="lhpos tvpos" style="padding:0.33em 0.67em;">Bump&#160;strength</td>
+<td id="3707" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3687" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3688" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Selects a specific UV space</td>
+<td id="3708" class="lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3709" class="lhpos tvpos" style="padding:0.33em 0.67em;">Selects a specific UV space</td>
 </tr>
 </table>
+</div>
 
+<div id="3710" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3689" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3690" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
-<td id="3691" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
-<td id="3692" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3711" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3712" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="3713" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="3714" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Default</td>
 </tr>
 <tr>
-<td id="3693" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bitmap&#160;file</td>
-<td id="3694" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;texture_2d</td>
-<td id="3695" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">texture</td>
-<td id="3696" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3715" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Bitmap&#160;file</td>
+<td id="3716" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;texture_2d</td>
+<td id="3717" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">texture</td>
+<td id="3718" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3697" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bump&#160;mode</td>
-<td id="3698" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;mono_mode</td>
-<td id="3699" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">bump_source</td>
-<td id="3700" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">mono_average</td>
+<td id="3719" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Bump&#160;mode</td>
+<td id="3720" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;mono_mode</td>
+<td id="3721" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">bump_source</td>
+<td id="3722" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">mono_average</td>
 </tr>
 <tr>
-<td id="3701" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3702" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float2</td>
-<td id="3703" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scaling</td>
-<td id="3704" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float2(1.0)</td>
+<td id="3723" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3724" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float2</td>
+<td id="3725" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">scaling</td>
+<td id="3726" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float2(1.0)</td>
 </tr>
 <tr>
-<td id="3705" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3706" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float2</td>
-<td id="3707" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">translation</td>
-<td id="3708" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float2(0.0)</td>
+<td id="3727" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3728" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float2</td>
+<td id="3729" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">translation</td>
+<td id="3730" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float2(0.0)</td>
 </tr>
 <tr>
-<td id="3709" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3710" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3711" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">rotation</td>
-<td id="3712" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+<td id="3731" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3732" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3733" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">rotation</td>
+<td id="3734" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0.0</td>
 </tr>
 <tr>
-<td id="3713" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Clip</td>
-<td id="3714" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
-<td id="3715" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">clip</td>
-<td id="3716" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">false</td>
+<td id="3735" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Clip</td>
+<td id="3736" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
+<td id="3737" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">clip</td>
+<td id="3738" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">false</td>
 </tr>
 <tr>
-<td id="3717" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Bump&#160;strength</td>
-<td id="3718" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3719" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">factor</td>
-<td id="3720" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1</td>
+<td id="3739" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Bump&#160;strength</td>
+<td id="3740" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3741" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">factor</td>
+<td id="3742" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">1</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3721" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3722" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;int</td>
-<td id="3723" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">texture_space</td>
-<td id="3724" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0</td>
+<td id="3743" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3744" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;int</td>
+<td id="3745" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">texture_space</td>
+<td id="3746" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0</td>
 </tr>
 </table>
-
+</div>
 
 <h2 id="normal-map-texture" class="headerlink"><span class="sectionnumber">3.12</span>Normal map texture</h2>
 
 
-<p id="3725">MDL identifier: <span class="monospace">core_definitions::normalmap_texture</span></p>
+<img id="normalmap-texture" src="pages/img/normalmap_texture.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
 
-<p id="3726">Allows the use of tangent space normal maps</p>
+<p id="3747">MDL identifier: <span class="monospace">core_definitions::normalmap_texture</span></p>
 
+<p id="3748">Allows the use of tangent space normal maps</p>
+
+<div id="3749" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3727" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3728" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3750" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3751" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Description</td>
 </tr>
 <tr>
-<td id="3729" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Normalmap&#160;file</td>
-<td id="3730" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3752" class="lhpos tvpos" style="padding:0.33em 0.67em;">Normalmap&#160;file</td>
+<td id="3753" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3731" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3732" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
+<td id="3754" class="lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3755" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls the scale of the texture on the object</td>
 </tr>
 <tr>
-<td id="3733" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3734" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
+<td id="3756" class="lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3757" class="lhpos tvpos" style="padding:0.33em 0.67em;">Controls position of the texture on the object</td>
 </tr>
 <tr>
-<td id="3735" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3736" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
+<td id="3758" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3759" class="lhpos tvpos" style="padding:0.33em 0.67em;">Rotation angle of the texture in degrees</td>
 </tr>
 <tr>
-<td id="3737" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Clip</td>
-<td id="3738" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">If set to true, texture will not repeat. Outside of the texture the surface will be flat.</td>
+<td id="3760" class="lhpos tvpos" style="padding:0.33em 0.67em;">Clip</td>
+<td id="3761" class="lhpos tvpos" style="padding:0.33em 0.67em;">If set to true, texture will not repeat. Outside of the texture the surface will be flat.</td>
 </tr>
 <tr>
-<td id="3739" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Strength</td>
-<td id="3740" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3762" class="lhpos tvpos" style="padding:0.33em 0.67em;">Strength</td>
+<td id="3763" class="lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3741" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3742" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Selects a specific UV space</td>
+<td id="3764" class="lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3765" class="lhpos tvpos" style="padding:0.33em 0.67em;">Selects a specific UV space</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3743" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flip&#160;V</td>
-<td id="3744" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flip handedness of the tangent space</td>
+<td id="3766" class="lhpos tvpos" style="padding:0.33em 0.67em;">Flip&#160;V</td>
+<td id="3767" class="lhpos tvpos" style="padding:0.33em 0.67em;">Flip handedness of the tangent space</td>
 </tr>
 </table>
+</div>
 
+<div id="3768" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3745" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3746" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
-<td id="3747" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
-<td id="3748" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3769" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3770" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="3771" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="3772" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Default</td>
 </tr>
 <tr>
-<td id="3749" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Normalmap&#160;file</td>
-<td id="3750" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;texture_2d</td>
-<td id="3751" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">texture</td>
-<td id="3752" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">&#160;</td>
+<td id="3773" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Normalmap&#160;file</td>
+<td id="3774" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;texture_2d</td>
+<td id="3775" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">texture</td>
+<td id="3776" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">&#160;</td>
 </tr>
 <tr>
-<td id="3753" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Tiling</td>
-<td id="3754" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float2</td>
-<td id="3755" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">scaling</td>
-<td id="3756" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float2(1.0)</td>
+<td id="3777" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Tiling</td>
+<td id="3778" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float2</td>
+<td id="3779" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">scaling</td>
+<td id="3780" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float2(1.0)</td>
 </tr>
 <tr>
-<td id="3757" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Offset</td>
-<td id="3758" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float2</td>
-<td id="3759" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">translation</td>
-<td id="3760" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float2(0.0)</td>
+<td id="3781" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Offset</td>
+<td id="3782" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float2</td>
+<td id="3783" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">translation</td>
+<td id="3784" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float2(0.0)</td>
 </tr>
 <tr>
-<td id="3761" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Rotation</td>
-<td id="3762" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3763" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">rotation</td>
-<td id="3764" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0.0</td>
+<td id="3785" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Rotation</td>
+<td id="3786" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3787" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">rotation</td>
+<td id="3788" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0.0</td>
 </tr>
 <tr>
-<td id="3765" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Clip</td>
-<td id="3766" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
-<td id="3767" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">clip</td>
-<td id="3768" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">false</td>
+<td id="3789" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Clip</td>
+<td id="3790" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
+<td id="3791" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">clip</td>
+<td id="3792" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">false</td>
 </tr>
 <tr>
-<td id="3769" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Strength</td>
-<td id="3770" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;float</td>
-<td id="3771" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">factor</td>
-<td id="3772" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1</td>
+<td id="3793" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Strength</td>
+<td id="3794" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;float</td>
+<td id="3795" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">factor</td>
+<td id="3796" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">1</td>
 </tr>
 <tr>
-<td id="3773" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
-<td id="3774" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;int</td>
-<td id="3775" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">texture_space</td>
-<td id="3776" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">0</td>
+<td id="3797" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">UV&#160;space&#160;index</td>
+<td id="3798" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;int</td>
+<td id="3799" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">texture_space</td>
+<td id="3800" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">0</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3777" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Flip&#160;V</td>
-<td id="3778" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
-<td id="3779" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">flip</td>
-<td id="3780" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">false</td>
+<td id="3801" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Flip&#160;V</td>
+<td id="3802" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">uniform&#160;bool</td>
+<td id="3803" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">flip</td>
+<td id="3804" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">false</td>
 </tr>
 </table>
-
+</div>
 
 <h2 id="blend-normals" class="headerlink"><span class="sectionnumber">3.13</span>Blend normals</h2>
 
 
-<p id="3781">MDL identifier: <span class="monospace">core_definitions::blend_normals</span></p>
+<img id="blend-normals" src="pages/img/blend_normals.jpg" data-resize="true" data-wmax="200" data-hmax="200" data-aspect="1.0" data-width="1" data-height="1.0" class="s-imgmargin"></img>
 
-<p id="3782">Blend two normals or apply a detail normal map</p>
+<p id="3805">MDL identifier: <span class="monospace">core_definitions::blend_normals</span></p>
 
+<p id="3806">Blend two normals or apply a detail normal map</p>
+
+<div id="3807" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3783" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3784" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Description</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3808" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3809" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Description</td>
 </tr>
 <tr>
-<td id="3785" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;normal</td>
-<td id="3786" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The base normal</td>
+<td id="3810" class="lhpos tvpos" style="padding:0.33em 0.67em;">Base&#160;normal</td>
+<td id="3811" class="lhpos tvpos" style="padding:0.33em 0.67em;">The base normal</td>
 </tr>
 <tr>
-<td id="3787" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;normal&#160;weight</td>
-<td id="3788" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Specifies the strength of the base normal using a linear blend between state::normal and &#8220;base_normal&#8221;</td>
+<td id="3812" class="lhpos tvpos" style="padding:0.33em 0.67em;">Base&#160;normal&#160;weight</td>
+<td id="3813" class="lhpos tvpos" style="padding:0.33em 0.67em;">Specifies the strength of the base normal using a linear blend between state::normal and &#8220;base_normal&#8221;</td>
 </tr>
 <tr>
-<td id="3789" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Detail&#160;normal</td>
-<td id="3790" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">The detail normal</td>
+<td id="3814" class="lhpos tvpos" style="padding:0.33em 0.67em;">Detail&#160;normal</td>
+<td id="3815" class="lhpos tvpos" style="padding:0.33em 0.67em;">The detail normal</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3791" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Detail&#160;normal&#160;weight</td>
-<td id="3792" class="lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Specifies the strength of the detail normal using a linear blend between state::normal and &#8220;detail_normal&#8221;</td>
+<td id="3816" class="lhpos tvpos" style="padding:0.33em 0.67em;">Detail&#160;normal&#160;weight</td>
+<td id="3817" class="lhpos tvpos" style="padding:0.33em 0.67em;">Specifies the strength of the detail normal using a linear blend between state::normal and &#8220;detail_normal&#8221;</td>
 </tr>
 </table>
+</div>
 
+<div id="3818" class="tablecontainer" style="margin-top: .25em; margin-bottom: .25em;">
 <table>
-<tr>
-<td id="3793" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
-<td id="3794" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Type</td>
-<td id="3795" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Parameter</td>
-<td id="3796" class="ifont lhpos tline bline gray" style="padding:0.33em 0.67em;">Default</td>
+<tr style=" padding-bottom: 1em; border-bottom: solid 1px black;">
+<td id="3819" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Display&#160;name</td>
+<td id="3820" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Type</td>
+<td id="3821" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Parameter</td>
+<td id="3822" class="ifont lhpos gray" style="padding:0.33em 0.67em;">Default</td>
 </tr>
 <tr>
-<td id="3797" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;normal</td>
-<td id="3798" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3</td>
-<td id="3799" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base_normal</td>
-<td id="3800" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">state::normal()</td>
+<td id="3823" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Base&#160;normal</td>
+<td id="3824" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3</td>
+<td id="3825" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">base_normal</td>
+<td id="3826" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">state::normal()</td>
 </tr>
 <tr>
-<td id="3801" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Base&#160;normal&#160;weight</td>
-<td id="3802" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
-<td id="3803" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">base_normal_weight</td>
-<td id="3804" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0f</td>
+<td id="3827" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Base&#160;normal&#160;weight</td>
+<td id="3828" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float</td>
+<td id="3829" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">base_normal_weight</td>
+<td id="3830" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">1.0f</td>
 </tr>
 <tr>
-<td id="3805" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Detail&#160;normal</td>
-<td id="3806" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float3</td>
-<td id="3807" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">detail_normal</td>
-<td id="3808" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">state::normal()</td>
+<td id="3831" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Detail&#160;normal</td>
+<td id="3832" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float3</td>
+<td id="3833" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">detail_normal</td>
+<td id="3834" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">state::normal()</td>
 </tr>
 <tr style=" border-bottom: solid 1px black;">
-<td id="3809" class="rfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">Detail&#160;normal&#160;weight</td>
-<td id="3810" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">float</td>
-<td id="3811" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">detail_normal_weight</td>
-<td id="3812" class="tfont lhpos tvpos tline bline" style="padding:0.33em 0.67em;">1.0f</td>
+<td id="3835" class="rfont lhpos tvpos" style="padding:0.33em 0.67em;">Detail&#160;normal&#160;weight</td>
+<td id="3836" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">float</td>
+<td id="3837" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">detail_normal_weight</td>
+<td id="3838" class="tfont lhpos tvpos" style="padding:0.33em 0.67em;">1.0f</td>
 </tr>
 </table>
+</div>
 
 <div id="bottomspacer"></div>
 </div>

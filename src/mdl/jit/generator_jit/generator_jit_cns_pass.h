@@ -30,7 +30,7 @@
 #include <llvm/Pass.h>
 
 namespace llvm {
-namespace hlsl {
+namespace sl {
 
 /// This pass computes a reducible AST above the control flow.
 /// Irreducible control flow is removed using "Controlled Node Splitting".
@@ -57,5 +57,5 @@ public:
 /// Create the "Controlled Node Splitting" pass.
 Pass *createControlledNodeSplittingPass();
 
-} // hlsl
+} // sl
 } // llvm

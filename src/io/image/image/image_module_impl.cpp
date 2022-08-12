@@ -161,7 +161,7 @@ IMipmap* Image_module_impl::create_mipmap(
 
     try {
         return new Mipmap_impl( pixel_type, width, height, layers, is_cubemap, gamma);
-    } catch( const std::bad_alloc& e) {
+    } catch( const std::bad_alloc&) {
         return nullptr;
     }
 }
@@ -233,13 +233,13 @@ void Image_module_impl::create_mipmaps(
     const mi::neuraylib::ICanvas* base_canvas,
     mi::Float32 gamma) const
 {
-    const mi::Uint32 w = base_canvas->get_resolution_x();
-    const mi::Uint32 h = base_canvas->get_resolution_y();
+    const mi::Uint32 width  = base_canvas->get_resolution_x();
+    const mi::Uint32 height = base_canvas->get_resolution_y();
 
-    if (w == 1 || h == 1)
+    if (width == 1 || height == 1)
         return;
 
-    const mi::Uint32 nr_of_levels = mi::math::log2_int(std::min(w, h));
+    const mi::Uint32 nr_of_levels = mi::math::log2_int(std::min(width, height));
     mipmaps.resize(nr_of_levels);
 
     const mi::neuraylib::ICanvas* prev_canvas = base_canvas;
@@ -271,7 +271,7 @@ mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
 
     try {
         return new Canvas_impl( pixel_type, width, height, layers, is_cubemap, gamma);
-    } catch( const std::bad_alloc& e) {
+    } catch( const std::bad_alloc&) {
         return nullptr;
     }
 }
@@ -348,7 +348,7 @@ mi::neuraylib::ITile* Image_module_impl::create_tile(
 
     try {
         return IMAGE::create_tile( pixel_type, width, height);
-    } catch( const std::bad_alloc& e) {
+    } catch( const std::bad_alloc&) {
         return nullptr;
     }
 }
@@ -368,32 +368,27 @@ IMipmap* Image_module_impl::copy_mipmap( const IMipmap* other, bool only_first_l
 
 mi::neuraylib::ICanvas* Image_module_impl::copy_canvas( const mi::neuraylib::ICanvas* other) const
 {
-    const Pixel_type pixel_type    = convert_pixel_type_string_to_enum( other->get_type());
+    const Pixel_type pixel_type = convert_pixel_type_string_to_enum( other->get_type());
     if( pixel_type == PT_UNDEF)
         return nullptr;
-    const mi::Uint32 canvas_width  = other->get_resolution_x();
-    const mi::Uint32 canvas_height = other->get_resolution_y();
-    const mi::Uint32 nr_of_layers  = other->get_layers_size();
-    const mi::Float32 gamma        = other->get_gamma();
+    const mi::Uint32 width  = other->get_resolution_x();
+    const mi::Uint32 height = other->get_resolution_y();
+    const mi::Uint32 layers = other->get_layers_size();
+    const mi::Float32 gamma = other->get_gamma();
 
     const bool is_cubemap = get_canvas_is_cubemap( other);
-    mi::neuraylib::ICanvas* const canvas = create_canvas( pixel_type,
-        canvas_width, canvas_height, nr_of_layers, is_cubemap, gamma);
-    if (!canvas)
+
+    if( pixel_type == PT_UNDEF || width == 0 || height == 0 || layers == 0 || gamma < 0)
         return nullptr;
 
-    const mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( pixel_type);
-    const mi::Size count = static_cast<mi::Size>( canvas_width) * canvas_height * bytes_per_pixel;
+    if( is_cubemap && layers != 6)
+        return nullptr;
 
-    for( mi::Uint32 z = 0; z < nr_of_layers; ++z) {
-        mi::base::Handle<const mi::neuraylib::ITile> other_tile( other->get_tile( z));
-        mi::base::Handle<mi::neuraylib::ITile> tile( canvas->get_tile( z));
-        const void* const other_tile_data = other_tile->get_data();
-        void* const tile_data = tile->get_data();
-        memcpy( tile_data, other_tile_data, count);
+    try {
+        return new Canvas_impl( other);
+    } catch( const std::bad_alloc&) {
+        return nullptr;
     }
-
-    return canvas;
 }
 
 mi::neuraylib::ITile* Image_module_impl::copy_tile( const mi::neuraylib::ITile* other) const
@@ -404,15 +399,11 @@ mi::neuraylib::ITile* Image_module_impl::copy_tile( const mi::neuraylib::ITile* 
     if( width == 0 || height == 0 || pixel_type == PT_UNDEF)
         return nullptr;
 
-    mi::neuraylib::ITile* tile = create_tile( pixel_type, width, height);
-
-    const mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( pixel_type);
-    const mi::Size count = static_cast<mi::Size>( width) * height * bytes_per_pixel;
-    const void* const other_tile_data = other->get_data();
-    void* const tile_data = tile->get_data();
-    memcpy( tile_data, other_tile_data, count);
-
-    return tile;
+    try {
+        return IMAGE::copy_tile( other);
+    } catch( const std::bad_alloc&) {
+        return nullptr;
+    }
 }
 
 mi::Sint32 Image_module_impl::copy_mipmap_data( const IMipmap* source, IMipmap* dest) const
@@ -522,7 +513,7 @@ mi::neuraylib::ICanvas* Image_module_impl::convert_canvas(
     const mi::Uint32 canvas_width  = old_canvas->get_resolution_x();
     const mi::Uint32 canvas_height = old_canvas->get_resolution_y();
     const mi::Uint32 nr_of_layers  = old_canvas->get_layers_size();
-    const mi::Size   nr_of_pixels  = canvas_width * canvas_height;
+    const mi::Size   nr_of_pixels  = (mi::Size)canvas_width * canvas_height;
     const mi::Float32 gamma        = old_canvas->get_gamma();
 
     const bool is_cubemap = get_canvas_is_cubemap( old_canvas);
@@ -555,7 +546,7 @@ mi::neuraylib::ITile* Image_module_impl::convert_tile(
 
     const mi::Uint32 tile_width   = old_tile->get_resolution_x();
     const mi::Uint32 tile_height  = old_tile->get_resolution_y();
-    const mi::Size   nr_of_pixels = tile_width * tile_height;
+    const mi::Size   nr_of_pixels = (mi::Size)tile_width * tile_height;
 
     mi::neuraylib::ITile* new_tile = IMAGE::create_tile( new_pixel_type, tile_width, tile_height);
     if( !new_tile)
@@ -566,6 +557,55 @@ mi::neuraylib::ITile* Image_module_impl::convert_tile(
     convert( old_data, new_data, old_pixel_type, new_pixel_type, nr_of_pixels);
 
     return new_tile;
+}
+
+void Image_module_impl::adjust_gamma(
+    mi::neuraylib::ITile* tile, mi::Float32 old_gamma, mi::Float32 new_gamma) const
+{
+    if( !tile || old_gamma <= 0.0f || new_gamma <= 0.0f || old_gamma == new_gamma)
+        return;
+
+    const Pixel_type pixel_type = convert_pixel_type_string_to_enum( tile->get_type());
+    const mi::Float32 exponent  = old_gamma/new_gamma;
+
+    const mi::Uint32 tile_width   = tile->get_resolution_x();
+    const mi::Uint32 tile_height  = tile->get_resolution_y();
+    const mi::Size   nr_of_pixels = (mi::Size)tile_width * tile_height;
+
+    switch( pixel_type) {
+        case PT_COLOR:
+        case PT_RGB_FP:
+        case PT_FLOAT32:
+        case PT_FLOAT32_2:
+        case PT_FLOAT32_3:
+        case PT_FLOAT32_4: {
+            const mi::Uint32 components = get_components_per_pixel( pixel_type);
+            mi::Float32* data = static_cast<mi::Float32*>( tile->get_data());
+            IMAGE::adjust_gamma( data, nr_of_pixels, components, exponent);
+            break;
+        }
+        case PT_SINT8:
+        case PT_RGB:
+        case PT_RGBA:
+        case PT_SINT32:
+        case PT_RGB_16:
+        case PT_RGBA_16:
+            LOG::mod_log->warning( M_IMAGE, LOG::Mod_log::C_IO,
+                "Adjusting gamma for pixel type \"%s\", which can lead to banding/quantization"
+                "artifacts.", tile->get_type());
+            [[fallthrough]];
+        case PT_RGBE:
+        case PT_RGBEA: {
+            std::vector<mi::Float32> buffer( 4*nr_of_pixels);
+            void* data = tile->get_data();
+            convert( data, buffer.data(), pixel_type, PT_COLOR, nr_of_pixels);
+            IMAGE::adjust_gamma( buffer.data(), nr_of_pixels, 4, exponent);
+            convert( buffer.data(), data, PT_COLOR, pixel_type, nr_of_pixels);
+            break;
+        }
+        case PT_UNDEF:
+            return;
+    }
 }
 
 void Image_module_impl::adjust_gamma(
@@ -584,7 +624,7 @@ void Image_module_impl::adjust_gamma(
     const mi::Uint32 canvas_width  = canvas->get_resolution_x();
     const mi::Uint32 canvas_height = canvas->get_resolution_y();
     const mi::Uint32 nr_of_layers  = canvas->get_layers_size();
-    const mi::Size   nr_of_pixels  = canvas_width * canvas_height;
+    const mi::Size   nr_of_pixels  = (mi::Size)canvas_width * canvas_height;
 
     switch (pixel_type) {
         case PT_COLOR:
@@ -608,7 +648,7 @@ void Image_module_impl::adjust_gamma(
             LOG::mod_log->warning(M_IMAGE, LOG::Mod_log::C_IO,
                 "Adjusting gamma for pixel type \"%s\", which can lead to banding/quantization"
                 "artifacts.", canvas->get_type());
-            // fallthrough
+            [[fallthrough]];
         case PT_RGBE:
         case PT_RGBEA: {
             std::vector<mi::Float32> buffer(4*nr_of_pixels);
@@ -677,7 +717,7 @@ mi::neuraylib::ICanvas* Image_module_impl::extract_channel(
     const mi::Uint32 canvas_width  = old_canvas->get_resolution_x();
     const mi::Uint32 canvas_height = old_canvas->get_resolution_y();
     const mi::Uint32 nr_of_layers  = old_canvas->get_layers_size();
-    const mi::Size   nr_of_pixels  = canvas_width * canvas_height;
+    const mi::Size   nr_of_pixels  = (mi::Size)canvas_width * canvas_height;
     const mi::Float32 gamma        = old_canvas->get_gamma();
 
     const bool is_cubemap = get_canvas_is_cubemap( old_canvas);
@@ -721,7 +761,7 @@ mi::neuraylib::ITile* Image_module_impl::extract_channel(
 
     const mi::Uint32 tile_width   = old_tile->get_resolution_x();
     const mi::Uint32 tile_height  = old_tile->get_resolution_y();
-    const mi::Size   nr_of_pixels = tile_width * tile_height;
+    const mi::Size   nr_of_pixels = (mi::Size)tile_width * tile_height;
 
     mi::neuraylib::ITile* new_tile = IMAGE::create_tile( new_pixel_type, tile_width, tile_height);
     if( !new_tile)
@@ -895,18 +935,28 @@ bool Image_module_impl::export_canvas(
         return false;
     }
 
+    const Pixel_type canvas_pixel_type_enum = convert_pixel_type_string_to_enum( canvas_pixel_type);
     const Pixel_type export_pixel_type_enum = convert_pixel_type_string_to_enum( export_pixel_type);
+    const int canvas_bpc = get_bytes_per_component( canvas_pixel_type_enum);
+    const int export_bpc = get_bytes_per_component( export_pixel_type_enum);
+    const mi::Float32 canvas_gamma = canvas->get_gamma();
     const mi::Float32 export_default_gamma = get_default_gamma( export_pixel_type_enum);
 
-    // If enabled and necessary, adjust gamma to export_default_gamma
-    if( force_default_gamma && fabs( canvas->get_gamma() - export_default_gamma) > 0.001) {
+    // Convert pixel type before potential gamma conversion if bytes per component increases.
+    if( (canvas_pixel_type_enum != export_pixel_type_enum) && (export_bpc > canvas_bpc)) {
+        canvas = convert_canvas( canvas.get(), export_pixel_type_enum);
+        ASSERT( M_IMAGE, canvas);
+    }
+
+    // If enabled and necessary, adjust gamma to export_default_gamma.
+    if( force_default_gamma && fabs( canvas_gamma - export_default_gamma) > 0.001f) {
         mi::base::Handle<mi::neuraylib::ICanvas> tmp( copy_canvas( canvas.get()));
         adjust_gamma( tmp.get(), export_default_gamma);
         canvas = tmp;
     }
 
-    // If necessary, convert canvas to export_pixel_type
-    if( strcmp( canvas_pixel_type, export_pixel_type) != 0) {
+    // Convert pixel type before after gamma conversion if bytes per component does not increase.
+    if( (canvas_pixel_type_enum != export_pixel_type_enum) && (export_bpc <= canvas_bpc)) {
         canvas = convert_canvas( canvas.get(), export_pixel_type_enum);
         ASSERT( M_IMAGE, canvas);
     }
@@ -982,7 +1032,11 @@ bool Image_module_impl::export_mipmap(
         return false;
     }
 
+    const Pixel_type canvas_pixel_type_enum = convert_pixel_type_string_to_enum( canvas_pixel_type);
     const Pixel_type export_pixel_type_enum = convert_pixel_type_string_to_enum( export_pixel_type);
+    const int canvas_bpc = get_bytes_per_component( canvas_pixel_type_enum);
+    const int export_bpc = get_bytes_per_component( export_pixel_type_enum);
+    const mi::Float32 canvas_gamma = canvas->get_gamma();
     const mi::Float32 export_default_gamma = get_default_gamma( export_pixel_type_enum);
 
     DISK::File_writer_impl writer;
@@ -1024,15 +1078,22 @@ bool Image_module_impl::export_mipmap(
 
         nr_of_layers             = canvas_l->get_layers_size();
 
-        // If enabled and necessary, adjust gamma to export_default_gamma
-        if( force_default_gamma && fabs( canvas_l->get_gamma() - export_default_gamma) > 0.001) {
+        // Convert pixel type before potential gamma conversion if bytes per component increases.
+        if( (canvas_pixel_type_enum != export_pixel_type_enum) && (export_bpc > canvas_bpc)) {
+            canvas_l = convert_canvas( canvas_l.get(), export_pixel_type_enum);
+            ASSERT( M_IMAGE, canvas_l);
+        }
+
+        // If enabled and necessary, adjust gamma to export_default_gamma.
+        if( force_default_gamma && fabs( canvas_gamma - export_default_gamma) > 0.001f) {
             mi::base::Handle<mi::neuraylib::ICanvas> tmp( copy_canvas( canvas_l.get()));
             adjust_gamma( tmp.get(), export_default_gamma);
             canvas_l = tmp;
         }
 
-        // If necessary, convert canvas to export_pixel_type
-        if( strcmp( canvas_pixel_type, export_pixel_type) != 0) {
+        // Convert pixel type before after gamma conversion if bytes per component does not
+        // increase.
+        if( (canvas_pixel_type_enum != export_pixel_type_enum) && (export_bpc <= canvas_bpc)) {
             canvas_l = convert_canvas( canvas_l.get(), export_pixel_type_enum);
             ASSERT( M_IMAGE, canvas_l);
         }
@@ -1076,6 +1137,7 @@ mi::neuraylib::IBuffer* Image_module_impl::create_buffer_from_canvas(
         return nullptr;
     }
 
+    const char* const canvas_pixel_type = canvas->get_type();
     const char* export_pixel_type = find_best_pixel_type_for_export( pixel_type, plugin);
     if( !export_pixel_type) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
@@ -1084,18 +1146,28 @@ mi::neuraylib::IBuffer* Image_module_impl::create_buffer_from_canvas(
         return nullptr;
     }
 
+    const Pixel_type canvas_pixel_type_enum = convert_pixel_type_string_to_enum( canvas_pixel_type);
     const Pixel_type export_pixel_type_enum = convert_pixel_type_string_to_enum( export_pixel_type);
+    const int canvas_bpc = get_bytes_per_component( canvas_pixel_type_enum);
+    const int export_bpc = get_bytes_per_component( export_pixel_type_enum);
+    const mi::Float32 canvas_gamma = canvas->get_gamma();
     const mi::Float32 export_default_gamma = get_default_gamma( export_pixel_type_enum);
 
-    // If enabled and necessary, adjust gamma to export_default_gamma
-    if( force_default_gamma && fabs( canvas->get_gamma() - export_default_gamma) > 0.001) {
+    // Convert pixel type before potential gamma conversion if bytes per component increases.
+    if( (canvas_pixel_type_enum != export_pixel_type_enum) && (export_bpc > canvas_bpc)) {
+        canvas = convert_canvas( canvas.get(), export_pixel_type_enum);
+        ASSERT( M_IMAGE, canvas);
+    }
+
+    // If enabled and necessary, adjust gamma to export_default_gamma.
+    if( force_default_gamma && fabs( canvas_gamma - export_default_gamma) > 0.001f) {
         mi::base::Handle<mi::neuraylib::ICanvas> tmp( copy_canvas( canvas.get()));
         adjust_gamma( tmp.get(), export_default_gamma);
         canvas = tmp;
     }
 
-    // If necessary, convert canvas to export_pixel_type
-    if( strcmp( export_pixel_type, canvas->get_type()) != 0) {
+    // Convert pixel type before after gamma conversion if bytes per component does not increase.
+    if( (canvas_pixel_type_enum != export_pixel_type_enum) && (export_bpc <= canvas_bpc)) {
         canvas = convert_canvas( canvas.get(), export_pixel_type_enum);
         ASSERT( M_IMAGE, canvas);
     }
@@ -1135,7 +1207,7 @@ mi::neuraylib::IImage_plugin* Image_module_impl::find_plugin_for_import(
     mi::Sint64 file_size = 0;
     if( reader) {
         const mi::Sint64 bytes_read
-            = reader->read( static_cast<char*>( static_cast<void*>( &buffer[0])), 512);
+            = reader->read( static_cast<char*>( static_cast<void*>( buffer)), 512);
         reader->rewind();
         file_size = reader->get_file_size();
         if( bytes_read != 512 && file_size >= 512)
@@ -1225,7 +1297,7 @@ void Image_module_impl::dump() const
     // Dump list of image plugins with extensions and pixel types for export
     for( ; it != it_end; ++it) {
 
-        mi::neuraylib::IImage_plugin* plugin
+        const mi::neuraylib::IImage_plugin* const plugin
             = static_cast<mi::neuraylib::IImage_plugin*>( (*it)->get_plugin());
 
         std::ostringstream line;
@@ -1237,7 +1309,7 @@ void Image_module_impl::dump() const
         mi::Uint32 j = 0;
         const char* file_extension = plugin->get_file_extension( j);
         while( file_extension) {
-            line << (j>0 ? ", ": "") << "\"." << file_extension << "\"";
+            line << (j>0 ? ", ": "") << "\"." << file_extension << '\"';
             file_extension = plugin->get_file_extension( ++j);
         }
 
@@ -1245,7 +1317,7 @@ void Image_module_impl::dump() const
         mi::Uint32 k = 0;
         const char* supported_type = plugin->get_supported_type( k);
         while( supported_type) {
-            line << (k>0 ? ", ": "") << "\"" << supported_type << "\"";
+            line << (k>0 ? ", ": "") << '\"' << supported_type << '\"';
             supported_type = plugin->get_supported_type( ++k);
         }
 

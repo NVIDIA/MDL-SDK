@@ -134,16 +134,16 @@ Db_element_impl_base::~Db_element_impl_base()
                 s << element_base->get_class_name();
 
                 DB::Tag tag = m_access_base.get_tag();
-                s << " " << tag.get_uint();
+                s << ' ' << tag.get_uint();
 
                 ASSERT( M_NEURAY_API, m_transaction);
                 DB::Transaction* db_transaction = m_transaction->get_db_transaction();
                 ASSERT( M_NEURAY_API, db_transaction);
                 const char* element_name = get_db_transaction()->tag_to_name( tag);
-                s << " " << (element_name ? element_name : "(unknown)");
+                s << ' ' << (element_name ? element_name : "(unknown)");
 
                 DB::Journal_type flags = m_access_base.get_journal_flags();
-                s << " " << flags.get_type() << " " << Db_element_tracker::flags_to_string( flags);
+                s << ' ' << flags.get_type() << ' ' << Db_element_tracker::flags_to_string( flags);
 
                 LOG::mod_log->info( M_NEURAY_API, LOG::Mod_log::C_DATABASE, s.str().c_str());
             }
@@ -298,7 +298,8 @@ bool Db_element_impl_base::can_reference_tag( DB::Tag tag) const
             ASSERT( M_NEURAY_API, false);
             return false;
         case STATE_ACCESS:
-            ASSERT( M_NEURAY_API, false); // fallthrough
+            ASSERT( M_NEURAY_API, false);
+            [[fallthrough]];
         case STATE_EDIT: {
             DB::Tag this_tag = get_tag();
             DB::Transaction* db_transaction = get_db_transaction();

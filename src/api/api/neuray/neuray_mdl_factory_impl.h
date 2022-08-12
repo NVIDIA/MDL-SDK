@@ -33,12 +33,16 @@
 #ifndef API_API_NEURAY_MDL_FACTORY_IMPL_H
 #define API_API_NEURAY_MDL_FACTORY_IMPL_H
 
+#include <mi/base/handle.h>
 #include <mi/base/interface_implement.h>
 #include <mi/neuraylib/imdl_factory.h>
 
 #include <boost/core/noncopyable.hpp>
 
-namespace mi { namespace neuraylib { class INeuray; class IMdl_execution_context;} }
+namespace mi {
+namespace mdl { class IMDL; }
+namespace neuraylib { class INeuray; class IMdl_execution_context; }
+}
 
 namespace MI {
 
@@ -145,13 +149,32 @@ public:
         mi::neuraylib::ITransaction* transaction,
         const char* module_name,
         const mi::IArray* mdl_data,
-        mi::neuraylib::IMdl_execution_context *context) final;
+        mi::neuraylib::IMdl_execution_context* context) final;
 
-    // internal methods
+    bool is_valid_mdl_identifier( const char* name) const final;
+
+   // internal methods
+
+    /// Starts this API component.
+    ///
+    /// The implementation of INeuray::start() calls the #start() method of each API component.
+    /// This method performs the API component's specific part of the library start.
+    ///
+    /// \return 0, in case of success, -1 in case of failure.
+    mi::Sint32 start();
+
+    /// Shuts down this API component.
+    ///
+    /// The implementation of INeuray::shutdown() calls the #shutdown() method of each API
+    /// component. This method performs the API component's specific part of the library shutdown.
+    ///
+    /// \return 0, in case of success, -1 in case of failure
+    mi::Sint32 shutdown();
 
 private:
     mi::neuraylib::INeuray* m_neuray;
     const Class_factory* m_class_factory;
+    mi::base::Handle<mi::mdl::IMDL> m_mdl;
 };
 
 } // namespace NEURAY

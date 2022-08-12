@@ -31,7 +31,7 @@ function set_next_last_button_status(current_index, visible_length) {
 
 
 $(window).on("load", function() {
-    all_navlink_items = $("#navigation li");
+    var all_navlink_items = $("#navigation li");
     $('#next').on('click', function(event) {
 	hide_help();
 	var visible_navlinks = $('.navlink:visible');

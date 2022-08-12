@@ -126,7 +126,7 @@ bool is_all_capital_letters_(
 
 /// Functor for the \c parse() function.
 struct Stripper {
-    std::string operator()(const std::string& str) { return STRING::strip(str); }
+    std::string operator()(const std::string& str) const { return STRING::strip(str); }
 };
 
 
@@ -162,7 +162,7 @@ std::pair<std::string, STLEXT::Any> parse(
 
     string key = token_list[0];
     // here we do remove all leading capital letters module identifiers
-    string::size_type p = key.find_first_of('_');
+    const string::size_type p = key.find_first_of('_');
     if (p != string::npos && p < key.size()-1) {
         if (is_all_capital_letters_(key, 0, p))
             key = key.substr(p+1);
@@ -182,7 +182,7 @@ std::pair<std::string, STLEXT::Any> parse(
             // eg ""string"" should be stripped to "string", """" to "", etc...
             newtype = 's';
             word++;
-            std::string::size_type pos = token_list[1].find('\"', 1);
+            const std::string::size_type pos = token_list[1].find('\"', 1);
             for (l=0; word[l] && word[l] != '"'; l++);	// find end of string
             if (word[l] != '"') {
                 mod_log->error(M_CONFIG, Mod_log::C_MISC, 14,
@@ -261,7 +261,7 @@ bool Config_module_impl::override(
         // comment
         return false;
 
-    std::pair<std::string, STLEXT::Any> record = parse(p);
+    const std::pair<std::string, STLEXT::Any> record = parse(p);
     if (record.first.empty())
         return false;
 
@@ -302,16 +302,15 @@ bool Config_module_impl::update(
     const char* help,		// meaning of var, for http/comments
     std::string& value)	// store pointers to string here
 {
-    CONFIG::Config_registry& registry = get_configuration();
+    const CONFIG::Config_registry& registry = get_configuration();
 
     string val;
-    bool success = false;
+    const bool success = registry.get_value(name, val);
 
     // updating
-    if (registry.get_value(name, val)) {
+    if (success)
         value = val;
-        success = true;
-    }
+
     return success;
 }
 

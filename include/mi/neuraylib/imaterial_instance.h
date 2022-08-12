@@ -125,74 +125,44 @@ public:
         Uint32 flags,
         IMdl_execution_context* context = 0) const = 0;
 
-    /// See \ref mi_mdl_materials_are_functions and
-    /// #mi::neuraylib::IFunction_call::get_function_definition().
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     virtual const char* get_material_definition() const = 0;
 
-    /// See \ref mi_mdl_materials_are_functions and
-    /// #mi::neuraylib::IFunction_call::get_mdl_function_definition().
     virtual const char* get_mdl_material_definition() const = 0;
 
-    /// See \ref mi_mdl_materials_are_functions and
-    /// #mi::neuraylib::IFunction_call::get_return_type().
     virtual const IType* get_return_type() const = 0;
 
-    /// See \ref mi_mdl_materials_are_functions and
-    /// #mi::neuraylib::IFunction_call::get_parameter_count().
     virtual Size get_parameter_count() const = 0;
 
-    /// See \ref mi_mdl_materials_are_functions and
-    /// #mi::neuraylib::IFunction_call::get_parameter_name().
     virtual const char* get_parameter_name( Size index) const = 0;
 
-    /// See \ref mi_mdl_materials_are_functions and
-    /// #mi::neuraylib::IFunction_call::get_parameter_index().
     virtual Size get_parameter_index( const char* name) const = 0;
 
-    /// See \ref mi_mdl_materials_are_functions and
-    /// #mi::neuraylib::IFunction_call::get_parameter_types().
     virtual const IType_list* get_parameter_types() const = 0;
 
-    /// See \ref mi_mdl_materials_are_functions and
-    /// #mi::neuraylib::IFunction_call::get_arguments().
     virtual const IExpression_list* get_arguments() const = 0;
 
-    /// See \ref mi_mdl_materials_are_functions and
-    /// #mi::neuraylib::IFunction_call::set_arguments().
     virtual Sint32 set_arguments( const IExpression_list* arguments) = 0;
 
-    /// See \ref mi_mdl_materials_are_functions and
-    /// #mi::neuraylib::IFunction_call::set_argument(Size,const IExpression*).
     virtual Sint32 set_argument( Size index, const IExpression* argument) = 0;
 
-    /// See \ref mi_mdl_materials_are_functions and
-    /// #mi::neuraylib::IFunction_call::set_argument(const char*,const IExpression*).
     virtual Sint32 set_argument( const char* name, const IExpression* argument) = 0;
 
-    /// See \ref mi_mdl_materials_are_functions and
-    /// #mi::neuraylib::IFunction_call::reset_argument(Size).
     virtual Sint32 reset_argument( Size index) = 0;
 
-    /// See \ref mi_mdl_materials_are_functions and
-    /// #mi::neuraylib::IFunction_call::reset_argument(const char*).
     virtual Sint32 reset_argument( const char* name) = 0;
 
-    /// See \ref mi_mdl_materials_are_functions and
-    /// #mi::neuraylib::IFunction_call::is_default().
     virtual bool is_default() const = 0;
 
-    /// See \ref mi_mdl_materials_are_functions and
-    /// #mi::neuraylib::IFunction_call::is_valid().
     virtual bool is_valid( IMdl_execution_context* context) const = 0;
 
-    /// See \ref mi_mdl_materials_are_functions and
-    /// #mi::neuraylib::IFunction_call::repair().
     virtual Sint32 repair(
         Uint32 flags,
         IMdl_execution_context* context) = 0;
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
 };
 
-/*@}*/ // end group mi_neuray_mdl_elements
+/**@}*/ // end group mi_neuray_mdl_elements
 
 } // namespace neuraylib
 

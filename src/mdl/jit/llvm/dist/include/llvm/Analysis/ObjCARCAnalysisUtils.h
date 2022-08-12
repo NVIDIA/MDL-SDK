@@ -1,9 +1,8 @@
 //===- ObjCARCAnalysisUtils.h - ObjC ARC Analysis Utilities -----*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 /// \file
@@ -23,25 +22,19 @@
 #ifndef LLVM_LIB_ANALYSIS_OBJCARCANALYSISUTILS_H
 #define LLVM_LIB_ANALYSIS_OBJCARCANALYSISUTILS_H
 
+#ifdef LLVM_ENABLE_OBJC
+
 #include "llvm/ADT/Optional.h"
-#include "llvm/ADT/StringSwitch.h"
-#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/ObjCARCInstKind.h"
-#include "llvm/Analysis/Passes.h"
 #include "llvm/Analysis/ValueTracking.h"
-#include "llvm/IR/CallSite.h"
 #include "llvm/IR/Constants.h"
-#include "llvm/IR/InstIterator.h"
-#include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/ValueHandle.h"
-#include "llvm/Pass.h"
 
 namespace llvm {
-class raw_ostream;
-}
 
-namespace llvm {
+class AAResults;
+
 namespace objcarc {
 
 /// A handy option to enable/disable all ARC Optimizations.
@@ -51,34 +44,33 @@ extern bool EnableARCOpts;
 /// on.
 inline bool ModuleHasARC(const Module &M) {
   return
-    M.getNamedValue("objc_retain") ||
-    M.getNamedValue("objc_release") ||
-    M.getNamedValue("objc_autorelease") ||
-    M.getNamedValue("objc_retainAutoreleasedReturnValue") ||
-    M.getNamedValue("objc_unsafeClaimAutoreleasedReturnValue") ||
-    M.getNamedValue("objc_retainBlock") ||
-    M.getNamedValue("objc_autoreleaseReturnValue") ||
-    M.getNamedValue("objc_autoreleasePoolPush") ||
-    M.getNamedValue("objc_loadWeakRetained") ||
-    M.getNamedValue("objc_loadWeak") ||
-    M.getNamedValue("objc_destroyWeak") ||
-    M.getNamedValue("objc_storeWeak") ||
-    M.getNamedValue("objc_initWeak") ||
-    M.getNamedValue("objc_moveWeak") ||
-    M.getNamedValue("objc_copyWeak") ||
-    M.getNamedValue("objc_retainedObject") ||
-    M.getNamedValue("objc_unretainedObject") ||
-    M.getNamedValue("objc_unretainedPointer") ||
-    M.getNamedValue("clang.arc.use");
+    M.getNamedValue("llvm.objc.retain") ||
+    M.getNamedValue("llvm.objc.release") ||
+    M.getNamedValue("llvm.objc.autorelease") ||
+    M.getNamedValue("llvm.objc.retainAutoreleasedReturnValue") ||
+    M.getNamedValue("llvm.objc.unsafeClaimAutoreleasedReturnValue") ||
+    M.getNamedValue("llvm.objc.retainBlock") ||
+    M.getNamedValue("llvm.objc.autoreleaseReturnValue") ||
+    M.getNamedValue("llvm.objc.autoreleasePoolPush") ||
+    M.getNamedValue("llvm.objc.loadWeakRetained") ||
+    M.getNamedValue("llvm.objc.loadWeak") ||
+    M.getNamedValue("llvm.objc.destroyWeak") ||
+    M.getNamedValue("llvm.objc.storeWeak") ||
+    M.getNamedValue("llvm.objc.initWeak") ||
+    M.getNamedValue("llvm.objc.moveWeak") ||
+    M.getNamedValue("llvm.objc.copyWeak") ||
+    M.getNamedValue("llvm.objc.retainedObject") ||
+    M.getNamedValue("llvm.objc.unretainedObject") ||
+    M.getNamedValue("llvm.objc.unretainedPointer") ||
+    M.getNamedValue("llvm.objc.clang.arc.use");
 }
 
 /// This is a wrapper around getUnderlyingObject which also knows how to
 /// look through objc_retain and objc_autorelease calls, which we know to return
 /// their argument verbatim.
-inline const Value *GetUnderlyingObjCPtr(const Value *V,
-                                                const DataLayout &DL) {
+inline const Value *GetUnderlyingObjCPtr(const Value *V) {
   for (;;) {
-    V = GetUnderlyingObject(V, DL);
+    V = getUnderlyingObject(V);
     if (!IsForwarding(GetBasicARCInstKind(V)))
       break;
     V = cast<CallInst>(V)->getArgOperand(0);
@@ -89,12 +81,12 @@ inline const Value *GetUnderlyingObjCPtr(const Value *V,
 
 /// A wrapper for GetUnderlyingObjCPtr used for results memoization.
 inline const Value *
-GetUnderlyingObjCPtrCached(const Value *V, const DataLayout &DL,
+GetUnderlyingObjCPtrCached(const Value *V,
                            DenseMap<const Value *, WeakTrackingVH> &Cache) {
   if (auto InCache = Cache.lookup(V))
     return InCache;
 
-  const Value *Computed = GetUnderlyingObjCPtr(V, DL);
+  const Value *Computed = GetUnderlyingObjCPtr(V);
   Cache[V] = const_cast<Value *>(Computed);
   return Computed;
 }
@@ -157,9 +149,7 @@ inline bool IsPotentialRetainableObjPtr(const Value *Op) {
     return false;
   // Special arguments can not be a valid retainable object pointer.
   if (const Argument *Arg = dyn_cast<Argument>(Op))
-    if (Arg->hasByValAttr() ||
-        Arg->hasInAllocaAttr() ||
-        Arg->hasNestAttr() ||
+    if (Arg->hasPassPointeeByValueCopyAttr() || Arg->hasNestAttr() ||
         Arg->hasStructRetAttr())
       return false;
   // Only consider values with pointer types.
@@ -175,34 +165,16 @@ inline bool IsPotentialRetainableObjPtr(const Value *Op) {
   return true;
 }
 
-inline bool IsPotentialRetainableObjPtr(const Value *Op,
-                                               AliasAnalysis &AA) {
-  // First make the rudimentary check.
-  if (!IsPotentialRetainableObjPtr(Op))
-    return false;
-
-  // Objects in constant memory are not reference-counted.
-  if (AA.pointsToConstantMemory(Op))
-    return false;
-
-  // Pointers in constant memory are not pointing to reference-counted objects.
-  if (const LoadInst *LI = dyn_cast<LoadInst>(Op))
-    if (AA.pointsToConstantMemory(LI->getPointerOperand()))
-      return false;
-
-  // Otherwise assume the worst.
-  return true;
-}
+bool IsPotentialRetainableObjPtr(const Value *Op, AAResults &AA);
 
 /// Helper for GetARCInstKind. Determines what kind of construct CS
 /// is.
-inline ARCInstKind GetCallSiteClass(ImmutableCallSite CS) {
-  for (ImmutableCallSite::arg_iterator I = CS.arg_begin(), E = CS.arg_end();
-       I != E; ++I)
+inline ARCInstKind GetCallSiteClass(const CallBase &CB) {
+  for (auto I = CB.arg_begin(), E = CB.arg_end(); I != E; ++I)
     if (IsPotentialRetainableObjPtr(*I))
-      return CS.onlyReadsMemory() ? ARCInstKind::User : ARCInstKind::CallOrUser;
+      return CB.onlyReadsMemory() ? ARCInstKind::User : ARCInstKind::CallOrUser;
 
-  return CS.onlyReadsMemory() ? ARCInstKind::None : ARCInstKind::Call;
+  return CB.onlyReadsMemory() ? ARCInstKind::None : ARCInstKind::Call;
 }
 
 /// Return true if this value refers to a distinct and identifiable
@@ -298,4 +270,5 @@ public:
 } // end namespace objcarc
 } // end namespace llvm
 
+#endif
 #endif

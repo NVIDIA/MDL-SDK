@@ -49,7 +49,7 @@ namespace DISK {
 class Buffer_impl : public mi::base::Interface_implement<mi::neuraylib::IBuffer>
 {
 public:
-    const mi::Uint8* get_data() const { return m_buffer.empty() ? 0 : &m_buffer[0]; }
+    const mi::Uint8* get_data() const { return m_buffer.empty() ? nullptr : m_buffer.data(); }
 
     mi::Size get_data_size() const { return m_buffer.size(); }
 

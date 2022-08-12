@@ -62,36 +62,18 @@ namespace MI {
 namespace MDL {
 
 Mdl_function_definition::Mdl_function_definition()
-: m_tf( get_type_factory())
-, m_vf( get_value_factory())
-, m_ef( get_expression_factory())
-, m_module_filename()
-, m_module_mdl_name()
-, m_module_db_name()
-, m_function_tag()
-, m_function_ident( -1)
-, m_mdl_semantic( mi::mdl::IDefinition::DS_UNKNOWN)
-, m_semantic( mi::neuraylib::IFunction_definition::DS_UNKNOWN)
-, m_mdl_name()
-, m_simple_name()
-, m_db_name()
-, m_original_name()
-, m_prototype_tag()
-, m_is_exported( false)
-, m_is_uniform( false)
-, m_is_material( false)
-, m_since_version( mi_mdl_IMDL_MDL_VERSION_INVALID)
-, m_removed_version( mi_mdl_IMDL_MDL_VERSION_INVALID)
-, m_parameter_types()
-, m_parameter_type_names()
-, m_return_type()
-, m_defaults()
-, m_annotations()
-, m_parameter_annotations()
-, m_return_annotations()
-, m_enable_if_conditions()
-, m_enable_if_users()
-, m_function_hash()
+  : m_tf( get_type_factory()),
+    m_vf( get_value_factory()),
+    m_ef( get_expression_factory()),
+    m_function_ident( -1),
+    m_mdl_semantic( mi::mdl::IDefinition::DS_UNKNOWN),
+    m_semantic( mi::neuraylib::IFunction_definition::DS_UNKNOWN),
+    m_is_exported( false),
+    m_is_uniform( false),
+    m_is_material( false),
+    m_since_version( mi_mdl_IMDL_MDL_VERSION_INVALID),
+    m_removed_version( mi_mdl_IMDL_MDL_VERSION_INVALID),
+    m_function_hash()
 {
 }
 
@@ -105,27 +87,15 @@ Mdl_function_definition::Mdl_function_definition(
     mi::Size index,
     const char* module_filename,
     const char* module_mdl_name,
-    bool load_resources)
-: m_tf( get_type_factory())
-, m_vf( get_value_factory())
-, m_ef( get_expression_factory())
-, m_module_filename( module_filename ? module_filename : "")
-, m_module_mdl_name()
-, m_module_db_name()
-, m_function_tag( function_tag)
-, m_function_ident( function_ident)
-, m_original_name()
-, m_prototype_tag()
-, m_is_material( is_material)
-, m_parameter_types()
-, m_return_type()
-, m_defaults()
-, m_annotations()
-, m_parameter_annotations()
-, m_return_annotations()
-, m_enable_if_conditions()
-, m_enable_if_users()
-, m_function_hash()
+    bool resolve_resources)
+  : m_tf( get_type_factory()),
+    m_vf( get_value_factory()),
+    m_ef( get_expression_factory()),
+    m_module_filename( module_filename ? module_filename : ""),
+    m_function_tag( function_tag),
+    m_function_ident( function_ident),
+    m_is_material( is_material),
+    m_function_hash()
 {
     m_module_mdl_name = module_mdl_name;
     m_module_db_name  = get_db_name( m_module_mdl_name);
@@ -168,7 +138,7 @@ Mdl_function_definition::Mdl_function_definition(
         module_filename,
         m_module_mdl_name.c_str(),
         m_prototype_tag,
-        load_resources,
+        resolve_resources,
         /*user_modules_seen*/ nullptr);
 
     // return type
@@ -418,7 +388,7 @@ const IExpression* Mdl_function_definition::get_body( DB::Transaction* transacti
         /*module_filename*/ nullptr,
         /*module_mdl_name*/ nullptr,
         m_prototype_tag,
-        /*load_resources*/ false,
+        /*resolve_resources*/ false,
         /*user_modules_seen*/ nullptr);
 
     mi::base::Handle<const IExpression> body_int( converter.mdl_dag_node_to_int_expr( body, nullptr));
@@ -478,7 +448,7 @@ const IExpression* Mdl_function_definition::get_temporary(
         /*module_filename*/ nullptr,
         /*module_mdl_name*/ nullptr,
         m_prototype_tag,
-        /*load_resources*/ false,
+        /*resolve_resources*/ false,
         /*user_modules_seen*/ nullptr);
 
     return converter.mdl_dag_node_to_int_expr( temporary, nullptr);
@@ -1132,7 +1102,7 @@ bool Mdl_function_definition::is_valid(
             continue;
         SERIAL::Class_id class_id = transaction->get_class_id(call_tag);
         if (class_id != ID_MDL_FUNCTION_CALL) {
-            add_context_error(
+            add_error_message(
                 context, "The function call attached to parameter '"
                 + std::string(m_defaults->get_name(i)) + "' has a wrong element type.", -1);
             return false;

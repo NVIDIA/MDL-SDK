@@ -1,9 +1,8 @@
 //===- TwineTest.cpp - Twine unit tests -----------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -106,7 +105,7 @@ TEST(TwineTest, LazyEvaluation) {
     explicit formatter(int &Count) : FormatAdapter(0), Count(Count) {}
     int &Count;
 
-    void format(raw_ostream &OS, StringRef Style) { ++Count; }
+    void format(raw_ostream &OS, StringRef Style) override { ++Count; }
   };
 
   int Count = 0;

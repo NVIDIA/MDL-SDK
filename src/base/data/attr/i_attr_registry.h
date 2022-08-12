@@ -38,7 +38,7 @@
 #include <base/system/stlext/i_stlext_any.h>
 
 #include <cstddef>
-#include <map>
+#include <base/lib/robin_hood/robin_hood.h>
 #include <set>
 #include <string>
 #include <utility>
@@ -149,7 +149,7 @@ class Attribute_registry
 
   private:
     std::set<Attribute_spec> m_registry;		///< the actual collection
-    std::map<std::string, Uint> m_name_mapping;	///< mapping name to id
+    robin_hood::unordered_map<std::string, Uint> m_name_mapping;	///< mapping name to id
     std::atomic<int32_t> m_counter;
 
     /// Find a new unique id for a new registry entry.

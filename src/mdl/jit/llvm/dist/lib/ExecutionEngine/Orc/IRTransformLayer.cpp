@@ -1,9 +1,8 @@
 //===-------------- IRTransformLayer.cpp - IR Transform Layer -------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -13,20 +12,20 @@
 namespace llvm {
 namespace orc {
 
-IRTransformLayer2::IRTransformLayer2(ExecutionSession &ES,
-                                     IRLayer &BaseLayer,
-                                     TransformFunction Transform)
-    : IRLayer(ES), BaseLayer(BaseLayer), Transform(std::move(Transform)) {}
+IRTransformLayer::IRTransformLayer(ExecutionSession &ES, IRLayer &BaseLayer,
+                                   TransformFunction Transform)
+    : IRLayer(ES, BaseLayer.getManglingOptions()), BaseLayer(BaseLayer),
+      Transform(std::move(Transform)) {}
 
-void IRTransformLayer2::emit(MaterializationResponsibility R, VModuleKey K,
-                             std::unique_ptr<Module> M) {
-  assert(M && "Module must not be null");
+void IRTransformLayer::emit(std::unique_ptr<MaterializationResponsibility> R,
+                            ThreadSafeModule TSM) {
+  assert(TSM && "Module must not be null");
 
-  if (auto TransformedMod = Transform(std::move(M)))
-    BaseLayer.emit(std::move(R), std::move(K), std::move(*TransformedMod));
+  if (auto TransformedTSM = Transform(std::move(TSM), *R))
+    BaseLayer.emit(std::move(R), std::move(*TransformedTSM));
   else {
-    R.failMaterialization();
-    getExecutionSession().reportError(TransformedMod.takeError());
+    R->failMaterialization();
+    getExecutionSession().reportError(TransformedTSM.takeError());
   }
 }
 

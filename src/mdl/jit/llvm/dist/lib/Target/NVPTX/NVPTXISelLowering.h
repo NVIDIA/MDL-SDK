@@ -1,9 +1,8 @@
 //===-- NVPTXISelLowering.h - NVPTX DAG Lowering Interface ------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -51,6 +50,7 @@ enum NodeType : unsigned {
   CallSeqBegin,
   CallSeqEnd,
   CallPrototype,
+  ProxyReg,
   FUN_SHFL_CLAMP,
   FUN_SHFR_CLAMP,
   MUL_WIDE_SIGNED,
@@ -491,8 +491,8 @@ public:
 
   std::string getPrototype(const DataLayout &DL, Type *, const ArgListTy &,
                            const SmallVectorImpl<ISD::OutputArg> &,
-                           unsigned retAlignment,
-                           ImmutableCallSite CS) const;
+                           MaybeAlign retAlignment, const CallBase &CB,
+                           unsigned UniqueCallSite) const;
 
   SDValue LowerReturn(SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
                       const SmallVectorImpl<ISD::OutputArg> &Outs,
@@ -511,7 +511,7 @@ public:
   }
 
   TargetLoweringBase::LegalizeTypeAction
-  getPreferredVectorAction(EVT VT) const override;
+  getPreferredVectorAction(MVT VT) const override;
 
   // Get the degree of precision we want from 32-bit floating point division
   // operations.
@@ -538,7 +538,10 @@ public:
   bool allowFMA(MachineFunction &MF, CodeGenOpt::Level OptLevel) const;
   bool allowUnsafeFPMath(MachineFunction &MF) const;
 
-  bool isFMAFasterThanFMulAndFAdd(EVT) const override { return true; }
+  bool isFMAFasterThanFMulAndFAdd(const MachineFunction &MF,
+                                  EVT) const override {
+    return true;
+  }
 
   bool enableAggressiveFMAFusion(EVT VT) const override { return true; }
 
@@ -558,6 +561,10 @@ private:
   SDValue LowerCONCAT_VECTORS(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerEXTRACT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) const;
 
+  SDValue LowerFROUND(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerFROUND32(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerFROUND64(SDValue Op, SelectionDAG &DAG) const;
+
   SDValue LowerLOAD(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerLOADi1(SDValue Op, SelectionDAG &DAG) const;
 
@@ -574,8 +581,8 @@ private:
                           SelectionDAG &DAG) const override;
   SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
 
-  unsigned getArgumentAlignment(SDValue Callee, ImmutableCallSite CS, Type *Ty,
-                                unsigned Idx, const DataLayout &DL) const;
+  Align getArgumentAlignment(SDValue Callee, const CallBase *CB, Type *Ty,
+                             unsigned Idx, const DataLayout &DL) const;
 };
 } // namespace llvm
 

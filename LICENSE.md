@@ -61,6 +61,7 @@ licenses, and/or restrictions:
 * LLVM:   [src/mdl/jit/llvm/dist/LICENSE.TXT](src/mdl/jit/llvm/dist/LICENSE.TXT)
 * libzip: [src/base/lib/libzip/](src/base/lib/libzip/)
 * zlib:   [src/base/lib/zlib/README](src/base/lib/zlib/README)
+* robin_hood:   [src/base/lib/robin_hood/LICENSE](src/base/lib/robin_hood/LICENSE)
 * Coco/R: [src/mdl/compiler/coco/LICENSE](src/mdl/compiler/coco/LICENSE) (1)
 * tinyxml2: 
   [src/base/lib/tinyxml2/tinyxml2.h](src/base/lib/tinyxml2/tinyxml2.h)

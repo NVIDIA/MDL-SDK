@@ -68,18 +68,44 @@ function(FIND_FREEIMAGE_EXT)
             # assuming the 'freeimage-dev' package is installed
             # or freeimage was build manually and follows a common folder structure
             set(_FREEIMAGE_LIB "") # not used
+
+            set(_HINTS
+                ${FREEIMAGE_DIR}
+                ${FREEIMAGE_DIR}/lib64
+                ${FREEIMAGE_DIR}/lib
+                /usr/lib64
+                /usr/lib
+                /usr/local/lib
+                )
+
+            # hints for the internal build system
+            if(LINUX)
+                set(_HINTS ${_HINTS}
+                    ${FREEIMAGE_DIR}/lib-${OS_NAME}-${ARCH_NAME}-gnu
+                    ${FREEIMAGE_DIR}/lib-${OS_NAME}-${ARCH_NAME}-gcc7
+                    ${FREEIMAGE_DIR}/lib/${ARCH_NAME}-${OS_NAME}-gnu
+                    /usr/lib/${ARCH_NAME}-${OS_NAME}-gnu
+                )
+            elseif(MACOSX)
+                set(_HINTS ${_HINTS}
+                    ${FREEIMAGE_DIR}/lib-${OS_NAME}-${ARCH_NAME}-clang900
+                    ${FREEIMAGE_DIR}/lib-${OS_NAME}-${ARCH_NAME}-clang1200
+                )
+            endif()
+
             find_file(_FREEIMAGE_SHARED
                 NAMES
                     "${CMAKE_SHARED_LIBRARY_PREFIX}freeimage${CMAKE_SHARED_LIBRARY_SUFFIX}"
+                    "${CMAKE_SHARED_LIBRARY_PREFIX}freeimage-3.17.0${CMAKE_SHARED_LIBRARY_SUFFIX}"
+                    "${CMAKE_SHARED_LIBRARY_PREFIX}freeimage-3.18.0${CMAKE_SHARED_LIBRARY_SUFFIX}"
+                    "${CMAKE_SHARED_LIBRARY_PREFIX}freeimage-3.19.0${CMAKE_SHARED_LIBRARY_SUFFIX}"
                     "libfreeimage.so"
-                HINTS 
+                HINTS
+                    ${_HINTS}
                     ${FREEIMAGE_DIR}
                     ${FREEIMAGE_DIR}/lib64
-                    ${FREEIMAGE_DIR}/lib/aarch64-linux-gnu
                     ${FREEIMAGE_DIR}/lib
                     /usr/lib64
-                    /usr/lib/x86_64-linux-gnu
-                    /usr/lib/aarch64-linux-gnu
                     /usr/lib
                     /usr/local/lib
                 )

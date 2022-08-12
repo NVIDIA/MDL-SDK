@@ -33,6 +33,7 @@
 #define IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_DETAIL_H
 
 #include "i_mdl_elements_type.h"
+#include "i_mdl_elements_utilities.h"
 
 #include <mi/mdl/mdl_types.h>
 #include <mi/mdl/mdl_values.h>
@@ -40,6 +41,7 @@
 #include <mi/mdl/mdl_entity_resolver.h>
 #include <mi/mdl/mdl_streams.h>
 #include <mi/neuraylib/ireader.h>
+#include <mi/neuraylib/iwriter.h>
 
 #include <condition_variable>
 #include <mutex>
@@ -530,6 +532,31 @@ public:
 private:
     mi::base::Handle<mi::neuraylib::IReader> m_reader;
     std::string m_filename;
+};
+
+/// Adapts mi::neuraylib::IWriter to MDL::Output_stream.
+class Output_stream_impl : public mi::base::Interface_implement<MDL::IOutput_stream>
+{
+public:
+    Output_stream_impl( mi::neuraylib::IWriter* writer);
+
+    // MDL core API methods
+
+    virtual void write_char( char c);
+
+    virtual void write( const char* s);
+
+    virtual void flush();
+
+    virtual bool unput( char c);
+
+    // methods of MDL::IOutput_stream
+
+    bool has_error() const { return m_error; }
+
+private:
+    mi::base::Handle<mi::neuraylib::IWriter> m_writer;
+    bool m_error;
 };
 
 /// Adapts mi::neuraylib::IReader to mi::mdl::IMdle_input_stream.

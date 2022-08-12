@@ -41,7 +41,6 @@
 #include <mi/neuraylib/inumber.h>
 #include <mi/neuraylib/istring.h>
 
-#include <sstream>
 #include <base/system/stlext/i_stlext_likely.h>
 #include <base/util/string_utils/i_string_lexicographic_cast.h>
 
@@ -85,11 +84,9 @@ mi::Size Array_impl_base<T>::get_length() const
 template <typename T>
 const char* Array_impl_base<T>::get_key( mi::Size index) const
 {
-    std::string key;
-    if( !index_to_key( index, key))
+    if( !index_to_key( index, m_cached_key))
         return nullptr;
 
-    m_cached_key = key;
     return m_cached_key.c_str();
 }
 
@@ -265,9 +262,7 @@ bool Array_impl_base<T>::index_to_key( mi::Size index, std::string& key) const
 {
     if( index >= m_array.size())
         return false;
-    std::ostringstream s;
-    s << index;
-    key = s.str();
+    key = std::to_string( index);
     return true;
 }
 
@@ -307,12 +302,10 @@ Array_impl::Array_impl(
 {
     m_successfully_constructed = set_length_internal( length);
 
-    std::ostringstream s;
-    s << length;
     m_type_name = element_type_name;
-    m_type_name += "[";
-    m_type_name += s.str();
-    m_type_name += "]";
+    m_type_name += '[';
+    m_type_name += std::to_string( length);
+    m_type_name += ']';
 }
 
 // This method requires explicit instantiation since it is not used in this translation unit.

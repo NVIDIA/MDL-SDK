@@ -273,7 +273,7 @@ public:
     virtual Float32 sample( Float32 phi, Float32 theta, bool candela) const = 0;
 };
 
-/*@}*/ // end group mi_neuray_misc
+/**@}*/ // end group mi_neuray_misc
 
 } // namespace neuraylib
 

@@ -71,7 +71,7 @@ public:
         m_depth  = d;
         m_pixels.resize( pixel_size);
         if( pixels)
-            memcpy( &m_pixels[0], pixels, pixel_size);
+            memcpy( m_pixels.data(), pixels, pixel_size);
     }
 
     /// Destroys the surface.
@@ -86,10 +86,10 @@ public:
     }
 
     /// Returns the pixels (read-only).
-    const mi::Uint8* get_pixels() const { return &m_pixels[0]; };
+    const mi::Uint8* get_pixels() const { return m_pixels.data(); }
 
     /// Returns the pixels (mutable).
-    mi::Uint8* get_pixels() { return &m_pixels[0]; };
+    mi::Uint8* get_pixels() { return m_pixels.data(); }
 
     /// Returns the width of the surface.
     mi::Uint32 get_width() const { return m_width; }

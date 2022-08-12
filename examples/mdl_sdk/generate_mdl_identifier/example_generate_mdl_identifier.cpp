@@ -25,17 +25,19 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
-// Generates a valid identifier from the input.
+
+// examples/mdl_sdk/generate_mdl_identifier/example_generate_mdl_identifier.cpp
+//
+// Generates a valid MDL identifier from the input.
 
 #include <string>
 #include <iostream>
-#include <set>
 #include <iomanip>
 
 #include "example_shared.h"
 
 /// Checks, if the given character is a valid MDL letter.
-bool is_mdl_letter(char c) 
+bool is_mdl_letter(char c)
 {
     if ('A' <= c && c <= 'Z')
         return true;
@@ -52,54 +54,26 @@ bool is_mdl_digit(char c)
     return false;
 }
 
-/// Checks, if the given identifier is an MDL keyword.
-bool is_mdl_keyword(std::string& ident) {
-
-    if (ident.empty())
-        return false;
-
-    static std::set <std::string> keywords = {
-        // keywords
-        "annotation", "bool", "bool2", "bool3", "bool4", "break", "bsdf", "bsdf_measurement",
-        "case", "color", "const", "continue", "default", "do", "double", "double2",
-        "double2x2", "double2x3", "double3", "double3x2", "double3x3", "double3x4", "double4",
-        "double4x3", "double4x4", "double4x2", "double2x4", "edf", "else", "enum", "export",
-        "false", "float", "float2", "float2x2", "float2x3", "float3", "float3x2", "float3x3",
-        "float3x4", "float4", "float4x3", "float4x4", "float4x2", "float2x4", "for", "if",
-        "import", "in", "int", "int2", "int3", "int4", "intensity_mode", "intensity_power",
-        "intensity_radiant", "_exitance", "let", "light_profile", "material", "material_emission",
-        "material_geometry", "material_surface", "material_volume", "mdl", "module", "package",
-        "return", "string", "struct", "switch", "texture_2d", "texture_3d", "texture_cube",
-        "texture_ptex", "true", "typedef", "uniform", "using", "varying", "vdf", "while",
-        // reserved for future use
-        "auto", "catch", "char", "class", "const_cast", "delete", "dynamic_cast", "explicit",
-        "extern", "external", "foreach", "friend", "goto", "graph", "half", "half2", "half2x2",
-        "half2x3", "half3", "half3x2", "half3x3", "half3x4", "half4", "half4x3", "half4x4",
-        "half4x2", "half2x4", "inline", "inout", "lambda", "long", "mutable", "namespace",
-        "native", "new", "operator", "out", "phenomenon", "private", "protected", "public",
-        "reinterpret_cast", "sampler", "shader", "short", "signed", "sizeof", "static",
-        "static_cast", "technique", "template", "this", "throw", "try", "typeid", "typename",
-        "union", "unsigned", "virtual", "void", "volatile", "wchar_t" };
-
-    return keywords.find(ident) !=  keywords.end();
-}
-
-/// Converts the given string into a valid mdl identifier.
+/// Demonstrates one way to convert the given string into a valid MDL identifier. Note that the
+/// implemented mapping is not injective, e.g., "a_b" and "a%b" are both converted to "a_b".
 std::string make_valid_mdl_identifier(
-    const std::string& id)
+    mi::neuraylib::IMdl_factory* mdl_factory, const std::string& id)
 {
+    // Return "m" for empty input.
     if (id.empty())
         return "m";
 
     std::string result;
     result.reserve(id.size());
 
-    // first check general identifier rules:
+    // First, check general identifier rules:
     // IDENT = LETTER { LETTER | DIGIT | '_' } .
 
+    // Replace leading underscore by 'm'.
     size_t index = 0;
     result.push_back(is_mdl_letter(id[index]) ? id[index] : 'm');
 
+    // Replace sequences of invalid characters by a single underscore.
     for (index = 1; index < id.size(); ++index) {
         const char c = id[index];
         if (is_mdl_digit(c) || is_mdl_letter(c) || c == '_')
@@ -110,27 +84,59 @@ std::string make_valid_mdl_identifier(
         }
     }
 
-    // check, if identifier is mdl keyword
-    if (is_mdl_keyword(result))
+    // Second, add prefix "m_" for MDL keywords.
+    if (!mdl_factory->is_valid_mdl_identifier(result.c_str()))
         return "m_" + result;
     else
         return result;
 }
 
-
-int MAIN_UTF8(int argc, char* argv[])
+void process(mi::neuraylib::INeuray* neuray, int argc, char* argv[])
 {
-    if (argc < 2)
-        std::cout << "Usage: " << argv[0] <<
-        " <identifier_1> [<identifier_2> ...<identifier_n>]" << std::endl;
+    if (argc < 2) {
+        std::cout << "Usage: " << argv[0]
+                  << " <identifier_1> [<identifier_2> ...<identifier_n>]" << std::endl;
+        return;
+    }
+
+    mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(
+        neuray->get_api_component<mi::neuraylib::IMdl_factory>());
 
     for (int i = 1; i < argc; ++i) {
-
-        std::cout << std::left << std::setw(25) << argv[i] << " --> " << make_valid_mdl_identifier(argv[i]) << std::endl;
+        std::string result = make_valid_mdl_identifier(mdl_factory.get(), argv[i]);
+        std::cout << std::left << std::setw(25) << argv[i] << " => " << result << std::endl;
     }
-    std::cout << std::endl;
+}
 
-    return 0;
+int MAIN_UTF8( int argc, char* argv[])
+{
+    // Access the MDL SDK
+    mi::base::Handle<mi::neuraylib::INeuray> neuray(mi::examples::mdl::load_and_get_ineuray());
+    if (!neuray.is_valid_interface())
+        exit_failure("Failed to load the SDK.");
+
+    // Configure the MDL SDK
+    if (!mi::examples::mdl::configure(neuray.get()))
+        exit_failure("Failed to initialize the SDK.");
+
+    // Start the MDL SDK
+    mi::Sint32 ret = neuray->start();
+    if (ret != 0)
+        exit_failure("Failed to initialize the SDK. Result code: %d", ret);
+
+    // Process the command-line arguments
+    process(neuray.get(), argc, argv);
+
+    // Shut down the MDL SDK
+    if (neuray->shutdown() != 0)
+        exit_failure("Failed to shutdown the SDK.");
+
+    // Unload the MDL SDK
+    neuray = nullptr;
+    if (!mi::examples::mdl::unload())
+        exit_failure("Failed to unload the SDK.");
+
+    exit_success();
 }
 
 // Convert command line arguments to UTF8 on Windows

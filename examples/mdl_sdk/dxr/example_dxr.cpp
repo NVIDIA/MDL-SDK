@@ -413,7 +413,7 @@ bool Example_dxr::load_scene(
     scene_options.units_per_meter = options->units_per_meter;
     scene_options.handle_z_axis_up = options->handle_z_axis_up;
 
-    if (!loader.load(scene_path, scene_options))
+    if (!loader.load(get_mdl_sdk(), scene_path, scene_options))
     {
         log_error("Failed to load scene: " + scene_path);
         set_scene_is_updating(false);
@@ -461,7 +461,7 @@ bool Example_dxr::load_scene(
     get_mdl_sdk().reconfigure_search_paths();
 
     Scene* new_scene = new Scene(this, "Scene", static_cast<size_t>(Ray_type::count));
-    if (!new_scene->build_scene(loader.get_scene()))
+    if (!new_scene->build_scene(loader.move_scene()))
     {
         log_error("Failed to build scene data structures: " + scene_path);
         set_scene_is_updating(false);
@@ -1302,13 +1302,16 @@ void Example_dxr::update(const Update_args& args)
                     mdl_d3d12::Mdl_material* mat = mat_gui->get_bound_material();
 
                     // keep the GLTF parameters (just in case we can reuse them in the future)
-                    IScene_loader::Material parameters =
-                        mat->get_material_desciption().get_material_parameters();
+                    const IScene_loader::Scene* scene = mat->get_material_desciption().get_scene();
+                    IScene_loader::Material scene_material =
+                        mat->get_material_desciption().get_scene_material();
 
                     // only replace the name with the name of the material to load
-                    parameters.name = e.get_data<char>();
+                    // and remove the material graph defined in glTF
+                    scene_material.name = e.get_data<char>();
+                    scene_material.ext_NV_materials_mdl = {};
 
-                    Mdl_material_description desc(parameters);
+                    Mdl_material_description desc(scene, scene_material);
                     replace_material(mat, desc, mat_gui);
                     break;
                 }

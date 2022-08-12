@@ -316,7 +316,7 @@ public:
 };
 
 
-/*@}*/ // end group mi_neuray_mdl_misc
+/**@}*/ // end group mi_neuray_mdl_misc
 
 } // namespace neuraylib
 } // namespace mi

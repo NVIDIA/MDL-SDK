@@ -40,7 +40,7 @@ endif()
 
 # call --version
 get_filename_component(clang_PATH_ABS ${clang_PATH} REALPATH)
-set(clang_PATH ${clang_PATH_ABS} CACHE FILEPATH "Path of the Clang 7.0 binary." FORCE)
+set(clang_PATH ${clang_PATH_ABS} CACHE FILEPATH "Path of the Clang 12.0 binary." FORCE)
 execute_process(COMMAND "${clang_PATH}" "--version" 
     OUTPUT_VARIABLE 
         _CLANG_VERSION_STRING 
@@ -55,7 +55,8 @@ if(NOT _CLANG_VERSION_STRING)
 else()
     # parse version number
     STRING(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" _CLANG_VERSION_STRING ${_CLANG_VERSION_STRING})
-    if(${_CLANG_VERSION_STRING} VERSION_GREATER_EQUAL "7.1.0" OR ${_CLANG_VERSION_STRING} VERSION_LESS "7.0.0")
-        message(FATAL_ERROR "Clang 7.0 is required but Clang ${_CLANG_VERSION_STRING} was found instead. Please set the CMake option 'clang_PATH' that needs to point to a clang 7.0.x compiler.")
+    if(${_CLANG_VERSION_STRING} VERSION_GREATER "12.0.1" OR ${_CLANG_VERSION_STRING} VERSION_LESS "12.0.0")
+        # TODO enable this check
+        #message(FATAL_ERROR "Clang 12.0 is required but Clang ${_CLANG_VERSION_STRING} was found instead. Please set the CMake option 'clang_PATH' that needs to point to a clang 12.0.x compiler.")
     endif()
 endif()

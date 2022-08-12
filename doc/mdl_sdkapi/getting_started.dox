@@ -108,6 +108,10 @@ The following third-party libraries are required:
     To build with Qt 5.10.1 on Linux, your system's GLIBC needs to be release 
     2.14 or later.
 
+-   **Vulkan SDK** (1.2.198.1)
+    - Please follow the instructions on the
+    [Vulkan SDK Website](https://vulkan.lunarg.com/sdk/home).
+
 -   **DirectX Raytracing support**
     - To build the DXR example, Windows 10 version 1809 and the corresponding 
     SDK 10.0.17763.0 as well as the optional *Graphic Tools* feature are required.
@@ -163,6 +167,9 @@ The following third-party libraries are required:
 
     -   **Qt5_DIR** in Ungrouped Entries (only if not installed using the installer)  
         for example: *C:/Qt/5.10.1/msvc2017_64*
+
+    -   **VULKAN_SDK_DIR** in Ungrouped Entries (only if not installed using the installer)
+        for example: *C:/VulkanSDK/1.2.198.1*
 
 
 6.  When all dependencies have been resolved or the corresponding examples 
@@ -310,6 +317,9 @@ The following options allow to select the components to build and particular log
 
 -   **MDL_ENABLE_OPENGL_EXAMPLES**  
     [ON/OFF] enable/disable examples that require OpenGL.
+
+-   **MDL_ENABLE_VULKAN_EXAMPLES**  
+    [ON/OFF] enable/disable examples that require Vulkan.
 
 -   **MDL_ENABLE_QT_EXAMPLES**  
     [ON/OFF] enable/disable examples that require Qt.

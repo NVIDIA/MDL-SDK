@@ -1,9 +1,8 @@
 //===- ObjectYAML.cpp - YAML utilities for object files -------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -33,7 +32,15 @@ void MappingTraits<YamlObjectFile>::mapping(IO &IO,
       MappingTraits<MachOYAML::UniversalBinary>::mapping(IO,
                                                          *ObjectFile.FatMachO);
   } else {
-    if (IO.mapTag("!ELF")) {
+    Input &In = (Input &)IO;
+    if (IO.mapTag("!Arch")) {
+      ObjectFile.Arch.reset(new ArchYAML::Archive());
+      MappingTraits<ArchYAML::Archive>::mapping(IO, *ObjectFile.Arch);
+      std::string Err =
+          MappingTraits<ArchYAML::Archive>::validate(IO, *ObjectFile.Arch);
+      if (!Err.empty())
+        IO.setError(Err);
+    } else if (IO.mapTag("!ELF")) {
       ObjectFile.Elf.reset(new ELFYAML::Object());
       MappingTraits<ELFYAML::Object>::mapping(IO, *ObjectFile.Elf);
     } else if (IO.mapTag("!COFF")) {
@@ -46,18 +53,18 @@ void MappingTraits<YamlObjectFile>::mapping(IO &IO,
       ObjectFile.FatMachO.reset(new MachOYAML::UniversalBinary());
       MappingTraits<MachOYAML::UniversalBinary>::mapping(IO,
                                                          *ObjectFile.FatMachO);
+    } else if (IO.mapTag("!minidump")) {
+      ObjectFile.Minidump.reset(new MinidumpYAML::Object());
+      MappingTraits<MinidumpYAML::Object>::mapping(IO, *ObjectFile.Minidump);
     } else if (IO.mapTag("!WASM")) {
       ObjectFile.Wasm.reset(new WasmYAML::Object());
       MappingTraits<WasmYAML::Object>::mapping(IO, *ObjectFile.Wasm);
-    } else {
-      Input &In = (Input &)IO;
-      std::string Tag = In.getCurrentNode()->getRawTag();
-      if (Tag.empty())
+    } else if (const Node *N = In.getCurrentNode()) {
+      if (N->getRawTag().empty())
         IO.setError("YAML Object File missing document type tag!");
       else
-        IO.setError(
-            Twine("YAML Object File unsupported document type tag '") +
-            Twine(Tag) + Twine("'!"));
+        IO.setError("YAML Object File unsupported document type tag '" +
+                    N->getRawTag() + "'!");
     }
   }
 }

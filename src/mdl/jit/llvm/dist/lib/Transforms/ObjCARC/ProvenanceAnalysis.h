@@ -1,9 +1,8 @@
 //===- ProvenanceAnalysis.h - ObjC ARC Optimization -------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -26,13 +25,15 @@
 #ifndef LLVM_LIB_TRANSFORMS_OBJCARC_PROVENANCEANALYSIS_H
 #define LLVM_LIB_TRANSFORMS_OBJCARC_PROVENANCEANALYSIS_H
 
+#ifdef LLVM_ENABLE_OBJC
+
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/IR/ValueHandle.h"
 #include <utility>
 
 namespace llvm {
 
+class AAResults;
 class DataLayout;
 class PHINode;
 class SelectInst;
@@ -50,7 +51,7 @@ namespace objcarc {
 /// not two pointers have the same provenance source and thus could
 /// potentially be related.
 class ProvenanceAnalysis {
-  AliasAnalysis *AA;
+  AAResults *AA;
 
   using ValuePairTy = std::pair<const Value *, const Value *>;
   using CachedResultsTy = DenseMap<ValuePairTy, bool>;
@@ -59,7 +60,7 @@ class ProvenanceAnalysis {
 
   DenseMap<const Value *, WeakTrackingVH> UnderlyingObjCPtrCache;
 
-  bool relatedCheck(const Value *A, const Value *B, const DataLayout &DL);
+  bool relatedCheck(const Value *A, const Value *B);
   bool relatedSelect(const SelectInst *A, const Value *B);
   bool relatedPHI(const PHINode *A, const Value *B);
 
@@ -68,11 +69,11 @@ public:
   ProvenanceAnalysis(const ProvenanceAnalysis &) = delete;
   ProvenanceAnalysis &operator=(const ProvenanceAnalysis &) = delete;
 
-  void setAA(AliasAnalysis *aa) { AA = aa; }
+  void setAA(AAResults *aa) { AA = aa; }
 
-  AliasAnalysis *getAA() const { return AA; }
+  AAResults *getAA() const { return AA; }
 
-  bool related(const Value *A, const Value *B, const DataLayout &DL);
+  bool related(const Value *A, const Value *B);
 
   void clear() {
     CachedResults.clear();
@@ -83,5 +84,7 @@ public:
 } // end namespace objcarc
 
 } // end namespace llvm
+
+#endif
 
 #endif // LLVM_LIB_TRANSFORMS_OBJCARC_PROVENANCEANALYSIS_H

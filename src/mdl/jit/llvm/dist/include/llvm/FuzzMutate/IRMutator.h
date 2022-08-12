@@ -1,9 +1,8 @@
 //===-- IRMutator.h - Mutation engine for fuzzing IR ------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -100,6 +99,17 @@ public:
 
   using IRMutationStrategy::mutate;
   void mutate(Function &F, RandomIRBuilder &IB) override;
+  void mutate(Instruction &Inst, RandomIRBuilder &IB) override;
+};
+
+class InstModificationIRStrategy : public IRMutationStrategy {
+public:
+  uint64_t getWeight(size_t CurrentSize, size_t MaxSize,
+                     uint64_t CurrentWeight) override {
+    return 4;
+  }
+
+  using IRMutationStrategy::mutate;
   void mutate(Instruction &Inst, RandomIRBuilder &IB) override;
 };
 

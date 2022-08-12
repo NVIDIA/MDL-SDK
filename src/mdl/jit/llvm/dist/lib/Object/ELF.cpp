@@ -1,9 +1,8 @@
 //===- ELF.cpp - ELF object file implementation ---------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -139,6 +138,27 @@ StringRef llvm::object::getELFRelocationTypeName(uint32_t Machine,
       break;
     }
     break;
+  case ELF::EM_MSP430:
+    switch (Type) {
+#include "llvm/BinaryFormat/ELFRelocs/MSP430.def"
+    default:
+      break;
+    }
+    break;
+  case ELF::EM_VE:
+    switch (Type) {
+#include "llvm/BinaryFormat/ELFRelocs/VE.def"
+    default:
+      break;
+    }
+    break;
+  case ELF::EM_CSKY:
+    switch (Type) {
+#include "llvm/BinaryFormat/ELFRelocs/CSKY.def"
+    default:
+      break;
+    }
+    break;
   default:
     break;
   }
@@ -147,7 +167,7 @@ StringRef llvm::object::getELFRelocationTypeName(uint32_t Machine,
 
 #undef ELF_RELOC
 
-uint32_t llvm::object::getELFRelrRelocationType(uint32_t Machine) {
+uint32_t llvm::object::getELFRelativeRelocationType(uint32_t Machine) {
   switch (Machine) {
   case ELF::EM_X86_64:
     return ELF::R_X86_64_RELATIVE;
@@ -181,6 +201,8 @@ uint32_t llvm::object::getELFRelrRelocationType(uint32_t Machine) {
   case ELF::EM_SPARC32PLUS:
   case ELF::EM_SPARCV9:
     return ELF::R_SPARC_RELATIVE;
+  case ELF::EM_CSKY:
+    return ELF::R_CKCORE_RELATIVE;
   case ELF::EM_AMDGPU:
     break;
   case ELF::EM_BPF:
@@ -213,9 +235,12 @@ StringRef llvm::object::getELFSectionTypeName(uint32_t Machine, unsigned Type) {
     switch (Type) {
       STRINGIFY_ENUM_CASE(ELF, SHT_MIPS_REGINFO);
       STRINGIFY_ENUM_CASE(ELF, SHT_MIPS_OPTIONS);
-      STRINGIFY_ENUM_CASE(ELF, SHT_MIPS_ABIFLAGS);
       STRINGIFY_ENUM_CASE(ELF, SHT_MIPS_DWARF);
+      STRINGIFY_ENUM_CASE(ELF, SHT_MIPS_ABIFLAGS);
     }
+    break;
+  case ELF::EM_RISCV:
+    switch (Type) { STRINGIFY_ENUM_CASE(ELF, SHT_RISCV_ATTRIBUTES); }
     break;
   default:
     break;
@@ -247,6 +272,11 @@ StringRef llvm::object::getELFSectionTypeName(uint32_t Machine, unsigned Type) {
     STRINGIFY_ENUM_CASE(ELF, SHT_LLVM_LINKER_OPTIONS);
     STRINGIFY_ENUM_CASE(ELF, SHT_LLVM_CALL_GRAPH_PROFILE);
     STRINGIFY_ENUM_CASE(ELF, SHT_LLVM_ADDRSIG);
+    STRINGIFY_ENUM_CASE(ELF, SHT_LLVM_DEPENDENT_LIBRARIES);
+    STRINGIFY_ENUM_CASE(ELF, SHT_LLVM_SYMPART);
+    STRINGIFY_ENUM_CASE(ELF, SHT_LLVM_PART_EHDR);
+    STRINGIFY_ENUM_CASE(ELF, SHT_LLVM_PART_PHDR);
+    STRINGIFY_ENUM_CASE(ELF, SHT_LLVM_BB_ADDR_MAP);
     STRINGIFY_ENUM_CASE(ELF, SHT_GNU_ATTRIBUTES);
     STRINGIFY_ENUM_CASE(ELF, SHT_GNU_HASH);
     STRINGIFY_ENUM_CASE(ELF, SHT_GNU_verdef);
@@ -258,7 +288,7 @@ StringRef llvm::object::getELFSectionTypeName(uint32_t Machine, unsigned Type) {
 }
 
 template <class ELFT>
-Expected<std::vector<typename ELFT::Rela>>
+std::vector<typename ELFT::Rel>
 ELFFile<ELFT>::decode_relrs(Elf_Relr_Range relrs) const {
   // This function decodes the contents of an SHT_RELR packed relocation
   // section.
@@ -290,11 +320,10 @@ ELFFile<ELFT>::decode_relrs(Elf_Relr_Range relrs) const {
   //    even means address, odd means bitmap.
   // 2. Just a simple list of addresses is a valid encoding.
 
-  Elf_Rela Rela;
-  Rela.r_info = 0;
-  Rela.r_addend = 0;
-  Rela.setType(getRelrRelocationType(), false);
-  std::vector<Elf_Rela> Relocs;
+  Elf_Rel Rel;
+  Rel.r_info = 0;
+  Rel.setType(getRelativeRelocationType(), false);
+  std::vector<Elf_Rel> Relocs;
 
   // Word type: uint32_t for Elf32, and uint64_t for Elf64.
   typedef typename ELFT::uint Word;
@@ -311,8 +340,8 @@ ELFFile<ELFT>::decode_relrs(Elf_Relr_Range relrs) const {
     Word Entry = R;
     if ((Entry&1) == 0) {
       // Even entry: encodes the offset for next relocation.
-      Rela.r_offset = Entry;
-      Relocs.push_back(Rela);
+      Rel.r_offset = Entry;
+      Relocs.push_back(Rel);
       // Set base offset for subsequent bitmap entries.
       Base = Entry + WordSize;
       continue;
@@ -323,8 +352,8 @@ ELFFile<ELFT>::decode_relrs(Elf_Relr_Range relrs) const {
     while (Entry != 0) {
       Entry >>= 1;
       if ((Entry&1) != 0) {
-        Rela.r_offset = Offset;
-        Relocs.push_back(Rela);
+        Rel.r_offset = Offset;
+        Relocs.push_back(Rel);
       }
       Offset += WordSize;
     }
@@ -338,7 +367,7 @@ ELFFile<ELFT>::decode_relrs(Elf_Relr_Range relrs) const {
 
 template <class ELFT>
 Expected<std::vector<typename ELFT::Rela>>
-ELFFile<ELFT>::android_relas(const Elf_Shdr *Sec) const {
+ELFFile<ELFT>::android_relas(const Elf_Shdr &Sec) const {
   // This function reads relocations in Android's packed relocation format,
   // which is based on SLEB128 and delta encoding.
   Expected<ArrayRef<uint8_t>> ContentsOrErr = getSectionContents(Sec);
@@ -393,20 +422,17 @@ ELFFile<ELFT>::android_relas(const Elf_Shdr *Sec) const {
     if (GroupedByAddend && GroupHasAddend)
       Addend += ReadSLEB();
 
+    if (!GroupHasAddend)
+      Addend = 0;
+
     for (uint64_t I = 0; I != NumRelocsInGroup; ++I) {
       Elf_Rela R;
       Offset += GroupedByOffsetDelta ? GroupOffsetDelta : ReadSLEB();
       R.r_offset = Offset;
       R.r_info = GroupedByInfo ? GroupRInfo : ReadSLEB();
-
-      if (GroupHasAddend) {
-        if (!GroupedByAddend)
-          Addend += ReadSLEB();
-        R.r_addend = Addend;
-      } else {
-        R.r_addend = 0;
-      }
-
+      if (GroupHasAddend && !GroupedByAddend)
+        Addend += ReadSLEB();
+      R.r_addend = Addend;
       Relocs.push_back(R);
 
       if (ErrStr)
@@ -421,7 +447,7 @@ ELFFile<ELFT>::android_relas(const Elf_Shdr *Sec) const {
 }
 
 template <class ELFT>
-const char *ELFFile<ELFT>::getDynamicTagAsString(unsigned Arch,
+std::string ELFFile<ELFT>::getDynamicTagAsString(unsigned Arch,
                                                  uint64_t Type) const {
 #define DYNAMIC_STRINGIFY_ENUM(tag, value)                                     \
   case value:                                                                  \
@@ -429,12 +455,21 @@ const char *ELFFile<ELFT>::getDynamicTagAsString(unsigned Arch,
 
 #define DYNAMIC_TAG(n, v)
   switch (Arch) {
+  case ELF::EM_AARCH64:
+    switch (Type) {
+#define AARCH64_DYNAMIC_TAG(name, value) DYNAMIC_STRINGIFY_ENUM(name, value)
+#include "llvm/BinaryFormat/DynamicTags.def"
+#undef AARCH64_DYNAMIC_TAG
+    }
+    break;
+
   case ELF::EM_HEXAGON:
     switch (Type) {
 #define HEXAGON_DYNAMIC_TAG(name, value) DYNAMIC_STRINGIFY_ENUM(name, value)
 #include "llvm/BinaryFormat/DynamicTags.def"
 #undef HEXAGON_DYNAMIC_TAG
     }
+    break;
 
   case ELF::EM_MIPS:
     switch (Type) {
@@ -442,6 +477,7 @@ const char *ELFFile<ELFT>::getDynamicTagAsString(unsigned Arch,
 #include "llvm/BinaryFormat/DynamicTags.def"
 #undef MIPS_DYNAMIC_TAG
     }
+    break;
 
   case ELF::EM_PPC64:
     switch (Type) {
@@ -449,37 +485,39 @@ const char *ELFFile<ELFT>::getDynamicTagAsString(unsigned Arch,
 #include "llvm/BinaryFormat/DynamicTags.def"
 #undef PPC64_DYNAMIC_TAG
     }
+    break;
   }
 #undef DYNAMIC_TAG
   switch (Type) {
 // Now handle all dynamic tags except the architecture specific ones
+#define AARCH64_DYNAMIC_TAG(name, value)
 #define MIPS_DYNAMIC_TAG(name, value)
 #define HEXAGON_DYNAMIC_TAG(name, value)
 #define PPC64_DYNAMIC_TAG(name, value)
 // Also ignore marker tags such as DT_HIOS (maps to DT_VERNEEDNUM), etc.
 #define DYNAMIC_TAG_MARKER(name, value)
-#define DYNAMIC_TAG(name, value) DYNAMIC_STRINGIFY_ENUM(name, value)
+#define DYNAMIC_TAG(name, value) case value: return #name;
 #include "llvm/BinaryFormat/DynamicTags.def"
 #undef DYNAMIC_TAG
+#undef AARCH64_DYNAMIC_TAG
 #undef MIPS_DYNAMIC_TAG
 #undef HEXAGON_DYNAMIC_TAG
 #undef PPC64_DYNAMIC_TAG
 #undef DYNAMIC_TAG_MARKER
 #undef DYNAMIC_STRINGIFY_ENUM
   default:
-    return "unknown";
+    return "<unknown:>0x" + utohexstr(Type, true);
   }
 }
 
 template <class ELFT>
-const char *ELFFile<ELFT>::getDynamicTagAsString(uint64_t Type) const {
-  return getDynamicTagAsString(getHeader()->e_machine, Type);
+std::string ELFFile<ELFT>::getDynamicTagAsString(uint64_t Type) const {
+  return getDynamicTagAsString(getHeader().e_machine, Type);
 }
 
 template <class ELFT>
 Expected<typename ELFT::DynRange> ELFFile<ELFT>::dynamicEntries() const {
   ArrayRef<Elf_Dyn> Dyn;
-  size_t DynSecSize = 0;
 
   auto ProgramHeadersOrError = program_headers();
   if (!ProgramHeadersOrError)
@@ -490,7 +528,6 @@ Expected<typename ELFT::DynRange> ELFFile<ELFT>::dynamicEntries() const {
       Dyn = makeArrayRef(
           reinterpret_cast<const Elf_Dyn *>(base() + Phdr.p_offset),
           Phdr.p_filesz / sizeof(Elf_Dyn));
-      DynSecSize = Phdr.p_filesz;
       break;
     }
   }
@@ -505,11 +542,10 @@ Expected<typename ELFT::DynRange> ELFFile<ELFT>::dynamicEntries() const {
     for (const Elf_Shdr &Sec : *SectionsOrError) {
       if (Sec.sh_type == ELF::SHT_DYNAMIC) {
         Expected<ArrayRef<Elf_Dyn>> DynOrError =
-            getSectionContentsAsArray<Elf_Dyn>(&Sec);
+            getSectionContentsAsArray<Elf_Dyn>(Sec);
         if (!DynOrError)
           return DynOrError.takeError();
         Dyn = *DynOrError;
-        DynSecSize = Sec.sh_size;
         break;
       }
     }
@@ -519,19 +555,19 @@ Expected<typename ELFT::DynRange> ELFFile<ELFT>::dynamicEntries() const {
   }
 
   if (Dyn.empty())
+    // TODO: this error is untested.
     return createError("invalid empty dynamic section");
 
-  if (DynSecSize % sizeof(Elf_Dyn) != 0)
-    return createError("malformed dynamic section");
-
   if (Dyn.back().d_tag != ELF::DT_NULL)
+    // TODO: this error is untested.
     return createError("dynamic sections must be DT_NULL terminated");
 
   return Dyn;
 }
 
 template <class ELFT>
-Expected<const uint8_t *> ELFFile<ELFT>::toMappedAddr(uint64_t VAddr) const {
+Expected<const uint8_t *>
+ELFFile<ELFT>::toMappedAddr(uint64_t VAddr, WarningHandler WarnHandler) const {
   auto ProgramHeadersOrError = program_headers();
   if (!ProgramHeadersOrError)
     return ProgramHeadersOrError.takeError();
@@ -542,20 +578,43 @@ Expected<const uint8_t *> ELFFile<ELFT>::toMappedAddr(uint64_t VAddr) const {
     if (Phdr.p_type == ELF::PT_LOAD)
       LoadSegments.push_back(const_cast<Elf_Phdr *>(&Phdr));
 
-  const Elf_Phdr *const *I =
-      std::upper_bound(LoadSegments.begin(), LoadSegments.end(), VAddr,
-                       [](uint64_t VAddr, const Elf_Phdr_Impl<ELFT> *Phdr) {
-                         return VAddr < Phdr->p_vaddr;
-                       });
+  auto SortPred = [](const Elf_Phdr_Impl<ELFT> *A,
+                     const Elf_Phdr_Impl<ELFT> *B) {
+    return A->p_vaddr < B->p_vaddr;
+  };
+  if (!llvm::is_sorted(LoadSegments, SortPred)) {
+    if (Error E =
+            WarnHandler("loadable segments are unsorted by virtual address"))
+      return std::move(E);
+    llvm::stable_sort(LoadSegments, SortPred);
+  }
+
+  const Elf_Phdr *const *I = llvm::upper_bound(
+      LoadSegments, VAddr, [](uint64_t VAddr, const Elf_Phdr_Impl<ELFT> *Phdr) {
+        return VAddr < Phdr->p_vaddr;
+      });
 
   if (I == LoadSegments.begin())
-    return createError("Virtual address is not in any segment");
+    return createError("virtual address is not in any segment: 0x" +
+                       Twine::utohexstr(VAddr));
   --I;
   const Elf_Phdr &Phdr = **I;
   uint64_t Delta = VAddr - Phdr.p_vaddr;
   if (Delta >= Phdr.p_filesz)
-    return createError("Virtual address is not in any segment");
-  return base() + Phdr.p_offset + Delta;
+    return createError("virtual address is not in any segment: 0x" +
+                       Twine::utohexstr(VAddr));
+
+  uint64_t Offset = Phdr.p_offset + Delta;
+  if (Offset >= getBufSize())
+    return createError("can't map virtual address 0x" +
+                       Twine::utohexstr(VAddr) + " to the segment with index " +
+                       Twine(&Phdr - (*ProgramHeadersOrError).data() + 1) +
+                       ": the segment ends at 0x" +
+                       Twine::utohexstr(Phdr.p_offset + Phdr.p_filesz) +
+                       ", which is greater than the file size (0x" +
+                       Twine::utohexstr(getBufSize()) + ")");
+
+  return base() + Offset;
 }
 
 template class llvm::object::ELFFile<ELF32LE>;

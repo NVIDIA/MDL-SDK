@@ -1,9 +1,8 @@
 //===- DIAEnumTables.cpp - DIA Table Enumerator Impl ------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -13,9 +12,8 @@
 using namespace llvm;
 using namespace llvm::pdb;
 
-DIAEnumTables::DIAEnumTables(
-  CComPtr<IDiaEnumTables> DiaEnumerator)
-  : Enumerator(DiaEnumerator) {}
+DIAEnumTables::DIAEnumTables(CComPtr<IDiaEnumTables> DiaEnumerator)
+    : Enumerator(DiaEnumerator) {}
 
 uint32_t DIAEnumTables::getChildCount() const {
   LONG Count = 0;
@@ -44,10 +42,3 @@ std::unique_ptr<IPDBTable> DIAEnumTables::getNext() {
 }
 
 void DIAEnumTables::reset() { Enumerator->Reset(); }
-
-DIAEnumTables *DIAEnumTables::clone() const {
-  CComPtr<IDiaEnumTables> EnumeratorClone;
-  if (S_OK != Enumerator->Clone(&EnumeratorClone))
-    return nullptr;
-  return new DIAEnumTables(EnumeratorClone);
-}

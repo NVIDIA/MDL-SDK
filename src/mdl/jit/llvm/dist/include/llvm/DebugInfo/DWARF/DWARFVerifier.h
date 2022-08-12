@@ -1,35 +1,33 @@
 //===- DWARFVerifier.h ----------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #ifndef LLVM_DEBUGINFO_DWARF_DWARFVERIFIER_H
 #define LLVM_DEBUGINFO_DWARF_DWARFVERIFIER_H
 
+#include "llvm/ADT/Optional.h"
 #include "llvm/DebugInfo/DIContext.h"
 #include "llvm/DebugInfo/DWARF/DWARFAcceleratorTable.h"
-#include "llvm/DebugInfo/DWARF/DWARFAddressRange.h"
 #include "llvm/DebugInfo/DWARF/DWARFDie.h"
-
+#include "llvm/DebugInfo/DWARF/DWARFUnitIndex.h"
 #include <cstdint>
 #include <map>
 #include <set>
 
 namespace llvm {
 class raw_ostream;
+struct DWARFAddressRange;
 struct DWARFAttribute;
 class DWARFContext;
-class DWARFDie;
-class DWARFUnit;
-class DWARFCompileUnit;
 class DWARFDataExtractor;
 class DWARFDebugAbbrev;
 class DataExtractor;
 struct DWARFSection;
+class DWARFUnit;
 
 /// A class that verifies DWARF debug information given a DWARF Context.
 class DWARFVerifier {
@@ -56,11 +54,13 @@ public:
     typedef std::set<DieRangeInfo>::const_iterator die_range_info_iterator;
 
     /// Inserts the address range. If the range overlaps with an existing
-    /// range, the range is *not* added and an iterator to the overlapping
-    /// range is returned.
+    /// range, the range that it overlaps with will be returned and the two
+    /// address ranges will be unioned together in "Ranges".
     ///
-    /// This is used for finding overlapping ranges within the same DIE.
-    address_range_iterator insert(const DWARFAddressRange &R);
+    /// This is used for finding overlapping ranges in the DW_AT_ranges
+    /// attribute of a DIE. It is also used as a set of address ranges that
+    /// children address ranges must all be contained in.
+    Optional<DWARFAddressRange> insert(const DWARFAddressRange &R);
 
     /// Finds an address range in the sorted vector of ranges.
     address_range_iterator findRange(const DWARFAddressRange &R) const {
@@ -94,12 +94,16 @@ private:
   /// A map that tracks all references (converted absolute references) so we
   /// can verify each reference points to a valid DIE and not an offset that
   /// lies between to valid DIEs.
-  std::map<uint64_t, std::set<uint32_t>> ReferenceToDIEOffsets;
+  std::map<uint64_t, std::set<uint64_t>> ReferenceToDIEOffsets;
   uint32_t NumDebugLineErrors = 0;
+  // Used to relax some checks that do not currently work portably
+  bool IsObjectFile;
+  bool IsMachOObject;
 
   raw_ostream &error() const;
   raw_ostream &warn() const;
   raw_ostream &note() const;
+  raw_ostream &dump(const DWARFDie &Die, unsigned indent = 0) const;
 
   /// Verifies the abbreviations section.
   ///
@@ -113,20 +117,20 @@ private:
   /// \returns The number of errors that occurred during verification.
   unsigned verifyAbbrevSection(const DWARFDebugAbbrev *Abbrev);
 
-  /// Verifies the header of a unit in the .debug_info section.
+  /// Verifies the header of a unit in a .debug_info or .debug_types section.
   ///
   /// This function currently checks for:
   /// - Unit is in 32-bit DWARF format. The function can be modified to
   /// support 64-bit format.
   /// - The DWARF version is valid
   /// - The unit type is valid (if unit is in version >=5)
-  /// - The unit doesn't extend beyond .debug_info section
+  /// - The unit doesn't extend beyond the containing section
   /// - The address size is valid
   /// - The offset in the .debug_abbrev section is valid
   ///
-  /// \param DebugInfoData The .debug_info section data
+  /// \param DebugInfoData The section data
   /// \param Offset A reference to the offset start of the unit. The offset will
-  /// be updated to point to the next unit in .debug_info
+  /// be updated to point to the next unit in the section
   /// \param UnitIndex The index of the unit to be verified
   /// \param UnitType A reference to the type of the unit
   /// \param isUnitDWARF64 A reference to a flag that shows whether the unit is
@@ -134,10 +138,10 @@ private:
   ///
   /// \returns true if the header is verified successfully, false otherwise.
   bool verifyUnitHeader(const DWARFDataExtractor DebugInfoData,
-                        uint32_t *Offset, unsigned UnitIndex, uint8_t &UnitType,
+                        uint64_t *Offset, unsigned UnitIndex, uint8_t &UnitType,
                         bool &isUnitDWARF64);
 
-  /// Verifies the header of a unit in the .debug_info section.
+  /// Verifies the header of a unit in a .debug_info or .debug_types section.
   ///
   /// This function currently verifies:
   ///  - The debug info attributes.
@@ -146,13 +150,29 @@ private:
   ///  - That the root DIE is a unit DIE.
   ///  - If a unit type is provided, that the unit DIE matches the unit type.
   ///  - The DIE ranges.
+  ///  - That call site entries are only nested within subprograms with a
+  ///    DW_AT_call attribute.
   ///
-  /// \param Unit      The DWARF Unit to verifiy.
-  /// \param UnitType  An optional unit type which will be used to verify the
-  ///                  type of the unit DIE.
+  /// \param Unit      The DWARF Unit to verify.
   ///
-  /// \returns true if the content is verified successfully, false otherwise.
-  bool verifyUnitContents(DWARFUnit &Unit, uint8_t UnitType = 0);
+  /// \returns The number of errors that occurred during verification.
+  unsigned verifyUnitContents(DWARFUnit &Unit);
+
+  /// Verifies the unit headers and contents in a .debug_info or .debug_types
+  /// section.
+  ///
+  /// \param S           The DWARF Section to verify.
+  /// \param SectionKind The object-file section kind that S comes from.
+  ///
+  /// \returns The number of errors that occurred during verification.
+  unsigned verifyUnitSection(const DWARFSection &S,
+                             DWARFSectionKind SectionKind);
+
+  /// Verifies that a call site entry is nested within a subprogram with a
+  /// DW_AT_call attribute.
+  ///
+  /// \returns Number of errors that occurred during verification.
+  unsigned verifyDebugInfoCallSite(const DWARFDie &Die);
 
   /// Verify that all Die ranges are valid.
   ///
@@ -172,7 +192,7 @@ private:
   /// \param AttrValue    The DWARF attribute value to check
   ///
   /// \returns NumErrors The number of errors occurred during verification of
-  /// attributes' values in a .debug_info section unit
+  /// attributes' values in a unit
   unsigned verifyDebugInfoAttribute(const DWARFDie &Die,
                                     DWARFAttribute &AttrValue);
 
@@ -180,14 +200,14 @@ private:
   ///
   /// This function currently checks for:
   /// - All DW_FORM_ref values that are CU relative have valid CU offsets
-  /// - All DW_FORM_ref_addr values have valid .debug_info offsets
+  /// - All DW_FORM_ref_addr values have valid section offsets
   /// - All DW_FORM_strp values have valid .debug_str offsets
   ///
   /// \param Die          The DWARF DIE that owns the attribute value
   /// \param AttrValue    The DWARF attribute value to check
   ///
   /// \returns NumErrors The number of errors occurred during verification of
-  /// attributes' forms in a .debug_info section unit
+  /// attributes' forms in a unit
   unsigned verifyDebugInfoForm(const DWARFDie &Die, DWARFAttribute &AttrValue);
 
   /// Verifies the all valid references that were found when iterating through
@@ -199,7 +219,7 @@ private:
   /// CU relative and absolute references.
   ///
   /// \returns NumErrors The number of errors occurred during verification of
-  /// references for the .debug_info section
+  /// references for the .debug_info and .debug_types sections
   unsigned verifyDebugInfoReferences();
 
   /// Verify the DW_AT_stmt_list encoding and value and ensure that no
@@ -268,8 +288,8 @@ private:
 
 public:
   DWARFVerifier(raw_ostream &S, DWARFContext &D,
-                DIDumpOptions DumpOpts = DIDumpOptions::getForSingleDIE())
-      : OS(S), DCtx(D), DumpOpts(std::move(DumpOpts)) {}
+                DIDumpOptions DumpOpts = DIDumpOptions::getForSingleDIE());
+
   /// Verify the information in any of the following sections, if available:
   /// .debug_abbrev, debug_abbrev.dwo
   ///
@@ -280,12 +300,12 @@ public:
   /// false otherwise.
   bool handleDebugAbbrev();
 
-  /// Verify the information in the .debug_info section.
+  /// Verify the information in the .debug_info and .debug_types sections.
   ///
-  /// Any errors are reported to the stream that was this object was
+  /// Any errors are reported to the stream that this object was
   /// constructed with.
   ///
-  /// \returns true if the .debug_info verifies successfully, false otherwise.
+  /// \returns true if all sections verify successfully, false otherwise.
   bool handleDebugInfo();
 
   /// Verify the information in the .debug_line section.

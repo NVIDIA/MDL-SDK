@@ -1,9 +1,8 @@
 //===- Option.h - Abstract Driver Options -----------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -131,9 +130,21 @@ public:
 
   /// Get the name of this option with the default prefix.
   std::string getPrefixedName() const {
-    std::string Ret = getPrefix();
+    std::string Ret(getPrefix());
     Ret += getName();
     return Ret;
+  }
+
+  /// Get the help text for this option.
+  StringRef getHelpText() const {
+    assert(Info && "Must have a valid info!");
+    return Info->HelpText;
+  }
+
+  /// Get the meta-variable list for this option.
+  StringRef getMetaVar() const {
+    assert(Info && "Must have a valid info!");
+    return Info->MetaVar;
   }
 
   unsigned getNumArgs() const { return Info->Param; }
@@ -202,11 +213,18 @@ public:
   /// Index to the position where argument parsing should resume
   /// (even if the argument is missing values).
   ///
-  /// \param ArgSize The number of bytes taken up by the matched Option prefix
-  ///                and name. This is used to determine where joined values
-  ///                start.
-  Arg *accept(const ArgList &Args, unsigned &Index, unsigned ArgSize) const;
+  /// \p CurArg The argument to be matched. It may be shorter than the
+  /// underlying storage to represent a Joined argument.
+  /// \p GroupedShortOption If true, we are handling the fallback case of
+  /// parsing a prefix of the current argument as a short option.
+  Arg *accept(const ArgList &Args, StringRef CurArg, bool GroupedShortOption,
+              unsigned &Index) const;
 
+private:
+  Arg *acceptInternal(const ArgList &Args, StringRef CurArg,
+                      unsigned &Index) const;
+
+public:
   void print(raw_ostream &O) const;
   void dump() const;
 };

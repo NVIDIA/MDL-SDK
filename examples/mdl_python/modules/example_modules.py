@@ -30,6 +30,7 @@ import sys
 import os
 import gc
 import traceback
+import time
 
 print("Current working directory: " + os.getcwd())
 print("\n")
@@ -244,7 +245,10 @@ def inspect_module(neuray, transaction, module_db_name):
         # Dump material definitions of the module.
         print("\nThe module contains the following %d material definitions:" % module.get_material_count())
         for i in range(module.get_material_count()):
-            print("*   %s" % module.get_material(i))
+            matdbname = module.get_material(i)
+            material_def = transaction.access_as(pymdlsdk.IMaterial_definition, matdbname)
+            simple_name = material_def.get_mdl_simple_name()
+            print("*   {}: {}".format(simple_name, matdbname))
 
 #--------------------------------------------------------------------------------------------------
 
@@ -414,6 +418,9 @@ if __name__ == "__main__":
         # unreachable = gc.collect()
         # print("\n%d unreachable objects detected during garbage collection.\n" % unreachable)
         # pymdlsdk._print_open_handle_statistic()
+
+        # sleep to be able to read the output when starting from VS
+        time.sleep(2.0)
 
     except Exception as e:
         print("Unexpected error: ", sys.exc_info()[0])

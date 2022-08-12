@@ -535,13 +535,14 @@ inline size_t dynamic_memory_consumption (const set<T1, A>& the_set)
 
 // std::unordered_map
 
-MI_MEM_HAS_DYNAMIC_MEMORY_CONSUMPTION_TEMPLATE5(unordered_map<T1,T2,T3,T4,T5>,T1,T2,T3,T4,T5)
+MI_MEM_HAS_DYNAMIC_MEMORY_CONSUMPTION_TEMPLATE5(std::unordered_map<T1,T2,T3,T4,T5>,T1,T2,T3,T4,T5)
 
 template < class T1 ,class T2, class T3, class T4, class T5 >
-inline size_t dynamic_memory_consumption (const unordered_map<T1, T2, T3, T4, T5>& the_map)
+inline size_t dynamic_memory_consumption (const std::unordered_map<T1, T2, T3, T4, T5>& the_map)
 {
-    typedef unordered_map<T1, T2, T3, T4, T5> Map_type;
+    typedef std::unordered_map<T1, T2, T3, T4, T5> Map_type;
 
+    // TODO This is not correct.
     // static size of the buckets (approximation)
     //size_t total = the_map.bucket_count() * (sizeof(size_t) + sizeof(void*));
     // bucket size is missing

@@ -180,6 +180,158 @@ public:
     ///   Possible values:
     ///   \c "on", \c "off". Default: \c "off".
     ///
+    ///
+    /// The following options are supported by the GLSL backend only:
+    /// - \c "glsl_version": Specifies the GLSL target version. Possible values for "core" and
+    ///   "compatibility" profiles:
+    ///   \c "150", \c "330", \c "400", \c "410", \c "420", \c "430", \c "440", \c "450", \c "460".
+    ///   Values for the "es" profile:
+    ///   \c "100", \c "300", \c "310".
+    ///   Default: \c "450".
+    /// - \c "glsl_profile": Specifies the GLSL target profile. Possible values:
+    ///   \c "core", \c "es", \c "compatibility".
+    ///   Default: \c "core".
+    /// - \c "glsl_include_uniform_state": If \c true, object_id will be included in the state
+    ///                                    according to the \c "glsl_state_object_id_mode" option.
+    ///   Possible values: \c "on", \c "off". Default: \c "off"
+    /// - \c "glsl_max_const_data": Specifies the maximum allowed amount in bytes of constant data
+    ///                             for a generated shader by the GLSL backend. If bigger data are
+    ///                             necessary, the backend will move it to uniform inputs.
+    ///   Default: \c "1024".
+    /// - \c "glsl_place_uniforms_into_ssbo": If \c true, all generated uniform inputs will be
+    ///                                       placed into a shader storage buffer object.
+    ///                                       This option can only be enabled, if the
+    ///                                       \c "GL_ARB_shader_storage_buffer_object" extension
+    ///                                       is enabled.
+    ///   Possible values: \c "on", \c "off". Default: \c "off"
+    /// - \c "glsl_uniform_ssbo_name": If non-empty, specifies a name for the SSBO buffer
+    ///                                containing the uniform initializer if option
+    ///                                \c "glsl_place_uniforms_into_ssbo" is enabled.
+    ///   Possible values: Any valid GLSL identifier.
+    ///   Default: \c "".
+    ///  - \c "glsl_uniform_ssbo_binding": A GLSL binding attribute expression for the SSBO buffer.
+    ///   Possible values: Currently limited to unsigned literals.
+    ///   Default: \c "" (Means no "binding" attribute)
+    ///  - \c "glsl_uniform_ssbo_set": A GLSL set attribute expression for the SSBO buffer.
+    ///   Possible values: Currently limited to unsigned literals.
+    ///   Default: \c "" (Means no "set" attribute)
+    /// - \c "glsl_remap_functions": Specifies a comma separated remap list of MDL functions. The
+    ///                              entries must be specified as &lt;old_name&gt;=&lt;new_name&gt;.
+    ///                              Both names have to be in mangled form.
+    ///   Default: \c "".
+    /// - \c "glsl_state_animation_time_mode": Specify the implementation mode of
+    ///                                        state::animation_time().
+    ///   Possible values:
+    ///   \c "field", \c "arg", \c "func", \c "zero".
+    ///   Default: \c "zero".
+    /// - \c "glsl_state_geometry_normal_mode": Specify the implementation mode of
+    ///                                         state::geometry_normal().
+    ///   Possible values:
+    ///   \c "field", \c "arg", \c "func", \c "zero".
+    ///   Default: \c "field".
+    /// - \c "glsl_state_motion_mode": Specify the implementation mode of state::motion().
+    ///   Possible values:
+    ///   \c "field", \c "arg", \c "func", \c "zero".
+    ///   Default: \c "zero".
+    /// - \c "glsl_state_normal_mode": Specify the implementation mode of state::normal().
+    ///   Possible values:
+    ///   \c "field", \c "arg", \c "func", \c "zero".
+    ///   Default: \c "field".
+    /// - \c "glsl_state_object_id_mode": Specify the implementation mode of state::object_id().
+    ///                                   You have to enable \c "glsl_include_uniform_state" for
+    ///                                   this mode to have any effect.
+    ///   Possible values:
+    ///   \c "field", \c "arg", \c "func", \c "zero".
+    ///   Default: \c "zero".
+    /// - \c "glsl_state_position_mode": Specify the implementation mode of state::position().
+    ///   Possible values:
+    ///   \c "field", \c "arg", \c "func", \c "zero".
+    ///   Default: \c "field".
+    /// - \c "glsl_state_texture_coordinate_mode": Specify the implementation mode of
+    ///                                            state::texture_coordinate().
+    ///   Possible values:
+    ///   \c "field", \c "arg", \c "func", \c "zero".
+    ///   Default: \c "zero".
+    /// - \c "glsl_state_texture_space_max_mode": Specify the implementation mode of
+    ///                                           state::texture_space_max().
+    ///   Possible values:
+    ///   \c "field", \c "arg", \c "func", \c "zero".
+    ///   Default: \c "zero".
+    /// - \c "glsl_state_texture_tangent_u_mode": Specify the implementation mode of
+    ///                                           state::texture_tangent_u().
+    ///   Possible values:
+    ///   \c "field", \c "arg", \c "func", \c "zero".
+    ///   Default: \c "zero".
+    /// - \c "glsl_state_texture_tangent_v_mode": Specify the implementation mode of
+    ///                                           state::texture_tangent_v().
+    ///   Possible values:
+    ///   \c "field", \c "arg", \c "func", \c "zero".
+    ///   Default: \c "zero".
+    /// - \c "glsl_state_geometry_tangent_u_mode": Specify the implementation mode of
+    ///                                            state::geometry_tangent_u().
+    ///   Possible values:
+    ///   \c "field", \c "arg", \c "func", \c "zero".
+    ///   Default: \c "zero".
+    /// - \c "glsl_state_geometry_tangent_v_mode": Specify the implementation mode of
+    ///                                            state::geometry_tangent_v().
+    ///   Possible values:
+    ///   \c "field", \c "arg", \c "func", \c "zero".
+    ///   Default: \c "zero".
+    /// - \c "glsl_enabled_extensions": Specifies the enabled GLSL extensions as a comma
+    ///                                 separated list.
+    ///   Default: \c "".
+    /// - \c "glsl_required_extensions": Specifies the required GLSL extensions as a comma
+    ///                                  separated list.
+    ///   Default: \c "".
+    ///
+    /// The following extensions are fully supported by the GLSL backend:
+    /// - \c "GL_ARB_gpu_shader_fp64"
+    /// - \c "GL_ARB_shader_atomic_counters"
+    /// - \c "GL_ARB_shading_language_420pack"
+    /// - \c "GL_ARB_arrays_of_arrays"
+    ///
+    /// The following extensions are partially supported by the GLSL backend:
+    /// - \c "GL_OES_texture_3D"
+    /// - \c "GL_OES_standard_derivatives"
+    /// - \c "GL_OES_EGL_image_external"
+    /// - \c "GL_EXT_frag_depth"
+    /// - \c "GL_EXT_shader_texture_lod"
+    /// - \c "GL_EXT_shader_implicit_conversions"
+    /// - \c "GL_ARB_texture_rectangle"
+    /// - \c "GL_ARB_texture_gather"
+    /// - \c "GL_ARB_gpu_shader5"
+    /// - \c "GL_ARB_separate_shader_objects"
+    /// - \c "GL_ARB_tessellation_shader"
+    /// - \c "GL_ARB_enhanced_layouts"
+    /// - \c "GL_ARB_texture_cube_map_array"
+    /// - \c "GL_ARB_shader_texture_lod"
+    /// - \c "GL_ARB_explicit_attrib_location"
+    /// - \c "GL_ARB_shader_image_load_store"
+    /// - \c "GL_ARB_derivative_control"
+    /// - \c "GL_ARB_shader_texture_image_samples"
+    /// - \c "GL_ARB_viewport_array"
+    /// - \c "GL_ARB_cull_distance"
+    /// - \c "GL_ARB_shader_subroutine"
+    /// - \c "GL_ARB_shader_storage_buffer_object"
+    /// - \c "GL_ARB_bindless_texture"
+    /// - \c "GL_ARB_gpu_shader_int64"
+    /// - \c "GL_3DL_array_objects"
+    /// - \c "GL_KHR_vulkan_glsl"
+    /// - \c "GL_NV_shader_buffer_load"
+    /// - \c "GL_NV_half_float"
+    /// - \c "GL_NV_gpu_shader5"
+    /// - \c "GL_AMD_gpu_shader_half_float"
+    /// - \c "GL_GOOGLE_cpp_style_line_directive"
+    /// - \c "GL_GOOGLE_include_directive"
+    ///
+    /// Meaning of the state modes:
+    /// - \c "field": access a field of a passed state struct
+    /// - \c "arg":   access an argument of the generated shader
+    /// - \c "func":  call a wrapper function
+    /// - \c "zero":  always zero
+    ///
+    /// \note In this version, state modes cannot be configured and are always fixed to "field"!
+    ///
     /// \param name       The name of the option.
     /// \param value      The value of the option.
     /// \return
@@ -658,7 +810,8 @@ public:
         SL_CUDA,
         SL_PTX,
         SL_HLSL,
-        SL_GLSL,             // \if MDL_SOURCE_RELEASE Reserved\else GLSL\endif.
+        SL_GLSL,
+        SL_OLD_GLSL, // \if MDL_SOURCE_RELEASE Reserved\else old GLSL\endif.
         SL_NUM_LANGUAGES
     };
 

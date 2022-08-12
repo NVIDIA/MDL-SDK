@@ -105,7 +105,6 @@ Link_unit::Link_unit(
 {
 }
 
-
 // Add an MDL environment function call as a function to this link unit.
 mi::Sint32 Link_unit::add_environment(
     mi::neuraylib::IFunction_call const *call,
@@ -333,8 +332,6 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::deserialize_target_code(
     return deserialize_target_code(transaction, &buffer, context);
 }
 
-
 } // namespace NEURAY
 
 } // namespace MI
-

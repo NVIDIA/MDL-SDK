@@ -1,9 +1,8 @@
 //===- ObjectTransformLayer.h - Run all objects through functor -*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -23,89 +22,25 @@
 namespace llvm {
 namespace orc {
 
-class ObjectTransformLayer2 : public ObjectLayer {
+class ObjectTransformLayer : public ObjectLayer {
 public:
   using TransformFunction =
       std::function<Expected<std::unique_ptr<MemoryBuffer>>(
           std::unique_ptr<MemoryBuffer>)>;
 
-  ObjectTransformLayer2(ExecutionSession &ES, ObjectLayer &BaseLayer,
-                        TransformFunction Transform);
+  ObjectTransformLayer(ExecutionSession &ES, ObjectLayer &BaseLayer,
+                       TransformFunction Transform = TransformFunction());
 
-  void emit(MaterializationResponsibility R, VModuleKey K,
+  void emit(std::unique_ptr<MaterializationResponsibility> R,
             std::unique_ptr<MemoryBuffer> O) override;
+
+  void setTransform(TransformFunction Transform) {
+    this->Transform = std::move(Transform);
+  }
 
 private:
   ObjectLayer &BaseLayer;
   TransformFunction Transform;
-};
-
-/// Object mutating layer.
-///
-///   This layer accepts sets of ObjectFiles (via addObject). It
-/// immediately applies the user supplied functor to each object, then adds
-/// the set of transformed objects to the layer below.
-template <typename BaseLayerT, typename TransformFtor>
-class ObjectTransformLayer {
-public:
-  /// Construct an ObjectTransformLayer with the given BaseLayer
-  ObjectTransformLayer(BaseLayerT &BaseLayer,
-                       TransformFtor Transform = TransformFtor())
-      : BaseLayer(BaseLayer), Transform(std::move(Transform)) {}
-
-  /// Apply the transform functor to each object in the object set, then
-  ///        add the resulting set of objects to the base layer, along with the
-  ///        memory manager and symbol resolver.
-  ///
-  /// @return A handle for the added objects.
-  template <typename ObjectPtr> Error addObject(VModuleKey K, ObjectPtr Obj) {
-    return BaseLayer.addObject(std::move(K), Transform(std::move(Obj)));
-  }
-
-  /// Remove the object set associated with the VModuleKey K.
-  Error removeObject(VModuleKey K) { return BaseLayer.removeObject(K); }
-
-  /// Search for the given named symbol.
-  /// @param Name The name of the symbol to search for.
-  /// @param ExportedSymbolsOnly If true, search only for exported symbols.
-  /// @return A handle for the given named symbol, if it exists.
-  JITSymbol findSymbol(const std::string &Name, bool ExportedSymbolsOnly) {
-    return BaseLayer.findSymbol(Name, ExportedSymbolsOnly);
-  }
-
-  /// Get the address of the given symbol in the context of the set of
-  ///        objects represented by the VModuleKey K. This call is forwarded to
-  ///        the base layer's implementation.
-  /// @param K The VModuleKey associated with the object set to search in.
-  /// @param Name The name of the symbol to search for.
-  /// @param ExportedSymbolsOnly If true, search only for exported symbols.
-  /// @return A handle for the given named symbol, if it is found in the
-  ///         given object set.
-  JITSymbol findSymbolIn(VModuleKey K, const std::string &Name,
-                         bool ExportedSymbolsOnly) {
-    return BaseLayer.findSymbolIn(K, Name, ExportedSymbolsOnly);
-  }
-
-  /// Immediately emit and finalize the object set represented by the
-  ///        given VModuleKey K.
-  Error emitAndFinalize(VModuleKey K) { return BaseLayer.emitAndFinalize(K); }
-
-  /// Map section addresses for the objects associated with the
-  /// VModuleKey K.
-  void mapSectionAddress(VModuleKey K, const void *LocalAddress,
-                         JITTargetAddress TargetAddr) {
-    BaseLayer.mapSectionAddress(K, LocalAddress, TargetAddr);
-  }
-
-  /// Access the transform functor directly.
-  TransformFtor &getTransform() { return Transform; }
-
-  /// Access the mumate functor directly.
-  const TransformFtor &getTransform() const { return Transform; }
-
-private:
-  BaseLayerT &BaseLayer;
-  TransformFtor Transform;
 };
 
 } // end namespace orc

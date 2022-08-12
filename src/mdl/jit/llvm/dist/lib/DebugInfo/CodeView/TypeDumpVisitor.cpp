@@ -1,9 +1,8 @@
 //===-- TypeDumpVisitor.cpp - CodeView type info dumper ----------*- C++-*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -172,11 +171,11 @@ Error TypeDumpVisitor::visitTypeBegin(CVType &Record) {
 }
 
 Error TypeDumpVisitor::visitTypeBegin(CVType &Record, TypeIndex Index) {
-  W->startLine() << getLeafTypeName(Record.Type);
+  W->startLine() << getLeafTypeName(Record.kind());
   W->getOStream() << " (" << HexNumber(Index.getIndex()) << ")";
   W->getOStream() << " {\n";
   W->indent();
-  W->printEnum("TypeLeafKind", unsigned(Record.Type),
+  W->printEnum("TypeLeafKind", unsigned(Record.kind()),
                makeArrayRef(LeafTypeNames));
   return Error::success();
 }
@@ -361,7 +360,6 @@ Error TypeDumpVisitor::visitKnownRecord(CVType &CVR, TypeServer2Record &TS) {
 
 Error TypeDumpVisitor::visitKnownRecord(CVType &CVR, PointerRecord &Ptr) {
   printTypeIndex("PointeeType", Ptr.getReferentType());
-  W->printHex("PointerAttributes", uint32_t(Ptr.getOptions()));
   W->printEnum("PtrType", unsigned(Ptr.getPointerKind()),
                makeArrayRef(PtrKindNames));
   W->printEnum("PtrMode", unsigned(Ptr.getMode()), makeArrayRef(PtrModeNames));
@@ -371,6 +369,8 @@ Error TypeDumpVisitor::visitKnownRecord(CVType &CVR, PointerRecord &Ptr) {
   W->printNumber("IsVolatile", Ptr.isVolatile());
   W->printNumber("IsUnaligned", Ptr.isUnaligned());
   W->printNumber("IsRestrict", Ptr.isRestrict());
+  W->printNumber("IsThisPtr&", Ptr.isLValueReferenceThisPtr());
+  W->printNumber("IsThisPtr&&", Ptr.isRValueReferenceThisPtr());
   W->printNumber("SizeOf", Ptr.getSize());
 
   if (Ptr.isPointerToMember()) {

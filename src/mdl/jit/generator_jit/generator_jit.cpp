@@ -28,6 +28,10 @@
 
 #include "pch.h"
 
+#ifdef PRINT_TIMINGS
+#include <chrono>
+#endif
+
 #include <mi/base/handle.h>
 
 #include <llvm/IR/Module.h>
@@ -131,10 +135,6 @@ static void fill_default_cg_options(
         "true",
         "Use built-in resource handler on CPU");
     options.add_option(
-        MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA,
-        "false",
-        "HLSL: Pass an extra user defined resource data struct to resource callbacks");
-    options.add_option(
         MDL_JIT_OPTION_USE_RENDERER_ADAPT_MICROFACET_ROUGHNESS,
         "false",
         "Use a renderer provided function to adapt microfacet roughness");
@@ -147,6 +147,10 @@ static void fill_default_cg_options(
         "false",
         "Enable code generation for auxiliary functions on DFs");
     options.add_option(
+        MDL_JIT_OPTION_ENABLE_PDF,
+        "true",
+        "Enable code generation for PDF functions");
+    options.add_option(
         MDL_JIT_OPTION_SCENE_DATA_NAMES,
         "",
         "Comma-separated list of names for which scene data may be available in the renderer "
@@ -156,6 +160,182 @@ static void fill_default_cg_options(
         "",
         "Comma-separated list of names of functions which will be visible in the generated code "
         "(empty string means no special restriction).");
+
+    // GLSL/HLSL specific options
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_NORMAL_MODE,
+        "field",
+        "The implementation mode of state::normal()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_NORMAL_NAME,
+        "normal",
+        "The name of the entity representing state::normal()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_GEOMETRY_NORMAL_MODE,
+        "field",
+        "The implementation mode of state::geometry_normal()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_GEOMETRY_NORMAL_NAME,
+        "geometry_normal",
+        "The name of the entity representingstate::geometry_normal()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_POSITION_MODE,
+        "field",
+        "The implementation mode of state::position()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_POSITION_NAME,
+        "position",
+        "The name of the entity representing state::position()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_MOTION_MODE,
+        "zero",
+        "The implementation mode of state::motion()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_MOTION_NAME,
+        "motion",
+        "The name of the entity representing state::motion()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_TEXTURE_SPACE_MAX_MODE,
+        "zero",
+        "The implementation mode of state::texture_space_max()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_TEXTURE_SPACE_MAX_NAME,
+        "texture_space_max",
+        "The name of the entity representing state::texture_space_max()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_ANIMATION_TIME_MODE,
+        "zero",
+        "The implementation mode of state::animation_time()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_ANIMATION_TIME_NAME,
+        "animation_time",
+        "The name of the entity representing state::animation_time()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_TEXTURE_COORDINATE_MODE,
+        "zero",
+        "The implementation mode of state::texture_coordinate()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_TEXTURE_COORDINATE_NAME,
+        "texture_coordinate",
+        "The name of the entity representing state::texture_coordinate()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_TEXTURE_TANGENT_U_MODE,
+        "zero",
+        "The implementation mode of state::texture_tangent_u()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_TEXTURE_TANGENT_U_NAME,
+        "texture_tangent_u",
+        "The name of the entity representing state::texture_tangent_u()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_TEXTURE_TANGENT_V_MODE,
+        "zero",
+        "The implementation mode of state::texture_tangent_v()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_TEXTURE_TANGENT_V_NAME,
+        "texture_tangent_v",
+        "The name of the entity representing state::texture_tangent_v()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_GEOMETRY_TANGENT_U_MODE,
+        "zero",
+        "The implementation mode of state::geometry_tangent_u()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_GEOMETRY_TANGENT_U_NAME,
+        "geometry_tangent_u",
+        "The name of the entity representing state::geometry_tangent_u()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_GEOMETRY_TANGENT_V_MODE,
+        "zero",
+        "The implementation mode of state::geometry_tangent_v()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_GEOMETRY_TANGENT_V_NAME,
+        "geometry_tangent_v",
+        "The name of the entity representing state::geometry_tangent_v()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_TRANSFORM_W2O_MODE,
+        "zero",
+        "The implementation mode of the uniform world-to-object transform");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_TRANSFORM_W2O_NAME,
+        "w2o_transform",
+        "The name of the entity representing the uniform world-to-object transform");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_TRANSFORM_O2W_MODE,
+        "zero",
+        "The implementation mode of the uniform object-to-world transform");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_TRANSFORM_O2W_NAME,
+        "o2w_transform",
+        "The name of the entity representing the uniform object-to-world transform");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_OBJECT_ID_MODE,
+        "zero",
+        "The implementation mode of state::object_id()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_STATE_OBJECT_ID_NAME,
+        "object_id",
+        "The name of the entity representing state::object_id()");
+    options.add_option(
+        MDL_JIT_OPTION_SL_USE_RESOURCE_DATA,
+        "false",
+        "GLSL/HLSL: Pass an extra user defined resource data struct to resource callbacks");
+    options.add_option(
+        MDL_JIT_OPTION_SL_REMAP_FUNCTIONS,
+        "",
+        "GLSL/HLSL: Function remap list");
+    options.add_option(
+        MDL_JIT_OPTION_SL_CORE_STATE_API_NAME,
+        "",
+        "GLSL/HLSL: Name of the API Core State struct");
+    options.add_option(
+        MDL_JIT_OPTION_SL_ENV_STATE_API_NAME,
+        "",
+        "GLSL/HLSL: Name of the API Environment State struct");
+
+    // GLSL specific options
+    options.add_option(
+        MDL_JIT_OPTION_GLSL_VERSION,
+        "4.50",
+        "GLSL: The target language version");
+
+    options.add_option(
+        MDL_JIT_OPTION_GLSL_PROFILE,
+        "core",
+        "GLSL: The target language profile");
+
+    options.add_option(
+        MDL_JIT_OPTION_GLSL_ENABLED_EXTENSIONS,
+        "",
+        "GLSL: Enabled GLSL extensions");
+
+    options.add_option(
+        MDL_JIT_OPTION_GLSL_REQUIRED_EXTENSIONS,
+        "",
+        "GLSL: Required GLSL extensions");
+
+    options.add_option(
+        MDL_JIT_OPTION_GLSL_MAX_CONST_DATA,
+        "1024",
+        "GLSL: Maximum allowed constant data in shader");
+
+    options.add_option(
+        MDL_JIT_OPTION_GLSL_PLACE_UNIFORMS_INTO_SSBO,
+        "false",
+        "GLSL: Use SSBO for uniform initializers");
+
+    options.add_option(
+        MDL_JIT_OPTION_GLSL_UNIFORM_SSBO_NAME,
+        "",
+        "GLSL: If non-empty, the name of the SSBO buffer for uniform initializers");
+
+    options.add_option(
+        MDL_JIT_OPTION_GLSL_UNIFORM_SSBO_BINDING,
+        "",
+        "GLSL: If non-empty, the binding index of the SSBO buffer for uniform initializers");
+
+    options.add_option(
+        MDL_JIT_OPTION_GLSL_UNIFORM_SSBO_SET,
+        "",
+        "GLSL: If non-empty, the set index of the SSBO buffer for uniform initializers");
 
     options.add_binary_option(
         MDL_JIT_BINOPTION_LLVM_STATE_MODULE,
@@ -233,18 +413,200 @@ mi::base::IInterface const *Code_generator_jit::get_interface(
     return Base::get_interface(interface_id);
 }
 
+// Compile a whole module into LLVM-IR.
+Generated_code_source *Code_generator_jit::compile_module_to_llvm(
+    IModule const      *module,
+    IModule_cache      *module_cache,
+    Options_impl const &options)
+{
+    Module const *mod = impl_cast<Module>(module);
+    mi::base::Handle<MDL> compiler(mod->get_compiler());
+
+    Generated_code_source *result = m_builder.create<Generated_code_source>(
+        m_builder.get_allocator(),
+        IGenerated_code::CK_LLVM_IR);
+
+    Messages_impl &msgs = result->access_messages();
+
+    llvm::LLVMContext llvm_context;
+
+    Generated_code_source::Source_res_manag res_manag(get_allocator(), NULL);
+
+    LLVM_code_generator llvm_generator(
+        m_jitted_code.get(),
+        compiler.get(),
+        module_cache,
+        msgs,
+        llvm_context,
+        /*target_language=*/ICode_generator::TL_NATIVE,
+        Type_mapper::TM_NATIVE_X86,
+        /*sm_version=*/0,
+        /*has_tex_handler=*/true,
+        Type_mapper::SSM_FULL_SET,
+        /*num_texture_spaces=*/4,
+        /*num_texture_results=*/32,
+        options,
+        /*incremental=*/false,
+        /*state_mapping=*/0,
+        &res_manag,
+        /*debug=*/false);
+
+    // for now, mark exported functions as entries, so the module will not be empty
+    llvm_generator.mark_exported_funcs_as_entries();
+
+    std::unique_ptr<llvm::Module> llvm_module(llvm_generator.compile_module(module));
+
+    if (llvm_module) {
+        llvm_generator.llvm_ir_compile(llvm_module.get(), result->access_src_code());
+    } else {
+        size_t file_id = msgs.register_fname(module->get_filename());
+        msgs.add_error_message(
+            INTERNAL_COMPILER_ERROR,
+            Generated_code_source::MESSAGE_CLASS,
+            file_id,
+            nullptr,
+            "Compiling LLVM code failed");
+    }
+
+    result->set_render_state_usage(llvm_generator.get_render_state_usage());
+
+    return result;
+}
+
+// Compile a whole module into PTX.
+Generated_code_source *Code_generator_jit::compile_module_to_ptx(
+    IModule const      *module,
+    IModule_cache      *module_cache,
+    Options_impl const &options)
+{
+    Module const *mod = impl_cast<Module>(module);
+    mi::base::Handle<MDL> compiler(mod->get_compiler());
+
+    Generated_code_source*result = m_builder.create<Generated_code_source>(
+        m_builder.get_allocator(),
+        IGenerated_code::CK_PTX);
+
+    Messages_impl &msgs = result->access_messages();
+
+    llvm::LLVMContext llvm_context;
+
+    Generated_code_source::Source_res_manag res_manag(get_allocator(), NULL);
+
+    unsigned sm_version = 20;
+    LLVM_code_generator llvm_generator(
+        m_jitted_code.get(),
+        compiler.get(),
+        module_cache,
+        msgs,
+        llvm_context,
+        /*target_language=*/ICode_generator::TL_PTX,
+        Type_mapper::TM_PTX,
+        sm_version,
+        /*has_tex_handler=*/false,
+        Type_mapper::SSM_FULL_SET,
+        /*num_texture_spaces=*/4,
+        /*num_texture_results=*/32,
+        options,
+        /*incremental=*/false,
+        /*state_mapping=*/0,
+        &res_manag,
+        /*debug=*/false);
+
+    // for now, mark exported functions as entries, so the module will not be empty
+    llvm_generator.mark_exported_funcs_as_entries();
+
+    std::unique_ptr<llvm::Module> llvm_module(llvm_generator.compile_module(module));
+    if (llvm_module) {
+        // FIXME: pass the sm version here. However, this is currently used for debugging
+        // only.
+        llvm_generator.ptx_compile(llvm_module.get(), result->access_src_code());
+    } else {
+        size_t file_id = msgs.register_fname(module->get_filename());
+        msgs.add_error_message(
+            INTERNAL_COMPILER_ERROR,
+            Generated_code_source::MESSAGE_CLASS,
+            file_id,
+            nullptr,
+            "Compiling LLVM code failed");
+    }
+
+    result->set_render_state_usage(llvm_generator.get_render_state_usage());
+
+    return result;
+}
+
+// Compile a whole MDL module into HLSL or GLSL.
+Generated_code_source *Code_generator_jit::compile_module_to_sl(
+    IModule const                    *imodule,
+    IModule_cache                    *module_cache,
+    ICode_generator::Target_language target,
+    Options_impl const               &options)
+{
+    Module const *mod = impl_cast<Module>(imodule);
+    mi::base::Handle<MDL> compiler(mod->get_compiler());
+
+    Generated_code_source *result = m_builder.create<Generated_code_source>(
+        m_builder.get_allocator(),
+        target == ICode_generator::TL_HLSL ? IGenerated_code::CK_HLSL : IGenerated_code::CK_GLSL);
+
+    Messages_impl &msgs = result->access_messages();
+
+    llvm::LLVMContext llvm_context;
+    SLOptPassGate opt_pass_gate;
+    llvm_context.setOptPassGate(opt_pass_gate);
+
+    Generated_code_source::Source_res_manag res_manag(get_allocator(), NULL);
+
+    LLVM_code_generator llvm_generator(
+        m_jitted_code.get(),
+        compiler.get(),
+        module_cache,
+        msgs,
+        llvm_context,
+        target,
+        target == ICode_generator::TL_HLSL ? Type_mapper::TM_HLSL : Type_mapper::TM_GLSL,
+        /*sm_version=*/0,
+        /*has_tex_handler=*/false,
+        Type_mapper::SSM_FULL_SET,
+        /*num_texture_spaces=*/4,
+        /*num_texture_results=*/32,
+        options,
+        /*incremental=*/false,
+        /*state_mapping=*/Type_mapper::SM_INCLUDE_UNIFORM_STATE,  // include uniform state for SL
+        &res_manag,
+        /*debug=*/false);
+
+    // for now, mark exported functions as entries, so the module will not be empty
+    llvm_generator.mark_exported_funcs_as_entries();
+
+    // the HLSL backend expects the RO-data-segment to be used
+    llvm_generator.enable_ro_data_segment();
+
+    std::unique_ptr<llvm::Module> llvm_module(llvm_generator.compile_module(mod));
+    if (llvm_module) {
+        llvm_generator.sl_compile(llvm_module.get(), target, options, *result);
+    } else {
+        size_t file_id = msgs.register_fname(mod->get_filename());
+        msgs.add_error_message(
+            INTERNAL_COMPILER_ERROR,
+            Generated_code_source::MESSAGE_CLASS,
+            file_id,
+            nullptr,
+            "Compiling LLVM code failed");
+    }
+
+    result->set_render_state_usage(llvm_generator.get_render_state_usage());
+
+    return result;
+}
+
 // Compile a whole module.
 IGenerated_code_executable *Code_generator_jit::compile(
     IModule const                  *module,
     IModule_cache                  *module_cache,
-    Compilation_mode               mode,
+    Target_language                target,
     ICode_generator_thread_context *ctx)
 {
-    Generated_code_jit *result = m_builder.create<Generated_code_jit>(
-        m_builder.get_allocator(),
-        m_jitted_code.get(),
-        module->get_filename());
-
     mi::base::Handle<Code_generator_thread_context> tmp;
     if (ctx == NULL) {
         tmp = mi::base::make_handle(create_thread_context());
@@ -253,19 +615,18 @@ IGenerated_code_executable *Code_generator_jit::compile(
 
     Options_impl &options = impl_cast<Options_impl>(ctx->access_options());
 
-    switch (mode) {
-    case CM_NATIVE:
-        result->compile_module_to_llvm(module, module_cache, options);
-        break;
-    case CM_HLSL:
-        result->compile_module_to_hlsl(module, module_cache, m_options);
-        break;
-    default:
-        result->compile_module_to_ptx(module, module_cache, options);
-        break;
+    switch (target) {
+    case TL_NATIVE:
+    case TL_LLVM_IR:
+        return compile_module_to_llvm(module, module_cache, options);
+    case TL_PTX:
+        return compile_module_to_ptx(module, module_cache, options);
+    case TL_HLSL:
+    case TL_GLSL:
+        return compile_module_to_sl(module, module_cache, target, options);
     }
 
-    return result;
+    return nullptr;
 }
 
 // Compile a lambda function using the JIT into an environment (shader) of a scene.
@@ -488,7 +849,7 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_const_function
         cache,
         code->access_messages(),
         code->get_llvm_context(),
-        LLVM_code_generator::TL_NATIVE,
+        ICode_generator::TL_NATIVE,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
         /*has_tex_handler=*/options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
@@ -504,13 +865,15 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_const_function
     if (llvm::Function *func = code_gen.compile_const_lambda(
             *lambda, resolver, attr, world_to_object, object_to_world, object_id))
     {
-        llvm::Module *module = func->getParent();
-        MDL_JIT_module_key module_key = code_gen.jit_compile(module);
-        code->set_llvm_module(module_key, module);
+        // remember the function name, because the function is not valid anymore after jit_compile
+        string func_name(func->getName().begin(), func->getName().end(), alloc);
+
+        MDL_JIT_module_key module_key = code_gen.jit_compile(func->getParent());
+        code->set_llvm_module(module_key);
         code_gen.fill_function_info(code.get());
 
         // gen the entry point
-        void *entry_point = code_gen.get_entry_point(module_key, func);
+        void *entry_point = code_gen.get_entry_point(module_key, func_name.c_str());
         code->add_entry_point(entry_point);
 
         // copy the render state usage
@@ -570,8 +933,9 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_switch_functio
     Generated_code_lambda_function *code =
         builder.create<Generated_code_lambda_function>(m_jitted_code.get());
 
+    Resource_attr_map map(lambda->get_resource_attribute_map());
     Generated_code_lambda_function::Lambda_res_manag res_manag(
-        *code, &lambda->get_resource_attribute_map());
+        *code, &map);
 
     mi::base::Handle<MDL> compiler(lambda->get_compiler());
 
@@ -583,7 +947,7 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_switch_functio
         cache,
         code->access_messages(),
         code->get_llvm_context(),
-        LLVM_code_generator::TL_NATIVE,
+        ICode_generator::TL_NATIVE,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
         /*has_tex_handler=*/lambda->get_execution_context() != ILambda_function::LEC_CORE,
@@ -603,10 +967,11 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_switch_functio
     llvm::Function *func = code_gen.compile_switch_lambda(
         /*incremental=*/false, *lambda, resolver, /*next_arg_block_index=*/0);
     if (func != NULL) {
-        llvm::Module *module = func->getParent();
+        // remember the function name, because the function is not valid anymore after jit_compile
+        string func_name(func->getName().begin(), func->getName().end(), alloc);
 
-        MDL_JIT_module_key module_key = code_gen.jit_compile(module);
-        code->set_llvm_module(module_key, module);
+        MDL_JIT_module_key module_key = code_gen.jit_compile(func->getParent());
+        code->set_llvm_module(module_key);
         code_gen.fill_function_info(code);
 
         size_t data_size = 0;
@@ -615,7 +980,7 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_switch_functio
         code->set_ro_segment(data, data_size);
 
         // gen the entry point
-        void *entry_point = code_gen.get_entry_point(module_key, func);
+        void *entry_point = code_gen.get_entry_point(module_key, func_name.c_str());
         code->add_entry_point(entry_point);
 
         // copy the render state usage
@@ -741,7 +1106,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
         module_cache,
         code->access_messages(),
         llvm_context,
-        LLVM_code_generator::TL_PTX,
+        ICode_generator::TL_PTX,
         Type_mapper::TM_PTX,
         sm_version,
         /*has_tex_handler=*/false,
@@ -770,9 +1135,9 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
         code_gen.drop_llvm_module(module);
 
         size_t data_size = 0;
-        char const *data = reinterpret_cast<char const *>(code_gen.get_ro_segment(data_size));
+        unsigned char const *data = code_gen.get_ro_segment(data_size);
 
-        code->set_ro_segment(data, data_size);
+        code->add_data_segment("RO", data, data_size);
 
         // copy the render state usage
         code->set_render_state_usage(code_gen.get_render_state_usage());
@@ -851,7 +1216,7 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_generic_functi
         cache,
         code->access_messages(),
         code->get_llvm_context(),
-        LLVM_code_generator::TL_NATIVE,
+        ICode_generator::TL_NATIVE,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
         /*has_tex_handler=*/options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
@@ -872,9 +1237,11 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_generic_functi
     llvm::Function *func = code_gen.compile_lambda(
         /*incremental=*/false, *lambda, resolver, transformer, /*next_arg_block_index=*/0);
     if (func != NULL) {
-        llvm::Module *module = func->getParent();
-        MDL_JIT_module_key module_key = code_gen.jit_compile(module);
-        code->set_llvm_module(module_key, module);
+        // remember the function name, because the function is not valid anymore after jit_compile
+        string func_name(func->getName().begin(), func->getName().end(), alloc);
+
+        MDL_JIT_module_key module_key = code_gen.jit_compile(func->getParent());
+        code->set_llvm_module(module_key);
         code_gen.fill_function_info(code.get());
 
         size_t data_size = 0;
@@ -883,7 +1250,7 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_generic_functi
         code->set_ro_segment(data, data_size);
 
         // gen the entry point
-        void *entry_point = code_gen.get_entry_point(module_key, func);
+        void *entry_point = code_gen.get_entry_point(module_key, func_name.c_str());
         code->add_entry_point(entry_point);
 
         // copy the render state usage
@@ -962,7 +1329,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_llvm_ir(
         cache,
         code->access_messages(),
         llvm_context,
-        LLVM_code_generator::TL_NATIVE,
+        ICode_generator::TL_NATIVE,
         enable_simd ? Type_mapper::TM_BIG_VECTORS : Type_mapper::TM_ALL_SCALAR,
         /*sm_version=*/0,
         /*has_tex_handler=*/options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
@@ -1009,9 +1376,9 @@ IGenerated_code_executable *Code_generator_jit::compile_into_llvm_ir(
         code_gen.drop_llvm_module(module);
 
         size_t data_size = 0;
-        char const *data = reinterpret_cast<char const *>(code_gen.get_ro_segment(data_size));
+        unsigned char const *data = code_gen.get_ro_segment(data_size);
 
-        code->set_ro_segment(data, data_size);
+        code->add_data_segment("RO", data, data_size);
 
         // create the argument block layout if any arguments are captured
         if (code_gen.get_captured_arguments_llvm_type() != NULL) {
@@ -1074,7 +1441,7 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_cp
         cache,
         code->access_messages(),
         code->get_llvm_context(),
-        LLVM_code_generator::TL_NATIVE,
+        TL_NATIVE,
         Type_mapper::TM_NATIVE_X86,
         /*sm_version=*/0,
         /*has_tex_handler=*/options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
@@ -1097,13 +1464,13 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_cp
 
     if (module != NULL) {
         MDL_JIT_module_key module_key = code_gen.jit_compile(module);
-        code->set_llvm_module(module_key, module);
+        code->set_llvm_module(module_key);
         code_gen.fill_function_info(code.get());
 
         // add all generated functions (init, sample, evaluate, pdf) as entrypoints
-        for (LLVM_code_generator::Function_vector::const_iterator it = llvm_funcs.begin(),
-                end = llvm_funcs.end(); it != end; ++it) {
-            code->add_entry_point(code_gen.get_entry_point(module_key, *it));
+        for (size_t i = 0, n = code->get_function_count(); i < n; ++i) {
+            char const* func_name = code->get_function_name(i);
+            code->add_entry_point(code_gen.get_entry_point(module_key, func_name));
         }
 
         // copy the render state usage
@@ -1123,7 +1490,7 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_cp
     return code.get();
 }
 
-// Compile a distribution function into a PTX or HLSL using the JIT.
+// Compile a distribution function into a PTX, HLSL, or GLSL using the JIT.
 IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gpu(
     IDistribution_function const   *idist_func,
     IModule_cache                  *cache,
@@ -1132,7 +1499,7 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
     unsigned                       num_texture_spaces,
     unsigned                       num_texture_results,
     unsigned                       sm_version,
-    Compilation_mode               comp_mode,
+    Target_language                target,
     bool                           llvm_ir_output)
 {
     Distribution_function const *dist_func = impl_cast<Distribution_function>(idist_func);
@@ -1151,16 +1518,31 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
     IAllocator        *alloc = get_allocator();
     Allocator_builder builder(alloc);
 
-    IGenerated_code_executable::Kind code_kind;
-    if (llvm_ir_output) {
-        code_kind = IGenerated_code_executable::CK_LLVM_IR;
-    } else if (comp_mode == ICode_generator_jit::CM_PTX) {
+    IGenerated_code_executable::Kind code_kind = IGenerated_code_executable::CK_EXECUTABLE;
+    Type_mapper::Type_mapping_mode   tm_mode   = Type_mapper::TM_NATIVE_X86;
+
+    switch (target) {
+    case TL_PTX:
         code_kind = IGenerated_code_executable::CK_PTX;
-    } else if (comp_mode == ICode_generator_jit::CM_HLSL) {
+        tm_mode   = Type_mapper::TM_PTX;
+        break;
+    case TL_HLSL:
         code_kind = IGenerated_code_executable::CK_HLSL;
-    } else {
+        tm_mode   = Type_mapper::TM_HLSL;
+        break;
+    case TL_GLSL:
+        code_kind = IGenerated_code_executable::CK_GLSL;
+        tm_mode   = Type_mapper::TM_GLSL;
+        break;
+    case TL_NATIVE:
+    case TL_LLVM_IR:
         MDL_ASSERT(!"Invalid compilation_mode for compile_distribution_function_gpu");
         return NULL;
+    }
+
+    if (llvm_ir_output) {
+        // independent of the target language the code kind will be LLVM
+        code_kind = IGenerated_code_executable::CK_LLVM_IR;
     }
 
     Generated_code_source *code = builder.create<Generated_code_source>(alloc, code_kind);
@@ -1169,8 +1551,9 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
         alloc, &dist_func->get_resource_attribute_map());
 
     llvm::LLVMContext llvm_context;
-    HLSLOptPassGate opt_pass_gate;
-    if (comp_mode == ICode_generator_jit::CM_HLSL) {
+    SLOptPassGate opt_pass_gate;
+    if (target == TL_HLSL || target == TL_GLSL) {
+        // disable several optimization if SL code generation is active
         llvm_context.setOptPassGate(opt_pass_gate);
     }
 
@@ -1182,11 +1565,9 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
         cache,
         code->access_messages(),
         llvm_context,
-        comp_mode == ICode_generator_jit::CM_PTX ?
-            LLVM_code_generator::TL_PTX : LLVM_code_generator::TL_HLSL,
-        comp_mode == ICode_generator_jit::CM_PTX ?
-            Type_mapper::TM_PTX : Type_mapper::TM_HLSL,
-        comp_mode == ICode_generator_jit::CM_PTX ? sm_version : 0,
+        target,
+        tm_mode,
+        target == TL_PTX ? sm_version : 0,
         /*has_tex_handler=*/false,
         Type_mapper::SSM_CORE,
         num_texture_spaces,
@@ -1203,7 +1584,7 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
     code_gen.enable_ro_data_segment();
 
     LLVM_code_generator::Function_vector llvm_funcs(get_allocator());
-    llvm::Module *module = code_gen.compile_distribution_function(
+    llvm::Module *mod = code_gen.compile_distribution_function(
         /*incremental=*/false,
         *dist_func,
         resolver,
@@ -1211,29 +1592,37 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
         /*next_arg_block_index=*/0,
         /*main_function_indices=*/NULL);
 
-    if (module != NULL) {
+    if (mod != NULL) {
         if (llvm_ir_output) {
             if (options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE)) {
-                code_gen.llvm_bc_compile(module, code->access_src_code());
+                code_gen.llvm_bc_compile(mod, code->access_src_code());
             } else {
-                code_gen.llvm_ir_compile(module, code->access_src_code());
+                code_gen.llvm_ir_compile(mod, code->access_src_code());
             }
         } else {
-            if (comp_mode == ICode_generator_jit::CM_PTX) {
-                code_gen.ptx_compile(module, code->access_src_code());
-            } else {
-                code_gen.hlsl_compile(module, code->access_src_code());
+            switch (target) {
+            case TL_PTX:
+                code_gen.ptx_compile(mod, code->access_src_code());
+                break;
+            case TL_HLSL:
+            case TL_GLSL:
+                code_gen.sl_compile(mod, target, options, *code);
+                break;
+            case TL_NATIVE:
+            case TL_LLVM_IR:
+                MDL_ASSERT(!"Invalid compilation_mode for compile_distribution_function_gpu");
+                return NULL;
             }
         }
         code_gen.fill_function_info(code);
 
         // it's now save to drop this module
-        code_gen.drop_llvm_module(module);
+        code_gen.drop_llvm_module(mod);
 
         size_t data_size = 0;
-        char const *data = reinterpret_cast<char const *>(code_gen.get_ro_segment(data_size));
+        unsigned char const *data = code_gen.get_ro_segment(data_size);
 
-        code->set_ro_segment(data, data_size);
+        code->add_data_segment("RO", data, data_size);
 
         // copy the render state usage
         code->set_render_state_usage(code_gen.get_render_state_usage());
@@ -1267,7 +1656,7 @@ void Code_generator_jit::fill_code_from_cache(
 
     code->access_src_code() = string(entry->code, entry->code_size, alloc);
 
-    code->set_ro_segment(entry->const_seg, entry->const_seg_size);
+    code->add_data_segment("RO", (unsigned char *)entry->const_seg, entry->const_seg_size);
 
     // only add a captured arguments layout, if it's non-empty
     if (entry->arg_layout_size != 0) {
@@ -1353,9 +1742,16 @@ void Code_generator_jit::enter_code_into_cache(
     }
 
     size_t data_size = 0;
-    char const *data = reinterpret_cast<char const *>(code->get_ro_data_segment(data_size));
+    char const *data = nullptr;
 
-    char const *layout_data = NULL;
+    if (IGenerated_code_executable::Segment const *ro_segment = code->get_data_segment(0)) {
+        data      = (char const *)ro_segment->data;
+        data_size = ro_segment->size;
+
+        MDL_ASSERT(code->get_data_segment_count() == 1 && "can only cache one data segment");
+    }
+
+    char const *layout_data = nullptr;
     size_t layout_data_size = 0;
     if (code->get_captured_argument_layouts_count() > 0) {
         mi::base::Handle<IGenerated_code_value_layout const> i_layout(
@@ -1386,7 +1782,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
     unsigned                       num_texture_spaces,
     unsigned                       num_texture_results,
     unsigned                       sm_version,
-    Compilation_mode               comp_mode,
+    Target_language                target,
     bool                           llvm_ir_output)
 {
     Lambda_function const *lambda = impl_cast<Lambda_function>(ilambda);
@@ -1411,16 +1807,31 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
     IAllocator        *alloc = get_allocator();
     Allocator_builder builder(alloc);
 
-    IGenerated_code_executable::Kind code_kind;
-    if (llvm_ir_output) {
-        code_kind = IGenerated_code_executable::CK_LLVM_IR;
-    } else if (comp_mode == ICode_generator_jit::CM_PTX) {
+    IGenerated_code_executable::Kind code_kind = IGenerated_code_executable::CK_EXECUTABLE;
+    Type_mapper::Type_mapping_mode   tm_mode   = Type_mapper::TM_NATIVE_X86;
+
+    switch (target) {
+    case TL_PTX:
         code_kind = IGenerated_code_executable::CK_PTX;
-    } else if (comp_mode == ICode_generator_jit::CM_HLSL) {
+        tm_mode = Type_mapper::TM_PTX;
+        break;
+    case TL_HLSL:
         code_kind = IGenerated_code_executable::CK_HLSL;
-    } else {
-        MDL_ASSERT(!"Invalid compilation_mode for compile_into_source");
+        tm_mode = Type_mapper::TM_HLSL;
+        break;
+    case TL_GLSL:
+        code_kind = IGenerated_code_executable::CK_GLSL;
+        tm_mode = Type_mapper::TM_GLSL;
+        break;
+    case TL_NATIVE:
+    case TL_LLVM_IR:
+        MDL_ASSERT(!"Invalid compilation_mode for compile_distribution_function_gpu");
         return NULL;
+    }
+
+    if (llvm_ir_output) {
+        // independent of the target language the code kind will be LLVM
+        code_kind = IGenerated_code_executable::CK_LLVM_IR;
     }
 
     Generated_code_source *code = builder.create<Generated_code_source>(alloc, code_kind);
@@ -1438,8 +1849,9 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
 
         hasher.update(lambda->get_name());
         hasher.update(hash->data(), hash->size());
-        if (comp_mode == ICode_generator_jit::CM_PTX)
+        if (target == TL_PTX) {
             hasher.update(sm_version);
+        }
         hasher.update(llvm_ir_output);
 
         // Beware: the selected options change the generated code, hence we must include them into
@@ -1464,8 +1876,10 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
         hasher.update(options.get_bool_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS));
         hasher.update(options.get_string_option(MDL_JIT_OPTION_SCENE_DATA_NAMES));
 
-        if (code_kind == IGenerated_code_executable::CK_HLSL) {
-            hasher.update(m_options.get_bool_option(MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA));
+        if (code_kind == IGenerated_code_executable::CK_GLSL ||
+            code_kind == IGenerated_code_executable::CK_HLSL)
+        {
+            hasher.update(options.get_bool_option(MDL_JIT_OPTION_SL_USE_RESOURCE_DATA));
         }
 
         hasher.final(cache_key);
@@ -1486,8 +1900,9 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
     Generated_code_source::Source_res_manag res_manag(alloc, &lambda->get_resource_attribute_map());
 
     llvm::LLVMContext llvm_context;
-    HLSLOptPassGate opt_pass_gate;
-    if (comp_mode == ICode_generator_jit::CM_HLSL) {
+    SLOptPassGate opt_pass_gate;
+    if (target == TL_HLSL || target == TL_GLSL) {
+        // disable several optimization if SL code generation is active
         llvm_context.setOptPassGate(opt_pass_gate);
     }
 
@@ -1499,11 +1914,9 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
         module_cache,
         code->access_messages(),
         llvm_context,
-        comp_mode == ICode_generator_jit::CM_PTX ?
-            LLVM_code_generator::TL_PTX : LLVM_code_generator::TL_HLSL,
-        comp_mode == ICode_generator_jit::CM_PTX ?
-            Type_mapper::TM_PTX : Type_mapper::TM_HLSL,
-        comp_mode == ICode_generator_jit::CM_PTX ? sm_version : 0,
+        target,
+        tm_mode,
+        target == TL_PTX ? sm_version : 0,
         /*has_tex_handler=*/false,
         lambda->get_execution_context() == ILambda_function::LEC_ENVIRONMENT ?
             Type_mapper::SSM_ENVIRONMENT : Type_mapper::SSM_CORE,
@@ -1536,30 +1949,36 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
             /*next_arg_block_index=*/0);
     }
     if (func != NULL) {
-        llvm::Module *module = func->getParent();
+        llvm::Module *mod = func->getParent();
 
         if (llvm_ir_output) {
             if (options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE)) {
-                code_gen.llvm_bc_compile(module, code->access_src_code());
+                code_gen.llvm_bc_compile(mod, code->access_src_code());
             } else {
-                code_gen.llvm_ir_compile(module, code->access_src_code());
+                code_gen.llvm_ir_compile(mod, code->access_src_code());
             }
         } else {
-            if (comp_mode == ICode_generator_jit::CM_PTX) {
-                code_gen.ptx_compile(module, code->access_src_code());
-            } else {
-                code_gen.hlsl_compile(module, code->access_src_code());
+            switch (target) {
+            case TL_PTX:
+                code_gen.ptx_compile(mod, code->access_src_code());
+                break;
+            case TL_HLSL:
+            case TL_GLSL:
+                code_gen.sl_compile(mod, target, options, *code);
+                break;
+            default:
+                MDL_ASSERT(!"unexpected target language");
             }
         }
         code_gen.fill_function_info(code);
 
         // it's now save to drop this module
-        code_gen.drop_llvm_module(module);
+        code_gen.drop_llvm_module(mod);
 
         // copy the read-only segment
         size_t data_size = 0;
-        char const *data = reinterpret_cast<char const *>(code_gen.get_ro_segment(data_size));
-        code->set_ro_segment(data, data_size);
+        unsigned char const *data = code_gen.get_ro_segment(data_size);
+        code->add_data_segment("RO", data, data_size);
 
         // copy the render state usage
         code->set_render_state_usage(code_gen.get_render_state_usage());
@@ -1619,7 +2038,7 @@ unsigned char const *Code_generator_jit::get_libbsdf_multiscatter_data(
 // Create a link unit.
 Link_unit_jit *Code_generator_jit::create_link_unit(
     ICode_generator_thread_context *ctx,
-    Compilation_mode               mode,
+    Target_language                target,
     bool                           enable_simd,
     unsigned                       sm_version,
     unsigned                       num_texture_spaces,
@@ -1636,30 +2055,30 @@ Link_unit_jit *Code_generator_jit::create_link_unit(
     // link units always expect the uniform state to be included in the MDL SDK state
     options.set_option(MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE, "true");
 
-    Link_unit_jit::Target_kind target_kind;
     Type_mapper::Type_mapping_mode tm_mode;
-    switch (mode) {
-    case CM_PTX:
-        target_kind = Link_unit_jit::TK_PTX;
+    switch (target) {
+    case TL_PTX:
         tm_mode = Type_mapper::TM_PTX;
         break;
 
-    case CM_LLVM_IR:
-        target_kind = Link_unit_jit::TK_LLVM_IR;
+    case TL_LLVM_IR:
         tm_mode = enable_simd ? Type_mapper::TM_BIG_VECTORS : Type_mapper::TM_ALL_SCALAR;
         break;
 
-    case CM_NATIVE:
-        target_kind = Link_unit_jit::TK_NATIVE;
+    case TL_NATIVE:
         tm_mode = Type_mapper::TM_NATIVE_X86;
         break;
 
-    case CM_HLSL:
-        target_kind = Link_unit_jit::TK_HLSL;
+    case TL_HLSL:
         tm_mode = Type_mapper::TM_HLSL;
         break;
 
+    case TL_GLSL:
+        tm_mode = Type_mapper::TM_GLSL;
+        break;
+
     default:
+        MDL_ASSERT(!"unsupported target languange");
         return NULL;
     }
 
@@ -1667,7 +2086,7 @@ Link_unit_jit *Code_generator_jit::create_link_unit(
         m_builder.get_allocator(),
         m_jitted_code.get(),
         m_compiler.get(),
-        target_kind,
+        target,
         tm_mode,
         sm_version,
         num_texture_spaces,
@@ -1707,62 +2126,100 @@ IGenerated_code_executable *Code_generator_jit::compile_unit(
     // pass the resource to tag map to the code generator
     unit->set_resource_tag_map(unit.get_resource_tag_map());
 
+#ifdef PRINT_TIMINGS
+    std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+#endif
+
     // now finalize the module
-    llvm::Module *module = unit->finalize_module();
+    llvm::Module *llvm_module = unit->finalize_module();
     mi::base::Handle<IGenerated_code_executable> code_obj(unit.get_code_object());
 
-    if (module == NULL) {
+#ifdef PRINT_TIMINGS
+    std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point t3 = t2;
+    std::chrono::steady_clock::time_point t4 = t2;
+    std::chrono::steady_clock::time_point t5 = t2;
+    std::chrono::steady_clock::time_point t6 = t2;
+#endif
+
+    if (llvm_module == NULL) {
         // on failure, ensure that the code contains an error message
-        if (unit->get_error_message_count() == 0)
+        if (unit->get_error_message_count() == 0) {
             unit->error(INTERNAL_JIT_BACKEND_ERROR, "Compiling link unit failed");
-    } else if (unit.get_target_kind() == Link_unit_jit::TK_NATIVE) {
+        }
+    } else if (unit.get_target_language() == ICode_generator::TL_NATIVE) {
+        // generate executable code
         mi::base::Handle<Generated_code_lambda_function> code(
             code_obj->get_interface<mi::mdl::Generated_code_lambda_function>());
 
-        llvm::Module *module = unit.get_function(0)->getParent();
-        MDL_JIT_module_key module_key = unit->jit_compile(module);
-        code->set_llvm_module(module_key, module);
+#ifdef PRINT_TIMINGS
+        t3 = std::chrono::steady_clock::now();
+#endif
+        MDL_JIT_module_key module_key = unit->jit_compile(llvm_module);
+#ifdef PRINT_TIMINGS
+        t4 = std::chrono::steady_clock::now();
+#endif
+        code->set_llvm_module(module_key);
         unit->fill_function_info(code.get());
+#ifdef PRINT_TIMINGS
+        t5 = std::chrono::steady_clock::now();
+#endif
 
         // add all generated functions as entry points
         for (size_t i = 0; i < num_funcs; ++i) {
-            llvm::Function *func = unit.get_function(i);
-            code->add_entry_point(unit->get_entry_point(module_key, func));
+            char const *func_name = unit.get_function_name(i);
+            code->add_entry_point(unit->get_entry_point(module_key, func_name));
         }
+#ifdef PRINT_TIMINGS
+        t6 = std::chrono::steady_clock::now();
+#endif
 
         // copy the render state usage
         code->set_render_state_usage(unit->get_render_state_usage());
 
         // add all argument block layouts
-        for (size_t i = 0, num = unit.get_arg_block_layout_count(); i < num; ++i)
+        for (size_t i = 0, num = unit.get_arg_block_layout_count(); i < num; ++i) {
             code->add_captured_arguments_layout(
                 mi::base::make_handle(unit.get_arg_block_layout(i)).get());
+        }
 
         // copy the string constant table
-        for (size_t i = 0, n = unit->get_string_constant_count(); i < n; ++i)
+        for (size_t i = 0, n = unit->get_string_constant_count(); i < n; ++i) {
             code->add_mapped_string(unit->get_string_constant(i), i);
+        }
     } else {
+        // generate source code
         mi::base::Handle<Generated_code_source> code(
             code_obj->get_interface<mi::mdl::Generated_code_source>());
 
-        if (unit.get_target_kind() == Link_unit_jit::TK_PTX) {
-            unit->ptx_compile(module, code->access_src_code());
-        } else if (unit.get_target_kind() == Link_unit_jit::TK_HLSL) {
-            unit->hlsl_compile(module, code->access_src_code());
-        } else {
-            MDL_ASSERT(unit.get_target_kind() == Link_unit_jit::TK_LLVM_IR);
+        Target_language target = unit.get_target_language();
+        switch (target) {
+        case ICode_generator::TL_PTX:
+            unit->ptx_compile(llvm_module, code->access_src_code());
+            break;
+        case ICode_generator::TL_HLSL:
+        case ICode_generator::TL_GLSL:
+            unit->sl_compile(llvm_module, target, options, *code);
+            break;
+        case ICode_generator::TL_LLVM_IR:
             if (options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE)) {
-                unit->llvm_bc_compile(module, code->access_src_code());
+                unit->llvm_bc_compile(llvm_module, code->access_src_code());
             } else {
-                unit->llvm_ir_compile(module, code->access_src_code());
+                unit->llvm_ir_compile(llvm_module, code->access_src_code());
             }
+            break;
+        default:
+            MDL_ASSERT(!"unexpected target kind");
+            break;
         }
         unit->fill_function_info(code.get());
 
         // set the read-only data segment
         size_t data_size = 0;
-        char const *data = reinterpret_cast<char const *>(unit->get_ro_segment(data_size));
-        code->set_ro_segment(data, data_size);
+        unsigned char const *data = unit->get_ro_segment(data_size);
+        if (data_size > 0) {
+            code->add_data_segment("RO", data, data_size);
+        }
 
         // copy the render state usage
         code->set_render_state_usage(unit->get_render_state_usage());
@@ -1779,8 +2236,34 @@ IGenerated_code_executable *Code_generator_jit::compile_unit(
         }
 
         // it's now safe to drop this module
-        delete module;
+        delete llvm_module;
     }
+
+#ifdef PRINT_TIMINGS
+    std::chrono::steady_clock::time_point t7 = std::chrono::steady_clock::now();
+
+    std::chrono::duration<double> et = t7 - t1;
+    printf("CU  |||| Total time                 : %f seconds.\n", et.count());
+
+    et = t2 - t1;
+    printf("CU  | Finalize module               : %f seconds.\n", et.count());
+
+    et = t3 - t2;
+    printf("CU  | Before jit_compile            : %f seconds.\n", et.count());
+
+    et = t4 - t3;
+    printf("CU  | jit_compile                   : %f seconds.\n", et.count());
+
+    et = t5 - t4;
+    printf("CU  | Before add entrypoints        : %f seconds.\n", et.count());
+
+    et = t6 - t5;
+    printf("CU  | Add entrypoints               : %f seconds.\n", et.count());
+
+    et = t7 - t6;
+    printf("CU  | Rest                          : %f seconds.\n", et.count());
+#endif
+
     code_obj->retain();
     return code_obj.get();
 }
@@ -1809,25 +2292,12 @@ unsigned Code_generator_jit::get_state_mapping(
     return res;
 }
 
-/// Translate the link unit target kind into the target language of the code generator.
-static LLVM_code_generator::Target_language get_target_lang(Link_unit_jit::Target_kind kind)
-{
-    switch (kind) {
-    case Link_unit_jit::TK_PTX:      return LLVM_code_generator::TL_PTX;
-    case Link_unit_jit::TK_LLVM_IR:  return LLVM_code_generator::TL_NATIVE;
-    case Link_unit_jit::TK_NATIVE:   return LLVM_code_generator::TL_NATIVE;
-    case Link_unit_jit::TK_HLSL:     return LLVM_code_generator::TL_HLSL;
-    }
-    MDL_ASSERT(!"unsupported link unit target kind");
-    return LLVM_code_generator::TL_NATIVE;
-}
-
 // Constructor.
 Link_unit_jit::Link_unit_jit(
     IAllocator         *alloc,
     Jitted_code        *jitted_code,
     MDL                *compiler,
-    Target_kind        target_kind,
+    Target_language    target_language,
     Type_mapping_mode  tm_mode,
     unsigned           sm_version,
     unsigned           num_texture_spaces,
@@ -1837,7 +2307,8 @@ Link_unit_jit::Link_unit_jit(
     bool               enable_debug)
 : Base(alloc)
 , m_arena(alloc)
-, m_target_kind(target_kind)
+, m_target_lang(target_language)
+, m_opt_pass_gate()
 , m_source_only_llvm_context()
 , m_code(create_code_object(jitted_code))
 , m_code_gen(
@@ -1846,12 +2317,14 @@ Link_unit_jit::Link_unit_jit(
     /*module_cache=*/NULL,
     access_messages(),
     *get_llvm_context(),
-    get_target_lang(target_kind),
+    target_language,
     tm_mode,
     sm_version,
-    /*has_tex_handler=*/target_kind == TK_NATIVE || target_kind == TK_LLVM_IR ?
+    /*has_tex_handler=*/
+    target_language == ICode_generator::TL_NATIVE ||
+    target_language == ICode_generator::TL_LLVM_IR ?
         options->get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU) :
-        false, // PTX and HLSL code cannot have a tex handler
+        false, // PTX, HLSL and GLSL code cannot have a tex handler
     Type_mapper::SSM_CORE,
     num_texture_spaces,
     num_texture_results,
@@ -1860,19 +2333,27 @@ Link_unit_jit::Link_unit_jit(
     state_mapping,
     /*res_manag=*/NULL,
     enable_debug)
-, m_res_manag(create_resource_manager(m_code.get()))
+, m_resource_attr_map(alloc)
+, m_res_manag(create_resource_manager(m_code.get(), options->get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU)))
 , m_arg_block_layouts(alloc)
 , m_lambdas(alloc)
 , m_dist_funcs(alloc)
 , m_resource_tag_map(alloc)
 {
     // For native code, we don't need mangling and read-only data segments
-    if (m_target_kind != TK_NATIVE) {
+    if (m_target_lang != ICode_generator::TL_NATIVE) {
         // enable name mangling
         m_code_gen.enable_name_mangling();
 
         // enable the read-only data segment
         m_code_gen.enable_ro_data_segment();
+
+        // disable several optimization if SL code generation is active
+        if (m_target_lang == ICode_generator::TL_HLSL ||
+            m_target_lang == ICode_generator::TL_GLSL)
+        {
+            m_source_only_llvm_context.setOptPassGate(m_opt_pass_gate);
+        }
     }
 
     m_code_gen.set_resource_manag(m_res_manag);
@@ -1885,8 +2366,8 @@ Link_unit_jit::~Link_unit_jit()
 
     // Note: the IResource_manager does not have an virtual destructor, hence cast
     // to the right type
-    switch (m_target_kind) {
-    case TK_NATIVE:
+    switch (m_target_lang) {
+    case ICode_generator::TL_NATIVE:
         {
             Generated_code_lambda_function::Lambda_res_manag *res_manag =
                 static_cast<Generated_code_lambda_function::Lambda_res_manag *>(m_res_manag);
@@ -1894,9 +2375,10 @@ Link_unit_jit::~Link_unit_jit()
             builder.destroy(res_manag);
         }
         break;
-    case TK_PTX:
-    case TK_HLSL:
-    case TK_LLVM_IR:
+    case ICode_generator::TL_PTX:
+    case ICode_generator::TL_HLSL:
+    case ICode_generator::TL_GLSL:
+    case ICode_generator::TL_LLVM_IR:
         {
             Generated_code_source::Source_res_manag *res_manag =
                 static_cast<Generated_code_source::Source_res_manag *>(m_res_manag);
@@ -1912,16 +2394,19 @@ IGenerated_code_executable *Link_unit_jit::create_code_object(
     Jitted_code *jitted_code)
 {
     Allocator_builder builder(get_allocator());
-    switch (m_target_kind) {
-    case TK_NATIVE:
+    switch (m_target_lang) {
+    case ICode_generator::TL_NATIVE:
         return builder.create<Generated_code_lambda_function>(jitted_code);
-    case TK_PTX:
+    case ICode_generator::TL_PTX:
         return builder.create<Generated_code_source>(
             get_allocator(), IGenerated_code_executable::CK_PTX);
-    case TK_HLSL:
+    case ICode_generator::TL_HLSL:
         return builder.create<Generated_code_source>(
             get_allocator(), IGenerated_code_executable::CK_HLSL);
-    case TK_LLVM_IR:
+    case ICode_generator::TL_GLSL:
+        return builder.create<Generated_code_source>(
+            get_allocator(), IGenerated_code_executable::CK_GLSL);
+    case ICode_generator::TL_LLVM_IR:
         return builder.create<Generated_code_source>(
             get_allocator(), IGenerated_code_executable::CK_LLVM_IR);
     }
@@ -1931,11 +2416,12 @@ IGenerated_code_executable *Link_unit_jit::create_code_object(
 
 // Creates the resource manager to be used with this link unit.
 IResource_manager *Link_unit_jit::create_resource_manager(
-    IGenerated_code_executable *icode)
+    IGenerated_code_executable *icode,
+    bool use_builtin_resource_handler_cpu)
 {
     Allocator_builder builder(get_allocator());
-    switch (m_target_kind) {
-    case TK_NATIVE:
+    switch (m_target_lang) {
+    case ICode_generator::TL_NATIVE:
         {
             // We need to build this manually, as Allocator_builder doesn't support reference
             // parameters in create<>.
@@ -1944,12 +2430,13 @@ IResource_manager *Link_unit_jit::create_resource_manager(
             Generated_code_lambda_function *code =
                 static_cast<Generated_code_lambda_function *>(icode);
             new (res_manag) Generated_code_lambda_function::Lambda_res_manag(
-                *code, /*resource_map=*/NULL);
+                *code, /*resource_map=*/use_builtin_resource_handler_cpu ? NULL : &m_resource_attr_map);
             return res_manag;
         }
-    case TK_PTX:
-    case TK_HLSL:
-    case TK_LLVM_IR:
+    case ICode_generator::TL_PTX:
+    case ICode_generator::TL_HLSL:
+    case ICode_generator::TL_GLSL:
+    case ICode_generator::TL_LLVM_IR:
         return builder.create<Generated_code_source::Source_res_manag>(
             get_allocator(), (mi::mdl::Resource_attr_map const *)NULL);
     }
@@ -1961,8 +2448,8 @@ IResource_manager *Link_unit_jit::create_resource_manager(
 void Link_unit_jit::update_resource_attribute_map(
     Lambda_function const *lambda)
 {
-    switch (m_target_kind) {
-    case TK_NATIVE:
+    switch (m_target_lang) {
+    case ICode_generator::TL_NATIVE:
         {
             Generated_code_lambda_function::Lambda_res_manag *res_manag =
                 static_cast<Generated_code_lambda_function::Lambda_res_manag *>(m_res_manag);
@@ -1970,9 +2457,10 @@ void Link_unit_jit::update_resource_attribute_map(
             res_manag->import_from_resource_attribute_map(&lambda->get_resource_attribute_map());
         }
         break;
-    case TK_PTX:
-    case TK_HLSL:
-    case TK_LLVM_IR:
+    case ICode_generator::TL_PTX:
+    case ICode_generator::TL_HLSL:
+    case ICode_generator::TL_GLSL:
+    case ICode_generator::TL_LLVM_IR:
         {
             Generated_code_source::Source_res_manag *res_manag =
                 static_cast<Generated_code_source::Source_res_manag *>(m_res_manag);
@@ -2035,16 +2523,17 @@ void Link_unit_jit::add_resource_tag_mapping(
 // Access messages.
 const Messages &Link_unit_jit::access_messages() const
 {
-    switch (m_target_kind) {
-    case TK_NATIVE:
+    switch (m_target_lang) {
+    case ICode_generator::TL_NATIVE:
         {
             mi::base::Handle<Generated_code_lambda_function> native_code(
                 m_code->get_interface<mi::mdl::Generated_code_lambda_function>());
             return native_code->access_messages();
         }
-    case TK_PTX:
-    case TK_HLSL:
-    case TK_LLVM_IR:
+    case ICode_generator::TL_PTX:
+    case ICode_generator::TL_HLSL:
+    case ICode_generator::TL_GLSL:
+    case ICode_generator::TL_LLVM_IR:
     default:
         {
             mi::base::Handle<Generated_code_source> source_code(
@@ -2057,16 +2546,17 @@ const Messages &Link_unit_jit::access_messages() const
 // Get write access to the messages of the generated code.
 Messages_impl &Link_unit_jit::access_messages()
 {
-    switch (m_target_kind) {
-    case TK_NATIVE:
+    switch (m_target_lang) {
+    case ICode_generator::TL_NATIVE:
         {
             mi::base::Handle<Generated_code_lambda_function> native_code(
                 m_code->get_interface<mi::mdl::Generated_code_lambda_function>());
             return native_code->access_messages();
         }
-    case TK_PTX:
-    case TK_HLSL:
-    case TK_LLVM_IR:
+    case ICode_generator::TL_PTX:
+    case ICode_generator::TL_HLSL:
+    case ICode_generator::TL_GLSL:
+    case ICode_generator::TL_LLVM_IR:
     default:
         {
             mi::base::Handle<Generated_code_source> source_code(
@@ -2079,7 +2569,7 @@ Messages_impl &Link_unit_jit::access_messages()
 // Get the LLVM context to use with this link unit.
 llvm::LLVMContext *Link_unit_jit::get_llvm_context()
 {
-    if (m_target_kind == TK_NATIVE) {
+    if (m_target_lang == ICode_generator::TL_NATIVE) {
         mi::base::Handle<Generated_code_lambda_function> native_code(
             m_code->get_interface<mi::mdl::Generated_code_lambda_function>());
         return &native_code->get_llvm_context();

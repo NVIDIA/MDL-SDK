@@ -134,7 +134,7 @@ public:
     virtual IScope* get_parent() const = 0;
 };
 
-/*@}*/ // end group mi_neuray_database_access
+/**@}*/ // end group mi_neuray_database_access
 
 } // namespace neuraylib
 

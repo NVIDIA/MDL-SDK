@@ -101,8 +101,6 @@ public:
     /// Add a search path.
     void add_path(const char *path) { m_roots.push_back(path); }
 
-public:
-
     /// Constructor
     Mdl_search_path() {
 

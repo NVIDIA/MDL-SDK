@@ -93,6 +93,7 @@ Printer::Printer(IAllocator *alloc, IOutput_stream *ostr)
 , m_c_ostr()
 , m_color_stack()
 , m_curr_unit(NULL)
+, m_string_quote("\"", alloc)
 {
     ::memset(m_priority_map, 0, sizeof(m_priority_map));
 
@@ -390,6 +391,9 @@ void Printer::print_location(Location const &loc)
 void Printer::print_type(Type *type, Symbol *name)
 {
     if (Type_function *f_type = as<Type_function>(type)) {
+        if (f_type->is_template()) {
+            print("template<typename param_t> ");
+        }
         Type *ret_type = f_type->get_return_type();
 
         print_type(ret_type);
@@ -591,6 +595,15 @@ void Printer::print_value(Value *value)
             } else {
                 print("(0.0l/0.0l)");
             }
+            break;
+        }
+    case Value::VK_STRING:
+        {
+            Value_string *v = cast<Value_string>(value);
+
+            print(m_string_quote.c_str());
+            print(v->get_value(), /*escape=*/true);
+            print(m_string_quote.c_str());
             break;
         }
     case Value::VK_VECTOR:
@@ -958,7 +971,33 @@ void Printer::print(
         print(")");
 }
 
-/// Print a statement.
+// Print a string with escapes.
+void Printer::print(char const *string, bool escapes)
+{
+    if (escapes) {
+        for (char const *p = string; *p; ++p) {
+            switch (*p) {
+            case '\a':  print("\\a");   break;
+            case '\b':  print("\\b");   break;
+            case '\f':  print("\\f");   break;
+            case '\n':  print("\\n");   break;
+            case '\r':  print("\\r");   break;
+            case '\t':  print("\\t");   break;
+            case '\v':  print("\\v");   break;
+            case '\\':  print("\\\\");  break;
+            case '\'':  print("\\\'");  break;
+            case '"':   print("\\\"");  break;
+            default:
+                print(*p);
+                break;
+            }
+        }
+    } else {
+        print(string);
+    }
+}
+
+// Print a statement.
 void Printer::print_condition(Stmt const *stmt)
 {
     switch (stmt->get_kind()) {

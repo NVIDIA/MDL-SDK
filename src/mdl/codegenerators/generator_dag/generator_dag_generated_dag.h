@@ -778,7 +778,6 @@ public:
         friend class Allocator_builder;
         friend class Distiller_plugin_api_impl;
         friend class Instance_cloner;
-        friend class MI::MDL::Mdl_material_instance_builder;
 
     public:
         /// The result of the dependence analysis.
@@ -1019,6 +1018,39 @@ public:
         /// Get the value factory of this instance.
         Value_factory const &get_value_factory() const { return m_value_factory; }
 
+        /// Set the material constructor.
+        void set_constructor(DAG_call const *call) { m_constructor = call; }
+
+        /// Get the instance properties.
+        void set_properties(Properties prop) { m_properties = prop; }
+
+        /// Set temporaries from an iterator range.
+        /// \tparam I     an iterator type
+        /// \param begin  the start iterator
+        /// \param end    the end iterator
+        template<typename I>
+        void set_temporaries(I begin, I end) {
+            m_temporaries.clear(); m_temporaries.insert(m_temporaries.begin(), begin, end);
+        }
+
+        /// Set the default parameter names and values.
+        /// \tparam S      a helper shim
+        /// \param params  the default parameters
+        template<typename S>
+        void set_default_parameters(S params) {
+            size_t n = params.size();
+            m_default_param_values.resize(n);
+            m_param_names.resize(n, string(get_allocator()));
+
+            for (size_t i = 0; i < n; ++i) {
+                m_default_param_values[i] = params.get_value(i);
+                m_param_names[i]          = params.get_name(i);
+            }
+        }
+
+        /// Calculate the hash values for this instance.
+        void calc_hashes();
+
         /// Find the tag for a given resource.
         ///
         /// \param res  the resource
@@ -1075,12 +1107,6 @@ public:
             bool        unsafe_math_optimizations);
 
     private:
-        /// Set the material constructor.
-        void set_constructor(DAG_call const *constructor)
-        {
-            m_constructor = constructor;
-        }
-
         /// Add a temporary.
         ///
         /// \param value       The temporary value to add.
@@ -1090,9 +1116,6 @@ public:
 
         /// Build temporaries by traversing the DAG and creating them for nodes with phen-out > 1.
         void build_temporaries();
-
-        /// Calculate the hash values for this instance.
-        void calc_hashes();
 
         /// Check instance argument for restrictions.
         ///

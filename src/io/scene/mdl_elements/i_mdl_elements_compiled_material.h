@@ -81,7 +81,8 @@ public:
     /// \param mdl_meters_per_scene_unit   Conversion ratio between meters and scene units.
     /// \param mdl_wavelength_min          The smallest supported wavelength.
     /// \param mdl_wavelength_max          The largest supported wavelength.
-    /// \param load_resources              True if resources are supposed to be loaded into the DB.
+    /// \param resolve_resources           \c true if resources are supposed to be loaded into the
+    ///                                    DB.
     Mdl_compiled_material(
         DB::Transaction* transaction,
         const mi::mdl::IGenerated_code_dag::IMaterial_instance* instance,
@@ -90,7 +91,7 @@ public:
         mi::Float32 mdl_meters_per_scene_unit,
         mi::Float32 mdl_wavelength_min,
         mi::Float32 mdl_wavelength_max,
-        bool        load_resources);
+        bool        resolve_resources);
 
     Mdl_compiled_material& operator=( const Mdl_compiled_material&) = delete;
 

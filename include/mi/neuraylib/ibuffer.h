@@ -55,7 +55,7 @@ public:
     virtual Size get_data_size() const = 0;
 };
 
-/*@}*/ // end group mi_neuray_types
+/**@}*/ // end group mi_neuray_types
 
 } // namespace neuraylib
 

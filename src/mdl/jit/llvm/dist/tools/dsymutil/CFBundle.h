@@ -1,11 +1,13 @@
 //===- tools/dsymutil/CFBundle.h - CFBundle helper --------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
+
+#ifndef LLVM_TOOLS_DSYMUTIL_CFBUNDLE_H
+#define LLVM_TOOLS_DSYMUTIL_CFBUNDLE_H
 
 #include "llvm/ADT/StringRef.h"
 #include <string>
@@ -24,3 +26,5 @@ CFBundleInfo getBundleInfo(llvm::StringRef ExePath);
 
 } // end namespace dsymutil
 } // end namespace llvm
+
+#endif

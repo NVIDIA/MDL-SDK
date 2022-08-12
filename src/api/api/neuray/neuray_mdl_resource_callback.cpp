@@ -35,6 +35,7 @@
 #include "neuray_mdl_resource_callback.h"
 
 #include <sstream>
+#include <cassert>
 #include <mi/mdl/mdl_modules.h>
 #include <mi/neuraylib/ibsdf_isotropic_data.h>
 #include <mi/neuraylib/ibuffer.h>
@@ -598,7 +599,7 @@ std::string Resource_callback::export_texture_image(
     for( mi::Size i = 0; copy_all && (i < n); ++i) {
         mi::Size m = image->get_frame_length( i);
         for( mi::Size j = 0; copy_all && (j < m); ++j) {
-            std::string old_filename_fuv = image->get_filename( i, j);
+            const std::string& old_filename_fuv = image->get_filename( i, j);
             if( old_filename_fuv.empty())
                 copy_all = false;
             if( !DISK::is_file( old_filename_fuv.c_str()))
@@ -628,12 +629,12 @@ std::string Resource_callback::export_texture_image(
         for( mi::Size j = 0; j < m; ++j) {
 
             // Actual filenames without frame/uvtile markers.
-            std::string old_filename_fuv = image->get_filename( i, j);
+            const std::string& old_filename_fuv = image->get_filename( i, j);
             mi::Sint32 u, v;
             image->get_uvtile_uv( frame_number, i, u, v);
             std::string new_filename_fuv
                 = (add_sequence_marker || add_uvtile_marker)
-                ? MDL::frame_uvtile_marker_to_string( new_filename.c_str(), frame_number, u, v)
+                ? MDL::frame_uvtile_marker_to_string( new_filename, frame_number, u, v)
                 : new_filename;
             ASSERT( M_NEURAY_API, !new_filename_fuv.empty());
 
@@ -694,7 +695,7 @@ std::string Resource_callback::export_light_profile(
         success = DISK::file_copy( old_filename.c_str(), new_filename.c_str());
     } else {
         // export to file
-        success = LIGHTPROFILE::export_to_file( m_transaction, profile, new_filename.c_str());
+        success = LIGHTPROFILE::export_to_file( m_transaction, profile, new_filename);
     }
 
     return success ? new_filename : std::string();
@@ -731,7 +732,7 @@ std::string Resource_callback::export_bsdf_measurement(
         success = DISK::file_copy( old_filename.c_str(), new_filename.c_str());
     } else {
         // export to file
-        success = BSDFM::export_to_file( refl.get(), trans.get(), new_filename.c_str());
+        success = BSDFM::export_to_file( refl.get(), trans.get(), new_filename);
     }
 
     return success ? new_filename : std::string();
@@ -872,7 +873,7 @@ void Resource_callback::add_error_export_failed(
 
     std::stringstream s;
     const char* name = m_transaction->tag_to_name( resource);
-    s << "Export of " << file_container_or_memory_based << " " << resource_type << " \"" << name
+    s << "Export of " << file_container_or_memory_based << ' ' << resource_type << " \"" << name
       << "\" failed.";
     m_result->message_push_back( error_number, mi::base::MESSAGE_SEVERITY_ERROR, s.str().c_str());
 }
@@ -888,7 +889,7 @@ void Resource_callback::add_error_string_based(
 
     std::stringstream s;
     const char* name = m_transaction->tag_to_name( resource);
-    s << "Export of " << file_container_or_memory_based << " " << resource_type << " \"" << name
+    s << "Export of " << file_container_or_memory_based << ' ' << resource_type << " \"" << name
       << "\" is not supported in string-based exports of MDL modules.";
     m_result->message_push_back( error_number, mi::base::MESSAGE_SEVERITY_ERROR, s.str().c_str());
 }

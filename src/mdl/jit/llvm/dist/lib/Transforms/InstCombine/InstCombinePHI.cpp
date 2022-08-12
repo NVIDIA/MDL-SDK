@@ -1,9 +1,8 @@
 //===- InstCombinePHI.cpp -------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -14,10 +13,14 @@
 #include "InstCombineInternal.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/InstructionSimplify.h"
-#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/PatternMatch.h"
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Transforms/InstCombine/InstCombiner.h"
+#include "llvm/Transforms/Utils/Local.h"
+
 using namespace llvm;
 using namespace llvm::PatternMatch;
 
@@ -27,10 +30,16 @@ static cl::opt<unsigned>
 MaxNumPhis("instcombine-max-num-phis", cl::init(512),
            cl::desc("Maximum number phis to handle in intptr/ptrint folding"));
 
+STATISTIC(NumPHIsOfInsertValues,
+          "Number of phi-of-insertvalue turned into insertvalue-of-phis");
+STATISTIC(NumPHIsOfExtractValues,
+          "Number of phi-of-extractvalue turned into extractvalue-of-phi");
+STATISTIC(NumPHICSEs, "Number of PHI's that got CSE'd");
+
 /// The PHI arguments will be folded into a single operation with a PHI node
 /// as input. The debug location of the single operation will be the merged
 /// locations of the original PHI node arguments.
-void InstCombiner::PHIArgMergedDebugLoc(Instruction *Inst, PHINode &PN) {
+void InstCombinerImpl::PHIArgMergedDebugLoc(Instruction *Inst, PHINode &PN) {
   auto *FirstInst = cast<Instruction>(PN.getIncomingValue(0));
   Inst->setDebugLoc(FirstInst->getDebugLoc());
   // We do not expect a CallInst here, otherwise, N-way merging of DebugLoc
@@ -93,7 +102,7 @@ void InstCombiner::PHIArgMergedDebugLoc(Instruction *Inst, PHINode &PN) {
 //    ptr_val_inc = ...
 //    ...
 //
-Instruction *InstCombiner::FoldIntegerTypedPHI(PHINode &PN) {
+Instruction *InstCombinerImpl::foldIntegerTypedPHI(PHINode &PN) {
   if (!PN.getType()->isIntegerTy())
     return nullptr;
   if (!PN.hasOneUse())
@@ -181,13 +190,14 @@ Instruction *InstCombiner::FoldIntegerTypedPHI(PHINode &PN) {
          "Not enough available ptr typed incoming values");
   PHINode *MatchingPtrPHI = nullptr;
   unsigned NumPhis = 0;
-  for (auto II = BB->begin(), EI = BasicBlock::iterator(BB->getFirstNonPHI());
-       II != EI; II++, NumPhis++) {
+  for (auto II = BB->begin(); II != BB->end(); II++, NumPhis++) {
     // FIXME: consider handling this in AggressiveInstCombine
+    PHINode *PtrPHI = dyn_cast<PHINode>(II);
+    if (!PtrPHI)
+      break;
     if (NumPhis > MaxNumPhis)
       return nullptr;
-    PHINode *PtrPHI = dyn_cast<PHINode>(II);
-    if (!PtrPHI || PtrPHI == &PN || PtrPHI->getType() != IntToPtr->getType())
+    if (PtrPHI == &PN || PtrPHI->getType() != IntToPtr->getType())
       continue;
     MatchingPtrPHI = PtrPHI;
     for (unsigned i = 0; i != PtrPHI->getNumIncomingValues(); ++i) {
@@ -211,20 +221,28 @@ Instruction *InstCombiner::FoldIntegerTypedPHI(PHINode &PN) {
   }
 
   // If it requires a conversion for every PHI operand, do not do it.
-  if (std::all_of(AvailablePtrVals.begin(), AvailablePtrVals.end(),
-                  [&](Value *V) {
-                    return (V->getType() != IntToPtr->getType()) ||
-                           isa<IntToPtrInst>(V);
-                  }))
+  if (all_of(AvailablePtrVals, [&](Value *V) {
+        return (V->getType() != IntToPtr->getType()) || isa<IntToPtrInst>(V);
+      }))
     return nullptr;
 
   // If any of the operand that requires casting is a terminator
-  // instruction, do not do it.
-  if (std::any_of(AvailablePtrVals.begin(), AvailablePtrVals.end(),
-                  [&](Value *V) {
-                    return (V->getType() != IntToPtr->getType()) &&
-                           isa<TerminatorInst>(V);
-                  }))
+  // instruction, do not do it. Similarly, do not do the transform if the value
+  // is PHI in a block with no insertion point, for example, a catchswitch
+  // block, since we will not be able to insert a cast after the PHI.
+  if (any_of(AvailablePtrVals, [&](Value *V) {
+        if (V->getType() == IntToPtr->getType())
+          return false;
+        auto *Inst = dyn_cast<Instruction>(V);
+        if (!Inst)
+          return false;
+        if (Inst->isTerminator())
+          return true;
+        auto *BB = Inst->getParent();
+        if (isa<PHINode>(Inst) && BB->getFirstInsertionPt() == BB->end())
+          return true;
+        return false;
+      }))
     return nullptr;
 
   PHINode *NewPtrPHI = PHINode::Create(
@@ -263,8 +281,10 @@ Instruction *InstCombiner::FoldIntegerTypedPHI(PHINode &PN) {
       if (auto *IncomingI = dyn_cast<Instruction>(IncomingVal)) {
         BasicBlock::iterator InsertPos(IncomingI);
         InsertPos++;
+        BasicBlock *BB = IncomingI->getParent();
         if (isa<PHINode>(IncomingI))
-          InsertPos = IncomingI->getParent()->getFirstInsertionPt();
+          InsertPos = BB->getFirstInsertionPt();
+        assert(InsertPos != BB->end() && "should have checked above");
         InsertNewInstBefore(CI, *InsertPos);
       } else {
         auto *InsertBB = &IncomingBB->getParent()->getEntryBlock();
@@ -279,9 +299,86 @@ Instruction *InstCombiner::FoldIntegerTypedPHI(PHINode &PN) {
                                           IntToPtr->getOperand(0)->getType());
 }
 
+/// If we have something like phi [insertvalue(a,b,0), insertvalue(c,d,0)],
+/// turn this into a phi[a,c] and phi[b,d] and a single insertvalue.
+Instruction *
+InstCombinerImpl::foldPHIArgInsertValueInstructionIntoPHI(PHINode &PN) {
+  auto *FirstIVI = cast<InsertValueInst>(PN.getIncomingValue(0));
+
+  // Scan to see if all operands are `insertvalue`'s with the same indicies,
+  // and all have a single use.
+  for (unsigned i = 1; i != PN.getNumIncomingValues(); ++i) {
+    auto *I = dyn_cast<InsertValueInst>(PN.getIncomingValue(i));
+    if (!I || !I->hasOneUser() || I->getIndices() != FirstIVI->getIndices())
+      return nullptr;
+  }
+
+  // For each operand of an `insertvalue`
+  std::array<PHINode *, 2> NewOperands;
+  for (int OpIdx : {0, 1}) {
+    auto *&NewOperand = NewOperands[OpIdx];
+    // Create a new PHI node to receive the values the operand has in each
+    // incoming basic block.
+    NewOperand = PHINode::Create(
+        FirstIVI->getOperand(OpIdx)->getType(), PN.getNumIncomingValues(),
+        FirstIVI->getOperand(OpIdx)->getName() + ".pn");
+    // And populate each operand's PHI with said values.
+    for (auto Incoming : zip(PN.blocks(), PN.incoming_values()))
+      NewOperand->addIncoming(
+          cast<InsertValueInst>(std::get<1>(Incoming))->getOperand(OpIdx),
+          std::get<0>(Incoming));
+    InsertNewInstBefore(NewOperand, PN);
+  }
+
+  // And finally, create `insertvalue` over the newly-formed PHI nodes.
+  auto *NewIVI = InsertValueInst::Create(NewOperands[0], NewOperands[1],
+                                         FirstIVI->getIndices(), PN.getName());
+
+  PHIArgMergedDebugLoc(NewIVI, PN);
+  ++NumPHIsOfInsertValues;
+  return NewIVI;
+}
+
+/// If we have something like phi [extractvalue(a,0), extractvalue(b,0)],
+/// turn this into a phi[a,b] and a single extractvalue.
+Instruction *
+InstCombinerImpl::foldPHIArgExtractValueInstructionIntoPHI(PHINode &PN) {
+  auto *FirstEVI = cast<ExtractValueInst>(PN.getIncomingValue(0));
+
+  // Scan to see if all operands are `extractvalue`'s with the same indicies,
+  // and all have a single use.
+  for (unsigned i = 1; i != PN.getNumIncomingValues(); ++i) {
+    auto *I = dyn_cast<ExtractValueInst>(PN.getIncomingValue(i));
+    if (!I || !I->hasOneUser() || I->getIndices() != FirstEVI->getIndices() ||
+        I->getAggregateOperand()->getType() !=
+            FirstEVI->getAggregateOperand()->getType())
+      return nullptr;
+  }
+
+  // Create a new PHI node to receive the values the aggregate operand has
+  // in each incoming basic block.
+  auto *NewAggregateOperand = PHINode::Create(
+      FirstEVI->getAggregateOperand()->getType(), PN.getNumIncomingValues(),
+      FirstEVI->getAggregateOperand()->getName() + ".pn");
+  // And populate the PHI with said values.
+  for (auto Incoming : zip(PN.blocks(), PN.incoming_values()))
+    NewAggregateOperand->addIncoming(
+        cast<ExtractValueInst>(std::get<1>(Incoming))->getAggregateOperand(),
+        std::get<0>(Incoming));
+  InsertNewInstBefore(NewAggregateOperand, PN);
+
+  // And finally, create `extractvalue` over the newly-formed PHI nodes.
+  auto *NewEVI = ExtractValueInst::Create(NewAggregateOperand,
+                                          FirstEVI->getIndices(), PN.getName());
+
+  PHIArgMergedDebugLoc(NewEVI, PN);
+  ++NumPHIsOfExtractValues;
+  return NewEVI;
+}
+
 /// If we have something like phi [add (a,b), add(a,c)] and if a/b/c and the
-/// adds all have a single use, turn this into a phi and a single binop.
-Instruction *InstCombiner::FoldPHIArgBinOpIntoPHI(PHINode &PN) {
+/// adds all have a single user, turn this into a phi and a single binop.
+Instruction *InstCombinerImpl::foldPHIArgBinOpIntoPHI(PHINode &PN) {
   Instruction *FirstInst = cast<Instruction>(PN.getIncomingValue(0));
   assert(isa<BinaryOperator>(FirstInst) || isa<CmpInst>(FirstInst));
   unsigned Opc = FirstInst->getOpcode();
@@ -291,10 +388,10 @@ Instruction *InstCombiner::FoldPHIArgBinOpIntoPHI(PHINode &PN) {
   Type *LHSType = LHSVal->getType();
   Type *RHSType = RHSVal->getType();
 
-  // Scan to see if all operands are the same opcode, and all have one use.
+  // Scan to see if all operands are the same opcode, and all have one user.
   for (unsigned i = 1; i != PN.getNumIncomingValues(); ++i) {
     Instruction *I = dyn_cast<Instruction>(PN.getIncomingValue(i));
-    if (!I || I->getOpcode() != Opc || !I->hasOneUse() ||
+    if (!I || I->getOpcode() != Opc || !I->hasOneUser() ||
         // Verify type of the LHS matches so we don't fold cmp's of different
         // types.
         I->getOperand(0)->getType() != LHSType ||
@@ -374,7 +471,7 @@ Instruction *InstCombiner::FoldPHIArgBinOpIntoPHI(PHINode &PN) {
   return NewBinOp;
 }
 
-Instruction *InstCombiner::FoldPHIArgGEPIntoPHI(PHINode &PN) {
+Instruction *InstCombinerImpl::foldPHIArgGEPIntoPHI(PHINode &PN) {
   GetElementPtrInst *FirstInst =cast<GetElementPtrInst>(PN.getIncomingValue(0));
 
   SmallVector<Value*, 16> FixedOperands(FirstInst->op_begin(),
@@ -390,11 +487,12 @@ Instruction *InstCombiner::FoldPHIArgGEPIntoPHI(PHINode &PN) {
 
   bool AllInBounds = true;
 
-  // Scan to see if all operands are the same opcode, and all have one use.
+  // Scan to see if all operands are the same opcode, and all have one user.
   for (unsigned i = 1; i != PN.getNumIncomingValues(); ++i) {
-    GetElementPtrInst *GEP= dyn_cast<GetElementPtrInst>(PN.getIncomingValue(i));
-    if (!GEP || !GEP->hasOneUse() || GEP->getType() != FirstInst->getType() ||
-      GEP->getNumOperands() != FirstInst->getNumOperands())
+    GetElementPtrInst *GEP =
+        dyn_cast<GetElementPtrInst>(PN.getIncomingValue(i));
+    if (!GEP || !GEP->hasOneUser() || GEP->getType() != FirstInst->getType() ||
+        GEP->getNumOperands() != FirstInst->getNumOperands())
       return nullptr;
 
     AllInBounds &= GEP->isInBounds();
@@ -483,7 +581,6 @@ Instruction *InstCombiner::FoldPHIArgGEPIntoPHI(PHINode &PN) {
   return NewGEP;
 }
 
-
 /// Return true if we know that it is safe to sink the load out of the block
 /// that defines it. This means that it must be obvious the value of the load is
 /// not changed from the point of the load to the end of the block it is in.
@@ -495,8 +592,14 @@ static bool isSafeAndProfitableToSinkLoad(LoadInst *L) {
   BasicBlock::iterator BBI = L->getIterator(), E = L->getParent()->end();
 
   for (++BBI; BBI != E; ++BBI)
-    if (BBI->mayWriteToMemory())
+    if (BBI->mayWriteToMemory()) {
+      // Calls that only access inaccessible memory do not block sinking the
+      // load.
+      if (auto *CB = dyn_cast<CallBase>(BBI))
+        if (CB->onlyAccessesInaccessibleMemory())
+          continue;
       return false;
+    }
 
   // Check for non-address taken alloca.  If not address-taken already, it isn't
   // profitable to do this xform.
@@ -529,7 +632,7 @@ static bool isSafeAndProfitableToSinkLoad(LoadInst *L) {
   return true;
 }
 
-Instruction *InstCombiner::FoldPHIArgLoadIntoPHI(PHINode &PN) {
+Instruction *InstCombinerImpl::foldPHIArgLoadIntoPHI(PHINode &PN) {
   LoadInst *FirstLI = cast<LoadInst>(PN.getIncomingValue(0));
 
   // FIXME: This is overconservative; this transform is allowed in some cases
@@ -543,7 +646,7 @@ Instruction *InstCombiner::FoldPHIArgLoadIntoPHI(PHINode &PN) {
   // visitLoadInst will propagate an alignment onto the load when TD is around,
   // and if TD isn't around, we can't handle the mixed case.
   bool isVolatile = FirstLI->isVolatile();
-  unsigned LoadAlignment = FirstLI->getAlignment();
+  Align LoadAlignment = FirstLI->getAlign();
   unsigned LoadAddrSpace = FirstLI->getPointerAddressSpace();
 
   // We can't sink the load if the loaded value could be modified between the
@@ -562,7 +665,7 @@ Instruction *InstCombiner::FoldPHIArgLoadIntoPHI(PHINode &PN) {
   // Check to see if all arguments are the same operation.
   for (unsigned i = 1, e = PN.getNumIncomingValues(); i != e; ++i) {
     LoadInst *LI = dyn_cast<LoadInst>(PN.getIncomingValue(i));
-    if (!LI || !LI->hasOneUse())
+    if (!LI || !LI->hasOneUser())
       return nullptr;
 
     // We can't sink the load if the loaded value could be modified between
@@ -573,12 +676,7 @@ Instruction *InstCombiner::FoldPHIArgLoadIntoPHI(PHINode &PN) {
         !isSafeAndProfitableToSinkLoad(LI))
       return nullptr;
 
-    // If some of the loads have an alignment specified but not all of them,
-    // we can't do the transformation.
-    if ((LoadAlignment != 0) != (LI->getAlignment() != 0))
-      return nullptr;
-
-    LoadAlignment = std::min(LoadAlignment, LI->getAlignment());
+    LoadAlignment = std::min(LoadAlignment, Align(LI->getAlign()));
 
     // If the PHI is of volatile loads and the load block has multiple
     // successors, sinking it would remove a load of the volatile value from
@@ -596,7 +694,8 @@ Instruction *InstCombiner::FoldPHIArgLoadIntoPHI(PHINode &PN) {
 
   Value *InVal = FirstLI->getOperand(0);
   NewPN->addIncoming(InVal, PN.getIncomingBlock(0));
-  LoadInst *NewLI = new LoadInst(NewPN, "", isVolatile, LoadAlignment);
+  LoadInst *NewLI =
+      new LoadInst(FirstLI->getType(), NewPN, "", isVolatile, LoadAlignment);
 
   unsigned KnownIDs[] = {
     LLVMContext::MD_tbaa,
@@ -608,6 +707,7 @@ Instruction *InstCombiner::FoldPHIArgLoadIntoPHI(PHINode &PN) {
     LLVMContext::MD_align,
     LLVMContext::MD_dereferenceable,
     LLVMContext::MD_dereferenceable_or_null,
+    LLVMContext::MD_access_group,
   };
 
   for (unsigned ID : KnownIDs)
@@ -616,7 +716,7 @@ Instruction *InstCombiner::FoldPHIArgLoadIntoPHI(PHINode &PN) {
   // Add all operands to the new PHI and combine TBAA metadata.
   for (unsigned i = 1, e = PN.getNumIncomingValues(); i != e; ++i) {
     LoadInst *LI = cast<LoadInst>(PN.getIncomingValue(i));
-    combineMetadata(NewLI, LI, KnownIDs);
+    combineMetadata(NewLI, LI, KnownIDs, true);
     Value *NewInVal = LI->getOperand(0);
     if (NewInVal != InVal)
       InVal = nullptr;
@@ -646,10 +746,10 @@ Instruction *InstCombiner::FoldPHIArgLoadIntoPHI(PHINode &PN) {
 /// TODO: This function could handle other cast types, but then it might
 /// require special-casing a cast from the 'i1' type. See the comment in
 /// FoldPHIArgOpIntoPHI() about pessimizing illegal integer types.
-Instruction *InstCombiner::FoldPHIArgZextsIntoPHI(PHINode &Phi) {
+Instruction *InstCombinerImpl::foldPHIArgZextsIntoPHI(PHINode &Phi) {
   // We cannot create a new instruction after the PHI if the terminator is an
   // EHPad because there is no valid insertion point.
-  if (TerminatorInst *TI = Phi.getParent()->getTerminator())
+  if (Instruction *TI = Phi.getParent()->getTerminator())
     if (TI->isEHPad())
       return nullptr;
 
@@ -678,8 +778,8 @@ Instruction *InstCombiner::FoldPHIArgZextsIntoPHI(PHINode &Phi) {
   unsigned NumConsts = 0;
   for (Value *V : Phi.incoming_values()) {
     if (auto *Zext = dyn_cast<ZExtInst>(V)) {
-      // All zexts must be identical and have one use.
-      if (Zext->getSrcTy() != NarrowType || !Zext->hasOneUse())
+      // All zexts must be identical and have one user.
+      if (Zext->getSrcTy() != NarrowType || !Zext->hasOneUser())
         return nullptr;
       NewIncoming.push_back(Zext->getOperand(0));
       NumZexts++;
@@ -720,19 +820,23 @@ Instruction *InstCombiner::FoldPHIArgZextsIntoPHI(PHINode &Phi) {
 /// If all operands to a PHI node are the same "unary" operator and they all are
 /// only used by the PHI, PHI together their inputs, and do the operation once,
 /// to the result of the PHI.
-Instruction *InstCombiner::FoldPHIArgOpIntoPHI(PHINode &PN) {
+Instruction *InstCombinerImpl::foldPHIArgOpIntoPHI(PHINode &PN) {
   // We cannot create a new instruction after the PHI if the terminator is an
   // EHPad because there is no valid insertion point.
-  if (TerminatorInst *TI = PN.getParent()->getTerminator())
+  if (Instruction *TI = PN.getParent()->getTerminator())
     if (TI->isEHPad())
       return nullptr;
 
   Instruction *FirstInst = cast<Instruction>(PN.getIncomingValue(0));
 
   if (isa<GetElementPtrInst>(FirstInst))
-    return FoldPHIArgGEPIntoPHI(PN);
+    return foldPHIArgGEPIntoPHI(PN);
   if (isa<LoadInst>(FirstInst))
-    return FoldPHIArgLoadIntoPHI(PN);
+    return foldPHIArgLoadIntoPHI(PN);
+  if (isa<InsertValueInst>(FirstInst))
+    return foldPHIArgInsertValueInstructionIntoPHI(PN);
+  if (isa<ExtractValueInst>(FirstInst))
+    return foldPHIArgExtractValueInstructionIntoPHI(PN);
 
   // Scan the instruction, looking for input operations that can be folded away.
   // If all input operands to the phi are the same instruction (e.g. a cast from
@@ -755,7 +859,7 @@ Instruction *InstCombiner::FoldPHIArgOpIntoPHI(PHINode &PN) {
     // otherwise call FoldPHIArgBinOpIntoPHI.
     ConstantOp = dyn_cast<Constant>(FirstInst->getOperand(1));
     if (!ConstantOp)
-      return FoldPHIArgBinOpIntoPHI(PN);
+      return foldPHIArgBinOpIntoPHI(PN);
   } else {
     return nullptr;  // Cannot fold this operation.
   }
@@ -763,7 +867,7 @@ Instruction *InstCombiner::FoldPHIArgOpIntoPHI(PHINode &PN) {
   // Check to see if all arguments are the same operation.
   for (unsigned i = 1, e = PN.getNumIncomingValues(); i != e; ++i) {
     Instruction *I = dyn_cast<Instruction>(PN.getIncomingValue(i));
-    if (!I || !I->hasOneUse() || !I->isSameOperationAs(FirstInst))
+    if (!I || !I->hasOneUser() || !I->isSameOperationAs(FirstInst))
       return nullptr;
     if (CastSrcTy) {
       if (I->getOperand(0)->getType() != CastSrcTy)
@@ -915,7 +1019,7 @@ struct LoweredPHIRecord {
   LoweredPHIRecord(PHINode *pn, unsigned Sh)
     : PN(pn), Shift(Sh), Width(0) {}
 };
-}
+} // namespace
 
 namespace llvm {
   template<>
@@ -936,7 +1040,7 @@ namespace llvm {
              LHS.Width == RHS.Width;
     }
   };
-}
+} // namespace llvm
 
 
 /// This is an integer PHI and we know that it has an illegal type: see if it is
@@ -947,7 +1051,7 @@ namespace llvm {
 /// TODO: The user of the trunc may be an bitcast to float/double/vector or an
 /// inttoptr.  We should produce new PHIs in the right type.
 ///
-Instruction *InstCombiner::SliceUpIllegalIntegerPHI(PHINode &FirstPhi) {
+Instruction *InstCombinerImpl::SliceUpIllegalIntegerPHI(PHINode &FirstPhi) {
   // PHIUsers - Keep track of all of the truncated values extracted from a set
   // of PHIs, along with their offset.  These are the things we want to rewrite.
   SmallVector<PHIUsageRecord, 16> PHIUsers;
@@ -1001,6 +1105,11 @@ Instruction *InstCombiner::SliceUpIllegalIntegerPHI(PHINode &FirstPhi) {
       if (UserI->getOpcode() != Instruction::LShr ||
           !UserI->hasOneUse() || !isa<TruncInst>(UserI->user_back()) ||
           !isa<ConstantInt>(UserI->getOperand(1)))
+        return nullptr;
+
+      // Bail on out of range shifts.
+      unsigned SizeInBits = UserI->getType()->getScalarSizeInBits();
+      if (cast<ConstantInt>(UserI->getOperand(1))->getValue().uge(SizeInBits))
         return nullptr;
 
       unsigned Shift = cast<ConstantInt>(UserI->getOperand(1))->getZExtValue();
@@ -1116,13 +1225,85 @@ Instruction *InstCombiner::SliceUpIllegalIntegerPHI(PHINode &FirstPhi) {
   return replaceInstUsesWith(FirstPhi, Undef);
 }
 
+static Value *SimplifyUsingControlFlow(InstCombiner &Self, PHINode &PN,
+                                       const DominatorTree &DT) {
+  // Simplify the following patterns:
+  //       if (cond)
+  //       /       \
+  //      ...      ...
+  //       \       /
+  //    phi [true] [false]
+  if (!PN.getType()->isIntegerTy(1))
+    return nullptr;
+
+  if (PN.getNumOperands() != 2)
+    return nullptr;
+
+  // Make sure all inputs are constants.
+  if (!all_of(PN.operands(), [](Value *V) { return isa<ConstantInt>(V); }))
+    return nullptr;
+
+  BasicBlock *BB = PN.getParent();
+  // Do not bother with unreachable instructions.
+  if (!DT.isReachableFromEntry(BB))
+    return nullptr;
+
+  // Same inputs.
+  if (PN.getOperand(0) == PN.getOperand(1))
+    return PN.getOperand(0);
+
+  BasicBlock *TruePred = nullptr, *FalsePred = nullptr;
+  for (auto *Pred : predecessors(BB)) {
+    auto *Input = cast<ConstantInt>(PN.getIncomingValueForBlock(Pred));
+    if (Input->isAllOnesValue())
+      TruePred = Pred;
+    else
+      FalsePred = Pred;
+  }
+  assert(TruePred && FalsePred && "Must be!");
+
+  // Check which edge of the dominator dominates the true input. If it is the
+  // false edge, we should invert the condition.
+  auto *IDom = DT.getNode(BB)->getIDom()->getBlock();
+  auto *BI = dyn_cast<BranchInst>(IDom->getTerminator());
+  if (!BI || BI->isUnconditional())
+    return nullptr;
+
+  // Check that edges outgoing from the idom's terminators dominate respective
+  // inputs of the Phi.
+  BasicBlockEdge TrueOutEdge(IDom, BI->getSuccessor(0));
+  BasicBlockEdge FalseOutEdge(IDom, BI->getSuccessor(1));
+
+  BasicBlockEdge TrueIncEdge(TruePred, BB);
+  BasicBlockEdge FalseIncEdge(FalsePred, BB);
+
+  auto *Cond = BI->getCondition();
+  if (DT.dominates(TrueOutEdge, TrueIncEdge) &&
+      DT.dominates(FalseOutEdge, FalseIncEdge))
+    // This Phi is actually equivalent to branching condition of IDom.
+    return Cond;
+  else if (DT.dominates(TrueOutEdge, FalseIncEdge) &&
+           DT.dominates(FalseOutEdge, TrueIncEdge)) {
+    // This Phi is actually opposite to branching condition of IDom. We invert
+    // the condition that will potentially open up some opportunities for
+    // sinking.
+    auto InsertPt = BB->getFirstInsertionPt();
+    if (InsertPt != BB->end()) {
+      Self.Builder.SetInsertPoint(&*InsertPt);
+      return Self.Builder.CreateNot(Cond);
+    }
+  }
+
+  return nullptr;
+}
+
 // PHINode simplification
 //
-Instruction *InstCombiner::visitPHINode(PHINode &PN) {
+Instruction *InstCombinerImpl::visitPHINode(PHINode &PN) {
   if (Value *V = SimplifyInstruction(&PN, SQ.getWithInstruction(&PN)))
     return replaceInstUsesWith(PN, V);
 
-  if (Instruction *Result = FoldPHIArgZextsIntoPHI(PN))
+  if (Instruction *Result = foldPHIArgZextsIntoPHI(PN))
     return Result;
 
   // If all PHI operands are the same operation, pull them through the PHI,
@@ -1130,18 +1311,16 @@ Instruction *InstCombiner::visitPHINode(PHINode &PN) {
   if (isa<Instruction>(PN.getIncomingValue(0)) &&
       isa<Instruction>(PN.getIncomingValue(1)) &&
       cast<Instruction>(PN.getIncomingValue(0))->getOpcode() ==
-      cast<Instruction>(PN.getIncomingValue(1))->getOpcode() &&
-      // FIXME: The hasOneUse check will fail for PHIs that use the value more
-      // than themselves more than once.
-      PN.getIncomingValue(0)->hasOneUse())
-    if (Instruction *Result = FoldPHIArgOpIntoPHI(PN))
+          cast<Instruction>(PN.getIncomingValue(1))->getOpcode() &&
+      PN.getIncomingValue(0)->hasOneUser())
+    if (Instruction *Result = foldPHIArgOpIntoPHI(PN))
       return Result;
 
   // If this is a trivial cycle in the PHI node graph, remove it.  Basically, if
   // this PHI only has a single use (a PHI), and if that PHI only has one use (a
   // PHI)... break the cycle.
   if (PN.hasOneUse()) {
-    if (Instruction *Result = FoldIntegerTypedPHI(PN))
+    if (Instruction *Result = foldIntegerTypedPHI(PN))
       return Result;
 
     Instruction *PHIUser = cast<Instruction>(PN.user_back());
@@ -1176,15 +1355,22 @@ Instruction *InstCombiner::visitPHINode(PHINode &PN) {
     if (CmpInst && isa<IntegerType>(PN.getType()) && CmpInst->isEquality() &&
         match(CmpInst->getOperand(1), m_Zero())) {
       ConstantInt *NonZeroConst = nullptr;
+      bool MadeChange = false;
       for (unsigned i = 0, e = PN.getNumIncomingValues(); i != e; ++i) {
         Instruction *CtxI = PN.getIncomingBlock(i)->getTerminator();
         Value *VA = PN.getIncomingValue(i);
         if (isKnownNonZero(VA, DL, 0, &AC, CtxI, &DT)) {
           if (!NonZeroConst)
             NonZeroConst = GetAnyNonZeroConstInt(PN);
-          PN.setIncomingValue(i, NonZeroConst);
+
+          if (NonZeroConst != VA) {
+            replaceOperand(PN, i, NonZeroConst);
+            MadeChange = true;
+          }
         }
       }
+      if (MadeChange)
+        return &PN;
     }
   }
 
@@ -1247,6 +1433,21 @@ Instruction *InstCombiner::visitPHINode(PHINode &PN) {
       }
     }
 
+  // Is there an identical PHI node in this basic block?
+  for (PHINode &IdenticalPN : PN.getParent()->phis()) {
+    // Ignore the PHI node itself.
+    if (&IdenticalPN == &PN)
+      continue;
+    // Note that even though we've just canonicalized this PHI, due to the
+    // worklist visitation order, there are no guarantess that *every* PHI
+    // has been canonicalized, so we can't just compare operands ranges.
+    if (!PN.isIdenticalToWhenDefined(&IdenticalPN))
+      continue;
+    // Just use that PHI instead then.
+    ++NumPHICSEs;
+    return replaceInstUsesWith(PN, &IdenticalPN);
+  }
+
   // If this is an integer PHI and we know that it has an illegal type, see if
   // it is only used by trunc or trunc(lshr) operations.  If so, we split the
   // PHI into the various pieces being extracted.  This sort of thing is
@@ -1255,6 +1456,10 @@ Instruction *InstCombiner::visitPHINode(PHINode &PN) {
       !DL.isLegalInteger(PN.getType()->getPrimitiveSizeInBits()))
     if (Instruction *Res = SliceUpIllegalIntegerPHI(PN))
       return Res;
+
+  // Ultimately, try to replace this Phi with a dominating condition.
+  if (auto *V = SimplifyUsingControlFlow(*this, PN, DT))
+    return replaceInstUsesWith(PN, V);
 
   return nullptr;
 }

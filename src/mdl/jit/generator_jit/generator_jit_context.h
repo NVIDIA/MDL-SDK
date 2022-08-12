@@ -416,17 +416,17 @@ public:
     /// \param x      first component
     /// \param y      second component
     /// \param z      third component
-    llvm::Constant *get_constant(llvm::VectorType *vtype, float x, float y, float z);
+    llvm::Constant* get_constant(llvm::FixedVectorType* vtype, float x, float y, float z);
 
     /// Get a vector4 constant.
     ///
-    /// \param vtype  a LLVM vector type, must be of at least length 3, longer vectors
+    /// \param vtype  a LLVM vector type, must be of at least length 4, longer vectors
     ///               will be filled up with zero
     /// \param x      first component
     /// \param y      second component
     /// \param z      third component
     /// \param w      fourth component
-    llvm::Constant *get_constant(llvm::VectorType *vtype, float x, float y, float z, float w);
+    llvm::Constant *get_constant(llvm::FixedVectorType *vtype, float x, float y, float z, float w);
 
     /// Get the file name of a module.
     ///
@@ -544,10 +544,13 @@ public:
     /// \param v     the scalar value
     llvm::Value *create_splat(llvm::Type *res_type, llvm::Value *v);
 
-    /// Get the number of elements for a vector or an array.
+    /// Get the number of elements for a fixed vector or an array.
     ///
     /// \param val   the value
     unsigned get_num_elements(llvm::Value *val);
+
+    /// Get the element type for a fixed vector or an array.
+    llvm::Type *get_element_type(llvm::Type *type);
 
     /// Creates a ExtractValue or ExtractElement instruction.
     ///
@@ -830,7 +833,7 @@ public:
     ///
     /// \param self   the value representing the this pointer for retrieving the vtable
     /// \param index  the vtable index.
-    llvm::Value *get_tex_lookup_func(
+    llvm::FunctionCallee get_tex_lookup_func(
         llvm::Value                                    *self,
         mi::mdl::Type_mapper::Tex_handler_vtable_index index);
 

@@ -152,7 +152,7 @@ public:
     virtual const char* get_value( const char* key, Size index) const = 0;
 };
 
-/*@}*/ // end group mi_neuray_mdl_misc
+/**@}*/ // end group mi_neuray_mdl_misc
 
 } // namespace neuraylib
 

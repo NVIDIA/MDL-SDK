@@ -75,7 +75,6 @@ public:
     /// Destructor of Mdl_impexp_api_impl.
     virtual ~Mdl_impexp_api_impl();
 
-public:
     // public API methods
 
     mi::Sint32 load_module(

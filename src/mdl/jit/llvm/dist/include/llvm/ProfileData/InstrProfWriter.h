@@ -1,9 +1,8 @@
 //===- InstrProfWriter.h - Instrumented profiling writer --------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -34,18 +33,22 @@ class raw_fd_ostream;
 class InstrProfWriter {
 public:
   using ProfilingData = SmallDenseMap<uint64_t, InstrProfRecord>;
-  enum ProfKind { PF_Unknown = 0, PF_FE, PF_IRLevel };
+  // PF_IRLevelWithCS is the profile from context sensitive IR instrumentation.
+  enum ProfKind { PF_Unknown = 0, PF_FE, PF_IRLevel, PF_IRLevelWithCS };
 
 private:
   bool Sparse;
   StringMap<ProfilingData> FunctionData;
   ProfKind ProfileKind = PF_Unknown;
+  bool InstrEntryBBEnabled;
   // Use raw pointer here for the incomplete type object.
   InstrProfRecordWriterTrait *InfoObj;
 
 public:
-  InstrProfWriter(bool Sparse = false);
+  InstrProfWriter(bool Sparse = false, bool InstrEntryBBEnabled = false);
   ~InstrProfWriter();
+
+  StringMap<ProfilingData> &getProfileData() { return FunctionData; }
 
   /// Add function counts for the given function. If there are already counts
   /// for this function and the hash and number of counts match, each counter is
@@ -75,20 +78,37 @@ public:
   std::unique_ptr<MemoryBuffer> writeBuffer();
 
   /// Set the ProfileKind. Report error if mixing FE and IR level profiles.
-  Error setIsIRLevelProfile(bool IsIRLevel) {
+  /// \c WithCS indicates if this is for contenxt sensitive instrumentation.
+  Error setIsIRLevelProfile(bool IsIRLevel, bool WithCS) {
     if (ProfileKind == PF_Unknown) {
-      ProfileKind = IsIRLevel ? PF_IRLevel: PF_FE;
+      if (IsIRLevel)
+        ProfileKind = WithCS ? PF_IRLevelWithCS : PF_IRLevel;
+      else
+        ProfileKind = PF_FE;
       return Error::success();
     }
-    return (IsIRLevel == (ProfileKind == PF_IRLevel))
-               ? Error::success()
-               : make_error<InstrProfError>(
-                     instrprof_error::unsupported_version);
+
+    if (((ProfileKind != PF_FE) && !IsIRLevel) ||
+        ((ProfileKind == PF_FE) && IsIRLevel))
+      return make_error<InstrProfError>(instrprof_error::unsupported_version);
+
+    // When merging a context-sensitive profile (WithCS == true) with an IRLevel
+    // profile, set the kind to PF_IRLevelWithCS.
+    if (ProfileKind == PF_IRLevel && WithCS)
+      ProfileKind = PF_IRLevelWithCS;
+
+    return Error::success();
   }
 
+  void setInstrEntryBBEnabled(bool Enabled) { InstrEntryBBEnabled = Enabled; }
   // Internal interface for testing purpose only.
   void setValueProfDataEndianness(support::endianness Endianness);
   void setOutputSparse(bool Sparse);
+  // Compute the overlap b/w this object and Other. Program level result is
+  // stored in Overlap and function level result is stored in FuncLevelOverlap.
+  void overlapRecord(NamedInstrProfRecord &&Other, OverlapStats &Overlap,
+                     OverlapStats &FuncLevelOverlap,
+                     const OverlapFuncFilters &FuncFilter);
 
 private:
   void addRecord(StringRef Name, uint64_t Hash, InstrProfRecord &&I,

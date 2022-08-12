@@ -212,8 +212,7 @@ const mi::IArray* Module_impl::get_function_overloads(
         return nullptr;
 
     std::vector<const char*> paramter_types_vector;
-    size_t n = parameter_types ? parameter_types->get_length() : 0;
-    for( size_t i = 0; i < n; ++i) {
+    for( size_t i = 0, n = parameter_types ? parameter_types->get_length() : 0; i < n; ++i) {
         mi::base::Handle<const mi::IString> element( parameter_types->get_element<mi::IString>( i));
         if( !element)
             return nullptr;
@@ -317,12 +316,12 @@ mi::Sint32 Module_impl::reload(
     mi::neuraylib::IMdl_execution_context* context)
 {
     MDL::Execution_context default_context;
-    mi::Sint32 result = get_db_element()->reload(
-        get_db_transaction(),
-        recursive,
-        unwrap_and_clear_context(context, default_context));
+    MDL::Execution_context* ctx = unwrap_and_clear_context( context, default_context);
 
-    add_journal_flag(SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
+    mi::Sint32 result = get_db_element()->reload(
+        get_db_transaction(), recursive, ctx);
+
+    add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
     return result;
 }
 
@@ -332,20 +331,21 @@ mi::Sint32 Module_impl::reload_from_string(
     mi::neuraylib::IMdl_execution_context* context)
 {
     MDL::Execution_context default_context;
-    MDL::Execution_context* ctx = unwrap_and_clear_context(context, default_context);
-    if (!module_source || strlen(module_source) == 0) {
-        return MDL::add_context_error(ctx, "Module source cannot be empty.", -1);
+    MDL::Execution_context* ctx = unwrap_and_clear_context( context, default_context);
+    if( !module_source || strlen( module_source) == 0) {
+        MDL::add_error_message( ctx, "Module source cannot be empty.", -1);
+        return -1;
     }
 
     mi::base::Handle<mi::neuraylib::IReader> reader(
-        Impexp_utilities::create_reader(module_source, strlen(module_source)));
+        Impexp_utilities::create_reader( module_source, strlen( module_source)));
     mi::Sint32 result = get_db_element()->reload_from_string(
         get_db_transaction(),
         reader.get(),
         recursive,
         ctx);
 
-    add_journal_flag(SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
+    add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
     return result;
 }
 
@@ -380,6 +380,7 @@ const mi::IArray* Module_impl::deprecated_get_function_overloads(
     }
 
     std::vector<const char*> parameter_types_vector_c_str;
+    parameter_types_vector_c_str.reserve(parameter_types_vector.size());
     for( const auto& s: parameter_types_vector)
         parameter_types_vector_c_str.push_back( s.c_str());
 

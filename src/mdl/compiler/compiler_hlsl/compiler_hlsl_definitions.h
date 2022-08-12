@@ -421,6 +421,12 @@ public:
     /// Get the declaration of the definition.
     Declaration_field *get_declaration() const HLSL_FINAL;
 
+    /// Set the field index of a field member.
+    void set_field_index(size_t idx) { m_field_index = idx; }
+
+    /// Get the field index of a field member.
+    size_t get_field_index() const { return m_field_index; }
+
 private:
     /// Constructor.
     ///
@@ -437,6 +443,10 @@ private:
         Scope          *parent_scope,
         Definition     *outer,
         size_t         id);
+
+private:
+    /// If this member is a field, its index inside the enclosing type.
+    size_t m_field_index;
 };
 
 /// A operator definition.
@@ -776,12 +786,14 @@ public:
 
     /// Enter a new member definition.
     ///
-    /// \param symbol  the symbol of the member
-    /// \param type    the type of the member
-    /// \param loc     the location of the member
+    /// \param symbol       the symbol of the member
+    /// \param type         the type of the member
+    /// \param field_index  the field index of this member (if it is a struct field)
+    /// \param loc          the location of the member
     Def_member *enter_member_definition(
         Symbol         *symbol,
         Type           *type,
+        size_t         field_index,
         Location const *loc);
 
     /// Enter a new operator definition.

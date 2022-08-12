@@ -825,6 +825,9 @@ class SignatureParser:
 				return True
 
 		if all_atomic and self.is_atomic_type(ret_type):
+			if name == "log10":
+				self.intrinsic_modes[name + signature] = "math::log10_atomic"
+				return True
 			# simple all float/int/bool functions
 			self.intrinsic_modes[name + signature] = "math::all_atomic"
 			return True
@@ -1641,6 +1644,79 @@ class SignatureParser:
 			}
 			""")
 
+		elif mode == "math::log10_atomic":
+			suffix = self.get_type_suffix(params[0])
+			suffix_upper = suffix.upper()
+			enum_value = self.get_runtime_enum("log10" + suffix)
+			type = self.m_inv_types[params[0]]
+
+			self.format_code(f,
+			"""// atomic log10
+			llvm::Function *callee = get_runtime_func(%s);
+			llvm::Value *call_args[%d];
+			if (inst.get_return_derivs()) {
+			""" % (enum_value, len(params)))
+
+			for idx, param in enumerate(params):
+				self.write(f, "call_args[%d] = ctx.get_dual_val(%s);\n"
+					% (idx, chr(ord('a') + idx)))
+
+
+			self.format_code(f,
+			"""
+			llvm::Value *val;
+			if (callee != nullptr) {
+				// we have log10
+				val = ctx->CreateCall(callee, call_args);
+			} else {
+				// log10(a) = log2(a) * 1/log2(10)
+				llvm::Function *callee = get_runtime_func(%(log2)s);
+				val = ctx->CreateCall(callee, call_args);
+				llvm::Value *r_log2_10 = ctx.get_constant(%(type)s(0.301029996));
+				val = ctx->CreateFMul(val, r_log2_10);
+			}
+			""" % { "log2": self.get_runtime_enum("log2" + suffix), "type": type } )
+
+			# Calculate derivatives for specific functions
+			self.format_code(f, """
+			// log10'(a) = a' * 1/a * 1/log(10)   for a > 0, 0 otherwise
+			llvm::Value *a_val = ctx.get_dual_val(a);
+			llvm::Value *r_a_log_10 = ctx->CreateFDiv(
+				ctx.get_constant(%(type)s(0.43429448190325182765112891891661)), a_val);
+
+			llvm::Value *dx_res = ctx->CreateFMul(ctx.get_dual_dx(a), r_a_log_10);
+			llvm::Value *dy_res = ctx->CreateFMul(ctx.get_dual_dy(a), r_a_log_10);
+
+			llvm::Value *zero = ctx.get_constant(%(type)s(0));
+			llvm::Value *too_small = ctx->CreateFCmpOLE(a_val, zero);
+
+			llvm::Value *dx = ctx->CreateSelect(too_small, zero, dx_res);
+			llvm::Value *dy = ctx->CreateSelect(too_small, zero, dy_res);
+			res = ctx.get_dual(val, dx, dy);
+			""" % { "type": type })
+
+
+			self.format_code(f, "} else {\n")
+
+			for idx, param in enumerate(params):
+				self.write(f, "call_args[%d] = %s;\n" % (idx, chr(ord('a') + idx)))
+
+			self.format_code(f,
+			"""
+			if (callee != nullptr) {
+				// we have log10
+				res = ctx->CreateCall(callee, call_args);
+			} else {
+				// log10(a) = log2(a) * 1/log2(10)
+				llvm::Function *callee = get_runtime_func(%(log2)s);
+				res = ctx->CreateCall(callee, call_args);
+				llvm::Value *r_log2_10 = ctx.get_constant(%(type)s(0.301029996));
+				res = ctx->CreateFMul(res, r_log2_10);
+			}
+			""" % { "log2": self.get_runtime_enum("log2" + suffix), "type": type } )
+
+			self.format_code(f, "}\n")
+
 		elif mode == "math::any|all":
 			vt = self.get_vector_type_and_size(params[0])
 			need_or = intrinsic == "any"
@@ -1728,7 +1804,7 @@ class SignatureParser:
 				llvm::Type *base_type = ctx.get_deriv_base_type(a->getType());
 				llvm::Type *elem_type = base_type;
 				if (elem_type->isVectorTy() || elem_type->isArrayTy())
-					elem_type = base_type->getSequentialElementType();
+					elem_type = ctx.get_element_type(base_type);
 
 				llvm::Value *one = ctx.get_dual(ctx.get_constant(elem_type, 1));
 				llvm::Value *one_minus_c = ctx.create_deriv_sub(base_type, one, c);
@@ -1837,7 +1913,7 @@ class SignatureParser:
 						res = ctx->CreateFAdd(res, t);
 					}
 				} else {
-					llvm::VectorType *v_tp = llvm::cast<llvm::VectorType>(arg_tp);
+					llvm::FixedVectorType *v_tp = llvm::cast<llvm::FixedVectorType>(arg_tp);
 					llvm::Type       *e_tp = v_tp->getElementType();
 
 					llvm::Value *t = ctx->CreateFMul(a, b);
@@ -1894,9 +1970,12 @@ class SignatureParser:
 			if is_float:
 				code_params["zero"] = "0.0f"
 				code_params["one"]  = "1.0f"
+				code_params["intrinsic_base"] = "RT_STEPFF"
 			else:
 				code_params["zero"] = "0.0"
 				code_params["one"]  = "1.0"
+				code_params["intrinsic_base"] = "RT_STEPDD"
+			code_params["intrinsic"] = "RT_STEP" + ret_type.upper()
 
 			if ret_is_vec:
 				code_params["size"] = ret_is_vec[1]
@@ -1906,6 +1985,7 @@ class SignatureParser:
 				llvm::Constant *one    = ctx.get_constant(%(one)s);
 				llvm::Constant *zero   = ctx.get_constant(%(zero)s);
 				if (ret_tp->isArrayTy()) {
+					llvm::Function *callee = get_runtime_func(%(intrinsic_base)s);
 					unsigned idxes[1];
 
 					res = llvm::ConstantAggregateZero::get(ret_tp);
@@ -1914,25 +1994,44 @@ class SignatureParser:
 
 						llvm::Value *a_elem = %(get_a)s
 						llvm::Value *b_elem = %(get_b)s
-						llvm::Value *cmp    = ctx->CreateFCmp(llvm::ICmpInst::FCMP_OLT, b_elem, a_elem);
+						llvm::Value *elem;
 
-						llvm::Value *tmp = ctx->CreateSelect(cmp, zero, one);
-						res = ctx->CreateInsertValue(res, tmp, idxes);
+						if (callee != nullptr) {
+							llvm::Value *call_args[] = { a, b };
+							elem = ctx->CreateCall(callee, call_args);
+						} else {
+							llvm::Value *cmp = ctx->CreateFCmp(
+								llvm::ICmpInst::FCMP_OLT, b_elem, a_elem);
+							elem = ctx->CreateSelect(cmp, zero, one);
+						}
+						res = ctx->CreateInsertValue(res, elem, idxes);
 					}
 				} else {
-						zero = llvm::ConstantVector::getSplat(%(size)d, zero);
-						one  = llvm::ConstantVector::getSplat(%(size)d, one);
+						llvm::Function *callee = get_runtime_func(%(intrinsic)s);
+						if (callee != nullptr) {
+							llvm::Value *call_args[] = { a, b };
+							res = ctx->CreateCall(callee, call_args);
+						} else {
+						        zero = llvm::ConstantVector::getSplat(llvm::ElementCount::getFixed(%(size)d), zero);
+						        one  = llvm::ConstantVector::getSplat(llvm::ElementCount::getFixed(%(size)d), one);
 
-						llvm::Value *cmp = ctx->CreateFCmp(llvm::ICmpInst::FCMP_OLT, b, a);
-						res = ctx->CreateSelect(cmp, zero, one);
+							llvm::Value *cmp = ctx->CreateFCmp(llvm::ICmpInst::FCMP_OLT, b, a);
+							res = ctx->CreateSelect(cmp, zero, one);
+						}
 				}
 				""" % code_params
 			else:
 				code = """
-				llvm::Value *cmp     = ctx->CreateFCmp(llvm::ICmpInst::FCMP_OLT, b, a);
-				llvm::Constant *one  = ctx.get_constant(%(one)s);
-				llvm::Constant *zero = ctx.get_constant(%(zero)s);
-				res = ctx->CreateSelect(cmp, zero, one);
+				llvm::Function *callee = get_runtime_func(%(intrinsic)s);
+				if (callee != nullptr) {
+					llvm::Value *call_args[] = { a, b };
+					res = ctx->CreateCall(callee, call_args);
+				} else {
+					llvm::Value *cmp     = ctx->CreateFCmp(llvm::ICmpInst::FCMP_OLT, b, a);
+					llvm::Constant *one  = ctx.get_constant(%(one)s);
+					llvm::Constant *zero = ctx.get_constant(%(zero)s);
+					res = ctx->CreateSelect(cmp, zero, one);
+				}
 				""" % code_params
 			self.format_code(f, code)
 
@@ -2427,7 +2526,7 @@ class SignatureParser:
 				res_integral = llvm::ConstantAggregateZero::get(elm_tp);
 				res_fractional = llvm::ConstantAggregateZero::get(elm_tp);
 
-				llvm::Type  *t_type = llvm::cast<llvm::SequentialType>(elm_tp)->getElementType();
+				llvm::Type  *t_type = ctx.get_element_type(elm_tp);
 				llvm::Value *intptr = ctx.create_local(t_type, "tmp");
 				llvm::Value *tmp;
 				""" % f_name)
@@ -2835,9 +2934,19 @@ class SignatureParser:
 			} else {
 				llvm::Value *args[%(len_params)d];
 				llvm::Value *tmp;
-				llvm::Function *elem_func = get_runtime_func(%(func_name)s);
+
+				// get atomic function (without derivatives)
+				mi::mdl::IDefinition const *a_def = m_code_gen.find_stdlib_signature(
+					"::math", "%(intrinsic)s(%(param_types)s)");
+				llvm::Function *elem_func = get_intrinsic_function(a_def, /*return_derivs=*/false);
+
 				res = llvm::ConstantAggregateZero::get(ctx_data->get_return_type());
-			""" % { "len_params": len(params), "func_name": f_name } )
+			""" % {
+				"intrinsic": intrinsic,
+				"param_types": ",".join(map(
+					lambda t: (self.get_vector_type_and_size(t) or (self.m_inv_types[t],))[0],
+					params)),
+				"len_params": len(params)} )
 
 			for i in range(n_elems):
 				for idx, param in enumerate(params):
@@ -2928,10 +3037,10 @@ class SignatureParser:
 			// this is a runtime function, and as such it is not instantiated, so the arrays are
 			// passed by array descriptors
 
-			if (m_target_lang == LLVM_code_generator::TL_HLSL) {
+			if (m_code_gen.target_is_structured_language(m_target_lang)) {
 				// passed by value
 
-				// we must always inline this for HLSL to avoid pointer type arguments
+				// we must always inline this for GLSL/HLSL to avoid pointer type arguments
 				func->addFnAttr(llvm::Attribute::AlwaysInline);
 
 				llvm::Value *args[] = {
@@ -3869,7 +3978,7 @@ class SignatureParser:
 						ctx->CreateLoad(self_adr),
 						m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-					llvm::Value *resolution_func = ctx.get_tex_lookup_func(
+					llvm::FunctionCallee resolution_func = ctx.get_tex_lookup_func(
 						self, Type_mapper::THV_tex_resolution_2d);
 
 					llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_int_2_type();
@@ -4018,7 +4127,7 @@ class SignatureParser:
 					ctx->CreateLoad(self_adr),
 					m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-				llvm::Value *resolution_func = ctx.get_tex_lookup_func(
+				llvm::FunctionCallee resolution_func = ctx.get_tex_lookup_func(
 					self, Type_mapper::THV_tex_frame);
 
 				llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_int_2_type();
@@ -4091,7 +4200,7 @@ class SignatureParser:
 						ctx->CreateLoad(self_adr),
 						m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-					llvm::Value *lookup_func = ctx.get_tex_lookup_func(
+					llvm::FunctionCallee lookup_func = ctx.get_tex_lookup_func(
 						self, Type_mapper::THV_tex_lookup_float3_2d);
 
 					llvm::Type *coord_type;
@@ -4156,7 +4265,7 @@ class SignatureParser:
 						ctx->CreateLoad(self_adr),
 						m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-					llvm::Value *lookup_func = ctx.get_tex_lookup_func(
+					llvm::FunctionCallee lookup_func = ctx.get_tex_lookup_func(
 						self, Type_mapper::THV_tex_lookup_float3_3d);
 
 					llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_float_3_type();
@@ -4209,7 +4318,7 @@ class SignatureParser:
 						ctx->CreateLoad(self_adr),
 						m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-					llvm::Value *lookup_func = ctx.get_tex_lookup_func(
+					llvm::FunctionCallee lookup_func = ctx.get_tex_lookup_func(
 						self, Type_mapper::THV_tex_lookup_float3_cube);
 
 					llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_float_3_type();
@@ -4332,7 +4441,7 @@ class SignatureParser:
 						ctx->CreateLoad(self_adr),
 						m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-					llvm::Value *lookup_func = ctx.get_tex_lookup_func(
+					llvm::FunctionCallee lookup_func = ctx.get_tex_lookup_func(
 						self, Type_mapper::THV_tex_lookup_float%(vt_size)s_2d);
 
 					llvm::Type *coord_type;
@@ -4398,7 +4507,7 @@ class SignatureParser:
 						ctx->CreateLoad(self_adr),
 						m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-					llvm::Value *lookup_func = ctx.get_tex_lookup_func(
+					llvm::FunctionCallee lookup_func = ctx.get_tex_lookup_func(
 						self, Type_mapper::THV_tex_lookup_float%(vt_size)s_3d);
 
 					llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_float_%(vt_size)s_type();
@@ -4453,7 +4562,7 @@ class SignatureParser:
 						ctx->CreateLoad(self_adr),
 						m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-					llvm::Value *lookup_func = ctx.get_tex_lookup_func(
+					llvm::FunctionCallee lookup_func = ctx.get_tex_lookup_func(
 						self, Type_mapper::THV_tex_lookup_float%(vt_size)s_cube);
 
 					llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_float_%(vt_size)s_type();
@@ -4546,7 +4655,7 @@ class SignatureParser:
 						ctx->CreateLoad(self_adr),
 						m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-					llvm::Value *texel_func = ctx.get_tex_lookup_func(
+					llvm::FunctionCallee texel_func = ctx.get_tex_lookup_func(
 						self, Type_mapper::THV_tex_texel_float4_2d);
 
 					llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_float_4_type();
@@ -4587,7 +4696,7 @@ class SignatureParser:
 						ctx->CreateLoad(self_adr),
 						m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-					llvm::Value *texel_func = ctx.get_tex_lookup_func(
+					llvm::FunctionCallee texel_func = ctx.get_tex_lookup_func(
 						self, Type_mapper::THV_tex_texel_float4_3d);
 
 					llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_float_4_type();
@@ -4681,7 +4790,7 @@ class SignatureParser:
 						ctx->CreateLoad(self_adr),
 						m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-					llvm::Value *texel_func = ctx.get_tex_lookup_func(
+					llvm::FunctionCallee texel_func = ctx.get_tex_lookup_func(
 						self, Type_mapper::THV_tex_texel_float4_2d);
 
 					llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_float_4_type();
@@ -4722,7 +4831,7 @@ class SignatureParser:
 						ctx->CreateLoad(self_adr),
 						m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-					llvm::Value *texel_func = ctx.get_tex_lookup_func(
+					llvm::FunctionCallee texel_func = ctx.get_tex_lookup_func(
 						self, Type_mapper::THV_tex_texel_float4_3d);
 
 					llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_float_4_type();
@@ -4772,7 +4881,7 @@ class SignatureParser:
 					ctx->CreateLoad(self_adr),
 					m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-				llvm::Value *runtime_func = ctx.get_tex_lookup_func(
+				llvm::FunctionCallee runtime_func = ctx.get_tex_lookup_func(
 					self, Type_mapper::THV_scene_data_isvalid);
 
 				llvm::Value *args[] = { self, ctx.get_state_parameter(), a };
@@ -4798,7 +4907,7 @@ class SignatureParser:
 						ctx->CreateLoad(self_adr),
 						m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-					llvm::Value *runtime_func = ctx.get_tex_lookup_func(
+					llvm::FunctionCallee runtime_func = ctx.get_tex_lookup_func(
 						self, Type_mapper::%(runtime_func_enum_name)s);
 					llvm::Value *args[] = {
 						self, ctx.get_state_parameter(), a, b, ctx.get_constant(%(is_uniform)s) };
@@ -4823,7 +4932,7 @@ class SignatureParser:
 						m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
 					if (inst.get_return_derivs()) {
-						llvm::Value *runtime_func = ctx.get_tex_lookup_func(
+						llvm::FunctionCallee runtime_func = ctx.get_tex_lookup_func(
 							self, Type_mapper::%(runtime_func_enum_deriv_name)s);
 
 						llvm::Value *tmp       = ctx.create_local(ctx.get_return_type(), "tmp");
@@ -4838,7 +4947,7 @@ class SignatureParser:
 
 						res = ctx->CreateLoad(tmp);
 					} else {
-						llvm::Value *runtime_func = ctx.get_tex_lookup_func(
+						llvm::FunctionCallee runtime_func = ctx.get_tex_lookup_func(
 							self, Type_mapper::%(runtime_func_enum_name)s);
 						llvm::Value *args[] = {
 							self, ctx.get_state_parameter(), a, b, ctx.get_constant(%(is_uniform)s) };
@@ -4870,7 +4979,7 @@ class SignatureParser:
 						ctx->CreateLoad(self_adr),
 						m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-					llvm::Value *runtime_func = ctx.get_tex_lookup_func(
+					llvm::FunctionCallee runtime_func = ctx.get_tex_lookup_func(
 						self, Type_mapper::%(runtime_func_enum_name)s);
 
 					llvm::Type  *res_type   = m_code_gen.m_type_mapper.get_arr_%(elem_type)s_%(vector_dim)s_type();
@@ -4903,7 +5012,7 @@ class SignatureParser:
 						ctx->CreateLoad(self_adr),
 						m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-					llvm::Value *runtime_func;
+					llvm::FunctionCallee runtime_func;
 					llvm::Type *res_type;
 					if (inst.get_return_derivs()) {
 						runtime_func = ctx.get_tex_lookup_func(
@@ -4937,10 +5046,10 @@ class SignatureParser:
 
 		elif mode == "debug::breakpoint":
 			code = """
-			if (m_target_lang == LLVM_code_generator::TL_NATIVE) {
+			if (m_target_lang == ICode_generator::TL_NATIVE) {
 				llvm::Function *break_func = get_runtime_func(RT_MDL_DEBUGBREAK);
 				ctx->CreateCall(break_func);
-			} else if (m_target_lang == LLVM_code_generator::TL_PTX) {
+			} else if (m_target_lang == ICode_generator::TL_PTX) {
 				llvm::FunctionType *f_tp = llvm::FunctionType::get(
 					m_code_gen.m_type_mapper.get_void_type(), /*is_VarArg=*/false);
 				llvm::InlineAsm *ia = llvm::InlineAsm::get(
@@ -4956,7 +5065,7 @@ class SignatureParser:
 
 		elif mode == "debug::assert":
 			code = """
-			if (m_target_lang != LLVM_code_generator::TL_HLSL) {
+			if (!m_code_gen.target_is_structured_language(m_target_lang)) {
 				llvm::Function   *conv_func = get_runtime_func(RT_MDL_TO_CSTRING);
 
 				llvm::Value      *cond    = ctx->CreateICmpNE(a, ctx.get_constant(false));
@@ -4974,7 +5083,7 @@ class SignatureParser:
 					c = ctx->CreateCall(conv_func, c);  // function name
 					d = ctx->CreateCall(conv_func, d);  // file
 
-					if (m_target_lang == LLVM_code_generator::TL_NATIVE) {
+					if (m_target_lang == ICode_generator::TL_NATIVE) {
 						llvm::Value *args[] = {
 							b,                           // message
 							c,                           // function name
@@ -4983,7 +5092,7 @@ class SignatureParser:
 						};
 						llvm::Function *assert_func = get_runtime_func(RT_MDL_ASSERTFAIL);
 						ctx->CreateCall(assert_func, args);
-					} else if (m_target_lang == LLVM_code_generator::TL_PTX) {
+					} else if (m_target_lang == ICode_generator::TL_PTX) {
 						llvm::Value *args[] = {
 							b,                           // message
 							d,                           // file
@@ -5014,7 +5123,7 @@ class SignatureParser:
 
 			# PTX prolog
 			code = """
-				if (m_target_lang == LLVM_code_generator::TL_PTX) {
+				if (m_target_lang == ICode_generator::TL_PTX) {
 					llvm::Function    *vprintf_func = get_runtime_func(RT_VPRINTF);
 					llvm::PointerType *void_ptr_tp = m_code_gen.m_type_mapper.get_void_ptr_type();
 					llvm::DataLayout   data_layout(m_code_gen.get_llvm_module());
@@ -5096,7 +5205,7 @@ class SignatureParser:
 					),
 					NULL,
 					"vprintf.valist");
-				valist->setAlignment(VPRINTF_BUFFER_ALIGNMENT);
+				valist->setAlignment(llvm::Align(VPRINTF_BUFFER_ALIGNMENT));
 
 				int offset = 0;
 				llvm::Value *elem;
@@ -5172,7 +5281,7 @@ class SignatureParser:
 						ctx->CreateBitCast(valist, void_ptr_tp)
 					};
 					ctx->CreateCall(vprintf_func, args);
-				} else if (m_target_lang == LLVM_code_generator::TL_NATIVE) {
+				} else if (m_target_lang == ICode_generator::TL_NATIVE) {
 					llvm::Function *begin_func = get_runtime_func(RT_MDL_PRINT_BEGIN);
 					llvm::Value    *buf        = ctx->CreateCall(begin_func);
 			""" % format_str
@@ -5875,8 +5984,18 @@ class SignatureParser:
 		self.register_runtime_func("rsqrt",             "DD_DD")
 		self.register_runtime_func("signf",             "II_FF")
 		self.register_runtime_func("sign",              "II_DD")
+		self.register_runtime_func("fsignf",            "FF_FF")
+		self.register_runtime_func("fsign",             "DD_DD")
 		self.register_runtime_func("int_bits_to_float", "FF_II")
 		self.register_runtime_func("float_bits_to_int", "II_FF")
+		self.register_runtime_func("stepFF",            "FF_FFFF")
+		self.register_runtime_func("stepF2",            "F2_F2F2")
+		self.register_runtime_func("stepF3",            "F3_F3F3")
+		self.register_runtime_func("stepF4",            "F4_F4F4")
+		self.register_runtime_func("stepDD",            "DD_DDDD")
+		self.register_runtime_func("stepD2",            "D2_D2D2")
+		self.register_runtime_func("stepD3",            "D3_D3D3")
+		self.register_runtime_func("stepD4",            "D4_D4D4")
 
 	def register_atomic_runtime(self):
 		self.register_mdl_runtime_func("mdl_clampi",      "II_IIIIII")
@@ -5963,6 +6082,38 @@ class SignatureParser:
 		self.register_mdl_runtime_func("mdl_tex_texel_float3_3d",       "FA3_PTIIIA3FF")
 		self.register_mdl_runtime_func("mdl_tex_texel_float4_3d",       "FA4_PTIIIA3FF")
 		self.register_mdl_runtime_func("mdl_tex_texel_color_3d",        "FA3_PTIIIA3FF")
+
+		# GLSL support functions
+		self.register_mdl_runtime_func("mdl_equal_B2",                  "B2_B2B2")
+		self.register_mdl_runtime_func("mdl_equal_B3",                  "B3_B3B3")
+		self.register_mdl_runtime_func("mdl_equal_B4",                  "B4_B4B4")
+		self.register_mdl_runtime_func("mdl_equal_D2",                  "B2_D2D2")
+		self.register_mdl_runtime_func("mdl_equal_D3",                  "B3_D3D3")
+		self.register_mdl_runtime_func("mdl_equal_D4",                  "B4_D4D4")
+		self.register_mdl_runtime_func("mdl_notEqual_B2",               "B2_B2B2")
+		self.register_mdl_runtime_func("mdl_notEqual_B3",               "B3_B3B3")
+		self.register_mdl_runtime_func("mdl_notEqual_B4",               "B4_B4B4")
+		self.register_mdl_runtime_func("mdl_notEqual_D2",               "B2_D2D2")
+		self.register_mdl_runtime_func("mdl_notEqual_D3",               "B3_D3D3")
+		self.register_mdl_runtime_func("mdl_notEqual_D4",               "B4_D4D4")
+		self.register_mdl_runtime_func("mdl_lessThan_D2",               "B2_D2D2")
+		self.register_mdl_runtime_func("mdl_lessThan_D3",               "B3_D3D3")
+		self.register_mdl_runtime_func("mdl_lessThan_D4",               "B4_D4D4")
+		self.register_mdl_runtime_func("mdl_lessThanEqual_D2",          "B2_D2D2")
+		self.register_mdl_runtime_func("mdl_lessThanEqual_D3",          "B3_D3D3")
+		self.register_mdl_runtime_func("mdl_lessThanEqual_D4",          "B4_D4D4")
+		self.register_mdl_runtime_func("mdl_greaterThan_D2",            "B2_D2D2")
+		self.register_mdl_runtime_func("mdl_greaterThan_D3",            "B3_D3D3")
+		self.register_mdl_runtime_func("mdl_greaterThan_D4",            "B4_D4D4")
+		self.register_mdl_runtime_func("mdl_greaterThanEqual_D2",       "B2_D2D2")
+		self.register_mdl_runtime_func("mdl_greaterThanEqual_D3",       "B3_D3D3")
+		self.register_mdl_runtime_func("mdl_greaterThanEqual_D4",       "B4_D4D4")
+		self.register_mdl_runtime_func("mdl_and_B2",                    "B2_B2B2")
+		self.register_mdl_runtime_func("mdl_and_B3",                    "B3_B3B3")
+		self.register_mdl_runtime_func("mdl_and_B4",                    "B4_B4B4")
+		self.register_mdl_runtime_func("mdl_or_B2",                     "B2_B2B2")
+		self.register_mdl_runtime_func("mdl_or_B3",                     "B3_B3B3")
+		self.register_mdl_runtime_func("mdl_or_B4",                     "B4_B4B4")
 
 		# df functions
 		self.register_mdl_runtime_func("mdl_df_light_profile_power",            "FF_PTII")

@@ -1,9 +1,8 @@
 //===- RegionPass.h - RegionPass class --------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -17,15 +16,13 @@
 #define LLVM_ANALYSIS_REGIONPASS_H
 
 #include "llvm/Analysis/RegionInfo.h"
-#include "llvm/IR/Function.h"
 #include "llvm/IR/LegacyPassManagers.h"
 #include "llvm/Pass.h"
 #include <deque>
 
 namespace llvm {
-
-class RGPassManager;
 class Function;
+class RGPassManager;
 
 //===----------------------------------------------------------------------===//
 /// A pass that runs on each Region in a function.
@@ -88,8 +85,6 @@ protected:
 /// The pass manager to schedule RegionPasses.
 class RGPassManager : public FunctionPass, public PMDataManager {
   std::deque<Region*> RQ;
-  bool skipThisRegion;
-  bool redoThisRegion;
   RegionInfo *RI;
   Region *CurrentRegion;
 

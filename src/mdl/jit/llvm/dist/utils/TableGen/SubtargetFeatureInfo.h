@@ -1,26 +1,20 @@
-//===- SubtargetFeatureInfo.h - Helpers for subtarget features ------------===//
+//===- SubtargetFeatureInfo.h - Helpers for subtarget features --*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #ifndef LLVM_UTIL_TABLEGEN_SUBTARGETFEATUREINFO_H
 #define LLVM_UTIL_TABLEGEN_SUBTARGETFEATUREINFO_H
 
-#include "llvm/TableGen/Error.h"
 #include "llvm/TableGen/Record.h"
-
 #include <map>
 #include <string>
 #include <vector>
 
 namespace llvm {
-class Record;
-class RecordKeeper;
-
 struct SubtargetFeatureInfo;
 using SubtargetFeatureInfoMap = std::map<Record *, SubtargetFeatureInfo, LessRecordByID>;
 
@@ -53,13 +47,6 @@ struct SubtargetFeatureInfo {
   void dump() const;
   static std::vector<std::pair<Record *, SubtargetFeatureInfo>>
   getAll(const RecordKeeper &Records);
-
-  /// Emit the subtarget feature flag definitions.
-  ///
-  /// This version emits the bit value for the feature and is therefore limited
-  /// to 64 feature bits.
-  static void emitSubtargetFeatureFlagEnumeration(
-      SubtargetFeatureInfoMap &SubtargetFeatures, raw_ostream &OS);
 
   /// Emit the subtarget feature flag definitions.
   ///

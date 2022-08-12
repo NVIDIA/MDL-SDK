@@ -97,21 +97,21 @@ The following third-party libraries are required to build the MDL SDK:
     [freeimage.sourceforge.net](http://freeimage.sourceforge.net/download.html).  
     Mac OS X: Install the *freeimage* package using brew.
 
--   **Python3** *(3.7.5)*  
+-   **Python3** *(3.8.0)*  
     Linux: Install the *python* package.  
-    Windows and Max OS X: Download and install Python 3.7 from 
+    Windows and Max OS X: Download and install Python 3.8 from 
     [python.org](https://www.python.org/downloads/).
 
--   **Clang 7.0.0**  
-    Using version 7.0.0 is mandatory.  
+-   **Clang 12.0.1**  
+    Using version 12.0.1 is mandatory.  
     Pre-compiled binaries can be found on
-    [llvm.org](http://releases.llvm.org/download.html#7.0.0).
+    [llvm.org](http://releases.llvm.org/download.html#12.0.1).
 
 For generating and compiling MDL Python Bindings, the following additional dependencies are required:
 
--   **Python3 Development Package** *(3.7.5)*  
+-   **Python3 Development Package** *(3.8.0)*  
     Linux: Install the *python-dev* package in addition to *python*.  
-    Windows and Max OS X: Download and install Python 3.7 from 
+    Windows and Max OS X: Download and install Python 3.8 from 
     [python.org](https://www.python.org/downloads/).
 
 -   **SWIG** *(4.0.2)*  
@@ -142,6 +142,9 @@ libraries. These additional libraries are:
     To build with Qt support on Linux, your system's GLIBC needs to be release 
     2.14 or later.
 
+-   **Vulkan SDK** *(1.2.198.1)*
+    Please follow the instructions on the [Vulkan SDK Website](https://vulkan.lunarg.com/sdk/home).
+
 -   **DirectX Raytracing support**  
     Building the DXR example requires:  
 
@@ -159,7 +162,13 @@ libraries. These additional libraries are:
 
 -   **MaterialX** *(github repository, tag: v1.38.4)*  
     Please download a release from [github](https://github.com/AcademySoftwareFoundation/MaterialX/releases).
-
+    The pre-built packages do not contain libs for debug. If those are needed a build from source is required.
+    
+The following third-party library is only required to build the AxF to MDL example:
+    
+-   **X-Rite AxF SDK** *(1.8.1)*
+    Please send the "Request AxF SDK" document from X-Rite Website: [X-Rite/AxF Website](https://www.xrite.com/axf).
+    
 <a name="doc-build-tools"></a>
 Required tools to build the documentation:
 
@@ -223,19 +232,22 @@ Required tools to build the documentation:
         for example: *C:/projects/thirdparty/glfw-3.2.1.bin.WIN64*
 
     -   **PYTHON_DIR** in Ungrouped Entries (only if not found in the PATH),  
-        for example: *C:/Python37*
+        for example: *C:/Python38*
 
     -   **clang_PATH** in Ungrouped Entries (only if not found in the PATH),  
-        for example: *C:/Program Files/LLVM-7/bin/clang.exe*
+        for example: *C:/Program Files/LLVM-12/bin/clang.exe*
 
     -   **python_PATH** in Ungrouped Entries (only if not found in the PATH),  
-        for example: *C:/projects/thirdparty/python_2_7_1/bin/python.exe*  
+        for example: *C:/projects/thirdparty/python_3_8_0/bin/python.exe*  
 
     -   **swig_PATH** in Ungrouped Entries (only if not found in the PATH),  
         for example: *C:/projects/thirdparty/swigwin-4.0.2/swig.exe*
 
     -   **Qt5_DIR** in Ungrouped Entries,  
         for example: *C:/Qt/5.10.1/msvc2017_64*
+
+    -   **VULKAN_SDK_DIR** in Ungrouped Entries (only if the environment variable VULKAN_SDK is not set)
+        for example: *C:/VulkanSDK/1.2.198.1*
 
     -   **ARNOLD_SDK_DIR** in Ungrouped Entries,
         for example: *C:/projects/thirdparty/Arnold-6.0.3.0-windows*
@@ -298,17 +310,17 @@ Required tools to build the documentation:
     sudo apt-get install libboost-dev libfreeimage-dev libglew-dev libglfw3-dev
     ```
 
-    Please note that the build also requires clang 7.0.0. Please download the
+    Please note that the build also requires clang 12.0.1. Please download the
     binary as described [above](#thirdparty-dependencies-libs). In
     the following, it is assumed that the extracted clang is the only
     clang compiler found in the system path or, for step 3.ii, that it
     has been extracted to (on x86-64):
 
-        $HOME/projects/thirdparty/clang+llvm-7.0.0-x86_64-linux-gnu-ubuntu-16.04/bin/clang
+        $HOME/projects/thirdparty/clang+llvm-12.0.1-x86_64-linux-gnu-ubuntu-16.04/bin/clang
 
     or (on aarch64):
 
-        $HOME/projects/thirdparty/clang+llvm-7.0.0-aarch64-linux-gnu/bin/clang
+        $HOME/projects/thirdparty/clang+llvm-12.0.1-aarch64-linux-gnu/bin/clang
     
 2.  It is assumed that you checked out the repository in your home directory 
     as follows:
@@ -367,20 +379,20 @@ Required tools to build the documentation:
         ```
 
         When a different clang compiler is installed on your system, you
-        can provide the path to a clang 7.0.0 by setting the 'clang_Path'
+        can provide the path to a clang 12.0.1 by setting the 'clang_Path'
         option (on x86-64):
 
         ```bash
-        cmake -Dclang_PATH=$HOME/projects/thirdparty/clang+llvm-7.0.0-x86_64-linux-gnu-ubuntu-16.04/bin/clang ..
+        cmake -Dclang_PATH=$HOME/projects/thirdparty/clang+llvm-12.0.1-x86_64-linux-gnu-ubuntu-16.04/bin/clang ..
         ```
 
         or (on aarch64):
 
         ```bash
-        cmake -Dclang_PATH=$HOME/projects/thirdparty/clang+llvm-7.0.0-aarch64-linux-gnu/bin/clang ..
+        cmake -Dclang_PATH=$HOME/projects/thirdparty/clang+llvm-12.0.1-aarch64-linux-gnu/bin/clang ..
         ```
 
-        The same applies to other dependencies like Python 2.7.
+        The same applies to other dependencies like Python 3.8.
 
         For builds using a different compiler version, you need to pass the 
         compiler names when calling CMake as follows:
@@ -449,21 +461,21 @@ Required tools to build the documentation:
 1.  Before generating make files, you need to install the required
     tools and libraries as listed [above](#thirdparty-dependencies-libs).
 
-    Please note that the build requires clang 7.0.0. Please download the
+    Please note that the build requires clang 12.0.1. Please download the
     binary as described [above](#thirdparty-dependencies-libs). In
     the following, it is assumed that it has been extracted to:
 
-        $HOME/projects/thirdparty/clang+llvm-7.0.0-x86_64-apple-darwin/bin/clang
+        $HOME/projects/thirdparty/clang+llvm-12.0.1-x86_64-apple-darwin/bin/clang
 
 2.  Depending on your workflow, you can use CMake-Gui and follow the [Windows instructions](#building-on-windows) 
     or use the command line as described in the [Linux section](#building-on-linux).
     In each case, begin with step 2 of the respective instructions.
 
-    If the brew packages, Python 2.7, CUDA, and Qt have been installed correctly,
+    If the brew packages, Python 3.8, CUDA, and Qt have been installed correctly,
     the following CMake options need to be specified:
 
     -   **clang_PATH** in Ungrouped Entries,  
-        for example: *$HOME/projects/thirdparty/clang+llvm-7.0.0-x86_64-apple-darwin/bin/clang*
+        for example: *$HOME/projects/thirdparty/clang+llvm-12.0.1-x86_64-apple-darwin/bin/clang*
 
     -   **python_PATH** in Ungrouped Entries (only if not found in the PATH),  
         for example: */usr/bin/python*
@@ -516,11 +528,17 @@ select particular logging information:
 -   **MDL_ENABLE_OPENGL_EXAMPLES**  
     [ON/OFF] enable/disable examples that require OpenGL.
 
+-   **MDL_ENABLE_VULKAN_EXAMPLES**  
+    [ON/OFF] enable/disable examples that require Vulkan.
+
 -   **MDL_ENABLE_OPTIX7_EXAMPLES**  
     [ON/OFF] enable/disable examples that require OptiX 7 (Linux and Windows only).
 
 -   **MDL_ENABLE_QT_EXAMPLES**  
     [ON/OFF] enable/disable examples that require Qt.
+    
+-   **MDL_ENABLE_AXF_EXAMPLES**  
+    [ON/OFF] enable/disable the AxF to MDL example.
 
 -   **MDL_ENABLE_PYTHON_BINDINGS**  
     [ON/OFF] enable/disable the generation and compilation of the MDL Python Bindings.

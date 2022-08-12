@@ -69,7 +69,7 @@ public:
     virtual bool flush() = 0;
 };
 
-/*@}*/ // end group mi_neuray_impexp
+/**@}*/ // end group mi_neuray_impexp
 
 } // namespace neuraylib
 

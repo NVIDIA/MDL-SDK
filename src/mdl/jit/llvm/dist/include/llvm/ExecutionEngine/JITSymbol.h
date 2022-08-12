@@ -1,9 +1,8 @@
 //===- JITSymbol.h - JIT symbol abstraction ---------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -23,27 +22,59 @@
 #include <set>
 #include <string>
 
+#include "llvm/ADT/BitmaskEnum.h"
+#include "llvm/ADT/FunctionExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Error.h"
 
 namespace llvm {
 
 class GlobalValue;
+class GlobalValueSummary;
 
 namespace object {
 
-class BasicSymbolRef;
+class SymbolRef;
 
 } // end namespace object
 
 /// Represents an address in the target process's address space.
 using JITTargetAddress = uint64_t;
 
+/// Convert a JITTargetAddress to a pointer.
+///
+/// Note: This is a raw cast of the address bit pattern to the given pointer
+/// type. When casting to a function pointer in order to execute JIT'd code
+/// jitTargetAddressToFunction should be preferred, as it will also perform
+/// pointer signing on targets that require it.
+template <typename T> T jitTargetAddressToPointer(JITTargetAddress Addr) {
+  static_assert(std::is_pointer<T>::value, "T must be a pointer type");
+  uintptr_t IntPtr = static_cast<uintptr_t>(Addr);
+  assert(IntPtr == Addr && "JITTargetAddress value out of range for uintptr_t");
+  return reinterpret_cast<T>(IntPtr);
+}
+
+/// Convert a JITTargetAddress to a callable function pointer.
+///
+/// Casts the given address to a callable function pointer. This operation
+/// will perform pointer signing for platforms that require it (e.g. arm64e).
+template <typename T> T jitTargetAddressToFunction(JITTargetAddress Addr) {
+  static_assert(std::is_pointer<T>::value &&
+                    std::is_function<std::remove_pointer_t<T>>::value,
+                "T must be a function pointer type");
+  return jitTargetAddressToPointer<T>(Addr);
+}
+
+/// Convert a pointer to a JITTargetAddress.
+template <typename T> JITTargetAddress pointerToJITTargetAddress(T *Ptr) {
+  return static_cast<JITTargetAddress>(reinterpret_cast<uintptr_t>(Ptr));
+}
+
 /// Flags for symbols in the JIT.
 class JITSymbolFlags {
 public:
   using UnderlyingType = uint8_t;
-  using TargetFlagsType = uint64_t;
+  using TargetFlagsType = uint8_t;
 
   enum FlagNames : UnderlyingType {
     None = 0,
@@ -52,13 +83,11 @@ public:
     Common = 1U << 2,
     Absolute = 1U << 3,
     Exported = 1U << 4,
-    Lazy = 1U << 5,
-    Materializing = 1U << 6
+    Callable = 1U << 5,
+    MaterializationSideEffectsOnly = 1U << 6,
+    LLVM_MARK_AS_BITMASK_ENUM( // LargestValue =
+        MaterializationSideEffectsOnly)
   };
-
-  static JITSymbolFlags stripTransientFlags(JITSymbolFlags Orig) {
-    return static_cast<FlagNames>(Orig.Flags & ~Lazy & ~Materializing);
-  }
 
   /// Default-construct a JITSymbolFlags instance.
   JITSymbolFlags() = default;
@@ -69,25 +98,32 @@ public:
   /// Construct a JITSymbolFlags instance from the given flags and target
   ///        flags.
   JITSymbolFlags(FlagNames Flags, TargetFlagsType TargetFlags)
-    : Flags(Flags), TargetFlags(TargetFlags) {}
+      : TargetFlags(TargetFlags), Flags(Flags) {}
+
+  /// Implicitly convert to bool. Returs true if any flag is set.
+  explicit operator bool() const { return Flags != None || TargetFlags != 0; }
+
+  /// Compare for equality.
+  bool operator==(const JITSymbolFlags &RHS) const {
+    return Flags == RHS.Flags && TargetFlags == RHS.TargetFlags;
+  }
+
+  /// Bitwise AND-assignment for FlagNames.
+  JITSymbolFlags &operator&=(const FlagNames &RHS) {
+    Flags &= RHS;
+    return *this;
+  }
+
+  /// Bitwise OR-assignment for FlagNames.
+  JITSymbolFlags &operator|=(const FlagNames &RHS) {
+    Flags |= RHS;
+    return *this;
+  }
 
   /// Return true if there was an error retrieving this symbol.
   bool hasError() const {
     return (Flags & HasError) == HasError;
   }
-
-  /// Returns true if this is a lazy symbol.
-  ///        This flag is used internally by the JIT APIs to track
-  ///        materialization states.
-  bool isLazy() const { return Flags & Lazy; }
-
-  /// Returns true if this symbol is in the process of being
-  ///        materialized.
-  bool isMaterializing() const { return Flags & Materializing; }
-
-  /// Returns true if this symbol is fully materialized.
-  ///        (i.e. neither lazy, nor materializing).
-  bool isMaterialized() const { return !(Flags & (Lazy | Materializing)); }
 
   /// Returns true if the Weak flag is set.
   bool isWeak() const {
@@ -109,11 +145,28 @@ public:
     return (Flags & Exported) == Exported;
   }
 
-  /// Implicitly convert to the underlying flags type.
-  operator UnderlyingType&() { return Flags; }
+  /// Returns true if the given symbol is known to be callable.
+  bool isCallable() const { return (Flags & Callable) == Callable; }
 
-  /// Implicitly convert to the underlying flags type.
-  operator const UnderlyingType&() const { return Flags; }
+  /// Returns true if this symbol is a materialization-side-effects-only
+  /// symbol. Such symbols do not have a real address. They exist to trigger
+  /// and support synchronization of materialization side effects, e.g. for
+  /// collecting initialization information. These symbols will vanish from
+  /// the symbol table immediately upon reaching the ready state, and will
+  /// appear to queries as if they were never defined (except that query
+  /// callback execution will be delayed until they reach the ready state).
+  /// MaterializationSideEffectOnly symbols should only be queried using the
+  /// SymbolLookupFlags::WeaklyReferencedSymbol flag (see
+  /// llvm/include/llvm/ExecutionEngine/Orc/Core.h).
+  bool hasMaterializationSideEffectsOnly() const {
+    return (Flags & MaterializationSideEffectsOnly) ==
+           MaterializationSideEffectsOnly;
+  }
+
+  /// Get the underlying flags value as an integer.
+  UnderlyingType getRawFlagsValue() const {
+    return static_cast<UnderlyingType>(Flags);
+  }
 
   /// Return a reference to the target-specific flags.
   TargetFlagsType& getTargetFlags() { return TargetFlags; }
@@ -125,14 +178,33 @@ public:
   /// value.
   static JITSymbolFlags fromGlobalValue(const GlobalValue &GV);
 
+  /// Construct a JITSymbolFlags value based on the flags of the given global
+  /// value summary.
+  static JITSymbolFlags fromSummary(GlobalValueSummary *S);
+
   /// Construct a JITSymbolFlags value based on the flags of the given libobject
   /// symbol.
-  static JITSymbolFlags fromObjectSymbol(const object::BasicSymbolRef &Symbol);
+  static Expected<JITSymbolFlags>
+  fromObjectSymbol(const object::SymbolRef &Symbol);
 
 private:
-  UnderlyingType Flags = None;
   TargetFlagsType TargetFlags = 0;
+  FlagNames Flags = None;
 };
+
+inline JITSymbolFlags operator&(const JITSymbolFlags &LHS,
+                                const JITSymbolFlags::FlagNames &RHS) {
+  JITSymbolFlags Tmp = LHS;
+  Tmp &= RHS;
+  return Tmp;
+}
+
+inline JITSymbolFlags operator|(const JITSymbolFlags &LHS,
+                                const JITSymbolFlags::FlagNames &RHS) {
+  JITSymbolFlags Tmp = LHS;
+  Tmp |= RHS;
+  return Tmp;
+}
 
 /// ARM-specific JIT symbol flags.
 /// FIXME: This should be moved into a target-specific header.
@@ -147,8 +219,8 @@ public:
 
   operator JITSymbolFlags::TargetFlagsType&() { return Flags; }
 
-  static ARMJITSymbolFlags fromObjectSymbol(
-                                           const object::BasicSymbolRef &Symbol);
+  static ARMJITSymbolFlags fromObjectSymbol(const object::SymbolRef &Symbol);
+
 private:
   JITSymbolFlags::TargetFlagsType Flags = 0;
 };
@@ -164,6 +236,13 @@ public:
   /// Create a symbol for the given address and flags.
   JITEvaluatedSymbol(JITTargetAddress Address, JITSymbolFlags Flags)
       : Address(Address), Flags(Flags) {}
+
+  /// Create a symbol from the given pointer with the given flags.
+  template <typename T>
+  static JITEvaluatedSymbol
+  fromPointer(T *P, JITSymbolFlags Flags = JITSymbolFlags::Exported) {
+    return JITEvaluatedSymbol(pointerToJITTargetAddress(P), Flags);
+  }
 
   /// An evaluated symbol converts to 'true' if its address is non-zero.
   explicit operator bool() const { return Address != 0; }
@@ -185,7 +264,7 @@ private:
 /// Represents a symbol in the JIT.
 class JITSymbol {
 public:
-  using GetAddressFtor = std::function<Expected<JITTargetAddress>()>;
+  using GetAddressFtor = unique_function<Expected<JITTargetAddress>()>;
 
   /// Create a 'null' symbol, used to represent a "symbol not found"
   ///        result from a successful (non-erroneous) lookup.
@@ -293,7 +372,7 @@ class JITSymbolResolver {
 public:
   using LookupSet = std::set<StringRef>;
   using LookupResult = std::map<StringRef, JITEvaluatedSymbol>;
-  using LookupFlagsResult = std::map<StringRef, JITSymbolFlags>;
+  using OnResolvedFunction = unique_function<void(Expected<LookupResult>)>;
 
   virtual ~JITSymbolResolver() = default;
 
@@ -302,13 +381,14 @@ public:
   ///
   /// This method will return an error if any of the given symbols can not be
   /// resolved, or if the resolution process itself triggers an error.
-  virtual Expected<LookupResult> lookup(const LookupSet &Symbols) = 0;
+  virtual void lookup(const LookupSet &Symbols,
+                      OnResolvedFunction OnResolved) = 0;
 
-  /// Returns the symbol flags for each of the given symbols.
-  ///
-  /// This method does NOT return an error if any of the given symbols is
-  /// missing. Instead, that symbol will be left out of the result map.
-  virtual Expected<LookupFlagsResult> lookupFlags(const LookupSet &Symbols) = 0;
+  /// Returns the subset of the given symbols that should be materialized by
+  /// the caller. Only weak/common symbols should be looked up, as strong
+  /// definitions are implicitly always part of the caller's responsibility.
+  virtual Expected<LookupSet>
+  getResponsibilitySet(const LookupSet &Symbols) = 0;
 
 private:
   virtual void anchor();
@@ -320,11 +400,11 @@ public:
   /// Performs lookup by, for each symbol, first calling
   ///        findSymbolInLogicalDylib and if that fails calling
   ///        findSymbol.
-  Expected<LookupResult> lookup(const LookupSet &Symbols) final;
+  void lookup(const LookupSet &Symbols, OnResolvedFunction OnResolved) final;
 
   /// Performs flags lookup by calling findSymbolInLogicalDylib and
   ///        returning the flags value for that symbol.
-  Expected<LookupFlagsResult> lookupFlags(const LookupSet &Symbols) final;
+  Expected<LookupSet> getResponsibilitySet(const LookupSet &Symbols) final;
 
   /// This method returns the address of the specified symbol if it exists
   /// within the logical dynamic library represented by this JITSymbolResolver.
@@ -349,7 +429,7 @@ public:
   virtual JITSymbol findSymbol(const std::string &Name) = 0;
 
 private:
-  virtual void anchor();
+  void anchor() override;
 };
 
 } // end namespace llvm

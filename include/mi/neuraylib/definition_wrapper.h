@@ -104,7 +104,7 @@ public:
     ///
     /// \return    If \ref mi_mdl_materials_are_functions is enabled:
     ///            #mi::neuraylib::ELEMENT_TYPE_FUNCTION_DEFINITION, or undefined if #is_valid()
-    ///            returns \c false. Otherwise:  #mi::neuraylib::ELEMENT_TYPE_MATERIAL_DEFINITION,
+    ///            returns \c false. Otherwise:  mi::neuraylib::ELEMENT_TYPE_MATERIAL_DEFINITION,
     ///            or #mi::neuraylib::ELEMENT_TYPE_FUNCTION_DEFINITION, or undefined if #is_valid()
     ///            returns \c false.
     Element_type get_type() const;
@@ -339,7 +339,7 @@ private:
     std::string m_name;
 };
 
-/*@}*/ // end group mi_neuray_mdl_elements
+/**@}*/ // end group mi_neuray_mdl_elements
 
 inline Definition_wrapper::Definition_wrapper(
     ITransaction* transaction, const char* name, IMdl_factory* mdl_factory)
@@ -356,27 +356,33 @@ inline Definition_wrapper::Definition_wrapper(
 
 inline bool Definition_wrapper::is_valid() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     return m_access
         && (m_type == ELEMENT_TYPE_MATERIAL_DEFINITION
         ||  m_type == ELEMENT_TYPE_FUNCTION_DEFINITION);
+#else // MI_NEURAYLIB_DEPRECATED_13_0
+    return m_access
+        && (m_type == ELEMENT_TYPE_FUNCTION_DEFINITION);
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
 }
 
 
 inline bool Definition_wrapper::is_valid_definition( IMdl_execution_context* context) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         base::Handle<const IMaterial_definition> md(
             m_access->get_interface<IMaterial_definition>());
         return md->is_valid( context);
-    }
-    else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());
         return fd->is_valid( context);
-    }
-    else
+    } else
         return false;
 }
 
@@ -387,13 +393,16 @@ inline Element_type Definition_wrapper::get_type() const
 
 inline const char* Definition_wrapper::get_mdl_definition() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         base::Handle<const IMaterial_definition> md(
             m_access->get_interface<IMaterial_definition>());
         return md->get_mdl_name();
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());
@@ -405,13 +414,16 @@ inline const char* Definition_wrapper::get_mdl_definition() const
 
 inline const char* Definition_wrapper::get_module() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         base::Handle<const IMaterial_definition> md(
             m_access->get_interface<IMaterial_definition>());
         return md->get_module();
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());
@@ -423,13 +435,16 @@ inline const char* Definition_wrapper::get_module() const
 
 inline bool Definition_wrapper::is_exported() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         base::Handle<const IMaterial_definition> md(
             m_access->get_interface<IMaterial_definition>());
         return md->is_exported();
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());
@@ -441,23 +456,35 @@ inline bool Definition_wrapper::is_exported() const
 
 inline bool Definition_wrapper::is_material() const
 {
-    if( !m_access)
-        return false;
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
-    base::Handle<const IMaterial_definition> md(
-        m_access->get_interface<IMaterial_definition>());
-    return md.is_valid_interface();
+        return true;
+
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+
+        base::Handle<const IFunction_definition> fd(
+            m_access->get_interface<IFunction_definition>());
+        return fd->is_material();
+
+    } else
+        return false;
 }
 
 inline Size Definition_wrapper::get_parameter_count() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         base::Handle<const IMaterial_definition> md(
             m_access->get_interface<IMaterial_definition>());
         return md->get_parameter_count();
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());
@@ -469,13 +496,16 @@ inline Size Definition_wrapper::get_parameter_count() const
 
 inline const char* Definition_wrapper::get_parameter_name( Size index) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         base::Handle<const IMaterial_definition> md(
             m_access->get_interface<IMaterial_definition>());
         return md->get_parameter_name( index);
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());
@@ -487,13 +517,16 @@ inline const char* Definition_wrapper::get_parameter_name( Size index) const
 
 inline Size Definition_wrapper::get_parameter_index( const char* name) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         base::Handle<const IMaterial_definition> md(
             m_access->get_interface<IMaterial_definition>());
         return md->get_parameter_index( name);
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());
@@ -505,13 +538,16 @@ inline Size Definition_wrapper::get_parameter_index( const char* name) const
 
 inline const IType_list* Definition_wrapper::get_parameter_types() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         base::Handle<const IMaterial_definition> md(
             m_access->get_interface<IMaterial_definition>());
         return md->get_parameter_types();
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());
@@ -523,11 +559,14 @@ inline const IType_list* Definition_wrapper::get_parameter_types() const
 
 inline const IType* Definition_wrapper::get_return_type() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         return 0;
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());
@@ -539,33 +578,37 @@ inline const IType* Definition_wrapper::get_return_type() const
 
 inline const char* Definition_wrapper::get_thumbnail() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         base::Handle<const IMaterial_definition> md(
             m_access->get_interface<IMaterial_definition>());
         return md->get_thumbnail();
 
-    }
-    else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());
         return fd->get_thumbnail();
 
-    }
-    else
+    } else
         return 0;
 }
 
 inline const IExpression_list* Definition_wrapper::get_defaults() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         base::Handle<const IMaterial_definition> md(
             m_access->get_interface<IMaterial_definition>());
         return md->get_defaults();
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());
@@ -578,6 +621,7 @@ inline const IExpression_list* Definition_wrapper::get_defaults() const
 template <class T>
 Sint32 Definition_wrapper::get_default( Size index, T& value) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         base::Handle<const IMaterial_definition> md(
@@ -594,7 +638,9 @@ Sint32 Definition_wrapper::get_default( Size index, T& value) const
         Sint32 result = get_value( default_value.get(), value);
         return result == 0 ? 0 : -5;
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());
@@ -617,6 +663,7 @@ Sint32 Definition_wrapper::get_default( Size index, T& value) const
 template <class T>
 Sint32 Definition_wrapper::get_default( const char* name, T& value) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         base::Handle<const IMaterial_definition> md(
@@ -633,7 +680,9 @@ Sint32 Definition_wrapper::get_default( const char* name, T& value) const
         Sint32 result = get_value( default_value.get(), value);
         return result == 0 ? 0 : -5;
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());
@@ -655,13 +704,16 @@ Sint32 Definition_wrapper::get_default( const char* name, T& value) const
 
 inline const IAnnotation_block* Definition_wrapper::get_annotations() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         base::Handle<const IMaterial_definition> md(
             m_access->get_interface<IMaterial_definition>());
         return md->get_annotations();
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());
@@ -673,13 +725,16 @@ inline const IAnnotation_block* Definition_wrapper::get_annotations() const
 
 inline const IAnnotation_list* Definition_wrapper::get_parameter_annotations() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         base::Handle<const IMaterial_definition> md(
             m_access->get_interface<IMaterial_definition>());
         return md->get_parameter_annotations();
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());
@@ -691,13 +746,16 @@ inline const IAnnotation_list* Definition_wrapper::get_parameter_annotations() c
 
 inline const IAnnotation_block* Definition_wrapper::get_return_annotations() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         base::Handle<const IMaterial_definition> md(
             m_access->get_interface<IMaterial_definition>());
         return md->get_return_annotations();
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());
@@ -709,14 +767,16 @@ inline const IAnnotation_block* Definition_wrapper::get_return_annotations() con
 
 inline const IExpression_list* Definition_wrapper::get_enable_if_conditions() const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         base::Handle<const IMaterial_definition> md(
             m_access->get_interface<IMaterial_definition>());
         return md->get_enable_if_conditions();
 
-    }
-    else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());
@@ -728,14 +788,16 @@ inline const IExpression_list* Definition_wrapper::get_enable_if_conditions() co
 
 inline Size Definition_wrapper::get_enable_if_users( Size index) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         base::Handle<const IMaterial_definition> md(
             m_access->get_interface<IMaterial_definition>());
         return md->get_enable_if_users( index);
 
-    }
-    else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());
@@ -747,6 +809,7 @@ inline Size Definition_wrapper::get_enable_if_users( Size index) const
 
 inline Size Definition_wrapper::get_enable_if_user( Size index, Size u_index) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         base::Handle<const IMaterial_definition> md(
@@ -754,7 +817,9 @@ inline Size Definition_wrapper::get_enable_if_user( Size index, Size u_index) co
         return md->get_enable_if_user( index, u_index);
 
     }
-    else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());
@@ -767,6 +832,7 @@ inline Size Definition_wrapper::get_enable_if_user( Size index, Size u_index) co
 inline IScene_element* Definition_wrapper::create_instance(
     const IExpression_list* arguments, Sint32* errors) const
 {
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
     if( m_type == ELEMENT_TYPE_MATERIAL_DEFINITION) {
 
         base::Handle<const IMaterial_definition> md(
@@ -798,7 +864,9 @@ inline IScene_element* Definition_wrapper::create_instance(
         }
         return md->create_material_instance( local_arguments.get(), errors);
 
-    } else if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
+    } else
+#endif // MI_NEURAYLIB_DEPRECATED_13_0
+    if( m_type == ELEMENT_TYPE_FUNCTION_DEFINITION) {
 
         base::Handle<const IFunction_definition> fd(
             m_access->get_interface<IFunction_definition>());

@@ -1,9 +1,8 @@
-//===-Config.h - LLVM Link Time Optimizer Configuration -------------------===//
+//===-Config.h - LLVM Link Time Optimizer Configuration ---------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -15,9 +14,14 @@
 #ifndef LLVM_LTO_CONFIG_H
 #define LLVM_LTO_CONFIG_H
 
+#include "llvm/ADT/DenseSet.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/IR/DiagnosticInfo.h"
+#include "llvm/IR/GlobalValue.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/CodeGen.h"
-#include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 
 #include <functional>
@@ -39,18 +43,37 @@ struct Config {
   std::string CPU;
   TargetOptions Options;
   std::vector<std::string> MAttrs;
+  std::vector<std::string> PassPlugins;
+  /// For adding passes that run right before codegen.
+  std::function<void(legacy::PassManager &)> PreCodeGenPassesHook;
   Optional<Reloc::Model> RelocModel = Reloc::PIC_;
   Optional<CodeModel::Model> CodeModel = None;
   CodeGenOpt::Level CGOptLevel = CodeGenOpt::Default;
-  TargetMachine::CodeGenFileType CGFileType = TargetMachine::CGFT_ObjectFile;
+  CodeGenFileType CGFileType = CGFT_ObjectFile;
   unsigned OptLevel = 2;
   bool DisableVerify = false;
 
   /// Use the new pass manager
-  bool UseNewPM = false;
+  bool UseNewPM = LLVM_ENABLE_NEW_PASS_MANAGER;
+
+  /// Flag to indicate that the optimizer should not assume builtins are present
+  /// on the target.
+  bool Freestanding = false;
 
   /// Disable entirely the optimizer, including importing for ThinLTO
   bool CodeGenOnly = false;
+
+  /// Run PGO context sensitive IR instrumentation.
+  bool RunCSIRInstr = false;
+
+  /// Asserts whether we can assume whole program visibility during the LTO
+  /// link.
+  bool HasWholeProgramVisibility = false;
+
+  /// Always emit a Regular LTO object even when it is empty because no Regular
+  /// LTO modules were linked. This option is useful for some build system which
+  /// want to know a priori all possible output files.
+  bool AlwaysEmitRegularLTOObj = false;
 
   /// If this field is set, the set of passes run in the middle-end optimizer
   /// will be the one specified by the string. Only works with the new pass
@@ -70,28 +93,70 @@ struct Config {
   /// with this triple.
   std::string DefaultTriple;
 
+  /// Context Sensitive PGO profile path.
+  std::string CSIRProfile;
+
   /// Sample PGO profile path.
   std::string SampleProfile;
+
+  /// Name remapping file for profile data.
+  std::string ProfileRemapping;
 
   /// The directory to store .dwo files.
   std::string DwoDir;
 
+  /// The name for the split debug info file used for the DW_AT_[GNU_]dwo_name
+  /// attribute in the skeleton CU. This should generally only be used when
+  /// running an individual backend directly via thinBackend(), as otherwise
+  /// all objects would use the same .dwo file. Not used as output path.
+  std::string SplitDwarfFile;
+
   /// The path to write a .dwo file to. This should generally only be used when
   /// running an individual backend directly via thinBackend(), as otherwise
-  /// all .dwo files will be written to the same path.
-  std::string DwoPath;
+  /// all .dwo files will be written to the same path. Not used in skeleton CU.
+  std::string SplitDwarfOutput;
 
   /// Optimization remarks file path.
-  std::string RemarksFilename = "";
+  std::string RemarksFilename;
+
+  /// Optimization remarks pass filter.
+  std::string RemarksPasses;
 
   /// Whether to emit optimization remarks with hotness informations.
   bool RemarksWithHotness = false;
+
+  /// The minimum hotness value a diagnostic needs in order to be included in
+  /// optimization diagnostics.
+  ///
+  /// The threshold is an Optional value, which maps to one of the 3 states:
+  /// 1. 0            => threshold disabled. All emarks will be printed.
+  /// 2. positive int => manual threshold by user. Remarks with hotness exceed
+  ///                    threshold will be printed.
+  /// 3. None         => 'auto' threshold by user. The actual value is not
+  ///                    available at command line, but will be synced with
+  ///                    hotness threhold from profile summary during
+  ///                    compilation.
+  ///
+  /// If threshold option is not specified, it is disabled by default.
+  llvm::Optional<uint64_t> RemarksHotnessThreshold = 0;
+
+  /// The format used for serializing remarks (default: YAML).
+  std::string RemarksFormat;
 
   /// Whether to emit the pass manager debuggging informations.
   bool DebugPassManager = false;
 
   /// Statistics output file path.
   std::string StatsFile;
+
+  /// Specific thinLTO modules to compile.
+  std::vector<std::string> ThinLTOModulesToCompile;
+
+  /// Time trace enabled.
+  bool TimeTraceEnabled = false;
+
+  /// Time trace granularity.
+  unsigned TimeTraceGranularity = 500;
 
   bool ShouldDiscardValueNames = true;
   DiagnosticHandlerFunction DiagHandler;
@@ -101,6 +166,9 @@ struct Config {
   /// used for testing and for running the LTO pipeline outside of the linker
   /// with llvm-lto2.
   std::unique_ptr<raw_ostream> ResolutionFile;
+
+  /// Tunable parameters for passes in the default pipelines.
+  PipelineTuningOptions PTO;
 
   /// The following callbacks deal with tasks, which normally represent the
   /// entire optimization and code generation pipeline for what will become a
@@ -126,7 +194,7 @@ struct Config {
   ///
   /// Note that in out-of-process backend scenarios, none of the hooks will be
   /// called for ThinLTO tasks.
-  typedef std::function<bool(unsigned Task, const Module &)> ModuleHookFn;
+  using ModuleHookFn = std::function<bool(unsigned Task, const Module &)>;
 
   /// This module hook is called after linking (regular LTO) or loading
   /// (ThinLTO) the module, before modifying it.
@@ -159,8 +227,9 @@ struct Config {
   ///
   /// It is called regardless of whether the backend is in-process, although it
   /// is not called from individual backend processes.
-  typedef std::function<bool(const ModuleSummaryIndex &Index)>
-      CombinedIndexHookFn;
+  using CombinedIndexHookFn = std::function<bool(
+      const ModuleSummaryIndex &Index,
+      const DenseSet<GlobalValue::GUID> &GUIDPreservedSymbols)>;
   CombinedIndexHookFn CombinedIndexHook;
 
   /// This is a convenience function that configures this Config object to write
@@ -202,7 +271,7 @@ struct LTOLLVMContext : LLVMContext {
     setDiscardValueNames(C.ShouldDiscardValueNames);
     enableDebugTypeODRUniquing();
     setDiagnosticHandler(
-        llvm::make_unique<LTOLLVMDiagnosticHandler>(&DiagHandler), true);
+        std::make_unique<LTOLLVMDiagnosticHandler>(&DiagHandler), true);
   }
   DiagnosticHandlerFunction DiagHandler;
 };

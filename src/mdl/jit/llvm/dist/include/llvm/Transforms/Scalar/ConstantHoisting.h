@@ -1,9 +1,8 @@
 //==- ConstantHoisting.h - Prepare code for expensive constants --*- C++ -*-==//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -15,7 +14,7 @@
 // cost. If the constant can be folded into the instruction (the cost is
 // TCC_Free) or the cost is just a simple operation (TCC_BASIC), then we don't
 // consider it expensive and leave it alone. This is the default behavior and
-// the default implementation of getIntImmCost will always return TCC_Free.
+// the default implementation of getIntImmCostInst will always return TCC_Free.
 //
 // If the cost is more than TCC_BASIC, then the integer constant can't be folded
 // into the instruction and it might be beneficial to hoist the constant.
@@ -38,6 +37,9 @@
 #define LLVM_TRANSFORMS_SCALAR_CONSTANTHOISTING_H
 
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/MapVector.h"
+#include "llvm/ADT/PointerUnion.h"
+#include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/PassManager.h"
@@ -50,9 +52,12 @@ class BasicBlock;
 class BlockFrequencyInfo;
 class Constant;
 class ConstantInt;
+class ConstantExpr;
 class DominatorTree;
 class Function;
+class GlobalVariable;
 class Instruction;
+class ProfileSummaryInfo;
 class TargetTransformInfo;
 
 /// A private "module" namespace for types and utilities used by
@@ -74,10 +79,15 @@ using ConstantUseListType = SmallVector<ConstantUser, 8>;
 /// Keeps track of a constant candidate and its uses.
 struct ConstantCandidate {
   ConstantUseListType Uses;
+  // If the candidate is a ConstantExpr (currely only constant GEP expressions
+  // whose base pointers are GlobalVariables are supported), ConstInt records
+  // its offset from the base GV, ConstExpr tracks the candidate GEP expr.
   ConstantInt *ConstInt;
+  ConstantExpr *ConstExpr;
   unsigned CumulativeCost = 0;
 
-  ConstantCandidate(ConstantInt *ConstInt) : ConstInt(ConstInt) {}
+  ConstantCandidate(ConstantInt *ConstInt, ConstantExpr *ConstExpr=nullptr) :
+      ConstInt(ConstInt), ConstExpr(ConstExpr) {}
 
   /// Add the user to the use list and update the cost.
   void addUser(Instruction *Inst, unsigned Idx, unsigned Cost) {
@@ -91,16 +101,21 @@ struct ConstantCandidate {
 struct RebasedConstantInfo {
   ConstantUseListType Uses;
   Constant *Offset;
+  Type *Ty;
 
-  RebasedConstantInfo(ConstantUseListType &&Uses, Constant *Offset)
-    : Uses(std::move(Uses)), Offset(Offset) {}
+  RebasedConstantInfo(ConstantUseListType &&Uses, Constant *Offset,
+      Type *Ty=nullptr) : Uses(std::move(Uses)), Offset(Offset), Ty(Ty) {}
 };
 
 using RebasedConstantListType = SmallVector<RebasedConstantInfo, 4>;
 
 /// A base constant and all its rebased constants.
 struct ConstantInfo {
-  ConstantInt *BaseConstant;
+  // If the candidate is a ConstantExpr (currely only constant GEP expressions
+  // whose base pointers are GlobalVariables are supported), ConstInt records
+  // its offset from the base GV, ConstExpr tracks the candidate GEP expr.
+  ConstantInt *BaseInt;
+  ConstantExpr *BaseExpr;
   RebasedConstantListType RebasedConstants;
 };
 
@@ -112,54 +127,77 @@ public:
 
   // Glue for old PM.
   bool runImpl(Function &F, TargetTransformInfo &TTI, DominatorTree &DT,
-               BlockFrequencyInfo *BFI, BasicBlock &Entry);
+               BlockFrequencyInfo *BFI, BasicBlock &Entry,
+               ProfileSummaryInfo *PSI);
 
-  void releaseMemory() {
-    ConstantVec.clear();
+  void cleanup() {
     ClonedCastMap.clear();
-    ConstCandVec.clear();
+    ConstIntCandVec.clear();
+    for (auto MapEntry : ConstGEPCandMap)
+      MapEntry.second.clear();
+    ConstGEPCandMap.clear();
+    ConstIntInfoVec.clear();
+    for (auto MapEntry : ConstGEPInfoMap)
+      MapEntry.second.clear();
+    ConstGEPInfoMap.clear();
   }
 
 private:
-  using ConstCandMapType = DenseMap<ConstantInt *, unsigned>;
-  using ConstCandVecType = std::vector<consthoist::ConstantCandidate>;
+  using ConstPtrUnionType = PointerUnion<ConstantInt *, ConstantExpr *>;
+  using ConstCandMapType = DenseMap<ConstPtrUnionType, unsigned>;
 
   const TargetTransformInfo *TTI;
   DominatorTree *DT;
   BlockFrequencyInfo *BFI;
+  LLVMContext *Ctx;
+  const DataLayout *DL;
   BasicBlock *Entry;
+  ProfileSummaryInfo *PSI;
 
   /// Keeps track of constant candidates found in the function.
-  ConstCandVecType ConstCandVec;
-
-  /// Keep track of cast instructions we already cloned.
-  SmallDenseMap<Instruction *, Instruction *> ClonedCastMap;
+  using ConstCandVecType = std::vector<consthoist::ConstantCandidate>;
+  using GVCandVecMapType = MapVector<GlobalVariable *, ConstCandVecType>;
+  ConstCandVecType ConstIntCandVec;
+  GVCandVecMapType ConstGEPCandMap;
 
   /// These are the final constants we decided to hoist.
-  SmallVector<consthoist::ConstantInfo, 8> ConstantVec;
+  using ConstInfoVecType = SmallVector<consthoist::ConstantInfo, 8>;
+  using GVInfoVecMapType = MapVector<GlobalVariable *, ConstInfoVecType>;
+  ConstInfoVecType ConstIntInfoVec;
+  GVInfoVecMapType ConstGEPInfoMap;
+
+  /// Keep track of cast instructions we already cloned.
+  MapVector<Instruction *, Instruction *> ClonedCastMap;
 
   Instruction *findMatInsertPt(Instruction *Inst, unsigned Idx = ~0U) const;
-  SmallPtrSet<Instruction *, 8>
+  SetVector<Instruction *>
   findConstantInsertionPoint(const consthoist::ConstantInfo &ConstInfo) const;
   void collectConstantCandidates(ConstCandMapType &ConstCandMap,
                                  Instruction *Inst, unsigned Idx,
                                  ConstantInt *ConstInt);
+  void collectConstantCandidates(ConstCandMapType &ConstCandMap,
+                                 Instruction *Inst, unsigned Idx,
+                                 ConstantExpr *ConstExpr);
   void collectConstantCandidates(ConstCandMapType &ConstCandMap,
                                  Instruction *Inst, unsigned Idx);
   void collectConstantCandidates(ConstCandMapType &ConstCandMap,
                                  Instruction *Inst);
   void collectConstantCandidates(Function &Fn);
   void findAndMakeBaseConstant(ConstCandVecType::iterator S,
-                               ConstCandVecType::iterator E);
+                               ConstCandVecType::iterator E,
+      SmallVectorImpl<consthoist::ConstantInfo> &ConstInfoVec);
   unsigned maximizeConstantsInRange(ConstCandVecType::iterator S,
                                     ConstCandVecType::iterator E,
                                     ConstCandVecType::iterator &MaxCostItr);
-  void findBaseConstants();
-  void emitBaseConstants(Instruction *Base, Constant *Offset,
+  // If BaseGV is nullptr, find base among Constant Integer candidates;
+  // otherwise find base among constant GEPs sharing BaseGV as base pointer.
+  void findBaseConstants(GlobalVariable *BaseGV);
+  void emitBaseConstants(Instruction *Base, Constant *Offset, Type *Ty,
                          const consthoist::ConstantUser &ConstUser);
-  bool emitBaseConstants();
+  // If BaseGV is nullptr, emit Constant Integer base; otherwise emit
+  // constant GEP base.
+  bool emitBaseConstants(GlobalVariable *BaseGV);
   void deleteDeadCastInst() const;
-  bool optimizeConstants(Function &Fn);
 };
 
 } // end namespace llvm

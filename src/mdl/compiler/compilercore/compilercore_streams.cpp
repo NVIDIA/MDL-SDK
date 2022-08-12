@@ -547,13 +547,11 @@ void Buffer_output_stream::write(char const *string)
 {
     if (m_data == NULL) {
         m_data_chunk_length = 1024;
-        
         m_data = reinterpret_cast<char *>(get_allocator()->malloc(m_data_chunk_length));
     }
 
-    bool end = false;
     size_t len = m_data_length;
-    for (size_t i = 0; !end; ++i) {
+    for (size_t i = 0; string[i] != '\0'; ++i) {
         m_data[len++] = string[i];
 
         if (len >= m_data_chunk_length) {
@@ -566,10 +564,8 @@ void Buffer_output_stream::write(char const *string)
             m_data = buf;
             alloc->free(t);
         }
-        end = string[i] == '\0';
     }
-    // '\0' is always written but NOT counted
-    m_data_length = len - 1;
+    m_data_length = len;
 }
 
 // Flush stream.
@@ -592,8 +588,16 @@ bool Buffer_output_stream::unput(char c)
 void Buffer_output_stream::clear()
 {
     m_data_length = 0;
-    if (m_data)
-        m_data[0] = '\0';
+}
+
+// Retrieve the buffer itself.
+char const *Buffer_output_stream::get_data()
+{
+    // ensure, the buffer is '\0' terminated
+    write_char('\0');
+    --m_data_length;
+
+    return m_data;
 }
 
 // Constructor.

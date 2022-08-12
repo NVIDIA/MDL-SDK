@@ -134,7 +134,7 @@ mi::Size Compiled_material_impl::get_referenced_scene_data_count() const
     return get_db_element()->get_referenced_scene_data_count();
 }
 
-char const *Compiled_material_impl::get_referenced_scene_data_name( mi::Size index) const
+const char* Compiled_material_impl::get_referenced_scene_data_name( mi::Size index) const
 {
     return get_db_element()->get_referenced_scene_data_name( index);
 }

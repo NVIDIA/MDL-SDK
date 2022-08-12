@@ -1,9 +1,8 @@
 //===- llvm/InstrTypes.h - Important Instruction subclasses -----*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -25,8 +24,10 @@
 #include "llvm/ADT/Twine.h"
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/IR/Attributes.h"
+#include "llvm/IR/CallingConv.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Function.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/OperandTraits.h"
@@ -45,233 +46,9 @@
 
 namespace llvm {
 
-//===----------------------------------------------------------------------===//
-//                            TerminatorInst Class
-//===----------------------------------------------------------------------===//
-
-/// Subclasses of this class are all able to terminate a basic
-/// block. Thus, these are all the flow control type of operations.
-///
-class TerminatorInst : public Instruction {
-protected:
-  TerminatorInst(Type *Ty, Instruction::TermOps iType,
-                 Use *Ops, unsigned NumOps,
-                 Instruction *InsertBefore = nullptr)
-    : Instruction(Ty, iType, Ops, NumOps, InsertBefore) {}
-
-  TerminatorInst(Type *Ty, Instruction::TermOps iType,
-                 Use *Ops, unsigned NumOps, BasicBlock *InsertAtEnd)
-    : Instruction(Ty, iType, Ops, NumOps, InsertAtEnd) {}
-
-public:
-  /// Return the number of successors that this terminator has.
-  unsigned getNumSuccessors() const;
-
-  /// Return the specified successor.
-  BasicBlock *getSuccessor(unsigned idx) const;
-
-  /// Update the specified successor to point at the provided block.
-  void setSuccessor(unsigned idx, BasicBlock *B);
-
-  // Methods for support type inquiry through isa, cast, and dyn_cast:
-  static bool classof(const Instruction *I) {
-    return I->isTerminator();
-  }
-  static bool classof(const Value *V) {
-    return isa<Instruction>(V) && classof(cast<Instruction>(V));
-  }
-
-  // Returns true if this terminator relates to exception handling.
-  bool isExceptional() const {
-    switch (getOpcode()) {
-    case Instruction::CatchSwitch:
-    case Instruction::CatchRet:
-    case Instruction::CleanupRet:
-    case Instruction::Invoke:
-    case Instruction::Resume:
-      return true;
-    default:
-      return false;
-    }
-  }
-
-  //===--------------------------------------------------------------------===//
-  // succ_iterator definition
-  //===--------------------------------------------------------------------===//
-
-  template <class Term, class BB> // Successor Iterator
-  class SuccIterator : public std::iterator<std::random_access_iterator_tag, BB,
-                                            int, BB *, BB *> {
-    using super =
-        std::iterator<std::random_access_iterator_tag, BB, int, BB *, BB *>;
-
-  public:
-    using pointer = typename super::pointer;
-    using reference = typename super::reference;
-
-  private:
-    Term TermInst;
-    unsigned idx;
-    using Self = SuccIterator<Term, BB>;
-
-    inline bool index_is_valid(unsigned idx) {
-      return idx < TermInst->getNumSuccessors();
-    }
-
-    /// Proxy object to allow write access in operator[]
-    class SuccessorProxy {
-      Self it;
-
-    public:
-      explicit SuccessorProxy(const Self &it) : it(it) {}
-
-      SuccessorProxy(const SuccessorProxy &) = default;
-
-      SuccessorProxy &operator=(SuccessorProxy r) {
-        *this = reference(r);
-        return *this;
-      }
-
-      SuccessorProxy &operator=(reference r) {
-        it.TermInst->setSuccessor(it.idx, r);
-        return *this;
-      }
-
-      operator reference() const { return *it; }
-    };
-
-  public:
-    // begin iterator
-    explicit inline SuccIterator(Term T) : TermInst(T), idx(0) {}
-    // end iterator
-    inline SuccIterator(Term T, bool) : TermInst(T) {
-      if (TermInst)
-        idx = TermInst->getNumSuccessors();
-      else
-        // Term == NULL happens, if a basic block is not fully constructed and
-        // consequently getTerminator() returns NULL. In this case we construct
-        // a SuccIterator which describes a basic block that has zero
-        // successors.
-        // Defining SuccIterator for incomplete and malformed CFGs is especially
-        // useful for debugging.
-        idx = 0;
-    }
-
-    /// This is used to interface between code that wants to
-    /// operate on terminator instructions directly.
-    unsigned getSuccessorIndex() const { return idx; }
-
-    inline bool operator==(const Self &x) const { return idx == x.idx; }
-    inline bool operator!=(const Self &x) const { return !operator==(x); }
-
-    inline reference operator*() const { return TermInst->getSuccessor(idx); }
-    inline pointer operator->() const { return operator*(); }
-
-    inline Self &operator++() {
-      ++idx;
-      return *this;
-    } // Preincrement
-
-    inline Self operator++(int) { // Postincrement
-      Self tmp = *this;
-      ++*this;
-      return tmp;
-    }
-
-    inline Self &operator--() {
-      --idx;
-      return *this;
-    }                             // Predecrement
-    inline Self operator--(int) { // Postdecrement
-      Self tmp = *this;
-      --*this;
-      return tmp;
-    }
-
-    inline bool operator<(const Self &x) const {
-      assert(TermInst == x.TermInst &&
-             "Cannot compare iterators of different blocks!");
-      return idx < x.idx;
-    }
-
-    inline bool operator<=(const Self &x) const {
-      assert(TermInst == x.TermInst &&
-             "Cannot compare iterators of different blocks!");
-      return idx <= x.idx;
-    }
-    inline bool operator>=(const Self &x) const {
-      assert(TermInst == x.TermInst &&
-             "Cannot compare iterators of different blocks!");
-      return idx >= x.idx;
-    }
-
-    inline bool operator>(const Self &x) const {
-      assert(TermInst == x.TermInst &&
-             "Cannot compare iterators of different blocks!");
-      return idx > x.idx;
-    }
-
-    inline Self &operator+=(int Right) {
-      unsigned new_idx = idx + Right;
-      assert(index_is_valid(new_idx) && "Iterator index out of bound");
-      idx = new_idx;
-      return *this;
-    }
-
-    inline Self operator+(int Right) const {
-      Self tmp = *this;
-      tmp += Right;
-      return tmp;
-    }
-
-    inline Self &operator-=(int Right) { return operator+=(-Right); }
-
-    inline Self operator-(int Right) const { return operator+(-Right); }
-
-    inline int operator-(const Self &x) const {
-      assert(TermInst == x.TermInst &&
-             "Cannot work on iterators of different blocks!");
-      int distance = idx - x.idx;
-      return distance;
-    }
-
-    inline SuccessorProxy operator[](int offset) {
-      Self tmp = *this;
-      tmp += offset;
-      return SuccessorProxy(tmp);
-    }
-
-    /// Get the source BB of this iterator.
-    inline BB *getSource() {
-      assert(TermInst && "Source not available, if basic block was malformed");
-      return TermInst->getParent();
-    }
-  };
-
-  using succ_iterator = SuccIterator<TerminatorInst *, BasicBlock>;
-  using succ_const_iterator =
-      SuccIterator<const TerminatorInst *, const BasicBlock>;
-  using succ_range = iterator_range<succ_iterator>;
-  using succ_const_range = iterator_range<succ_const_iterator>;
-
-private:
-  inline succ_iterator succ_begin() { return succ_iterator(this); }
-  inline succ_const_iterator succ_begin() const {
-    return succ_const_iterator(this);
-  }
-  inline succ_iterator succ_end() { return succ_iterator(this, true); }
-  inline succ_const_iterator succ_end() const {
-    return succ_const_iterator(this, true);
-  }
-
-public:
-  inline succ_range successors() {
-    return succ_range(succ_begin(), succ_end());
-  }
-  inline succ_const_range successors() const {
-    return succ_const_range(succ_begin(), succ_end());
-  }
-};
+namespace Intrinsic {
+typedef unsigned ID;
+}
 
 //===----------------------------------------------------------------------===//
 //                          UnaryInstruction Class
@@ -300,7 +77,8 @@ public:
 
   // Methods for support type inquiry through isa, cast, and dyn_cast:
   static bool classof(const Instruction *I) {
-    return I->getOpcode() == Instruction::Alloca ||
+    return I->isUnaryOp() ||
+           I->getOpcode() == Instruction::Alloca ||
            I->getOpcode() == Instruction::Load ||
            I->getOpcode() == Instruction::VAArg ||
            I->getOpcode() == Instruction::ExtractValue ||
@@ -317,6 +95,93 @@ struct OperandTraits<UnaryInstruction> :
 };
 
 DEFINE_TRANSPARENT_OPERAND_ACCESSORS(UnaryInstruction, Value)
+
+//===----------------------------------------------------------------------===//
+//                                UnaryOperator Class
+//===----------------------------------------------------------------------===//
+
+class UnaryOperator : public UnaryInstruction {
+  void AssertOK();
+
+protected:
+  UnaryOperator(UnaryOps iType, Value *S, Type *Ty,
+                const Twine &Name, Instruction *InsertBefore);
+  UnaryOperator(UnaryOps iType, Value *S, Type *Ty,
+                const Twine &Name, BasicBlock *InsertAtEnd);
+
+  // Note: Instruction needs to be a friend here to call cloneImpl.
+  friend class Instruction;
+
+  UnaryOperator *cloneImpl() const;
+
+public:
+
+  /// Construct a unary instruction, given the opcode and an operand.
+  /// Optionally (if InstBefore is specified) insert the instruction
+  /// into a BasicBlock right before the specified instruction.  The specified
+  /// Instruction is allowed to be a dereferenced end iterator.
+  ///
+  static UnaryOperator *Create(UnaryOps Op, Value *S,
+                               const Twine &Name = Twine(),
+                               Instruction *InsertBefore = nullptr);
+
+  /// Construct a unary instruction, given the opcode and an operand.
+  /// Also automatically insert this instruction to the end of the
+  /// BasicBlock specified.
+  ///
+  static UnaryOperator *Create(UnaryOps Op, Value *S,
+                               const Twine &Name,
+                               BasicBlock *InsertAtEnd);
+
+  /// These methods just forward to Create, and are useful when you
+  /// statically know what type of instruction you're going to create.  These
+  /// helpers just save some typing.
+#define HANDLE_UNARY_INST(N, OPC, CLASS) \
+  static UnaryOperator *Create##OPC(Value *V, const Twine &Name = "") {\
+    return Create(Instruction::OPC, V, Name);\
+  }
+#include "llvm/IR/Instruction.def"
+#define HANDLE_UNARY_INST(N, OPC, CLASS) \
+  static UnaryOperator *Create##OPC(Value *V, const Twine &Name, \
+                                    BasicBlock *BB) {\
+    return Create(Instruction::OPC, V, Name, BB);\
+  }
+#include "llvm/IR/Instruction.def"
+#define HANDLE_UNARY_INST(N, OPC, CLASS) \
+  static UnaryOperator *Create##OPC(Value *V, const Twine &Name, \
+                                    Instruction *I) {\
+    return Create(Instruction::OPC, V, Name, I);\
+  }
+#include "llvm/IR/Instruction.def"
+
+  static UnaryOperator *
+  CreateWithCopiedFlags(UnaryOps Opc, Value *V, Instruction *CopyO,
+                        const Twine &Name = "",
+                        Instruction *InsertBefore = nullptr) {
+    UnaryOperator *UO = Create(Opc, V, Name, InsertBefore);
+    UO->copyIRFlags(CopyO);
+    return UO;
+  }
+
+  static UnaryOperator *CreateFNegFMF(Value *Op, Instruction *FMFSource,
+                                      const Twine &Name = "",
+                                      Instruction *InsertBefore = nullptr) {
+    return CreateWithCopiedFlags(Instruction::FNeg, Op, FMFSource, Name,
+                                 InsertBefore);
+  }
+
+  UnaryOps getOpcode() const {
+    return static_cast<UnaryOps>(Instruction::getOpcode());
+  }
+
+  // Methods for support type inquiry through isa, cast, and dyn_cast:
+  static bool classof(const Instruction *I) {
+    return I->isUnaryOp();
+  }
+  static bool classof(const Value *V) {
+    return isa<Instruction>(V) && classof(cast<Instruction>(V));
+  }
+};
 
 //===----------------------------------------------------------------------===//
 //                           BinaryOperator Class
@@ -385,42 +250,37 @@ public:
 
   static BinaryOperator *CreateWithCopiedFlags(BinaryOps Opc,
                                                Value *V1, Value *V2,
-                                               BinaryOperator *CopyBO,
+                                               Instruction *CopyO,
                                                const Twine &Name = "") {
     BinaryOperator *BO = Create(Opc, V1, V2, Name);
-    BO->copyIRFlags(CopyBO);
+    BO->copyIRFlags(CopyO);
     return BO;
   }
 
   static BinaryOperator *CreateFAddFMF(Value *V1, Value *V2,
-                                       BinaryOperator *FMFSource,
+                                       Instruction *FMFSource,
                                        const Twine &Name = "") {
     return CreateWithCopiedFlags(Instruction::FAdd, V1, V2, FMFSource, Name);
   }
   static BinaryOperator *CreateFSubFMF(Value *V1, Value *V2,
-                                       BinaryOperator *FMFSource,
+                                       Instruction *FMFSource,
                                        const Twine &Name = "") {
     return CreateWithCopiedFlags(Instruction::FSub, V1, V2, FMFSource, Name);
   }
   static BinaryOperator *CreateFMulFMF(Value *V1, Value *V2,
-                                       BinaryOperator *FMFSource,
+                                       Instruction *FMFSource,
                                        const Twine &Name = "") {
     return CreateWithCopiedFlags(Instruction::FMul, V1, V2, FMFSource, Name);
   }
   static BinaryOperator *CreateFDivFMF(Value *V1, Value *V2,
-                                       BinaryOperator *FMFSource,
+                                       Instruction *FMFSource,
                                        const Twine &Name = "") {
     return CreateWithCopiedFlags(Instruction::FDiv, V1, V2, FMFSource, Name);
   }
   static BinaryOperator *CreateFRemFMF(Value *V1, Value *V2,
-                                       BinaryOperator *FMFSource,
+                                       Instruction *FMFSource,
                                        const Twine &Name = "") {
     return CreateWithCopiedFlags(Instruction::FRem, V1, V2, FMFSource, Name);
-  }
-  static BinaryOperator *CreateFNegFMF(Value *Op, BinaryOperator *FMFSource,
-                                       const Twine &Name = "") {
-    Value *Zero = ConstantFP::getNegativeZero(Op->getType());
-    return CreateWithCopiedFlags(Instruction::FSub, Zero, Op, FMFSource);
   }
 
   static BinaryOperator *CreateNSW(BinaryOps Opc, Value *V1, Value *V2,
@@ -527,30 +387,10 @@ public:
                                       Instruction *InsertBefore = nullptr);
   static BinaryOperator *CreateNUWNeg(Value *Op, const Twine &Name,
                                       BasicBlock *InsertAtEnd);
-  static BinaryOperator *CreateFNeg(Value *Op, const Twine &Name = "",
-                                    Instruction *InsertBefore = nullptr);
-  static BinaryOperator *CreateFNeg(Value *Op, const Twine &Name,
-                                    BasicBlock *InsertAtEnd);
   static BinaryOperator *CreateNot(Value *Op, const Twine &Name = "",
                                    Instruction *InsertBefore = nullptr);
   static BinaryOperator *CreateNot(Value *Op, const Twine &Name,
                                    BasicBlock *InsertAtEnd);
-
-  /// Check if the given Value is a NEG, FNeg, or NOT instruction.
-  ///
-  static bool isNeg(const Value *V);
-  static bool isFNeg(const Value *V, bool IgnoreZeroSign=false);
-  static bool isNot(const Value *V);
-
-  /// Helper functions to extract the unary argument of a NEG, FNEG or NOT
-  /// operation implemented via Sub, FSub, or Xor.
-  ///
-  static const Value *getNegArgument(const Value *BinOp);
-  static       Value *getNegArgument(      Value *BinOp);
-  static const Value *getFNegArgument(const Value *BinOp);
-  static       Value *getFNegArgument(      Value *BinOp);
-  static const Value *getNotArgument(const Value *BinOp);
-  static       Value *getNotArgument(      Value *BinOp);
 
   BinaryOps getOpcode() const {
     return static_cast<BinaryOps>(Instruction::getOpcode());
@@ -759,12 +599,6 @@ public:
     BasicBlock *InsertAtEnd  ///< The block to insert the instruction into
   );
 
-  /// Check whether it is valid to call getCastOpcode for these types.
-  static bool isCastable(
-    Type *SrcTy, ///< The Type from which the value should be cast.
-    Type *DestTy ///< The Type to which the value should be cast.
-  );
-
   /// Check whether a bitcast between these types is valid
   static bool isBitCastable(
     Type *SrcTy, ///< The Type from which the value should be cast.
@@ -810,8 +644,8 @@ public:
   /// DataLayout argument is to determine the pointer size when examining casts
   /// involving Integer and Pointer types. They are no-op casts if the integer
   /// is the same size as the pointer. However, pointer size varies with
-  /// platform.
-  /// Determine if the described cast is a no-op cast.
+  /// platform.  Note that a precondition of this method is that the cast is
+  /// legal - i.e. the instruction formed with these operands would verify.
   static bool isNoopCast(
     Instruction::CastOps Opcode, ///< Opcode of cast
     Type *SrcTy,         ///< SrcTy of cast
@@ -851,11 +685,14 @@ public:
   /// Return the destination type, as a convenience
   Type* getDestTy() const { return getType(); }
 
-  /// This method can be used to determine if a cast from S to DstTy using
+  /// This method can be used to determine if a cast from SrcTy to DstTy using
   /// Opcode op is valid or not.
   /// @returns true iff the proposed cast is valid.
   /// Determine if a cast is valid without creating one.
-  static bool castIsValid(Instruction::CastOps op, Value *S, Type *DstTy);
+  static bool castIsValid(Instruction::CastOps op, Type *SrcTy, Type *DstTy);
+  static bool castIsValid(Instruction::CastOps op, Value *S, Type *DstTy) {
+    return castIsValid(op, S->getType(), DstTy);
+  }
 
   /// Methods for support type inquiry through isa, cast, and dyn_cast:
   static bool classof(const Instruction *I) {
@@ -882,46 +719,49 @@ public:
   /// Some passes (e.g. InstCombine) depend on the bit-wise characteristics of
   /// FCMP_* values. Changing the bit patterns requires a potential change to
   /// those passes.
-  enum Predicate {
-    // Opcode              U L G E    Intuitive operation
-    FCMP_FALSE =  0,  ///< 0 0 0 0    Always false (always folded)
-    FCMP_OEQ   =  1,  ///< 0 0 0 1    True if ordered and equal
-    FCMP_OGT   =  2,  ///< 0 0 1 0    True if ordered and greater than
-    FCMP_OGE   =  3,  ///< 0 0 1 1    True if ordered and greater than or equal
-    FCMP_OLT   =  4,  ///< 0 1 0 0    True if ordered and less than
-    FCMP_OLE   =  5,  ///< 0 1 0 1    True if ordered and less than or equal
-    FCMP_ONE   =  6,  ///< 0 1 1 0    True if ordered and operands are unequal
-    FCMP_ORD   =  7,  ///< 0 1 1 1    True if ordered (no nans)
-    FCMP_UNO   =  8,  ///< 1 0 0 0    True if unordered: isnan(X) | isnan(Y)
-    FCMP_UEQ   =  9,  ///< 1 0 0 1    True if unordered or equal
-    FCMP_UGT   = 10,  ///< 1 0 1 0    True if unordered or greater than
-    FCMP_UGE   = 11,  ///< 1 0 1 1    True if unordered, greater than, or equal
-    FCMP_ULT   = 12,  ///< 1 1 0 0    True if unordered or less than
-    FCMP_ULE   = 13,  ///< 1 1 0 1    True if unordered, less than, or equal
-    FCMP_UNE   = 14,  ///< 1 1 1 0    True if unordered or not equal
-    FCMP_TRUE  = 15,  ///< 1 1 1 1    Always true (always folded)
+  enum Predicate : unsigned {
+    // Opcode            U L G E    Intuitive operation
+    FCMP_FALSE = 0, ///< 0 0 0 0    Always false (always folded)
+    FCMP_OEQ = 1,   ///< 0 0 0 1    True if ordered and equal
+    FCMP_OGT = 2,   ///< 0 0 1 0    True if ordered and greater than
+    FCMP_OGE = 3,   ///< 0 0 1 1    True if ordered and greater than or equal
+    FCMP_OLT = 4,   ///< 0 1 0 0    True if ordered and less than
+    FCMP_OLE = 5,   ///< 0 1 0 1    True if ordered and less than or equal
+    FCMP_ONE = 6,   ///< 0 1 1 0    True if ordered and operands are unequal
+    FCMP_ORD = 7,   ///< 0 1 1 1    True if ordered (no nans)
+    FCMP_UNO = 8,   ///< 1 0 0 0    True if unordered: isnan(X) | isnan(Y)
+    FCMP_UEQ = 9,   ///< 1 0 0 1    True if unordered or equal
+    FCMP_UGT = 10,  ///< 1 0 1 0    True if unordered or greater than
+    FCMP_UGE = 11,  ///< 1 0 1 1    True if unordered, greater than, or equal
+    FCMP_ULT = 12,  ///< 1 1 0 0    True if unordered or less than
+    FCMP_ULE = 13,  ///< 1 1 0 1    True if unordered, less than, or equal
+    FCMP_UNE = 14,  ///< 1 1 1 0    True if unordered or not equal
+    FCMP_TRUE = 15, ///< 1 1 1 1    Always true (always folded)
     FIRST_FCMP_PREDICATE = FCMP_FALSE,
     LAST_FCMP_PREDICATE = FCMP_TRUE,
     BAD_FCMP_PREDICATE = FCMP_TRUE + 1,
-    ICMP_EQ    = 32,  ///< equal
-    ICMP_NE    = 33,  ///< not equal
-    ICMP_UGT   = 34,  ///< unsigned greater than
-    ICMP_UGE   = 35,  ///< unsigned greater or equal
-    ICMP_ULT   = 36,  ///< unsigned less than
-    ICMP_ULE   = 37,  ///< unsigned less or equal
-    ICMP_SGT   = 38,  ///< signed greater than
-    ICMP_SGE   = 39,  ///< signed greater or equal
-    ICMP_SLT   = 40,  ///< signed less than
-    ICMP_SLE   = 41,  ///< signed less or equal
+    ICMP_EQ = 32,  ///< equal
+    ICMP_NE = 33,  ///< not equal
+    ICMP_UGT = 34, ///< unsigned greater than
+    ICMP_UGE = 35, ///< unsigned greater or equal
+    ICMP_ULT = 36, ///< unsigned less than
+    ICMP_ULE = 37, ///< unsigned less or equal
+    ICMP_SGT = 38, ///< signed greater than
+    ICMP_SGE = 39, ///< signed greater or equal
+    ICMP_SLT = 40, ///< signed less than
+    ICMP_SLE = 41, ///< signed less or equal
     FIRST_ICMP_PREDICATE = ICMP_EQ,
     LAST_ICMP_PREDICATE = ICMP_SLE,
     BAD_ICMP_PREDICATE = ICMP_SLE + 1
   };
+  using PredicateField =
+      Bitfield::Element<Predicate, 0, 6, LAST_ICMP_PREDICATE>;
 
 protected:
   CmpInst(Type *ty, Instruction::OtherOps op, Predicate pred,
           Value *LHS, Value *RHS, const Twine &Name = "",
-          Instruction *InsertBefore = nullptr);
+          Instruction *InsertBefore = nullptr,
+          Instruction *FlagsSource = nullptr);
 
   CmpInst(Type *ty, Instruction::OtherOps op, Predicate pred,
           Value *LHS, Value *RHS, const Twine &Name,
@@ -956,15 +796,15 @@ public:
   }
 
   /// Return the predicate for this instruction.
-  Predicate getPredicate() const {
-    return Predicate(getSubclassDataFromInstruction());
-  }
+  Predicate getPredicate() const { return getSubclassData<PredicateField>(); }
 
   /// Set the predicate for this instruction to the specified value.
-  void setPredicate(Predicate P) { setInstructionSubclassData(P); }
+  void setPredicate(Predicate P) { setSubclassData<PredicateField>(P); }
 
   static bool isFPPredicate(Predicate P) {
-    return P >= FIRST_FCMP_PREDICATE && P <= LAST_FCMP_PREDICATE;
+    static_assert(FIRST_FCMP_PREDICATE == 0,
+                  "FIRST_FCMP_PREDICATE is required to be 0");
+    return P <= LAST_FCMP_PREDICATE;
   }
 
   static bool isIntPredicate(Predicate P) {
@@ -1005,20 +845,38 @@ public:
   /// Return the predicate as if the operands were swapped.
   static Predicate getSwappedPredicate(Predicate pred);
 
-  /// For predicate of kind "is X or equal to 0" returns the predicate "is X".
-  /// For predicate of kind "is X" returns the predicate "is X or equal to 0".
-  /// does not support other kind of predicates.
-  /// @returns the predicate that does not contains is equal to zero if
-  /// it had and vice versa.
-  /// Return the flipped strictness of predicate
-  Predicate getFlippedStrictnessPredicate() const {
-    return getFlippedStrictnessPredicate(getPredicate());
+  /// This is a static version that you can use without an instruction
+  /// available.
+  /// @returns true if the comparison predicate is strict, false otherwise.
+  static bool isStrictPredicate(Predicate predicate);
+
+  /// @returns true if the comparison predicate is strict, false otherwise.
+  /// Determine if this instruction is using an strict comparison predicate.
+  bool isStrictPredicate() const { return isStrictPredicate(getPredicate()); }
+
+  /// This is a static version that you can use without an instruction
+  /// available.
+  /// @returns true if the comparison predicate is non-strict, false otherwise.
+  static bool isNonStrictPredicate(Predicate predicate);
+
+  /// @returns true if the comparison predicate is non-strict, false otherwise.
+  /// Determine if this instruction is using an non-strict comparison predicate.
+  bool isNonStrictPredicate() const {
+    return isNonStrictPredicate(getPredicate());
+  }
+
+  /// For example, SGE -> SGT, SLE -> SLT, ULE -> ULT, UGE -> UGT.
+  /// Returns the strict version of non-strict comparisons.
+  Predicate getStrictPredicate() const {
+    return getStrictPredicate(getPredicate());
   }
 
   /// This is a static version that you can use without an instruction
   /// available.
-  /// Return the flipped strictness of predicate
-  static Predicate getFlippedStrictnessPredicate(Predicate pred);
+  /// @returns the strict version of comparison provided in \p pred.
+  /// If \p pred is not a strict comparison predicate, returns \p pred.
+  /// Returns the strict version of non-strict comparisons.
+  static Predicate getStrictPredicate(Predicate pred);
 
   /// For example, SGT -> SGE, SLT -> SLE, ULT -> ULE, UGT -> UGE.
   /// Returns the non-strict version of strict comparisons.
@@ -1033,6 +891,21 @@ public:
   /// Returns the non-strict version of strict comparisons.
   static Predicate getNonStrictPredicate(Predicate pred);
 
+  /// This is a static version that you can use without an instruction
+  /// available.
+  /// Return the flipped strictness of predicate
+  static Predicate getFlippedStrictnessPredicate(Predicate pred);
+
+  /// For predicate of kind "is X or equal to 0" returns the predicate "is X".
+  /// For predicate of kind "is X" returns the predicate "is X or equal to 0".
+  /// does not support other kind of predicates.
+  /// @returns the predicate that does not contains is equal to zero if
+  /// it had and vice versa.
+  /// Return the flipped strictness of predicate
+  Predicate getFlippedStrictnessPredicate() const {
+    return getFlippedStrictnessPredicate(getPredicate());
+  }
+
   /// Provide more efficient getOperand methods.
   DECLARE_TRANSPARENT_OPERAND_ACCESSORS(Value);
 
@@ -1045,9 +918,19 @@ public:
   /// Determine if this CmpInst is commutative.
   bool isCommutative() const;
 
-  /// This is just a convenience that dispatches to the subclasses.
   /// Determine if this is an equals/not equals predicate.
-  bool isEquality() const;
+  /// This is a static version that you can use without an instruction
+  /// available.
+  static bool isEquality(Predicate pred);
+
+  /// Determine if this is an equals/not equals predicate.
+  bool isEquality() const { return isEquality(getPredicate()); }
+
+  /// Return true if the predicate is relational (not EQ or NE).
+  static bool isRelational(Predicate P) { return !isEquality(P); }
+
+  /// Return true if the predicate is relational (not EQ or NE).
+  bool isRelational() const { return !isEquality(); }
 
   /// @returns true if the comparison is signed, false otherwise.
   /// Determine if this instruction is using a signed comparison.
@@ -1072,6 +955,30 @@ public:
   /// return the signed version of a predicate
   Predicate getSignedPredicate() {
     return getSignedPredicate(getPredicate());
+  }
+
+  /// For example, SLT->ULT, SLE->ULE, SGT->UGT, SGE->UGE, ULT->Failed assert
+  /// @returns the unsigned version of the signed predicate pred.
+  static Predicate getUnsignedPredicate(Predicate pred);
+
+  /// For example, SLT->ULT, SLE->ULE, SGT->UGT, SGE->UGE, ULT->Failed assert
+  /// @returns the unsigned version of the predicate for this instruction (which
+  /// has to be an signed predicate).
+  /// return the unsigned version of a predicate
+  Predicate getUnsignedPredicate() {
+    return getUnsignedPredicate(getPredicate());
+  }
+
+  /// For example, SLT->ULT, ULT->SLT, SLE->ULE, ULE->SLE, EQ->Failed assert
+  /// @returns the unsigned version of the signed predicate pred or
+  ///          the signed version of the signed predicate pred.
+  static Predicate getFlippedSignednessPredicate(Predicate pred);
+
+  /// For example, SLT->ULT, ULT->SLT, SLE->ULE, ULE->SLE, EQ->Failed assert
+  /// @returns the unsigned version of the signed predicate pred or
+  ///          the signed version of the signed predicate pred.
+  Predicate getFlippedSignednessPredicate() {
+    return getFlippedSignednessPredicate(getPredicate());
   }
 
   /// This is just a convenience.
@@ -1127,7 +1034,7 @@ public:
   static Type* makeCmpResultType(Type* opnd_type) {
     if (VectorType* vt = dyn_cast<VectorType>(opnd_type)) {
       return VectorType::get(Type::getInt1Ty(opnd_type->getContext()),
-                             vt->getNumElements());
+                             vt->getElementCount());
     }
     return Type::getInt1Ty(opnd_type->getContext());
   }
@@ -1146,76 +1053,6 @@ struct OperandTraits<CmpInst> : public FixedNumOperandTraits<CmpInst, 2> {
 };
 
 DEFINE_TRANSPARENT_OPERAND_ACCESSORS(CmpInst, Value)
-
-//===----------------------------------------------------------------------===//
-//                           FuncletPadInst Class
-//===----------------------------------------------------------------------===//
-class FuncletPadInst : public Instruction {
-private:
-  FuncletPadInst(const FuncletPadInst &CPI);
-
-  explicit FuncletPadInst(Instruction::FuncletPadOps Op, Value *ParentPad,
-                          ArrayRef<Value *> Args, unsigned Values,
-                          const Twine &NameStr, Instruction *InsertBefore);
-  explicit FuncletPadInst(Instruction::FuncletPadOps Op, Value *ParentPad,
-                          ArrayRef<Value *> Args, unsigned Values,
-                          const Twine &NameStr, BasicBlock *InsertAtEnd);
-
-  void init(Value *ParentPad, ArrayRef<Value *> Args, const Twine &NameStr);
-
-protected:
-  // Note: Instruction needs to be a friend here to call cloneImpl.
-  friend class Instruction;
-  friend class CatchPadInst;
-  friend class CleanupPadInst;
-
-  FuncletPadInst *cloneImpl() const;
-
-public:
-  /// Provide fast operand accessors
-  DECLARE_TRANSPARENT_OPERAND_ACCESSORS(Value);
-
-  /// getNumArgOperands - Return the number of funcletpad arguments.
-  ///
-  unsigned getNumArgOperands() const { return getNumOperands() - 1; }
-
-  /// Convenience accessors
-
-  /// Return the outer EH-pad this funclet is nested within.
-  ///
-  /// Note: This returns the associated CatchSwitchInst if this FuncletPadInst
-  /// is a CatchPadInst.
-  Value *getParentPad() const { return Op<-1>(); }
-  void setParentPad(Value *ParentPad) {
-    assert(ParentPad);
-    Op<-1>() = ParentPad;
-  }
-
-  /// getArgOperand/setArgOperand - Return/set the i-th funcletpad argument.
-  ///
-  Value *getArgOperand(unsigned i) const { return getOperand(i); }
-  void setArgOperand(unsigned i, Value *v) { setOperand(i, v); }
-
-  /// arg_operands - iteration adapter for range-for loops.
-  op_range arg_operands() { return op_range(op_begin(), op_end() - 1); }
-
-  /// arg_operands - iteration adapter for range-for loops.
-  const_op_range arg_operands() const {
-    return const_op_range(op_begin(), op_end() - 1);
-  }
-
-  // Methods for support type inquiry through isa, cast, and dyn_cast:
-  static bool classof(const Instruction *I) { return I->isFuncletPad(); }
-  static bool classof(const Value *V) {
-    return isa<Instruction>(V) && classof(cast<Instruction>(V));
-  }
-};
-
-template <>
-struct OperandTraits<FuncletPadInst>
-    : public VariadicOperandTraits<FuncletPadInst, /*MINARITY=*/1> {};
-
-DEFINE_TRANSPARENT_OPERAND_ACCESSORS(FuncletPadInst, Value)
 
 /// A lightweight accessor for an operand bundle meant to be passed
 /// around by value.
@@ -1261,6 +1098,11 @@ struct OperandBundleUse {
     return getTagID() == LLVMContext::OB_funclet;
   }
 
+  /// Return true if this is a "cfguardtarget" operand bundle.
+  bool isCFGuardTargetOperandBundle() const {
+    return getTagID() == LLVMContext::OB_cfguardtarget;
+  }
+
 private:
   /// Pointer to an entry in LLVMContextImpl::getOrInsertBundleTag.
   StringMapEntry<uint32_t> *Tag;
@@ -1283,8 +1125,8 @@ public:
       : Tag(std::move(Tag)), Inputs(Inputs) {}
 
   explicit OperandBundleDefT(const OperandBundleUse &OBU) {
-    Tag = OBU.getTagName();
-    Inputs.insert(Inputs.end(), OBU.Inputs.begin(), OBU.Inputs.end());
+    Tag = std::string(OBU.getTagName());
+    llvm::append_range(Inputs, OBU.Inputs);
   }
 
   ArrayRef<InputTy> inputs() const { return Inputs; }
@@ -1301,57 +1143,722 @@ public:
 using OperandBundleDef = OperandBundleDefT<Value *>;
 using ConstOperandBundleDef = OperandBundleDefT<const Value *>;
 
-/// A mixin to add operand bundle functionality to llvm instruction
-/// classes.
+//===----------------------------------------------------------------------===//
+//                               CallBase Class
+//===----------------------------------------------------------------------===//
+
+/// Base class for all callable instructions (InvokeInst and CallInst)
+/// Holds everything related to calling a function.
 ///
-/// OperandBundleUser uses the descriptor area co-allocated with the host User
-/// to store some meta information about which operands are "normal" operands,
-/// and which ones belong to some operand bundle.
+/// All call-like instructions are required to use a common operand layout:
+/// - Zero or more arguments to the call,
+/// - Zero or more operand bundles with zero or more operand inputs each
+///   bundle,
+/// - Zero or more subclass controlled operands
+/// - The called function.
 ///
-/// The layout of an operand bundle user is
-///
-///          +-----------uint32_t End-------------------------------------+
-///          |                                                            |
-///          |  +--------uint32_t Begin--------------------+              |
-///          |  |                                          |              |
-///          ^  ^                                          v              v
-///  |------|------|----|----|----|----|----|---------|----|---------|----|-----
-///  | BOI0 | BOI1 | .. | DU | U0 | U1 | .. | BOI0_U0 | .. | BOI1_U0 | .. | Un
-///  |------|------|----|----|----|----|----|---------|----|---------|----|-----
-///   v  v                                  ^              ^
-///   |  |                                  |              |
-///   |  +--------uint32_t Begin------------+              |
-///   |                                                    |
-///   +-----------uint32_t End-----------------------------+
-///
-///
-/// BOI0, BOI1 ... are descriptions of operand bundles in this User's use list.
-/// These descriptions are installed and managed by this class, and they're all
-/// instances of OperandBundleUser<T>::BundleOpInfo.
-///
-/// DU is an additional descriptor installed by User's 'operator new' to keep
-/// track of the 'BOI0 ... BOIN' co-allocation.  OperandBundleUser does not
-/// access or modify DU in any way, it's an implementation detail private to
-/// User.
-///
-/// The regular Use& vector for the User starts at U0.  The operand bundle uses
-/// are part of the Use& vector, just like normal uses.  In the diagram above,
-/// the operand bundle uses start at BOI0_U0.  Each instance of BundleOpInfo has
-/// information about a contiguous set of uses constituting an operand bundle,
-/// and the total set of operand bundle uses themselves form a contiguous set of
-/// uses (i.e. there are no gaps between uses corresponding to individual
-/// operand bundles).
-///
-/// This class does not know the location of the set of operand bundle uses
-/// within the use list -- that is decided by the User using this class via the
-/// BeginIdx argument in populateBundleOperandInfos.
-///
-/// Currently operand bundle users with hung-off operands are not supported.
-template <typename InstrTy, typename OpIteratorTy> class OperandBundleUser {
+/// This allows this base class to easily access the called function and the
+/// start of the arguments without knowing how many other operands a particular
+/// subclass requires. Note that accessing the end of the argument list isn't
+/// as cheap as most other operations on the base class.
+class CallBase : public Instruction {
+protected:
+  // The first two bits are reserved by CallInst for fast retrieval,
+  using CallInstReservedField = Bitfield::Element<unsigned, 0, 2>;
+  using CallingConvField =
+      Bitfield::Element<CallingConv::ID, CallInstReservedField::NextBit, 10,
+                        CallingConv::MaxID>;
+  static_assert(
+      Bitfield::areContiguous<CallInstReservedField, CallingConvField>(),
+      "Bitfields must be contiguous");
+
+  /// The last operand is the called operand.
+  static constexpr int CalledOperandOpEndIdx = -1;
+
+  AttributeList Attrs; ///< parameter attributes for callable
+  FunctionType *FTy;
+
+  template <class... ArgsTy>
+  CallBase(AttributeList const &A, FunctionType *FT, ArgsTy &&... Args)
+      : Instruction(std::forward<ArgsTy>(Args)...), Attrs(A), FTy(FT) {}
+
+  using Instruction::Instruction;
+
+  bool hasDescriptor() const { return Value::HasDescriptor; }
+
+  unsigned getNumSubclassExtraOperands() const {
+    switch (getOpcode()) {
+    case Instruction::Call:
+      return 0;
+    case Instruction::Invoke:
+      return 2;
+    case Instruction::CallBr:
+      return getNumSubclassExtraOperandsDynamic();
+    }
+    llvm_unreachable("Invalid opcode!");
+  }
+
+  /// Get the number of extra operands for instructions that don't have a fixed
+  /// number of extra operands.
+  unsigned getNumSubclassExtraOperandsDynamic() const;
+
 public:
+  using Instruction::getContext;
+
+  /// Create a clone of \p CB with a different set of operand bundles and
+  /// insert it before \p InsertPt.
+  ///
+  /// The returned call instruction is identical \p CB in every way except that
+  /// the operand bundles for the new instruction are set to the operand bundles
+  /// in \p Bundles.
+  static CallBase *Create(CallBase *CB, ArrayRef<OperandBundleDef> Bundles,
+                          Instruction *InsertPt = nullptr);
+
+  static bool classof(const Instruction *I) {
+    return I->getOpcode() == Instruction::Call ||
+           I->getOpcode() == Instruction::Invoke ||
+           I->getOpcode() == Instruction::CallBr;
+  }
+  static bool classof(const Value *V) {
+    return isa<Instruction>(V) && classof(cast<Instruction>(V));
+  }
+
+  FunctionType *getFunctionType() const { return FTy; }
+
+  void mutateFunctionType(FunctionType *FTy) {
+    Value::mutateType(FTy->getReturnType());
+    this->FTy = FTy;
+  }
+
+  DECLARE_TRANSPARENT_OPERAND_ACCESSORS(Value);
+
+  /// data_operands_begin/data_operands_end - Return iterators iterating over
+  /// the call / invoke argument list and bundle operands.  For invokes, this is
+  /// the set of instruction operands except the invoke target and the two
+  /// successor blocks; and for calls this is the set of instruction operands
+  /// except the call target.
+  User::op_iterator data_operands_begin() { return op_begin(); }
+  User::const_op_iterator data_operands_begin() const {
+    return const_cast<CallBase *>(this)->data_operands_begin();
+  }
+  User::op_iterator data_operands_end() {
+    // Walk from the end of the operands over the called operand and any
+    // subclass operands.
+    return op_end() - getNumSubclassExtraOperands() - 1;
+  }
+  User::const_op_iterator data_operands_end() const {
+    return const_cast<CallBase *>(this)->data_operands_end();
+  }
+  iterator_range<User::op_iterator> data_ops() {
+    return make_range(data_operands_begin(), data_operands_end());
+  }
+  iterator_range<User::const_op_iterator> data_ops() const {
+    return make_range(data_operands_begin(), data_operands_end());
+  }
+  bool data_operands_empty() const {
+    return data_operands_end() == data_operands_begin();
+  }
+  unsigned data_operands_size() const {
+    return std::distance(data_operands_begin(), data_operands_end());
+  }
+
+  bool isDataOperand(const Use *U) const {
+    assert(this == U->getUser() &&
+           "Only valid to query with a use of this instruction!");
+    return data_operands_begin() <= U && U < data_operands_end();
+  }
+  bool isDataOperand(Value::const_user_iterator UI) const {
+    return isDataOperand(&UI.getUse());
+  }
+
+  /// Given a value use iterator, return the data operand corresponding to it.
+  /// Iterator must actually correspond to a data operand.
+  unsigned getDataOperandNo(Value::const_user_iterator UI) const {
+    return getDataOperandNo(&UI.getUse());
+  }
+
+  /// Given a use for a data operand, get the data operand number that
+  /// corresponds to it.
+  unsigned getDataOperandNo(const Use *U) const {
+    assert(isDataOperand(U) && "Data operand # out of range!");
+    return U - data_operands_begin();
+  }
+
+  /// Return the iterator pointing to the beginning of the argument list.
+  User::op_iterator arg_begin() { return op_begin(); }
+  User::const_op_iterator arg_begin() const {
+    return const_cast<CallBase *>(this)->arg_begin();
+  }
+
+  /// Return the iterator pointing to the end of the argument list.
+  User::op_iterator arg_end() {
+    // From the end of the data operands, walk backwards past the bundle
+    // operands.
+    return data_operands_end() - getNumTotalBundleOperands();
+  }
+  User::const_op_iterator arg_end() const {
+    return const_cast<CallBase *>(this)->arg_end();
+  }
+
+  /// Iteration adapter for range-for loops.
+  iterator_range<User::op_iterator> args() {
+    return make_range(arg_begin(), arg_end());
+  }
+  iterator_range<User::const_op_iterator> args() const {
+    return make_range(arg_begin(), arg_end());
+  }
+  bool arg_empty() const { return arg_end() == arg_begin(); }
+  unsigned arg_size() const { return arg_end() - arg_begin(); }
+
+  // Legacy API names that duplicate the above and will be removed once users
+  // are migrated.
+  iterator_range<User::op_iterator> arg_operands() {
+    return make_range(arg_begin(), arg_end());
+  }
+  iterator_range<User::const_op_iterator> arg_operands() const {
+    return make_range(arg_begin(), arg_end());
+  }
+  unsigned getNumArgOperands() const { return arg_size(); }
+
+  Value *getArgOperand(unsigned i) const {
+    assert(i < getNumArgOperands() && "Out of bounds!");
+    return getOperand(i);
+  }
+
+  void setArgOperand(unsigned i, Value *v) {
+    assert(i < getNumArgOperands() && "Out of bounds!");
+    setOperand(i, v);
+  }
+
+  /// Wrappers for getting the \c Use of a call argument.
+  const Use &getArgOperandUse(unsigned i) const {
+    assert(i < getNumArgOperands() && "Out of bounds!");
+    return User::getOperandUse(i);
+  }
+  Use &getArgOperandUse(unsigned i) {
+    assert(i < getNumArgOperands() && "Out of bounds!");
+    return User::getOperandUse(i);
+  }
+
+  bool isArgOperand(const Use *U) const {
+    assert(this == U->getUser() &&
+           "Only valid to query with a use of this instruction!");
+    return arg_begin() <= U && U < arg_end();
+  }
+  bool isArgOperand(Value::const_user_iterator UI) const {
+    return isArgOperand(&UI.getUse());
+  }
+
+  /// Given a use for a arg operand, get the arg operand number that
+  /// corresponds to it.
+  unsigned getArgOperandNo(const Use *U) const {
+    assert(isArgOperand(U) && "Arg operand # out of range!");
+    return U - arg_begin();
+  }
+
+  /// Given a value use iterator, return the arg operand number corresponding to
+  /// it. Iterator must actually correspond to a data operand.
+  unsigned getArgOperandNo(Value::const_user_iterator UI) const {
+    return getArgOperandNo(&UI.getUse());
+  }
+
+  /// Returns true if this CallSite passes the given Value* as an argument to
+  /// the called function.
+  bool hasArgument(const Value *V) const {
+    return llvm::is_contained(args(), V);
+  }
+
+  Value *getCalledOperand() const { return Op<CalledOperandOpEndIdx>(); }
+
+  const Use &getCalledOperandUse() const { return Op<CalledOperandOpEndIdx>(); }
+  Use &getCalledOperandUse() { return Op<CalledOperandOpEndIdx>(); }
+
+  /// Returns the function called, or null if this is an
+  /// indirect function invocation.
+  Function *getCalledFunction() const {
+    return dyn_cast_or_null<Function>(getCalledOperand());
+  }
+
+  /// Return true if the callsite is an indirect call.
+  bool isIndirectCall() const;
+
+  /// Determine whether the passed iterator points to the callee operand's Use.
+  bool isCallee(Value::const_user_iterator UI) const {
+    return isCallee(&UI.getUse());
+  }
+
+  /// Determine whether this Use is the callee operand's Use.
+  bool isCallee(const Use *U) const { return &getCalledOperandUse() == U; }
+
+  /// Helper to get the caller (the parent function).
+  Function *getCaller();
+  const Function *getCaller() const {
+    return const_cast<CallBase *>(this)->getCaller();
+  }
+
+  /// Tests if this call site must be tail call optimized. Only a CallInst can
+  /// be tail call optimized.
+  bool isMustTailCall() const;
+
+  /// Tests if this call site is marked as a tail call.
+  bool isTailCall() const;
+
+  /// Returns the intrinsic ID of the intrinsic called or
+  /// Intrinsic::not_intrinsic if the called function is not an intrinsic, or if
+  /// this is an indirect call.
+  Intrinsic::ID getIntrinsicID() const;
+
+  void setCalledOperand(Value *V) { Op<CalledOperandOpEndIdx>() = V; }
+
+  /// Sets the function called, including updating the function type.
+  void setCalledFunction(Function *Fn) {
+    setCalledFunction(Fn->getFunctionType(), Fn);
+  }
+
+  /// Sets the function called, including updating the function type.
+  void setCalledFunction(FunctionCallee Fn) {
+    setCalledFunction(Fn.getFunctionType(), Fn.getCallee());
+  }
+
+  /// Sets the function called, including updating to the specified function
+  /// type.
+  void setCalledFunction(FunctionType *FTy, Value *Fn) {
+    this->FTy = FTy;
+    assert(FTy == cast<FunctionType>(
+                      cast<PointerType>(Fn->getType())->getElementType()));
+    // This function doesn't mutate the return type, only the function
+    // type. Seems broken, but I'm just gonna stick an assert in for now.
+    assert(getType() == FTy->getReturnType());
+    setCalledOperand(Fn);
+  }
+
+  CallingConv::ID getCallingConv() const {
+    return getSubclassData<CallingConvField>();
+  }
+
+  void setCallingConv(CallingConv::ID CC) {
+    setSubclassData<CallingConvField>(CC);
+  }
+
+  /// Check if this call is an inline asm statement.
+  bool isInlineAsm() const { return isa<InlineAsm>(getCalledOperand()); }
+
+  /// \name Attribute API
+  ///
+  /// These methods access and modify attributes on this call (including
+  /// looking through to the attributes on the called function when necessary).
+  ///@{
+
+  /// Return the parameter attributes for this call.
+  ///
+  AttributeList getAttributes() const { return Attrs; }
+
+  /// Set the parameter attributes for this call.
+  ///
+  void setAttributes(AttributeList A) { Attrs = A; }
+
+  /// Determine whether this call has the given attribute. If it does not
+  /// then determine if the called function has the attribute, but only if
+  /// the attribute is allowed for the call.
+  bool hasFnAttr(Attribute::AttrKind Kind) const {
+    assert(Kind != Attribute::NoBuiltin &&
+           "Use CallBase::isNoBuiltin() to check for Attribute::NoBuiltin");
+    return hasFnAttrImpl(Kind);
+  }
+
+  /// Determine whether this call has the given attribute. If it does not
+  /// then determine if the called function has the attribute, but only if
+  /// the attribute is allowed for the call.
+  bool hasFnAttr(StringRef Kind) const { return hasFnAttrImpl(Kind); }
+
+  /// adds the attribute to the list of attributes.
+  void addAttribute(unsigned i, Attribute::AttrKind Kind) {
+    AttributeList PAL = getAttributes();
+    PAL = PAL.addAttribute(getContext(), i, Kind);
+    setAttributes(PAL);
+  }
+
+  /// adds the attribute to the list of attributes.
+  void addAttribute(unsigned i, Attribute Attr) {
+    AttributeList PAL = getAttributes();
+    PAL = PAL.addAttribute(getContext(), i, Attr);
+    setAttributes(PAL);
+  }
+
+  /// Adds the attribute to the indicated argument
+  void addParamAttr(unsigned ArgNo, Attribute::AttrKind Kind) {
+    assert(ArgNo < getNumArgOperands() && "Out of bounds");
+    AttributeList PAL = getAttributes();
+    PAL = PAL.addParamAttribute(getContext(), ArgNo, Kind);
+    setAttributes(PAL);
+  }
+
+  /// Adds the attribute to the indicated argument
+  void addParamAttr(unsigned ArgNo, Attribute Attr) {
+    assert(ArgNo < getNumArgOperands() && "Out of bounds");
+    AttributeList PAL = getAttributes();
+    PAL = PAL.addParamAttribute(getContext(), ArgNo, Attr);
+    setAttributes(PAL);
+  }
+
+  /// removes the attribute from the list of attributes.
+  void removeAttribute(unsigned i, Attribute::AttrKind Kind) {
+    AttributeList PAL = getAttributes();
+    PAL = PAL.removeAttribute(getContext(), i, Kind);
+    setAttributes(PAL);
+  }
+
+  /// removes the attribute from the list of attributes.
+  void removeAttribute(unsigned i, StringRef Kind) {
+    AttributeList PAL = getAttributes();
+    PAL = PAL.removeAttribute(getContext(), i, Kind);
+    setAttributes(PAL);
+  }
+
+  void removeAttributes(unsigned i, const AttrBuilder &Attrs) {
+    AttributeList PAL = getAttributes();
+    PAL = PAL.removeAttributes(getContext(), i, Attrs);
+    setAttributes(PAL);
+  }
+
+  /// Removes the attribute from the given argument
+  void removeParamAttr(unsigned ArgNo, Attribute::AttrKind Kind) {
+    assert(ArgNo < getNumArgOperands() && "Out of bounds");
+    AttributeList PAL = getAttributes();
+    PAL = PAL.removeParamAttribute(getContext(), ArgNo, Kind);
+    setAttributes(PAL);
+  }
+
+  /// Removes the attribute from the given argument
+  void removeParamAttr(unsigned ArgNo, StringRef Kind) {
+    assert(ArgNo < getNumArgOperands() && "Out of bounds");
+    AttributeList PAL = getAttributes();
+    PAL = PAL.removeParamAttribute(getContext(), ArgNo, Kind);
+    setAttributes(PAL);
+  }
+
+  /// adds the dereferenceable attribute to the list of attributes.
+  void addDereferenceableAttr(unsigned i, uint64_t Bytes) {
+    AttributeList PAL = getAttributes();
+    PAL = PAL.addDereferenceableAttr(getContext(), i, Bytes);
+    setAttributes(PAL);
+  }
+
+  /// adds the dereferenceable_or_null attribute to the list of
+  /// attributes.
+  void addDereferenceableOrNullAttr(unsigned i, uint64_t Bytes) {
+    AttributeList PAL = getAttributes();
+    PAL = PAL.addDereferenceableOrNullAttr(getContext(), i, Bytes);
+    setAttributes(PAL);
+  }
+
+  /// Determine whether the return value has the given attribute.
+  bool hasRetAttr(Attribute::AttrKind Kind) const {
+    return hasRetAttrImpl(Kind);
+  }
+  /// Determine whether the return value has the given attribute.
+  bool hasRetAttr(StringRef Kind) const { return hasRetAttrImpl(Kind); }
+
+  /// Determine whether the argument or parameter has the given attribute.
+  bool paramHasAttr(unsigned ArgNo, Attribute::AttrKind Kind) const;
+
+  /// Get the attribute of a given kind at a position.
+  Attribute getAttribute(unsigned i, Attribute::AttrKind Kind) const {
+    return getAttributes().getAttribute(i, Kind);
+  }
+
+  /// Get the attribute of a given kind at a position.
+  Attribute getAttribute(unsigned i, StringRef Kind) const {
+    return getAttributes().getAttribute(i, Kind);
+  }
+
+  /// Get the attribute of a given kind from a given arg
+  Attribute getParamAttr(unsigned ArgNo, Attribute::AttrKind Kind) const {
+    assert(ArgNo < getNumArgOperands() && "Out of bounds");
+    return getAttributes().getParamAttr(ArgNo, Kind);
+  }
+
+  /// Get the attribute of a given kind from a given arg
+  Attribute getParamAttr(unsigned ArgNo, StringRef Kind) const {
+    assert(ArgNo < getNumArgOperands() && "Out of bounds");
+    return getAttributes().getParamAttr(ArgNo, Kind);
+  }
+
+  /// Return true if the data operand at index \p i has the attribute \p
+  /// A.
+  ///
+  /// Data operands include call arguments and values used in operand bundles,
+  /// but does not include the callee operand.  This routine dispatches to the
+  /// underlying AttributeList or the OperandBundleUser as appropriate.
+  ///
+  /// The index \p i is interpreted as
+  ///
+  ///  \p i == Attribute::ReturnIndex  -> the return value
+  ///  \p i in [1, arg_size + 1)  -> argument number (\p i - 1)
+  ///  \p i in [arg_size + 1, data_operand_size + 1) -> bundle operand at index
+  ///     (\p i - 1) in the operand list.
+  bool dataOperandHasImpliedAttr(unsigned i, Attribute::AttrKind Kind) const {
+    // Note that we have to add one because `i` isn't zero-indexed.
+    assert(i < (getNumArgOperands() + getNumTotalBundleOperands() + 1) &&
+           "Data operand index out of bounds!");
+
+    // The attribute A can either be directly specified, if the operand in
+    // question is a call argument; or be indirectly implied by the kind of its
+    // containing operand bundle, if the operand is a bundle operand.
+
+    if (i == AttributeList::ReturnIndex)
+      return hasRetAttr(Kind);
+
+    // FIXME: Avoid these i - 1 calculations and update the API to use
+    // zero-based indices.
+    if (i < (getNumArgOperands() + 1))
+      return paramHasAttr(i - 1, Kind);
+
+    assert(hasOperandBundles() && i >= (getBundleOperandsStartIndex() + 1) &&
+           "Must be either a call argument or an operand bundle!");
+    return bundleOperandHasAttr(i - 1, Kind);
+  }
+
+  /// Determine whether this data operand is not captured.
+  // FIXME: Once this API is no longer duplicated in `CallSite`, rename this to
+  // better indicate that this may return a conservative answer.
+  bool doesNotCapture(unsigned OpNo) const {
+    return dataOperandHasImpliedAttr(OpNo + 1, Attribute::NoCapture);
+  }
+
+  /// Determine whether this argument is passed by value.
+  bool isByValArgument(unsigned ArgNo) const {
+    return paramHasAttr(ArgNo, Attribute::ByVal);
+  }
+
+  /// Determine whether this argument is passed in an alloca.
+  bool isInAllocaArgument(unsigned ArgNo) const {
+    return paramHasAttr(ArgNo, Attribute::InAlloca);
+  }
+
+  /// Determine whether this argument is passed by value, in an alloca, or is
+  /// preallocated.
+  bool isPassPointeeByValueArgument(unsigned ArgNo) const {
+    return paramHasAttr(ArgNo, Attribute::ByVal) ||
+           paramHasAttr(ArgNo, Attribute::InAlloca) ||
+           paramHasAttr(ArgNo, Attribute::Preallocated);
+  }
+
+  /// Determine if there are is an inalloca argument. Only the last argument can
+  /// have the inalloca attribute.
+  bool hasInAllocaArgument() const {
+    return !arg_empty() && paramHasAttr(arg_size() - 1, Attribute::InAlloca);
+  }
+
+  // FIXME: Once this API is no longer duplicated in `CallSite`, rename this to
+  // better indicate that this may return a conservative answer.
+  bool doesNotAccessMemory(unsigned OpNo) const {
+    return dataOperandHasImpliedAttr(OpNo + 1, Attribute::ReadNone);
+  }
+
+  // FIXME: Once this API is no longer duplicated in `CallSite`, rename this to
+  // better indicate that this may return a conservative answer.
+  bool onlyReadsMemory(unsigned OpNo) const {
+    return dataOperandHasImpliedAttr(OpNo + 1, Attribute::ReadOnly) ||
+           dataOperandHasImpliedAttr(OpNo + 1, Attribute::ReadNone);
+  }
+
+  // FIXME: Once this API is no longer duplicated in `CallSite`, rename this to
+  // better indicate that this may return a conservative answer.
+  bool doesNotReadMemory(unsigned OpNo) const {
+    return dataOperandHasImpliedAttr(OpNo + 1, Attribute::WriteOnly) ||
+           dataOperandHasImpliedAttr(OpNo + 1, Attribute::ReadNone);
+  }
+
+  LLVM_ATTRIBUTE_DEPRECATED(unsigned getRetAlignment() const,
+                            "Use getRetAlign() instead") {
+    if (const auto MA = Attrs.getRetAlignment())
+      return MA->value();
+    return 0;
+  }
+
+  /// Extract the alignment of the return value.
+  MaybeAlign getRetAlign() const { return Attrs.getRetAlignment(); }
+
+  /// Extract the alignment for a call or parameter (0=unknown).
+  LLVM_ATTRIBUTE_DEPRECATED(unsigned getParamAlignment(unsigned ArgNo) const,
+                            "Use getParamAlign() instead") {
+    if (const auto MA = Attrs.getParamAlignment(ArgNo))
+      return MA->value();
+    return 0;
+  }
+
+  /// Extract the alignment for a call or parameter (0=unknown).
+  MaybeAlign getParamAlign(unsigned ArgNo) const {
+    return Attrs.getParamAlignment(ArgNo);
+  }
+
+  /// Extract the byval type for a call or parameter.
+  Type *getParamByValType(unsigned ArgNo) const {
+    Type *Ty = Attrs.getParamByValType(ArgNo);
+    return Ty ? Ty : getArgOperand(ArgNo)->getType()->getPointerElementType();
+  }
+
+  /// Extract the preallocated type for a call or parameter.
+  Type *getParamPreallocatedType(unsigned ArgNo) const {
+    Type *Ty = Attrs.getParamPreallocatedType(ArgNo);
+    return Ty ? Ty : getArgOperand(ArgNo)->getType()->getPointerElementType();
+  }
+
+  /// Extract the number of dereferenceable bytes for a call or
+  /// parameter (0=unknown).
+  uint64_t getDereferenceableBytes(unsigned i) const {
+    return Attrs.getDereferenceableBytes(i);
+  }
+
+  /// Extract the number of dereferenceable_or_null bytes for a call or
+  /// parameter (0=unknown).
+  uint64_t getDereferenceableOrNullBytes(unsigned i) const {
+    return Attrs.getDereferenceableOrNullBytes(i);
+  }
+
+  /// Return true if the return value is known to be not null.
+  /// This may be because it has the nonnull attribute, or because at least
+  /// one byte is dereferenceable and the pointer is in addrspace(0).
+  bool isReturnNonNull() const;
+
+  /// Determine if the return value is marked with NoAlias attribute.
+  bool returnDoesNotAlias() const {
+    return Attrs.hasAttribute(AttributeList::ReturnIndex, Attribute::NoAlias);
+  }
+
+  /// If one of the arguments has the 'returned' attribute, returns its
+  /// operand value. Otherwise, return nullptr.
+  Value *getReturnedArgOperand() const;
+
+  /// Return true if the call should not be treated as a call to a
+  /// builtin.
+  bool isNoBuiltin() const {
+    return hasFnAttrImpl(Attribute::NoBuiltin) &&
+           !hasFnAttrImpl(Attribute::Builtin);
+  }
+
+  /// Determine if the call requires strict floating point semantics.
+  bool isStrictFP() const { return hasFnAttr(Attribute::StrictFP); }
+
+  /// Return true if the call should not be inlined.
+  bool isNoInline() const { return hasFnAttr(Attribute::NoInline); }
+  void setIsNoInline() {
+    addAttribute(AttributeList::FunctionIndex, Attribute::NoInline);
+  }
+  /// Determine if the call does not access memory.
+  bool doesNotAccessMemory() const { return hasFnAttr(Attribute::ReadNone); }
+  void setDoesNotAccessMemory() {
+    addAttribute(AttributeList::FunctionIndex, Attribute::ReadNone);
+  }
+
+  /// Determine if the call does not access or only reads memory.
+  bool onlyReadsMemory() const {
+    return doesNotAccessMemory() || hasFnAttr(Attribute::ReadOnly);
+  }
+
+  void setOnlyReadsMemory() {
+    addAttribute(AttributeList::FunctionIndex, Attribute::ReadOnly);
+  }
+
+  /// Determine if the call does not access or only writes memory.
+  bool doesNotReadMemory() const {
+    return doesNotAccessMemory() || hasFnAttr(Attribute::WriteOnly);
+  }
+  void setDoesNotReadMemory() {
+    addAttribute(AttributeList::FunctionIndex, Attribute::WriteOnly);
+  }
+
+  /// Determine if the call can access memmory only using pointers based
+  /// on its arguments.
+  bool onlyAccessesArgMemory() const {
+    return hasFnAttr(Attribute::ArgMemOnly);
+  }
+  void setOnlyAccessesArgMemory() {
+    addAttribute(AttributeList::FunctionIndex, Attribute::ArgMemOnly);
+  }
+
+  /// Determine if the function may only access memory that is
+  /// inaccessible from the IR.
+  bool onlyAccessesInaccessibleMemory() const {
+    return hasFnAttr(Attribute::InaccessibleMemOnly);
+  }
+  void setOnlyAccessesInaccessibleMemory() {
+    addAttribute(AttributeList::FunctionIndex, Attribute::InaccessibleMemOnly);
+  }
+
+  /// Determine if the function may only access memory that is
+  /// either inaccessible from the IR or pointed to by its arguments.
+  bool onlyAccessesInaccessibleMemOrArgMem() const {
+    return hasFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
+  }
+  void setOnlyAccessesInaccessibleMemOrArgMem() {
+    addAttribute(AttributeList::FunctionIndex,
+                 Attribute::InaccessibleMemOrArgMemOnly);
+  }
+  /// Determine if the call cannot return.
+  bool doesNotReturn() const { return hasFnAttr(Attribute::NoReturn); }
+  void setDoesNotReturn() {
+    addAttribute(AttributeList::FunctionIndex, Attribute::NoReturn);
+  }
+
+  /// Determine if the call should not perform indirect branch tracking.
+  bool doesNoCfCheck() const { return hasFnAttr(Attribute::NoCfCheck); }
+
+  /// Determine if the call cannot unwind.
+  bool doesNotThrow() const { return hasFnAttr(Attribute::NoUnwind); }
+  void setDoesNotThrow() {
+    addAttribute(AttributeList::FunctionIndex, Attribute::NoUnwind);
+  }
+
+  /// Determine if the invoke cannot be duplicated.
+  bool cannotDuplicate() const { return hasFnAttr(Attribute::NoDuplicate); }
+  void setCannotDuplicate() {
+    addAttribute(AttributeList::FunctionIndex, Attribute::NoDuplicate);
+  }
+
+  /// Determine if the call cannot be tail merged.
+  bool cannotMerge() const { return hasFnAttr(Attribute::NoMerge); }
+  void setCannotMerge() {
+    addAttribute(AttributeList::FunctionIndex, Attribute::NoMerge);
+  }
+
+  /// Determine if the invoke is convergent
+  bool isConvergent() const { return hasFnAttr(Attribute::Convergent); }
+  void setConvergent() {
+    addAttribute(AttributeList::FunctionIndex, Attribute::Convergent);
+  }
+  void setNotConvergent() {
+    removeAttribute(AttributeList::FunctionIndex, Attribute::Convergent);
+  }
+
+  /// Determine if the call returns a structure through first
+  /// pointer argument.
+  bool hasStructRetAttr() const {
+    if (getNumArgOperands() == 0)
+      return false;
+
+    // Be friendly and also check the callee.
+    return paramHasAttr(0, Attribute::StructRet);
+  }
+
+  /// Determine if any call argument is an aggregate passed by value.
+  bool hasByValArgument() const {
+    return Attrs.hasAttrSomewhere(Attribute::ByVal);
+  }
+
+  ///@{
+  // End of attribute API.
+
+  /// \name Operand Bundle API
+  ///
+  /// This group of methods provides the API to access and manipulate operand
+  /// bundles on this call.
+  /// @{
+
   /// Return the number of operand bundles associated with this User.
   unsigned getNumOperandBundles() const {
-    return unsigned(std::distance(bundle_op_info_begin(), bundle_op_info_end()));
+    return std::distance(bundle_op_info_begin(), bundle_op_info_end());
   }
 
   /// Return true if this User has any operand bundles.
@@ -1373,6 +1880,16 @@ public:
   bool isBundleOperand(unsigned Idx) const {
     return hasOperandBundles() && Idx >= getBundleOperandsStartIndex() &&
            Idx < getBundleOperandsEndIndex();
+  }
+
+  /// Returns true if the use is a bundle operand.
+  bool isBundleOperand(const Use *U) const {
+    assert(this == U->getUser() &&
+           "Only valid to query with a use of this instruction!");
+    return hasOperandBundles() && isBundleOperand(U - op_begin());
+  }
+  bool isBundleOperand(Value::const_user_iterator UI) const {
+    return isBundleOperand(&UI.getUse());
   }
 
   /// Return the total number operands (not operand bundles) used by
@@ -1455,10 +1972,7 @@ public:
   /// OperandBundleUser to a vector of OperandBundleDefs.  Note:
   /// OperandBundeUses and OperandBundleDefs are non-trivially *different*
   /// representations of operand bundles (see documentation above).
-  void getOperandBundlesAsDefs(SmallVectorImpl<OperandBundleDef> &Defs) const {
-    for (unsigned i = 0, e = getNumOperandBundles(); i != e; ++i)
-      Defs.emplace_back(getOperandBundleAt(i));
-  }
+  void getOperandBundlesAsDefs(SmallVectorImpl<OperandBundleDef> &Defs) const;
 
   /// Return the operand bundle for the operand at index OpIdx.
   ///
@@ -1504,8 +2018,7 @@ public:
   /// Return true if \p Other has the same sequence of operand bundle
   /// tags with the same number of operands on each one of them as this
   /// OperandBundleUser.
-  bool hasIdenticalOperandBundleSchema(
-      const OperandBundleUser<InstrTy, OpIteratorTy> &Other) const {
+  bool hasIdenticalOperandBundleSchema(const CallBase &Other) const {
     if (getNumOperandBundles() != Other.getNumOperandBundles())
       return false;
 
@@ -1524,11 +2037,10 @@ public:
     return false;
   }
 
-protected:
   /// Is the function attribute S disallowed by some operand bundle on
   /// this operand bundle user?
   bool isFnAttrDisallowedByOpBundle(StringRef S) const {
-    // Operand bundles only possibly disallow readnone, readonly and argmenonly
+    // Operand bundles only possibly disallow readnone, readonly and argmemonly
     // attributes.  All String attributes are fine.
     return false;
   }
@@ -1583,8 +2095,8 @@ protected:
   /// OperandBundleUse.
   OperandBundleUse
   operandBundleFromBundleOpInfo(const BundleOpInfo &BOI) const {
-    auto op_begin = static_cast<const InstrTy *>(this)->op_begin();
-    ArrayRef<Use> Inputs(op_begin + BOI.Begin, op_begin + BOI.End);
+    auto begin = op_begin();
+    ArrayRef<Use> Inputs(begin + BOI.Begin, begin + BOI.End);
     return OperandBundleUse(BOI.Tag, Inputs);
   }
 
@@ -1593,37 +2105,79 @@ protected:
 
   /// Return the start of the list of BundleOpInfo instances associated
   /// with this OperandBundleUser.
+  ///
+  /// OperandBundleUser uses the descriptor area co-allocated with the host User
+  /// to store some meta information about which operands are "normal" operands,
+  /// and which ones belong to some operand bundle.
+  ///
+  /// The layout of an operand bundle user is
+  ///
+  ///          +-----------uint32_t End-------------------------------------+
+  ///          |                                                            |
+  ///          |  +--------uint32_t Begin--------------------+              |
+  ///          |  |                                          |              |
+  ///          ^  ^                                          v              v
+  ///  |------|------|----|----|----|----|----|---------|----|---------|----|-----
+  ///  | BOI0 | BOI1 | .. | DU | U0 | U1 | .. | BOI0_U0 | .. | BOI1_U0 | .. | Un
+  ///  |------|------|----|----|----|----|----|---------|----|---------|----|-----
+  ///   v  v                                  ^              ^
+  ///   |  |                                  |              |
+  ///   |  +--------uint32_t Begin------------+              |
+  ///   |                                                    |
+  ///   +-----------uint32_t End-----------------------------+
+  ///
+  ///
+  /// BOI0, BOI1 ... are descriptions of operand bundles in this User's use
+  /// list. These descriptions are installed and managed by this class, and
+  /// they're all instances of OperandBundleUser<T>::BundleOpInfo.
+  ///
+  /// DU is an additional descriptor installed by User's 'operator new' to keep
+  /// track of the 'BOI0 ... BOIN' co-allocation.  OperandBundleUser does not
+  /// access or modify DU in any way, it's an implementation detail private to
+  /// User.
+  ///
+  /// The regular Use& vector for the User starts at U0.  The operand bundle
+  /// uses are part of the Use& vector, just like normal uses.  In the diagram
+  /// above, the operand bundle uses start at BOI0_U0.  Each instance of
+  /// BundleOpInfo has information about a contiguous set of uses constituting
+  /// an operand bundle, and the total set of operand bundle uses themselves
+  /// form a contiguous set of uses (i.e. there are no gaps between uses
+  /// corresponding to individual operand bundles).
+  ///
+  /// This class does not know the location of the set of operand bundle uses
+  /// within the use list -- that is decided by the User using this class via
+  /// the BeginIdx argument in populateBundleOperandInfos.
+  ///
+  /// Currently operand bundle users with hung-off operands are not supported.
   bundle_op_iterator bundle_op_info_begin() {
-    if (!static_cast<InstrTy *>(this)->hasDescriptor())
+    if (!hasDescriptor())
       return nullptr;
 
-    uint8_t *BytesBegin = static_cast<InstrTy *>(this)->getDescriptor().begin();
+    uint8_t *BytesBegin = getDescriptor().begin();
     return reinterpret_cast<bundle_op_iterator>(BytesBegin);
   }
 
   /// Return the start of the list of BundleOpInfo instances associated
   /// with this OperandBundleUser.
   const_bundle_op_iterator bundle_op_info_begin() const {
-    auto *NonConstThis =
-        const_cast<OperandBundleUser<InstrTy, OpIteratorTy> *>(this);
+    auto *NonConstThis = const_cast<CallBase *>(this);
     return NonConstThis->bundle_op_info_begin();
   }
 
   /// Return the end of the list of BundleOpInfo instances associated
   /// with this OperandBundleUser.
   bundle_op_iterator bundle_op_info_end() {
-    if (!static_cast<InstrTy *>(this)->hasDescriptor())
+    if (!hasDescriptor())
       return nullptr;
 
-    uint8_t *BytesEnd = static_cast<InstrTy *>(this)->getDescriptor().end();
+    uint8_t *BytesEnd = getDescriptor().end();
     return reinterpret_cast<bundle_op_iterator>(BytesEnd);
   }
 
   /// Return the end of the list of BundleOpInfo instances associated
   /// with this OperandBundleUser.
   const_bundle_op_iterator bundle_op_info_end() const {
-    auto *NonConstThis =
-        const_cast<OperandBundleUser<InstrTy, OpIteratorTy> *>(this);
+    auto *NonConstThis = const_cast<CallBase *>(this);
     return NonConstThis->bundle_op_info_end();
   }
 
@@ -1643,43 +2197,20 @@ protected:
   ///
   /// Each \p OperandBundleDef instance is tracked by a OperandBundleInfo
   /// instance allocated in this User's descriptor.
-  OpIteratorTy populateBundleOperandInfos(ArrayRef<OperandBundleDef> Bundles,
-                                          const unsigned BeginIndex) {
-    auto It = static_cast<InstrTy *>(this)->op_begin() + BeginIndex;
-    for (auto &B : Bundles)
-      It = std::copy(B.input_begin(), B.input_end(), It);
+  op_iterator populateBundleOperandInfos(ArrayRef<OperandBundleDef> Bundles,
+                                         const unsigned BeginIndex);
 
-    auto *ContextImpl = static_cast<InstrTy *>(this)->getContext().pImpl;
-    auto BI = Bundles.begin();
-    unsigned CurrentIndex = BeginIndex;
-
-    for (auto &BOI : bundle_op_infos()) {
-      assert(BI != Bundles.end() && "Incorrect allocation?");
-
-      BOI.Tag = ContextImpl->getOrInsertBundleTag(BI->getTag());
-      BOI.Begin = CurrentIndex;
-      BOI.End = CurrentIndex + BI->input_size();
-      CurrentIndex = BOI.End;
-      BI++;
-    }
-
-    assert(BI == Bundles.end() && "Incorrect allocation?");
-
-    return It;
-  }
-
+public:
   /// Return the BundleOpInfo for the operand at index OpIdx.
   ///
   /// It is an error to call this with an OpIdx that does not correspond to an
   /// bundle operand.
+  BundleOpInfo &getBundleOpInfoForOperand(unsigned OpIdx);
   const BundleOpInfo &getBundleOpInfoForOperand(unsigned OpIdx) const {
-    for (auto &BOI : bundle_op_infos())
-      if (BOI.Begin <= OpIdx && OpIdx < BOI.End)
-        return BOI;
-
-    llvm_unreachable("Did not find operand bundle for operand!");
+    return const_cast<CallBase *>(this)->getBundleOpInfoForOperand(OpIdx);
   }
 
+protected:
   /// Return the total number of values used in \p Bundles.
   static unsigned CountBundleInputs(ArrayRef<OperandBundleDef> Bundles) {
     unsigned Total = 0;
@@ -1687,7 +2218,113 @@ protected:
       Total += B.input_size();
     return Total;
   }
+
+  /// @}
+  // End of operand bundle API.
+
+private:
+  bool hasFnAttrOnCalledFunction(Attribute::AttrKind Kind) const;
+  bool hasFnAttrOnCalledFunction(StringRef Kind) const;
+
+  template <typename AttrKind> bool hasFnAttrImpl(AttrKind Kind) const {
+    if (Attrs.hasFnAttribute(Kind))
+      return true;
+
+    // Operand bundles override attributes on the called function, but don't
+    // override attributes directly present on the call instruction.
+    if (isFnAttrDisallowedByOpBundle(Kind))
+      return false;
+
+    return hasFnAttrOnCalledFunction(Kind);
+  }
+
+  /// Determine whether the return value has the given attribute. Supports
+  /// Attribute::AttrKind and StringRef as \p AttrKind types.
+  template <typename AttrKind> bool hasRetAttrImpl(AttrKind Kind) const {
+    if (Attrs.hasAttribute(AttributeList::ReturnIndex, Kind))
+      return true;
+
+    // Look at the callee, if available.
+    if (const Function *F = getCalledFunction())
+      return F->getAttributes().hasAttribute(AttributeList::ReturnIndex, Kind);
+    return false;
+  }
 };
+
+template <>
+struct OperandTraits<CallBase> : public VariadicOperandTraits<CallBase, 1> {};
+
+DEFINE_TRANSPARENT_OPERAND_ACCESSORS(CallBase, Value)
+
+//===----------------------------------------------------------------------===//
+//                           FuncletPadInst Class
+//===----------------------------------------------------------------------===//
+class FuncletPadInst : public Instruction {
+private:
+  FuncletPadInst(const FuncletPadInst &CPI);
+
+  explicit FuncletPadInst(Instruction::FuncletPadOps Op, Value *ParentPad,
+                          ArrayRef<Value *> Args, unsigned Values,
+                          const Twine &NameStr, Instruction *InsertBefore);
+  explicit FuncletPadInst(Instruction::FuncletPadOps Op, Value *ParentPad,
+                          ArrayRef<Value *> Args, unsigned Values,
+                          const Twine &NameStr, BasicBlock *InsertAtEnd);
+
+  void init(Value *ParentPad, ArrayRef<Value *> Args, const Twine &NameStr);
+
+protected:
+  // Note: Instruction needs to be a friend here to call cloneImpl.
+  friend class Instruction;
+  friend class CatchPadInst;
+  friend class CleanupPadInst;
+
+  FuncletPadInst *cloneImpl() const;
+
+public:
+  /// Provide fast operand accessors
+  DECLARE_TRANSPARENT_OPERAND_ACCESSORS(Value);
+
+  /// getNumArgOperands - Return the number of funcletpad arguments.
+  ///
+  unsigned getNumArgOperands() const { return getNumOperands() - 1; }
+
+  /// Convenience accessors
+
+  /// Return the outer EH-pad this funclet is nested within.
+  ///
+  /// Note: This returns the associated CatchSwitchInst if this FuncletPadInst
+  /// is a CatchPadInst.
+  Value *getParentPad() const { return Op<-1>(); }
+  void setParentPad(Value *ParentPad) {
+    assert(ParentPad);
+    Op<-1>() = ParentPad;
+  }
+
+  /// getArgOperand/setArgOperand - Return/set the i-th funcletpad argument.
+  ///
+  Value *getArgOperand(unsigned i) const { return getOperand(i); }
+  void setArgOperand(unsigned i, Value *v) { setOperand(i, v); }
+
+  /// arg_operands - iteration adapter for range-for loops.
+  op_range arg_operands() { return op_range(op_begin(), op_end() - 1); }
+
+  /// arg_operands - iteration adapter for range-for loops.
+  const_op_range arg_operands() const {
+    return const_op_range(op_begin(), op_end() - 1);
+  }
+
+  // Methods for support type inquiry through isa, cast, and dyn_cast:
+  static bool classof(const Instruction *I) { return I->isFuncletPad(); }
+  static bool classof(const Value *V) {
+    return isa<Instruction>(V) && classof(cast<Instruction>(V));
+  }
+};
+
+template <>
+struct OperandTraits<FuncletPadInst>
+    : public VariadicOperandTraits<FuncletPadInst, /*MINARITY=*/1> {};
+
+DEFINE_TRANSPARENT_OPERAND_ACCESSORS(FuncletPadInst, Value)
 
 } // end namespace llvm
 

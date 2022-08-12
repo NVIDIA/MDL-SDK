@@ -39,6 +39,8 @@
 #include <codecvt>
 #include <vector>
 #include <algorithm>
+#include <string>
+#include <sstream>
 
 #include <mi/base/enums.h>
 #include <mi/neuraylib/imdl_execution_context.h>
@@ -61,6 +63,144 @@ namespace mi { namespace examples { namespace strings
         using convert_type = std::codecvt_utf8<wchar_t>;
         std::wstring_convert<convert_type, wchar_t> converter;
         return converter.to_bytes(s);
+    }
+
+    // --------------------------------------------------------------------------------------------
+
+ // utility to convert from UTF8 to wide chars
+ #define BOM8A ((unsigned char)0xEF)
+ #define BOM8B ((unsigned char)0xBB)
+ #define BOM8C ((unsigned char)0xBF)
+
+ // Convert the given char input of UTF-8 format into a wchar.
+     inline std::wstring utf8_to_wchar(const char* str)
+     {
+         long b = 0, c = 0;
+         if ((unsigned char)str[0] == BOM8A && (unsigned char)str[1] == BOM8B && (unsigned char)str[2] == BOM8C)
+             str += 3;
+         for (const unsigned char* a = (unsigned char*)str; *a; a++)
+             if (((unsigned char)*a) < 128 || (*a & 192) == 192)
+                 c++;
+         wchar_t* buf = new wchar_t[c + 1];
+         buf[c] = 0;
+         for (unsigned char* a = (unsigned char*)str; *a; a++) {
+             if (!(*a & 128))
+                 //Byte represents an ASCII character. Direct copy will do.
+                 buf[b] = *a;
+             else if ((*a & 192) == 128)
+                 //Byte is the middle of an encoded character. Ignore.
+                 continue;
+             else if ((*a & 224) == 192)
+                 //Byte represents the start of an encoded character in the range U+0080 to U+07FF
+                 buf[b] = ((*a & 31) << 6) | (a[1] & 63);
+             else if ((*a & 240) == 224)
+                 //Byte represents the start of an encoded character in the range U+07FF to U+FFFF
+                 buf[b] = ((*a & 15) << 12) | ((a[1] & 63) << 6) | (a[2] & 63);
+             else if ((*a & 248) == 240) {
+                 //Byte represents the start of an encoded character beyond U+FFFF limit of 16-bit ints
+                 buf[b] = '?';
+             }
+             b++;
+         }
+
+         std::wstring wstr(buf, c);
+         delete[] buf;
+
+         return wstr;
+     }
+
+    // --------------------------------------------------------------------------------------------
+
+    /// Converts a wchar_t * string into an utf8 encoded string.
+    inline std::string wchar_to_utf8(const wchar_t* src)
+    {
+        std::string res;
+
+        for (wchar_t const *p = src; *p != L'\0'; ++p) 
+        {
+            unsigned code = *p;
+
+            if (code <= 0x7F) 
+            {
+                // 0xxxxxxx
+                res += char(code);
+            } 
+            else if (code <= 0x7FF) 
+            {
+                // 110xxxxx 10xxxxxx
+                unsigned high = code >> 6;
+                unsigned low  = code & 0x3F;
+                res += char(0xC0 + high);
+                res += char(0x80 + low);
+            }
+            else if (0xD800 <= code && code <= 0xDBFF && 0xDC00 <= p[1] && p[1] <= 0xDFFF)
+            {
+                // surrogate pair, 0x10000 to 0x10FFFF
+                unsigned high = code & 0x3FF;
+                unsigned low  = p[1] & 0x3FF;
+                code = 0x10000 + ((high << 10) | low);
+
+                if (code <= 0x10FFFF)
+                {
+                    // 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+                    unsigned high = (code >> 18) & 0x07;
+                    unsigned mh   = (code >> 12) & 0x3F;
+                    unsigned ml   = (code >> 6) & 0x3F;
+                    unsigned low  = code & 0x3F;
+                    res += char(0xF0 + high);
+                    res += char(0x80 + mh);
+                    res += char(0x80 + ml);
+                    res += char(0x80 + low);
+                }
+                else 
+                {
+                    // error, replace by (U+FFFD) (or EF BF BD in UTF-8)
+                    res += char(0xEF);
+                    res += char(0xBF);
+                    res += char(0xBD);
+                }
+            }
+            else if (code <= 0xFFFF)
+            {
+                if (code < 0xD800 || code > 0xDFFF)
+                {
+                    // 1110xxxx 10xxxxxx 10xxxxxx
+                    unsigned high   = code >> 12;
+                    unsigned middle = (code >> 6) & 0x3F;
+                    unsigned low    = code & 0x3F;
+                    res += char(0xE0 + high);
+                    res += char(0x80 + middle);
+                    res += char(0x80 + low);
+                }
+                else
+                {
+                    // forbidden surrogate part, replace by (U+FFFD) (or EF BF BD in UTF-8)
+                    res += char(0xEF);
+                    res += char(0xBF);
+                    res += char(0xBD);
+                }
+            }
+            else if (code <= 0x10FFFF)
+            {
+                // 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+                unsigned high = (code >> 18) & 0x07;
+                unsigned mh   = (code >> 12) & 0x3F;
+                unsigned ml   = (code >> 6) & 0x3F;
+                unsigned low  = code & 0x3F;
+                res += char(0xF0 + high);
+                res += char(0x80 + mh);
+                res += char(0x80 + ml);
+                res += char(0x80 + low);
+            }
+            else
+            {
+                // error, replace by (U+FFFD) (or EF BF BD in UTF-8)
+                res += char(0xEF);
+                res += char(0xBF);
+                res += char(0xBD);
+            }
+        }
+        return res;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -295,5 +435,34 @@ namespace mi { namespace examples { namespace strings
         }
         return "";
     }
+
+    // --------------------------------------------------------------------------------------------
+    
+    /// Convert the given value into its string representation.
+    /// \return string resembling the given input parameter
+    template <typename T>
+    std::string lexicographic_cast(
+        T value)
+    {
+        std::stringstream s;
+        s << value;
+        return s.str();
+    }
+
+    // --------------------------------------------------------------------------------------------
+
+    /// Convert the given string into the given value.
+    /// \return value resembling the given input string
+    template <typename T>
+    T lexicographic_cast(
+        const std::string& str)
+    {
+        std::stringstream s;
+        s << str;
+        T result = T();
+        s >> result;
+        return result;
+    }
+    
 }}}
 #endif

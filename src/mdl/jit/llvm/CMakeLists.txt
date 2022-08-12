@@ -48,13 +48,15 @@ create_from_base_preset(
         ${CMAKE_CURRENT_BINARY_DIR}/llvm.d
     )
 
-# set the platform name
-if(${MI_PLATFORM_NAME} MATCHES "linux-aarch64")
+# set platform dependent variables
+if(ARCH_ARM)
     set(_LLVM_PLATFORM_NAME_LOWER_CASE "aarch64")
     set(_LLVM_PLATFORM_NAME_MIXED_CASE "AArch64")
+    set(_LLVM_PLATFORM_UTILS LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}Utils)
 else()
     set(_LLVM_PLATFORM_NAME_LOWER_CASE "x86")
     set(_LLVM_PLATFORM_NAME_MIXED_CASE "X86")
+    set(_LLVM_PLATFORM_UTILS "")
 endif()
 
 # list of llvm Libraries we need
@@ -64,8 +66,10 @@ set(_LLVM_LIB_NAMES
     LLVMAsmParser
     LLVMAsmPrinter
     LLVMBinaryFormat
+    LLVMBitstreamReader
     LLVMBitReader
     LLVMBitWriter
+    LLVMCFGuard
     LLVMCodeGen
     LLVMCore
     LLVMDebugInfoCodeView
@@ -74,39 +78,42 @@ set(_LLVM_LIB_NAMES
     LLVMDebugInfoMSF
     LLVMDemangle
     LLVMExecutionEngine
+    LLVMFrontendOpenMP
     LLVMGlobalISel
     LLVMInstCombine
     LLVMInstrumentation
     LLVMipo
     LLVMIRReader
+    LLVMJITLink
     LLVMLinker
     LLVMMC
     LLVMMCDisassembler
     LLVMMCJIT
     LLVMMCParser
-    LLVMNVPTXAsmPrinter
     LLVMNVPTXCodeGen
     LLVMNVPTXDesc
     LLVMNVPTXInfo
     LLVMObject
     LLVMOption
     LLVMOrcJIT
+    LLVMOrcShared
     LLVMProfileData
+    LLVMRemarks
     LLVMRuntimeDyld
     LLVMScalarOpts
     LLVMSelectionDAG
     LLVMSupport
     LLVMTableGen
     LLVMTarget
+    LLVMTextAPI
     LLVMTransformUtils
     LLVMVectorize
     LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}AsmParser
-    LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}AsmPrinter
     LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}CodeGen
     LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}Desc
     LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}Disassembler
     LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}Info
-    LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}Utils
+    ${_LLVM_PLATFORM_UTILS}
     )
 
 # -------------------------------------------------------------------------------------------------
@@ -117,6 +124,7 @@ set(_LLVM_LIB_NAMES
 # Here, we define the options before they are created within the dist/CMakeLists.txt.
 # This allows to change the default values without altering the code inside the dist folder.
 set(LLVM_TARGETS_TO_BUILD "${_LLVM_PLATFORM_NAME_MIXED_CASE};NVPTX" CACHE STRING "Semicolon-separated list of targets to build, or \"all\".")
+option(LLVM_INCLUDE_BENCHMARKS "Generate benchmark targets. If OFF, benchmarks can't be built." OFF)
 option(LLVM_INCLUDE_TESTS "Generate build targets for the LLVM unit tests." OFF)
 option(LLVM_INCLUDE_GO_TESTS "Include the Go bindings tests in test build targets." OFF)
 option(LLVM_INCLUDE_EXAMPLES "Generate build targets for the LLVM examples" OFF)
@@ -132,10 +140,13 @@ option(LLVM_ENABLE_TIMESTAMPS "Enable embedding timestamp information in build" 
 option(LLVM_ENABLE_TERMINFO "Use terminfo database if available." OFF)
 option(LLVM_ENABLE_ZLIB "Use zlib for compression/decompression if available." OFF)
 set(LLVM_ENABLE_LIBXML2 "OFF" CACHE STRING "Use libxml2 if available. Can be ON, OFF, or FORCE_ON")
+if(MSVC)
+  option(LLVM_BUILD_LLVM_C_DYLIB "Build LLVM-C.dll (Windows only)" OFF)
+endif()
 
 # python path
 target_add_tool_dependency(TARGET ${PROJECT_NAME} TOOL python)
-set(PYTHON_EXECUTABLE ${python_PATH})
+set(Python3_EXECUTABLE ${python_PATH})
 
 set(LLVM_CMAKE_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/dist CACHE PATH "LLVM source root.")
 set(LLVM_NATIVE_BUILD ${CMAKE_CURRENT_BINARY_DIR}/dist/NATIVE CACHE PATH "Binary root dir for LLVM tablegen.")
@@ -152,13 +163,13 @@ option(LLVM_OPTIMIZED_TABLEGEN "Force TableGen to be built with optimization" ${
 if(WINDOWS)
     set(CROSS_TOOLCHAIN_FLAGS_NATIVE
         -DLLVM_INCLUDE_TESTS=OFF;
-        -DPYTHON_EXECUTABLE=${PYTHON_EXECUTABLE};
+        -DPython3_EXECUTABLE=${Python3_EXECUTABLE};
         -DLLVM_ENABLE_DIA_SDK=0
         CACHE STRING "Toolchain configuration for NATIVE")
 else()
     set(CROSS_TOOLCHAIN_FLAGS_NATIVE
         -DLLVM_INCLUDE_TESTS=OFF;
-        -DPYTHON_EXECUTABLE=${PYTHON_EXECUTABLE}
+        -DPython3_EXECUTABLE=${Python3_EXECUTABLE}
         CACHE STRING "Toolchain configuration for NATIVE")
 endif()
 
@@ -177,7 +188,14 @@ elseif(MACOSX)
     # For MacOS build we must set the lowest supported OS version by the default triple.
     # This is baked into LLVM und later used to decide which runtime functions are
     # use the same version as for the 'mmacosx-version-min' flag
-    set(LLVM_DEFAULT_TARGET_TRIPLE x86_64-apple-darwin10.10.0 CACHE STRING "")
+    if(ARCH_ARM)
+        set(LLVM_DEFAULT_TARGET_TRIPLE arm64-apple-darwin10.13.0 CACHE STRING "")
+        set(LLVM_TARGETS_TO_BUILD "AArch64;NVPTX" CACHE INTERNAL "")
+        set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE INTERNAL "")
+        set(LLVM_TARGET_ARCH "AArch64" CACHE INTERNAL "")
+    else()
+        set(LLVM_DEFAULT_TARGET_TRIPLE x86_64-apple-darwin10.13.0 CACHE STRING "")
+    endif()
 
     # disable mem-sanitizer even if the header was found (because the symbol can be missing)
     set(HAVE_SANITIZER_MSAN_INTERFACE_H 0)
@@ -242,7 +260,7 @@ function(LLVM_TARGET_SETUP)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
         target_compile_options(${LLVM_TARGET_SETUP_TARGET}
             PRIVATE
-                "-mmacosx-version-min=10.10"
+                "-mmacosx-version-min=10.13"
                 "-fPIC"
                 "-m64"
                 "-stdlib=libc++"
@@ -304,13 +322,13 @@ endforeach()
 # targets that are required without additional build flags
 set(_LLVM_ADDITIONAL_TARGETS
     # tablegenning
-    AttributeCompatFuncTableGen
     DllOptionsTableGen
-    InstCombineTableGen
     intrinsics_gen
     LibOptionsTableGen
     NVPTXCommonTableGen
     ${_LLVM_PLATFORM_NAME_MIXED_CASE}CommonTableGen
+    omp_cpp
+    omp_gen
     # misc
     llvm_vcsrevision_h
 )
@@ -322,17 +340,22 @@ set(_LLVM_EXCLUDE
     LLVMCoverage
     # LLVMDebugInfoMSF (commented out in the creating cmake file)
     LLVMDlltoolDriver
+    LLVMDWARFLinker
+    LLVMExtensions
+    LLVMFileCheck
+    LLVMFrontendOpenACC
     LLVMFuzzMutate
+    LLVMInterfaceStub
     LLVMInterpreter
     LLVMLibDriver
     LLVMLineEditor
     LLVMLTO
+    LLVMMCA
     LLVMMIRParser
     LLVMObjCARCOpts
     LLVMObjectYAML
     LLVMPasses
     LLVMSymbolize
-    LLVMTestingSupport
     LLVMWindowsManifest
     LLVMXRay
     # loadable modules

@@ -59,7 +59,6 @@
 using mi::mdl::as;
 using mi::mdl::cast;
 using mi::mdl::impl_cast;
-using mi::mdl::is;
 
 namespace MI {
 
@@ -380,7 +379,7 @@ void Import_declaration_replacer::run()
         }
     }
 
-    m_module->replace_declarations( &declarations[0], declarations.size());
+    m_module->replace_declarations( declarations.data(), declarations.size());
 }
 
 void Import_declaration_replacer::do_create_absolute_import_declaration(
@@ -1191,8 +1190,8 @@ public:
         const mi::mdl::Module* module,
         const std::vector<std::string>& module_name,
         Execution_context* context)
-      : Resource_file_path_replacer( module, module_name),
-        m_context( context) { }
+      : Resource_file_path_replacer( module, module_name)/*,
+        m_context( context)*/ { }
 
 private:
     mi::mdl::IExpression* post_visit( mi::mdl::IExpression_literal* expr) final
@@ -1241,7 +1240,7 @@ private:
         return expr;
     }
 
-    Execution_context* m_context;
+    //Execution_context* m_context;
 };
 
 } // namespace

@@ -1,3 +1,5 @@
+.. _phabricator-reviews:
+
 =============================
 Code Reviews with Phabricator
 =============================
@@ -16,7 +18,7 @@ to respond to free-form comments in mail sent to the commits list.
 Sign up
 -------
 
-To get started with Phabricator, navigate to `http://reviews.llvm.org`_ and
+To get started with Phabricator, navigate to `https://reviews.llvm.org`_ and
 click the power icon in the top right. You can register with a GitHub account,
 a Google account, or you can create your own profile.
 
@@ -24,7 +26,7 @@ Make *sure* that the email address registered with Phabricator is subscribed
 to the relevant -commits mailing list. If you are not subscribed to the commit
 list, all mail sent by Phabricator on your behalf will be held for moderation.
 
-Note that if you use your Subversion user name as Phabricator user name,
+Note that if you use your git user name as Phabricator user name,
 Phabricator will automatically connect your submits to your Phabricator user in
 the `Code Repository Browser`_.
 
@@ -37,6 +39,21 @@ the command line. To get you set up, follow the
 
 You can learn more about how to use arc to interact with
 Phabricator in the `Arcanist User Guide`_.
+The basic way of creating a revision for the current commit in your local
+repository is to run:
+
+::
+
+  arc diff HEAD~
+
+
+If you later update your commit message, you need to add the `--verbatim`
+option to have `arc` update the description on Phabricator:
+
+::
+
+  arc diff --edit --verbatim
+
 
 .. _phabricator-request-review-web:
 
@@ -46,9 +63,13 @@ Requesting a review via the web interface
 The tool to create and review patches in Phabricator is called
 *Differential*.
 
-Note that you can upload patches created through various diff tools,
-including git and svn. To make reviews easier, please always include
-**as much context as possible** with your diff! Don't worry, Phabricator
+Note that you can upload patches created through git, but using `arc` on the
+command line (see previous section) is preferred: it adds more metadata to
+Phabricator which are useful for the pre-merge testing system and for
+propagating attribution on commits when someone else has to push it for you.
+
+To make reviews easier, please always include **as much context as
+possible** with your diff! Don't worry, Phabricator
 will automatically send a diff with a smaller context in the review
 email, but having the full file in the web interface will help the
 reviewer understand your code.
@@ -57,8 +78,11 @@ To get a full diff, use one of the following commands (or just use Arcanist
 to upload your patch):
 
 * ``git show HEAD -U999999 > mypatch.patch``
-* ``git format-patch -U999999 @{u}``
-* ``svn diff --diff-cmd=diff -x -U999999``
+* ``git diff -U999999 @{u} > mypatch.patch``
+* ``git diff HEAD~1 -U999999 > mypatch.patch``
+
+Before uploading your patch, please make sure it is formatted properly, as
+described in :ref:`How to Submit a Patch <format patches>`.
 
 To upload a new patch:
 
@@ -73,8 +97,7 @@ To upload a new patch:
 * Add reviewers (see below for advice). (If you set the Repository field
   correctly, llvm-commits or cfe-commits will be subscribed automatically;
   otherwise, you will have to manually subscribe them.)
-* In the Repository field, enter the name of the project (LLVM, Clang,
-  etc.) to which the review should be sent.
+* In the Repository field, enter "rG LLVM Github Monorepo".
 * Click *Save*.
 
 To submit an updated patch:
@@ -94,9 +117,15 @@ them to participate. Many people will see the email notification on cfe-commits
 or llvm-commits, and if the subject line suggests the patch is something they
 should look at, they will.
 
+
+.. _finding-potential-reviewers:
+
+Finding potential reviewers
+---------------------------
+
 Here are a couple of ways to pick the initial reviewer(s):
 
-* Use ``svn blame`` and the commit log to find names of people who have
+* Use ``git blame`` and the commit log to find names of people who have
   recently modified the same area of code that you are modifying.
 * Look in CODE_OWNERS.TXT to see who might be responsible for that area.
 * If you've discussed the change on a dev list, the people who participated
@@ -145,7 +174,7 @@ ends with the line:
   Differential Revision: <URL>
 
 where ``<URL>`` is the URL for the code review, starting with
-``http://reviews.llvm.org/``.
+``https://reviews.llvm.org/``.
 
 This allows people reading the version history to see the review for
 context. This also allows Phabricator to detect the commit, close the
@@ -156,38 +185,22 @@ be added automatically. If you don't want to use Arcanist, you can add the
 ``Differential Revision`` line (as the last line) to the commit message
 yourself.
 
-Using the Arcanist tool can simplify the process of committing reviewed code
-as it will retrieve reviewers, the ``Differential Revision``, etc from the review
-and place it in the commit message. Several methods of using Arcanist to commit
-code are given below. If you do not wish to use Arcanist then simply commit
-the reviewed patch as you would normally.
+Using the Arcanist tool can simplify the process of committing reviewed code as
+it will retrieve reviewers, the ``Differential Revision``, etc from the review
+and place it in the commit message. You may also commit an accepted change
+directly using ``git push``, per the section in the :ref:`getting started
+guide <commit_from_git>`.
 
 Note that if you commit the change without using Arcanist and forget to add the
 ``Differential Revision`` line to your commit message then it is recommended
 that you close the review manually. In the web UI, under "Leap Into Action" put
-the SVN revision number in the Comment, set the Action to "Close Revision" and
+the git revision number in the Comment, set the Action to "Close Revision" and
 click Submit.  Note the review must have been Accepted first.
 
-Subversion and Arcanist
-^^^^^^^^^^^^^^^^^^^^^^^
+Committing someone's change from Phabricator
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-On a clean Subversion working copy run the following (where ``<Revision>`` is
-the Phabricator review number):
-
-::
-
-  arc patch D<Revision>
-  arc commit --revision D<Revision>
-
-The first command will take the latest version of the reviewed patch and apply it to the working
-copy. The second command will commit this revision to trunk.
-
-git-svn and Arcanist
-^^^^^^^^^^^^^^^^^^^^
-
-This presumes that the git repository has been configured as described in :ref:`developers-work-with-git-svn`.
-
-On a clean Git repository on an up to date ``master`` branch run the
+On a clean Git repository on an up to date ``main`` branch run the
 following (where ``<Revision>`` is the Phabricator review number):
 
 ::
@@ -196,19 +209,26 @@ following (where ``<Revision>`` is the Phabricator review number):
 
 
 This will create a new branch called ``arcpatch-D<Revision>`` based on the
-current ``master`` and will create a commit corresponding to ``D<Revision>`` with a
+current ``main`` and will create a commit corresponding to ``D<Revision>`` with a
 commit message derived from information in the Phabricator review.
 
-Check you are happy with the commit message and amend it if necessary. Now switch to
-the ``master`` branch and add the new commit to it and commit it to trunk. This
-can be done by running the following:
+Check you are happy with the commit message and amend it if necessary.
+For example, ensure the 'Author' property of the commit is set to the original author.
+You can use a command to correct the author property if it is incorrect:
 
 ::
 
-  git checkout master
-  git merge --ff-only arcpatch-D<Revision>
-  git svn dcommit
+  git commit --amend --author="John Doe <jdoe@llvm.org>"
 
+Then, make sure the commit is up-to-date, and commit it. This can be done by running
+the following:
+
+::
+
+  git pull --rebase https://github.com/llvm/llvm-project.git main
+  git show # Ensure the patch looks correct.
+  ninja check-$whatever # Rerun the appropriate tests if needed.
+  git push https://github.com/llvm/llvm-project.git HEAD:main
 
 
 Abandoning a change
@@ -235,9 +255,9 @@ requests. We're looking into what the right long-term hosting for this is, but
 note that it is a derivative of an existing open source project, and so not
 trivially a good fit for an official LLVM project.
 
-.. _LLVM's Phabricator: http://reviews.llvm.org
-.. _`http://reviews.llvm.org`: http://reviews.llvm.org
-.. _Code Repository Browser: http://reviews.llvm.org/diffusion/
+.. _LLVM's Phabricator: https://reviews.llvm.org
+.. _`https://reviews.llvm.org`: https://reviews.llvm.org
+.. _Code Repository Browser: https://reviews.llvm.org/diffusion/
 .. _Arcanist Quick Start: https://secure.phabricator.com/book/phabricator/article/arcanist_quick_start/
 .. _Arcanist User Guide: https://secure.phabricator.com/book/phabricator/article/arcanist/
 .. _llvm-reviews GitHub project: https://github.com/r4nt/llvm-reviews/

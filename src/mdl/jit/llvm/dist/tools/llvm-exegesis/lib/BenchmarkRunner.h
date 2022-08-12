@@ -1,9 +1,8 @@
 //===-- BenchmarkRunner.h ---------------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 ///
@@ -17,39 +16,20 @@
 #define LLVM_TOOLS_LLVM_EXEGESIS_BENCHMARKRUNNER_H
 
 #include "Assembler.h"
+#include "BenchmarkCode.h"
 #include "BenchmarkResult.h"
 #include "LlvmState.h"
 #include "MCInstrDescView.h"
-#include "RegisterAliasing.h"
+#include "SnippetRepetitor.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/Support/Error.h"
+#include <cstdlib>
+#include <memory>
 #include <vector>
 
+namespace llvm {
 namespace exegesis {
-
-// A class representing failures that happened during Benchmark, they are used
-// to report informations to the user.
-class BenchmarkFailure : public llvm::StringError {
-public:
-  BenchmarkFailure(const llvm::Twine &S);
-};
-
-// A collection of instructions that are to be assembled, executed and measured.
-struct BenchmarkConfiguration {
-  // This code is run before the Snippet is iterated. Since it is part of the
-  // measurement it should be as short as possible. It is usually used to setup
-  // the content of the Registers.
-  struct Setup {
-    std::vector<unsigned> RegsToDef;
-  };
-  Setup SnippetSetup;
-
-  // The sequence of instructions that are to be repeated.
-  std::vector<llvm::MCInst> Snippet;
-
-  // Informations about how this configuration was built.
-  std::string Info;
-};
 
 // Common code for all benchmark modes.
 class BenchmarkRunner {
@@ -59,50 +39,55 @@ public:
 
   virtual ~BenchmarkRunner();
 
-  llvm::Expected<std::vector<InstructionBenchmark>>
-  run(unsigned Opcode, unsigned NumRepetitions);
+  Expected<InstructionBenchmark>
+  runConfiguration(const BenchmarkCode &Configuration, unsigned NumRepetitions,
+                   ArrayRef<std::unique_ptr<const SnippetRepetitor>> Repetitors,
+                   bool DumpObjectToDisk) const;
 
-  // Given a snippet, computes which registers the setup code needs to define.
-  std::vector<unsigned>
-  computeRegsToDef(const std::vector<InstructionInstance> &Snippet) const;
+  // Scratch space to run instructions that touch memory.
+  struct ScratchSpace {
+    static constexpr const size_t kAlignment = 1024;
+    static constexpr const size_t kSize = 1 << 20; // 1MB.
+    ScratchSpace()
+        : UnalignedPtr(std::make_unique<char[]>(kSize + kAlignment)),
+          AlignedPtr(
+              UnalignedPtr.get() + kAlignment -
+              (reinterpret_cast<intptr_t>(UnalignedPtr.get()) % kAlignment)) {}
+    char *ptr() const { return AlignedPtr; }
+    void clear() { std::memset(ptr(), 0, kSize); }
+
+  private:
+    const std::unique_ptr<char[]> UnalignedPtr;
+    char *const AlignedPtr;
+  };
+
+  // A helper to measure counters while executing a function in a sandboxed
+  // context.
+  class FunctionExecutor {
+  public:
+    virtual ~FunctionExecutor();
+    // FIXME deprecate this.
+    virtual Expected<int64_t> runAndMeasure(const char *Counters) const = 0;
+
+    virtual Expected<llvm::SmallVector<int64_t, 4>>
+    runAndSample(const char *Counters) const = 0;
+  };
 
 protected:
   const LLVMState &State;
-  const RegisterAliasingTrackerCache RATC;
-
-  // Generates a single instruction prototype that has a self-dependency.
-  llvm::Expected<SnippetPrototype>
-  generateSelfAliasingPrototype(const Instruction &Instr) const;
-  // Generates a single instruction prototype without assignment constraints.
-  llvm::Expected<SnippetPrototype>
-  generateUnconstrainedPrototype(const Instruction &Instr,
-                                 llvm::StringRef Msg) const;
+  const InstructionBenchmark::ModeE Mode;
 
 private:
-  // API to be implemented by subclasses.
-  virtual llvm::Expected<SnippetPrototype>
-  generatePrototype(unsigned Opcode) const = 0;
+  virtual Expected<std::vector<BenchmarkMeasure>>
+  runMeasurements(const FunctionExecutor &Executor) const = 0;
 
-  virtual std::vector<BenchmarkMeasure>
-  runMeasurements(const ExecutableFunction &EF,
-                  const unsigned NumRepetitions) const = 0;
+  Expected<std::string> writeObjectFile(const BenchmarkCode &Configuration,
+                                        const FillFunction &Fill) const;
 
-  // Internal helpers.
-  InstructionBenchmark runOne(const BenchmarkConfiguration &Configuration,
-                              unsigned Opcode, unsigned NumRepetitions) const;
-
-  // Calls generatePrototype and expands the SnippetPrototype into one or more
-  // BenchmarkConfiguration.
-  llvm::Expected<std::vector<BenchmarkConfiguration>>
-  generateConfigurations(unsigned Opcode) const;
-
-  llvm::Expected<std::string>
-  writeObjectFile(const BenchmarkConfiguration::Setup &Setup,
-                  llvm::ArrayRef<llvm::MCInst> Code) const;
-
-  const InstructionBenchmark::ModeE Mode;
+  const std::unique_ptr<ScratchSpace> Scratch;
 };
 
 } // namespace exegesis
+} // namespace llvm
 
 #endif // LLVM_TOOLS_LLVM_EXEGESIS_BENCHMARKRUNNER_H

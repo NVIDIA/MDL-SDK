@@ -59,7 +59,7 @@ namespace {
 std::string hash_to_string( const mi::base::Uuid& hash)
 {
     char buffer[35];
-    snprintf( &buffer[0], sizeof( buffer), "0x%08x%08x%08x%08x",
+    snprintf( buffer, sizeof( buffer), "0x%08x%08x%08x%08x",
               hash.m_id1, hash.m_id2, hash.m_id3, hash.m_id4);
     return buffer;
 }
@@ -107,7 +107,7 @@ mi::Sint32 Lightprofile::reset_file(
 {
     SYSTEM::Access_module<PATH::Path_module> m_path_module( false);
     const std::string resolved_filename
-        = m_path_module->search( PATH::RESOURCE, original_filename.c_str());
+        = m_path_module->search( PATH::RESOURCE, original_filename);
 #if 0
     LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_IO,
         "Configured resource search paths:");
@@ -129,7 +129,7 @@ mi::Sint32 Lightprofile::reset_file(
     if( !reader.open( resolved_filename.c_str()))
         return -2;
 
-    const std::string log_identifier = "light profile \"" + resolved_filename + "\"";
+    const std::string log_identifier = "light profile \"" + resolved_filename + '\"';
     const mi::base::Uuid impl_hash{0,0,0,0};
     const mi::Sint32 result = reset_shared( transaction,
         &reader, log_identifier, impl_hash, resolution_phi, resolution_theta, degree, flags);
@@ -185,12 +185,12 @@ mi::Sint32 Lightprofile::reset_mdl(
     // compute filename for log messages
     std::string log_identifier;
     if( !filename.empty())
-        log_identifier = std::string( "light profile \"") + filename + "\"";
+        log_identifier = std::string( "light profile \"") + filename + '\"';
     else if( !container_filename.empty())
         log_identifier = std::string( "light profile \"") + container_membername + "\" in \""
-            + container_filename + "\"";
+            + container_filename + '\"';
     else if( !mdl_file_path.empty())
-        log_identifier = std::string( "light profile from MDL file path \"") + mdl_file_path + "\"";
+        log_identifier = std::string( "light profile from MDL file path \"") + mdl_file_path + '\"';
     else
         log_identifier = "memory-based light profile";
 
@@ -398,10 +398,10 @@ SERIAL::Serializable* Lightprofile::deserialize( SERIAL::Deserializer* deseriali
         // (no error since we no longer require all resources to be present on all nodes).
         if( !DISK::is_file( m_resolved_filename.c_str())) {
             SYSTEM::Access_module<PATH::Path_module> m_path_module( false);
-            m_resolved_filename = m_path_module->search( PATH::MDL, m_original_filename.c_str());
+            m_resolved_filename = m_path_module->search( PATH::MDL, m_original_filename);
             if( m_resolved_filename.empty())
                 m_resolved_filename = m_path_module->search(
-                    PATH::RESOURCE, m_original_filename.c_str());
+                    PATH::RESOURCE, m_original_filename);
         }
     }
 
@@ -579,7 +579,7 @@ mi::Float32 Lightprofile_impl::get_data( mi::Uint32 index_phi, mi::Uint32 index_
 
 const mi::Float32* Lightprofile_impl::get_data() const
 {
-    return m_data.size() > 0 ? &m_data[0] : nullptr;
+    return !m_data.empty() ? m_data.data() : nullptr;
 }
 
 mi::Float32 Lightprofile_impl::sample( mi::Float32 phi, mi::Float32 theta, bool candela) const

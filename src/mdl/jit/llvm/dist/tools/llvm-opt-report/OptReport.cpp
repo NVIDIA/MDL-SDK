@@ -1,9 +1,8 @@
 //===------------------ llvm-opt-report/OptReport.cpp ---------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 ///
@@ -14,7 +13,10 @@
 ///
 //===----------------------------------------------------------------------===//
 
+#include "llvm-c/Remarks.h"
 #include "llvm/Demangle/Demangle.h"
+#include "llvm/Remarks/RemarkFormat.h"
+#include "llvm/Remarks/RemarkParser.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/ErrorOr.h"
@@ -26,16 +28,12 @@
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/WithColor.h"
-#include "llvm/Support/YAMLTraits.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
 #include <map>
 #include <set>
 
 using namespace llvm;
-using namespace llvm::yaml;
-
-static cl::opt<bool> Help("h", cl::desc("Alias for -help"), cl::Hidden);
 
 // Mark all our options with this category, everything else (except for -version
 // and -help) will be hidden.
@@ -61,6 +59,11 @@ static cl::opt<bool>
 static cl::opt<bool>
   NoDemangle("no-demangle", cl::desc("Don't demangle function names"),
              cl::init(false), cl::cat(OptReportCategory));
+
+static cl::opt<std::string> ParserFormat("format",
+                                         cl::desc("The format of the remarks."),
+                                         cl::init("yaml"),
+                                         cl::cat(OptReportCategory));
 
 namespace {
 // For each location in the source file, the common per-transformation state
@@ -142,108 +145,75 @@ typedef std::map<std::string, std::map<int, std::map<std::string, std::map<int,
           OptReportLocationInfo>>>> LocationInfoTy;
 } // anonymous namespace
 
-static void collectLocationInfo(yaml::Stream &Stream,
-                                LocationInfoTy &LocationInfo) {
-  SmallVector<char, 8> Tmp;
+static bool readLocationInfo(LocationInfoTy &LocationInfo) {
+  ErrorOr<std::unique_ptr<MemoryBuffer>> Buf =
+      MemoryBuffer::getFile(InputFileName.c_str());
+  if (std::error_code EC = Buf.getError()) {
+    WithColor::error() << "Can't open file " << InputFileName << ": "
+                       << EC.message() << "\n";
+    return false;
+  }
 
-  // Note: We're using the YAML parser here directly, instead of using the
-  // YAMLTraits implementation, because the YAMLTraits implementation does not
-  // support a way to handle only a subset of the input keys (it will error out
-  // if there is an input key that you don't map to your class), and
-  // furthermore, it does not provide a way to handle the Args sequence of
-  // key/value pairs, where the order must be captured and the 'String' key
-  // might be repeated.
-  for (auto &Doc : Stream) {
-    auto *Root = dyn_cast<yaml::MappingNode>(Doc.getRoot());
-    if (!Root)
-      continue;
+  Expected<remarks::Format> Format = remarks::parseFormat(ParserFormat);
+  if (!Format) {
+    handleAllErrors(Format.takeError(), [&](const ErrorInfoBase &PE) {
+      PE.log(WithColor::error());
+      errs() << '\n';
+    });
+    return false;
+  }
 
-    bool Transformed = Root->getRawTag() == "!Passed";
-    std::string Pass, File, Function;
-    int Line = 0, Column = 1;
+  Expected<std::unique_ptr<remarks::RemarkParser>> MaybeParser =
+      remarks::createRemarkParserFromMeta(*Format, (*Buf)->getBuffer());
+  if (!MaybeParser) {
+    handleAllErrors(MaybeParser.takeError(), [&](const ErrorInfoBase &PE) {
+      PE.log(WithColor::error());
+      errs() << '\n';
+    });
+    return false;
+  }
+  remarks::RemarkParser &Parser = **MaybeParser;
+
+  while (true) {
+    Expected<std::unique_ptr<remarks::Remark>> MaybeRemark = Parser.next();
+    if (!MaybeRemark) {
+      Error E = MaybeRemark.takeError();
+      if (E.isA<remarks::EndOfFileError>()) {
+        // EOF.
+        consumeError(std::move(E));
+        break;
+      }
+      handleAllErrors(std::move(E), [&](const ErrorInfoBase &PE) {
+        PE.log(WithColor::error());
+        errs() << '\n';
+      });
+      return false;
+    }
+
+    const remarks::Remark &Remark = **MaybeRemark;
+
+    bool Transformed = Remark.RemarkType == remarks::Type::Passed;
 
     int VectorizationFactor = 1;
     int InterleaveCount = 1;
     int UnrollCount = 1;
 
-    for (auto &RootChild : *Root) {
-      auto *Key = dyn_cast<yaml::ScalarNode>(RootChild.getKey());
-      if (!Key)
-        continue;
-      StringRef KeyName = Key->getValue(Tmp);
-      if (KeyName == "Pass") {
-        auto *Value = dyn_cast<yaml::ScalarNode>(RootChild.getValue());
-        if (!Value)
-          continue;
-        Pass = Value->getValue(Tmp);
-      } else if (KeyName == "Function") {
-        auto *Value = dyn_cast<yaml::ScalarNode>(RootChild.getValue());
-        if (!Value)
-          continue;
-        Function = Value->getValue(Tmp);
-      } else if (KeyName == "DebugLoc") {
-        auto *DebugLoc = dyn_cast<yaml::MappingNode>(RootChild.getValue());
-        if (!DebugLoc)
-          continue;
-
-        for (auto &DLChild : *DebugLoc) {
-          auto *DLKey = dyn_cast<yaml::ScalarNode>(DLChild.getKey());
-          if (!DLKey)
-            continue;
-          StringRef DLKeyName = DLKey->getValue(Tmp);
-          if (DLKeyName == "File") {
-            auto *Value = dyn_cast<yaml::ScalarNode>(DLChild.getValue());
-            if (!Value)
-              continue;
-            File = Value->getValue(Tmp);
-          } else if (DLKeyName == "Line") {
-            auto *Value = dyn_cast<yaml::ScalarNode>(DLChild.getValue());
-            if (!Value)
-              continue;
-            Value->getValue(Tmp).getAsInteger(10, Line);
-          } else if (DLKeyName == "Column") {
-            auto *Value = dyn_cast<yaml::ScalarNode>(DLChild.getValue());
-            if (!Value)
-              continue;
-            Value->getValue(Tmp).getAsInteger(10, Column);
-          }
-        }
-      } else if (KeyName == "Args") {
-        auto *Args = dyn_cast<yaml::SequenceNode>(RootChild.getValue());
-        if (!Args)
-          continue;
-        for (auto &ArgChild : *Args) {
-          auto *ArgMap = dyn_cast<yaml::MappingNode>(&ArgChild);
-          if (!ArgMap)
-            continue;
-          for (auto &ArgKV : *ArgMap) {
-            auto *ArgKey = dyn_cast<yaml::ScalarNode>(ArgKV.getKey());
-            if (!ArgKey)
-              continue;
-            StringRef ArgKeyName = ArgKey->getValue(Tmp);
-            if (ArgKeyName == "VectorizationFactor") {
-              auto *Value = dyn_cast<yaml::ScalarNode>(ArgKV.getValue());
-              if (!Value)
-                continue;
-              Value->getValue(Tmp).getAsInteger(10, VectorizationFactor);
-            } else if (ArgKeyName == "InterleaveCount") {
-              auto *Value = dyn_cast<yaml::ScalarNode>(ArgKV.getValue());
-              if (!Value)
-                continue;
-              Value->getValue(Tmp).getAsInteger(10, InterleaveCount);
-            } else if (ArgKeyName == "UnrollCount") {
-              auto *Value = dyn_cast<yaml::ScalarNode>(ArgKV.getValue());
-              if (!Value)
-                continue;
-              Value->getValue(Tmp).getAsInteger(10, UnrollCount);
-            }
-          }
-        }
-      }
+    for (const remarks::Argument &Arg : Remark.Args) {
+      if (Arg.Key == "VectorizationFactor")
+        Arg.Val.getAsInteger(10, VectorizationFactor);
+      else if (Arg.Key == "InterleaveCount")
+        Arg.Val.getAsInteger(10, InterleaveCount);
+      else if (Arg.Key == "UnrollCount")
+        Arg.Val.getAsInteger(10, UnrollCount);
     }
 
-    if (Line < 1 || File.empty())
+    const Optional<remarks::RemarkLocation> &Loc = Remark.Loc;
+    if (!Loc)
       continue;
+
+    StringRef File = Loc->SourceFilePath;
+    unsigned Line = Loc->SourceLine;
+    unsigned Column = Loc->SourceColumn;
 
     // We track information on both actual and potential transformations. This
     // way, if there are multiple possible things on a line that are, or could
@@ -254,42 +224,30 @@ static void collectLocationInfo(yaml::Stream &Stream,
         LLII.Transformed = true;
     };
 
-    if (Pass == "inline") {
-      auto &LI = LocationInfo[File][Line][Function][Column];
+    if (Remark.PassName == "inline") {
+      auto &LI = LocationInfo[std::string(File)][Line]
+                             [std::string(Remark.FunctionName)][Column];
       UpdateLLII(LI.Inlined);
-    } else if (Pass == "loop-unroll") {
-      auto &LI = LocationInfo[File][Line][Function][Column];
+    } else if (Remark.PassName == "loop-unroll") {
+      auto &LI = LocationInfo[std::string(File)][Line]
+                             [std::string(Remark.FunctionName)][Column];
       LI.UnrollCount = UnrollCount;
       UpdateLLII(LI.Unrolled);
-    } else if (Pass == "loop-vectorize") {
-      auto &LI = LocationInfo[File][Line][Function][Column];
+    } else if (Remark.PassName == "loop-vectorize") {
+      auto &LI = LocationInfo[std::string(File)][Line]
+                             [std::string(Remark.FunctionName)][Column];
       LI.VectorizationFactor = VectorizationFactor;
       LI.InterleaveCount = InterleaveCount;
       UpdateLLII(LI.Vectorized);
     }
   }
-}
-
-static bool readLocationInfo(LocationInfoTy &LocationInfo) {
-  ErrorOr<std::unique_ptr<MemoryBuffer>> Buf =
-      MemoryBuffer::getFileOrSTDIN(InputFileName);
-  if (std::error_code EC = Buf.getError()) {
-    WithColor::error() << "Can't open file " << InputFileName << ": "
-                       << EC.message() << "\n";
-    return false;
-  }
-
-  SourceMgr SM;
-  yaml::Stream Stream(Buf.get()->getBuffer(), SM);
-  collectLocationInfo(Stream, LocationInfo);
 
   return true;
 }
 
 static bool writeReport(LocationInfoTy &LocationInfo) {
   std::error_code EC;
-  llvm::raw_fd_ostream OS(OutputFileName, EC,
-              llvm::sys::fs::F_Text);
+  llvm::raw_fd_ostream OS(OutputFileName, EC, llvm::sys::fs::OF_Text);
   if (EC) {
     WithColor::error() << "Can't open file " << OutputFileName << ": "
                        << EC.message() << "\n";
@@ -299,13 +257,8 @@ static bool writeReport(LocationInfoTy &LocationInfo) {
   bool FirstFile = true;
   for (auto &FI : LocationInfo) {
     SmallString<128> FileName(FI.first);
-    if (!InputRelDir.empty()) {
-      if (std::error_code EC = sys::fs::make_absolute(InputRelDir, FileName)) {
-        WithColor::error() << "Can't resolve file path to " << FileName << ": "
-                           << EC.message() << "\n";
-        return false;
-      }
-    }
+    if (!InputRelDir.empty())
+      sys::fs::make_absolute(InputRelDir, FileName);
 
     const auto &FileInfo = FI.second;
 
@@ -513,11 +466,6 @@ int main(int argc, const char **argv) {
       argc, argv,
       "A tool to generate an optimization report from YAML optimization"
       " record files.\n");
-
-  if (Help) {
-    cl::PrintHelpMessage();
-    return 0;
-  }
 
   LocationInfoTy LocationInfo;
   if (!readLocationInfo(LocationInfo))

@@ -64,7 +64,6 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         mdl::mdl-codegenerators-generator_code
         mdl::mdl-runtime
         mdl::mdl-no_jit-generator_stub
-        mdl::mdl-no_glsl-generator_stub
         mdl::base-lib-libzip
         mdl::base-lib-zlib
         mdl::base-system-version

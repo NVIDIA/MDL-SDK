@@ -2057,16 +2057,17 @@ string File_resolver::resolve_filename(
     }
     // Step 3: consistency checks: Note that builtin modules do not have a "real" file path,
     // so ignore the checks for them
-    if ((is_resource || is_mdle_module || !is_builtin(canonical_file_path)) && !check_consistency(
-        resolved_file_system_location,
-        canonical_file_path,
-        info.has_marker(),
-        url,
-        current_working_directory,
-        current_search_path,
-        is_resource,
-        csp_is_archive,
-        owner_is_string_module))
+    if ((is_resource || is_mdle_module || !is_builtin(canonical_file_path)) &&
+        !check_consistency(
+            resolved_file_system_location,
+            canonical_file_path,
+            info.has_marker(),
+            url,
+            current_working_directory,
+            current_search_path,
+            is_resource,
+            csp_is_archive,
+            owner_is_string_module))
     {
         return string(m_alloc);
     }

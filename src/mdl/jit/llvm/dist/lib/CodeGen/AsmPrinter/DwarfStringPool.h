@@ -1,9 +1,8 @@
 //===- llvm/CodeGen/DwarfStringPool.h - Dwarf Debug Framework ---*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -29,8 +28,11 @@ class DwarfStringPool {
 
   StringMap<EntryTy, BumpPtrAllocator &> Pool;
   StringRef Prefix;
-  unsigned NumBytes = 0;
+  uint64_t NumBytes = 0;
+  unsigned NumIndexedStrings = 0;
   bool ShouldCreateSymbols;
+
+  StringMapEntry<EntryTy> &getEntryImpl(AsmPrinter &Asm, StringRef Str);
 
 public:
   using EntryRef = DwarfStringPoolEntryRef;
@@ -48,8 +50,15 @@ public:
 
   unsigned size() const { return Pool.size(); }
 
+  unsigned getNumIndexedStrings() const { return NumIndexedStrings; }
+
   /// Get a reference to an entry in the string pool.
   EntryRef getEntry(AsmPrinter &Asm, StringRef Str);
+
+  /// Same as getEntry, except that you can use EntryRef::getIndex to obtain a
+  /// unique ID of this entry (e.g., for use in indexed forms like
+  /// DW_FORM_strx).
+  EntryRef getIndexedEntry(AsmPrinter &Asm, StringRef Str);
 };
 
 } // end namespace llvm

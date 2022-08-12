@@ -172,7 +172,7 @@ public:
         IMdl_execution_context* context) const = 0;
 };
 
-/*@}*/ // end group mi_neuray_mdl_misc
+/**@}*/ // end group mi_neuray_mdl_misc
 
 } // namespace neuraylib
 } // namespace mi

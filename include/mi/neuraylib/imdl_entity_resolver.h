@@ -244,7 +244,7 @@ public:
     virtual const IMdl_resolved_resource_element* get_element( Size i) const = 0;
 };
 
-/*@}*/ // end group mi_neuray_mdl_misc
+/**@}*/ // end group mi_neuray_mdl_misc
 
 } // namespace neuraylib
 

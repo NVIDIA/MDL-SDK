@@ -1,9 +1,8 @@
 //===- GuardWidening.cpp - ---- Guard widening ----------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -40,10 +39,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/Scalar/GuardWidening.h"
-#include <functional>
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/Analysis/BranchProbabilityInfo.h"
+#include "llvm/Analysis/GuardUtils.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/LoopPass.h"
 #include "llvm/Analysis/PostDominators.h"
@@ -52,19 +52,63 @@
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/PatternMatch.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/KnownBits.h"
 #include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Utils/GuardUtils.h"
 #include "llvm/Transforms/Utils/LoopUtils.h"
+#include <functional>
 
 using namespace llvm;
 
 #define DEBUG_TYPE "guard-widening"
 
 STATISTIC(GuardsEliminated, "Number of eliminated guards");
+STATISTIC(CondBranchEliminated, "Number of eliminated conditional branches");
+
+static cl::opt<bool>
+    WidenBranchGuards("guard-widening-widen-branch-guards", cl::Hidden,
+                      cl::desc("Whether or not we should widen guards  "
+                               "expressed as branches by widenable conditions"),
+                      cl::init(true));
 
 namespace {
+
+// Get the condition of \p I. It can either be a guard or a conditional branch.
+static Value *getCondition(Instruction *I) {
+  if (IntrinsicInst *GI = dyn_cast<IntrinsicInst>(I)) {
+    assert(GI->getIntrinsicID() == Intrinsic::experimental_guard &&
+           "Bad guard intrinsic?");
+    return GI->getArgOperand(0);
+  }
+  Value *Cond, *WC;
+  BasicBlock *IfTrueBB, *IfFalseBB;
+  if (parseWidenableBranch(I, Cond, WC, IfTrueBB, IfFalseBB))
+    return Cond;
+
+  return cast<BranchInst>(I)->getCondition();
+}
+
+// Set the condition for \p I to \p NewCond. \p I can either be a guard or a
+// conditional branch.  
+static void setCondition(Instruction *I, Value *NewCond) {
+  if (IntrinsicInst *GI = dyn_cast<IntrinsicInst>(I)) {
+    assert(GI->getIntrinsicID() == Intrinsic::experimental_guard &&
+           "Bad guard intrinsic?");
+    GI->setArgOperand(0, NewCond);
+    return;
+  }
+  cast<BranchInst>(I)->setCondition(NewCond);
+}
+
+// Eliminates the guard instruction properly.
+static void eliminateGuard(Instruction *GuardInst) {
+  GuardInst->eraseFromParent();
+  ++GuardsEliminated;
+}
 
 class GuardWideningImpl {
   DominatorTree &DT;
@@ -76,34 +120,22 @@ class GuardWideningImpl {
   DomTreeNode *Root;
   std::function<bool(BasicBlock*)> BlockFilter;
 
-  /// The set of guards whose conditions have been widened into dominating
-  /// guards.
-  SmallVector<Instruction *, 16> EliminatedGuards;
+  /// The set of guards and conditional branches whose conditions have been
+  /// widened into dominating guards.
+  SmallVector<Instruction *, 16> EliminatedGuardsAndBranches;
 
   /// The set of guards which have been widened to include conditions to other
   /// guards.
   DenseSet<Instruction *> WidenedGuards;
 
-  /// Try to eliminate guard \p Guard by widening it into an earlier dominating
-  /// guard.  \p DFSI is the DFS iterator on the dominator tree that is
-  /// currently visiting the block containing \p Guard, and \p GuardsPerBlock
+  /// Try to eliminate instruction \p Instr by widening it into an earlier
+  /// dominating guard.  \p DFSI is the DFS iterator on the dominator tree that
+  /// is currently visiting the block containing \p Guard, and \p GuardsPerBlock
   /// maps BasicBlocks to the set of guards seen in that block.
-  bool eliminateGuardViaWidening(
-      Instruction *Guard, const df_iterator<DomTreeNode *> &DFSI,
+  bool eliminateInstrViaWidening(
+      Instruction *Instr, const df_iterator<DomTreeNode *> &DFSI,
       const DenseMap<BasicBlock *, SmallVector<Instruction *, 8>> &
-          GuardsPerBlock);
-
-  // Get the condition from \p GuardInst.
-  Value *getGuardCondition(Instruction *GuardInst);
-
-  // Set the condition for \p GuardInst.
-  void setGuardCondition(Instruction *GuardInst, Value *NewCond);
-
-  // Whether or not the particular instruction is a guard.
-  bool isGuard(const Instruction *I);
-
-  // Eliminates the guard instruction properly.
-  void eliminateGuard(Instruction *GuardInst);
+          GuardsPerBlock, bool InvertCondition = false);
 
   /// Used to keep track of which widening potential is more effective.
   enum WideningScore {
@@ -125,58 +157,58 @@ class GuardWideningImpl {
 
   static StringRef scoreTypeToString(WideningScore WS);
 
-  /// Compute the score for widening the condition in \p DominatedGuard
-  /// (contained in \p DominatedGuardLoop) into \p DominatingGuard (contained in
-  /// \p DominatingGuardLoop).
-  WideningScore computeWideningScore(Instruction *DominatedGuard,
-                                     Loop *DominatedGuardLoop,
+  /// Compute the score for widening the condition in \p DominatedInstr
+  /// into \p DominatingGuard. If \p InvertCond is set, then we widen the
+  /// inverted condition of the dominating guard.
+  WideningScore computeWideningScore(Instruction *DominatedInstr,
                                      Instruction *DominatingGuard,
-                                     Loop *DominatingGuardLoop);
+                                     bool InvertCond);
 
   /// Helper to check if \p V can be hoisted to \p InsertPos.
-  bool isAvailableAt(Value *V, Instruction *InsertPos) {
-    SmallPtrSet<Instruction *, 8> Visited;
+  bool isAvailableAt(const Value *V, const Instruction *InsertPos) const {
+    SmallPtrSet<const Instruction *, 8> Visited;
     return isAvailableAt(V, InsertPos, Visited);
   }
 
-  bool isAvailableAt(Value *V, Instruction *InsertPos,
-                     SmallPtrSetImpl<Instruction *> &Visited);
+  bool isAvailableAt(const Value *V, const Instruction *InsertPos,
+                     SmallPtrSetImpl<const Instruction *> &Visited) const;
 
   /// Helper to hoist \p V to \p InsertPos.  Guaranteed to succeed if \c
   /// isAvailableAt returned true.
-  void makeAvailableAt(Value *V, Instruction *InsertPos);
+  void makeAvailableAt(Value *V, Instruction *InsertPos) const;
 
   /// Common helper used by \c widenGuard and \c isWideningCondProfitable.  Try
-  /// to generate an expression computing the logical AND of \p Cond0 and \p
-  /// Cond1.  Return true if the expression computing the AND is only as
+  /// to generate an expression computing the logical AND of \p Cond0 and (\p
+  /// Cond1 XOR \p InvertCondition).
+  /// Return true if the expression computing the AND is only as
   /// expensive as computing one of the two. If \p InsertPt is true then
   /// actually generate the resulting expression, make it available at \p
   /// InsertPt and return it in \p Result (else no change to the IR is made).
   bool widenCondCommon(Value *Cond0, Value *Cond1, Instruction *InsertPt,
-                       Value *&Result);
+                       Value *&Result, bool InvertCondition);
 
   /// Represents a range check of the form \c Base + \c Offset u< \c Length,
   /// with the constraint that \c Length is not negative.  \c CheckInst is the
   /// pre-existing instruction in the IR that computes the result of this range
   /// check.
   class RangeCheck {
-    Value *Base;
-    ConstantInt *Offset;
-    Value *Length;
+    const Value *Base;
+    const ConstantInt *Offset;
+    const Value *Length;
     ICmpInst *CheckInst;
 
   public:
-    explicit RangeCheck(Value *Base, ConstantInt *Offset, Value *Length,
-                        ICmpInst *CheckInst)
+    explicit RangeCheck(const Value *Base, const ConstantInt *Offset,
+                        const Value *Length, ICmpInst *CheckInst)
         : Base(Base), Offset(Offset), Length(Length), CheckInst(CheckInst) {}
 
-    void setBase(Value *NewBase) { Base = NewBase; }
-    void setOffset(ConstantInt *NewOffset) { Offset = NewOffset; }
+    void setBase(const Value *NewBase) { Base = NewBase; }
+    void setOffset(const ConstantInt *NewOffset) { Offset = NewOffset; }
 
-    Value *getBase() const { return Base; }
-    ConstantInt *getOffset() const { return Offset; }
+    const Value *getBase() const { return Base; }
+    const ConstantInt *getOffset() const { return Offset; }
     const APInt &getOffsetValue() const { return getOffset()->getValue(); }
-    Value *getLength() const { return Length; };
+    const Value *getLength() const { return Length; };
     ICmpInst *getCheckInst() const { return CheckInst; }
 
     void print(raw_ostream &OS, bool PrintTypes = false) {
@@ -198,33 +230,42 @@ class GuardWideningImpl {
   /// append them to \p Checks.  Returns true on success, may clobber \c Checks
   /// on failure.
   bool parseRangeChecks(Value *CheckCond, SmallVectorImpl<RangeCheck> &Checks) {
-    SmallPtrSet<Value *, 8> Visited;
+    SmallPtrSet<const Value *, 8> Visited;
     return parseRangeChecks(CheckCond, Checks, Visited);
   }
 
   bool parseRangeChecks(Value *CheckCond, SmallVectorImpl<RangeCheck> &Checks,
-                        SmallPtrSetImpl<Value *> &Visited);
+                        SmallPtrSetImpl<const Value *> &Visited);
 
   /// Combine the checks in \p Checks into a smaller set of checks and append
   /// them into \p CombinedChecks.  Return true on success (i.e. all of checks
   /// in \p Checks were combined into \p CombinedChecks).  Clobbers \p Checks
   /// and \p CombinedChecks on success and on failure.
   bool combineRangeChecks(SmallVectorImpl<RangeCheck> &Checks,
-                          SmallVectorImpl<RangeCheck> &CombinedChecks);
+                          SmallVectorImpl<RangeCheck> &CombinedChecks) const;
 
   /// Can we compute the logical AND of \p Cond0 and \p Cond1 for the price of
   /// computing only one of the two expressions?
-  bool isWideningCondProfitable(Value *Cond0, Value *Cond1) {
+  bool isWideningCondProfitable(Value *Cond0, Value *Cond1, bool InvertCond) {
     Value *ResultUnused;
-    return widenCondCommon(Cond0, Cond1, /*InsertPt=*/nullptr, ResultUnused);
+    return widenCondCommon(Cond0, Cond1, /*InsertPt=*/nullptr, ResultUnused,
+                           InvertCond);
   }
 
-  /// Widen \p ToWiden to fail if \p NewCondition is false (in addition to
-  /// whatever it is already checking).
-  void widenGuard(Instruction *ToWiden, Value *NewCondition) {
+  /// If \p InvertCondition is false, Widen \p ToWiden to fail if
+  /// \p NewCondition is false, otherwise make it fail if \p NewCondition is
+  /// true (in addition to whatever it is already checking).
+  void widenGuard(Instruction *ToWiden, Value *NewCondition,
+                  bool InvertCondition) {
     Value *Result;
-    widenCondCommon(ToWiden->getOperand(0), NewCondition, ToWiden, Result);
-    setGuardCondition(ToWiden, Result);
+    
+    widenCondCommon(getCondition(ToWiden), NewCondition, ToWiden, Result,
+                    InvertCondition);
+    if (isGuardAsWidenableBranch(ToWiden)) {
+      setWidenableBranchCond(cast<BranchInst>(ToWiden), Result);
+      return;
+    }
+    setCondition(ToWiden, Result);
   }
 
 public:
@@ -232,17 +273,25 @@ public:
   explicit GuardWideningImpl(DominatorTree &DT, PostDominatorTree *PDT,
                              LoopInfo &LI, DomTreeNode *Root,
                              std::function<bool(BasicBlock*)> BlockFilter)
-    : DT(DT), PDT(PDT), LI(LI), Root(Root), BlockFilter(BlockFilter) {}
+    : DT(DT), PDT(PDT), LI(LI), Root(Root), BlockFilter(BlockFilter)
+        {}
 
   /// The entry point for this pass.
   bool run();
 };
 }
 
+static bool isSupportedGuardInstruction(const Instruction *Insn) {
+  if (isGuard(Insn))
+    return true;
+  if (WidenBranchGuards && isGuardAsWidenableBranch(Insn))
+    return true;
+  return false;
+}
+
 bool GuardWideningImpl::run() {
   DenseMap<BasicBlock *, SmallVector<Instruction *, 8>> GuardsInBlock;
   bool Changed = false;
-
   for (auto DFI = df_begin(Root), DFE = df_end(Root);
        DFI != DFE; ++DFI) {
     auto *BB = (*DFI)->getBlock();
@@ -252,28 +301,41 @@ bool GuardWideningImpl::run() {
     auto &CurrentList = GuardsInBlock[BB];
 
     for (auto &I : *BB)
-      if (isGuard(&I))
+      if (isSupportedGuardInstruction(&I))
         CurrentList.push_back(cast<Instruction>(&I));
 
     for (auto *II : CurrentList)
-      Changed |= eliminateGuardViaWidening(II, DFI, GuardsInBlock);
+      Changed |= eliminateInstrViaWidening(II, DFI, GuardsInBlock);
   }
 
-  assert(EliminatedGuards.empty() || Changed);
-  for (auto *II : EliminatedGuards)
-    if (!WidenedGuards.count(II))
-      eliminateGuard(II);
+  assert(EliminatedGuardsAndBranches.empty() || Changed);
+  for (auto *I : EliminatedGuardsAndBranches)
+    if (!WidenedGuards.count(I)) {
+      assert(isa<ConstantInt>(getCondition(I)) && "Should be!");
+      if (isSupportedGuardInstruction(I))
+        eliminateGuard(I);
+      else {
+        assert(isa<BranchInst>(I) &&
+               "Eliminated something other than guard or branch?");
+        ++CondBranchEliminated;
+      }
+    }
 
   return Changed;
 }
 
-bool GuardWideningImpl::eliminateGuardViaWidening(
-    Instruction *GuardInst, const df_iterator<DomTreeNode *> &DFSI,
+bool GuardWideningImpl::eliminateInstrViaWidening(
+    Instruction *Instr, const df_iterator<DomTreeNode *> &DFSI,
     const DenseMap<BasicBlock *, SmallVector<Instruction *, 8>> &
-        GuardsInBlock) {
+        GuardsInBlock, bool InvertCondition) {
+  // Ignore trivial true or false conditions. These instructions will be
+  // trivially eliminated by any cleanup pass. Do not erase them because other
+  // guards can possibly be widened into them.
+  if (isa<ConstantInt>(getCondition(Instr)))
+    return false;
+
   Instruction *BestSoFar = nullptr;
   auto BestScoreSoFar = WS_IllegalOrNegative;
-  auto *GuardInstLoop = LI.getLoopFor(GuardInst->getParent());
 
   // In the set of dominating guards, find the one we can merge GuardInst with
   // for the most profit.
@@ -281,12 +343,12 @@ bool GuardWideningImpl::eliminateGuardViaWidening(
     auto *CurBB = DFSI.getPath(i)->getBlock();
     if (!BlockFilter(CurBB))
       break;
-    auto *CurLoop = LI.getLoopFor(CurBB);
     assert(GuardsInBlock.count(CurBB) && "Must have been populated by now!");
     const auto &GuardsInCurBB = GuardsInBlock.find(CurBB)->second;
 
     auto I = GuardsInCurBB.begin();
-    auto E = GuardsInCurBB.end();
+    auto E = Instr->getParent() == CurBB ? find(GuardsInCurBB, Instr)
+                                         : GuardsInCurBB.end();
 
 #ifndef NDEBUG
     {
@@ -302,21 +364,12 @@ bool GuardWideningImpl::eliminateGuardViaWidening(
     }
 #endif
 
-    assert((i == (e - 1)) == (GuardInst->getParent() == CurBB) && "Bad DFS?");
-
-    if (i == (e - 1)) {
-      // Corner case: make sure we're only looking at guards strictly dominating
-      // GuardInst when visiting GuardInst->getParent().
-      auto NewEnd = std::find(I, E, GuardInst);
-      assert(NewEnd != E && "GuardInst not in its own block?");
-      E = NewEnd;
-    }
+    assert((i == (e - 1)) == (Instr->getParent() == CurBB) && "Bad DFS?");
 
     for (auto *Candidate : make_range(I, E)) {
-      auto Score =
-          computeWideningScore(GuardInst, GuardInstLoop, Candidate, CurLoop);
-      LLVM_DEBUG(dbgs() << "Score between " << *getGuardCondition(GuardInst)
-                        << " and " << *getGuardCondition(Candidate) << " is "
+      auto Score = computeWideningScore(Instr, Candidate, InvertCondition);
+      LLVM_DEBUG(dbgs() << "Score between " << *getCondition(Instr)
+                        << " and " << *getCondition(Candidate) << " is "
                         << scoreTypeToString(Score) << "\n");
       if (Score > BestScoreSoFar) {
         BestScoreSoFar = Score;
@@ -326,64 +379,45 @@ bool GuardWideningImpl::eliminateGuardViaWidening(
   }
 
   if (BestScoreSoFar == WS_IllegalOrNegative) {
-    LLVM_DEBUG(dbgs() << "Did not eliminate guard " << *GuardInst << "\n");
+    LLVM_DEBUG(dbgs() << "Did not eliminate guard " << *Instr << "\n");
     return false;
   }
 
-  assert(BestSoFar != GuardInst && "Should have never visited same guard!");
-  assert(DT.dominates(BestSoFar, GuardInst) && "Should be!");
+  assert(BestSoFar != Instr && "Should have never visited same guard!");
+  assert(DT.dominates(BestSoFar, Instr) && "Should be!");
 
-  LLVM_DEBUG(dbgs() << "Widening " << *GuardInst << " into " << *BestSoFar
+  LLVM_DEBUG(dbgs() << "Widening " << *Instr << " into " << *BestSoFar
                     << " with score " << scoreTypeToString(BestScoreSoFar)
                     << "\n");
-  widenGuard(BestSoFar, getGuardCondition(GuardInst));
-  setGuardCondition(GuardInst, ConstantInt::getTrue(GuardInst->getContext()));
-  EliminatedGuards.push_back(GuardInst);
+  widenGuard(BestSoFar, getCondition(Instr), InvertCondition);
+  auto NewGuardCondition = InvertCondition
+                               ? ConstantInt::getFalse(Instr->getContext())
+                               : ConstantInt::getTrue(Instr->getContext());
+  setCondition(Instr, NewGuardCondition);
+  EliminatedGuardsAndBranches.push_back(Instr);
   WidenedGuards.insert(BestSoFar);
   return true;
 }
 
-Value *GuardWideningImpl::getGuardCondition(Instruction *GuardInst) {
-  IntrinsicInst *GI = cast<IntrinsicInst>(GuardInst);
-  assert(GI->getIntrinsicID() == Intrinsic::experimental_guard &&
-         "Bad guard intrinsic?");
-  return GI->getArgOperand(0);
-}
-
-void GuardWideningImpl::setGuardCondition(Instruction *GuardInst,
-                                          Value *NewCond) {
-  IntrinsicInst *GI = cast<IntrinsicInst>(GuardInst);
-  assert(GI->getIntrinsicID() == Intrinsic::experimental_guard &&
-         "Bad guard intrinsic?");
-  GI->setArgOperand(0, NewCond);
-}
-
-bool GuardWideningImpl::isGuard(const Instruction* I) {
-  using namespace llvm::PatternMatch;
-  return match(I, m_Intrinsic<Intrinsic::experimental_guard>());
-}
-
-void GuardWideningImpl::eliminateGuard(Instruction *GuardInst) {
-  GuardInst->eraseFromParent();
-  ++GuardsEliminated;
-}
-
-GuardWideningImpl::WideningScore GuardWideningImpl::computeWideningScore(
-    Instruction *DominatedGuard, Loop *DominatedGuardLoop,
-    Instruction *DominatingGuard, Loop *DominatingGuardLoop) {
+GuardWideningImpl::WideningScore
+GuardWideningImpl::computeWideningScore(Instruction *DominatedInstr,
+                                        Instruction *DominatingGuard,
+                                        bool InvertCond) {
+  Loop *DominatedInstrLoop = LI.getLoopFor(DominatedInstr->getParent());
+  Loop *DominatingGuardLoop = LI.getLoopFor(DominatingGuard->getParent());
   bool HoistingOutOfLoop = false;
 
-  if (DominatingGuardLoop != DominatedGuardLoop) {
+  if (DominatingGuardLoop != DominatedInstrLoop) {
     // Be conservative and don't widen into a sibling loop.  TODO: If the
     // sibling is colder, we should consider allowing this.
     if (DominatingGuardLoop &&
-        !DominatingGuardLoop->contains(DominatedGuardLoop))
+        !DominatingGuardLoop->contains(DominatedInstrLoop))
       return WS_IllegalOrNegative;
 
     HoistingOutOfLoop = true;
   }
 
-  if (!isAvailableAt(getGuardCondition(DominatedGuard), DominatingGuard))
+  if (!isAvailableAt(getCondition(DominatedInstr), DominatingGuard))
     return WS_IllegalOrNegative;
 
   // If the guard was conditional executed, it may never be reached
@@ -394,8 +428,8 @@ GuardWideningImpl::WideningScore GuardWideningImpl::computeWideningScore(
   // here.  TODO: evaluate cost model for spurious deopt
   // NOTE: As written, this also lets us hoist right over another guard which
   // is essentially just another spelling for control flow.
-  if (isWideningCondProfitable(getGuardCondition(DominatedGuard),
-                               getGuardCondition(DominatingGuard)))
+  if (isWideningCondProfitable(getCondition(DominatedInstr),
+                               getCondition(DominatingGuard), InvertCond))
     return HoistingOutOfLoop ? WS_VeryPositive : WS_Positive;
 
   if (HoistingOutOfLoop)
@@ -406,7 +440,9 @@ GuardWideningImpl::WideningScore GuardWideningImpl::computeWideningScore(
   // throw, etc...).  That choice appears arbitrary.
   auto MaybeHoistingOutOfIf = [&]() {
     auto *DominatingBlock = DominatingGuard->getParent();
-    auto *DominatedBlock = DominatedGuard->getParent();
+    auto *DominatedBlock = DominatedInstr->getParent();
+    if (isGuardAsWidenableBranch(DominatingGuard))
+      DominatingBlock = cast<BranchInst>(DominatingGuard)->getSuccessor(0);
 
     // Same Block?
     if (DominatedBlock == DominatingBlock)
@@ -416,15 +452,15 @@ GuardWideningImpl::WideningScore GuardWideningImpl::computeWideningScore(
       return false;
     // TODO: diamond, triangle cases
     if (!PDT) return true;
-    return !PDT->dominates(DominatedGuard->getParent(),
-                           DominatingGuard->getParent());
+    return !PDT->dominates(DominatedBlock, DominatingBlock);
   };
 
   return MaybeHoistingOutOfIf() ? WS_IllegalOrNegative : WS_Neutral;
 }
 
-bool GuardWideningImpl::isAvailableAt(Value *V, Instruction *Loc,
-                                      SmallPtrSetImpl<Instruction *> &Visited) {
+bool GuardWideningImpl::isAvailableAt(
+    const Value *V, const Instruction *Loc,
+    SmallPtrSetImpl<const Instruction *> &Visited) const {
   auto *Inst = dyn_cast<Instruction>(V);
   if (!Inst || DT.dominates(Inst, Loc) || Visited.count(Inst))
     return true;
@@ -444,7 +480,7 @@ bool GuardWideningImpl::isAvailableAt(Value *V, Instruction *Loc,
                 [&](Value *Op) { return isAvailableAt(Op, Loc, Visited); });
 }
 
-void GuardWideningImpl::makeAvailableAt(Value *V, Instruction *Loc) {
+void GuardWideningImpl::makeAvailableAt(Value *V, Instruction *Loc) const {
   auto *Inst = dyn_cast<Instruction>(V);
   if (!Inst || DT.dominates(Inst, Loc))
     return;
@@ -459,7 +495,8 @@ void GuardWideningImpl::makeAvailableAt(Value *V, Instruction *Loc) {
 }
 
 bool GuardWideningImpl::widenCondCommon(Value *Cond0, Value *Cond1,
-                                        Instruction *InsertPt, Value *&Result) {
+                                        Instruction *InsertPt, Value *&Result,
+                                        bool InvertCondition) {
   using namespace llvm::PatternMatch;
 
   {
@@ -469,6 +506,8 @@ bool GuardWideningImpl::widenCondCommon(Value *Cond0, Value *Cond1,
     ICmpInst::Predicate Pred0, Pred1;
     if (match(Cond0, m_ICmp(Pred0, m_Value(LHS), m_ConstantInt(RHS0))) &&
         match(Cond1, m_ICmp(Pred1, m_Specific(LHS), m_ConstantInt(RHS1)))) {
+      if (InvertCondition)
+        Pred1 = ICmpInst::getInversePredicate(Pred1);
 
       ConstantRange CR0 =
           ConstantRange::makeExactICmpRegion(Pred0, RHS0->getValue());
@@ -502,7 +541,9 @@ bool GuardWideningImpl::widenCondCommon(Value *Cond0, Value *Cond1,
 
   {
     SmallVector<GuardWideningImpl::RangeCheck, 4> Checks, CombinedChecks;
-    if (parseRangeChecks(Cond0, Checks) && parseRangeChecks(Cond1, Checks) &&
+    // TODO: Support InvertCondition case?
+    if (!InvertCondition &&
+        parseRangeChecks(Cond0, Checks) && parseRangeChecks(Cond1, Checks) &&
         combineRangeChecks(Checks, CombinedChecks)) {
       if (InsertPt) {
         Result = nullptr;
@@ -514,7 +555,7 @@ bool GuardWideningImpl::widenCondCommon(Value *Cond0, Value *Cond1,
           else
             Result = RC.getCheckInst();
         }
-
+        assert(Result && "Failed to find result value");
         Result->setName("wide.chk");
       }
       return true;
@@ -526,7 +567,8 @@ bool GuardWideningImpl::widenCondCommon(Value *Cond0, Value *Cond1,
   if (InsertPt) {
     makeAvailableAt(Cond0, InsertPt);
     makeAvailableAt(Cond1, InsertPt);
-
+    if (InvertCondition)
+      Cond1 = BinaryOperator::CreateNot(Cond1, "inverted", InsertPt);
     Result = BinaryOperator::CreateAnd(Cond0, Cond1, "wide.chk", InsertPt);
   }
 
@@ -536,7 +578,7 @@ bool GuardWideningImpl::widenCondCommon(Value *Cond0, Value *Cond1,
 
 bool GuardWideningImpl::parseRangeChecks(
     Value *CheckCond, SmallVectorImpl<GuardWideningImpl::RangeCheck> &Checks,
-    SmallPtrSetImpl<Value *> &Visited) {
+    SmallPtrSetImpl<const Value *> &Visited) {
   if (!Visited.insert(CheckCond).second)
     return true;
 
@@ -555,7 +597,7 @@ bool GuardWideningImpl::parseRangeChecks(
        IC->getPredicate() != ICmpInst::ICMP_UGT))
     return false;
 
-  Value *CmpLHS = IC->getOperand(0), *CmpRHS = IC->getOperand(1);
+  const Value *CmpLHS = IC->getOperand(0), *CmpRHS = IC->getOperand(1);
   if (IC->getPredicate() == ICmpInst::ICMP_UGT)
     std::swap(CmpLHS, CmpRHS);
 
@@ -608,13 +650,13 @@ bool GuardWideningImpl::parseRangeChecks(
 
 bool GuardWideningImpl::combineRangeChecks(
     SmallVectorImpl<GuardWideningImpl::RangeCheck> &Checks,
-    SmallVectorImpl<GuardWideningImpl::RangeCheck> &RangeChecksOut) {
+    SmallVectorImpl<GuardWideningImpl::RangeCheck> &RangeChecksOut) const {
   unsigned OldCount = Checks.size();
   while (!Checks.empty()) {
     // Pick all of the range checks with a specific base and length, and try to
     // merge them.
-    Value *CurrentBase = Checks.front().getBase();
-    Value *CurrentLength = Checks.front().getLength();
+    const Value *CurrentBase = Checks.front().getBase();
+    const Value *CurrentLength = Checks.front().getLength();
 
     SmallVector<GuardWideningImpl::RangeCheck, 3> CurrentChecks;
 
@@ -623,29 +665,27 @@ bool GuardWideningImpl::combineRangeChecks(
     };
 
     copy_if(Checks, std::back_inserter(CurrentChecks), IsCurrentCheck);
-    Checks.erase(remove_if(Checks, IsCurrentCheck), Checks.end());
+    erase_if(Checks, IsCurrentCheck);
 
     assert(CurrentChecks.size() != 0 && "We know we have at least one!");
 
     if (CurrentChecks.size() < 3) {
-      RangeChecksOut.insert(RangeChecksOut.end(), CurrentChecks.begin(),
-                            CurrentChecks.end());
+      llvm::append_range(RangeChecksOut, CurrentChecks);
       continue;
     }
 
     // CurrentChecks.size() will typically be 3 here, but so far there has been
     // no need to hard-code that fact.
 
-    llvm::sort(CurrentChecks.begin(), CurrentChecks.end(),
-               [&](const GuardWideningImpl::RangeCheck &LHS,
-                   const GuardWideningImpl::RangeCheck &RHS) {
+    llvm::sort(CurrentChecks, [&](const GuardWideningImpl::RangeCheck &LHS,
+                                  const GuardWideningImpl::RangeCheck &RHS) {
       return LHS.getOffsetValue().slt(RHS.getOffsetValue());
     });
 
     // Note: std::sort should not invalidate the ChecksStart iterator.
 
-    ConstantInt *MinOffset = CurrentChecks.front().getOffset(),
-                *MaxOffset = CurrentChecks.back().getOffset();
+    const ConstantInt *MinOffset = CurrentChecks.front().getOffset();
+    const ConstantInt *MaxOffset = CurrentChecks.back().getOffset();
 
     unsigned BitWidth = MaxOffset->getValue().getBitWidth();
     if ((MaxOffset->getValue() - MinOffset->getValue())
@@ -658,9 +698,7 @@ bool GuardWideningImpl::combineRangeChecks(
       return (HighOffset - RC.getOffsetValue()).ult(MaxDiff);
     };
 
-    if (MaxDiff.isMinValue() ||
-        !std::all_of(std::next(CurrentChecks.begin()), CurrentChecks.end(),
-                     OffsetOK))
+    if (MaxDiff.isMinValue() || !all_of(drop_begin(CurrentChecks), OffsetOK))
       return false;
 
     // We have a series of f+1 checks as:
@@ -735,6 +773,22 @@ PreservedAnalyses GuardWideningPass::run(Function &F,
   PreservedAnalyses PA;
   PA.preserveSet<CFGAnalyses>();
   return PA;
+}
+
+PreservedAnalyses GuardWideningPass::run(Loop &L, LoopAnalysisManager &AM,
+                                         LoopStandardAnalysisResults &AR,
+                                         LPMUpdater &U) {
+  BasicBlock *RootBB = L.getLoopPredecessor();
+  if (!RootBB)
+    RootBB = L.getHeader();
+  auto BlockFilter = [&](BasicBlock *BB) {
+    return BB == RootBB || L.contains(BB);
+  };
+  if (!GuardWideningImpl(AR.DT, nullptr, AR.LI, AR.DT.getNode(RootBB),
+                         BlockFilter).run())
+    return PreservedAnalyses::all();
+
+  return getLoopPassPreservedAnalyses();
 }
 
 namespace {

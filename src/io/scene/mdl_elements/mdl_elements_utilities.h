@@ -343,7 +343,7 @@ public:
     ///                               with relative filenames).
     /// \param module_mdl_name        The MDL module name.
     /// \param prototype_tag          The prototype_tag if relevant.
-    /// \param load_resources         \c True, if resources are supposed to be loaded into the DB
+    /// \param resolve_resources      \c true, if resources are supposed to be loaded into the DB
     /// \param user_modules_seen      If non - \c NULL, visited user module tags and identifiers
     ///                               are put here.
     Mdl_dag_converter(
@@ -356,7 +356,7 @@ public:
         const char* module_filename,
         const char* module_mdl_name,
         DB::Tag prototype_tag,
-        bool load_resources,
+        bool resolve_resources,
         std::set<Mdl_tag_ident>* user_modules_seen);
 
     /// Converts mi::mdl::IValue to MI::MDL::IValue.
@@ -417,7 +417,6 @@ private:
         const IType* type_int,
         const char* qualified_name) const;
 
-private:
     mi::base::Handle<IExpression_factory> m_ef;
     mi::base::Handle<IValue_factory> m_vf;
     mi::base::Handle<IType_factory> m_tf;
@@ -431,7 +430,7 @@ private:
     const char* m_module_filename;
     const char* m_module_mdl_name;
     DB::Tag     m_prototype_tag; ///< The prototype of the mat. def. converted if relevant
-    bool        m_load_resources;
+    bool        m_resolve_resources;
     mutable std::set<Mdl_tag_ident>* m_user_modules_seen;
 };
 
@@ -554,6 +553,8 @@ bool argument_type_matches_parameter_type(
 /// function itself is varying.
 ///
 /// \pre argument->get_kind() does not return IExpression::EK_TEMPORARY
+///
+/// Returns \c false if the referenced function call/definition has an unexpected class ID.
 bool return_type_is_varying( DB::Transaction* transaction, const IExpression* argument);
 
 /// Performs a deep copy of expressions.
@@ -832,7 +833,7 @@ public:
 
 private:
     /// Converts \p name into a string representation.
-    std::string stringify( const mi::mdl::IQualified_name* name);
+    static std::string stringify( const mi::mdl::IQualified_name* name);
 
     /// Returns a string with \p ident as prefix that is not contained in \c m_aliases.
     ///
@@ -889,7 +890,7 @@ public:
 
 private:
     /// Converts \p name into a string representation.
-    std::string stringify( const mi::mdl::IQualified_name* name);
+    static std::string stringify( const mi::mdl::IQualified_name* name);
 
     /// The name importer.
     Name_importer* m_name_importer;
@@ -907,16 +908,6 @@ private:
 
 // ********** Misc *********************************************************************************
 
-/// Find the expression a path is pointing on.
-///
-/// \param transaction  the current transaction
-/// \param path         the path
-/// \param args         the material arguments
-mi::base::Handle<const IExpression> find_path(
-    DB::Transaction* transaction,
-    const std::string& path,
-    const mi::base::Handle<const IExpression_list>& args);
-
 /// Converts a hash from the MDL API representation to the base API representation.
 mi::base::Uuid convert_hash( const mi::mdl::DAG_hash& hash);
 
@@ -929,28 +920,6 @@ mi::base::Uuid get_hash( const mi::mdl::IMDL_resource_set* set);
 
 /// Generates a unique ID.
 Uint64 generate_unique_id();
-
-/// Repairs the given argument list according to the given rules.
-/// \param transaction  the transaction.
-/// \param arguments    the arguments to repair.
-/// \param defaults     argument defaults.
-/// \param repair_calls if \c true, invalid calls will be repaired, if possible.
-/// \param remove_calls if \c true, invalid calls will be replaced by a default. In case \p
-///                     repair_calls is \c true, the call will be removed if the repair
-///                     failed.
-/// \param level        recursion level
-/// \param context      execution context to propagate error messages.
-/// \return
-///      -  0:   Success
-///      - -1:   Repairing failed. See the context for details.
-mi::Sint32 repair_arguments(
-    DB::Transaction* transaction,
-    IExpression_list* arguments,
-    const IExpression_list* defaults,
-    bool repair_calls,
-    bool remove_calls,
-    mi::Uint32 level,
-    Execution_context* context);
 
 } // namespace MDL
 

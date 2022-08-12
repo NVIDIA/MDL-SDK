@@ -680,7 +680,7 @@ public:
     /// \see The \p flags parameter of #compare()
     enum Comparison_options {
         /// Default comparison options.
-        DEFAULT_COMPARISON_OPTIONS      = 0,
+        DEFAULT_OPTIONS      = 0,
         /// This option indicates that call expressions should be compared for equality, not for
         /// identity. That is, the comparison is not done via
         /// #mi::neuraylib::IExpression::get_value(), but by traversing into the referenced
@@ -852,7 +852,7 @@ public:
         Sint32 *errors = 0) const = 0;
 };
 
-/*@}*/ // end group mi_neuray_mdl_types
+/**@}*/ // end group mi_neuray_mdl_types
 
 }  // namespace neuraylib
 

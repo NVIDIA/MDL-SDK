@@ -99,7 +99,7 @@ public:
 
 };
 
-/*@}*/ // end group mi_neuray_impexp
+/**@}*/ // end group mi_neuray_impexp
 
 } // namespace neuraylib
 

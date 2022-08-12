@@ -1,9 +1,8 @@
 //===- PDBSymbolTypeFunctionSig.cpp - --------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -56,26 +55,15 @@ public:
 
   void reset() override { Enumerator->reset(); }
 
-  MyType *clone() const override {
-    std::unique_ptr<ArgEnumeratorType> Clone(Enumerator->clone());
-    return new FunctionArgEnumerator(Session, std::move(Clone));
-  }
-
 private:
   const IPDBSession &Session;
   std::unique_ptr<ArgEnumeratorType> Enumerator;
 };
 }
 
-PDBSymbolTypeFunctionSig::PDBSymbolTypeFunctionSig(
-    const IPDBSession &PDBSession, std::unique_ptr<IPDBRawSymbol> Symbol)
-    : PDBSymbol(PDBSession, std::move(Symbol)) {
-  assert(RawSymbol->getSymTag() == PDB_SymType::FunctionSig);
-}
-
 std::unique_ptr<IPDBEnumSymbols>
 PDBSymbolTypeFunctionSig::getArguments() const {
-  return llvm::make_unique<FunctionArgEnumerator>(Session, *this);
+  return std::make_unique<FunctionArgEnumerator>(Session, *this);
 }
 
 void PDBSymbolTypeFunctionSig::dump(PDBSymDumper &Dumper) const {

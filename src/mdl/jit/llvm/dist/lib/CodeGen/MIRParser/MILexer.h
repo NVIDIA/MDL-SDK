@@ -1,9 +1,8 @@
 //===- MILexer.h - Lexer for machine instructions ---------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -16,7 +15,6 @@
 #define LLVM_LIB_CODEGEN_MIRPARSER_MILEXER_H
 
 #include "llvm/ADT/APSInt.h"
-#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include <string>
 
@@ -71,7 +69,12 @@ struct MIToken {
     kw_contract,
     kw_afn,
     kw_reassoc,
+    kw_nuw,
+    kw_nsw,
+    kw_exact,
+    kw_nofpexcept,
     kw_debug_location,
+    kw_debug_instr_number,
     kw_cfi_same_value,
     kw_cfi_offset,
     kw_cfi_rel_offset,
@@ -86,6 +89,7 @@ struct MIToken {
     kw_cfi_restore_state,
     kw_cfi_undefined,
     kw_cfi_window_save,
+    kw_cfi_aarch64_negate_ra_sign_state,
     kw_blockaddress,
     kw_intrinsic,
     kw_target_index,
@@ -100,19 +104,28 @@ struct MIToken {
     kw_non_temporal,
     kw_invariant,
     kw_align,
+    kw_basealign,
     kw_addrspace,
     kw_stack,
     kw_got,
     kw_jump_table,
     kw_constant_pool,
     kw_call_entry,
+    kw_custom,
     kw_liveout,
     kw_address_taken,
     kw_landing_pad,
+    kw_ehfunclet_entry,
     kw_liveins,
     kw_successors,
     kw_floatpred,
     kw_intpred,
+    kw_shufflemask,
+    kw_pre_instr_symbol,
+    kw_post_instr_symbol,
+    kw_heap_alloc_marker,
+    kw_bbsections,
+    kw_unknown_size,
 
     // Named metadata keywords
     md_tbaa,
@@ -120,6 +133,7 @@ struct MIToken {
     md_noalias,
     md_range,
     md_diexpr,
+    md_dilocation,
 
     // Identifier tokens
     Identifier,
@@ -132,11 +146,13 @@ struct MIToken {
     NamedGlobalValue,
     GlobalValue,
     ExternalSymbol,
+    MCSymbol,
 
     // Other tokens
     IntegerLiteral,
     FloatingPointLiteral,
     HexLiteral,
+    VectorLiteral,
     VirtualRegister,
     ConstantPoolItem,
     JumpTableIndex,

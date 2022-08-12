@@ -33,6 +33,7 @@
 
 #include "common.h"
 #include "raytracing_pipeline.h"
+#include "gltf_nv_materials_mdl.h"
 
 namespace mi { namespace examples { namespace mdl_d3d12
 {
@@ -40,6 +41,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
     class Buffer;
     class Constant_buffer_base;
     class IMaterial;
+    class Mdl_sdk;
     class Scene;
     struct Update_args;
 
@@ -54,7 +56,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
         DirectX::XMVECTOR res = DirectX::XMLoadFloat3(&vec3);
         res.m128_f32[3] = w;
-        return std::move(res);
+        return res;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -478,6 +480,18 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
             // general extensions
             Model_data_materials_emissive_strength emissive_strength;
+
+            // holds the material level information of the MDL extension
+            fx::gltf::NV_MaterialsMDL::Material_extension ext_NV_materials_mdl;
+        };
+
+        // --------------------------------------------------------------------
+
+        // textures, light profiles, measured BSDFs
+        class Resource
+        {
+        public:
+            std::string resource_db_name;
         };
 
         // --------------------------------------------------------------------
@@ -488,7 +502,11 @@ namespace mi { namespace examples { namespace mdl_d3d12
             std::vector<Mesh> meshes;
             std::vector<Camera> cameras;
             std::vector<Material> materials;
+            std::vector<Resource> resources;
             Node root;
+
+            // holds the scene level information of the MDL extension
+            fx::gltf::NV_MaterialsMDL::Gltf_extension ext_NV_materials_mdl;
         };
 
         // --------------------------------------------------------------------
@@ -505,8 +523,13 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
         // --------------------------------------------------------------------
 
-        virtual bool load(const std::string& file_name, const Scene_options& options) = 0;
-        virtual const Scene& get_scene() const = 0;
+        virtual bool load(
+            Mdl_sdk& sdk,
+            const std::string& file_name,
+            const Scene_options& options) = 0;
+
+        // moves the scene data loaded (including ownership)
+        virtual std::unique_ptr<const IScene_loader::Scene> move_scene() = 0;
     };
 
     // --------------------------------------------------------------------------------------------
@@ -592,7 +615,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
             const Mesh* get_mesh() const { return m_mesh; }
             Mesh* get_mesh() { return m_mesh; }
 
-            const IMaterial* get_material(const Mesh::Geometry* geometry) const {
+            IMaterial* get_material(const Mesh::Geometry* geometry) {
                 return m_materials[geometry->m_index_in_mesh];
             }
 
@@ -837,8 +860,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// can be used with the material library for instance.
         virtual size_t get_target_code_id() const = 0;
 
-        /// get the scene data names mapped to IDs that will be requested in the shader.
-        virtual const std::unordered_map<std::string, uint32_t>& get_scene_data_name_map() const = 0;
+        /// register scene data names that appear on the geometry data at the material for
+        /// making them accessible in the shader.
+        virtual uint32_t register_scene_data_name(const std::string& name) = 0;
 
         /// get the GPU handle of to the first resource of the target in the descriptor heap
         virtual D3D12_GPU_DESCRIPTOR_HANDLE get_target_descriptor_heap_region() const = 0;
@@ -858,7 +882,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
             size_t ray_type_count);
         virtual ~Scene();
 
-        bool build_scene(const IScene_loader::Scene& scene);
+        bool build_scene(std::unique_ptr<const IScene_loader::Scene> scene);
 
         Raytracing_acceleration_structure* get_acceleration_structure() const {
             return m_acceleration_structure;
@@ -900,6 +924,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
     private:
         Base_application* m_app;
         const std::string& m_debug_name;
+
+        std::unique_ptr<const IScene_loader::Scene> m_scene_descripion;
 
         std::vector<Camera*> m_cameras;
         std::vector<Mesh*> m_meshes;

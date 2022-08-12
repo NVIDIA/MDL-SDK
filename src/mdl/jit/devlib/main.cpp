@@ -49,6 +49,7 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/Threading.h>
 #include <llvm/Transforms/IPO.h>
+#include <llvm/InitializePasses.h>
 #include <llvm/PassRegistry.h>
 
 namespace llvm {
@@ -139,7 +140,7 @@ public:
         for (auto &F : M.functions()) {
             StringRef const name = F.getName();
 
-            if (m_roots->find(name) != m_roots->end()) {
+            if (m_roots->find(name.str()) != m_roots->end()) {
                 // found a root, start marking
                 llvm::CallGraphNode const *node = CG[&F];
                 visit(node);
@@ -285,7 +286,7 @@ std::unique_ptr<llvm::Module> load_libdevice(char const *filename, llvm::LLVMCon
 void write_libdevice(llvm::Module const *libdevice, char const *filename)
 {
     std::error_code error;
-    llvm::raw_fd_ostream Out(filename, error, llvm::sys::fs::OpenFlags::F_None);
+    llvm::raw_fd_ostream Out(filename, error, llvm::sys::fs::OF_None);
     if (error) {
         fprintf(stderr, "Error writing file: %s\n", error.message().c_str());
         return;

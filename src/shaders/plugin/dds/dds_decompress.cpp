@@ -93,7 +93,7 @@ bool Dxt_decompressor::alpha_enabled() const
 void Dxt_decompressor::decompress_blockline( const mi::Uint8* blocks, const mi::Uint32 block_y)
 {
     const mi::Uint8* src = blocks + block_y * m_blocks_x * get_bytes_per_block();
-    mi::Uint8* dest = &m_buffer[0];
+    mi::Uint8* dest = m_buffer.data();
 
     for( mi::Uint32 x = 0; x < m_blocks_x; ++x) {
         (this->*m_decompress_block)( src, dest);

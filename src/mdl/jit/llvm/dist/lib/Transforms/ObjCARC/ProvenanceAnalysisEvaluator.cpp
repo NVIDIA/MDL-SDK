@@ -1,11 +1,12 @@
 //===- ProvenanceAnalysisEvaluator.cpp - ObjC ARC Optimization ------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
+
+#ifdef LLVM_ENABLE_OBJC
 
 #include "ProvenanceAnalysis.h"
 #include "llvm/ADT/SetVector.h"
@@ -13,7 +14,9 @@
 #include "llvm/Analysis/Passes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/InstIterator.h"
+#include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Module.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -66,7 +69,6 @@ bool PAEval::runOnFunction(Function &F) {
 
   ProvenanceAnalysis PA;
   PA.setAA(&getAnalysis<AAResultsWrapperPass>().getAAResults());
-  const DataLayout &DL = F.getParent()->getDataLayout();
 
   for (Value *V1 : Values) {
     StringRef NameV1 = getName(V1);
@@ -75,7 +77,7 @@ bool PAEval::runOnFunction(Function &F) {
       if (NameV1 >= NameV2)
         continue;
       errs() << NameV1 << " and " << NameV2;
-      if (PA.related(V1, V2, DL))
+      if (PA.related(V1, V2))
         errs() << " are related.\n";
       else
         errs() << " are not related.\n";
@@ -92,3 +94,5 @@ INITIALIZE_PASS_BEGIN(PAEval, "pa-eval",
 INITIALIZE_PASS_DEPENDENCY(AAResultsWrapperPass)
 INITIALIZE_PASS_END(PAEval, "pa-eval",
                     "Evaluate ProvenanceAnalysis on all pairs", false, true)
+
+#endif

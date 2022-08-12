@@ -322,6 +322,8 @@ PREDEF_SYM_ALL(sym_min16uint,              SYM_TYPE_MIN16UINT,              "min
 PREDEF_SYM_ALL(sym_min10float,             SYM_TYPE_MIN10FLOAT,             "min10float")
 PREDEF_SYM_ALL(sym_min16float,             SYM_TYPE_MIN16FLOAT,             "min16float")
 
+PREDEF_SYM(    sym_string,                 SYM_TYPE_STRING,                 "string")
+
 PREDEF_SYM(    sym_sampler,                SYM_TYPE_SAMPLER,                "sampler")
 
 PREDEF_SYM(    sym_texture,                SYM_TYPE_TEXTURE,                "texture")
@@ -331,6 +333,8 @@ PREDEF_SYM(    sym_texture2d,              SYM_TYPE_TEXTURE2D,              "Tex
 PREDEF_SYM(    sym_texture2darray,         SYM_TYPE_TEXTURE2DARRAY,         "Texture2DArray")
 PREDEF_SYM(    sym_texture3d,              SYM_TYPE_TEXTURE3D,              "Texture3D")
 PREDEF_SYM(    sym_texturecube,            SYM_TYPE_TEXTURECUBE,            "TextureCube")
+
+PREDEF_SYM(    sym_template,               SYM_TYPE_TEMPLATE,               "param_t")
 
 // constants
 PREDEF_SYM(sym_cnst_true,  SYM_CNST_TRUE,  "true")

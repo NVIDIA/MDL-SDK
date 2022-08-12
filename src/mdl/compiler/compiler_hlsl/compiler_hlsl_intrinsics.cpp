@@ -145,6 +145,7 @@ struct HLSL_intrinsic {
 
 class Intrinsic_generator {
 
+public:
     /// Add all intrinsics.
     static void add_hlsl_intrinsics(Compilation_unit &unit)
     {
@@ -198,20 +199,56 @@ private:
     /// \param unit   the unit we generate intrinsics for.
     Intrinsic_generator(Compilation_unit &unit)
     : m_deftab(unit.get_definition_table())
+    , m_tf(unit.get_type_factory())
+    , m_st(unit.get_symbol_table())
     {
     }
 
 private:
     /// The definition table of the current unit.
     Definition_table &m_deftab;
+
+    /// The type factory of the current unit.
+    Type_factory &m_tf;
+
+    /// The symbol table of the current unit.
+    Symbol_table &m_st;
 };
 
 // Generate one intrinsic (with overloads).
+// TODO: Currently, we just define the function name in the definition table as a void function
+//       to avoid declaring variables or parameters with their names.
 void Intrinsic_generator::generate_intrinsic(HLSL_intrinsic const &intrinsic)
 {
+    // The function name is stored as first argument. Make sure, it exists.
+    if (intrinsic.uNumArgs == 0) {
+        MDL_ASSERT(!"HLSL intrinsic without function name");
+        return;
+    }
 
+    hlsl::Type* void_type = m_tf.get_void();
+
+    hlsl::Type_function* func_type = m_tf.get_function(
+        void_type, Array_ref<hlsl::Type_function::Parameter>());
+
+    m_deftab.enter_function_definition(
+        m_st.get_symbol(intrinsic.pArgs[0].pName),
+        func_type,
+        intrinsic.Sema,
+        NULL);
 }
 
+/// Add all HLSL intrinsics to the given compilation unit.
+void enter_hlsl_intrinsics(Compilation_unit &unit)
+{
+    Definition_table &dt = unit.get_definition_table();
+
+    // put the intrinsics in the predefined scope
+    {
+        Definition_table::Scope_transition trans(dt, dt.get_predef_scope());
+        Intrinsic_generator::add_hlsl_intrinsics(unit);
+    }
+}
 
 }  // hlsl
 }  // mdl

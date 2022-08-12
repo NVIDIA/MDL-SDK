@@ -58,9 +58,10 @@ class Image_api_impl
 public:
     /// Constructor.
     ///
-    /// Usually, \p image is \c NULL, in which case #start() and #stop() have to be used. If this
-    /// class is used by Plugin_api_impl below, then the #start() and #stop() calls would lead to
-    /// a cyclic module initialization, therefore it is provided directly as arguemnt in such cases.
+    /// Usually, \p image_module is \c NULL, in which case #start() and #stop() have to be used. If
+    /// this class is used by Plugin_api_impl below, then the #start() and #stop() calls would lead
+    /// to a cyclic module initialization, therefore it is provided directly as arguemnt in such
+    /// cases.
     Image_api_impl( IMAGE::Image_module* image_module);
 
     // public API methods
@@ -87,6 +88,10 @@ public:
         mi::Float32 gamma) const;
 
     mi::IArray* create_mipmaps( const mi::neuraylib::ICanvas* canvas, mi::Float32 gamma) const;
+
+    mi::neuraylib::ITile* clone_tile( const mi::neuraylib::ITile* tile) const;
+
+    mi::neuraylib::ICanvas* clone_canvas( const mi::neuraylib::ICanvas* canvas) const;
 
     mi::Sint32 read_raw_pixels(
         mi::Uint32 width,
@@ -132,8 +137,14 @@ public:
 
     bool supports_format_for_encoding( const char* image_format) const;
 
+    mi::neuraylib::ITile* convert(
+        const mi::neuraylib::ITile* tiles, const char* pixel_type) const;
+
     mi::neuraylib::ICanvas* convert(
         const mi::neuraylib::ICanvas* canvas, const char* pixel_type) const;
+
+    void adjust_gamma(
+        mi::neuraylib::ITile* tile, mi::Float32 old_gamma, mi::Float32 new_gamma) const;
 
     void adjust_gamma( mi::neuraylib::ICanvas* canvas, mi::Float32 new_gamma) const;
 

@@ -44,7 +44,6 @@
 #include <mi/neuraylib/istring.h>
 #include <mi/neuraylib/istructure_decl.h>
 
-#include <sstream>
 #include <boost/core/ignore_unused.hpp>
 #include <base/lib/log/i_log_assert.h>
 
@@ -135,11 +134,8 @@ mi::Size Structure_impl::get_length() const
 
 const char* Structure_impl::get_key( mi::Size index) const
 {
-    std::string key;
-    if( !index_to_key( index, key))
+    if( !index_to_key( index, m_cached_key))
         return nullptr;
-
-    m_cached_key = key;
     return m_cached_key.c_str();
 }
 
@@ -263,7 +259,7 @@ bool Structure_impl::key_to_index( const char* key, mi::Size& index) const
 {
     if( !key)
         return false;
-    std::map<std::string, mi::Size>::const_iterator it = m_key_to_index.find( key);
+    robin_hood::unordered_map<std::string, mi::Size>::const_iterator it = m_key_to_index.find( key);
     if( it == m_key_to_index.end())
         return false;
 
@@ -333,11 +329,8 @@ mi::Size Structure_impl_proxy::get_length() const
 
 const char* Structure_impl_proxy::get_key( mi::Size index) const
 {
-    std::string key;
-    if( !index_to_key( index, key))
+    if( !index_to_key( index, m_cached_key))
         return nullptr;
-
-    m_cached_key = key;
     return m_cached_key.c_str();
 }
 
@@ -370,12 +363,13 @@ const mi::base::IInterface* Structure_impl_proxy::get_value( mi::Size index) con
     if( index >= m_length)
         return nullptr;
 
-    std::ostringstream s;
-    s << m_attribute_name << "." << m_structure_decl->get_member_name( index);
+    std::string s(m_attribute_name);
+    s += '.';
+    s += m_structure_decl->get_member_name( index);
 
     mi::base::Handle<const IAttribute_context> attribute_context(
         m_owner->get_interface<IAttribute_context>());
-    return Attribute_set_impl_helper::get_attribute( attribute_context.get(), s.str());
+    return Attribute_set_impl_helper::get_attribute( attribute_context.get(), s);
 }
 
 mi::base::IInterface* Structure_impl_proxy::get_value( mi::Size index)
@@ -383,12 +377,13 @@ mi::base::IInterface* Structure_impl_proxy::get_value( mi::Size index)
     if( index >= m_length)
         return nullptr;
 
-    std::ostringstream s;
-    s << m_attribute_name << "." << m_structure_decl->get_member_name( index);
+    std::string s(m_attribute_name);
+    s += '.';
+    s += m_structure_decl->get_member_name( index);
 
     mi::base::Handle<const IAttribute_context> attribute_context(
         m_owner->get_interface<IAttribute_context>());
-    return Attribute_set_impl_helper::get_attribute( attribute_context.get(), s.str());
+    return Attribute_set_impl_helper::get_attribute( attribute_context.get(), s);
 }
 
 mi::Sint32 Structure_impl_proxy::set_value( const char* key, mi::base::IInterface* value)
@@ -481,7 +476,7 @@ bool Structure_impl_proxy::key_to_index( const char* key, mi::Size& index) const
 {
     if( !key)
         return false;
-    std::map<std::string, mi::Size>::const_iterator it = m_key_to_index.find( key);
+    robin_hood::unordered_map<std::string, mi::Size>::const_iterator it = m_key_to_index.find( key);
     if( it == m_key_to_index.end())
         return false;
 

@@ -1,9 +1,8 @@
 //===- ScheduleDAGVLIW.cpp - SelectionDAG list scheduler for VLIW -*- C++ -*-=//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -64,14 +63,13 @@ private:
   /// HazardRec - The hazard recognizer to use.
   ScheduleHazardRecognizer *HazardRec;
 
-  /// AA - AliasAnalysis for making memory reference queries.
-  AliasAnalysis *AA;
+  /// AA - AAResults for making memory reference queries.
+  AAResults *AA;
 
 public:
-  ScheduleDAGVLIW(MachineFunction &mf,
-                  AliasAnalysis *aa,
+  ScheduleDAGVLIW(MachineFunction &mf, AAResults *aa,
                   SchedulingPriorityQueue *availqueue)
-    : ScheduleDAGSDNodes(mf), AvailableQueue(availqueue), AA(aa) {
+      : ScheduleDAGSDNodes(mf), AvailableQueue(availqueue), AA(aa) {
     const TargetSubtargetInfo &STI = mf.getSubtarget();
     HazardRec = STI.getInstrInfo()->CreateTargetHazardRecognizer(&STI, this);
   }
@@ -118,7 +116,7 @@ void ScheduleDAGVLIW::releaseSucc(SUnit *SU, const SDep &D) {
 #ifndef NDEBUG
   if (SuccSU->NumPredsLeft == 0) {
     dbgs() << "*** Scheduling failed! ***\n";
-    SuccSU->dump(this);
+    dumpNode(*SuccSU);
     dbgs() << " has been released too many times!\n";
     llvm_unreachable(nullptr);
   }
@@ -152,7 +150,7 @@ void ScheduleDAGVLIW::releaseSuccessors(SUnit *SU) {
 /// the Available queue.
 void ScheduleDAGVLIW::scheduleNodeTopDown(SUnit *SU, unsigned CurCycle) {
   LLVM_DEBUG(dbgs() << "*** Scheduling [" << CurCycle << "]: ");
-  LLVM_DEBUG(SU->dump(this));
+  LLVM_DEBUG(dumpNode(*SU));
 
   Sequence.push_back(SU);
   assert(CurCycle >= SU->getDepth() && "Node scheduled above its depth!");

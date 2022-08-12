@@ -954,7 +954,7 @@ static void horizontal_rotate(
 {
     const Uint nb_horizontal_angles = horizontal_angles.size();
 
-    while(rotation + horizontal_angles[0] < -M_PI)
+    while(rotation + Dscalar(horizontal_angles[0]) < -M_PI)
         rotation += 2.0 * M_PI;
 
     const Scalar rotationf = Scalar(rotation);
@@ -1167,7 +1167,7 @@ static void remap_angles(
     else if(theta>Scalar(M_PI))
         theta = Scalar(M_PI);
 
-    d_theta = vertical_angles[nb_vertical_angles-2] / (vertical_resolution-1);
+    d_theta = vertical_angles[nb_vertical_angles-2] / Scalar(vertical_resolution-1);
 
     phi = horizontal_angles[1];                 // Omitting boundary angle (cp. add_boundary)
     horizontal_angles[0] -= phi;
@@ -1183,7 +1183,7 @@ static void remap_angles(
     while(phi>= Scalar(2.0*M_PI)) phi -= Scalar(2.0*M_PI);
     while(phi<  0.0f)             phi += Scalar(2.0*M_PI);
 
-    d_phi = horizontal_angles[nb_horizontal_angles-2] / (horizontal_resolution-1);
+    d_phi = horizontal_angles[nb_horizontal_angles-2] / Scalar(horizontal_resolution-1);
 }
 //
 // Compute linear interpolation to determine lighprofile values on a regular grid
@@ -1203,7 +1203,7 @@ static void compute_linear_interpolation(
 {
     const Uint nb_vertical_angles   = vertical_angles.size();
     const Uint nb_horizontal_angles = horizontal_angles.size();
-    grid_values.resize(horizontal_resolution*vertical_resolution, -1);
+    grid_values.resize((size_t)horizontal_resolution*vertical_resolution, -1);
 
     bool warning_output = false;
 
@@ -1333,7 +1333,7 @@ static void compute_cubic_interpolation(
     const Scalar eps = 0.00001f;
     const Uint nb_vertical_angles   = vertical_angles.size();
     const Uint nb_horizontal_angles = horizontal_angles.size();
-    grid_values.resize(horizontal_resolution*vertical_resolution);
+    grid_values.resize((size_t)horizontal_resolution*vertical_resolution);
 
     Scalar h_base[4];
     Scalar v_base[4];

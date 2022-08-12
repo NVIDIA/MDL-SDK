@@ -99,7 +99,7 @@ std::string Time::to_string_rfc_2822() const
     }
 
     char buffer[16];
-    snprintf(&buffer[0], sizeof(buffer), "%c%02d:%02d", minus?'-':'+', hours, minutes);
+    snprintf(buffer, sizeof(buffer), "%c%02d:%02d", minus?'-':'+', hours, minutes);
     result += buffer;
 
     return result;
@@ -118,8 +118,8 @@ std::string Time::to_string(const char* format, bool gmt) const
 #endif
 
     char buffer[1024];
-    size_t result = ::strftime(&buffer[0], sizeof(buffer), format, &time_stamp_tm);
-    return result > 0 ? std::string(buffer) : std::string("");
+    const size_t result = ::strftime(buffer, sizeof(buffer), format, &time_stamp_tm);
+    return result > 0 ? std::string(buffer) : std::string();
 }
 
 // Convert a time value to a readable string. The time value is considered being an interval and

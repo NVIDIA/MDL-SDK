@@ -40,8 +40,8 @@ export using ::base import texture_return;
 export using ::base import mono_mode;
 export using ::base import color_layer_mode;
 module [[
-	anno::version( 2, 0, 1),
-	anno::display_name("NVIDIA core definitions")
+    anno::version( 2, 0, 1),
+    anno::display_name("NVIDIA core definitions")
 ]];
 
 
@@ -164,27 +164,28 @@ export texture_return blend_colors(
     float weight = 1.
     [[
         anno::description("Defines strength of the effect. At weight 0, only color 1 will be visible. At weight 1, the blend function will have full effect."),
-        anno::display_name("Blend weight")
+        anno::display_name("Blend weight"),
+        anno::soft_range(0.0,1.0)
     ]],
-	uniform bool linear_blend = true
-	[[
+    uniform bool linear_blend = true
+    [[
         anno::description("The blend opperation can either be applied in linear or gamma (2.2) color space"),
         anno::display_name("Linear blend")
-	]]
+    ]]
 )
 [[
     anno::display_name("Blend colors"),
     anno::description("Allows combining textures and colors in varied ways"),
-	anno::thumbnail(".thumbs/blend_colors.png"),
-	anno::in_group("Texturing, high level"),
-	anno::ui_order(33),
+    anno::thumbnail(".thumbs/blend_colors.png"),
+    anno::in_group("Texturing, high level"),
+    anno::ui_order(33),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT)
 ]]
 {
-	color c1 = linear_blend? color_1: math::pow(color_1,0.45);
-	color c2 = linear_blend? color_2: math::pow(color_2,0.45);
-	float w = linear_blend? weight: math::pow(weight,0.45);
+    color c1 = linear_blend? color_1: math::pow(color_1,0.45);
+    color c2 = linear_blend? color_2: math::pow(color_2,0.45);
+    float w = linear_blend? weight: math::pow(weight,0.45);
     texture_return r = base::blend_color_layers(
         layers: base::color_layer[](
             base::color_layer(
@@ -194,7 +195,7 @@ export texture_return blend_colors(
                 )),
         base: c1
     );
-	return linear_blend? r: texture_return(math::pow(r.tint,2.2),math::pow(r.mono,2.2));
+    return linear_blend? r: texture_return(math::pow(r.tint,2.2),math::pow(r.mono,2.2));
 }
 
 export texture_return file_texture(
@@ -215,13 +216,15 @@ export texture_return file_texture(
     [[
         anno::display_name("Brightness"),
         anno::in_group("Bitmap parameters"),
-        anno::ui_order(2)
+        anno::ui_order(2),
+        anno::soft_range(0.0,1.0)
     ]],
     uniform float contrast = 1.
     [[
         anno::display_name("Contrast"),
         anno::in_group("Bitmap parameters"),
-        anno::ui_order(3)
+        anno::ui_order(3),
+        anno::soft_range(0.0,1.0)
     ]],
     uniform float2 scaling = float2(1.)
     [[
@@ -242,7 +245,8 @@ export texture_return file_texture(
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
         anno::in_group("Placement"),
-        anno::ui_order(6)
+        anno::ui_order(6),
+        anno::soft_range(0.0,360.0)
     ]],
     uniform bool clip = false
     [[
@@ -270,9 +274,9 @@ export texture_return file_texture(
 [[
     anno::display_name("Bitmap texture"),
     anno::description("Allows texturing using image files of various file formats"),
-	anno::thumbnail(".thumbs/file_texture.png"),
-	anno::in_group("Texturing, high level"),
-	anno::ui_order(30),
+    anno::thumbnail(".thumbs/file_texture.png"),
+    anno::in_group("Texturing, high level"),
+    anno::ui_order(30),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT)
 ]]
@@ -393,9 +397,9 @@ export texture_return perlin_noise_texture(
 [[
     anno::display_name("Perlin noise texture"),
     anno::description("Enable texturing with a random noise pattern"),
-	anno::thumbnail(".thumbs/perlin_noise_texture.png"),
-	anno::in_group("Texturing, high level"),
-	anno::ui_order(34),
+    anno::thumbnail(".thumbs/perlin_noise_texture.png"),
+    anno::in_group("Texturing, high level"),
+    anno::ui_order(34),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT)
 ]]
@@ -426,7 +430,8 @@ export float3 perlin_noise_bump_texture(
     [[
         anno::display_name("Bump strength"),
         anno::in_group("Noise parameters"),
-        anno::ui_order(0)
+        anno::ui_order(0),
+        anno::soft_range(0.0,5.0)
     ]],
     uniform float3 scaling = float3(10.)
     [[
@@ -498,9 +503,9 @@ export float3 perlin_noise_bump_texture(
 [[
     anno::display_name("Perlin noise texture -- bump mapping"),
     anno::description("Enable bump-map texturing with a random noise pattern"),
-	anno::thumbnail(".thumbs/perlin_noise_bump_texture.png"),
-	anno::in_group("Texturing, high level"),
-	anno::ui_order(35),
+    anno::thumbnail(".thumbs/perlin_noise_bump_texture.png"),
+    anno::in_group("Texturing, high level"),
+    anno::ui_order(35),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT)
 ]]
@@ -606,9 +611,9 @@ export texture_return worley_noise_texture(
 [[
     anno::display_name("Cellular noise texture"),
     anno::description("Allow texturing with a cell forming pattern"),
-	anno::thumbnail(".thumbs/worley_noise_texture.png"),
-	anno::in_group("Texturing, high level"),
-	anno::ui_order(36),
+    anno::thumbnail(".thumbs/worley_noise_texture.png"),
+    anno::in_group("Texturing, high level"),
+    anno::ui_order(36),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT)
 ]]
@@ -638,7 +643,8 @@ export float3 worley_noise_bump_texture(
     [[
         anno::display_name("Bump strength"),
         anno::in_group("Noise parameters"),
-        anno::ui_order(0)
+        anno::ui_order(0),
+        anno::soft_range(0.0,1.0)
     ]],
     uniform cell_base metric = circular_cells
     [[
@@ -702,9 +708,9 @@ export float3 worley_noise_bump_texture(
 [[
     anno::display_name("Cellular noise texture -- bump mapping"),
     anno::description("Allow texturing with a cell forming pattern"),
-	anno::thumbnail(".thumbs/worley_noise_bump_texture.png"),
-	anno::in_group("Texturing, high level"),
-	anno::ui_order(37),
+    anno::thumbnail(".thumbs/worley_noise_bump_texture.png"),
+    anno::in_group("Texturing, high level"),
+    anno::ui_order(37),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT)
 ]]
@@ -775,37 +781,42 @@ export texture_return flow_noise_texture(
     [[
         anno::display_name("Phase offset"),
         anno::description("Controls the third dimension of the function"),
-        anno::in_group("Noise parameters")
-        ,
-        anno::ui_order(5)
+        anno::in_group("Noise parameters"),
+
+        anno::ui_order(5),
+        anno::soft_range(0.0,1.0)
     ]],
     uniform float level_gain = 0.5
     [[
         anno::display_name("Level intensity gain"),
         anno::description("If multiple levels are used, this parameter specifies a weighting factor for subsequent levels"),
         anno::in_group("Noise parameters"),
-        anno::ui_order(6)
+        anno::ui_order(6),
+        anno::soft_range(0.0,1.0)
     ]],
     uniform float level_scale = 2.0
     [[
         anno::display_name("Level scaling"),
         anno::description("If multiple levels are used, this parameter specifies a global scaling factor for subsequent levels"),
         anno::in_group("Noise parameters"),
-        anno::ui_order(7)
+        anno::ui_order(7),
+        anno::soft_range(0.0,4.0)
     ]],
     uniform float level_progressive_u_scale = 1.
     [[
         anno::display_name("Progressive u scale"),
         anno::description("If multiple levels are used, this parameter specifies an additional scaling factor in the \"u\" direction"),
         anno::in_group("Noise parameters"),
-        anno::ui_order(8)
+        anno::ui_order(8),
+        anno::soft_range(0.0,1.0)
     ]],
     uniform float level_progressive_v_motion = 0.
     [[
         anno::display_name("Progressive v offset"),
         anno::description("If multiple levels are used, this parameter specifies an offset for subsequent levels in the \"v\" direction"),
         anno::in_group("Noise parameters"),
-        anno::ui_order(9)
+        anno::ui_order(9),
+        anno::soft_range(0.0,1.0)
     ]],
     uniform float3 scaling = float3(10.)
     [[
@@ -831,9 +842,9 @@ export texture_return flow_noise_texture(
 [[
     anno::display_name("Flow noise texture"),
     anno::description("Allow texturing with a 2D noise pattern suitable for waves"),
-	anno::thumbnail(".thumbs/flow_noise_texture.png"),
-	anno::in_group("Texturing, high level"),
-	anno::ui_order(38),
+    anno::thumbnail(".thumbs/flow_noise_texture.png"),
+    anno::in_group("Texturing, high level"),
+    anno::ui_order(38),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT)
 ]]
@@ -866,7 +877,8 @@ export float3 flow_noise_bump_texture(
     [[
         anno::display_name("Bump strength"),
         anno::in_group("Noise parameters"),
-        anno::ui_order(0)
+        anno::ui_order(0),
+        anno::soft_range(0.0,1.0)
     ]],
     uniform float3 scaling = float3(10.)
     [[
@@ -909,35 +921,40 @@ export float3 flow_noise_bump_texture(
         anno::display_name("Phase offset"),
         anno::description("Controls the 3rd dimension of the function"),
         anno::in_group("Noise parameters"),
-        anno::ui_order(3)
+        anno::ui_order(3),
+        anno::soft_range(0.0,1.0)
     ]],
     uniform float level_gain = 0.5
     [[
         anno::display_name("Level intensity gain"),
         anno::description("If multiple levels are used, this parameter specifies a weighting factor for subsequent levels"),
         anno::in_group("Noise parameters"),
-        anno::ui_order(4)
+        anno::ui_order(4),
+        anno::soft_range(0.0,1.0)
     ]],
     uniform float level_scale = 2.0
     [[
         anno::display_name("Level scaling"),
         anno::description("If multiple levels are used, this parameter specifies a global scaling factor for subsequent levels"),
         anno::in_group("Noise parameters"),
-        anno::ui_order(5)
+        anno::ui_order(5),
+        anno::soft_range(0.0,4.0)
     ]],
     uniform float level_progressive_u_scale = 1.
     [[
         anno::display_name("Progressive u scale"),
         anno::description("If multiple levels are used, this parameter specifies an additional scaling factor in the \"u\" direction"),
         anno::in_group("Noise parameters"),
-        anno::ui_order(6)
+        anno::ui_order(6),
+        anno::soft_range(0.0,1.0)
     ]],
     uniform float level_progressive_v_motion = 0.
     [[
         anno::display_name("Progressive v offset"),
         anno::description("If multiple levels are used, this parameter specifies an offset for subsequent levels in the \"v\" direction"),
         anno::in_group("Noise parameters"),
-        anno::ui_order(7)
+        anno::ui_order(7),
+        anno::soft_range(0.0,1.0)
     ]],
     uniform float3 translation = float3(0.)
     [[
@@ -956,9 +973,9 @@ export float3 flow_noise_bump_texture(
 [[
     anno::display_name("Flow noise texture -- bump mapping"),
     anno::description("Allow texturing with a 2D noise pattern suitable for waves"),
-	anno::thumbnail(".thumbs/flow_noise_bump_texture.png"),
-	anno::in_group("Texturing, high level"),
-	anno::ui_order(39),
+    anno::thumbnail(".thumbs/flow_noise_bump_texture.png"),
+    anno::in_group("Texturing, high level"),
+    anno::ui_order(39),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT)
 ]]
@@ -1045,9 +1062,9 @@ export texture_return checker_texture(
 [[
     anno::display_name("3D checker texture"),
     anno::description("Allows texturing a checkerboard pattern"),
-	anno::thumbnail(".thumbs/checker_texture.png"),
-	anno::in_group("Texturing, high level"),
-	anno::ui_order(40),
+    anno::thumbnail(".thumbs/checker_texture.png"),
+    anno::in_group("Texturing, high level"),
+    anno::ui_order(40),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT)
 ]]
@@ -1074,7 +1091,8 @@ export float3 checker_bump_texture(
     [[
         anno::display_name("Bump strength"),
         anno::in_group("Checker parameters"),
-        anno::ui_order(0)
+        anno::ui_order(0),
+        anno::soft_range(0.0,1.0)
     ]],
     uniform float blur = 0
     [[
@@ -1123,9 +1141,9 @@ export float3 checker_bump_texture(
 [[
     anno::display_name("3D checker texture -- bump mapping"),
     anno::description("Allows texturing a checkerboard pattern"),
-	anno::thumbnail(".thumbs/checker_bump_texture.png"),
-	anno::in_group("Texturing, high level"),
-	anno::ui_order(41),
+    anno::thumbnail(".thumbs/checker_bump_texture.png"),
+    anno::in_group("Texturing, high level"),
+    anno::ui_order(41),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT)
 ]]
@@ -1179,7 +1197,8 @@ export float3 file_bump_texture(
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
         anno::in_group("Placement"),
-        anno::ui_order(6)
+        anno::ui_order(6),
+        anno::soft_range(0.0,360.0)
     ]],
     uniform bool clip = false
     [[
@@ -1193,7 +1212,8 @@ export float3 file_bump_texture(
     [[
         anno::display_name("Bump strength"),
         anno::in_group("Bitmap parameters"),
-        anno::ui_order(3)
+        anno::ui_order(3),
+        anno::soft_range(0.0,1.0)
     ]],
     uniform int texture_space = 0
     [[
@@ -1207,9 +1227,9 @@ export float3 file_bump_texture(
 [[
     anno::display_name("Bitmap texture, bump"),
     anno::description("Allows texturing using image files of various file formats"),
-	anno::thumbnail(".thumbs/file_bump_texture.png"),
-	anno::in_group("Texturing, high level"),
-	anno::ui_order(31),
+    anno::thumbnail(".thumbs/file_bump_texture.png"),
+    anno::in_group("Texturing, high level"),
+    anno::ui_order(31),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT)
 ]]
@@ -1258,7 +1278,8 @@ export float3 normalmap_texture(
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
         anno::in_group("Placement"),
-        anno::ui_order(6)
+        anno::ui_order(6),
+        anno::soft_range(0.0,360.0)
     ]],
     uniform bool clip = false
     [[
@@ -1272,7 +1293,8 @@ export float3 normalmap_texture(
     [[
         anno::display_name("Strength"),
         anno::in_group("Normal map parameters"),
-        anno::ui_order(2)
+        anno::ui_order(2),
+        anno::soft_range(0.0,1.0)
     ]],
     uniform int texture_space = 0
     [[
@@ -1282,8 +1304,8 @@ export float3 normalmap_texture(
         anno::in_group("Placement"),
         anno::ui_order(3)
     ]],
-	uniform bool flip = false    
-	[[
+    uniform bool flip = false
+    [[
         anno::description("Flip handedness of the tangent space"),
         anno::display_name("Flip V"),
         anno::in_group("Placement"),
@@ -1293,9 +1315,9 @@ export float3 normalmap_texture(
 [[
     anno::display_name("Normal map texture"),
     anno::description("Allows the use of tangent space normal maps"),
-	anno::thumbnail(".thumbs/normalmap_texture.png"),
-	anno::in_group("Texturing, high level"),
-	anno::ui_order(32),
+    anno::thumbnail(".thumbs/normalmap_texture.png"),
+    anno::in_group("Texturing, high level"),
+    anno::ui_order(32),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT)
 ]]
@@ -1313,7 +1335,7 @@ export float3 normalmap_texture(
         ),
         wrap_u: clip?tex::wrap_clamp:tex::wrap_repeat,
         wrap_v: clip?tex::wrap_clamp:tex::wrap_repeat,
-		flip_tangent_v: flip,
+        flip_tangent_v: flip,
         clip: clip
     );
 }
@@ -1321,32 +1343,34 @@ export float3 normalmap_texture(
 // http://blog.selfshadow.com/publications/blending-in-detail/
 export float3 blend_normals(
     float3 base_normal = state::normal()
-        [[
-            anno::description("The base normal")
-        ]],
+    [[
+        anno::description("The base normal")
+    ]],
     float base_normal_weight = 1.0f
-        [[
-            anno::description("Specifies the strength of the base normal using a linear blend between state::normal and \"base_normal\"")
-        ]],
+    [[
+        anno::description("Specifies the strength of the base normal using a linear blend between state::normal and \"base_normal\""),
+        anno::soft_range(0.0,1.0)
+    ]],
     float3 detail_normal = state::normal()
-        [[
-            anno::description("The detail normal")
-        ]],
+    [[
+        anno::description("The detail normal")
+    ]],
     float detail_normal_weight = 1.0f
-        [[
-            anno::description("Specifies the strength of the detail normal using a linear blend between state::normal and \"detail_normal\"")
-        ]]
+    [[
+        anno::description("Specifies the strength of the detail normal using a linear blend between state::normal and \"detail_normal\""),
+        anno::soft_range(0.0,1.0)
+    ]]
 )
 [[
     anno::description("Blend two normals or apply a detail normal map"),
     anno::display_name("Blend normals"),
-	anno::thumbnail(".thumbs/blend_normals.png"),
-	anno::in_group("Texturing, high level"),
-	anno::ui_order(33),
+    anno::thumbnail(".thumbs/blend_normals.png"),
+    anno::in_group("Texturing, high level"),
+    anno::ui_order(33),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT)]]
 {
-	return base::blend_normals(base_normal,base_normal_weight,detail_normal,detail_normal_weight);
+    return base::blend_normals(base_normal,base_normal_weight,detail_normal,detail_normal_weight);
 }
 
 //endgroup
@@ -1376,9 +1400,9 @@ export material diffuse(
 [[
     anno::display_name("Simple diffuse"),
     anno::description("A basic diffuse material"),
-	anno::thumbnail(".thumbs/diffuse.png"),
-	anno::in_group("Materials"),
-	anno::ui_order(0),
+    anno::thumbnail(".thumbs/diffuse.png"),
+    anno::in_group("Materials"),
+    anno::ui_order(0),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
@@ -1437,9 +1461,9 @@ export material scratched_metal_v2(
 [[
     anno::display_name("Metal"),
     anno::description("A metallic material with stretched reflections"),
-	anno::thumbnail(".thumbs/scratched_metal.png"),
- 	anno::in_group("Materials"),
-	anno::ui_order(1),
+    anno::thumbnail(".thumbs/scratched_metal.png"),
+    anno::in_group("Materials"),
+    anno::ui_order(1),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
@@ -1529,9 +1553,9 @@ export material scratched_plastic_v2(
 [[
     anno::display_name("Plastic"),
     anno::description("A basic dielectric, works for everything opaque that is not metallic. Supports stretched highlights."),
-	anno::thumbnail(".thumbs/scratched_plastic.png"),
-	anno::in_group("Materials"),
-	anno::ui_order(2),
+    anno::thumbnail(".thumbs/scratched_plastic.png"),
+    anno::in_group("Materials"),
+    anno::ui_order(2),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
@@ -1614,9 +1638,9 @@ export material retroreflective(
 [[
     anno::display_name("Retroreflective"),
     anno::description("A material with a retroreflective component, works well for road signs and retroreflective stickers"),
-	anno::thumbnail(".thumbs/retroreflective.png"),
-	anno::in_group("Materials"),
-	anno::ui_order(3),
+    anno::thumbnail(".thumbs/retroreflective.png"),
+    anno::in_group("Materials"),
+    anno::ui_order(3),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
@@ -1774,10 +1798,10 @@ export material flex_material_v2(
 [[
     anno::display_name("Flexible material model"),
     anno::description("A complex material that can be configured to a wide variety of looks"),
-	anno::thumbnail(".thumbs/flex_material.png"),
+    anno::thumbnail(".thumbs/flex_material.png"),
     anno::author("NVIDIA Corporation"),
-	anno::in_group("Materials"),
-	anno::ui_order(5),
+    anno::in_group("Materials"),
+    anno::ui_order(5),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(complex_material),
     anno::key_words(string[]("generic","complex"))
@@ -1811,21 +1835,21 @@ export material flex_material_v2(
         normal: normal
     );
     bsdf add_reflection = df::weighted_layer(
-		is_metal,
-		df::weighted_layer(
-			weight: reflectivity,
-			layer: df::directional_factor(base_color,color(1.0),5.,glossy_bsdf),
-			base: add_transparency,
-			normal: normal
-		),
-		df::fresnel_layer(
-			ior: ior,
-			weight: reflectivity,
-			layer: glossy_bsdf,
-			base: add_transparency,
-			normal: normal
-		)
-	);
+        is_metal,
+        df::weighted_layer(
+            weight: reflectivity,
+            layer: df::directional_factor(base_color,color(1.0),5.,glossy_bsdf),
+            base: add_transparency,
+            normal: normal
+        ),
+        df::fresnel_layer(
+            ior: ior,
+            weight: reflectivity,
+            layer: glossy_bsdf,
+            base: add_transparency,
+            normal: normal
+        )
+    );
     bsdf add_normal = df::weighted_layer(
         normal: normal,
         weight: 1.,
@@ -1869,9 +1893,9 @@ export material thin_glass_v2(
 [[
     anno::display_name("Thin glass"),
     anno::description("A basic transmissive dielectric without refraction or volume"),
-	anno::thumbnail(".thumbs/thin_glass.png"),
-	anno::in_group("Materials"),
-	anno::ui_order(6),
+    anno::thumbnail(".thumbs/thin_glass.png"),
+    anno::in_group("Materials"),
+    anno::ui_order(6),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
@@ -1942,9 +1966,9 @@ export material thin_translucent_v2(
 [[
     anno::display_name("Thin translucent"),
     anno::description("A diffuse transmissive dielectric material"),
-	anno::thumbnail(".thumbs/thin_translucent.png"),
-	anno::in_group("Materials"),
-	anno::ui_order(7),
+    anno::thumbnail(".thumbs/thin_translucent.png"),
+    anno::in_group("Materials"),
+    anno::ui_order(7),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
@@ -2035,9 +2059,9 @@ export material thick_glass_v2(
 [[
     anno::display_name("Thick glass"),
     anno::description("A basic transmissive dielectric with refraction and coloring in the volume"),
-	anno::thumbnail(".thumbs/thick_glass.png"),
-	anno::in_group("Materials"),
-	anno::ui_order(8),
+    anno::thumbnail(".thumbs/thick_glass.png"),
+    anno::in_group("Materials"),
+    anno::ui_order(8),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
@@ -2140,9 +2164,9 @@ export material thick_translucent_v2(
 [[
     anno::display_name("Thick translucent"),
     anno::description("A subsurface scattering material"),
-	anno::thumbnail(".thumbs/thick_translucent.png"),
-	anno::in_group("Materials"),
-	anno::ui_order(9),
+    anno::thumbnail(".thumbs/thick_translucent.png"),
+    anno::in_group("Materials"),
+    anno::ui_order(9),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
@@ -2206,9 +2230,9 @@ export material blend(
 [[
     anno::display_name("Surface blender"),
     anno::description("Blend surface characteristics of 2 materials or mask them using a texture"),
-	anno::thumbnail(".thumbs/blend.png"),
-	anno::in_group("Materials, modifiers"),
-	anno::ui_order(15),
+    anno::thumbnail(".thumbs/blend.png"),
+    anno::in_group("Materials, modifiers"),
+    anno::ui_order(15),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(combiner_material),
@@ -2262,9 +2286,9 @@ export material surface_falloff(
 [[
     anno::display_name("Surface falloff"),
     anno::description("Blend surface characteristics of 2 materials or mask them using a texture"),
-	anno::thumbnail(".thumbs/surface_falloff.png"),
-	anno::in_group("Materials, modifiers"),
-	anno::ui_order(15),
+    anno::thumbnail(".thumbs/surface_falloff.png"),
+    anno::in_group("Materials, modifiers"),
+    anno::ui_order(15),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(combiner_material),
@@ -2274,9 +2298,9 @@ export material surface_falloff(
     surface: material_surface(
         scattering: df::custom_curve_layer(
             weight: 1.,
-			exponent: blend_bias,
-			normal_reflectivity: facing_weight,
-			grazing_reflectivity: edge_weight,
+            exponent: blend_bias,
+            normal_reflectivity: facing_weight,
+            grazing_reflectivity: edge_weight,
             layer: blend.surface.scattering,
             base: base.surface.scattering
         ),
@@ -2333,9 +2357,9 @@ export material apply_clearcoat_v2(
     anno::display_name("Apply clear coating"),
     anno::description("Apply clear coat to an existing material"),
     anno::author("NVIDIA Corporation"),
-	anno::thumbnail(".thumbs/apply_clearcoat.png"),
-	anno::in_group("Materials, modifiers"),
-	anno::ui_order(16),
+    anno::thumbnail(".thumbs/apply_clearcoat.png"),
+    anno::in_group("Materials, modifiers"),
+    anno::ui_order(16),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(modifier_material),
     anno::key_words(string[]("modifier","generic","coating"))
@@ -2385,9 +2409,9 @@ export material apply_thinfilm(
 [[
     anno::display_name("Apply thin film"),
     anno::description("Apply thin film to an existing material"),
-	anno::thumbnail(".thumbs/apply_thinfilm.png"),
-	anno::in_group("Materials, modifiers"),
-	anno::ui_order(17),
+    anno::thumbnail(".thumbs/apply_thinfilm.png"),
+    anno::in_group("Materials, modifiers"),
+    anno::ui_order(17),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(modifier_material),
@@ -2445,9 +2469,9 @@ export material apply_metalcoat_v2(
 [[
     anno::display_name("Apply thin metal coating"),
     anno::description("Apply metal coat to an existing material"),
-	anno::thumbnail(".thumbs/apply_metalcoat.png"),
-	anno::in_group("Materials, modifiers"),
-	anno::ui_order(18),
+    anno::thumbnail(".thumbs/apply_metalcoat.png"),
+    anno::in_group("Materials, modifiers"),
+    anno::ui_order(18),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(modifier_material),
@@ -2507,9 +2531,9 @@ export material apply_dustcover(
 [[
     anno::display_name("Apply a cover of dust"),
     anno::description("Apply a diffuse cover of dust or dirt"),
-	anno::thumbnail(".thumbs/apply_dustcover.png"),
-	anno::in_group("Materials, modifiers"),
-	anno::ui_order(19),
+    anno::thumbnail(".thumbs/apply_dustcover.png"),
+    anno::in_group("Materials, modifiers"),
+    anno::ui_order(19),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(modifier_material),
@@ -2573,10 +2597,10 @@ export material apply_colorfalloff_v2(
 [[
     anno::display_name("Apply a color falloff"),
     anno::description("Makes the color view dependent"),
-	anno::thumbnail(".thumbs/apply_colorfalloff.png"),
+    anno::thumbnail(".thumbs/apply_colorfalloff.png"),
     anno::author("NVIDIA Corporation"),
-	anno::in_group("Materials, modifiers"),
-	anno::ui_order(20),
+    anno::in_group("Materials, modifiers"),
+    anno::ui_order(20),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(modifier_material),
     anno::key_words(string[]("modifier","generic","coating"))
@@ -2639,9 +2663,9 @@ export material apply_metallicflakes(
 [[
     anno::display_name("Apply flake coating"),
     anno::description("Apply layer of metallic flakes to an existing material"),
-	anno::thumbnail(".thumbs/apply_metallicflakes.png"),
-	anno::in_group("Materials, modifiers"),
-	anno::ui_order(21),
+    anno::thumbnail(".thumbs/apply_metallicflakes.png"),
+    anno::in_group("Materials, modifiers"),
+    anno::ui_order(21),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(modifier_material),
@@ -2742,10 +2766,10 @@ export material flake_paint(
 [[
     anno::display_name("Flaky paint"),
     anno::description("A multi layer paint material containing flakes"),
-	anno::thumbnail(".thumbs/flake_paint.png"),
+    anno::thumbnail(".thumbs/flake_paint.png"),
     anno::author("NVIDIA Corporation"),
-	anno::in_group("Materials"),
-	anno::ui_order(14),
+    anno::in_group("Materials"),
+    anno::ui_order(14),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(complex_material),
     anno::key_words(string[]("complex","carpaint"))
@@ -2800,9 +2824,9 @@ export material add_cutout(
 ) [[
     anno::display_name("Add cut-outs"),
     anno::description("Adds cut-outs to existing materials. Also forces material to be thin-walled. Good for modeling leaves, grass or fences."),
-	anno::thumbnail(".thumbs/add_cutout.png"),
-	anno::in_group("Materials, modifiers"),
-	anno::ui_order(22),
+    anno::thumbnail(".thumbs/add_cutout.png"),
+    anno::in_group("Materials, modifiers"),
+    anno::ui_order(22),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(modifier_material),
@@ -2869,10 +2893,10 @@ export material add_simple_sticker(
 ) [[
     anno::display_name("Add simple sticker"),
     anno::description("A quick way for adding simple stickers to a material. The sticker is a simple dielectric and needs a mask to define its extent."),
-	anno::thumbnail(".thumbs/add_simple_sticker.png"),
+    anno::thumbnail(".thumbs/add_simple_sticker.png"),
     anno::author("NVIDIA Corporation"),
-	anno::in_group("Materials, modifiers"),
-	anno::ui_order(23),
+    anno::in_group("Materials, modifiers"),
+    anno::ui_order(23),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(modifier_material),
     anno::key_words(string[]("modifier","generic"))
@@ -2913,10 +2937,10 @@ export material add_globalbump(
 ) [[
     anno::display_name("Add global bumpmap"),
     anno::description("Adds global bumpmap to existing materials. Local bump map of the base material is preserved."),
-	anno::thumbnail(".thumbs/add_globalbump.png"),
+    anno::thumbnail(".thumbs/add_globalbump.png"),
     anno::author("NVIDIA Corporation"),
-	anno::in_group("Materials, modifiers"),
-	anno::ui_order(24),
+    anno::in_group("Materials, modifiers"),
+    anno::ui_order(24),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(modifier_material),
     anno::key_words(string[]("modifier","generic"))
@@ -2951,10 +2975,10 @@ export material add_displacement(
 ) [[
     anno::display_name("Add displacement"),
     anno::description("Adds displacement to existing materials"),
-	anno::thumbnail(".thumbs/add_displacement.png"),
+    anno::thumbnail(".thumbs/add_displacement.png"),
     anno::author("NVIDIA Corporation"),
-	anno::in_group("Materials, modifiers"),
-	anno::ui_order(25),
+    anno::in_group("Materials, modifiers"),
+    anno::ui_order(25),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(modifier_material),
     anno::key_words(string[]("modifier","generic"))
@@ -3000,18 +3024,18 @@ export material add_emission(
 ) [[
     anno::display_name("Add emission"),
     anno::description("Adds emission to a material"),
-	anno::thumbnail(".thumbs/add_emission.png"),
+    anno::thumbnail(".thumbs/add_emission.png"),
     anno::author("NVIDIA Corporation"),
-	anno::in_group("Materials, modifiers"),
-	anno::ui_order(26),
+    anno::in_group("Materials, modifiers"),
+    anno::ui_order(26),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(modifier_material),
     suitable_as_light(),
     anno::key_words(string[]("modifier","generic"))
-]] = 
+]] =
 let {
     uniform float unit_intensity = (unit==lumen || unit==lumen_m2)?intensity:intensity*math::PI; //diffuse emission is per projected hemisphere
-    uniform intensity_mode imode = (unit==lumen || unit==candela)?intensity_power:intensity_radiant_exitance;    
+    uniform intensity_mode imode = (unit==lumen || unit==candela)?intensity_power:intensity_radiant_exitance;
 }
 in material(
     surface: material_surface(
@@ -3052,18 +3076,18 @@ export material add_thermal_emission(
 ) [[
     anno::display_name("Add thermal emission"),
     anno::description("Adds emission to a material, color is based on a \"color temperature\""),
-	anno::thumbnail(".thumbs/add_thermal_emission.png"),
+    anno::thumbnail(".thumbs/add_thermal_emission.png"),
     anno::author("NVIDIA Corporation"),
-	anno::in_group("Materials, modifiers"),
-	anno::ui_order(27),
+    anno::in_group("Materials, modifiers"),
+    anno::ui_order(27),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(modifier_material),
     suitable_as_light(),
     anno::key_words(string[]("modifier","generic"))
-]] = 
+]] =
 let {
     uniform float unit_intensity = (unit==lumen || unit==lumen_m2)?intensity:intensity*math::PI; //diffuse emission is per projected hemisphere
-    uniform intensity_mode imode = (unit==lumen || unit==candela)?intensity_power:intensity_radiant_exitance;    
+    uniform intensity_mode imode = (unit==lumen || unit==candela)?intensity_power:intensity_radiant_exitance;
     color emission_color = math::blackbody(temperature);
 
     color scaled_intensity = unit_intensity * (emission_color / math::luminance(emission_color));}
@@ -3072,7 +3096,7 @@ in material(
         scattering: base.surface.scattering,
         emission: material_emission(
             emission: df::diffuse_edf(),
-            intensity: scaled_intensity, 
+            intensity: scaled_intensity,
             mode: imode
         )
     ),
@@ -3112,18 +3136,18 @@ export material light_omni (
 ) [[
     anno::display_name("Diffuse emission"),
     anno::description("Emissive material emitting in all directions"),
-	anno::thumbnail(".thumbs/light_omni.png"),
+    anno::thumbnail(".thumbs/light_omni.png"),
     anno::author("NVIDIA Corporation"),
-	anno::in_group("Materials, lights"),
-	anno::ui_order(5000),
-	anno::hidden(),
+    anno::in_group("Materials, lights"),
+    anno::ui_order(5000),
+    anno::hidden(),
     anno::copyright_notice(COPYRIGHT),
     anno::key_words(string[]("lightsource")),
     suitable_as_light()
-]] = 
+]] =
 let{
     uniform float unit_intensity = (unit==lumen || unit==lumen_m2)?intensity:intensity*math::PI; //diffuse emission is per projected hemisphere
-    uniform intensity_mode imode = (unit==lumen || unit==candela)?intensity_power:intensity_radiant_exitance;    
+    uniform intensity_mode imode = (unit==lumen || unit==candela)?intensity_power:intensity_radiant_exitance;
 } in material (
     surface: material_surface (
         emission: material_emission (
@@ -3164,25 +3188,25 @@ export material light_spot (
 ) [[
     anno::display_name("Spotlight emission"),
     anno::description("Emissive material emitting focused in one direction"),
-	anno::thumbnail(".thumbs/light_spot.png"),
+    anno::thumbnail(".thumbs/light_spot.png"),
     anno::author("NVIDIA Corporation"),
-	anno::in_group("Materials, lights"),
-	anno::hidden(),
-	anno::ui_order(5051),
+    anno::in_group("Materials, lights"),
+    anno::hidden(),
+    anno::ui_order(5051),
     anno::copyright_notice(COPYRIGHT),
     anno::key_words(string[]("lightsource")),
     suitable_as_light()
-]]  = 
+]]  =
 let{
     //since this is a spotlight, we need the apex angle to convert from candela to lumen
-    //http://www.compuphase.com/electronics/candela_lumen.htm 
+    //http://www.compuphase.com/electronics/candela_lumen.htm
     //uniform float cos_apexangle_2 = math::pow(0.5,1./spot_exponent); //spot exponent 0 ->4pi
     //uniform float apexfactor = 2*math::PI*(1.0-cos_apexangle_2);
 
     //correct integral
     uniform float factor = (spot_exponent == 0)? 4*math::PI: 2*math::PI/(spot_exponent+1);
-    uniform float unit_intensity = (unit==lumen || unit==lumen_m2)?intensity:intensity*factor; 
-    uniform intensity_mode imode = (unit==lumen || unit==candela)?intensity_power:intensity_radiant_exitance;    
+    uniform float unit_intensity = (unit==lumen || unit==lumen_m2)?intensity:intensity*factor;
+    uniform intensity_mode imode = (unit==lumen || unit==candela)?intensity_power:intensity_radiant_exitance;
 } in  material (
     surface: material_surface (
         emission:  material_emission (
@@ -3218,11 +3242,11 @@ export material light_ies (
 ) [[
     anno::display_name("IES file based emission"),
     anno::description("Emissive material emitting as described in an IES file"),
-	anno::thumbnail(".thumbs/light_ies.png"),
+    anno::thumbnail(".thumbs/light_ies.png"),
     anno::author("NVIDIA Corporation"),
-	anno::in_group("Materials, lights"),
-	anno::hidden(),
-	anno::ui_order(5052),
+    anno::in_group("Materials, lights"),
+    anno::hidden(),
+    anno::ui_order(5052),
     anno::copyright_notice(COPYRIGHT),
     anno::key_words(string[]("lightsource")),
     suitable_as_light()
@@ -3241,7 +3265,7 @@ export material light_ies (
 
 //deprecated functionality===========================================================================================
 export annotation ui_position(int position);
-export annotation typical_object_size(float size); 
+export annotation typical_object_size(float size);
 
 export material metal(
     color metal_color = color(.9)
@@ -3270,10 +3294,10 @@ export material metal(
 [[
     anno::display_name("Simple metal, deprecated"),
     anno::description("A basic metallic material"),
-	anno::thumbnail(".thumbs/metal.png"),
+    anno::thumbnail(".thumbs/metal.png"),
     anno::author("NVIDIA Corporation"),
     anno::hidden(),
-	//anno::deprecated("Use scratched_metal_v2"),
+    //anno::deprecated("Use scratched_metal_v2"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
     anno::key_words(string[]("generic","metal"))
@@ -3330,10 +3354,10 @@ export material plastic(
 [[
     anno::display_name("Simple plastic, deprecated"),
     anno::description("A basic dielectric, works for everything opaque that is not metallic"),
-	anno::thumbnail(".thumbs/plastic.png"),
+    anno::thumbnail(".thumbs/plastic.png"),
     anno::author("NVIDIA Corporation"),
     anno::hidden(),
-	//anno::deprecated("Use scratched_plastic_v2"),
+    //anno::deprecated("Use scratched_plastic_v2"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
     anno::key_words(string[]("generic","dielectric","plastic","wood","stone"))
@@ -3402,9 +3426,9 @@ export material scratched_metal(
 [[
     anno::display_name("Metal , deprecated"),
     anno::description("A metallic material with stretched reflections"),
-	anno::thumbnail(".thumbs/scratched_metal.png"),
+    anno::thumbnail(".thumbs/scratched_metal.png"),
     anno::hidden(),
-	//anno::deprecated("Use scratched_metal_v2 instead"),
+    //anno::deprecated("Use scratched_metal_v2 instead"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
@@ -3494,9 +3518,9 @@ export material scratched_plastic(
 [[
     anno::display_name("Plastic, deprecated"),
     anno::description("A basic dielectric, works for everything opaque that is not metallic. Supports stretched highlights."),
-	anno::thumbnail(".thumbs/scratched_plastic.png"),
+    anno::thumbnail(".thumbs/scratched_plastic.png"),
     anno::hidden(),
-	//anno::deprecated("Use scratched_plastic_v2 instead"),
+    //anno::deprecated("Use scratched_plastic_v2 instead"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
@@ -3572,9 +3596,9 @@ export material apply_colorfalloff(
     anno::description("Makes the color view dependent"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
-	anno::thumbnail(".thumbs/apply_colorfalloff.png"),
+    anno::thumbnail(".thumbs/apply_colorfalloff.png"),
     anno::hidden(),
-	//anno::deprecated("Use apply_colorfalloff_v2 instead"),
+    //anno::deprecated("Use apply_colorfalloff_v2 instead"),
     type_of_material(modifier_material),
     anno::key_words(string[]("modifier","generic","coating"))
 ]]
@@ -3719,9 +3743,9 @@ export material flex_material(
 [[
     anno::display_name("Flexible material model, deprecated"),
     anno::description("A complex material that can be configured to a wide variety of looks"),
-	anno::thumbnail(".thumbs/flex_material.png"),
+    anno::thumbnail(".thumbs/flex_material.png"),
     anno::hidden(),
-	//anno::deprecated("Use flex_material_v2 instead"),
+    //anno::deprecated("Use flex_material_v2 instead"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(complex_material),
@@ -3810,9 +3834,9 @@ export material thin_glass(
 [[
     anno::display_name("Thin glass, deprecated"),
     anno::description("A basic transmissive dielectric without refraction or volume"),
-	anno::thumbnail(".thumbs/thin_glass.png"),
+    anno::thumbnail(".thumbs/thin_glass.png"),
     anno::hidden(),
-	//anno::deprecated("Use thin_glass_v2 instead"),
+    //anno::deprecated("Use thin_glass_v2 instead"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
@@ -3883,9 +3907,9 @@ export material thin_translucent(
 [[
     anno::display_name("Thin translucent, deprecated"),
     anno::description("A diffuse transmissive dielectric material"),
-	anno::thumbnail(".thumbs/thin_translucent.png"),
+    anno::thumbnail(".thumbs/thin_translucent.png"),
     anno::hidden(),
-	//anno::deprecated("Use thin_translucent_v2 instead"),
+    //anno::deprecated("Use thin_translucent_v2 instead"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
@@ -3976,9 +4000,9 @@ export material thick_glass(
 [[
     anno::display_name("Thick glass, deprecated"),
     anno::description("A basic transmissive dielectric with refraction and coloring in the volume"),
-	anno::thumbnail(".thumbs/thick_glass.png"),
+    anno::thumbnail(".thumbs/thick_glass.png"),
     anno::hidden(),
-	//anno::deprecated("Use thick_glass_v2 instead"),
+    //anno::deprecated("Use thick_glass_v2 instead"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
@@ -4081,9 +4105,9 @@ export material thick_translucent(
 [[
     anno::display_name("Thick translucent, deprecated"),
     anno::description("A subsurface scattering material"),
-	anno::thumbnail(".thumbs/thick_translucent.png"),
+    anno::thumbnail(".thumbs/thick_translucent.png"),
     anno::hidden(),
-	//anno::deprecated("Use thick_translucent_v2 instead"),
+    //anno::deprecated("Use thick_translucent_v2 instead"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(simple_material),
@@ -4167,9 +4191,9 @@ export material apply_clearcoat(
     anno::display_name("Apply clear coating, deprecated"),
     anno::description("Apply clear coat to an existing material"),
     anno::author("NVIDIA Corporation"),
-	anno::thumbnail(".thumbs/apply_clearcoat.png"),
+    anno::thumbnail(".thumbs/apply_clearcoat.png"),
     anno::hidden(),
-	//anno::deprecated("Use apply_clearcoat_v2 instead"),
+    //anno::deprecated("Use apply_clearcoat_v2 instead"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(modifier_material),
     anno::key_words(string[]("modifier","generic","coating"))
@@ -4235,9 +4259,9 @@ export material apply_metalcoat(
 [[
     anno::display_name("Apply thin metal coating, deprecated"),
     anno::description("Apply metal coat to an existing material"),
-	anno::thumbnail(".thumbs/apply_metalcoat.png"),
+    anno::thumbnail(".thumbs/apply_metalcoat.png"),
     anno::hidden(),
-	//anno::deprecated("Use apply_metalcoat_v2 instead"),
+    //anno::deprecated("Use apply_metalcoat_v2 instead"),
     anno::author("NVIDIA Corporation"),
     anno::copyright_notice(COPYRIGHT),
     type_of_material(modifier_material),

@@ -466,7 +466,7 @@ void Attribute::dump() const
     if(m_override == PROPAGATION_OVERRIDE)
         head += " override";
     mod_log->debug(M_ATTR, LOG::Mod_log::C_DATABASE, "%s", head.c_str());
-    dump_attr_values(get_type(),get_name(),get_values(),1);
+    //dump_attr_values(get_type(),get_name(),get_values(),1);
     for (Uint i=0; i < m_attachments.size(); i++) {
         const Attachment *at = &m_attachments[i];
         mod_log->debug(M_ATTR, LOG::Mod_log::C_DATABASE,

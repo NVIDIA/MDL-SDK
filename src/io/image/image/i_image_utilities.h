@@ -91,10 +91,10 @@ inline Pixel_type convert_pixel_type_string_to_enum( const char* pixel_type)
 }
 
 /// Converts a pixel type from its enum to string representation.
-inline const char* convert_pixel_type_enum_to_string( Pixel_type pixel_type)
+constexpr const char* convert_pixel_type_enum_to_string( Pixel_type pixel_type)
 {
     switch( pixel_type) {
-        case PT_UNDEF:     return 0;
+        case PT_UNDEF:     return nullptr;
         case PT_SINT8:     return "Sint8";
         case PT_SINT32:    return "Sint32";
         case PT_FLOAT32:   return "Float32";
@@ -109,32 +109,32 @@ inline const char* convert_pixel_type_enum_to_string( Pixel_type pixel_type)
         case PT_RGBA_16:   return "Rgba_16";
         case PT_RGB_FP:    return "Rgb_fp";
         case PT_COLOR:     return "Color";
-        default:           return 0;
+        default:           return nullptr;
     }
 }
 
 /// Returns the number of components of a given pixel type.
 ///
 /// For example, 3 for PT_RGB and 4 for PT_RGBA.
-inline int get_components_per_pixel( Pixel_type pixel_type);
+constexpr int get_components_per_pixel( Pixel_type pixel_type);
 
 /// Returns the number of bytes used by a component of a given pixel type.
 ///
 /// For example, 1 for PT_RGB, 2 for PT_RGB_16, and 4 for PT_RGB_FP.
-inline int get_bytes_per_component( Pixel_type pixel_type);
+constexpr int get_bytes_per_component( Pixel_type pixel_type);
 
 /// Return the number of bytes used by a pixel of a given pixel type.
 ///
 /// This is the product of #get_components_per_pixel() and #get_bytes_per_component().
-inline mi::Uint32 get_bytes_per_pixel( Pixel_type pixel_type);
+constexpr mi::Uint32 get_bytes_per_pixel( Pixel_type pixel_type);
 
 /// Indicates whether the pixel type has an alpha channel.
-inline bool has_alpha( Pixel_type pixel_type);
+constexpr bool has_alpha( Pixel_type pixel_type);
 
 /// Returns the default gamma value for a given pixel type.
 ///
 /// The default gamma value is 1.0 for HDR pixel types and 2.2 for LDR pixel types.
-inline mi::Float32 get_default_gamma( Pixel_type pixel_type);
+constexpr mi::Float32 get_default_gamma( Pixel_type pixel_type);
 
 /// Indicates whether \p selector is a valid RGBA channel selector.
 bool is_valid_rgba_channel( const char* selector);
@@ -289,7 +289,7 @@ struct Pixel_type_traits<PT_COLOR>
     static constexpr bool s_linear = true;
 };
 
-inline int get_components_per_pixel( Pixel_type pixel_type)
+constexpr int get_components_per_pixel( Pixel_type pixel_type)
 {
     switch( pixel_type) {
         case PT_UNDEF:     return 0;
@@ -311,7 +311,7 @@ inline int get_components_per_pixel( Pixel_type pixel_type)
     }
 }
 
-inline int get_bytes_per_component( Pixel_type pixel_type)
+constexpr int get_bytes_per_component( Pixel_type pixel_type)
 {
     switch( pixel_type) {
         case PT_UNDEF:     return 0;
@@ -333,7 +333,7 @@ inline int get_bytes_per_component( Pixel_type pixel_type)
     }
 }
 
-inline mi::Uint32 get_bytes_per_pixel( Pixel_type pixel_type)
+constexpr mi::Uint32 get_bytes_per_pixel( Pixel_type pixel_type)
 {
 #define MI_IMAGE_BYTES_PER_PIXEL(T) \
     Pixel_type_traits<T>::s_components_per_pixel * (int) sizeof( Pixel_type_traits<T>::Base_type)
@@ -360,7 +360,7 @@ inline mi::Uint32 get_bytes_per_pixel( Pixel_type pixel_type)
 #undef MI_IMAGE_BYTES_PER_PIXEL
 }
 
-inline bool has_alpha( Pixel_type pixel_type)
+constexpr bool has_alpha( Pixel_type pixel_type)
 {
     switch( pixel_type) {
         case PT_UNDEF:     return false;
@@ -382,7 +382,7 @@ inline bool has_alpha( Pixel_type pixel_type)
     }
 }
 
-inline mi::Float32 get_default_gamma( Pixel_type pixel_type)
+constexpr mi::Float32 get_default_gamma( Pixel_type pixel_type)
 {
     switch( pixel_type) {
         case PT_UNDEF:     return 1.0f;

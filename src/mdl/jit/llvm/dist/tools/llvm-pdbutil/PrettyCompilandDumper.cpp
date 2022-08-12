@@ -1,9 +1,8 @@
 //===- PrettyCompilandDumper.cpp - llvm-pdbutil compiland dumper -*- C++ *-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -28,6 +27,7 @@
 #include "llvm/DebugInfo/PDB/PDBSymbolThunk.h"
 #include "llvm/DebugInfo/PDB/PDBSymbolTypeFunctionSig.h"
 #include "llvm/DebugInfo/PDB/PDBSymbolUnknown.h"
+#include "llvm/DebugInfo/PDB/PDBSymbolUsingNamespace.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
@@ -215,4 +215,14 @@ void CompilandDumper::dump(const PDBSymbolTypeTypedef &Symbol) {}
 void CompilandDumper::dump(const PDBSymbolUnknown &Symbol) {
   Printer.NewLine();
   Printer << "unknown (" << Symbol.getSymTag() << ")";
+}
+
+void CompilandDumper::dump(const PDBSymbolUsingNamespace &Symbol) {
+  if (Printer.IsSymbolExcluded(Symbol.getName()))
+    return;
+
+  Printer.NewLine();
+  Printer << "using namespace ";
+  std::string Name = Symbol.getName();
+  WithColor(Printer, PDB_ColorItem::Identifier).get() << Name;
 }

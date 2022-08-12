@@ -1,9 +1,8 @@
 //===- TypeMetadataUtils.cpp - Utilities related to type metadata ---------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -14,6 +13,8 @@
 
 #include "llvm/Analysis/TypeMetadataUtils.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/Dominators.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Module.h"
 
@@ -22,15 +23,25 @@ using namespace llvm;
 // Search for virtual calls that call FPtr and add them to DevirtCalls.
 static void
 findCallsAtConstantOffset(SmallVectorImpl<DevirtCallSite> &DevirtCalls,
-                          bool *HasNonCallUses, Value *FPtr, uint64_t Offset) {
+                          bool *HasNonCallUses, Value *FPtr, uint64_t Offset,
+                          const CallInst *CI, DominatorTree &DT) {
   for (const Use &U : FPtr->uses()) {
-    Value *User = U.getUser();
+    Instruction *User = cast<Instruction>(U.getUser());
+    // Ignore this instruction if it is not dominated by the type intrinsic
+    // being analyzed. Otherwise we may transform a call sharing the same
+    // vtable pointer incorrectly. Specifically, this situation can arise
+    // after indirect call promotion and inlining, where we may have uses
+    // of the vtable pointer guarded by a function pointer check, and a fallback
+    // indirect call.
+    if (!DT.dominates(CI, User))
+      continue;
     if (isa<BitCastInst>(User)) {
-      findCallsAtConstantOffset(DevirtCalls, HasNonCallUses, User, Offset);
-    } else if (auto CI = dyn_cast<CallInst>(User)) {
-      DevirtCalls.push_back({Offset, CI});
-    } else if (auto II = dyn_cast<InvokeInst>(User)) {
-      DevirtCalls.push_back({Offset, II});
+      findCallsAtConstantOffset(DevirtCalls, HasNonCallUses, User, Offset, CI,
+                                DT);
+    } else if (auto *CI = dyn_cast<CallInst>(User)) {
+      DevirtCalls.push_back({Offset, *CI});
+    } else if (auto *II = dyn_cast<InvokeInst>(User)) {
+      DevirtCalls.push_back({Offset, *II});
     } else if (HasNonCallUses) {
       *HasNonCallUses = true;
     }
@@ -38,23 +49,23 @@ findCallsAtConstantOffset(SmallVectorImpl<DevirtCallSite> &DevirtCalls,
 }
 
 // Search for virtual calls that load from VPtr and add them to DevirtCalls.
-static void
-findLoadCallsAtConstantOffset(const Module *M,
-                              SmallVectorImpl<DevirtCallSite> &DevirtCalls,
-                              Value *VPtr, int64_t Offset) {
+static void findLoadCallsAtConstantOffset(
+    const Module *M, SmallVectorImpl<DevirtCallSite> &DevirtCalls, Value *VPtr,
+    int64_t Offset, const CallInst *CI, DominatorTree &DT) {
   for (const Use &U : VPtr->uses()) {
     Value *User = U.getUser();
     if (isa<BitCastInst>(User)) {
-      findLoadCallsAtConstantOffset(M, DevirtCalls, User, Offset);
+      findLoadCallsAtConstantOffset(M, DevirtCalls, User, Offset, CI, DT);
     } else if (isa<LoadInst>(User)) {
-      findCallsAtConstantOffset(DevirtCalls, nullptr, User, Offset);
+      findCallsAtConstantOffset(DevirtCalls, nullptr, User, Offset, CI, DT);
     } else if (auto GEP = dyn_cast<GetElementPtrInst>(User)) {
       // Take into account the GEP offset.
       if (VPtr == GEP->getPointerOperand() && GEP->hasAllConstantIndices()) {
         SmallVector<Value *, 8> Indices(GEP->op_begin() + 1, GEP->op_end());
         int64_t GEPOffset = M->getDataLayout().getIndexedOffsetInType(
             GEP->getSourceElementType(), Indices);
-        findLoadCallsAtConstantOffset(M, DevirtCalls, User, Offset + GEPOffset);
+        findLoadCallsAtConstantOffset(M, DevirtCalls, User, Offset + GEPOffset,
+                                      CI, DT);
       }
     }
   }
@@ -62,7 +73,8 @@ findLoadCallsAtConstantOffset(const Module *M,
 
 void llvm::findDevirtualizableCallsForTypeTest(
     SmallVectorImpl<DevirtCallSite> &DevirtCalls,
-    SmallVectorImpl<CallInst *> &Assumes, const CallInst *CI) {
+    SmallVectorImpl<CallInst *> &Assumes, const CallInst *CI,
+    DominatorTree &DT) {
   assert(CI->getCalledFunction()->getIntrinsicID() == Intrinsic::type_test);
 
   const Module *M = CI->getParent()->getParent()->getParent();
@@ -79,15 +91,15 @@ void llvm::findDevirtualizableCallsForTypeTest(
   // If we found any, search for virtual calls based on %p and add them to
   // DevirtCalls.
   if (!Assumes.empty())
-    findLoadCallsAtConstantOffset(M, DevirtCalls,
-                                  CI->getArgOperand(0)->stripPointerCasts(), 0);
+    findLoadCallsAtConstantOffset(
+        M, DevirtCalls, CI->getArgOperand(0)->stripPointerCasts(), 0, CI, DT);
 }
 
 void llvm::findDevirtualizableCallsForTypeCheckedLoad(
     SmallVectorImpl<DevirtCallSite> &DevirtCalls,
     SmallVectorImpl<Instruction *> &LoadedPtrs,
     SmallVectorImpl<Instruction *> &Preds, bool &HasNonCallUses,
-    const CallInst *CI) {
+    const CallInst *CI, DominatorTree &DT) {
   assert(CI->getCalledFunction()->getIntrinsicID() ==
          Intrinsic::type_checked_load);
 
@@ -114,5 +126,37 @@ void llvm::findDevirtualizableCallsForTypeCheckedLoad(
 
   for (Value *LoadedPtr : LoadedPtrs)
     findCallsAtConstantOffset(DevirtCalls, &HasNonCallUses, LoadedPtr,
-                              Offset->getZExtValue());
+                              Offset->getZExtValue(), CI, DT);
+}
+
+Constant *llvm::getPointerAtOffset(Constant *I, uint64_t Offset, Module &M) {
+  if (I->getType()->isPointerTy()) {
+    if (Offset == 0)
+      return I;
+    return nullptr;
+  }
+
+  const DataLayout &DL = M.getDataLayout();
+
+  if (auto *C = dyn_cast<ConstantStruct>(I)) {
+    const StructLayout *SL = DL.getStructLayout(C->getType());
+    if (Offset >= SL->getSizeInBytes())
+      return nullptr;
+
+    unsigned Op = SL->getElementContainingOffset(Offset);
+    return getPointerAtOffset(cast<Constant>(I->getOperand(Op)),
+                              Offset - SL->getElementOffset(Op), M);
+  }
+  if (auto *C = dyn_cast<ConstantArray>(I)) {
+    ArrayType *VTableTy = C->getType();
+    uint64_t ElemSize = DL.getTypeAllocSize(VTableTy->getElementType());
+
+    unsigned Op = Offset / ElemSize;
+    if (Op >= C->getNumOperands())
+      return nullptr;
+
+    return getPointerAtOffset(cast<Constant>(I->getOperand(Op)),
+                              Offset % ElemSize, M);
+  }
+  return nullptr;
 }

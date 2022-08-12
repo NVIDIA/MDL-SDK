@@ -1,9 +1,8 @@
 //===- MSFBuilder.cpp -----------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -205,8 +204,7 @@ Error MSFBuilder::setStreamSize(uint32_t Idx, uint32_t Size) {
     if (auto EC = allocateBlocks(AddedBlocks, AddedBlockList))
       return EC;
     auto &CurrentBlocks = StreamData[Idx].second;
-    CurrentBlocks.insert(CurrentBlocks.end(), AddedBlockList.begin(),
-                         AddedBlockList.end());
+    llvm::append_range(CurrentBlocks, AddedBlockList);
   } else if (OldBlocks > NewBlocks) {
     // For shrinking, free all the Blocks in the Block map, update the stream
     // data, then shrink the directory.
@@ -269,8 +267,7 @@ Expected<MSFLayout> MSFBuilder::generateLayout() {
     ExtraBlocks.resize(NumExtraBlocks);
     if (auto EC = allocateBlocks(NumExtraBlocks, ExtraBlocks))
       return std::move(EC);
-    DirectoryBlocks.insert(DirectoryBlocks.end(), ExtraBlocks.begin(),
-                           ExtraBlocks.end());
+    llvm::append_range(DirectoryBlocks, ExtraBlocks);
   } else if (NumDirectoryBlocks < DirectoryBlocks.size()) {
     uint32_t NumUnnecessaryBlocks = DirectoryBlocks.size() - NumDirectoryBlocks;
     for (auto B :

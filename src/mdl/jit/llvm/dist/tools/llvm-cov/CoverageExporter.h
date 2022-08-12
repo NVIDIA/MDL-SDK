@@ -1,9 +1,8 @@
 //===- CoverageExporter.h - Code coverage exporter ------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -30,7 +29,7 @@ protected:
   /// The options passed to the tool.
   const CoverageViewOptions &Options;
 
-  /// Output stream to print JSON to.
+  /// Output stream to print to.
   raw_ostream &OS;
 
   CoverageExporter(const coverage::CoverageMapping &CoverageMapping,
@@ -41,10 +40,10 @@ public:
   virtual ~CoverageExporter(){};
 
   /// Render the CoverageMapping object.
-  virtual void renderRoot(const CoverageFilters &IgnoreFilenameFilters) = 0;
+  virtual void renderRoot(const CoverageFilters &IgnoreFilters) = 0;
 
   /// Render the CoverageMapping object for specified source files.
-  virtual void renderRoot(const std::vector<std::string> &SourceFiles) = 0;
+  virtual void renderRoot(ArrayRef<std::string> SourceFiles) = 0;
 };
 
 } // end namespace llvm

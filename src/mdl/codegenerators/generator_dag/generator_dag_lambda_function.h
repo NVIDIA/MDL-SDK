@@ -271,13 +271,13 @@ public:
         size_t       idx,
         bool         valid) MDL_FINAL;
 
-    /// Analyze one root of a lambda function.
+    /// Analyze one root of a lambda function or the body expression, in case there are no roots.
     ///
-    /// \param[in]  proj           the root number
+    /// \param[in]  proj           the root number, ignored if there are no roots but a body expression.
     /// \param[in]  name_resolver  a call name resolver
     /// \param[out] result         the analysis result
     ///
-    /// \return true on success, false if proj is out of bounds
+    /// \return true on success, false if proj is out of bounds or in case of no roots, if there is no body.
     bool analyze(
         size_t                    proj,
         ICall_name_resolver const *name_resolver,

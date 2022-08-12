@@ -99,6 +99,6 @@
 #endif // MI_BASE_VERSION_QUALIFIER_EMPTY
 
 
-/*@}*/ // end group mi_base_version
+/**@}*/ // end group mi_base_version
 
 #endif // MI_BASE_VERSION_H

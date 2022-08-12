@@ -1,9 +1,8 @@
 //===- llvm/MC/MCInst.h - MCInst class --------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -154,18 +153,17 @@ public:
   bool evaluateAsConstantImm(int64_t &Imm) const;
 };
 
-template <> struct isPodLike<MCOperand> { static const bool value = true; };
-
 /// Instances of this class represent a single low-level machine
 /// instruction.
 class MCInst {
   unsigned Opcode = 0;
-  SMLoc Loc;
-  SmallVector<MCOperand, 8> Operands;
   // These flags could be used to pass some info from one target subcomponent
   // to another, for example, from disassembler to asm printer. The values of
   // the flags have any sense on target level only (e.g. prefixes on x86).
   unsigned Flags = 0;
+
+  SMLoc Loc;
+  SmallVector<MCOperand, 8> Operands;
 
 public:
   MCInst() = default;
@@ -183,13 +181,14 @@ public:
   MCOperand &getOperand(unsigned i) { return Operands[i]; }
   unsigned getNumOperands() const { return Operands.size(); }
 
-  void addOperand(const MCOperand &Op) { Operands.push_back(Op); }
+  void addOperand(const MCOperand Op) { Operands.push_back(Op); }
 
   using iterator = SmallVectorImpl<MCOperand>::iterator;
   using const_iterator = SmallVectorImpl<MCOperand>::const_iterator;
 
   void clear() { Operands.clear(); }
   void erase(iterator I) { Operands.erase(I); }
+  void erase(iterator First, iterator Last) { Operands.erase(First, Last); }
   size_t size() const { return Operands.size(); }
   iterator begin() { return Operands.begin(); }
   const_iterator begin() const { return Operands.begin(); }
@@ -207,6 +206,8 @@ public:
   /// structures, if given. Operators are separated by the \p Separator
   /// string.
   void dump_pretty(raw_ostream &OS, const MCInstPrinter *Printer = nullptr,
+                   StringRef Separator = " ") const;
+  void dump_pretty(raw_ostream &OS, StringRef Name,
                    StringRef Separator = " ") const;
 };
 

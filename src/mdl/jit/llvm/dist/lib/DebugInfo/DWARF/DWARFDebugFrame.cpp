@@ -1,9 +1,8 @@
 //===- DWARFDebugFrame.h - Parsing of .debug_frame ------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -13,9 +12,11 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/BinaryFormat/Dwarf.h"
+#include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/DataExtractor.h"
+#include "llvm/Support/Errc.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
@@ -29,130 +30,149 @@
 using namespace llvm;
 using namespace dwarf;
 
+static void printRegister(raw_ostream &OS, const MCRegisterInfo *MRI, bool IsEH,
+                          unsigned RegNum) {
+  if (MRI) {
+    if (Optional<unsigned> LLVMRegNum = MRI->getLLVMRegNum(RegNum, IsEH)) {
+      if (const char *RegName = MRI->getName(*LLVMRegNum)) {
+        OS << RegName;
+        return;
+      }
+    }
+  }
+  OS << "reg" << RegNum;
+}
 
 // See DWARF standard v3, section 7.23
 const uint8_t DWARF_CFI_PRIMARY_OPCODE_MASK = 0xc0;
 const uint8_t DWARF_CFI_PRIMARY_OPERAND_MASK = 0x3f;
 
-Error CFIProgram::parse(DataExtractor Data, uint32_t *Offset,
-                        uint32_t EndOffset) {
-  while (*Offset < EndOffset) {
-    uint8_t Opcode = Data.getU8(Offset);
-    // Some instructions have a primary opcode encoded in the top bits.
-    uint8_t Primary = Opcode & DWARF_CFI_PRIMARY_OPCODE_MASK;
+Error CFIProgram::parse(DWARFDataExtractor Data, uint64_t *Offset,
+                        uint64_t EndOffset) {
+  DataExtractor::Cursor C(*Offset);
+  while (C && C.tell() < EndOffset) {
+    uint8_t Opcode = Data.getRelocatedValue(C, 1);
+    if (!C)
+      break;
 
-    if (Primary) {
+    // Some instructions have a primary opcode encoded in the top bits.
+    if (uint8_t Primary = Opcode & DWARF_CFI_PRIMARY_OPCODE_MASK) {
       // If it's a primary opcode, the first operand is encoded in the bottom
       // bits of the opcode itself.
       uint64_t Op1 = Opcode & DWARF_CFI_PRIMARY_OPERAND_MASK;
       switch (Primary) {
-      default:
-        return make_error<StringError>(
-            "Invalid primary CFI opcode",
-            std::make_error_code(std::errc::illegal_byte_sequence));
       case DW_CFA_advance_loc:
       case DW_CFA_restore:
         addInstruction(Primary, Op1);
         break;
       case DW_CFA_offset:
-        addInstruction(Primary, Op1, Data.getULEB128(Offset));
+        addInstruction(Primary, Op1, Data.getULEB128(C));
         break;
-      }
-    } else {
-      // Extended opcode - its value is Opcode itself.
-      switch (Opcode) {
       default:
-        return make_error<StringError>(
-            "Invalid extended CFI opcode",
-            std::make_error_code(std::errc::illegal_byte_sequence));
-      case DW_CFA_nop:
-      case DW_CFA_remember_state:
-      case DW_CFA_restore_state:
-      case DW_CFA_GNU_window_save:
-        // No operands
-        addInstruction(Opcode);
-        break;
-      case DW_CFA_set_loc:
-        // Operands: Address
-        addInstruction(Opcode, Data.getAddress(Offset));
-        break;
-      case DW_CFA_advance_loc1:
-        // Operands: 1-byte delta
-        addInstruction(Opcode, Data.getU8(Offset));
-        break;
-      case DW_CFA_advance_loc2:
-        // Operands: 2-byte delta
-        addInstruction(Opcode, Data.getU16(Offset));
-        break;
-      case DW_CFA_advance_loc4:
-        // Operands: 4-byte delta
-        addInstruction(Opcode, Data.getU32(Offset));
-        break;
-      case DW_CFA_restore_extended:
-      case DW_CFA_undefined:
-      case DW_CFA_same_value:
-      case DW_CFA_def_cfa_register:
-      case DW_CFA_def_cfa_offset:
-      case DW_CFA_GNU_args_size:
-        // Operands: ULEB128
-        addInstruction(Opcode, Data.getULEB128(Offset));
-        break;
-      case DW_CFA_def_cfa_offset_sf:
-        // Operands: SLEB128
-        addInstruction(Opcode, Data.getSLEB128(Offset));
-        break;
-      case DW_CFA_offset_extended:
-      case DW_CFA_register:
-      case DW_CFA_def_cfa:
-      case DW_CFA_val_offset: {
-        // Operands: ULEB128, ULEB128
-        // Note: We can not embed getULEB128 directly into function
-        // argument list. getULEB128 changes Offset and order of evaluation
-        // for arguments is unspecified.
-        auto op1 = Data.getULEB128(Offset);
-        auto op2 = Data.getULEB128(Offset);
-        addInstruction(Opcode, op1, op2);
-        break;
-        }
-        case DW_CFA_offset_extended_sf:
-        case DW_CFA_def_cfa_sf:
-        case DW_CFA_val_offset_sf: {
-          // Operands: ULEB128, SLEB128
-          // Note: see comment for the previous case
-          auto op1 = Data.getULEB128(Offset);
-          auto op2 = (uint64_t)Data.getSLEB128(Offset);
-          addInstruction(Opcode, op1, op2);
-          break;
-        }
-        case DW_CFA_def_cfa_expression: {
-          uint32_t ExprLength = Data.getULEB128(Offset);
-          addInstruction(Opcode, 0);
-          DataExtractor Extractor(
-              Data.getData().slice(*Offset, *Offset + ExprLength),
-              Data.isLittleEndian(), Data.getAddressSize());
-          Instructions.back().Expression = DWARFExpression(
-              Extractor, Data.getAddressSize(), dwarf::DWARF_VERSION);
-          *Offset += ExprLength;
-          break;
-        }
-        case DW_CFA_expression:
-        case DW_CFA_val_expression: {
-          auto RegNum = Data.getULEB128(Offset);
-          auto BlockLength = Data.getULEB128(Offset);
-          addInstruction(Opcode, RegNum, 0);
-          DataExtractor Extractor(
-              Data.getData().slice(*Offset, *Offset + BlockLength),
-              Data.isLittleEndian(), Data.getAddressSize());
-          Instructions.back().Expression = DWARFExpression(
-              Extractor, Data.getAddressSize(), dwarf::DWARF_VERSION);
-          *Offset += BlockLength;
-          break;
-        }
+        llvm_unreachable("invalid primary CFI opcode");
       }
+      continue;
+    }
+
+    // Extended opcode - its value is Opcode itself.
+    switch (Opcode) {
+    default:
+      return createStringError(errc::illegal_byte_sequence,
+                               "invalid extended CFI opcode 0x%" PRIx8, Opcode);
+    case DW_CFA_nop:
+    case DW_CFA_remember_state:
+    case DW_CFA_restore_state:
+    case DW_CFA_GNU_window_save:
+      // No operands
+      addInstruction(Opcode);
+      break;
+    case DW_CFA_set_loc:
+      // Operands: Address
+      addInstruction(Opcode, Data.getRelocatedAddress(C));
+      break;
+    case DW_CFA_advance_loc1:
+      // Operands: 1-byte delta
+      addInstruction(Opcode, Data.getRelocatedValue(C, 1));
+      break;
+    case DW_CFA_advance_loc2:
+      // Operands: 2-byte delta
+      addInstruction(Opcode, Data.getRelocatedValue(C, 2));
+      break;
+    case DW_CFA_advance_loc4:
+      // Operands: 4-byte delta
+      addInstruction(Opcode, Data.getRelocatedValue(C, 4));
+      break;
+    case DW_CFA_restore_extended:
+    case DW_CFA_undefined:
+    case DW_CFA_same_value:
+    case DW_CFA_def_cfa_register:
+    case DW_CFA_def_cfa_offset:
+    case DW_CFA_GNU_args_size:
+      // Operands: ULEB128
+      addInstruction(Opcode, Data.getULEB128(C));
+      break;
+    case DW_CFA_def_cfa_offset_sf:
+      // Operands: SLEB128
+      addInstruction(Opcode, Data.getSLEB128(C));
+      break;
+    case DW_CFA_offset_extended:
+    case DW_CFA_register:
+    case DW_CFA_def_cfa:
+    case DW_CFA_val_offset: {
+      // Operands: ULEB128, ULEB128
+      // Note: We can not embed getULEB128 directly into function
+      // argument list. getULEB128 changes Offset and order of evaluation
+      // for arguments is unspecified.
+      uint64_t op1 = Data.getULEB128(C);
+      uint64_t op2 = Data.getULEB128(C);
+      addInstruction(Opcode, op1, op2);
+      break;
+    }
+    case DW_CFA_offset_extended_sf:
+    case DW_CFA_def_cfa_sf:
+    case DW_CFA_val_offset_sf: {
+      // Operands: ULEB128, SLEB128
+      // Note: see comment for the previous case
+      uint64_t op1 = Data.getULEB128(C);
+      uint64_t op2 = (uint64_t)Data.getSLEB128(C);
+      addInstruction(Opcode, op1, op2);
+      break;
+    }
+    case DW_CFA_def_cfa_expression: {
+      uint64_t ExprLength = Data.getULEB128(C);
+      addInstruction(Opcode, 0);
+      StringRef Expression = Data.getBytes(C, ExprLength);
+
+      DataExtractor Extractor(Expression, Data.isLittleEndian(),
+                              Data.getAddressSize());
+      // Note. We do not pass the DWARF format to DWARFExpression, because
+      // DW_OP_call_ref, the only operation which depends on the format, is
+      // prohibited in call frame instructions, see sec. 6.4.2 in DWARFv5.
+      Instructions.back().Expression =
+          DWARFExpression(Extractor, Data.getAddressSize());
+      break;
+    }
+    case DW_CFA_expression:
+    case DW_CFA_val_expression: {
+      uint64_t RegNum = Data.getULEB128(C);
+      addInstruction(Opcode, RegNum, 0);
+
+      uint64_t BlockLength = Data.getULEB128(C);
+      StringRef Expression = Data.getBytes(C, BlockLength);
+      DataExtractor Extractor(Expression, Data.isLittleEndian(),
+                              Data.getAddressSize());
+      // Note. We do not pass the DWARF format to DWARFExpression, because
+      // DW_OP_call_ref, the only operation which depends on the format, is
+      // prohibited in call frame instructions, see sec. 6.4.2 in DWARFv5.
+      Instructions.back().Expression =
+          DWARFExpression(Extractor, Data.getAddressSize());
+      break;
+    }
     }
   }
 
-  return Error::success();
+  *Offset = C.tell();
+  return C.takeError();
 }
 
 namespace {
@@ -214,9 +234,10 @@ ArrayRef<CFIProgram::OperandType[2]> CFIProgram::getOperandTypes() {
 }
 
 /// Print \p Opcode's operand number \p OperandIdx which has value \p Operand.
-void CFIProgram::printOperand(raw_ostream &OS, const MCRegisterInfo *MRI,
-                              bool IsEH, const Instruction &Instr,
-                              unsigned OperandIdx, uint64_t Operand) const {
+void CFIProgram::printOperand(raw_ostream &OS, DIDumpOptions DumpOpts,
+                              const MCRegisterInfo *MRI, bool IsEH,
+                              const Instruction &Instr, unsigned OperandIdx,
+                              uint64_t Operand) const {
   assert(OperandIdx < 2);
   uint8_t Opcode = Instr.Opcode;
   OperandType Type = getOperandTypes()[Opcode][OperandIdx];
@@ -224,7 +245,7 @@ void CFIProgram::printOperand(raw_ostream &OS, const MCRegisterInfo *MRI,
   switch (Type) {
   case OT_Unset: {
     OS << " Unsupported " << (OperandIdx ? "second" : "first") << " operand to";
-    auto OpcodeName = CallFrameString(Opcode);
+    auto OpcodeName = CallFrameString(Opcode, Arch);
     if (!OpcodeName.empty())
       OS << " " << OpcodeName;
     else
@@ -261,36 +282,60 @@ void CFIProgram::printOperand(raw_ostream &OS, const MCRegisterInfo *MRI,
       OS << format(" %" PRId64 "*data_alignment_factor" , Operand);
     break;
   case OT_Register:
-    OS << format(" reg%" PRId64, Operand);
+    OS << ' ';
+    printRegister(OS, MRI, IsEH, Operand);
     break;
   case OT_Expression:
     assert(Instr.Expression && "missing DWARFExpression object");
     OS << " ";
-    Instr.Expression->print(OS, MRI, IsEH);
+    Instr.Expression->print(OS, DumpOpts, MRI, nullptr, IsEH);
     break;
   }
 }
 
-void CFIProgram::dump(raw_ostream &OS, const MCRegisterInfo *MRI, bool IsEH,
+void CFIProgram::dump(raw_ostream &OS, DIDumpOptions DumpOpts,
+                      const MCRegisterInfo *MRI, bool IsEH,
                       unsigned IndentLevel) const {
   for (const auto &Instr : Instructions) {
     uint8_t Opcode = Instr.Opcode;
     if (Opcode & DWARF_CFI_PRIMARY_OPCODE_MASK)
       Opcode &= DWARF_CFI_PRIMARY_OPCODE_MASK;
     OS.indent(2 * IndentLevel);
-    OS << CallFrameString(Opcode) << ":";
+    OS << CallFrameString(Opcode, Arch) << ":";
     for (unsigned i = 0; i < Instr.Ops.size(); ++i)
-      printOperand(OS, MRI, IsEH, Instr, i, Instr.Ops[i]);
+      printOperand(OS, DumpOpts, MRI, IsEH, Instr, i, Instr.Ops[i]);
     OS << '\n';
   }
 }
 
-void CIE::dump(raw_ostream &OS, const MCRegisterInfo *MRI, bool IsEH) const {
-  OS << format("%08x %08x %08x CIE", (uint32_t)Offset, (uint32_t)Length,
-               DW_CIE_ID)
-     << "\n";
-  OS << format("  Version:               %d\n", Version);
-  OS << "  Augmentation:          \"" << Augmentation << "\"\n";
+// Returns the CIE identifier to be used by the requested format.
+// CIE ids for .debug_frame sections are defined in Section 7.24 of DWARFv5.
+// For CIE ID in .eh_frame sections see
+// https://refspecs.linuxfoundation.org/LSB_5.0.0/LSB-Core-generic/LSB-Core-generic/ehframechpt.html
+constexpr uint64_t getCIEId(bool IsDWARF64, bool IsEH) {
+  if (IsEH)
+    return 0;
+  if (IsDWARF64)
+    return DW64_CIE_ID;
+  return DW_CIE_ID;
+}
+
+void CIE::dump(raw_ostream &OS, DIDumpOptions DumpOpts,
+               const MCRegisterInfo *MRI, bool IsEH) const {
+  // A CIE with a zero length is a terminator entry in the .eh_frame section.
+  if (IsEH && Length == 0) {
+    OS << format("%08" PRIx64, Offset) << " ZERO terminator\n";
+    return;
+  }
+
+  OS << format("%08" PRIx64, Offset)
+     << format(" %0*" PRIx64, IsDWARF64 ? 16 : 8, Length)
+     << format(" %0*" PRIx64, IsDWARF64 && !IsEH ? 16 : 8,
+               getCIEId(IsDWARF64, IsEH))
+     << " CIE\n"
+     << "  Format:                " << FormatString(IsDWARF64) << "\n"
+     << format("  Version:               %d\n", Version)
+     << "  Augmentation:          \"" << Augmentation << "\"\n";
   if (Version >= 4) {
     OS << format("  Address size:          %u\n", (uint32_t)AddressSize);
     OS << format("  Segment desc size:     %u\n",
@@ -300,7 +345,7 @@ void CIE::dump(raw_ostream &OS, const MCRegisterInfo *MRI, bool IsEH) const {
   OS << format("  Data alignment factor: %d\n", (int32_t)DataAlignmentFactor);
   OS << format("  Return address column: %d\n", (int32_t)ReturnAddressRegister);
   if (Personality)
-    OS << format("  Personality Address: %08x\n", *Personality);
+    OS << format("  Personality Address: %016" PRIx64 "\n", *Personality);
   if (!AugmentationData.empty()) {
     OS << "  Augmentation data:    ";
     for (uint8_t Byte : AugmentationData)
@@ -308,29 +353,37 @@ void CIE::dump(raw_ostream &OS, const MCRegisterInfo *MRI, bool IsEH) const {
     OS << "\n";
   }
   OS << "\n";
-  CFIs.dump(OS, MRI, IsEH);
+  CFIs.dump(OS, DumpOpts, MRI, IsEH);
   OS << "\n";
 }
 
-void FDE::dump(raw_ostream &OS, const MCRegisterInfo *MRI, bool IsEH) const {
-  OS << format("%08x %08x %08x FDE ", (uint32_t)Offset, (uint32_t)Length,
-               (int32_t)LinkedCIEOffset);
-  OS << format("cie=%08x pc=%08x...%08x\n", (int32_t)LinkedCIEOffset,
-               (uint32_t)InitialLocation,
-               (uint32_t)InitialLocation + (uint32_t)AddressRange);
+void FDE::dump(raw_ostream &OS, DIDumpOptions DumpOpts,
+               const MCRegisterInfo *MRI, bool IsEH) const {
+  OS << format("%08" PRIx64, Offset)
+     << format(" %0*" PRIx64, IsDWARF64 ? 16 : 8, Length)
+     << format(" %0*" PRIx64, IsDWARF64 && !IsEH ? 16 : 8, CIEPointer)
+     << " FDE cie=";
+  if (LinkedCIE)
+    OS << format("%08" PRIx64, LinkedCIE->getOffset());
+  else
+    OS << "<invalid offset>";
+  OS << format(" pc=%08" PRIx64 "...%08" PRIx64 "\n", InitialLocation,
+               InitialLocation + AddressRange);
+  OS << "  Format:       " << FormatString(IsDWARF64) << "\n";
   if (LSDAAddress)
-    OS << format("  LSDA Address: %08x\n", *LSDAAddress);
-  CFIs.dump(OS, MRI, IsEH);
+    OS << format("  LSDA Address: %016" PRIx64 "\n", *LSDAAddress);
+  CFIs.dump(OS, DumpOpts, MRI, IsEH);
   OS << "\n";
 }
 
-DWARFDebugFrame::DWARFDebugFrame(bool IsEH, uint64_t EHFrameAddress)
-    : IsEH(IsEH), EHFrameAddress(EHFrameAddress) {}
+DWARFDebugFrame::DWARFDebugFrame(Triple::ArchType Arch,
+    bool IsEH, uint64_t EHFrameAddress)
+    : Arch(Arch), IsEH(IsEH), EHFrameAddress(EHFrameAddress) {}
 
 DWARFDebugFrame::~DWARFDebugFrame() = default;
 
 static void LLVM_ATTRIBUTE_UNUSED dumpDataAux(DataExtractor Data,
-                                              uint32_t Offset, int Length) {
+                                              uint64_t Offset, int Length) {
   errs() << "DUMP: ";
   for (int i = 0; i < Length; ++i) {
     uint8_t c = Data.getU8(&Offset);
@@ -339,63 +392,61 @@ static void LLVM_ATTRIBUTE_UNUSED dumpDataAux(DataExtractor Data,
   errs() << "\n";
 }
 
-// This is a workaround for old compilers which do not allow
-// noreturn attribute usage in lambdas. Once the support for those
-// compilers are phased out, we can remove this and return back to
-// a ReportError lambda: [StartOffset](const char *ErrorMsg).
-static void LLVM_ATTRIBUTE_NORETURN ReportError(uint32_t StartOffset,
-                                                const char *ErrorMsg) {
-  std::string Str;
-  raw_string_ostream OS(Str);
-  OS << format(ErrorMsg, StartOffset);
-  OS.flush();
-  report_fatal_error(Str);
-}
-
-void DWARFDebugFrame::parse(DWARFDataExtractor Data) {
-  uint32_t Offset = 0;
-  DenseMap<uint32_t, CIE *> CIEs;
+Error DWARFDebugFrame::parse(DWARFDataExtractor Data) {
+  uint64_t Offset = 0;
+  DenseMap<uint64_t, CIE *> CIEs;
 
   while (Data.isValidOffset(Offset)) {
-    uint32_t StartOffset = Offset;
+    uint64_t StartOffset = Offset;
 
-    bool IsDWARF64 = false;
-    uint64_t Length = Data.getU32(&Offset);
-    uint64_t Id;
+    uint64_t Length;
+    DwarfFormat Format;
+    std::tie(Length, Format) = Data.getInitialLength(&Offset);
+    bool IsDWARF64 = Format == DWARF64;
 
-    if (Length == UINT32_MAX) {
-      // DWARF-64 is distinguished by the first 32 bits of the initial length
-      // field being 0xffffffff. Then, the next 64 bits are the actual entry
-      // length.
-      IsDWARF64 = true;
-      Length = Data.getU64(&Offset);
+    // If the Length is 0, then this CIE is a terminator. We add it because some
+    // dumper tools might need it to print something special for such entries
+    // (e.g. llvm-objdump --dwarf=frames prints "ZERO terminator").
+    if (Length == 0) {
+      auto Cie = std::make_unique<CIE>(
+          IsDWARF64, StartOffset, 0, 0, SmallString<8>(), 0, 0, 0, 0, 0,
+          SmallString<8>(), 0, 0, None, None, Arch);
+      CIEs[StartOffset] = Cie.get();
+      Entries.push_back(std::move(Cie));
+      break;
     }
 
     // At this point, Offset points to the next field after Length.
     // Length is the structure size excluding itself. Compute an offset one
     // past the end of the structure (needed to know how many instructions to
     // read).
-    // TODO: For honest DWARF64 support, DataExtractor will have to treat
-    //       offset_ptr as uint64_t*
-    uint32_t StartStructureOffset = Offset;
-    uint32_t EndStructureOffset = Offset + static_cast<uint32_t>(Length);
+    uint64_t StartStructureOffset = Offset;
+    uint64_t EndStructureOffset = Offset + Length;
 
     // The Id field's size depends on the DWARF format
-    Id = Data.getUnsigned(&Offset, (IsDWARF64 && !IsEH) ? 8 : 4);
-    bool IsCIE =
-        ((IsDWARF64 && Id == DW64_CIE_ID) || Id == DW_CIE_ID || (IsEH && !Id));
+    Error Err = Error::success();
+    uint64_t Id = Data.getRelocatedValue((IsDWARF64 && !IsEH) ? 8 : 4, &Offset,
+                                         /*SectionIndex=*/nullptr, &Err);
+    if (Err)
+      return Err;
 
-    if (IsCIE) {
+    if (Id == getCIEId(IsDWARF64, IsEH)) {
       uint8_t Version = Data.getU8(&Offset);
       const char *Augmentation = Data.getCStr(&Offset);
       StringRef AugmentationString(Augmentation ? Augmentation : "");
+      // TODO: we should provide a way to report a warning and continue dumping.
+      if (IsEH && Version != 1)
+        return createStringError(errc::not_supported,
+                                 "unsupported CIE version: %" PRIu8, Version);
+
       uint8_t AddressSize = Version < 4 ? Data.getAddressSize() :
                                           Data.getU8(&Offset);
       Data.setAddressSize(AddressSize);
       uint8_t SegmentDescriptorSize = Version < 4 ? 0 : Data.getU8(&Offset);
       uint64_t CodeAlignmentFactor = Data.getULEB128(&Offset);
       int64_t DataAlignmentFactor = Data.getSLEB128(&Offset);
-      uint64_t ReturnAddressRegister = Data.getULEB128(&Offset);
+      uint64_t ReturnAddressRegister =
+          Version == 1 ? Data.getU8(&Offset) : Data.getULEB128(&Offset);
 
       // Parse the augmentation data for EH CIEs
       StringRef AugmentationData("");
@@ -405,61 +456,72 @@ void DWARFDebugFrame::parse(DWARFDataExtractor Data) {
       Optional<uint32_t> PersonalityEncoding;
       if (IsEH) {
         Optional<uint64_t> AugmentationLength;
-        uint32_t StartAugmentationOffset;
-        uint32_t EndAugmentationOffset;
+        uint64_t StartAugmentationOffset;
+        uint64_t EndAugmentationOffset;
 
         // Walk the augmentation string to get all the augmentation data.
         for (unsigned i = 0, e = AugmentationString.size(); i != e; ++i) {
           switch (AugmentationString[i]) {
-            default:
-              ReportError(StartOffset,
-                          "Unknown augmentation character in entry at %lx");
-            case 'L':
-              LSDAPointerEncoding = Data.getU8(&Offset);
-              break;
-            case 'P': {
-              if (Personality)
-                ReportError(StartOffset,
-                            "Duplicate personality in entry at %lx");
-              PersonalityEncoding = Data.getU8(&Offset);
-              Personality = Data.getEncodedPointer(
-                  &Offset, *PersonalityEncoding,
-                  EHFrameAddress ? EHFrameAddress + Offset : 0);
-              break;
-            }
-            case 'R':
-              FDEPointerEncoding = Data.getU8(&Offset);
-              break;
-            case 'S':
-              // Current frame is a signal trampoline.
-              break;
-            case 'z':
-              if (i)
-                ReportError(StartOffset,
-                            "'z' must be the first character at %lx");
-              // Parse the augmentation length first.  We only parse it if
-              // the string contains a 'z'.
-              AugmentationLength = Data.getULEB128(&Offset);
-              StartAugmentationOffset = Offset;
-              EndAugmentationOffset = Offset +
-                static_cast<uint32_t>(*AugmentationLength);
+          default:
+            return createStringError(
+                errc::invalid_argument,
+                "unknown augmentation character in entry at 0x%" PRIx64,
+                StartOffset);
+          case 'L':
+            LSDAPointerEncoding = Data.getU8(&Offset);
+            break;
+          case 'P': {
+            if (Personality)
+              return createStringError(
+                  errc::invalid_argument,
+                  "duplicate personality in entry at 0x%" PRIx64, StartOffset);
+            PersonalityEncoding = Data.getU8(&Offset);
+            Personality = Data.getEncodedPointer(
+                &Offset, *PersonalityEncoding,
+                EHFrameAddress ? EHFrameAddress + Offset : 0);
+            break;
+          }
+          case 'R':
+            FDEPointerEncoding = Data.getU8(&Offset);
+            break;
+          case 'S':
+            // Current frame is a signal trampoline.
+            break;
+          case 'z':
+            if (i)
+              return createStringError(
+                  errc::invalid_argument,
+                  "'z' must be the first character at 0x%" PRIx64, StartOffset);
+            // Parse the augmentation length first.  We only parse it if
+            // the string contains a 'z'.
+            AugmentationLength = Data.getULEB128(&Offset);
+            StartAugmentationOffset = Offset;
+            EndAugmentationOffset = Offset + *AugmentationLength;
+            break;
+          case 'B':
+            // B-Key is used for signing functions associated with this
+            // augmentation string
+            break;
           }
         }
 
         if (AugmentationLength.hasValue()) {
           if (Offset != EndAugmentationOffset)
-            ReportError(StartOffset, "Parsing augmentation data at %lx failed");
-
+            return createStringError(errc::invalid_argument,
+                                     "parsing augmentation data at 0x%" PRIx64
+                                     " failed",
+                                     StartOffset);
           AugmentationData = Data.getData().slice(StartAugmentationOffset,
                                                   EndAugmentationOffset);
         }
       }
 
-      auto Cie = llvm::make_unique<CIE>(
-          StartOffset, Length, Version, AugmentationString, AddressSize,
-          SegmentDescriptorSize, CodeAlignmentFactor, DataAlignmentFactor,
-          ReturnAddressRegister, AugmentationData, FDEPointerEncoding,
-          LSDAPointerEncoding, Personality, PersonalityEncoding);
+      auto Cie = std::make_unique<CIE>(
+          IsDWARF64, StartOffset, Length, Version, AugmentationString,
+          AddressSize, SegmentDescriptorSize, CodeAlignmentFactor,
+          DataAlignmentFactor, ReturnAddressRegister, AugmentationData,
+          FDEPointerEncoding, LSDAPointerEncoding, Personality,
+          PersonalityEncoding, Arch);
       CIEs[StartOffset] = Cie.get();
       Entries.emplace_back(std::move(Cie));
     } else {
@@ -473,12 +535,13 @@ void DWARFDebugFrame::parse(DWARFDataExtractor Data) {
       if (IsEH) {
         // The address size is encoded in the CIE we reference.
         if (!Cie)
-          ReportError(StartOffset,
-                      "Parsing FDE data at %lx failed due to missing CIE");
-
-        if (auto Val = Data.getEncodedPointer(
-                &Offset, Cie->getFDEPointerEncoding(),
-                EHFrameAddress ? EHFrameAddress + Offset : 0)) {
+          return createStringError(errc::invalid_argument,
+                                   "parsing FDE data at 0x%" PRIx64
+                                   " failed due to missing CIE",
+                                   StartOffset);
+        if (auto Val =
+                Data.getEncodedPointer(&Offset, Cie->getFDEPointerEncoding(),
+                                       EHFrameAddress + Offset)) {
           InitialLocation = *Val;
         }
         if (auto Val = Data.getEncodedPointer(
@@ -491,8 +554,7 @@ void DWARFDebugFrame::parse(DWARFDataExtractor Data) {
           // Parse the augmentation length and data for this FDE.
           uint64_t AugmentationLength = Data.getULEB128(&Offset);
 
-          uint32_t EndAugmentationOffset =
-            Offset + static_cast<uint32_t>(AugmentationLength);
+          uint64_t EndAugmentationOffset = Offset + AugmentationLength;
 
           // Decode the LSDA if the CIE augmentation string said we should.
           if (Cie->getLSDAPointerEncoding() != DW_EH_PE_omit) {
@@ -502,47 +564,53 @@ void DWARFDebugFrame::parse(DWARFDataExtractor Data) {
           }
 
           if (Offset != EndAugmentationOffset)
-            ReportError(StartOffset, "Parsing augmentation data at %lx failed");
+            return createStringError(errc::invalid_argument,
+                                     "parsing augmentation data at 0x%" PRIx64
+                                     " failed",
+                                     StartOffset);
         }
       } else {
-        InitialLocation = Data.getAddress(&Offset);
-        AddressRange = Data.getAddress(&Offset);
+        InitialLocation = Data.getRelocatedAddress(&Offset);
+        AddressRange = Data.getRelocatedAddress(&Offset);
       }
 
-      Entries.emplace_back(new FDE(StartOffset, Length, CIEPointer,
-                                   InitialLocation, AddressRange,
-                                   Cie, LSDAAddress));
+      Entries.emplace_back(new FDE(IsDWARF64, StartOffset, Length, CIEPointer,
+                                   InitialLocation, AddressRange, Cie,
+                                   LSDAAddress, Arch));
     }
 
     if (Error E =
-            Entries.back()->cfis().parse(Data, &Offset, EndStructureOffset)) {
-      report_fatal_error(toString(std::move(E)));
-    }
+            Entries.back()->cfis().parse(Data, &Offset, EndStructureOffset))
+      return E;
 
     if (Offset != EndStructureOffset)
-      ReportError(StartOffset, "Parsing entry instructions at %lx failed");
+      return createStringError(
+          errc::invalid_argument,
+          "parsing entry instructions at 0x%" PRIx64 " failed", StartOffset);
   }
+
+  return Error::success();
 }
 
 FrameEntry *DWARFDebugFrame::getEntryAtOffset(uint64_t Offset) const {
-  auto It =
-      std::lower_bound(Entries.begin(), Entries.end(), Offset,
-                       [](const std::unique_ptr<FrameEntry> &E,
-                          uint64_t Offset) { return E->getOffset() < Offset; });
+  auto It = partition_point(Entries, [=](const std::unique_ptr<FrameEntry> &E) {
+    return E->getOffset() < Offset;
+  });
   if (It != Entries.end() && (*It)->getOffset() == Offset)
     return It->get();
   return nullptr;
 }
 
-void DWARFDebugFrame::dump(raw_ostream &OS, const MCRegisterInfo *MRI,
+void DWARFDebugFrame::dump(raw_ostream &OS, DIDumpOptions DumpOpts,
+                           const MCRegisterInfo *MRI,
                            Optional<uint64_t> Offset) const {
   if (Offset) {
     if (auto *Entry = getEntryAtOffset(*Offset))
-      Entry->dump(OS, MRI, IsEH);
+      Entry->dump(OS, DumpOpts, MRI, IsEH);
     return;
   }
 
   OS << "\n";
   for (const auto &Entry : Entries)
-    Entry->dump(OS, MRI, IsEH);
+    Entry->dump(OS, DumpOpts, MRI, IsEH);
 }

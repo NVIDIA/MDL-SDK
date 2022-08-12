@@ -1,9 +1,8 @@
 //===- RegisterUsageInfo.cpp - Register Usage Information Storage ---------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 ///
@@ -40,7 +39,7 @@ INITIALIZE_PASS(PhysicalRegisterUsageInfo, "reg-usage-info",
 
 char PhysicalRegisterUsageInfo::ID = 0;
 
-void PhysicalRegisterUsageInfo::setTargetMachine(const TargetMachine &TM) {
+void PhysicalRegisterUsageInfo::setTargetMachine(const LLVMTargetMachine &TM) {
   this->TM = &TM;
 }
 
@@ -81,7 +80,7 @@ void PhysicalRegisterUsageInfo::print(raw_ostream &OS, const Module *M) const {
 
   // sort the vector to print analysis in alphabatic order of function name.
   llvm::sort(
-      FPRMPairVector.begin(), FPRMPairVector.end(),
+      FPRMPairVector,
       [](const FuncPtrRegMaskPair *A, const FuncPtrRegMaskPair *B) -> bool {
         return A->first->getName() < B->first->getName();
       });

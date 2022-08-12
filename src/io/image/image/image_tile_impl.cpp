@@ -43,14 +43,23 @@ namespace MI {
 namespace IMAGE {
 
 template <Pixel_type T>
-Tile_impl<T>::Tile_impl( mi::Uint32 width, mi::Uint32 height)
+Tile_impl<T>::Tile_impl( mi::Uint32 width, mi::Uint32 height) : m_data(static_cast<mi::Size>(width) * height * s_components_per_pixel)
 {
     // check incorrect arguments
     ASSERT( M_IMAGE, width > 0 && height > 0);
 
     m_width = width;
     m_height = height;
-    m_data.resize(static_cast<mi::Size>( m_width) * m_height * s_components_per_pixel);
+}
+
+template <Pixel_type T>
+Tile_impl<T>::Tile_impl( const mi::neuraylib::ITile* other) : m_data((typename Pixel_type_traits<T>::Base_type*)other->get_data(), (typename Pixel_type_traits<T>::Base_type*)other->get_data() + (size_t)other->get_resolution_x() * other->get_resolution_y() * s_components_per_pixel)
+{
+    m_width = other->get_resolution_x();
+    m_height = other->get_resolution_y();
+
+	// check incorrect arguments
+    ASSERT( M_IMAGE, m_width > 0 && m_height > 0);
 }
 
 template <Pixel_type T>
@@ -528,6 +537,29 @@ mi::neuraylib::ITile* create_tile( Pixel_type pixel_type, mi::Uint32 width, mi::
         case PT_RGBA_16:   return new Tile_impl<PT_RGBA_16  >( width, height);
         case PT_RGB_FP:    return new Tile_impl<PT_RGB_FP   >( width, height);
         case PT_COLOR:     return new Tile_impl<PT_COLOR    >( width, height);
+        default:           ASSERT( M_IMAGE, false); return nullptr;
+    }
+}
+
+mi::neuraylib::ITile* copy_tile( const mi::neuraylib::ITile* other)
+{
+    const Pixel_type pixel_type = convert_pixel_type_string_to_enum(other->get_type());
+    switch( pixel_type) {
+        case PT_UNDEF:     ASSERT( M_IMAGE, false); return nullptr;
+        case PT_SINT8:     return new Tile_impl<PT_SINT8    >( other);
+        case PT_SINT32:    return new Tile_impl<PT_SINT32   >( other);
+        case PT_FLOAT32:   return new Tile_impl<PT_FLOAT32  >( other);
+        case PT_FLOAT32_2: return new Tile_impl<PT_FLOAT32_2>( other);
+        case PT_FLOAT32_3: return new Tile_impl<PT_FLOAT32_3>( other);
+        case PT_FLOAT32_4: return new Tile_impl<PT_FLOAT32_4>( other);
+        case PT_RGB:       return new Tile_impl<PT_RGB      >( other);
+        case PT_RGBA:      return new Tile_impl<PT_RGBA     >( other);
+        case PT_RGBE:      return new Tile_impl<PT_RGBE     >( other);
+        case PT_RGBEA:     return new Tile_impl<PT_RGBEA    >( other);
+        case PT_RGB_16:    return new Tile_impl<PT_RGB_16   >( other);
+        case PT_RGBA_16:   return new Tile_impl<PT_RGBA_16  >( other);
+        case PT_RGB_FP:    return new Tile_impl<PT_RGB_FP   >( other);
+        case PT_COLOR:     return new Tile_impl<PT_COLOR    >( other);
         default:           ASSERT( M_IMAGE, false); return nullptr;
     }
 }

@@ -1,6 +1,7 @@
 set(LLVM_LINK_COMPONENTS
   DebugInfoCodeView
   DebugInfoDWARF
+  Demangle
   Object
   BinaryFormat
   Support
@@ -14,13 +15,13 @@ add_llvm_tool(llvm-readobj
   COFFDumper.cpp
   COFFImportDumper.cpp
   ELFDumper.cpp
-  Error.cpp
   llvm-readobj.cpp
   MachODumper.cpp
   ObjDumper.cpp
   WasmDumper.cpp
   Win64EHDumper.cpp
   WindowsResourceDumper.cpp
+  XCOFFDumper.cpp
   )
 
 add_llvm_tool_symlink(llvm-readelf llvm-readobj)

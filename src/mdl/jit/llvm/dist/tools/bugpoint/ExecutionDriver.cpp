@@ -1,9 +1,8 @@
 //===- ExecutionDriver.cpp - Allow execution of LLVM program --------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -34,7 +33,6 @@ enum OutputType {
   RunJIT,
   RunLLC,
   RunLLCIA,
-  LLC_Safe,
   CompileCustom,
   Custom
 };
@@ -54,7 +52,6 @@ cl::opt<OutputType> InterpreterSel(
                clEnumValN(RunLLC, "run-llc", "Compile with LLC"),
                clEnumValN(RunLLCIA, "run-llc-ia",
                           "Compile with LLC with integrated assembler"),
-               clEnumValN(LLC_Safe, "llc-safe", "Use LLC for all"),
                clEnumValN(CompileCustom, "compile-custom",
                           "Use -compile-command to define a command to "
                           "compile the bitcode. Useful to avoid linking."),
@@ -148,8 +145,9 @@ Error BugDriver::initializeExecutionEnvironment() {
   std::string Message;
 
   if (CCBinary.empty()) {
-    if (sys::findProgramByName("clang"))
-      CCBinary = "clang";
+    if (ErrorOr<std::string> ClangPath =
+            FindProgramByName("clang", getToolName(), &AbsTolerance))
+      CCBinary = *ClangPath;
     else
       CCBinary = "gcc";
   }
@@ -182,7 +180,6 @@ Error BugDriver::initializeExecutionEnvironment() {
     break;
   case RunLLC:
   case RunLLCIA:
-  case LLC_Safe:
     Interpreter = AbstractInterpreter::createLLC(
         getToolName(), Message, CCBinary, &ToolArgv, &CCToolArgv,
         InterpreterSel == RunLLCIA);
@@ -193,11 +190,11 @@ Error BugDriver::initializeExecutionEnvironment() {
     break;
   case CompileCustom:
     Interpreter = AbstractInterpreter::createCustomCompiler(
-        Message, CustomCompileCommand);
+        getToolName(), Message, CustomCompileCommand);
     break;
   case Custom:
-    Interpreter =
-        AbstractInterpreter::createCustomExecutor(Message, CustomExecCommand);
+    Interpreter = AbstractInterpreter::createCustomExecutor(
+        getToolName(), Message, CustomExecCommand);
     break;
   }
   if (!Interpreter)
@@ -212,21 +209,12 @@ Error BugDriver::initializeExecutionEnvironment() {
   switch (SafeInterpreterSel) {
   case AutoPick:
     // In "llc-safe" mode, default to using LLC as the "safe" backend.
-    if (!SafeInterpreter && InterpreterSel == LLC_Safe) {
+    if (InterpreterSel == RunLLC) {
       SafeInterpreterSel = RunLLC;
       SafeToolArgs.push_back("--relocation-model=pic");
       SafeInterpreter = AbstractInterpreter::createLLC(
           Path.c_str(), Message, CCBinary, &SafeToolArgs, &CCToolArgv);
-    }
-
-    if (!SafeInterpreter && InterpreterSel != RunLLC &&
-        InterpreterSel != RunJIT) {
-      SafeInterpreterSel = RunLLC;
-      SafeToolArgs.push_back("--relocation-model=pic");
-      SafeInterpreter = AbstractInterpreter::createLLC(
-          Path.c_str(), Message, CCBinary, &SafeToolArgs, &CCToolArgv);
-    }
-    if (!SafeInterpreter) {
+    } else if (InterpreterSel != CompileCustom) {
       SafeInterpreterSel = AutoPick;
       Message = "Sorry, I can't automatically select a safe interpreter!\n";
     }
@@ -239,20 +227,20 @@ Error BugDriver::initializeExecutionEnvironment() {
         SafeInterpreterSel == RunLLCIA);
     break;
   case Custom:
-    SafeInterpreter =
-        AbstractInterpreter::createCustomExecutor(Message, CustomExecCommand);
+    SafeInterpreter = AbstractInterpreter::createCustomExecutor(
+        getToolName(), Message, CustomExecCommand);
     break;
   default:
     Message = "Sorry, this back-end is not supported by bugpoint as the "
               "\"safe\" backend right now!\n";
     break;
   }
-  if (!SafeInterpreter) {
+  if (!SafeInterpreter && InterpreterSel != CompileCustom) {
     outs() << Message << "\nExiting.\n";
     exit(1);
   }
 
-  cc = CC::create(Message, CCBinary, &CCToolArgv);
+  cc = CC::create(getToolName(), Message, CCBinary, &CCToolArgv);
   if (!cc) {
     outs() << Message << "\nExiting.\n";
     exit(1);
@@ -299,25 +287,31 @@ Expected<std::string> BugDriver::executeProgram(const Module &Program,
   if (!AI)
     AI = Interpreter;
   assert(AI && "Interpreter should have been created already!");
+  bool CreatedBitcode = false;
   if (BitcodeFile.empty()) {
     // Emit the program to a bitcode file...
-    auto File =
-        sys::fs::TempFile::create(OutputPrefix + "-test-program-%%%%%%%.bc");
-    if (!File) {
-      errs() << ToolName
-             << ": Error making unique filename: " << toString(File.takeError())
+    SmallString<128> UniqueFilename;
+    int UniqueFD;
+    std::error_code EC = sys::fs::createUniqueFile(
+        OutputPrefix + "-test-program-%%%%%%%.bc", UniqueFD, UniqueFilename);
+    if (EC) {
+      errs() << ToolName << ": Error making unique filename: " << EC.message()
              << "!\n";
       exit(1);
     }
-    DiscardTemp Discard{*File};
-    BitcodeFile = File->TmpName;
+    BitcodeFile = std::string(UniqueFilename.str());
 
-    if (writeProgramToFile(File->FD, Program)) {
+    if (writeProgramToFile(BitcodeFile, UniqueFD, Program)) {
       errs() << ToolName << ": Error emitting bitcode to file '" << BitcodeFile
              << "'!\n";
       exit(1);
     }
+    CreatedBitcode = true;
   }
+
+  // Remove the temporary bitcode file when we are done.
+  std::string BitcodePath(BitcodeFile);
+  FileRemover BitcodeFileRemover(BitcodePath, CreatedBitcode && !SaveTemps);
 
   if (OutputFile.empty())
     OutputFile = OutputPrefix + "-execution-output-%%%%%%%";
@@ -330,7 +324,7 @@ Expected<std::string> BugDriver::executeProgram(const Module &Program,
            << "\n";
     exit(1);
   }
-  OutputFile = UniqueFile.str();
+  OutputFile = std::string(UniqueFile.str());
 
   // Figure out which shared objects to run, if any.
   std::vector<std::string> SharedObjs(AdditionalSOs);

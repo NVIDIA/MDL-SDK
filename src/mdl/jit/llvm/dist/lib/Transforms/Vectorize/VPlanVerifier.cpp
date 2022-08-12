@@ -1,9 +1,8 @@
 //===-- VPlanVerifier.cpp -------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 ///
@@ -14,7 +13,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "VPlanVerifier.h"
+#include "VPlan.h"
 #include "llvm/ADT/DepthFirstIterator.h"
+#include "llvm/Support/CommandLine.h"
 
 #define DEBUG_TYPE "loop-vectorize"
 
@@ -64,9 +65,7 @@ static void verifyBlocksInRegion(const VPRegionBlock *Region) {
     for (const VPBlockBase *Succ : Successors) {
       // There must be a bi-directional link between block and successor.
       const auto &SuccPreds = Succ->getPredecessors();
-      assert(std::find(SuccPreds.begin(), SuccPreds.end(), VPB) !=
-                 SuccPreds.end() &&
-             "Missing predecessor link.");
+      assert(llvm::is_contained(SuccPreds, VPB) && "Missing predecessor link.");
       (void)SuccPreds;
     }
 
@@ -85,9 +84,7 @@ static void verifyBlocksInRegion(const VPRegionBlock *Region) {
 
       // There must be a bi-directional link between block and predecessor.
       const auto &PredSuccs = Pred->getSuccessors();
-      assert(std::find(PredSuccs.begin(), PredSuccs.end(), VPB) !=
-                 PredSuccs.end() &&
-             "Missing successor link.");
+      assert(llvm::is_contained(PredSuccs, VPB) && "Missing successor link.");
       (void)PredSuccs;
     }
   }

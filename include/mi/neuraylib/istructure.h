@@ -71,7 +71,7 @@ public:
     virtual const IStructure_decl* get_structure_decl() const = 0;
 };
 
-/*@}*/ // end group mi_neuray_collections
+/**@}*/ // end group mi_neuray_collections
 
 } // namespace mi
 

@@ -108,6 +108,8 @@ public:
         MAKE_ALL(SYM_TYPE_MIN10FLOAT),
         MAKE_ALL(SYM_TYPE_MIN16FLOAT),
 
+        SYM_TYPE_STRING,
+
         SYM_TYPE_SAMPLER,
 
         SYM_TYPE_TEXTURE,
@@ -118,7 +120,9 @@ public:
         SYM_TYPE_TEXTURE3D,
         SYM_TYPE_TEXTURECUBE,
 
-        SYM_TYPE_LAST = SYM_TYPE_TEXTURECUBE,
+        SYM_TYPE_TEMPLATE,
+
+        SYM_TYPE_LAST = SYM_TYPE_TEMPLATE,
 
         // constants
         SYM_CNST_FIRST,

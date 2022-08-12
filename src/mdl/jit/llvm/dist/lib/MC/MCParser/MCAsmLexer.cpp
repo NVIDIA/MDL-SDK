@@ -1,9 +1,8 @@
 //===- MCAsmLexer.cpp - Abstract Asm Lexer Interface ----------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -15,7 +14,7 @@
 
 using namespace llvm;
 
-MCAsmLexer::MCAsmLexer() : AltMacroMode(false) {
+MCAsmLexer::MCAsmLexer() {
   CurTok.emplace_back(AsmToken::Space, StringRef());
 }
 
@@ -85,6 +84,7 @@ void AsmToken::dump(raw_ostream &OS) const {
   case AsmToken::LessGreater:        OS << "LessGreater"; break;
   case AsmToken::LessLess:           OS << "LessLess"; break;
   case AsmToken::Minus:              OS << "Minus"; break;
+  case AsmToken::MinusGreater:       OS << "MinusGreater"; break;
   case AsmToken::Percent:            OS << "Percent"; break;
   case AsmToken::Pipe:               OS << "Pipe"; break;
   case AsmToken::PipePipe:           OS << "PipePipe"; break;

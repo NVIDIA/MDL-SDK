@@ -427,8 +427,11 @@ this section, it invokes the callback and passes the section name. The
 JIT can record the in-memory address of the section at this time and
 later parse it to recover the stack map data.
 
-On Darwin, the stack map section name is "__llvm_stackmaps". The
-segment name is "__LLVM_STACKMAPS".
+For MachO (e.g. on Darwin), the stack map section name is
+"__llvm_stackmaps". The segment name is "__LLVM_STACKMAPS".
+
+For ELF (e.g. on Linux), the stack map section name is
+".llvm_stackmaps".  The segment name is "__LLVM_STACKMAPS".
 
 Stack Map Usage
 ===============
@@ -511,4 +514,4 @@ Supported Architectures
 Support for StackMap generation and the related intrinsics requires 
 some code for each backend.  Today, only a subset of LLVM's backends 
 are supported.  The currently supported architectures are X86_64, 
-PowerPC, and Aarch64.
+PowerPC, Aarch64 and SystemZ.

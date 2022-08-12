@@ -1,9 +1,8 @@
 //===- SSAUpdater.h - Unstructured SSA Update Tool --------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -76,6 +75,10 @@ public:
   /// block.
   bool HasValueForBlock(BasicBlock *BB) const;
 
+  /// Return the value for the specified block if the SSAUpdater has one,
+  /// otherwise return nullptr.
+  Value *FindValueForBlock(BasicBlock *BB) const;
+
   /// Construct SSA form, materializing a value that is live at the end
   /// of the specified block.
   Value *GetValueAtEndOfBlock(BasicBlock *BB);
@@ -144,7 +147,7 @@ public:
   /// Insts is a list of loads and stores to promote, and Name is the basename
   /// for the PHIs to insert. After this is complete, the loads and stores are
   /// removed from the code.
-  void run(const SmallVectorImpl<Instruction *> &Insts) const;
+  void run(const SmallVectorImpl<Instruction *> &Insts);
 
   /// Return true if the specified instruction is in the Inst list.
   ///
@@ -155,7 +158,7 @@ public:
 
   /// This hook is invoked after all the stores are found and inserted as
   /// available values.
-  virtual void doExtraRewritesBeforeFinalDeletion() const {}
+  virtual void doExtraRewritesBeforeFinalDeletion() {}
 
   /// Clients can choose to implement this to get notified right before
   /// a load is RAUW'd another value.

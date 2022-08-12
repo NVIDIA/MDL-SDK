@@ -578,14 +578,14 @@ bool Mdl_discovery_api_impl::is_valid_node_name(const char* identifier) const
     if (!identifier)
         return false;
 
-    std::string s = identifier;
-    s = "::" + s;
+    std::string s = "::";
+    s += identifier;
     return MDL::is_valid_module_name(s);
 }
 
 bool Mdl_discovery_api_impl::is_known_search_path(
     const char* path,
-    mi::base::Handle<Mdl_package_info_impl>package) const
+    const mi::base::Handle<Mdl_package_info_impl>& package) const
 {
     for (mi::Size i = 0; i < package->get_search_path_index_count(); ++i) {
         if (strcmp(package->get_search_path(i), path) == 0)
@@ -602,7 +602,7 @@ namespace {
         const std::string& with,
         std::string& output)
     {
-        if (input.size() == 0)
+        if (input.empty())
             output = input;
 
         std::string sentence(input);
@@ -670,10 +670,10 @@ namespace {
     }
 
     void qualified_path_to_resolved_path(
-        std::string val,
+        const std::string& val,
         std::string& res)
     {
-        if (val.size() > 0) {
+        if (!val.empty()) {
 #ifdef MI_PLATFORM_WINDOWS
             replace_expression(val, "::", "\\", res);
 #else
@@ -683,10 +683,10 @@ namespace {
     }
 
     void resolved_path_to_qualified_path(
-        std::string val,
+        const std::string& val,
         std::string& res)
     {
-        if (val.size() > 0) {
+        if (!val.empty()) {
 #ifdef MI_PLATFORM_WINDOWS
             replace_expression(val, "\\", "::", res);
 #else
@@ -763,7 +763,7 @@ namespace {
 } // end namespace
 
 bool Mdl_discovery_api_impl::discover_filesystem_recursive(
-    mi::base::Handle<Mdl_package_info_impl> parent,
+    const mi::base::Handle<Mdl_package_info_impl>& parent,
     const char* search_path, 
     mi::Size s_idx, 
     const char* path, 
@@ -794,11 +794,11 @@ bool Mdl_discovery_api_impl::discover_filesystem_recursive(
            
             mi::base::Handle<Mdl_package_info_impl> child_package(
                 new Mdl_package_info_impl(
-                    entry.c_str(), 
+                    entry, 
                     search_path,
-                    resolved_path.c_str(), 
+                    resolved_path, 
                     mi::Uint32(s_idx), 
-                    (package_path + entry).c_str()));
+                    package_path + entry));
 
             if (!is_valid_node_name(entry.c_str()) ||
                 (parent->get_kind() == mi::neuraylib::IMdl_info::Kind::DK_DIRECTORY)) {
@@ -869,9 +869,9 @@ bool Mdl_discovery_api_impl::discover_filesystem_recursive(
                         (parent->get_kind() == mi::neuraylib::IMdl_info::Kind::DK_PACKAGE)) {
                         mi::base::Handle<Mdl_module_info_impl> module(
                             new Mdl_module_info_impl(
-                                entry.c_str(),
-                                (package_path + entry).c_str(),
-                                resolved_path.c_str(),
+                                entry,
+                                package_path + entry,
+                                resolved_path,
                                 search_path,
                                 s_idx,
                                 false));
@@ -882,10 +882,10 @@ bool Mdl_discovery_api_impl::discover_filesystem_recursive(
                         (is_xlf_file(ext))) {
                         mi::base::Handle<Mdl_xliff_info_impl>xliff(
                             new Mdl_xliff_info_impl(
-                                entry.c_str(),
-                                res_qualified_path.c_str(),
-                                resolved_path.c_str(),
-                                ext.c_str(),
+                                entry,
+                                res_qualified_path,
+                                resolved_path,
+                                ext,
                                 search_path,
                                 s_idx,
                                 false));
@@ -895,10 +895,10 @@ bool Mdl_discovery_api_impl::discover_filesystem_recursive(
                         (is_texture_file(ext))) {
                         mi::base::Handle<Mdl_texture_info_impl>texture(
                             new Mdl_texture_info_impl(
-                                entry.c_str(),
-                                res_qualified_path.c_str(),
-                                resolved_path.c_str(),
-                                ext.c_str(),
+                                entry,
+                                res_qualified_path,
+                                resolved_path,
+                                ext,
                                 search_path,
                                 s_idx,
                                 false));
@@ -909,10 +909,10 @@ bool Mdl_discovery_api_impl::discover_filesystem_recursive(
                         (is_lightprofile_file(ext))) {
                         mi::base::Handle<Mdl_lightprofile_info_impl>lightprofile(
                             new Mdl_lightprofile_info_impl(
-                                entry.c_str(),
-                                res_qualified_path.c_str(),
-                                resolved_path.c_str(),
-                                ext.c_str(),
+                                entry,
+                                res_qualified_path,
+                                resolved_path,
+                                ext,
                                 search_path,
                                 s_idx,
                                 false));
@@ -923,10 +923,10 @@ bool Mdl_discovery_api_impl::discover_filesystem_recursive(
                         (is_bsdf_file(ext))) {
                         mi::base::Handle<Mdl_measured_bsdf_info_impl>measured_bsdf(
                             new Mdl_measured_bsdf_info_impl(
-                                entry.c_str(),
-                                res_qualified_path.c_str(),
-                                resolved_path.c_str(),
-                                ext.c_str(),
+                                entry,
+                                res_qualified_path,
+                                resolved_path,
+                                ext,
                                 search_path,
                                 s_idx,
                                 false));
@@ -1014,7 +1014,7 @@ const mi::neuraylib::IMdl_discovery_result* Mdl_discovery_api_impl::discover(
 }
 
 bool Mdl_discovery_api_impl::add_archive_entries(
-    mi::base::Handle<Mdl_package_info_impl> parent,  
+    const mi::base::Handle<Mdl_package_info_impl>& parent,  
     mi::Size s_idx, 
     const char* sp, 
     const char* fqp, 
@@ -1043,7 +1043,7 @@ bool Mdl_discovery_api_impl::add_archive_entries(
             qualified_path_to_resolved_path(
                 qpath_form,
                 conv);
-            rpath_form += ":" + conv + std::string(extension);
+            rpath_form += ':' + conv + extension;
             qpath_form = "::" + qpath_form;
 
             std::string resource_qualified_path;
@@ -1053,9 +1053,9 @@ bool Mdl_discovery_api_impl::add_archive_entries(
                 // Add module
                 mi::base::Handle<Mdl_module_info_impl> module(
                     new Mdl_module_info_impl(
-                        skip_path.c_str(),
-                        qpath_form.c_str(),
-                        rpath_form.c_str(),
+                        skip_path,
+                        qpath_form,
+                        rpath_form,
                         sp,
                         s_idx,
                         true));
@@ -1067,9 +1067,9 @@ bool Mdl_discovery_api_impl::add_archive_entries(
             else if (is_xlf_file(extension)) {
                 mi::base::Handle<Mdl_xliff_info_impl>xliff(
                     new Mdl_xliff_info_impl(
-                        skip_path.c_str(),
-                        resource_qualified_path.c_str(),
-                        rpath_form.c_str(),
+                        skip_path,
+                        resource_qualified_path,
+                        rpath_form,
                         extension,
                         sp,
                         s_idx,
@@ -1080,9 +1080,9 @@ bool Mdl_discovery_api_impl::add_archive_entries(
             else if (is_texture_file(extension)) {
                 mi::base::Handle<Mdl_texture_info_impl>texture(
                     new Mdl_texture_info_impl(
-                        skip_path.c_str(),
-                        resource_qualified_path.c_str(),
-                        rpath_form.c_str(),
+                        skip_path,
+                        resource_qualified_path,
+                        rpath_form,
                         extension,
                         sp,
                         s_idx,
@@ -1095,9 +1095,9 @@ bool Mdl_discovery_api_impl::add_archive_entries(
             else if (is_lightprofile_file(extension)) {
                 mi::base::Handle<Mdl_lightprofile_info_impl>lightprofile(
                     new Mdl_lightprofile_info_impl(
-                        skip_path.c_str(),
-                        resource_qualified_path.c_str(),
-                        rpath_form.c_str(),
+                        skip_path,
+                        resource_qualified_path,
+                        rpath_form,
                         extension,
                         sp,
                         s_idx,
@@ -1111,9 +1111,9 @@ bool Mdl_discovery_api_impl::add_archive_entries(
             else if (is_bsdf_file(extension)) {
                 mi::base::Handle<Mdl_measured_bsdf_info_impl>measured_bsdf(
                     new Mdl_measured_bsdf_info_impl(
-                        skip_path.c_str(),
-                        resource_qualified_path.c_str(),
-                        rpath_form.c_str(),
+                        skip_path,
+                        resource_qualified_path,
+                        rpath_form,
                         extension,
                         sp,
                         s_idx,
@@ -1126,7 +1126,7 @@ bool Mdl_discovery_api_impl::add_archive_entries(
             }
         }
 
-        if ((e == std::string::npos) && (std::string(extension).size() == 0)){
+        if ((e == std::string::npos) && (std::string(extension).empty())){
             // Last package in archive entry path
             qualified_path.append(skip_path);
             entry = skip_path;
@@ -1141,7 +1141,7 @@ bool Mdl_discovery_api_impl::add_archive_entries(
 }
 
 bool Mdl_discovery_api_impl::discover_archive_recursive(
-    mi::base::Handle<Mdl_package_info_impl> parent,
+    const mi::base::Handle<Mdl_package_info_impl>& parent,
     const char* previous_module,
     const char* full_q_path,
     const char* search_path,
@@ -1150,8 +1150,8 @@ bool Mdl_discovery_api_impl::discover_archive_recursive(
     mi::Size s_idx,
     mi::Size level) const
 {
-    std::string entry("");
-    std::string qualified_path("");
+    std::string entry;
+    std::string qualified_path;
 
     bool is_file = add_archive_entries(
         parent,
@@ -1164,7 +1164,7 @@ bool Mdl_discovery_api_impl::discover_archive_recursive(
         entry,
         level);
 
-        if ((std::string(extension).size() == 0) || (!is_file)) {
+        if ((std::string(extension).empty()) || (!is_file)) {
 
             // Convert paths to compiler convention
             std::string rpath_formatted(resolved_path);
@@ -1174,7 +1174,7 @@ bool Mdl_discovery_api_impl::discover_archive_recursive(
                 qpath_formatted = qualified_path.substr(0, qualified_path.size() - 2);
             std::string conv;
             qualified_path_to_resolved_path(qpath_formatted, conv);
-            rpath_formatted += ":" + conv;
+            rpath_formatted += ':' + conv;
             std::string resolved_no_delimiter(qpath_formatted);
             qpath_formatted = "::" + qpath_formatted;
 
@@ -1183,17 +1183,17 @@ bool Mdl_discovery_api_impl::discover_archive_recursive(
             std::string archive_entry = std::string(full_q_path);
             std::size_t found = archive_entry.rfind(entry);
             mi::Uint32 p(found + entry.size());
-            if ((archive_entry.size() <= p) && (std::string(extension).size() == 0))
+            if ((archive_entry.size() <= p) && (std::string(extension).empty()))
                 terminate = true;
 
             // Create new package
             mi::base::Handle<Mdl_package_info_impl> new_package(
                 new Mdl_package_info_impl(
-                    entry.c_str(),
+                    entry,
                     search_path,
-                    rpath_formatted.c_str(),
+                    rpath_formatted,
                     mi::Uint32(s_idx), 
-                    qpath_formatted.c_str()));
+                    qpath_formatted));
             new_package->set_archive(0, true);
           
             // Check if the qualified path has changed in last recursion step
@@ -1203,7 +1203,7 @@ bool Mdl_discovery_api_impl::discover_archive_recursive(
                 if (idx >= 0) {
                     // Reuse package
                     mi::base::Handle<const Mdl_package_info_impl> mg(parent->get_package(idx));
-                    mi::base::Handle<Mdl_package_info_impl> reuse_pkg(new Mdl_package_info_impl(*mg.get()));
+                    mi::base::Handle<Mdl_package_info_impl> reuse_pkg(new Mdl_package_info_impl(*mg));
                     if (!is_known_search_path(search_path, reuse_pkg)) {
                         reuse_pkg->add_path(search_path);
                         reuse_pkg->add_path_index(s_idx);
@@ -1335,9 +1335,9 @@ bool Mdl_discovery_api_impl::read_archive(
     }
 
     // Special case when omly filter DK_PACKAGE is set 
-    for ( auto p : unhandled_packages) {
+    for (const  auto& p : unhandled_packages) {
         // Add unhandled_paths
-        e_list.push_back(std::string(p));
+        e_list.push_back(p);
         std::string res;
         replace_expression(
                 e_list[e_list.size() - 1],
@@ -1352,7 +1352,7 @@ bool Mdl_discovery_api_impl::read_archive(
 }
 
 bool Mdl_discovery_api_impl::discover_archive(
-    mi::base::Handle<Mdl_package_info_impl> parent,
+    const mi::base::Handle<Mdl_package_info_impl>& parent,
     const char* search_path, 
     mi::Size s_idx, 
     const char* res_path,
@@ -1369,7 +1369,7 @@ bool Mdl_discovery_api_impl::discover_archive(
         std::string fqp = entry_list[x].substr(p);
         std::size_t dot = fqp.find_last_of('.');
 
-        std::string extension("");
+        std::string extension;
         if (dot != std::string::npos) {
             extension = (fqp.substr(fqp.find_last_of('.'), fqp.size()));
             fqp = fqp.substr(0, fqp.find_last_of('.'));
@@ -1404,7 +1404,7 @@ mi::Sint32 Mdl_discovery_api_impl::shutdown()
 
 Mdl_discovery_result_impl::Mdl_discovery_result_impl(
     const Mdl_package_info_impl* graph,
-    const std::vector<std::string>paths)
+    const std::vector<std::string>& paths)
     : m_graph(make_handle_dup(graph))
 {
     for (mi::Size i=0; i < paths.size(); ++i)

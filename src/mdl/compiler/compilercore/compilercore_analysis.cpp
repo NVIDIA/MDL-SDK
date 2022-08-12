@@ -1011,7 +1011,7 @@ public:
     ///
     /// \param ana           the name and type analysis object
     /// \param num_args      number of arguments of the processed call
-    /// \param origin        the original module from which the initializer is cloned
+    /// \param origin        the original module from which the initializer is cloned if any
     explicit Default_initializer_modifier(
         NT_analysis    &ana,
         size_t         num_args,
@@ -1521,7 +1521,8 @@ string Analysis::format_msg(int code, Error_params const &params)
     m_string_buf->clear();
 
     print_error_message(code, MESSAGE_CLASS, params, m_printer.get());
-    return string(m_string_buf->get_data(), m_builder.get_allocator());
+    return string(
+        m_string_buf->get_data(), m_string_buf->get_data_size(), m_builder.get_allocator());
 }
 
 // Parse warning options.
@@ -3845,7 +3846,7 @@ Definition const *NT_analysis::import_definition(
         if (kind == Definition::DK_TYPE) {
             // we import a type/material, import the sub scope
             import_type_scope(
-                imported, from, from_idx, new_def, /*is_exported=*/false, err_pos);
+                imported, from, from_idx, new_def, err_pos);
         }
     }
     // all went fine
@@ -3882,7 +3883,6 @@ void NT_analysis::import_type_scope(
     Module const     *from,
     size_t           from_idx,
     Definition       *new_def,
-    bool             is_exported,
     Position const   &err_pos)
 {
     // we import a type/material, import the sub scope
@@ -3897,7 +3897,21 @@ void NT_analysis::import_type_scope(
     {
         Definition_table::Scope_enter enter(*m_def_tab, imp_type, new_def);
         import_scope_entities(
-            orig_scope, from, from_idx, is_exported, /*forced=*/true, err_pos);
+            orig_scope, from, from_idx, /*is_exported=*/false, /*forced=*/true, err_pos);
+
+        if (new_def->has_flag(Definition::DEF_IS_EXPORTED)) {
+            // export all constructors if the type is exported
+            ISymbol const *sym = new_def->get_sym();
+
+            for (Definition *c_def = m_def_tab->get_definition(sym);
+                c_def != NULL;
+                c_def = c_def->get_prev_def())
+            {
+                if (c_def->get_kind() == IDefinition::DK_CONSTRUCTOR) {
+                    c_def->set_flag(Definition::DEF_IS_EXPORTED);
+                }
+            }
+        }
     }
 }
 
@@ -3924,7 +3938,7 @@ void NT_analysis::import_scope_entities(
          imported = imported->get_next_def_in_scope())
     {
         // we do not allow to export only parts of an overload set, so it it safe to check for
-        // the exported flag just on the lat member of a set
+        // the exported flag just on the last member of a set
         if (forced || imported->has_flag(Definition::DEF_IS_EXPORTED)) {
             // check if we can import def
             ISymbol const *imp_sym = m_module.import_symbol(imported->get_sym());
@@ -3991,7 +4005,7 @@ void NT_analysis::import_scope_entities(
             Definition::Kind kind = imported->get_kind();
             if (kind == Definition::DK_TYPE) {
                 import_type_scope(
-                    imported, from, from_idx, new_def, /*is_exported=*/false, err_pos);
+                    imported, from, from_idx, new_def, err_pos);
             }
         }
     }
@@ -4417,13 +4431,6 @@ void NT_analysis::import_all_entities(
 
     Scope *imp_scope = imp_deftab.get_global_scope();
 
-    // import into global scope
-    {
-        Definition_table::Scope_transition transition(*m_def_tab, m_def_tab->get_global_scope());
-        import_scope_entities(
-            imp_scope, imp_mod, imp_idx, is_exported, /*forced=*/false, err_pos);
-    }
-
     // import into named scope (never exported)
     {
         Definition_table::Scope_transition transition(*m_def_tab, m_def_tab->get_global_scope());
@@ -4444,6 +4451,15 @@ void NT_analysis::import_all_entities(
 
         import_scope_entities(
             imp_scope, imp_mod, imp_idx, /*is_exported=*/false, /*forced=*/false, err_pos);
+    }
+
+    // import into global scope. Beware: Do this AFTER import into local scope,
+    // so the type scopes are pointing to this entities. This is crucial, because only entities
+    // in the global scope have the export flag set!
+    {
+        Definition_table::Scope_transition transition(*m_def_tab, m_def_tab->get_global_scope());
+        import_scope_entities(
+            imp_scope, imp_mod, imp_idx, is_exported, /*forced=*/false, err_pos);
     }
 }
 
@@ -9875,17 +9891,20 @@ IExpression const *NT_analysis::find_init_constructor(
     IExpression_reference *callee    = fact.create_reference(tname);
     IExpression_call      *call_expr = fact.create_call(callee, POS(pos));
 
-    // visit the reference, that sets the definitions
-    (void)visit(callee);
+    Definition const *initial_def = get_definition_for_reference(callee);
+    callee->set_definition(initial_def);
+    callee->set_type(initial_def->get_type());
+
+    MDL_ASSERT(!is<IType_auto>(callee->get_type()));
+
+    MDL_ASSERT(is_error(initial_def) || initial_def->get_kind() == Definition::DK_CONSTRUCTOR);
+
 
     if (init_expr != NULL) {
         Position const &pos = init_expr->access_position();
         IArgument_positional const *arg = fact.create_positional_argument(init_expr, POS(pos));
         call_expr->add_argument(arg);
     }
-
-    Definition const *initial_def = impl_cast<Definition>(callee->get_definition());
-    MDL_ASSERT(is_error(initial_def) || initial_def->get_kind() == Definition::DK_CONSTRUCTOR);
 
     // we are always looking up an constructor, so we are bound to scope
     Definition const *def = find_overload(initial_def, call_expr, /*bound_to_scope=*/true);
@@ -10188,16 +10207,16 @@ Definition const *NT_analysis::reformat_default_struct_constructor(
             ptype = ptype->skip_type_alias();
 
             // Getting the default value might be more complicated then expected.
-            // The problem here is auto export: A filed type might be a non-imported
+            // The problem here is auto export: A field type might be a non-imported
             // type. Handle that gracefully.
-
-            mi::base::Handle<Module const> ptype_mod(&m_module, mi::base::DUP_INTERFACE);
 
             IType const *tp = ptype;
 
             while (IType_array const *a_tp = as<IType_array>(tp)) {
                 tp = a_tp->get_element_type()->skip_type_alias();
             }
+
+            mi::base::Handle<Module const> ptype_mod(&m_module, mi::base::DUP_INTERFACE);
 
             if (is<IType_struct>(ptype) || is<IType_enum>(ptype)) {
                 Scope *type_scope = m_def_tab->get_type_scope(ptype);
@@ -12480,52 +12499,7 @@ IExpression *NT_analysis::post_visit(IExpression_literal *lit)
 // end of a reference expression
 IExpression *NT_analysis::post_visit(IExpression_reference *ref)
 {
-    // get the definition from the type name
-    IType_name const *type_name = ref->get_name();
-    IQualified_name const *qual_name = type_name->get_qualified_name();
-    Definition const *tdef = impl_cast<Definition>(qual_name->get_definition());
-
-    Definition const *def = tdef;
-    Definition::Kind kind = tdef->get_kind();
-    if (kind == Definition::DK_TYPE) {
-        // we are referencing a type/material, must be a constructor: look if there is one
-        IType const *type = type_name->get_type()->skip_type_alias();
-
-        if (type_name->is_array()) {
-            ref->set_array_constructor();
-        }
-
-        if (is<IType_error>(type)) {
-            def = get_error_definition();
-        } else {
-            if (IType_array const *a_type = as<IType_array>(type)) {
-                // folded array constructor, i.e. T[size] a(args)
-                type = a_type->get_element_type()->skip_type_alias();
-            }
-
-            Scope *type_scope = m_def_tab->get_type_scope(type);
-
-            def = type_scope != NULL ?
-                type_scope->find_definition_in_scope(type_scope->get_scope_name()) : NULL;
-            if (def == NULL) {
-                error(
-                    INTERNAL_COMPILER_ERROR,
-                    ref->access_position(),
-                    Error_params(*this)
-                        .add("Could not find constructor for type '")
-                        .add(tdef->get_sym())
-                        .add("'"));
-                def = get_error_definition();
-            }
-        }
-    }
-
-    if (def->get_kind() != Definition::DK_ERROR) {
-        if (def->has_flag(Definition::DEF_IS_INCOMPLETE)) {
-            // was used when in incomplete state
-            const_cast<Definition *>(def)->set_flag(Definition::DEF_USED_INCOMPLETE);
-        }
-    }
+    Definition const *def = get_definition_for_reference(ref);
 
     ref->set_definition(def);
 
@@ -16635,6 +16609,60 @@ void NT_analysis::handle_resource_url(
         }
         lit->set_value(val);
     }
+}
+
+// Compute the definition for a reference expression.
+Definition const *NT_analysis::get_definition_for_reference(
+    IExpression_reference *ref)
+{
+    // get the definition from the type name
+    IType_name const *type_name = ref->get_name();
+    IQualified_name const *qual_name = type_name->get_qualified_name();
+    Definition const *tdef = impl_cast<Definition>(qual_name->get_definition());
+
+    Definition const *def = tdef;
+    Definition::Kind kind = tdef->get_kind();
+    if (kind == Definition::DK_TYPE) {
+        // we are referencing a type/material, must be a constructor: look if there is one
+        IType const *type = def->get_type()->skip_type_alias();
+
+        // FIXME: This is ugly, as it is a necessary side effect
+        if (type_name->is_array()) {
+            ref->set_array_constructor();
+        }
+
+        if (is<IType_error>(type)) {
+            def = get_error_definition();
+        } else {
+            if (IType_array const *a_type = as<IType_array>(type)) {
+                // folded array constructor, i.e. T[size] a(args)
+                type = a_type->get_element_type()->skip_type_alias();
+            }
+
+            Scope *type_scope = m_def_tab->get_type_scope(type);
+
+            def = type_scope != NULL ?
+                type_scope->find_definition_in_scope(type_scope->get_scope_name()) : NULL;
+            if (def == NULL) {
+                error(
+                    INTERNAL_COMPILER_ERROR,
+                    ref->access_position(),
+                    Error_params(*this)
+                    .add("Could not find constructor for type '")
+                    .add(tdef->get_sym())
+                    .add("'"));
+                def = get_error_definition();
+            }
+        }
+    }
+
+    if (def->get_kind() != Definition::DK_ERROR) {
+        if (def->has_flag(Definition::DEF_IS_INCOMPLETE)) {
+            // was used when in incomplete state
+            const_cast<Definition *>(def)->set_flag(Definition::DEF_USED_INCOMPLETE);
+        }
+    }
+    return def;
 }
 
 // Constructor.

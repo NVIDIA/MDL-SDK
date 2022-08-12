@@ -35,6 +35,7 @@
 
 #include <string>
 #include <map>
+#include <functional>
 
 #include <mi/base/handle.h>
 #include <mi/mdl/mdl_printers.h>

@@ -209,7 +209,7 @@ bool Mdl_configuration_impl::get_expose_names_of_let_expressions() const
     return m_expose_names_of_let_expressions;
 }
 
-mi::Sint32 Mdl_configuration_impl::set_simple_glossy_bsdf_legacy_enabled(bool value)
+mi::Sint32 Mdl_configuration_impl::set_simple_glossy_bsdf_legacy_enabled( bool value)
 {
     return -1; // cannot be changed for mdl_sdk
 }
@@ -219,7 +219,7 @@ bool Mdl_configuration_impl::get_simple_glossy_bsdf_legacy_enabled() const
     return m_simple_glossy_bsdf_legacy_enabled;
 }
 
-mi::Sint32 Mdl_configuration_impl::set_materials_are_functions(bool value)
+mi::Sint32 Mdl_configuration_impl::set_materials_are_functions( bool value)
 {
     mi::neuraylib::INeuray::Status status = m_neuray->get_status();
     if(    (status != mi::neuraylib::INeuray::PRE_STARTING)
@@ -227,6 +227,9 @@ mi::Sint32 Mdl_configuration_impl::set_materials_are_functions(bool value)
         return -1;
 
     m_materials_are_functions = value;
+    if( !value)
+        LOG::mod_log->warning( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
+            "Disabling \"materials are functions\" is deprecated.");
 
     return 0;
 }
@@ -244,6 +247,9 @@ mi::Sint32 Mdl_configuration_impl::set_encoded_names_enabled( bool value)
         return -1;
 
     MDL::set_encoded_names_enabled( value);
+    if( !value)
+        LOG::mod_log->warning( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
+            "Disabling encoded names is deprecated.");
 
     return 0;
 }
@@ -304,7 +310,7 @@ mi::Sint32 Mdl_configuration_impl::start()
 
     MDL::Neuray_impl* neuray_impl = static_cast<MDL::Neuray_impl*>( m_neuray);
     neuray_impl->get_class_factory()->set_materials_are_functions( m_materials_are_functions);
-    
+
     LOG::mod_log->info( M_MDLC, LOG::Mod_log::C_COMPILER,
         "Encoded names are %s.", MDL::get_encoded_names_enabled() ? "enabled" : "disabled");
 

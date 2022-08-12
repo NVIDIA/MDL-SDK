@@ -1,9 +1,8 @@
 //===--- Compression.cpp - Compression implementation ---------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -18,25 +17,15 @@
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/ErrorHandling.h"
-#if LLVM_ENABLE_ZLIB == 1 && HAVE_ZLIB_H
+#if LLVM_ENABLE_ZLIB
 #include <zlib.h>
 #endif
 
 using namespace llvm;
 
-#if LLVM_ENABLE_ZLIB == 1 && HAVE_LIBZ
+#if LLVM_ENABLE_ZLIB
 static Error createError(StringRef Err) {
   return make_error<StringError>(Err, inconvertibleErrorCode());
-}
-
-static int encodeZlibCompressionLevel(zlib::CompressionLevel Level) {
-  switch (Level) {
-    case zlib::NoCompression: return 0;
-    case zlib::BestSpeedCompression: return 1;
-    case zlib::DefaultCompression: return Z_DEFAULT_COMPRESSION;
-    case zlib::BestSizeCompression: return 9;
-  }
-  llvm_unreachable("Invalid zlib::CompressionLevel!");
 }
 
 static StringRef convertZlibCodeToString(int Code) {
@@ -58,18 +47,16 @@ static StringRef convertZlibCodeToString(int Code) {
 bool zlib::isAvailable() { return true; }
 
 Error zlib::compress(StringRef InputBuffer,
-                     SmallVectorImpl<char> &CompressedBuffer,
-                     CompressionLevel Level) {
+                     SmallVectorImpl<char> &CompressedBuffer, int Level) {
   unsigned long CompressedSize = ::compressBound(InputBuffer.size());
-  CompressedBuffer.resize(CompressedSize);
-  int CLevel = encodeZlibCompressionLevel(Level);
-  int Res = ::compress2((Bytef *)CompressedBuffer.data(), &CompressedSize,
-                        (const Bytef *)InputBuffer.data(), InputBuffer.size(),
-                        CLevel);
+  CompressedBuffer.reserve(CompressedSize);
+  int Res =
+      ::compress2((Bytef *)CompressedBuffer.data(), &CompressedSize,
+                  (const Bytef *)InputBuffer.data(), InputBuffer.size(), Level);
   // Tell MemorySanitizer that zlib output buffer is fully initialized.
   // This avoids a false report when running LLVM with uninstrumented ZLib.
   __msan_unpoison(CompressedBuffer.data(), CompressedSize);
-  CompressedBuffer.resize(CompressedSize);
+  CompressedBuffer.set_size(CompressedSize);
   return Res ? createError(convertZlibCodeToString(Res)) : Error::success();
 }
 
@@ -87,10 +74,10 @@ Error zlib::uncompress(StringRef InputBuffer, char *UncompressedBuffer,
 Error zlib::uncompress(StringRef InputBuffer,
                        SmallVectorImpl<char> &UncompressedBuffer,
                        size_t UncompressedSize) {
-  UncompressedBuffer.resize(UncompressedSize);
+  UncompressedBuffer.reserve(UncompressedSize);
   Error E =
       uncompress(InputBuffer, UncompressedBuffer.data(), UncompressedSize);
-  UncompressedBuffer.resize(UncompressedSize);
+  UncompressedBuffer.set_size(UncompressedSize);
   return E;
 }
 
@@ -101,8 +88,7 @@ uint32_t zlib::crc32(StringRef Buffer) {
 #else
 bool zlib::isAvailable() { return false; }
 Error zlib::compress(StringRef InputBuffer,
-                     SmallVectorImpl<char> &CompressedBuffer,
-                     CompressionLevel Level) {
+                     SmallVectorImpl<char> &CompressedBuffer, int Level) {
   llvm_unreachable("zlib::compress is unavailable");
 }
 Error zlib::uncompress(StringRef InputBuffer, char *UncompressedBuffer,
@@ -118,4 +104,3 @@ uint32_t zlib::crc32(StringRef Buffer) {
   llvm_unreachable("zlib::crc32 is unavailable");
 }
 #endif
-

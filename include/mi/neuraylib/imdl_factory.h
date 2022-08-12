@@ -123,7 +123,7 @@ public:
     ///
     /// \see #mi::neuraylib::IImage::reset_file() if you are given a plain filename instead of an
     ///      MDL file path.
-    virtual IValue_texture* create_texture(  
+    virtual IValue_texture* create_texture(
         ITransaction* transaction,
         const char* file_path,
         IType_texture::Shape shape,
@@ -385,9 +385,12 @@ public:
         const char* module_name,
         const IArray* mdl_data,
         IMdl_execution_context* context) = 0;
+
+    /// Indicates whether the given string is a valid MDL identifier.
+    virtual bool is_valid_mdl_identifier( const char* name) const = 0;
 };
 
-/*@}*/ // end group mi_neuray_mdl_misc
+/**@}*/ // end group mi_neuray_mdl_misc
 
 } // namespace neuraylib
 

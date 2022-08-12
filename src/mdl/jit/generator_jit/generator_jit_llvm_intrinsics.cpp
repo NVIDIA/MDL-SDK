@@ -1262,6 +1262,23 @@ typedef void   (*VV_lbDD)(LB *, double);
 typedef void   (*VV_lbCS)(LB *, char const *);
 typedef void   (*VV_xsIIZZCSII)(Exc_state &, int, size_t, char const *, int);
 typedef void   (*VV_xsCSII)(Exc_state &, char const *, int);
+typedef void  *(*vv_vvIIZZ)(void *, int, size_t);
+
+// Note: we use structs here instead of vectors, BUT we will never match the type against C-lib
+struct F2 { float a; float b; };
+struct F3 { float a; float b; float c; };
+struct F4 { float a; float b; float c; float d; };
+struct D2 { double a; double b; };
+struct D3 { double a; double b; double c; };
+struct D4 { double a; double b; double c; double d; };
+
+typedef F2 (*F2_F2F2)(F2, F2);
+typedef F2 (*F3_F3F3)(F3, F3);
+typedef F2 (*F4_F4F4)(F4, F4);
+
+typedef D2(*D2_D2D2)(D2, D2);
+typedef D2(*D3_D3D3)(D3, D3);
+typedef D2(*D4_D4D4)(D4, D4);
 
 template <typename Signature>
 struct Signature_trait {
@@ -1305,6 +1322,138 @@ static void add_attributes(llvm::Function *func, int nocapture_idx)
     }
     else
         func->setOnlyReadsMemory();
+}
+
+/// Create the body of a vector compare wrapper function.
+static void create_vector_compare(
+    llvm::CmpInst::Predicate     pred,
+    Function_context             &ctx,
+    llvm::Function::arg_iterator &arg_it)
+{
+    llvm::Type *res_type = ctx.get_return_type();
+    if (llvm::FixedVectorType *vt = llvm::dyn_cast<llvm::FixedVectorType>(res_type)) {
+        uint64_t size = vt->getNumElements();
+
+        llvm::Value *res = llvm::ConstantAggregateZero::get(vt);
+
+        llvm::Value *a = arg_it++;
+        llvm::Value *b = arg_it;
+
+        llvm::Constant *cTrue  = ctx.get_constant(true);
+        llvm::Constant *cFalse = ctx.get_constant(false);
+        for (uint64_t i = 0; i < size; ++i) {
+            llvm::Value *a_elem = ctx->CreateExtractElement(a, i);
+            llvm::Value *b_elem = ctx->CreateExtractElement(b, i);
+
+            llvm::Value *cmp  = llvm::CmpInst::isIntPredicate(pred) ?
+                ctx->CreateICmp(pred, a_elem, b_elem) :
+                ctx->CreateFCmp(pred, a_elem, b_elem);
+            llvm::Value *elem = ctx->CreateSelect(cmp, cTrue, cFalse);
+
+            res = ctx->CreateInsertElement(res, elem, i);
+        }
+        ctx.create_return(res);
+    } else {
+        llvm::ArrayType *at = llvm::cast<llvm::ArrayType>(res_type);
+        uint64_t size = at->getNumElements();
+
+        llvm::Value *res = llvm::ConstantAggregateZero::get(at);
+
+        llvm::Value *a = arg_it++;
+        llvm::Value *b = arg_it;
+
+        llvm::Constant *cTrue  = ctx.get_constant(true);
+        llvm::Constant *cFalse = ctx.get_constant(false);
+        unsigned idxes[1];
+
+        for (uint64_t i = 0; i < size; ++i) {
+            idxes[0] = unsigned(i);
+
+            llvm::Value *a_elem = ctx->CreateExtractValue(a, idxes);
+            llvm::Value *b_elem = ctx->CreateExtractValue(b, idxes);
+
+            llvm::Value *cmp = llvm::CmpInst::isIntPredicate(pred) ?
+                ctx->CreateICmp(pred, a_elem, b_elem) :
+                ctx->CreateFCmp(pred, a_elem, b_elem);
+            llvm::Value *elem = ctx->CreateSelect(cmp, cTrue, cFalse);
+
+            res = ctx->CreateInsertValue(res, elem, idxes);
+        }
+        ctx.create_return(res);
+    }
+}
+
+/// Create the body of a bool vector wrapper function.
+static void create_bool_vector_op(
+    mdl::IExpression_binary::Operator op,
+    Function_context                  &ctx,
+    llvm::Function::arg_iterator      &arg_it)
+{
+    llvm::Type *res_type = ctx.get_return_type();
+    if (llvm::FixedVectorType *vt = llvm::dyn_cast<llvm::FixedVectorType>(res_type)) {
+        uint64_t size = vt->getNumElements();
+
+        llvm::Value *res = llvm::UndefValue::get(vt);
+
+        llvm::Value *a = arg_it++;
+        llvm::Value *b = arg_it;
+
+        for (uint64_t i = 0; i < size; ++i) {
+            llvm::Value *a_elem = ctx->CreateExtractElement(a, i);
+            llvm::Value *b_elem = ctx->CreateExtractElement(b, i);
+
+            llvm::Value *elem = nullptr;
+
+            switch (op) {
+            case mdl::IExpression_binary::OK_LOGICAL_AND:
+                elem = ctx->CreateAnd(a_elem, b_elem);
+                break;
+            case mdl::IExpression_binary::OK_LOGICAL_OR:
+                elem = ctx->CreateOr(a_elem, b_elem);
+                break;
+            default:
+                MDL_ASSERT(!"unexpected operator");
+                elem = llvm::UndefValue::get(vt->getElementType());
+            }
+
+            res = ctx->CreateInsertElement(res, elem, i);
+        }
+        ctx.create_return(res);
+    } else {
+        llvm::ArrayType *at = llvm::cast<llvm::ArrayType>(res_type);
+        uint64_t size = at->getNumElements();
+
+        llvm::Value *res = llvm::ConstantAggregateZero::get(at);
+
+        llvm::Value *a = arg_it++;
+        llvm::Value *b = arg_it;
+
+        unsigned idxes[1];
+
+        for (uint64_t i = 0; i < size; ++i) {
+            idxes[0] = unsigned(i);
+
+            llvm::Value *a_elem = ctx->CreateExtractValue(a, idxes);
+            llvm::Value *b_elem = ctx->CreateExtractValue(b, idxes);
+
+            llvm::Value *elem = nullptr;
+            switch (op) {
+            case mdl::IExpression_binary::OK_LOGICAL_AND:
+                elem = ctx->CreateAnd(a_elem, b_elem);
+                break;
+            case mdl::IExpression_binary::OK_LOGICAL_OR:
+                elem = ctx->CreateOr(a_elem, b_elem);
+                break;
+            default:
+                MDL_ASSERT(!"unexpected operator");
+                elem = llvm::UndefValue::get(vt->getElementType());
+            }
+
+            res = ctx->CreateInsertValue(res, elem, idxes);
+        }
+        ctx.create_return(res);
+
+    }
 }
 
 //#ifdef MI_ENABLE_MISTD
@@ -1390,10 +1539,21 @@ case en: \
     func->setLinkage(llvm::GlobalValue::ExternalLinkage); \
     break;
 
+#define GLSL_INTRINSIC(en, name, type) \
+case en: \
+    func = decl_from_signature("glsl." #name, signature, is_sret); \
+    add_attributes(func, Signature_trait<type>::NO_CAPTURE_ARG_IDX); \
+    func->setLinkage(llvm::GlobalValue::ExternalLinkage); \
+    break;
+
+#define UNSUPPORTED(en) \
+case en: return NULL;
+
     llvm::Function *func = NULL;
     bool is_sret = false;
     switch (m_target_lang) {
-    case LLVM_code_generator::TL_NATIVE:
+    case ICode_generator::TL_LLVM_IR:
+    case ICode_generator::TL_NATIVE:
         // use default LLVM intrinsics
         switch (code) {
         LLVM_INTRINSIC(RT_ABS,      fabs);
@@ -1431,12 +1591,20 @@ case en: \
         EXTERNAL_CMATH(RT_TANHF,    tanhf, FF_FF);
         EXTERNAL_CMATH(RT_TANH,     tanh, DD_DD);
         LLVM_INTRINSIC(RT_COPYSIGN, copysign);
+        UNSUPPORTED(RT_STEPFF);
+        UNSUPPORTED(RT_STEPF2);
+        UNSUPPORTED(RT_STEPF3);
+        UNSUPPORTED(RT_STEPF4);
+        UNSUPPORTED(RT_STEPDD);
+        UNSUPPORTED(RT_STEPD2);
+        UNSUPPORTED(RT_STEPD3);
+        UNSUPPORTED(RT_STEPD4);
         default:
             MDL_ASSERT(!"unsupported <cmath> runtime function requested");
             break;
         }
         break;
-    case LLVM_code_generator::TL_PTX:
+    case ICode_generator::TL_PTX:
         // use libdevice calls
         switch (code) {
         EXTERNAL_LIBDEVICE(RT_ABSF,              fabsf,             FF_FF);
@@ -1498,13 +1666,20 @@ case en: \
         EXTERNAL_LIBDEVICE(RT_RSQRT,             rsqrt,             DD_DD);
         EXTERNAL_LIBDEVICE(RT_INT_BITS_TO_FLOAT, int_as_float,      FF_II);
         EXTERNAL_LIBDEVICE(RT_FLOAT_BITS_TO_INT, float_as_int,      II_FF);
-
+        UNSUPPORTED(RT_STEPFF);
+        UNSUPPORTED(RT_STEPF2);
+        UNSUPPORTED(RT_STEPF3);
+        UNSUPPORTED(RT_STEPF4);
+        UNSUPPORTED(RT_STEPDD);
+        UNSUPPORTED(RT_STEPD2);
+        UNSUPPORTED(RT_STEPD3);
+        UNSUPPORTED(RT_STEPD4);
         default:
             MDL_ASSERT(!"unsupported <cmath> runtime function requested");
             break;
         }
         break;
-    case LLVM_code_generator::TL_HLSL:
+    case ICode_generator::TL_HLSL:
         switch (code) {
         LLVM_INTRINSIC(RT_ABS,               fabs);
         HLSL_INTRINSIC(RT_ABSI,              abs,       II_II);
@@ -1535,7 +1710,7 @@ case en: \
         HLSL_INTRINSIC(RT_MODF,              modf,      DD_DDdd);
         HLSL_INTRINSIC(RT_POWF,              pow,       FF_FFFF);
         HLSL_INTRINSIC(RT_POW,               pow,       DD_DDDD);
-        HLSL_INTRINSIC(RT_POWI,              pow,       DD_DDII);
+        UNSUPPORTED(   RT_POWI);
         LLVM_INTRINSIC(RT_SIN,               sin);
         HLSL_INTRINSIC(RT_SINHF,             sinh,      FF_FF);
         HLSL_INTRINSIC(RT_SINH,              sinh,      DD_DD);
@@ -1544,8 +1719,6 @@ case en: \
         HLSL_INTRINSIC(RT_TAN,               tan,       DD_DD);
         HLSL_INTRINSIC(RT_TANHF,             tanh,      FF_FF);
         HLSL_INTRINSIC(RT_TANH,              tanh,      DD_DD);
-        HLSL_INTRINSIC(RT_COPYSIGNF,         copysign,  FF_FFFF);
-        HLSL_INTRINSIC(RT_COPYSIGN,          copysign,  DD_DDDD);
         HLSL_INTRINSIC(RT_MINI,              min,       II_IIII);
         HLSL_INTRINSIC(RT_MAXI,              max,       II_IIII);
         HLSL_INTRINSIC(RT_MINF,              min,       FF_FFFF);
@@ -1558,11 +1731,89 @@ case en: \
         HLSL_INTRINSIC(RT_SIGN,              sign,      II_DD);
         HLSL_INTRINSIC(RT_INT_BITS_TO_FLOAT, asfloat,   FF_II);
         HLSL_INTRINSIC(RT_FLOAT_BITS_TO_INT, asint,     II_FF);
-
+        HLSL_INTRINSIC(RT_STEPFF,            step,      FF_FFFF);
+        HLSL_INTRINSIC(RT_STEPF2,            step,      F2_F2F2);
+        HLSL_INTRINSIC(RT_STEPF3,            step,      F3_F3F3);
+        HLSL_INTRINSIC(RT_STEPF4,            step,      F4_F4F4);
+        HLSL_INTRINSIC(RT_STEPDD,            step,      DD_DDDD);
+        HLSL_INTRINSIC(RT_STEPD2,            step,      D2_D2D2);
+        HLSL_INTRINSIC(RT_STEPD3,            step,      D3_D3D3);
+        HLSL_INTRINSIC(RT_STEPD4,            step,      D4_D4D4);
         default:
             MDL_ASSERT(!"unsupported HLSL runtime function requested");
             break;
         }
+        break;
+    case ICode_generator::TL_GLSL:
+        switch (code) {
+        LLVM_INTRINSIC(RT_ABS,               fabs);
+        GLSL_INTRINSIC(RT_ABSI,              abs,            II_II);
+        GLSL_INTRINSIC(RT_ACOSF,             acos,           FF_FF);
+        GLSL_INTRINSIC(RT_ACOS,              acos,           DD_DD);
+        GLSL_INTRINSIC(RT_ASINF,             asin,           FF_FF);
+        GLSL_INTRINSIC(RT_ASIN,              asin,           DD_DD);
+        GLSL_INTRINSIC(RT_ATANF,             atan,           FF_FF);
+        GLSL_INTRINSIC(RT_ATAN,              atan,           DD_DD);
+        GLSL_INTRINSIC(RT_ATAN2F,            atan,           FF_FFFF);
+        GLSL_INTRINSIC(RT_ATAN2,             atan,           DD_DDDD);
+        LLVM_INTRINSIC(RT_CEIL,              ceil);
+        LLVM_INTRINSIC(RT_COS,               cos);
+        GLSL_INTRINSIC(RT_COSHF,             cosh,           FF_FF);
+        GLSL_INTRINSIC(RT_COSH,              cosh,           DD_DD);
+        LLVM_INTRINSIC(RT_EXP,               exp);
+        LLVM_INTRINSIC(RT_EXP2,              exp2);
+        GLSL_INTRINSIC(RT_FLOORF,            floor,          FF_FF);
+        GLSL_INTRINSIC(RT_FLOOR,             floor,          DD_DD);
+        // FIXME: mod has different behavior then MDL fmod
+        GLSL_INTRINSIC(RT_FMODF,             mod,            FF_FFFF);
+        GLSL_INTRINSIC(RT_FMOD,              mod,            DD_DDDD);
+        GLSL_INTRINSIC(RT_FRACF,             fract,          FF_FF);
+        GLSL_INTRINSIC(RT_FRAC,              fract,          DD_DD);
+        LLVM_INTRINSIC(RT_LOG,               log);
+        LLVM_INTRINSIC(RT_LOG2,              log2);
+        UNSUPPORTED(   RT_LOG10F);
+        UNSUPPORTED(   RT_LOG10);
+        GLSL_INTRINSIC(RT_MODFF,             modf,           FF_FFff);
+        GLSL_INTRINSIC(RT_MODF,              modf,           DD_DDdd);
+        GLSL_INTRINSIC(RT_POWF,              pow,            FF_FFFF);
+        GLSL_INTRINSIC(RT_POW,               pow,            DD_DDDD);
+        UNSUPPORTED(   RT_POWI);
+        LLVM_INTRINSIC(RT_SIN,               sin);
+        GLSL_INTRINSIC(RT_SINHF,             sinh,           FF_FF);
+        GLSL_INTRINSIC(RT_SINH,              sinh,           DD_DD);
+        LLVM_INTRINSIC(RT_SQRT,              sqrt);
+        GLSL_INTRINSIC(RT_TANF,              tan,            FF_FF);
+        GLSL_INTRINSIC(RT_TAN,               tan,            DD_DD);
+        GLSL_INTRINSIC(RT_TANHF,             tanh,           FF_FF);
+        GLSL_INTRINSIC(RT_TANH,              tanh,           DD_DD);
+        GLSL_INTRINSIC(RT_MINI,              min,            II_IIII);
+        GLSL_INTRINSIC(RT_MAXI,              max,            II_IIII);
+        GLSL_INTRINSIC(RT_MINF,              min,            FF_FFFF);
+        GLSL_INTRINSIC(RT_MAXF,              max,            FF_FFFF);
+        GLSL_INTRINSIC(RT_MIN,               min,            DD_DDDD);
+        GLSL_INTRINSIC(RT_MAX,               max,            DD_DDDD);
+        GLSL_INTRINSIC(RT_RSQRTF,            inversesqrt,    FF_FF);
+        GLSL_INTRINSIC(RT_RSQRT,             inversesqrt,    DD_DD);
+        GLSL_INTRINSIC(RT_FSIGNF,            sign,           FF_FF);
+        GLSL_INTRINSIC(RT_FSIGN,             sign,           DD_DD);
+        GLSL_INTRINSIC(RT_INT_BITS_TO_FLOAT, intBitsToFloat, FF_II);
+        GLSL_INTRINSIC(RT_FLOAT_BITS_TO_INT, floatBitsToInt, II_FF);
+        GLSL_INTRINSIC(RT_STEPFF,            step,           FF_FFFF);
+        GLSL_INTRINSIC(RT_STEPF2,            step,           F2_F2F2);
+        GLSL_INTRINSIC(RT_STEPF3,            step,           F3_F3F3);
+        GLSL_INTRINSIC(RT_STEPF4,            step,           F4_F4F4);
+        GLSL_INTRINSIC(RT_STEPDD,            step,           DD_DDDD);
+        GLSL_INTRINSIC(RT_STEPD2,            step,           D2_D2D2);
+        GLSL_INTRINSIC(RT_STEPD3,            step,           D3_D3D3);
+        GLSL_INTRINSIC(RT_STEPD4,            step,           D4_D4D4);
+
+        default:
+            MDL_ASSERT(!"unsupported GLSL runtime function requested");
+            break;
+        }
+        break;
+    default:
+        MDL_ASSERT(!"unsupported target language");
         break;
     }
     return func;
@@ -1587,8 +1838,14 @@ llvm::Type *MDL_runtime_creator::type_from_signature(
             signature += 2;
             return m_code_gen.m_type_mapper.get_bool_type();
         case '2':
+            signature += 2;
+            return m_code_gen.m_type_mapper.get_bool2_type();
         case '3':
+            signature += 2;
+            return m_code_gen.m_type_mapper.get_bool3_type();
         case '4':
+            signature += 2;
+            return m_code_gen.m_type_mapper.get_bool4_type();
             break;
         }
         break;
@@ -1629,9 +1886,14 @@ llvm::Type *MDL_runtime_creator::type_from_signature(
             signature += 2;
             return m_code_gen.m_type_mapper.get_float_type();
         case '2':
+            signature += 2;
+            return m_code_gen.m_type_mapper.get_float2_type();
         case '3':
+            signature += 2;
+            return m_code_gen.m_type_mapper.get_float3_type();
         case '4':
-            break;
+            signature += 2;
+            return m_code_gen.m_type_mapper.get_float4_type();
         case 'A':
             {
                 // Arrays
@@ -1675,8 +1937,14 @@ llvm::Type *MDL_runtime_creator::type_from_signature(
             signature += 2;
             return m_code_gen.m_type_mapper.get_double_type();
         case '2':
+            signature += 2;
+            return m_code_gen.m_type_mapper.get_double2_type();
         case '3':
+            signature += 2;
+            return m_code_gen.m_type_mapper.get_double3_type();
         case '4':
+            signature += 2;
+            return m_code_gen.m_type_mapper.get_double4_type();
         case 'A':
             break;
         }
@@ -1984,7 +2252,7 @@ llvm::Value *MDL_runtime_creator::call_tex_attr_func(
             ctx->CreateLoad(self_adr),
             m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-        llvm::Value *tex_func = ctx.get_tex_lookup_func(self, tex_func_idx);
+        llvm::FunctionCallee tex_func = ctx.get_tex_lookup_func(self, tex_func_idx);
         llvm::SmallVector<llvm::Value *, 4> args;
 
         llvm::Value *tmp = nullptr;
@@ -2060,7 +2328,7 @@ llvm::Value *MDL_runtime_creator::call_attr_func(
             ctx->CreateLoad(self_adr),
             m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-        llvm::Value *tex_func = ctx.get_tex_lookup_func(self, tex_func_idx);
+        llvm::FunctionCallee tex_func = ctx.get_tex_lookup_func(self, tex_func_idx);
 
         llvm::Value *args[] = { self, res_id };
         llvm::CallInst *call = ctx->CreateCall(tex_func, args);
@@ -2089,65 +2357,71 @@ llvm::Function *MDL_runtime_creator::find_in_c_runtime(
         return get_c_runtime_func(RT_LOG2, signature);
 #endif
     case RT_MDL_MINI:
-        if (m_target_lang == LLVM_code_generator::TL_PTX) {
+        if (m_target_lang == ICode_generator::TL_PTX) {
             return get_c_runtime_func(RT_MINI, signature);
         }
         return NULL;
     case RT_MDL_MAXI:
-        if (m_target_lang == LLVM_code_generator::TL_PTX) {
+        if (m_target_lang == ICode_generator::TL_PTX) {
             return get_c_runtime_func(RT_MAXI, signature);
         }
         return NULL;
     case RT_MDL_MINF:
-        if (m_target_lang == LLVM_code_generator::TL_PTX) {
+        if (m_target_lang == ICode_generator::TL_PTX) {
             return get_c_runtime_func(RT_MINF, signature);
         }
         return NULL;
     case RT_MDL_MAXF:
-        if (m_target_lang == LLVM_code_generator::TL_PTX) {
+        if (m_target_lang == ICode_generator::TL_PTX) {
             return get_c_runtime_func(RT_MAXF, signature);
         }
         return NULL;
     case RT_MDL_MIN:
-        if (m_target_lang == LLVM_code_generator::TL_PTX) {
+        if (m_target_lang == ICode_generator::TL_PTX) {
             return get_c_runtime_func(RT_MIN, signature);
         }
         return NULL;
     case RT_MDL_MAX:
-        if (m_target_lang == LLVM_code_generator::TL_PTX) {
+        if (m_target_lang == ICode_generator::TL_PTX) {
             return get_c_runtime_func(RT_MAX, signature);
         }
         return NULL;
     case RT_MDL_RSQRTF:
-        if (m_target_lang == LLVM_code_generator::TL_PTX) {
+        if (m_target_lang == ICode_generator::TL_PTX) {
             return get_c_runtime_func(RT_RSQRTF, signature);
         }
         return NULL;
     case RT_MDL_RSQRT:
-        if (m_target_lang == LLVM_code_generator::TL_PTX) {
+        if (m_target_lang == ICode_generator::TL_PTX) {
             return get_c_runtime_func(RT_RSQRT, signature);
         }
         return NULL;
     case RT_MDL_FRAC:
-        if (m_target_lang == LLVM_code_generator::TL_HLSL) {
+        if (m_target_lang == ICode_generator::TL_HLSL ||
+            m_target_lang == ICode_generator::TL_GLSL)
+        {
             return get_c_runtime_func(RT_FRAC, signature);
         }
         return NULL;
     case RT_MDL_FRACF:
-        if (m_target_lang == LLVM_code_generator::TL_HLSL) {
+        if (m_target_lang == ICode_generator::TL_HLSL ||
+            m_target_lang == ICode_generator::TL_GLSL)
+        {
             return get_c_runtime_func(RT_FRACF, signature);
         }
         return NULL;
     case RT_MDL_INT_BITS_TO_FLOATI:
-        if (m_target_lang == LLVM_code_generator::TL_PTX ||
-            m_target_lang == LLVM_code_generator::TL_HLSL)
+        if (m_target_lang == ICode_generator::TL_PTX ||
+            m_target_lang == ICode_generator::TL_HLSL ||
+            m_target_lang == ICode_generator::TL_GLSL)
         {
             return get_c_runtime_func(RT_INT_BITS_TO_FLOAT, signature);
         }
         return NULL;
     case RT_MDL_FLOAT_BITS_TO_INTF:
-        if (m_target_lang == LLVM_code_generator::TL_PTX ||
-            m_target_lang == LLVM_code_generator::TL_HLSL)
+        if (m_target_lang == ICode_generator::TL_PTX ||
+            m_target_lang == ICode_generator::TL_HLSL ||
+            m_target_lang == ICode_generator::TL_GLSL)
         {
             return get_c_runtime_func(RT_FLOAT_BITS_TO_INT, signature);
         }
@@ -2174,7 +2448,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
     // Mark function as a native function already registered with the Jitted_code,
     // if we are in NATIVE mode
     #define MARK_NATIVE(func) do {                                    \
-            if (m_target_lang == LLVM_code_generator::TL_NATIVE) {    \
+            if (m_target_lang == ICode_generator::TL_NATIVE ||        \
+                m_target_lang == ICode_generator::TL_LLVM_IR) {       \
                 func->setCallingConv(llvm::CallingConv::C);           \
                 func->setLinkage(llvm::GlobalValue::ExternalLinkage); \
             }                                                         \
@@ -2866,15 +3141,25 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         func->addFnAttr(llvm::Attribute::AlwaysInline);
         break;
     case RT_MDL_POWI:
-        // pow(int a, int b) = int(powi(double(a), b))
         {
             llvm::Value    *a         = arg_it++;
             llvm::Value    *b         = arg_it;
             llvm::Function *powi_func = get_runtime_func(RT_POWI);
 
             llvm::Value *x = ctx->CreateSIToFP(a, m_code_gen.m_type_mapper.get_double_type());
-            x = ctx->CreateCall(powi_func, { x, b });
-            ctx.create_return(ctx->CreateFPToSI(x, m_code_gen.m_type_mapper.get_int_type()));
+            if (powi_func != nullptr) {
+                // pow(int a, int b) = int(powi(double(a), b))
+
+                x = ctx->CreateCall(powi_func, { x, b });
+                ctx.create_return(ctx->CreateFPToSI(x, m_code_gen.m_type_mapper.get_int_type()));
+            } else {
+                // pow(int a, int b) = int(pow(double(a), double(b)))
+                llvm::Function *pow_func = get_runtime_func(RT_POW);
+
+                llvm::Value *y = ctx->CreateSIToFP(b, m_code_gen.m_type_mapper.get_double_type());
+                x = ctx->CreateCall(pow_func, { x, y });
+                ctx.create_return(ctx->CreateFPToSI(x, m_code_gen.m_type_mapper.get_int_type()));
+            }
         }
         func->addFnAttr(llvm::Attribute::AlwaysInline);
         break;
@@ -2943,8 +3228,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
     case RT_MDL_SIGN:
     case RT_MDL_SIGNF:
         // fp sign
-        if (m_target_lang == LLVM_code_generator::TL_HLSL) {
-            // use sign
+        if (m_target_lang == ICode_generator::TL_HLSL) {
+            // use HLSL int<> sign(numeric<>)
 
             bool           is_float = code == RT_MDL_SIGNF;
             llvm::Value    *x = arg_it;
@@ -2969,6 +3254,20 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             llvm::Value *cmp0 = ctx->CreateICmpEQ(sgn, izero);
             llvm::Value *cmp1 = ctx->CreateICmpEQ(sgn, ione);
             llvm::Value *res  = ctx->CreateSelect(cmp0, zero, ctx->CreateSelect(cmp1, one, mone));
+            ctx.create_return(res);
+        } else if (m_target_lang == ICode_generator::TL_GLSL) {
+            // just wrap GLSL sign()
+
+            llvm::Value    *x = arg_it;
+            llvm::Function *sign_func;
+
+            if (code == RT_MDL_SIGNF) {
+                sign_func = get_runtime_func(RT_FSIGNF);
+            } else {
+                sign_func = get_runtime_func(RT_FSIGN);
+            }
+            llvm::Value *args[] = { x };
+            llvm::Value *res = ctx->CreateCall(sign_func, args);
             ctx.create_return(res);
         } else {
             // use copysign
@@ -3133,6 +3432,74 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         func->addFnAttr(llvm::Attribute::AlwaysInline);
         break;
 
+    case RT_MDL_EQUAL_B2:
+    case RT_MDL_EQUAL_B3:
+    case RT_MDL_EQUAL_B4:
+        // bool vector compare for for GLSL
+        create_vector_compare(llvm::ICmpInst::ICMP_EQ, ctx, arg_it);
+        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        break;
+    case RT_MDL_EQUAL_D2:
+    case RT_MDL_EQUAL_D3:
+    case RT_MDL_EQUAL_D4:
+        // double vector compare for for GLSL
+        create_vector_compare(llvm::ICmpInst::FCMP_OEQ, ctx, arg_it);
+        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        break;
+    case RT_MDL_NOTEQUAL_B2:
+    case RT_MDL_NOTEQUAL_B3:
+    case RT_MDL_NOTEQUAL_B4:
+        // bool vector compare for for GLSL
+        create_vector_compare(llvm::ICmpInst::ICMP_NE, ctx, arg_it);
+        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        break;
+    case RT_MDL_NOTEQUAL_D2:
+    case RT_MDL_NOTEQUAL_D3:
+    case RT_MDL_NOTEQUAL_D4:
+        // double vector compare for for GLSL
+        create_vector_compare(llvm::ICmpInst::FCMP_UNE, ctx, arg_it);
+        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        break;
+    case RT_MDL_LESSTHAN_D2:
+    case RT_MDL_LESSTHAN_D3:
+    case RT_MDL_LESSTHAN_D4:
+        // double vector compare for for GLSL
+        create_vector_compare(llvm::ICmpInst::FCMP_OLT, ctx, arg_it);
+        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        break;
+    case RT_MDL_LESSTHANEQUAL_D2:
+    case RT_MDL_LESSTHANEQUAL_D3:
+    case RT_MDL_LESSTHANEQUAL_D4:
+        // double vector compare for for GLSL
+        create_vector_compare(llvm::ICmpInst::FCMP_OLE, ctx, arg_it);
+        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        break;
+    case RT_MDL_GREATERTHAN_D2:
+    case RT_MDL_GREATERTHAN_D3:
+    case RT_MDL_GREATERTHAN_D4:
+        // double vector compare for for GLSL
+        create_vector_compare(llvm::ICmpInst::FCMP_OGT, ctx, arg_it);
+        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        break;
+    case RT_MDL_GREATERTHANEQUAL_D2:
+    case RT_MDL_GREATERTHANEQUAL_D3:
+    case RT_MDL_GREATERTHANEQUAL_D4:
+        // double vector compare for for GLSL
+        create_vector_compare(llvm::ICmpInst::FCMP_OGE, ctx, arg_it);
+        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        break;
+    case RT_MDL_AND_B2:
+    case RT_MDL_AND_B3:
+    case RT_MDL_AND_B4:
+        create_bool_vector_op(mdl::IExpression_binary::OK_LOGICAL_AND, ctx, arg_it);
+        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        break;
+    case RT_MDL_OR_B2:
+    case RT_MDL_OR_B3:
+    case RT_MDL_OR_B4:
+        create_bool_vector_op(mdl::IExpression_binary::OK_LOGICAL_OR, ctx, arg_it);
+        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        break;
     default:
         MDL_ASSERT(!"Unsupported MDL runtime function");
         break;
@@ -3157,6 +3524,8 @@ void LLVM_code_generator::register_native_runtime_functions(Jitted_code *jitted_
     REG_CMATH(atan,   DD_DD);
     REG_CMATH(atan2f, FF_FFFF);
     REG_CMATH(atan2,  DD_DDDD);
+    REG_CMATH(cbrtf,  FF_FF);
+    REG_CMATH(cbrt,   DD_DD);
     REG_CMATH(ceilf,  FF_FF);
     REG_CMATH(ceil,   DD_DD);
     REG_CMATH(cosf,   FF_FF);
@@ -3199,10 +3568,13 @@ void LLVM_code_generator::register_native_runtime_functions(Jitted_code *jitted_
     REG_CMATH(copysign,  DD_DDDD);
 #endif
 
+    // not math, but also needed
+    REG_CMATH(memset, vv_vvIIZZ);
+
     // optional functions
 
 #if !defined(_MSC_VER) || _MSC_VER >= 1900
-    // on WIN we need we have at least VS 2015 for these functions
+    // on WIN we need at least VS 2015 for these functions
     REG_CMATH(log2f,     FF_FF);
     REG_CMATH(log2,      DD_DD);
     REG_CMATH(exp2f,     FF_FF);
@@ -3361,7 +3733,7 @@ llvm::Function *MDL_runtime_creator::create_state_get_texture_results(
         res = ctx.create_simple_gep_in_bounds(
             state, ctx.get_constant(m_code_gen.m_type_mapper.get_state_index(
                 Type_mapper::STATE_CORE_TEXT_RESULTS)));
-        if (m_code_gen.m_target_lang != LLVM_code_generator::TL_HLSL) {
+        if (m_code_gen.target_supports_pointers()) {
             res = ctx->CreateLoad(res);
         }
         res = ctx->CreatePointerCast(res, ret_tp);
@@ -3425,7 +3797,7 @@ llvm::Function *MDL_runtime_creator::create_state_get_arg_block_value(
 
         switch (int_func->get_kind()) {
         case Internal_function::KI_STATE_GET_ARG_BLOCK_FLOAT:
-            res = ctx->CreateCall(m_code_gen.m_hlsl_func_argblock_as_float, offs);
+            res = ctx->CreateCall(m_code_gen.m_sl_funcs.m_argblock_as_float, offs);
             break;
         case Internal_function::KI_STATE_GET_ARG_BLOCK_FLOAT3:
             res = llvm::UndefValue::get(ctx_data->get_return_type());
@@ -3435,15 +3807,15 @@ llvm::Function *MDL_runtime_creator::create_state_get_arg_block_value(
                 }
                 res = ctx.create_insert(
                     res,
-                    ctx->CreateCall(m_code_gen.m_hlsl_func_argblock_as_float, offs),
+                    ctx->CreateCall(m_code_gen.m_sl_funcs.m_argblock_as_float, offs),
                     i);
             }
             break;
         case Internal_function::KI_STATE_GET_ARG_BLOCK_UINT:
-            res = ctx->CreateCall(m_code_gen.m_hlsl_func_argblock_as_uint, offs);
+            res = ctx->CreateCall(m_code_gen.m_sl_funcs.m_argblock_as_uint, offs);
             break;
         case Internal_function::KI_STATE_GET_ARG_BLOCK_BOOL:
-            res = ctx->CreateCall(m_code_gen.m_hlsl_func_argblock_as_bool, offs);
+            res = ctx->CreateCall(m_code_gen.m_sl_funcs.m_argblock_as_bool, offs);
             break;
         default:
             MDL_ASSERT(!"Unexpected get_arg_block_* kind");
@@ -3538,19 +3910,19 @@ llvm::Function *MDL_runtime_creator::create_state_adapt_normal(
     unsigned          flags     = ctx_data->get_function_flags();
 
     Function_context ctx(m_alloc, m_code_gen, inst, func, flags);
-    llvm::Value* res;
+    llvm::Value *res;
 
     llvm::Function::arg_iterator arg_it = ctx.get_first_parameter();
     llvm::Value *a = load_by_value(ctx, arg_it++);
 
     if (m_code_gen.m_use_renderer_adapt_normal) {
         llvm::Type  *arr_float_3_type = m_code_gen.m_type_mapper.get_arr_float_3_type();
-        llvm::Value *tmp = ctx.create_local(arr_float_3_type, "tmp");
+        llvm::Value *tmp    = ctx.create_local(arr_float_3_type, "tmp");
         llvm::Value *normal = ctx.create_local(arr_float_3_type, "normal");
         ctx.convert_and_store(a, normal);
 
         llvm::Value *res_data = ctx.get_resource_data_parameter();
-        llvm::Value* state = ctx.get_state_parameter();
+        llvm::Value *state    = ctx.get_state_parameter();
 
         // adapt_normal is only supported via the texture handler, which will also be used
         // if the builtin texture runtime is used (which uses the resource handler)
@@ -3560,7 +3932,7 @@ llvm::Function *MDL_runtime_creator::create_state_adapt_normal(
             ctx->CreateLoad(self_adr),
             m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-        llvm::Value *lookup_func = ctx.get_tex_lookup_func(
+        llvm::FunctionCallee lookup_func = ctx.get_tex_lookup_func(
             self, Type_mapper::THV_adapt_normal);
 
         llvm::Value *args[] = {tmp, self, state, normal};
@@ -3608,7 +3980,7 @@ llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_resolution(
             ctx->CreateLoad(self_adr),
             m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-        llvm::Value *resolution_func = ctx.get_tex_lookup_func(
+        llvm::FunctionCallee resolution_func = ctx.get_tex_lookup_func(
             self, Type_mapper::THV_bsdf_measurement_resolution);
 
         llvm::Value *args[] = {tmp, self, a, b};
@@ -3660,7 +4032,7 @@ llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_evaluate(
             ctx->CreateLoad(self_adr),
             m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-        llvm::Value *lookup_func = ctx.get_tex_lookup_func(
+        llvm::FunctionCallee lookup_func = ctx.get_tex_lookup_func(
             self, Type_mapper::THV_bsdf_measurement_evaluate);
 
         llvm::Value *args[] = {tmp, self, a, theta_phi_in, theta_phi_out, d};
@@ -3714,7 +4086,7 @@ llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_sample(
             ctx->CreateLoad(self_adr),
             m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-        llvm::Value *lookup_func = ctx.get_tex_lookup_func(
+        llvm::FunctionCallee lookup_func = ctx.get_tex_lookup_func(
             self, Type_mapper::THV_bsdf_measurement_sample);
 
         llvm::Value *args[] = {tmp, self, a, theta_phi_out, xi, d};
@@ -3762,7 +4134,7 @@ llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_pdf(
             ctx->CreateLoad(self_adr),
             m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-        llvm::Value *lookup_func = ctx.get_tex_lookup_func(
+        llvm::FunctionCallee lookup_func = ctx.get_tex_lookup_func(
             self, Type_mapper::THV_bsdf_measurement_pdf);
 
         llvm::Value *args[] = {self, a, theta_phi_in, theta_phi_out, d};
@@ -3809,7 +4181,7 @@ llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_albedos(
             ctx->CreateLoad(self_adr),
             m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-        llvm::Value *lookup_func = ctx.get_tex_lookup_func(
+        llvm::FunctionCallee lookup_func = ctx.get_tex_lookup_func(
             self, Type_mapper::THV_bsdf_measurement_albedos);
 
         llvm::Value *args[] = {tmp, self, a, theta_phi};
@@ -3853,7 +4225,7 @@ llvm::Function *MDL_runtime_creator::create_df_light_profile_evaluate(
             ctx->CreateLoad(self_adr),
             m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-        llvm::Value *lookup_func = ctx.get_tex_lookup_func(
+        llvm::FunctionCallee lookup_func = ctx.get_tex_lookup_func(
             self, Type_mapper::THV_light_profile_evaluate);
 
         llvm::Value *args[] = {self, a, theta_phi};
@@ -3898,7 +4270,7 @@ llvm::Function *MDL_runtime_creator::create_df_light_profile_sample(
             ctx->CreateLoad(self_adr),
             m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-        llvm::Value *lookup_func = ctx.get_tex_lookup_func(
+        llvm::FunctionCallee lookup_func = ctx.get_tex_lookup_func(
             self, Type_mapper::THV_light_profile_sample);
 
         llvm::Value *args[] = {tmp, self, a, xi};
@@ -3942,7 +4314,7 @@ llvm::Function *MDL_runtime_creator::create_df_light_profile_pdf(
             ctx->CreateLoad(self_adr),
             m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
 
-        llvm::Value *lookup_func = ctx.get_tex_lookup_func(
+        llvm::FunctionCallee lookup_func = ctx.get_tex_lookup_func(
             self, Type_mapper::THV_light_profile_pdf);
 
         llvm::Value *args[] = {self, a, theta_phi};
@@ -4060,8 +4432,7 @@ llvm::Function *MDL_runtime_creator::get_internal_function(Internal_function con
             break;
 
         case Internal_function::KI_STATE_ADAPT_NORMAL:
-            if (m_code_gen.m_use_renderer_adapt_normal &&
-                    m_code_gen.m_target_lang == LLVM_code_generator::TL_HLSL) {
+            if (m_code_gen.target_uses_renderer_adapt_normal()) {
                 Function_instance inst(
                     m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
                 LLVM_context_data* ctx_data =
@@ -4074,8 +4445,7 @@ llvm::Function *MDL_runtime_creator::get_internal_function(Internal_function con
                 func->addParamAttr(0, llvm::Attribute::ReadOnly);  // mark state param as read-only
                 func->addParamAttr(0, llvm::Attribute::NoCapture);
                 m_internal_funcs[kind] = ctx_data->get_function();
-            }
-            else {
+            } else {
                 m_internal_funcs[kind] = create_state_adapt_normal(int_func);
             }
             break;
@@ -4215,13 +4585,13 @@ llvm::Value *LLVM_code_generator::translate_call_intrinsic_function(
 
     llvm::Function *callee = NULL;
     unsigned promote = PR_NONE;
-    if (m_target_lang == TL_HLSL) {
+    if (target_is_structured_language(m_target_lang)) {
         IDefinition const *latest_def = promote_to_highest_version(callee_def, promote);
         if (promote != PR_NONE) {
             callee_def = latest_def;
         }
 
-        callee = get_hlsl_intrinsic_function(callee_def, return_derivs);
+        callee = get_sl_intrinsic_function(callee_def, return_derivs);
     }
     if (callee == NULL) {
         callee = get_intrinsic_function(callee_def, return_derivs);
@@ -4232,8 +4602,9 @@ llvm::Value *LLVM_code_generator::translate_call_intrinsic_function(
     LLVM_context_data *p_data = get_context_data(inst);
 
     Func_deriv_info const *func_deriv_info = NULL;
-    if (m_deriv_infos != NULL)
+    if (m_deriv_infos != NULL) {
         func_deriv_info = m_deriv_infos->get_function_derivative_infos(inst);
+    }
 
     // prepare arguments
     llvm::SmallVector<llvm::Value *, 8> args;
@@ -4445,7 +4816,7 @@ MDL_runtime_creator *LLVM_code_generator::create_mdl_runtime(
         code_gen,
         target_lang,
         fast_math,
-        /*has_sincos=*/target_lang == TL_PTX,
+        code_gen->target_has_sincos(),
         has_texture_handler,
         encoding);
 }
@@ -4467,6 +4838,185 @@ llvm::Function *LLVM_code_generator::get_out_of_bounds() const
 llvm::Function *LLVM_code_generator::get_div_by_zero() const
 {
     return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_DIV_BY_ZERO);
+}
+
+// Retrieve the target specific compare function if any.
+llvm::Function *LLVM_code_generator::get_target_compare_function(
+    mi::mdl::IExpression_binary::Operator op,
+    llvm::Type                            *op_type)
+{
+    if (m_target_lang != ICode_generator::TL_GLSL) {
+        return nullptr;
+    }
+
+    if (!llvm::isa<llvm::FixedVectorType>(op_type)) {
+        return nullptr;
+    }
+
+    llvm::FixedVectorType *vt = llvm::cast<llvm::FixedVectorType>(op_type);
+    llvm::Type       *et = vt->getElementType();
+
+    // GLSL vector compare on double vectors
+    size_t n = vt->getNumElements();
+
+    if (et == m_type_mapper.get_bool_type()) {
+        // double vector wrapper
+        switch (op) {
+        case mi::mdl::IExpression_binary::OK_EQUAL:
+            switch (n) {
+            case 2:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_EQUAL_B2);
+            case 3:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_EQUAL_B3);
+            case 4:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_EQUAL_B4);
+            }
+            break;
+        case mi::mdl::IExpression_binary::OK_NOT_EQUAL:
+            switch (n) {
+            case 2:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_NOTEQUAL_B2);
+            case 3:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_NOTEQUAL_B3);
+            case 4:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_NOTEQUAL_B4);
+            }
+            break;
+        default:
+            break;
+        }
+    } else if (et == m_type_mapper.get_double_type()) {
+        // double vector wrapper
+        switch (op) {
+        case mi::mdl::IExpression_binary::OK_EQUAL:
+            switch (n) {
+            case 2:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_EQUAL_D2);
+            case 3:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_EQUAL_D3);
+            case 4:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_EQUAL_D4);
+            }
+            break;
+        case mi::mdl::IExpression_binary::OK_NOT_EQUAL:
+            switch (n) {
+            case 2:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_NOTEQUAL_D2);
+            case 3:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_NOTEQUAL_D3);
+            case 4:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_NOTEQUAL_D4);
+            }
+            break;
+        case mi::mdl::IExpression_binary::OK_LESS:
+            switch (n) {
+            case 2:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_LESSTHAN_D2);
+            case 3:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_LESSTHAN_D3);
+            case 4:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_LESSTHAN_D4);
+            }
+            break;
+        case mi::mdl::IExpression_binary::OK_LESS_OR_EQUAL:
+            switch (n) {
+            case 2:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_LESSTHANEQUAL_D2);
+            case 3:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_LESSTHANEQUAL_D3);
+            case 4:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_LESSTHANEQUAL_D4);
+            }
+            break;
+        case mi::mdl::IExpression_binary::OK_GREATER:
+            switch (n) {
+            case 2:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_GREATERTHAN_D2);
+            case 3:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_GREATERTHAN_D3);
+            case 4:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_GREATERTHAN_D4);
+            }
+            break;
+        case mi::mdl::IExpression_binary::OK_GREATER_OR_EQUAL:
+            switch (n) {
+            case 2:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_GREATERTHANEQUAL_D2);
+            case 3:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_GREATERTHANEQUAL_D3);
+            case 4:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_GREATERTHANEQUAL_D4);
+            }
+            break;
+        default:
+            break;
+        }
+    }
+    return nullptr;
+}
+
+// Retrieve the target specific (binary) operator function if any.
+llvm::Function *LLVM_code_generator::get_target_operator_function(
+    unsigned   op,
+    llvm::Type *arg_type)
+{
+    switch (op) {
+    case llvm::Instruction::And:
+        return get_target_operator_function(mdl::IExpression_binary::OK_BITWISE_AND, arg_type);
+    case llvm::Instruction::Or:
+        return get_target_operator_function(mdl::IExpression_binary::OK_BITWISE_OR, arg_type);
+    default:
+        return nullptr;
+    }
+}
+
+// Retrieve the target specific (binary) operator function if any.
+llvm::Function *LLVM_code_generator::get_target_operator_function(
+    mdl::IExpression_binary::Operator op,
+    llvm::Type                        *arg_type)
+{
+    if (m_target_lang != ICode_generator::TL_GLSL) {
+        return nullptr;
+    }
+
+    if (!llvm::isa<llvm::FixedVectorType>(arg_type)) {
+        return nullptr;
+    }
+
+    llvm::FixedVectorType *vt = llvm::cast<llvm::FixedVectorType>(arg_type);
+    llvm::Type            *et = vt->getElementType();
+
+    // GLSL vector compare on double vectors
+    size_t n = vt->getNumElements();
+
+    if (et == m_type_mapper.get_bool_type()) {
+        // bool vector wrapper
+        switch (op) {
+        case mi::mdl::IExpression_binary::OK_BITWISE_AND:
+            switch (n) {
+            case 2:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_AND_B2);
+            case 3:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_AND_B3);
+            case 4:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_AND_B4);
+            }
+            break;
+        case mi::mdl::IExpression_binary::OK_BITWISE_OR:
+            switch (n) {
+            case 2:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_OR_B2);
+            case 3:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_OR_B3);
+            case 4:
+                return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_OR_B4);
+            }
+            break;
+        default:
+            break;
+        }
+    }
+    return nullptr;
 }
 
 // Handle out of bounds.
@@ -4510,9 +5060,9 @@ void LLVM_code_generator::mdl_div_by_zero(
 // Get the texture results pointer from the state.
 llvm::Value *LLVM_code_generator::get_texture_results(Function_context &ctx)
 {
-    if (m_target_lang == TL_HLSL) {
+    if (target_is_structured_language()) {
         llvm::Value *state = ctx.get_state_parameter();
-        llvm::Value *res = ctx.create_simple_gep_in_bounds(
+        llvm::Value *res   = ctx.create_simple_gep_in_bounds(
             state, ctx.get_constant(m_type_mapper.get_state_index(
                 Type_mapper::STATE_CORE_TEXT_RESULTS)));
         return res;
@@ -4575,7 +5125,9 @@ struct Runtime_func_info
 // Initialize the current LLVM module with user-specified LLVM implementations.
 bool LLVM_code_generator::init_user_modules()
 {
-    if (m_user_state_module.data == NULL) return true;
+    if (m_user_state_module.data == NULL) {
+        return true;
+    }
 
     std::unique_ptr<llvm::MemoryBuffer> mem(llvm::MemoryBuffer::getMemBuffer(
         llvm::StringRef(m_user_state_module.data, m_user_state_module.size),
@@ -4597,11 +5149,12 @@ bool LLVM_code_generator::init_user_modules()
     // correctly map the types
     llvm::SmallVector<llvm::Type *, 8> arg_types;
     for (llvm::Module::iterator FI = state_mod->get()->begin(), FE = state_mod->get()->end();
-            FI != FE; ++FI)
+        FI != FE;
+        ++FI)
     {
-        if (FI->isDeclaration())
+        if (FI->isDeclaration()) {
             continue;  // not a function definition
-
+        }
         arg_types.clear();
 
         llvm::FunctionType const *func_type = FI->getFunctionType();
@@ -4672,12 +5225,14 @@ bool LLVM_code_generator::init_user_modules()
     for (llvm::Module::iterator FI = state_mod->get()->begin(), FE = state_mod->get()->end();
             FI != FE; ++FI)
     {
-        if (!FI->isDeclaration())
+        if (!FI->isDeclaration()) {
             continue;  // not an external function
+        }
 
         llvm::StringRef func_name = FI->getName();
-        if (!func_name.startswith("_Z"))
+        if (!func_name.startswith("_Z")) {
             continue;  // not a C++ mangled name
+        }
 
         string demangled_name(get_allocator());
         MDL_name_mangler mangler(get_allocator(), demangled_name);
@@ -4689,15 +5244,17 @@ bool LLVM_code_generator::init_user_modules()
         // find last "::" before the parameters
         size_t parenpos = demangled_name.find('(');
         size_t colonpos = demangled_name.rfind("::", parenpos);
-        if (colonpos == string::npos || colonpos == 0)
+        if (colonpos == string::npos || colonpos == 0) {
             continue;  // no module member
+        }
 
         string module_name = demangled_name.substr(0, colonpos);
         string signature = demangled_name.substr(colonpos + 2);
         IDefinition const *def = m_compiler->find_stdlib_signature(
             module_name.c_str(), signature.c_str());
-        if (def == NULL)
+        if (def == NULL) {
             continue;  // not one of our modules
+        }
 
         llvm::Function *func = m_runtime->get_intrinsic_function(def, /*return_derivs=*/ false);
         if (func->getFunctionType() != FI->getFunctionType()) {
@@ -4735,12 +5292,11 @@ bool LLVM_code_generator::init_user_modules()
         llvm::SmallVector<llvm::Instruction *, 16> delete_list;
 
         // replace all calls to calls to our implementation
-        for (auto func_user : decl_func->users())
-        {
+        for (auto func_user : decl_func->users()) {
             if (llvm::CallInst *inst = llvm::dyn_cast<llvm::CallInst>(func_user)) {
                 llvm::SmallVector<llvm::Value *, 8> args;
-                for (unsigned i = 0, n = inst->getNumArgOperands(); i < n; ++i) {
-                    args.push_back(inst->getArgOperand(i));
+                for (unsigned idx = 0, n_args = inst->getNumArgOperands(); idx < n_args; ++idx) {
+                    args.push_back(inst->getArgOperand(idx));
                 }
                 llvm::CallInst *new_call = llvm::CallInst::Create(prot, args, "", inst);
                 inst->replaceAllUsesWith(new_call);
@@ -4763,8 +5319,7 @@ bool LLVM_code_generator::init_user_modules()
     // we try to avoid.
     state_mod->get()->setTargetTriple("");
 
-    if (llvm::Linker::linkModules(*m_module, std::move(state_mod.get())))
-    {
+    if (llvm::Linker::linkModules(*m_module, std::move(state_mod.get()))) {
         // true means linking has failed
         error(LINKING_STATE_MODULE_FAILED, "unknown linking error");
         return false;
@@ -4787,12 +5342,13 @@ Expression_result LLVM_code_generator::translate_jit_intrinsic(
         IType const *ret_type = call_expr->get_type()->skip_type_alias();
 
         llvm::Function *func = NULL;
-        if (is<IType_float>(ret_type))
+        if (is<IType_float>(ret_type)) {
             func = m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_TEX_RES_FLOAT);
-        else if (is<IType_color>(ret_type))
+        } else if (is<IType_color>(ret_type)) {
             func = m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_TEX_RES_COLOR);
-        else if (is<IType_vector>(ret_type))
+        } else if (is<IType_vector>(ret_type)) {
             func = m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_TEX_RES_FLOAT3);
+        }
 
         if (func != NULL) {
             // prepare arguments
@@ -4862,39 +5418,39 @@ llvm::Function *LLVM_code_generator::get_intrinsic_function(
 // Get the LLVM function for an internal function.
 llvm::Function *LLVM_code_generator::get_internal_function(Internal_function const *int_func)
 {
-    if (m_target_lang == TL_HLSL) {
-        char const *hlsl_name = NULL;
+    if (target_is_structured_language()) {
+        char const *sl_name = NULL;
 
         switch (int_func->get_kind()) {
         case Internal_function::KI_DF_BSDF_MEASUREMENT_RESOLUTION:
-            hlsl_name = "df_bsdf_measurement_resolution";
+            sl_name = "df_bsdf_measurement_resolution";
             break;
         case Internal_function::KI_DF_BSDF_MEASUREMENT_EVALUATE:
-            hlsl_name = "df_bsdf_measurement_evaluate";
+            sl_name = "df_bsdf_measurement_evaluate";
             break;
         case Internal_function::KI_DF_BSDF_MEASUREMENT_SAMPLE:
-            hlsl_name = "df_bsdf_measurement_sample";
+            sl_name = "df_bsdf_measurement_sample";
             break;
         case Internal_function::KI_DF_BSDF_MEASUREMENT_PDF:
-            hlsl_name = "df_bsdf_measurement_pdf";
+            sl_name = "df_bsdf_measurement_pdf";
             break;
         case Internal_function::KI_DF_BSDF_MEASUREMENT_ALBEDOS:
-            hlsl_name = "df_bsdf_measurement_albedos";
+            sl_name = "df_bsdf_measurement_albedos";
             break;
         case Internal_function::KI_DF_LIGHT_PROFILE_EVALUATE:
-            hlsl_name = "df_light_profile_evaluate";
+            sl_name = "df_light_profile_evaluate";
             break;
         case Internal_function::KI_DF_LIGHT_PROFILE_SAMPLE:
-            hlsl_name = "df_light_profile_sample";
+            sl_name = "df_light_profile_sample";
             break;
         case Internal_function::KI_DF_LIGHT_PROFILE_PDF:
-            hlsl_name = "df_light_profile_pdf";
+            sl_name = "df_light_profile_pdf";
             break;
         default:
             break;
         }
 
-        if (hlsl_name != NULL) {
+        if (sl_name != NULL) {
             Function_instance inst(get_allocator(), reinterpret_cast<size_t>(int_func));
             if (llvm::Function *func = get_function(inst)) {
                 return func;
@@ -4904,7 +5460,7 @@ llvm::Function *LLVM_code_generator::get_internal_function(Internal_function con
                 NULL, inst, "::df", /*is_prototype=*/ true);
             llvm::Function *func = ctx->get_function();
 
-            func->setName(hlsl_name);
+            func->setName(sl_name);
             return func;
         }
     }

@@ -88,6 +88,12 @@ function(TARGET_BUILD_SETUP)
     # WINDOWS
     #---------------------------------------------------------------------------------------
     if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+
+        target_compile_options(${TARGET_BUILD_SETUP_TARGET} 
+        PRIVATE
+            "/Zc:__cplusplus"                    # make visual studio report the correct __cplusplus
+        )
+
         target_compile_definitions(${TARGET_BUILD_SETUP_TARGET} 
             PUBLIC
                 "MI_PLATFORM=\"${MI_PLATFORM_NAME}-vc\"" #todo fix version number
@@ -171,12 +177,13 @@ function(TARGET_BUILD_SETUP)
             PUBLIC
                 "MI_PLATFORM=\"${MI_PLATFORM_NAME}-clang900\""
                 "MI_PLATFORM_MACOSX"
+                "$<$<STREQUAL:${MI_PLATFORM_NAME},macosx-aarch64>:AARCH64>"
                 "MACOSX"
             )
 
         target_compile_options(${TARGET_BUILD_SETUP_TARGET} 
             PRIVATE
-                "-mmacosx-version-min=10.10"
+                "-mmacosx-version-min=10.13"
                 "-fPIC"
                 "-m64"
                 "-stdlib=libc++"
@@ -194,6 +201,16 @@ function(TARGET_BUILD_SETUP)
                 "-Wno-covered-switch-default"
                 "-Wno-non-virtual-dtor"
                 "-Wno-unusable-partial-specialization"
+            )
+
+        # set the library paths
+        set(CMAKE_SKIP_BUILD_RPATH FALSE)
+        set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+        set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+        set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
+        set_target_properties(${TARGET_BUILD_SETUP_TARGET} PROPERTIES
+            MACOSX_RPATH TRUE
             )
     endif()
 
@@ -1138,6 +1155,55 @@ function(TARGET_CREATE_VS_USER_SETTINGS)
         "   </PropertyGroup>\n"
         "</Project>\n"
         )
+endfunction()
+
+# -------------------------------------------------------------------------------------------------
+# add RPATH to locate references libraries
+
+function(TARGET_ADD_RPATH)
+    set(options)
+    set(oneValueArgs TARGET)
+    set(multiValueArgs RPATHS)
+    cmake_parse_arguments(TARGET_ADD_RPATH "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
+    # provides the following variables:
+    # - TARGET_ADD_RPATH_TARGET
+    # - TARGET_ADD_RPATH_RPATHS
+
+    # no RPATHs on windows
+    if(WINDOWS)
+        return()
+    endif()
+
+    foreach(_PATH ${TARGET_ADD_RPATH_RPATHS})
+        if(_PATHS)
+            string(APPEND _PATHS ";")
+            string(APPEND _PATHS "${_PATH}")
+        else()
+            set(_PATHS "${_PATH}")
+        endif()
+        if(MDL_LOG_DEPENDENCIES)
+            message(STATUS "- rpath added:    " ${_PATH})
+        endif()
+    endforeach()
+
+    # append the rpaths to the build rpath
+    get_target_property(CURRENT_BUILD_RPATH ${TARGET_ADD_RPATH_TARGET} BUILD_RPATH)
+    if(CURRENT_BUILD_RPATH)
+        string(PREPEND _PATHS ";")
+        string(PREPEND _PATHS "${CURRENT_BUILD_RPATH}")
+    endif()
+    set_target_properties(${TARGET_ADD_RPATH_TARGET} PROPERTIES
+        BUILD_RPATH "${_PATHS}"
+    )
+
+    # check
+    # get_target_property(CURRENT_BUILD_RPATH ${TARGET_ADD_RPATH_TARGET} BUILD_RPATH)
+    # foreach(_PATH ${CURRENT_BUILD_RPATH})
+    #     message(STATUS " - RPATH: ${_PATH}")
+    # endforeach()
+
+    # TODO set the install rpath
+
 endfunction()
 
 # -------------------------------------------------------------------------------------------------

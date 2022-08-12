@@ -202,7 +202,7 @@ public:
     //@}
 };
 
-/*@}*/ // end group mi_neuray_misc
+/**@}*/ // end group mi_neuray_misc
 
 } // namespace neuraylib
 

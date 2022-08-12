@@ -77,8 +77,9 @@ public:
         ++m_visit_count;
         m_last = NULL;
         do_link_nodes(m_dg.get_exported_module_nodes());
-        if (m_last != NULL)
+        if (m_last != NULL) {
             m_last->set_next(NULL);
+        }
         m_last = NULL;
 
         Dependence_node *res = m_first;
@@ -217,8 +218,9 @@ private:
     /// \param roots  the roots
     void do_link_nodes(Node_list const &roots)
     {
-        for (Node_list::const_iterator it(roots.begin()), end(roots.end()); it != end; ++it)
+        for (Node_list::const_iterator it(roots.begin()), end(roots.end()); it != end; ++it) {
             do_link_nodes(*it);
+        }
     }
 
     /// Walk a node.
@@ -1352,8 +1354,9 @@ Dependence_node *DAG_dependence_graph::get_node(IDefinition const *idef)
 {
     Definition const *def = impl_cast<Definition>(idef);
 
-    if (Definition const *def_def = def->get_definite_definition())
+    if (Definition const *def_def = def->get_definite_definition()) {
         def = def_def;
+    }
 
     Def_node_map::iterator it = m_def_node_map.find(def);
     if (it != m_def_node_map.end()) {
@@ -1381,24 +1384,25 @@ Dependence_node *DAG_dependence_graph::get_node(IDefinition const *idef)
             flags |= Dependence_node::FL_IS_EXPORTED;
 
             dag_name = Arena_strdup(m_arena, m_dag_builder.def_to_name(def, module, true).c_str());
-            dag_simple_name
-                = Arena_strdup(m_arena, m_dag_builder.def_to_name(def, (char const *)NULL, false).c_str());
+            dag_simple_name = Arena_strdup(
+                m_arena, m_dag_builder.def_to_name(def, (char const *)NULL, false).c_str());
 
-            dag_alias_name =
-                Arena_strdup(m_arena, m_dag_builder.def_to_name(def, owner.get()).c_str());
+            dag_alias_name = Arena_strdup(
+                m_arena, m_dag_builder.def_to_name(def, owner.get()).c_str());
         } else {
             // only imported
-            dag_name = Arena_strdup(m_arena, m_dag_builder.def_to_name(def, owner.get(), true).c_str());
-            dag_simple_name
-                = Arena_strdup(m_arena, m_dag_builder.def_to_name(def, (char const *)NULL, false).c_str());
+            dag_name = Arena_strdup(
+                m_arena, m_dag_builder.def_to_name(def, owner.get(), true).c_str());
+            dag_simple_name = Arena_strdup(
+                m_arena, m_dag_builder.def_to_name(def, (char const *)NULL, false).c_str());
         }
 
         // check for preset
         idef = module->get_original_definition(def);
         IDefinition const *preset_def = skip_presets(idef, owner);
         if (preset_def != idef) {
-            dag_preset_name =
-                Arena_strdup(m_arena, m_dag_builder.def_to_name(preset_def, owner.get()).c_str());
+            dag_preset_name = Arena_strdup(
+                m_arena, m_dag_builder.def_to_name(preset_def, owner.get()).c_str());
         }
     } else {
         // from this module
@@ -1609,8 +1613,9 @@ void DAG_dependence_graph::create_exported_nodes(
     IModule const     *module,
     IDefinition const *def)
 {
-    if (skip_definition(def))
+    if (skip_definition(def)) {
         return;
+    }
 
     IType const *type = def->get_type()->skip_type_alias();
     switch (type->get_kind()) {

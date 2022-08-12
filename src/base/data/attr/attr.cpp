@@ -178,7 +178,7 @@ static void do_deserialize_data(
             Dynamic_array *array = (Dynamic_array*)value;
             deser->read(&arraysize);
             array->m_count = arraysize;
-            array->m_value = arraysize > 0 ? new char[it->sizeof_elem() * arraysize] : 0;
+            array->m_value = arraysize > 0 ? new char[it->sizeof_elem() * arraysize] : nullptr;
             value = array->m_value;
         }
 

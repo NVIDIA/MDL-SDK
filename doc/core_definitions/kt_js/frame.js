@@ -1,3 +1,4 @@
+"use strict";
 
 function frame_resize() {
     /*

@@ -1,9 +1,8 @@
 //===- StackColoring.cpp --------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -49,6 +48,7 @@
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Use.h"
 #include "llvm/IR/Value.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
@@ -373,6 +373,36 @@ STATISTIC(EscapedAllocas, "Number of allocas that escaped the lifetime region");
 // before visiting the memcpy block (which will contain the lifetime start
 // for "b" then it will appear that 'b' has a degenerate lifetime.
 //
+// Handle Windows Exception with LifetimeStartOnFirstUse:
+// -----------------
+//
+// There was a bug for using LifetimeStartOnFirstUse in win32.
+// class Type1 {
+// ...
+// ~Type1(){ write memory;}
+// }
+// ...
+// try{
+// Type1 V
+// ...
+// } catch (Type2 X){
+// ...
+// }
+// For variable X in catch(X), we put point pX=&(&X) into ConservativeSlots
+// to prevent using LifetimeStartOnFirstUse. Because pX may merged with
+// object V which may call destructor after implicitly writing pX. All these
+// are done in C++ EH runtime libs (through CxxThrowException), and can't
+// obviously check it in IR level.
+//
+// The loader of pX, without obvious writing IR, is usually the first LOAD MI
+// in EHPad, Some like:
+// bb.x.catch.i (landing-pad, ehfunclet-entry):
+// ; predecessors: %bb...
+//   successors: %bb...
+//  %n:gr32 = MOV32rm %stack.pX ...
+//  ...
+// The Type2** %stack.pX will only be written in EH runtime libs, so we
+// check the StoreSlots to screen it out.
 
 namespace {
 
@@ -433,6 +463,9 @@ class StackColoring : public MachineFunctionPass {
   /// FI slots that need to be handled conservatively (for these
   /// slots lifetime-start-on-first-use is disabled).
   BitVector ConservativeSlots;
+
+  /// Record the FI slots referenced by a 'may write to memory'.
+  BitVector StoreSlots;
 
   /// Number of iterations taken during data flow analysis.
   unsigned NumIterations;
@@ -629,10 +662,13 @@ unsigned StackColoring::collectMarkers(unsigned NumSlot) {
   InterestingSlots.resize(NumSlot);
   ConservativeSlots.clear();
   ConservativeSlots.resize(NumSlot);
+  StoreSlots.clear();
+  StoreSlots.resize(NumSlot);
 
   // number of start and end lifetime ops for each slot
   SmallVector<int, 8> NumStartLifetimes(NumSlot, 0);
   SmallVector<int, 8> NumEndLifetimes(NumSlot, 0);
+  SmallVector<int, 8> NumLoadInCatchPad(NumSlot, 0);
 
   // Step 1: collect markers and populate the "InterestingSlots"
   // and "ConservativeSlots" sets.
@@ -687,6 +723,13 @@ unsigned StackColoring::collectMarkers(unsigned NumSlot) {
           if (! BetweenStartEnd.test(Slot)) {
             ConservativeSlots.set(Slot);
           }
+          // Here we check the StoreSlots to screen catch point out. For more
+          // information, please refer "Handle Windows Exception with
+          // LifetimeStartOnFirstUse" at the head of this file.
+          if (MI.mayStore())
+            StoreSlots.set(Slot);
+          if (MF->getWinEHFuncInfo() && MBB->isEHPad() && MI.mayLoad())
+            NumLoadInCatchPad[Slot] += 1;
         }
       }
     }
@@ -697,11 +740,14 @@ unsigned StackColoring::collectMarkers(unsigned NumSlot) {
     return 0;
   }
 
-  // PR27903: slots with multiple start or end lifetime ops are not
+  // 1) PR27903: slots with multiple start or end lifetime ops are not
   // safe to enable for "lifetime-start-on-first-use".
-  for (unsigned slot = 0; slot < NumSlot; ++slot)
-    if (NumStartLifetimes[slot] > 1 || NumEndLifetimes[slot] > 1)
+  // 2) And also not safe for variable X in catch(X) in windows.
+  for (unsigned slot = 0; slot < NumSlot; ++slot) {
+    if (NumStartLifetimes[slot] > 1 || NumEndLifetimes[slot] > 1 ||
+        (NumLoadInCatchPad[slot] > 1 && !StoreSlots.test(slot)))
       ConservativeSlots.set(slot);
+  }
   LLVM_DEBUG(dumpBV("Conservative slots", ConservativeSlots));
 
   // Step 2: compute begin/end sets for each block
@@ -913,6 +959,11 @@ void StackColoring::remapInstructions(DenseMap<int, int> &SlotRemap) {
     assert(To && From && "Invalid allocation object");
     Allocas[From] = To;
 
+    // If From is before wo, its possible that there is a use of From between
+    // them.
+    if (From->comesBefore(To))
+      const_cast<AllocaInst*>(To)->moveBefore(const_cast<AllocaInst*>(From));
+
     // AA might be used later for instruction scheduling, and we need it to be
     // able to deduce the correct aliasing releationships between pointers
     // derived from the alloca being remapped and the target of that remapping.
@@ -960,6 +1011,8 @@ void StackColoring::remapInstructions(DenseMap<int, int> &SlotRemap) {
   }
 
   // Remap all instructions to the new stack slots.
+  std::vector<std::vector<MachineMemOperand *>> SSRefs(
+      MFI->getObjectIndexEnd());
   for (MachineBasicBlock &BB : *MF)
     for (MachineInstr &I : BB) {
       // Skip lifetime markers. We'll remove them soon.
@@ -1004,7 +1057,7 @@ void StackColoring::remapInstructions(DenseMap<int, int> &SlotRemap) {
         // zone are okay, despite the fact that we don't have a good way
         // for validating all of the usages of the calculation.
 #ifndef NDEBUG
-        bool TouchesMemory = I.mayLoad() || I.mayStore();
+        bool TouchesMemory = I.mayLoadOrStore();
         // If we *don't* protect the user from escaped allocas, don't bother
         // validating the instructions.
         if (!I.isDebugInstr() && TouchesMemory && ProtectFromEscapedAllocas) {
@@ -1022,18 +1075,26 @@ void StackColoring::remapInstructions(DenseMap<int, int> &SlotRemap) {
       }
 
       // We adjust AliasAnalysis information for merged stack slots.
-      MachineSDNode::mmo_iterator NewMemOps =
-          MF->allocateMemRefsArray(I.getNumMemOperands());
-      unsigned MemOpIdx = 0;
+      SmallVector<MachineMemOperand *, 2> NewMMOs;
       bool ReplaceMemOps = false;
       for (MachineMemOperand *MMO : I.memoperands()) {
+        // Collect MachineMemOperands which reference
+        // FixedStackPseudoSourceValues with old frame indices.
+        if (const auto *FSV = dyn_cast_or_null<FixedStackPseudoSourceValue>(
+                MMO->getPseudoValue())) {
+          int FI = FSV->getFrameIndex();
+          auto To = SlotRemap.find(FI);
+          if (To != SlotRemap.end())
+            SSRefs[FI].push_back(MMO);
+        }
+
         // If this memory location can be a slot remapped here,
         // we remove AA information.
         bool MayHaveConflictingAAMD = false;
         if (MMO->getAAInfo()) {
           if (const Value *MMOV = MMO->getValue()) {
             SmallVector<Value *, 4> Objs;
-            getUnderlyingObjectsForCodeGen(MMOV, Objs, MF->getDataLayout());
+            getUnderlyingObjectsForCodeGen(MMOV, Objs);
 
             if (Objs.empty())
               MayHaveConflictingAAMD = true;
@@ -1051,17 +1112,26 @@ void StackColoring::remapInstructions(DenseMap<int, int> &SlotRemap) {
           }
         }
         if (MayHaveConflictingAAMD) {
-          NewMemOps[MemOpIdx++] = MF->getMachineMemOperand(MMO, AAMDNodes());
+          NewMMOs.push_back(MF->getMachineMemOperand(MMO, AAMDNodes()));
           ReplaceMemOps = true;
+        } else {
+          NewMMOs.push_back(MMO);
         }
-        else
-          NewMemOps[MemOpIdx++] = MMO;
       }
 
       // If any memory operand is updated, set memory references of
       // this instruction.
       if (ReplaceMemOps)
-        I.setMemRefs(std::make_pair(NewMemOps, I.getNumMemOperands()));
+        I.setMemRefs(*MF, NewMMOs);
+    }
+
+  // Rewrite MachineMemOperands that reference old frame indices.
+  for (auto E : enumerate(SSRefs))
+    if (!E.value().empty()) {
+      const PseudoSourceValue *NewSV =
+          MF->getPSVManager().getFixedStack(SlotRemap.find(E.index())->second);
+      for (MachineMemOperand *Ref : E.value())
+        Ref->setValue(NewSV);
     }
 
   // Update the location of C++ catch objects for the MSVC personality routine.
@@ -1217,23 +1287,24 @@ bool StackColoring::runOnMachineFunction(MachineFunction &Func) {
 
   // This is a simple greedy algorithm for merging allocas. First, sort the
   // slots, placing the largest slots first. Next, perform an n^2 scan and look
-  // for disjoint slots. When you find disjoint slots, merge the samller one
+  // for disjoint slots. When you find disjoint slots, merge the smaller one
   // into the bigger one and update the live interval. Remove the small alloca
   // and continue.
 
   // Sort the slots according to their size. Place unused slots at the end.
   // Use stable sort to guarantee deterministic code generation.
-  std::stable_sort(SortedSlots.begin(), SortedSlots.end(),
-                   [this](int LHS, int RHS) {
+  llvm::stable_sort(SortedSlots, [this](int LHS, int RHS) {
     // We use -1 to denote a uninteresting slot. Place these slots at the end.
-    if (LHS == -1) return false;
-    if (RHS == -1) return true;
+    if (LHS == -1)
+      return false;
+    if (RHS == -1)
+      return true;
     // Sort according to size.
     return MFI->getObjectSize(LHS) > MFI->getObjectSize(RHS);
   });
 
   for (auto &s : LiveStarts)
-    llvm::sort(s.begin(), s.end());
+    llvm::sort(s);
 
   bool Changed = true;
   while (Changed) {
@@ -1270,8 +1341,8 @@ bool StackColoring::runOnMachineFunction(MachineFunction &Func) {
           SortedSlots[J] = -1;
           LLVM_DEBUG(dbgs() << "Merging #" << FirstSlot << " and slots #"
                             << SecondSlot << " together.\n");
-          unsigned MaxAlignment = std::max(MFI->getObjectAlignment(FirstSlot),
-                                           MFI->getObjectAlignment(SecondSlot));
+          Align MaxAlignment = std::max(MFI->getObjectAlign(FirstSlot),
+                                        MFI->getObjectAlign(SecondSlot));
 
           assert(MFI->getObjectSize(FirstSlot) >=
                  MFI->getObjectSize(SecondSlot) &&

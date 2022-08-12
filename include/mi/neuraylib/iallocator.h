@@ -100,7 +100,7 @@ public:
     virtual Size get_used_extra_memory() = 0;
 };
 
-/*@}*/ // end group mi_neuray_ineuray
+/**@}*/ // end group mi_neuray_ineuray
 
 } // namespace neuraylib
 

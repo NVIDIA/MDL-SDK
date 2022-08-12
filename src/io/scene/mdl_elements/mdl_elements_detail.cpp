@@ -49,9 +49,6 @@
 #include <mi/mdl/mdl_streams.h>
 #include <mi/neuraylib/imdl_entity_resolver.h>
 
-#include <boost/algorithm/string/replace.hpp>
-#include <boost/core/ignore_unused.hpp>
-
 #include <base/system/main/access_module.h>
 #include <base/hal/disk/disk.h>
 #include <base/hal/hal/i_hal_ospath.h>
@@ -772,6 +769,39 @@ bool Input_stream_reader_impl::readline( char* buffer, mi::Sint32 size)
     return true;
 }
 
+Output_stream_impl::Output_stream_impl( mi::neuraylib::IWriter* writer)
+  : m_writer( writer, mi::base::DUP_INTERFACE),
+    m_error( false)
+{
+}
+
+void Output_stream_impl::write_char( char c)
+{
+    mi::Sint64 out_len = m_writer->write( &c, 1);
+    if( out_len != 1)
+        m_error = true;
+}
+
+void Output_stream_impl::write( const char* s)
+{
+    size_t in_len = strlen( s);
+    mi::Sint64 out_len = m_writer->write( s, in_len);
+    if( static_cast<size_t>(out_len) != in_len)
+        m_error = true;
+}
+
+void Output_stream_impl::flush()
+{
+    if( !m_writer->flush())
+        m_error = true;
+}
+
+bool Output_stream_impl::unput( char c)
+{
+    // unsupported
+    return false;
+}
+
 Resource_reader_impl::Resource_reader_impl( mi::mdl::IMDL_resource_reader* reader)
   : m_reader( reader, mi::base::DUP_INTERFACE)
 {
@@ -1138,48 +1168,54 @@ std::string lookup_thumbnail(
         std::string module_container_filename   = get_container_filename( module_filename.c_str());
         std::string module_container_membername = get_container_membername( module_filename.c_str());
 
-        if (has_mdl_suffix( module_container_membername)) {
-            // remove ".mdl" to obtain module base name
-            std::string module_container_member_basename
-                = strip_dot_mdl_suffix(module_container_membername);
-
-            // construct thumbnail base name
-            std::string thumbnail_container_member_basename
-                = module_container_member_basename + '.' + def_simple_name + '.';
-
-            // check for supported file types
-            for( int i = 0; ext[i] != nullptr; ++i) {
-                std::string thumbnail_container_membername = thumbnail_container_member_basename + ext[i];
-                mi::base::Handle<mi::mdl::IInput_stream> file( archive_tool->get_file_content(
-                    module_container_filename.c_str(), thumbnail_container_membername.c_str()));
-                if( file)
-                    return module_container_filename + ':' + thumbnail_container_membername;
-            }
+        if( !has_mdl_suffix( module_container_membername)) {
+            assert( false);
+            return "";
         }
-    } else {
-        if (has_mdl_suffix( module_filename)) {
-            // remove ".mdl" to obtain module base name
-            std::string module_basename = strip_dot_mdl_suffix( module_filename);
-            if (!module_basename.empty()) {
-                // construct thumbnail base name
-                std::string thumbnail_basename = module_basename + '.' + def_simple_name + '.';
 
-                // check for supported file types
-                for( int i = 0; ext[i] != nullptr; ++i) {
-                    std::string thumbnail_filename = thumbnail_basename + ext[i];
-                    if( DISK::is_file( thumbnail_filename.c_str()))
-                        return thumbnail_filename;
-                }
-            }
+        // remove ".mdl" to obtain module base name
+        std::string module_container_member_basename
+            = strip_dot_mdl_suffix( module_container_membername);
+
+        // construct thumbnail base name
+        std::string thumbnail_container_member_basename
+            = module_container_member_basename + '.' + def_simple_name + '.';
+
+        // check for supported file types
+        for( int i = 0; ext[i] != nullptr; ++i) {
+            std::string thumbnail_container_membername = thumbnail_container_member_basename + ext[i];
+            mi::base::Handle<mi::mdl::IInput_stream> file( archive_tool->get_file_content(
+                module_container_filename.c_str(), thumbnail_container_membername.c_str()));
+            if( file)
+                return module_container_filename + ':' + thumbnail_container_membername;
         }
+
+        return "";
+    }
+
+    // string-based module?
+    if( !has_mdl_suffix( module_filename))
+        return "";
+
+    // remove ".mdl" to obtain module base name
+    std::string module_basename = strip_dot_mdl_suffix( module_filename);
+    assert( !module_basename.empty());
+
+    // construct thumbnail base name
+    std::string thumbnail_basename = module_basename + '.' + def_simple_name + '.';
+
+    // check for supported file types
+    for( int i = 0; ext[i] != nullptr; ++i) {
+        std::string thumbnail_filename = thumbnail_basename + ext[i];
+        if( DISK::is_file( thumbnail_filename.c_str()))
+            return thumbnail_filename;
     }
 
     return "";
 }
 
 Local_mdl_resource_element::Local_mdl_resource_element( const mi::mdl::IMDL_resource_element* other)
-  : m_frame( other->get_frame_number()),
-    m_entries()
+  : m_frame( other->get_frame_number())
 {
     size_t count = other->get_count();
     m_entries.reserve(count);
@@ -1271,12 +1307,8 @@ bool Local_mdl_resource_element::get_resource_hash( size_t i, unsigned char hash
 Local_mdl_resource_set::Local_mdl_resource_set( mi::mdl::IMDL_resource_set* other)
   : m_first_frame( other->get_first_frame()),
     m_last_frame( other->get_last_frame()),
-    m_mdl_url_mask(),
-    m_filename_mask(),
     m_has_sequence_marker( other->has_sequence_marker()),
-    m_udim_mode( other->get_udim_mode()),
-    m_elements(),
-    m_element_idx()
+    m_udim_mode( other->get_udim_mode())
 {
     const char* mdl_url_mask  = other->get_mdl_url_mask();
     const char* filename_mask = other->get_filename_mask();
@@ -1368,7 +1400,7 @@ Local_mdl_resource_reader::Local_mdl_resource_reader( mi::mdl::IMDL_resource_rea
         m_filename = filename;
     if( mdl_url)
         m_mdl_url  = mdl_url;
-    m_hash_valid   = other->get_resource_hash( &m_hash[0]);
+    m_hash_valid   = other->get_resource_hash( m_hash);
 
     bool success = other->seek( 0, mi::mdl::IMDL_resource_reader::MDL_SEEK_END);
     if( !success)

@@ -1,9 +1,8 @@
 //===-- LTOModule.cpp - LLVM Link Time Optimizer --------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -29,6 +28,7 @@
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/SubtargetFeature.h"
 #include "llvm/Object/IRObjectFile.h"
+#include "llvm/Object/MachO.h"
 #include "llvm/Object/ObjectFile.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Host.h"
@@ -46,6 +46,7 @@ using namespace llvm::object;
 LTOModule::LTOModule(std::unique_ptr<Module> M, MemoryBufferRef MBRef,
                      llvm::TargetMachine *TM)
     : Mod(std::move(M)), MBRef(MBRef), _target(TM) {
+  assert(_target && "target machine is null");
   SymTab.addModule(Mod.get());
 }
 
@@ -73,7 +74,7 @@ bool LTOModule::isBitcodeFile(StringRef Path) {
 bool LTOModule::isThinLTO() {
   Expected<BitcodeLTOInfo> Result = getBitcodeLTOInfo(MBRef);
   if (!Result) {
-    logAllUnhandledErrors(Result.takeError(), errs(), "");
+    logAllUnhandledErrors(Result.takeError(), errs());
     return false;
   }
   return Result->IsThinLTO;
@@ -131,7 +132,8 @@ LTOModule::createFromOpenFileSlice(LLVMContext &Context, int fd, StringRef path,
                                    size_t map_size, off_t offset,
                                    const TargetOptions &options) {
   ErrorOr<std::unique_ptr<MemoryBuffer>> BufferOrErr =
-      MemoryBuffer::getOpenFileSlice(fd, path, map_size, offset);
+      MemoryBuffer::getOpenFileSlice(sys::fs::convertFDToNativeFile(fd), path,
+                                     map_size, offset);
   if (std::error_code EC = BufferOrErr.getError()) {
     Context.emitError(EC.message());
     return EC;
@@ -220,7 +222,10 @@ LTOModule::makeLTOModule(MemoryBufferRef Buffer, const TargetOptions &options,
       CPU = "core2";
     else if (Triple.getArch() == llvm::Triple::x86)
       CPU = "yonah";
-    else if (Triple.getArch() == llvm::Triple::aarch64)
+    else if (Triple.isArm64e())
+      CPU = "apple-a12";
+    else if (Triple.getArch() == llvm::Triple::aarch64 ||
+             Triple.getArch() == llvm::Triple::aarch64_32)
       CPU = "cyclone";
   }
 
@@ -412,9 +417,8 @@ void LTOModule::addDefinedFunctionSymbol(StringRef Name, const Function *F) {
 
 void LTOModule::addDefinedSymbol(StringRef Name, const GlobalValue *def,
                                  bool isFunction) {
-  // set alignment part log2() can have rounding errors
-  uint32_t align = def->getAlignment();
-  uint32_t attr = align ? countTrailingZeros(align) : 0;
+  const GlobalObject *go = dyn_cast<GlobalObject>(def);
+  uint32_t attr = go ? Log2(go->getAlign().valueOrOne()) : 0;
 
   // set permissions part
   if (isFunction) {
@@ -646,6 +650,40 @@ void LTOModule::parseMetadata() {
       continue;
     emitLinkerFlagsForGlobalCOFF(OS, Sym.symbol, TT, M);
   }
+}
 
-  // Add other interesting metadata here.
+lto::InputFile *LTOModule::createInputFile(const void *buffer,
+                                           size_t buffer_size, const char *path,
+                                           std::string &outErr) {
+  StringRef Data((const char *)buffer, buffer_size);
+  MemoryBufferRef BufferRef(Data, path);
+
+  Expected<std::unique_ptr<lto::InputFile>> ObjOrErr =
+      lto::InputFile::create(BufferRef);
+
+  if (ObjOrErr)
+    return ObjOrErr->release();
+
+  outErr = std::string(path) +
+           ": Could not read LTO input file: " + toString(ObjOrErr.takeError());
+  return nullptr;
+}
+
+size_t LTOModule::getDependentLibraryCount(lto::InputFile *input) {
+  return input->getDependentLibraries().size();
+}
+
+const char *LTOModule::getDependentLibrary(lto::InputFile *input, size_t index,
+                                           size_t *size) {
+  StringRef S = input->getDependentLibraries()[index];
+  *size = S.size();
+  return S.data();
+}
+
+Expected<uint32_t> LTOModule::getMachOCPUType() const {
+  return MachO::getCPUType(Triple(Mod->getTargetTriple()));
+}
+
+Expected<uint32_t> LTOModule::getMachOCPUSubType() const {
+  return MachO::getCPUSubType(Triple(Mod->getTargetTriple()));
 }

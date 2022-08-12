@@ -1,9 +1,8 @@
 //===- ObjCARC.h - ObjC ARC Optimization --------------*- C++ -*-----------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 /// \file
@@ -23,22 +22,10 @@
 #ifndef LLVM_LIB_TRANSFORMS_OBJCARC_OBJCARC_H
 #define LLVM_LIB_TRANSFORMS_OBJCARC_OBJCARC_H
 
-#include "llvm/ADT/StringSwitch.h"
-#include "llvm/Analysis/AliasAnalysis.h"
-#include "llvm/Analysis/ObjCARCAnalysisUtils.h"
-#include "llvm/Analysis/ObjCARCInstKind.h"
-#include "llvm/Analysis/Passes.h"
-#include "llvm/Transforms/Utils/Local.h"
-#include "llvm/Analysis/ValueTracking.h"
-#include "llvm/IR/CallSite.h"
-#include "llvm/IR/InstIterator.h"
-#include "llvm/IR/Module.h"
-#include "llvm/Pass.h"
-#include "llvm/Transforms/ObjCARC.h"
+#ifdef LLVM_ENABLE_OBJC
 
-namespace llvm {
-class raw_ostream;
-}
+#include "llvm/Analysis/ObjCARCAnalysisUtils.h"
+#include "llvm/Transforms/Utils/Local.h"
 
 namespace llvm {
 namespace objcarc {
@@ -58,7 +45,7 @@ static inline void EraseInstruction(Instruction *CI) {
     // Replace the return value with the argument.
     assert((IsForwarding(GetBasicARCInstKind(CI)) ||
             (IsNoopOnNull(GetBasicARCInstKind(CI)) &&
-             isa<ConstantPointerNull>(OldArg))) &&
+             IsNullOrUndef(OldArg->stripPointerCasts()))) &&
            "Can't delete non-forwarding instruction with users!");
     CI->replaceAllUsesWith(OldArg);
   }
@@ -105,4 +92,5 @@ void getEquivalentPHIs(PHINodeTy &PN, VectorTy &PHIList) {
 } // end namespace objcarc
 } // end namespace llvm
 
+#endif
 #endif

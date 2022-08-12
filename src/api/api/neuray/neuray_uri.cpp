@@ -58,16 +58,16 @@ std::string Uri::get_str() const
     // see RFC 2396, section 5.2, step 7
     std::string result;
     if( !m_scheme.empty())
-        result += m_scheme + ":";
+        result += m_scheme + ':';
     if( !m_authority.empty())
         result += "//" + m_authority;
     if( m_authority.empty() && m_path.substr( 0, 2) == "//")
         result += "//";
     result += m_path;
     if( !m_query.empty())
-        result += "?" + m_query;
+        result += '?' + m_query;
     if( !m_fragment.empty())
-        result += "#" + m_fragment;
+        result += '#' + m_fragment;
     return result;
 }
 

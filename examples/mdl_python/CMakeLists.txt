@@ -29,19 +29,7 @@
 # create Visual Studio code launch.json
 get_property(BINDING_MODULE_PATH TARGET "mdl::mdl_python" PROPERTY BINARY_DIR)
 
-# Platform depended symbols and keywords
-if(WINDOWS)
-    set(ENV_SEP ";")
-    set(ENV_LIB_PATH "PATH")
-elseif(MACOSX)
-    set(ENV_SEP ":")
-    set(ENV_LIB_PATH "DYLD_LIBRARY_PATH")
-else() # LINUX
-    set(ENV_SEP ":")
-    set(ENV_LIB_PATH "LD_LIBRARY_PATH")
-endif()
-
-# Depending on the product and it's distribution we need set paths and enviroment variables slightly different
+# Depending on the product and it's distribution we need set paths and environment variables slightly different
 if("MDL_BINARY_RELEASE" IN_LIST MDL_ADDITIONAL_COMPILER_DEFINES)
     if(MDL_INTERNAL_BUILD)
         set(_VS_CODE_FILE_IN ${CMAKE_CURRENT_SOURCE_DIR}/cmake_templates/mdl_python_examples.examples_internal.code-workspace)

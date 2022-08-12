@@ -397,7 +397,7 @@ public:
 mi_static_assert( sizeof( IFactory::Assign_result) == sizeof( Uint32));
 mi_static_assert( sizeof( IFactory::Assign_clone_options) == sizeof( Uint32));
 
-/*@}*/ // end group mi_neuray_types
+/**@}*/ // end group mi_neuray_types
 
 } // namespace neuraylib
 

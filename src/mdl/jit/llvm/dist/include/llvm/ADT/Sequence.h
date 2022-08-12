@@ -1,9 +1,8 @@
 //===- Sequence.h - Utility for producing sequences of values ---*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 /// \file
@@ -43,6 +42,10 @@ public:
   value_sequence_iterator(const value_sequence_iterator &) = default;
   value_sequence_iterator(value_sequence_iterator &&Arg)
       : Value(std::move(Arg.Value)) {}
+  value_sequence_iterator &operator=(const value_sequence_iterator &Arg) {
+    Value = Arg.Value;
+    return *this;
+  }
 
   template <typename U, typename Enabler = decltype(ValueT(std::declval<U>()))>
   value_sequence_iterator(U &&Value) : Value(std::forward<U>(Value)) {}

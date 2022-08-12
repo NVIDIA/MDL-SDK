@@ -187,7 +187,7 @@ Sint64 File::read(
     if (num >> 63) {
         MI_STREAM_DEBUG(M_DISK, LOG::Mod_log::C_DISKTRACE)
             << "File::read() error: Only 63 significant bits supported"
-            " for filesize [file: " << m_path << "]";
+            " for filesize [file: " << m_path << ']';
         m_error = EINVAL;
         return -1;
     }
@@ -195,7 +195,7 @@ Sint64 File::read(
     // 32 bit platform
     if (num >= Uint64(std::numeric_limits<size_t>::max())) {
         MI_STREAM_DEBUG(M_DISK, LOG::Mod_log::C_DISKTRACE)
-            << "File::read() error: Filesize too large (" << num << ")"
+            << "File::read() error: Filesize too large (" << num << ')'
             " [file: " << m_path << "]";
         m_error = EINVAL;
         return -1;
@@ -231,7 +231,7 @@ bool File::readline(
 
     m_error = 0;
     if (!fgets(line, num, m_fp))
-        line[0] = 0; // eof
+        line[0] = '\0'; // eof
     return true;
 }
 
@@ -282,7 +282,7 @@ Sint64 File::write(
     if (num >> 63) {
         MI_STREAM_DEBUG(M_DISK, LOG::Mod_log::C_DISKTRACE)
             << "File::write() error: Only 63 significant bits supported"
-            " for filesize [file: " << m_path << "]";
+            " for filesize [file: " << m_path << ']';
         m_error = EINVAL;
         return -1;
     }
@@ -290,7 +290,7 @@ Sint64 File::write(
     // 32 bit platform
     if (num >= Uint64(std::numeric_limits<size_t>::max())) {
         MI_STREAM_DEBUG(M_DISK, LOG::Mod_log::C_DISKTRACE)
-            << "File::write() error: Filesize too large (" << num << ")"
+            << "File::write() error: Filesize too large (" << num << ')'
             " [file: " << m_path << "]";
         m_error = EINVAL;
         return -1;

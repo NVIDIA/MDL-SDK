@@ -1,6 +1,9 @@
-add_llvm_library(LLVMipo
+add_llvm_component_library(LLVMipo
   AlwaysInliner.cpp
+  Annotation2Metadata.cpp
   ArgumentPromotion.cpp
+  Attributor.cpp
+  AttributorAttributes.cpp
   BarrierNoopPass.cpp
   BlockExtractor.cpp
   CalledValuePropagation.cpp
@@ -15,8 +18,9 @@ add_llvm_library(LLVMipo
   GlobalDCE.cpp
   GlobalOpt.cpp
   GlobalSplit.cpp
-  IPConstantPropagation.cpp
+  HotColdSplitting.cpp
   IPO.cpp
+  IROutliner.cpp
   InferFunctionAttrs.cpp
   InlineSimple.cpp
   Inliner.cpp
@@ -24,10 +28,13 @@ add_llvm_library(LLVMipo
   LoopExtractor.cpp
   LowerTypeTests.cpp
   MergeFunctions.cpp
+  OpenMPOpt.cpp
   PartialInlining.cpp
   PassManagerBuilder.cpp
   PruneEH.cpp
+  SampleContextTracker.cpp
   SampleProfile.cpp
+  SampleProfileProbe.cpp
   SCCP.cpp
   StripDeadPrototypes.cpp
   StripSymbols.cpp
@@ -41,4 +48,26 @@ add_llvm_library(LLVMipo
 
   DEPENDS
   intrinsics_gen
+  omp_gen
+
+  COMPONENT_NAME
+  IPO
+
+  LINK_COMPONENTS
+  AggressiveInstCombine
+  Analysis
+  BitReader
+  BitWriter
+  Core
+  FrontendOpenMP
+  InstCombine
+  IRReader
+  Linker
+  Object
+  ProfileData
+  Scalar
+  Support
+  TransformUtils
+  Vectorize
+  Instrumentation
   )

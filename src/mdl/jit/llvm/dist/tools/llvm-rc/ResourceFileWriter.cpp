@@ -1,9 +1,8 @@
 //===-- ResourceFileWriter.cpp --------------------------------*- C++-*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===---------------------------------------------------------------------===//
 //
@@ -12,11 +11,11 @@
 //===---------------------------------------------------------------------===//
 
 #include "ResourceFileWriter.h"
-
 #include "llvm/Object/WindowsResource.h"
 #include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/EndianStream.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
@@ -139,7 +138,8 @@ enum class NullHandlingMethod {
 };
 
 // Parses an identifier or string and returns a processed version of it:
-//   * String the string boundary quotes.
+//   * Strip the string boundary quotes.
+//   * Convert the input code page characters to UTF16.
 //   * Squash "" to a single ".
 //   * Replace the escape sequences with their processed version.
 // For identifiers, this is no-op.
@@ -514,6 +514,11 @@ Error ResourceFileWriter::visitCharacteristicsStmt(
   return Error::success();
 }
 
+Error ResourceFileWriter::visitExStyleStmt(const ExStyleStmt *Stmt) {
+  ObjectData.ExStyle = Stmt->Value;
+  return Error::success();
+}
+
 Error ResourceFileWriter::visitFontStmt(const FontStmt *Stmt) {
   RETURN_IF_ERROR(checkNumberFits<uint16_t>(Stmt->Size, "Font size"));
   RETURN_IF_ERROR(checkNumberFits<uint16_t>(Stmt->Weight, "Font weight"));
@@ -718,7 +723,7 @@ Error ResourceFileWriter::writeBitmapBody(const RCResource *Base) {
 
 // --- CursorResource and IconResource helpers. --- //
 
-// ICONRESDIR structure. Describes a single icon in resouce group.
+// ICONRESDIR structure. Describes a single icon in resource group.
 //
 // Ref: msdn.microsoft.com/en-us/library/windows/desktop/ms648016.aspx
 struct IconResDir {
@@ -982,7 +987,8 @@ Error ResourceFileWriter::writeSingleDialogControl(const Control &Ctl,
   padStream(sizeof(uint32_t));
 
   auto TypeInfo = Control::SupportedCtls.lookup(Ctl.Type);
-  uint32_t CtlStyle = TypeInfo.Style | Ctl.Style.getValueOr(0);
+  IntWithNotMask CtlStyle(TypeInfo.Style);
+  CtlStyle |= Ctl.Style.getValueOr(RCInt(0));
   uint32_t CtlExtStyle = Ctl.ExtStyle.getValueOr(0);
 
   // DIALOG(EX) item header prefix.
@@ -990,7 +996,7 @@ Error ResourceFileWriter::writeSingleDialogControl(const Control &Ctl,
     struct {
       ulittle32_t Style;
       ulittle32_t ExtStyle;
-    } Prefix{ulittle32_t(CtlStyle), ulittle32_t(CtlExtStyle)};
+    } Prefix{ulittle32_t(CtlStyle.getValue()), ulittle32_t(CtlExtStyle)};
     writeObject(Prefix);
   } else {
     struct {
@@ -998,7 +1004,7 @@ Error ResourceFileWriter::writeSingleDialogControl(const Control &Ctl,
       ulittle32_t ExtStyle;
       ulittle32_t Style;
     } Prefix{ulittle32_t(Ctl.HelpID.getValueOr(0)), ulittle32_t(CtlExtStyle),
-             ulittle32_t(CtlStyle)};
+             ulittle32_t(CtlStyle.getValue())};
     writeObject(Prefix);
   }
 
@@ -1065,6 +1071,7 @@ Error ResourceFileWriter::writeDialogBody(const RCResource *Base) {
     UsedStyle |= StyleCaptionFlag;
 
   const uint16_t DialogExMagic = 0xFFFF;
+  uint32_t ExStyle = ObjectData.ExStyle.getValueOr(0);
 
   // Write DIALOG(EX) header prefix. These are pretty different.
   if (!Res->IsExtended) {
@@ -1083,7 +1090,7 @@ Error ResourceFileWriter::writeDialogBody(const RCResource *Base) {
       ulittle32_t Style;
       ulittle32_t ExtStyle;
     } Prefix{ulittle32_t(UsedStyle),
-             ulittle32_t(0)}; // As of now, we don't keep EXSTYLE.
+             ulittle32_t(ExStyle)};
 
     writeObject(Prefix);
   } else {
@@ -1094,7 +1101,7 @@ Error ResourceFileWriter::writeDialogBody(const RCResource *Base) {
       ulittle32_t ExtStyle;
       ulittle32_t Style;
     } Prefix{ulittle16_t(1), ulittle16_t(DialogExMagic),
-             ulittle32_t(Res->HelpID), ulittle32_t(0), ulittle32_t(UsedStyle)};
+             ulittle32_t(Res->HelpID), ulittle32_t(ExStyle), ulittle32_t(UsedStyle)};
 
     writeObject(Prefix);
   }
@@ -1174,8 +1181,10 @@ Error ResourceFileWriter::writeMenuDefinition(
 
   if (auto *MenuItemPtr = dyn_cast<MenuItem>(DefPtr)) {
     writeInt<uint16_t>(Flags);
-    RETURN_IF_ERROR(
-        checkNumberFits<uint16_t>(MenuItemPtr->Id, "MENUITEM action ID"));
+    // Some resource files use -1, i.e. UINT32_MAX, for empty menu items.
+    if (MenuItemPtr->Id != static_cast<uint32_t>(-1))
+      RETURN_IF_ERROR(
+          checkNumberFits<uint16_t>(MenuItemPtr->Id, "MENUITEM action ID"));
     writeInt<uint16_t>(MenuItemPtr->Id);
     RETURN_IF_ERROR(writeCString(MenuItemPtr->Name));
     return Error::success();
@@ -1238,7 +1247,8 @@ Error ResourceFileWriter::visitStringTableBundle(const RCResource *Res) {
 }
 
 Error ResourceFileWriter::insertStringIntoBundle(
-    StringTableInfo::Bundle &Bundle, uint16_t StringID, StringRef String) {
+    StringTableInfo::Bundle &Bundle, uint16_t StringID,
+    const std::vector<StringRef> &String) {
   uint16_t StringLoc = StringID & 15;
   if (Bundle.Data[StringLoc])
     return createError("Multiple STRINGTABLE strings located under ID " +
@@ -1253,13 +1263,15 @@ Error ResourceFileWriter::writeStringTableBundleBody(const RCResource *Base) {
     // The string format is a tiny bit different here. We
     // first output the size of the string, and then the string itself
     // (which is not null-terminated).
-    bool IsLongString;
     SmallVector<UTF16, 128> Data;
-    RETURN_IF_ERROR(processString(Res->Bundle.Data[ID].getValueOr(StringRef()),
-                                  NullHandlingMethod::CutAtDoubleNull,
-                                  IsLongString, Data, Params.CodePage));
-    if (AppendNull && Res->Bundle.Data[ID])
-      Data.push_back('\0');
+    if (Res->Bundle.Data[ID]) {
+      bool IsLongString;
+      for (StringRef S : *Res->Bundle.Data[ID])
+        RETURN_IF_ERROR(processString(S, NullHandlingMethod::CutAtDoubleNull,
+                                      IsLongString, Data, Params.CodePage));
+      if (AppendNull)
+        Data.push_back('\0');
+    }
     RETURN_IF_ERROR(
         checkNumberFits<uint16_t>(Data.size(), "STRINGTABLE string size"));
     writeInt<uint16_t>(Data.size());
@@ -1502,6 +1514,18 @@ ResourceFileWriter::loadFile(StringRef File) const {
   SmallString<128> Cwd;
   std::unique_ptr<MemoryBuffer> Result;
 
+  // 0. The file path is absolute or has a root directory, so we shouldn't
+  // try to append it on top of other base directories. (An absolute path
+  // must have a root directory, but e.g. the path "\dir\file" on windows
+  // isn't considered absolute, but it does have a root directory. As long as
+  // sys::path::append doesn't handle appending an absolute path or a path
+  // starting with a root directory on top of a base, we must handle this
+  // case separately at the top. C++17's path::append handles that case
+  // properly though, so if using that to append paths below, this early
+  // exception case could be removed.)
+  if (sys::path::has_root_directory(File))
+    return errorOrToExpected(MemoryBuffer::getFile(File, -1, false));
+
   // 1. The current working directory.
   sys::fs::current_path(Cwd);
   Path.assign(Cwd.begin(), Cwd.end());
@@ -1510,8 +1534,7 @@ ResourceFileWriter::loadFile(StringRef File) const {
     return errorOrToExpected(MemoryBuffer::getFile(Path, -1, false));
 
   // 2. The directory of the input resource file, if it is different from the
-  // current
-  //    working directory.
+  // current working directory.
   StringRef InputFileDir = sys::path::parent_path(Params.InputFilePath);
   Path.assign(InputFileDir.begin(), InputFileDir.end());
   sys::path::append(Path, File);

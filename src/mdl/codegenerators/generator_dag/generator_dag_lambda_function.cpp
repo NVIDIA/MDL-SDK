@@ -1299,7 +1299,7 @@ bool Lambda_function::analyze(
     ICall_name_resolver const *name_resolver,
     Analysis_result           &result) const
 {
-    if (proj >= m_roots.size()) {
+    if (m_body_expr == NULL && proj >= m_roots.size()) {
         return false;
     }
 
@@ -1309,7 +1309,9 @@ bool Lambda_function::analyze(
     result.uses_state_rc_normal     = 0;
     result.uses_texresult_lookup    = 0;
 
-    DAG_node const *root = m_roots[proj];
+    DAG_node const *root = !m_roots.empty() ? m_roots[proj] : m_body_expr;
+
+    MDL_ASSERT(root);
 
     return analyze(root, name_resolver, result);
 }
@@ -2586,6 +2588,7 @@ void Lambda_function::serialize(ISerializer *is) const
         Resource_tag_tuple const &k = it->first;
         dag_serializer.write_encoded(k.m_kind);
         dag_serializer.write_encoded(k.m_url);
+        dag_serializer.write_encoded(k.m_selector);
         dag_serializer.write_db_tag(k.m_tag);
 
         Resource_attr_entry const &e = it->second;
@@ -2723,10 +2726,12 @@ Lambda_function *Lambda_function::deserialize(
     for (size_t i = 0; i < mlen; ++i) {
         Resource_tag_tuple k;
 
-        k.m_kind    = dag_deserializer.read_encoded<Resource_tag_tuple::Kind>();
-        string url  = dag_deserializer.read_encoded<string>();
-        k.m_url     = Arena_strdup(res->m_arena, url.c_str());
-        k.m_tag     = dag_deserializer.read_db_tag();
+        k.m_kind        = dag_deserializer.read_encoded<Resource_tag_tuple::Kind>();
+        string url      = dag_deserializer.read_encoded<string>();
+        k.m_url         = Arena_strdup(res->m_arena, url.c_str());
+        string selector = dag_deserializer.read_encoded<string>();
+        k.m_selector    = Arena_strdup(res->m_arena, selector.c_str());
+        k.m_tag         = dag_deserializer.read_db_tag();
 
         Resource_attr_entry e;
         e.index = dag_deserializer.read_encoded_tag();

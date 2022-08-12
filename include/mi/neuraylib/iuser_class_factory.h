@@ -114,7 +114,7 @@ public:
     }
 };
 
-/*@}*/ // end group mi_neuray_plugins
+/**@}*/ // end group mi_neuray_plugins
 
 } // namespace neuraylib
 

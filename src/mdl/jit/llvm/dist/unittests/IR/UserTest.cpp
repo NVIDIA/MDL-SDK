@@ -1,9 +1,8 @@
 //===- llvm/unittest/IR/UserTest.cpp - User unit tests --------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -116,6 +115,38 @@ TEST(UserTest, ValueOpIteration) {
   CI++;
   EXPECT_EQ(IP->getOperand(6), CI[2]);
   EXPECT_EQ(IP->value_op_end(), (CI - 2) + 8);
+}
+
+TEST(UserTest, replaceUseOfWith) {
+  LLVMContext C;
+
+  const char *ModuleString = "define void @f(i32 %x) {\n"
+                             "entry:\n"
+                             "  %v0 = add i32 1, 1\n"
+                             "  %v1 = add i32 %x, 2\n"
+                             "  ret void\n"
+                             "}\n";
+  SMDiagnostic Err;
+  std::unique_ptr<Module> M = parseAssemblyString(ModuleString, Err, C);
+  Function *F = M->getFunction("f");
+  EXPECT_TRUE(F);
+  EXPECT_TRUE(F->arg_begin() != F->arg_end());
+  BasicBlock& entryBB = F->front();
+  Instruction& I0 = *(entryBB.begin());
+  Instruction& I1 = *(++(entryBB.begin()));
+
+  Argument &X = *F->arg_begin();
+  EXPECT_EQ("x", X.getName());
+  EXPECT_NE(X.user_begin() ,X.user_end());
+  EXPECT_EQ(I0.user_begin() ,I0.user_end());
+
+
+  auto XUser = find(X.users(), &(I1));
+  EXPECT_NE(XUser, X.user_end());
+ 
+  XUser->replaceUsesOfWith(&X, &I0);
+  EXPECT_EQ(X.user_begin() ,X.user_end());
+  EXPECT_NE(I0.user_begin() ,I0.user_end());
 }
 
 TEST(UserTest, PersonalityUser) {

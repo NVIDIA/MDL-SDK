@@ -96,27 +96,22 @@ bool Plug_module_impl::load_library( const char* path)
     }
 
     // Invoke plugin factory for all plugins
-    std::vector<mi::base::Handle<mi::base::IPlugin_descriptor> > new_plugins;
     for( size_t i = 0; true; ++i) {
 
-        mi::base::Plugin* plugin = factory( i, NULL);
+    	Plugin_descriptor_impl::Plugin_ptr plugin(factory( i, nullptr),[](mi::base::Plugin* p) { if (p) p->release(); });
         if( !plugin)
             break;
 
-        mi::Sint32 plugin_system_version = plugin->get_plugin_system_version();
+        const mi::Sint32 plugin_system_version = plugin->get_plugin_system_version();
         if( plugin_system_version != mi::base::Plugin::s_version) {
             LOG::mod_log->error( M_PLUG, LOG::Mod_log::C_PLUGIN, 2,
                 "Library \"%s\": found plugin with unsupported plugin system version %d, "
                 "ignoring plugin.", path_str.c_str(), plugin_system_version);
-            plugin->release();
             continue;
         }
 
-        mi::base::Handle<mi::base::IPlugin_descriptor> descriptor( // takes over plugin
-            new Plugin_descriptor_impl( library.get(), plugin, path_str.c_str()));
-        m_plugins.push_back( descriptor);
-        new_plugins.push_back( descriptor);
-
+        m_plugins.emplace_back( new Plugin_descriptor_impl(
+                library, std::move(plugin), path_str));
     }
 
     return true;

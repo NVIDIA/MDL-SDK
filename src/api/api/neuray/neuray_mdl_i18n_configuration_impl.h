@@ -92,7 +92,6 @@ public:
     /// \return           0, in case of success, -1 in case of failure
     mi::Sint32 shutdown();
 
-public:
     static const std::string system_keyword;
 
 private:

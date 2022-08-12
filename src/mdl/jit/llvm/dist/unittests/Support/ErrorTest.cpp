@@ -1,17 +1,18 @@
 //===----- unittests/ErrorTest.cpp - Error.h tests ------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Support/Error.h"
+#include "llvm-c/Error.h"
 
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/Errc.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/ManagedStatic.h"
 #include "llvm/Testing/Support/Error.h"
 #include "gtest/gtest-spi.h"
 #include "gtest/gtest.h"
@@ -103,7 +104,7 @@ TEST(Error, CheckedSuccess) {
   EXPECT_FALSE(E) << "Unexpected error while testing Error 'Success'";
 }
 
-// Test that unchecked succes values cause an abort.
+// Test that unchecked success values cause an abort.
 #if LLVM_ENABLE_ABI_BREAKING_CHECKS
 TEST(Error, UncheckedSuccess) {
   EXPECT_DEATH({ Error E = Error::success(); },
@@ -389,7 +390,8 @@ TEST(Error, FailureToHandle) {
   };
 
   EXPECT_DEATH(FailToHandle(),
-               "Failure value returned from cantFail wrapped call")
+               "Failure value returned from cantFail wrapped call\n"
+               "CustomError \\{7\\}")
       << "Unhandled Error in handleAllErrors call did not cause an "
          "abort()";
 }
@@ -408,7 +410,8 @@ TEST(Error, FailureFromHandler) {
   };
 
   EXPECT_DEATH(ReturnErrorFromHandler(),
-               "Failure value returned from cantFail wrapped call")
+               "Failure value returned from cantFail wrapped call\n"
+               "CustomError \\{7\\}")
       << " Error returned from handler in handleAllErrors call did not "
          "cause abort()";
 }
@@ -432,9 +435,8 @@ TEST(Error, CatchErrorFromHandler) {
 TEST(Error, StringError) {
   std::string Msg;
   raw_string_ostream S(Msg);
-  logAllUnhandledErrors(make_error<StringError>("foo" + Twine(42),
-                                                inconvertibleErrorCode()),
-                        S, "");
+  logAllUnhandledErrors(
+      make_error<StringError>("foo" + Twine(42), inconvertibleErrorCode()), S);
   EXPECT_EQ(S.str(), "foo42\n") << "Unexpected StringError log result";
 
   auto EC =
@@ -449,13 +451,13 @@ TEST(Error, createStringError) {
   std::string Msg;
   raw_string_ostream S(Msg);
   logAllUnhandledErrors(createStringError(EC, "foo%s%d0x%" PRIx8, Bar, 1, 0xff),
-                        S, "");
+                        S);
   EXPECT_EQ(S.str(), "foobar10xff\n")
     << "Unexpected createStringError() log result";
 
   S.flush();
   Msg.clear();
-  logAllUnhandledErrors(createStringError(EC, Bar), S, "");
+  logAllUnhandledErrors(createStringError(EC, Bar), S);
   EXPECT_EQ(S.str(), "bar\n")
     << "Unexpected createStringError() (overloaded) log result";
 
@@ -510,11 +512,12 @@ TEST(Error, CantFailSuccess) {
 // Test that cantFail results in a crash if you pass it a failure value.
 #if LLVM_ENABLE_ABI_BREAKING_CHECKS && !defined(NDEBUG)
 TEST(Error, CantFailDeath) {
-  EXPECT_DEATH(
-      cantFail(make_error<StringError>("foo", inconvertibleErrorCode()),
-               "Cantfail call failed"),
-      "Cantfail call failed")
-    << "cantFail(Error) did not cause an abort for failure value";
+  EXPECT_DEATH(cantFail(make_error<StringError>("Original error message",
+                                                inconvertibleErrorCode()),
+                        "Cantfail call failed"),
+               "Cantfail call failed\n"
+               "Original error message")
+      << "cantFail(Error) did not cause an abort for failure value";
 
   EXPECT_DEATH(
       {
@@ -758,12 +761,22 @@ TEST(Error, Stream) {
   }
 }
 
-TEST(Error, ErrorMatchers) {
+TEST(Error, SucceededMatcher) {
   EXPECT_THAT_ERROR(Error::success(), Succeeded());
   EXPECT_NONFATAL_FAILURE(
       EXPECT_THAT_ERROR(make_error<CustomError>(0), Succeeded()),
       "Expected: succeeded\n  Actual: failed  (CustomError {0})");
 
+  EXPECT_THAT_EXPECTED(Expected<int>(0), Succeeded());
+  EXPECT_NONFATAL_FAILURE(
+      EXPECT_THAT_EXPECTED(Expected<int>(make_error<CustomError>(0)),
+                           Succeeded()),
+      "Expected: succeeded\n  Actual: failed  (CustomError {0})");
+  int a = 1;
+  EXPECT_THAT_EXPECTED(Expected<int &>(a), Succeeded());
+}
+
+TEST(Error, FailedMatcher) {
   EXPECT_THAT_ERROR(make_error<CustomError>(0), Failed());
   EXPECT_NONFATAL_FAILURE(EXPECT_THAT_ERROR(Error::success(), Failed()),
                           "Expected: failed\n  Actual: succeeded");
@@ -793,17 +806,14 @@ TEST(Error, ErrorMatchers) {
       "  Actual: failed  (CustomError {0})");
   EXPECT_THAT_ERROR(make_error<CustomError>(0), Failed<ErrorInfoBase>());
 
-  EXPECT_THAT_EXPECTED(Expected<int>(0), Succeeded());
-  EXPECT_NONFATAL_FAILURE(
-      EXPECT_THAT_EXPECTED(Expected<int>(make_error<CustomError>(0)),
-                           Succeeded()),
-      "Expected: succeeded\n  Actual: failed  (CustomError {0})");
-
   EXPECT_THAT_EXPECTED(Expected<int>(make_error<CustomError>(0)), Failed());
   EXPECT_NONFATAL_FAILURE(
       EXPECT_THAT_EXPECTED(Expected<int>(0), Failed()),
       "Expected: failed\n  Actual: succeeded with value 0");
+  EXPECT_THAT_EXPECTED(Expected<int &>(make_error<CustomError>(0)), Failed());
+}
 
+TEST(Error, HasValueMatcher) {
   EXPECT_THAT_EXPECTED(Expected<int>(0), HasValue(0));
   EXPECT_NONFATAL_FAILURE(
       EXPECT_THAT_EXPECTED(Expected<int>(make_error<CustomError>(0)),
@@ -815,9 +825,7 @@ TEST(Error, ErrorMatchers) {
       "Expected: succeeded with value (is equal to 0)\n"
       "  Actual: succeeded with value 1, (isn't equal to 0)");
 
-  EXPECT_THAT_EXPECTED(Expected<int &>(make_error<CustomError>(0)), Failed());
   int a = 1;
-  EXPECT_THAT_EXPECTED(Expected<int &>(a), Succeeded());
   EXPECT_THAT_EXPECTED(Expected<int &>(a), HasValue(testing::Eq(1)));
 
   EXPECT_THAT_EXPECTED(Expected<int>(1), HasValue(testing::Gt(0)));
@@ -832,4 +840,187 @@ TEST(Error, ErrorMatchers) {
       "  Actual: failed  (CustomError {0})");
 }
 
+TEST(Error, FailedWithMessageMatcher) {
+  EXPECT_THAT_EXPECTED(Expected<int>(make_error<CustomError>(0)),
+                       FailedWithMessage("CustomError {0}"));
+
+  EXPECT_NONFATAL_FAILURE(
+      EXPECT_THAT_EXPECTED(Expected<int>(make_error<CustomError>(1)),
+                           FailedWithMessage("CustomError {0}")),
+      "Expected: failed with Error whose message has 1 element that is equal "
+      "to \"CustomError {0}\"\n"
+      "  Actual: failed  (CustomError {1})");
+
+  EXPECT_NONFATAL_FAILURE(
+      EXPECT_THAT_EXPECTED(Expected<int>(0),
+                           FailedWithMessage("CustomError {0}")),
+      "Expected: failed with Error whose message has 1 element that is equal "
+      "to \"CustomError {0}\"\n"
+      "  Actual: succeeded with value 0");
+
+  EXPECT_NONFATAL_FAILURE(
+      EXPECT_THAT_EXPECTED(Expected<int>(make_error<CustomError>(0)),
+                           FailedWithMessage("CustomError {0}", "CustomError {0}")),
+      "Expected: failed with Error whose message has 2 elements where\n"
+      "element #0 is equal to \"CustomError {0}\",\n"
+      "element #1 is equal to \"CustomError {0}\"\n"
+      "  Actual: failed  (CustomError {0}), which has 1 element");
+
+  EXPECT_NONFATAL_FAILURE(
+      EXPECT_THAT_EXPECTED(
+          Expected<int>(joinErrors(make_error<CustomError>(0),
+                                   make_error<CustomError>(0))),
+          FailedWithMessage("CustomError {0}")),
+      "Expected: failed with Error whose message has 1 element that is equal "
+      "to \"CustomError {0}\"\n"
+      "  Actual: failed  (CustomError {0}; CustomError {0}), which has 2 elements");
+
+  EXPECT_THAT_ERROR(
+      joinErrors(make_error<CustomError>(0), make_error<CustomError>(0)),
+      FailedWithMessageArray(testing::SizeIs(2)));
+}
+
+TEST(Error, C_API) {
+  EXPECT_THAT_ERROR(unwrap(wrap(Error::success())), Succeeded())
+      << "Failed to round-trip Error success value via C API";
+  EXPECT_THAT_ERROR(unwrap(wrap(make_error<CustomError>(0))),
+                    Failed<CustomError>())
+      << "Failed to round-trip Error failure value via C API";
+
+  auto Err =
+      wrap(make_error<StringError>("test message", inconvertibleErrorCode()));
+  EXPECT_EQ(LLVMGetErrorTypeId(Err), LLVMGetStringErrorTypeId())
+      << "Failed to match error type ids via C API";
+  char *ErrMsg = LLVMGetErrorMessage(Err);
+  EXPECT_STREQ(ErrMsg, "test message")
+      << "Failed to roundtrip StringError error message via C API";
+  LLVMDisposeErrorMessage(ErrMsg);
+
+  bool GotCSE = false;
+  bool GotCE = false;
+  handleAllErrors(
+    unwrap(wrap(joinErrors(make_error<CustomSubError>(42, 7),
+                           make_error<CustomError>(42)))),
+    [&](CustomSubError &CSE) {
+      GotCSE = true;
+    },
+    [&](CustomError &CE) {
+      GotCE = true;
+    });
+  EXPECT_TRUE(GotCSE) << "Failed to round-trip ErrorList via C API";
+  EXPECT_TRUE(GotCE) << "Failed to round-trip ErrorList via C API";
+}
+
+TEST(Error, FileErrorTest) {
+#if !defined(NDEBUG) && GTEST_HAS_DEATH_TEST
+    EXPECT_DEATH(
+      {
+        Error S = Error::success();
+        consumeError(createFileError("file.bin", std::move(S)));
+      },
+      "");
+#endif
+  // Not allowed, would fail at compile-time
+  //consumeError(createFileError("file.bin", ErrorSuccess()));
+
+  Error E1 = make_error<CustomError>(1);
+  Error FE1 = createFileError("file.bin", std::move(E1));
+  EXPECT_EQ(toString(std::move(FE1)).compare("'file.bin': CustomError {1}"), 0);
+
+  Error E2 = make_error<CustomError>(2);
+  Error FE2 = createFileError("file.bin", std::move(E2));
+  handleAllErrors(std::move(FE2), [](const FileError &F) {
+    EXPECT_EQ(F.message().compare("'file.bin': CustomError {2}"), 0);
+  });
+
+  Error E3 = make_error<CustomError>(3);
+  Error FE3 = createFileError("file.bin", std::move(E3));
+  auto E31 = handleErrors(std::move(FE3), [](std::unique_ptr<FileError> F) {
+    return F->takeError();
+  });
+  handleAllErrors(std::move(E31), [](const CustomError &C) {
+    EXPECT_EQ(C.message().compare("CustomError {3}"), 0);
+  });
+
+  Error FE4 =
+      joinErrors(createFileError("file.bin", make_error<CustomError>(41)),
+                 createFileError("file2.bin", make_error<CustomError>(42)));
+  EXPECT_EQ(toString(std::move(FE4))
+                .compare("'file.bin': CustomError {41}\n"
+                         "'file2.bin': CustomError {42}"),
+            0);
+}
+
+enum class test_error_code {
+  unspecified = 1,
+  error_1,
+  error_2,
+};
+
 } // end anon namespace
+
+namespace std {
+    template <>
+    struct is_error_code_enum<test_error_code> : std::true_type {};
+} // namespace std
+
+namespace {
+
+const std::error_category &TErrorCategory();
+
+inline std::error_code make_error_code(test_error_code E) {
+    return std::error_code(static_cast<int>(E), TErrorCategory());
+}
+
+class TestDebugError : public ErrorInfo<TestDebugError, StringError> {
+public:
+    using ErrorInfo<TestDebugError, StringError >::ErrorInfo; // inherit constructors
+    TestDebugError(const Twine &S) : ErrorInfo(S, test_error_code::unspecified) {}
+    static char ID;
+};
+
+class TestErrorCategory : public std::error_category {
+public:
+  const char *name() const noexcept override { return "error"; }
+  std::string message(int Condition) const override {
+    switch (static_cast<test_error_code>(Condition)) {
+    case test_error_code::unspecified:
+      return "An unknown error has occurred.";
+    case test_error_code::error_1:
+      return "Error 1.";
+    case test_error_code::error_2:
+      return "Error 2.";
+    }
+    llvm_unreachable("Unrecognized test_error_code");
+  }
+};
+
+static llvm::ManagedStatic<TestErrorCategory> TestErrCategory;
+const std::error_category &TErrorCategory() { return *TestErrCategory; }
+
+char TestDebugError::ID;
+
+TEST(Error, SubtypeStringErrorTest) {
+  auto E1 = make_error<TestDebugError>(test_error_code::error_1);
+  EXPECT_EQ(toString(std::move(E1)).compare("Error 1."), 0);
+
+  auto E2 = make_error<TestDebugError>(test_error_code::error_1,
+                                       "Detailed information");
+  EXPECT_EQ(toString(std::move(E2)).compare("Error 1. Detailed information"),
+            0);
+
+  auto E3 = make_error<TestDebugError>(test_error_code::error_2);
+  handleAllErrors(std::move(E3), [](const TestDebugError &F) {
+    EXPECT_EQ(F.message().compare("Error 2."), 0);
+  });
+
+  auto E4 = joinErrors(make_error<TestDebugError>(test_error_code::error_1,
+                                                  "Detailed information"),
+                       make_error<TestDebugError>(test_error_code::error_2));
+  EXPECT_EQ(toString(std::move(E4))
+                .compare("Error 1. Detailed information\n"
+                         "Error 2."),
+            0);
+}
+
+} // namespace

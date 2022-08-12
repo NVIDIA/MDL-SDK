@@ -1,3 +1,4 @@
+import itertools
 import os
 import platform
 import re
@@ -8,10 +9,7 @@ import lit.util
 from lit.llvm.subst import FindTool
 from lit.llvm.subst import ToolSubst
 
-
-def binary_feature(on, feature, off_prefix):
-    return feature if on else off_prefix + feature
-
+lit_path_displayed = False
 
 class LLVMConfig(object):
 
@@ -24,16 +22,25 @@ class LLVMConfig(object):
         self.use_lit_shell = False
         # Tweak PATH for Win32 to decide to use bash.exe or not.
         if sys.platform == 'win32':
-            # For tests that require Windows to run.
-            features.add('system-windows')
-
-            # Seek sane tools in directories and set to $PATH.
-            path = self.lit_config.getToolsPath(config.lit_tools_dir,
+            # Seek necessary tools in directories and set to $PATH.
+            path = None
+            lit_tools_dir = getattr(config, 'lit_tools_dir', None)
+            required_tools = ['cmp.exe', 'grep.exe', 'sed.exe', 'diff.exe', 'echo.exe']
+            path = self.lit_config.getToolsPath(lit_tools_dir,
                                                 config.environment['PATH'],
-                                                ['cmp.exe', 'grep.exe', 'sed.exe'])
+                                                required_tools)
+            if path is None:
+                path = self._find_git_windows_unix_tools(required_tools)
             if path is not None:
                 self.with_environment('PATH', path, append_path=True)
+            # Many tools behave strangely if these environment variables aren't set.
+            self.with_system_environment(['SystemDrive', 'SystemRoot', 'TEMP', 'TMP'])
             self.use_lit_shell = True
+
+            global lit_path_displayed
+            if not self.lit_config.quiet and lit_path_displayed is False:
+                self.lit_config.note("using lit tools: {}".format(path))
+                lit_path_displayed = True
 
         # Choose between lit's internal shell pipeline runner and a real shell.  If
         # LIT_USE_INTERNAL_SHELL is in the environment, we use that as an override.
@@ -53,8 +60,16 @@ class LLVMConfig(object):
         elif platform.system() == 'Windows':
             # For tests that require Windows to run.
             features.add('system-windows')
-        elif platform.system() == "Linux":
+        elif platform.system() == 'Linux':
             features.add('system-linux')
+        elif platform.system() in ['FreeBSD']:
+            features.add('system-freebsd')
+        elif platform.system() == 'NetBSD':
+            features.add('system-netbsd')
+        elif platform.system() == 'AIX':
+            features.add('system-aix')
+        elif platform.system() == 'SunOS':
+            features.add('system-solaris')
 
         # Native compilation: host arch == default triple arch
         # Both of these values should probably be in every site config (e.g. as
@@ -67,13 +82,16 @@ class LLVMConfig(object):
         # Sanitizers.
         sanitizers = getattr(config, 'llvm_use_sanitizer', '')
         sanitizers = frozenset(x.lower() for x in sanitizers.split(';'))
-        features.add(binary_feature('address' in sanitizers, 'asan', 'not_'))
-        features.add(binary_feature('memory' in sanitizers, 'msan', 'not_'))
-        features.add(binary_feature(
-            'undefined' in sanitizers, 'ubsan', 'not_'))
+        if 'address' in sanitizers:
+            features.add('asan')
+        if 'memory' in sanitizers or 'memorywithorigins' in sanitizers:
+            features.add('msan')
+        if 'undefined' in sanitizers:
+            features.add('ubsan')
 
         have_zlib = getattr(config, 'have_zlib', None)
-        features.add(binary_feature(have_zlib, 'zlib', 'no'))
+        if have_zlib:
+            features.add('zlib')
 
         # Check if we should run long running tests.
         long_tests = lit_config.params.get('run_long_tests', None)
@@ -82,14 +100,21 @@ class LLVMConfig(object):
 
         if target_triple:
             if re.match(r'^x86_64.*-apple', target_triple):
+                features.add('x86_64-apple')
                 host_cxx = getattr(config, 'host_cxx', None)
                 if 'address' in sanitizers and self.get_clang_has_lsan(host_cxx, target_triple):
                     self.with_environment(
                         'ASAN_OPTIONS', 'detect_leaks=1', append_path=True)
             if re.match(r'^x86_64.*-linux', target_triple):
                 features.add('x86_64-linux')
-            if re.match(r'.*-win32$', target_triple):
-                features.add('target-windows')
+            if re.match(r'^i.86.*', target_triple):
+                features.add('target-x86')
+            elif re.match(r'^x86_64.*', target_triple):
+                features.add('target-x86_64')
+            elif re.match(r'^aarch64.*', target_triple):
+                features.add('target-aarch64')
+            elif re.match(r'^arm.*', target_triple):
+                features.add('target-arm')
 
         use_gmalloc = lit_config.params.get('use_gmalloc', None)
         if lit.util.pythonize_bool(use_gmalloc):
@@ -100,6 +125,35 @@ class LLVMConfig(object):
             if gmalloc_path_str is not None:
                 self.with_environment(
                     'DYLD_INSERT_LIBRARIES', gmalloc_path_str)
+
+    def _find_git_windows_unix_tools(self, tools_needed):
+        assert(sys.platform == 'win32')
+        if sys.version_info.major >= 3:
+            import winreg
+        else:
+            import _winreg as winreg
+
+        # Search both the 64 and 32-bit hives, as well as HKLM + HKCU
+        masks = [0, winreg.KEY_WOW64_64KEY]
+        hives = [winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER]
+        for mask, hive in itertools.product(masks, hives):
+            try:
+                with winreg.OpenKey(hive, r"SOFTWARE\GitForWindows", 0,
+                                    winreg.KEY_READ | mask) as key:
+                    install_root, _ = winreg.QueryValueEx(key, 'InstallPath')
+
+                    if not install_root:
+                        continue
+                    candidate_path = os.path.join(install_root, 'usr', 'bin')
+                    if not lit.util.checkToolsPath(candidate_path, tools_needed):
+                        continue
+
+                    # We found it, stop enumerating.
+                    return lit.util.to_string(candidate_path)
+            except:
+                continue
+
+        return None
 
     def with_environment(self, variable, value, append_path=False):
         if append_path:
@@ -120,7 +174,7 @@ class LLVMConfig(object):
                 paths = []
 
             # If we are passed a list [a b c], then iterating this list forwards
-            # and adding each to the beginning would result in b c a.  So we
+            # and adding each to the beginning would result in c b a.  So we
             # need to iterate in reverse to end up with the original ordering.
             for p in reversed(paths_to_add):
                 # Move it to the front if it already exists, otherwise insert it at the
@@ -223,8 +277,8 @@ class LLVMConfig(object):
             major_version_number = int(version_regex.group(1))
             minor_version_number = int(version_regex.group(2))
             patch_version_number = int(version_regex.group(3))
-            if 'Apple LLVM' in version_string:
-                # Apple LLVM doesn't yet support LSan
+            if ('Apple LLVM' in version_string) or ('Apple clang' in version_string):
+                # Apple clang doesn't yet support LSan
                 return False
             else:
                 return major_version_number >= 5
@@ -236,10 +290,10 @@ class LLVMConfig(object):
         if not m:
             self.lit_config.fatal(
                 "Could not turn '%s' into Itanium ABI triple" % triple)
-        if m.group(3).lower() != 'win32':
-            # All non-win32 triples use the Itanium ABI.
+        if m.group(3).lower() != 'windows':
+            # All non-windows triples use the Itanium ABI.
             return triple
-        return m.group(1) + '-' + m.group(2) + '-mingw32'
+        return m.group(1) + '-' + m.group(2) + '-' + m.group(3) + '-gnu'
 
     def make_msabi_triple(self, triple):
         m = re.match(r'(\w+)-(\w+)-(\w+)', triple)
@@ -249,14 +303,14 @@ class LLVMConfig(object):
         isa = m.group(1).lower()
         vendor = m.group(2).lower()
         os = m.group(3).lower()
-        if os == 'win32':
-            # If the OS is win32, we're done.
+        if os == 'windows' and re.match(r'.*-msvc$', triple):
+            # If the OS is windows and environment is msvc, we're done.
             return triple
         if isa.startswith('x86') or isa == 'amd64' or re.match(r'i\d86', isa):
             # For x86 ISAs, adjust the OS.
-            return isa + '-' + vendor + '-win32'
-        # -win32 is not supported for non-x86 targets; use a default.
-        return 'i686-pc-win32'
+            return isa + '-' + vendor + '-windows-msvc'
+        # -msvc is not supported for non-x86 targets; use a default.
+        return 'i686-pc-windows-msvc'
 
     def add_tool_substitutions(self, tools, search_dirs=None):
         if not search_dirs:
@@ -331,7 +385,7 @@ class LLVMConfig(object):
                 self.lit_config.note('using {}: {}'.format(name, tool))
         return tool
 
-    def use_clang(self, required=True):
+    def use_clang(self, additional_tool_dirs=[], additional_flags=[], required=True):
         """Configure the test suite to be able to invoke clang.
 
         Sets up some environment variables important to clang, locates a
@@ -368,41 +422,47 @@ class LLVMConfig(object):
 
         # Tweak the PATH to include the tools dir and the scripts dir.
         # Put Clang first to avoid LLVM from overriding out-of-tree clang builds.
-        possible_paths = ['clang_tools_dir', 'llvm_tools_dir']
-        paths = [getattr(self.config, pp) for pp in possible_paths
+        exe_dir_props = [self.config.name.lower() + '_tools_dir', 'clang_tools_dir', 'llvm_tools_dir']
+        paths = [getattr(self.config, pp) for pp in exe_dir_props
                  if getattr(self.config, pp, None)]
+        paths = additional_tool_dirs + paths
         self.with_environment('PATH', paths, append_path=True)
 
-        paths = [self.config.llvm_shlib_dir, self.config.llvm_libs_dir]
+        lib_dir_props = [self.config.name.lower() + '_libs_dir', 'clang_libs_dir', 'llvm_shlib_dir', 'llvm_libs_dir']
+        paths = [getattr(self.config, pp) for pp in lib_dir_props
+                 if getattr(self.config, pp, None)]
+
         self.with_environment('LD_LIBRARY_PATH', paths, append_path=True)
 
-        # Discover the 'clang' and 'clangcc' to use.
+        shl = getattr(self.config, 'llvm_shlib_dir', None)
+        pext = getattr(self.config, 'llvm_plugin_ext', None)
+        if shl:
+            self.config.substitutions.append(('%llvmshlibdir', shl))
+        if pext:
+            self.config.substitutions.append(('%pluginext', pext))
 
+        # Discover the 'clang' and 'clangcc' to use.
         self.config.clang = self.use_llvm_tool(
             'clang', search_env='CLANG', required=required)
-
-        self.config.substitutions.append(
-            ('%llvmshlibdir', self.config.llvm_shlib_dir))
-        self.config.substitutions.append(
-            ('%pluginext', self.config.llvm_plugin_ext))
-
-        builtin_include_dir = self.get_clang_builtin_include_dir(self.config.clang)
-        tool_substitutions = [
-            ToolSubst('%clang', command=self.config.clang),
-            ToolSubst('%clang_analyze_cc1', command='%clang_cc1', extra_args=['-analyze', '%analyze']),
-            ToolSubst('%clang_cc1', command=self.config.clang, extra_args=['-cc1', '-internal-isystem', builtin_include_dir, '-nostdsysteminc']),
-            ToolSubst('%clang_cpp', command=self.config.clang, extra_args=['--driver-mode=cpp']),
-            ToolSubst('%clang_cl', command=self.config.clang, extra_args=['--driver-mode=cl']),
-            ToolSubst('%clangxx', command=self.config.clang, extra_args=['--driver-mode=g++']),
-            ]
-        self.add_tool_substitutions(tool_substitutions)
+        if self.config.clang:
+          self.config.available_features.add('clang')
+          builtin_include_dir = self.get_clang_builtin_include_dir(self.config.clang)
+          tool_substitutions = [
+              ToolSubst('%clang', command=self.config.clang, extra_args=additional_flags),
+              ToolSubst('%clang_analyze_cc1', command='%clang_cc1', extra_args=['-analyze', '%analyze', '-setup-static-analyzer']+additional_flags),
+              ToolSubst('%clang_cc1', command=self.config.clang, extra_args=['-cc1', '-internal-isystem', builtin_include_dir, '-nostdsysteminc']+additional_flags),
+              ToolSubst('%clang_cpp', command=self.config.clang, extra_args=['--driver-mode=cpp']+additional_flags),
+              ToolSubst('%clang_cl', command=self.config.clang, extra_args=['--driver-mode=cl']+additional_flags),
+              ToolSubst('%clangxx', command=self.config.clang, extra_args=['--driver-mode=g++']+additional_flags),
+              ]
+          self.add_tool_substitutions(tool_substitutions)
+          self.config.substitutions.append(
+              ('%resource_dir', builtin_include_dir))
 
         self.config.substitutions.append(('%itanium_abi_triple',
                                           self.make_itanium_abi_triple(self.config.target_triple)))
         self.config.substitutions.append(('%ms_abi_triple',
                                           self.make_msabi_triple(self.config.target_triple)))
-        self.config.substitutions.append(
-            ('%resource_dir', builtin_include_dir))
 
         # The host triple might not be set, at least if we're compiling clang from
         # an already installed llvm.
@@ -413,34 +473,34 @@ class LLVMConfig(object):
             self.config.substitutions.append(
                 ('%target_itanium_abi_host_triple', ''))
 
-        self.config.substitutions.append(
-            ('%src_include_dir', self.config.clang_src_dir + '/include'))
-
         # FIXME: Find nicer way to prohibit this.
         self.config.substitutions.append(
-            (' clang ', """*** Do not use 'clang' in tests, use '%clang'. ***"""))
+            (' clang ', """\"*** Do not use 'clang' in tests, use '%clang'. ***\""""))
         self.config.substitutions.append(
-            (' clang\+\+ ', """*** Do not use 'clang++' in tests, use '%clangxx'. ***"""))
+            (r' clang\+\+ ', """\"*** Do not use 'clang++' in tests, use '%clangxx'. ***\""""))
         self.config.substitutions.append(
             (' clang-cc ',
-             """*** Do not use 'clang-cc' in tests, use '%clang_cc1'. ***"""))
+             """\"*** Do not use 'clang-cc' in tests, use '%clang_cc1'. ***\""""))
+        self.config.substitutions.append(
+            (' clang-cl ',
+             """\"*** Do not use 'clang-cl' in tests, use '%clang_cl'. ***\""""))
         self.config.substitutions.append(
             (' clang -cc1 -analyze ',
-             """*** Do not use 'clang -cc1 -analyze' in tests, use '%clang_analyze_cc1'. ***"""))
+             """\"*** Do not use 'clang -cc1 -analyze' in tests, use '%clang_analyze_cc1'. ***\""""))
         self.config.substitutions.append(
             (' clang -cc1 ',
-             """*** Do not use 'clang -cc1' in tests, use '%clang_cc1'. ***"""))
+             """\"*** Do not use 'clang -cc1' in tests, use '%clang_cc1'. ***\""""))
         self.config.substitutions.append(
             (' %clang-cc1 ',
-             """*** invalid substitution, use '%clang_cc1'. ***"""))
+             """\"*** invalid substitution, use '%clang_cc1'. ***\""""))
         self.config.substitutions.append(
             (' %clang-cpp ',
-             """*** invalid substitution, use '%clang_cpp'. ***"""))
+             """\"*** invalid substitution, use '%clang_cpp'. ***\""""))
         self.config.substitutions.append(
             (' %clang-cl ',
-             """*** invalid substitution, use '%clang_cl'. ***"""))
+             """\"*** invalid substitution, use '%clang_cl'. ***\""""))
 
-    def use_lld(self, required=True):
+    def use_lld(self, additional_tool_dirs=[], required=True):
         """Configure the test suite to be able to invoke lld.
 
         Sets up some environment variables important to lld, locates a
@@ -448,20 +508,36 @@ class LLVMConfig(object):
         substitutions useful to any test suite that makes use of lld.
 
         """
-        # Tweak the PATH to include the tools dir
-        tool_dirs = [self.config.llvm_tools_dir]
-        lib_dirs = [self.config.llvm_libs_dir]
-        lld_tools_dir = getattr(self.config, 'lld_tools_dir', None)
-        lld_libs_dir = getattr(self.config, 'lld_libs_dir', None)
 
-        if lld_tools_dir:
-            tool_dirs = tool_dirs + [lld_tools_dir]
-        if lld_libs_dir:
-            lib_dirs = lib_dirs + [lld_libs_dir]
+        # Tweak the PATH to include the tools dir and the scripts dir.
+        exe_dir_props = [self.config.name.lower() + '_tools_dir', 'lld_tools_dir', 'llvm_tools_dir']
+        paths = [getattr(self.config, pp) for pp in exe_dir_props
+                 if getattr(self.config, pp, None)]
+        paths = additional_tool_dirs + paths
+        self.with_environment('PATH', paths, append_path=True)
 
-        self.with_environment('PATH', tool_dirs, append_path=True)
-        self.with_environment('LD_LIBRARY_PATH', lib_dirs, append_path=True)
+        lib_dir_props = [self.config.name.lower() + '_libs_dir', 'lld_libs_dir', 'llvm_libs_dir']
+        paths = [getattr(self.config, pp) for pp in lib_dir_props
+                 if getattr(self.config, pp, None)]
 
-        tool_patterns = ['lld', 'ld.lld', 'lld-link', 'ld64.lld', 'wasm-ld']
+        self.with_environment('LD_LIBRARY_PATH', paths, append_path=True)
 
-        self.add_tool_substitutions(tool_patterns, tool_dirs)
+        # Discover the 'clang' and 'clangcc' to use.
+
+        ld_lld = self.use_llvm_tool('ld.lld', required=required)
+        lld_link = self.use_llvm_tool('lld-link', required=required)
+        ld64_lld = self.use_llvm_tool('ld64.lld', required=required)
+        wasm_ld = self.use_llvm_tool('wasm-ld', required=required)
+
+        was_found = ld_lld and lld_link and ld64_lld and wasm_ld
+        tool_substitutions = []
+        if ld_lld:
+            tool_substitutions.append(ToolSubst(r'ld\.lld', command=ld_lld))
+        if lld_link:
+            tool_substitutions.append(ToolSubst('lld-link', command=lld_link))
+        if ld64_lld:
+            tool_substitutions.append(ToolSubst(r'ld64\.lld', command=ld64_lld))
+        if wasm_ld:
+            tool_substitutions.append(ToolSubst('wasm-ld', command=wasm_ld))
+        self.add_tool_substitutions(tool_substitutions)
+        return was_found

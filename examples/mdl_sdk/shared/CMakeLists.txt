@@ -31,7 +31,6 @@ set(PROJECT_NAME examples-mdl_sdk-shared)
 
 # collect sources
 set(PROJECT_SOURCES
-    "example_cuda_shared.h"
     "example_shared.cpp"
     "example_shared.h"
     "compiled_material_traverser_base.h"
@@ -49,10 +48,20 @@ set(PROJECT_SOURCES
     "utils/os.h"
     "utils/strings.h"
     )
+    
+if(MDL_ENABLE_AXF_EXAMPLES)
+    set(PROJECT_SOURCES
+        ${PROJECT_SOURCES}
+        "utils/ospath.h"
+        "utils/ospath.cpp"
+        )
+endif()
+    
 
 if(MDL_ENABLE_CUDA_EXAMPLES)
     set(PROJECT_SOURCES
         ${PROJECT_SOURCES}
+        "example_cuda_shared.h"
         "texture_support_cuda.h"
         )
 endif()
@@ -61,6 +70,16 @@ if(MDL_ENABLE_OPENGL_EXAMPLES)
     set(PROJECT_SOURCES
         ${PROJECT_SOURCES}
         "utils/gl_display.h"
+        "gui/gui_api_interface_glfw.h"
+        "example_glsl_shared.h"
+        )
+endif()
+
+if(MDL_ENABLE_VULKAN_EXAMPLES)
+    set(PROJECT_SOURCES
+        ${PROJECT_SOURCES}
+        "example_vulkan_shared.h"
+        "example_vulkan_shared.cpp"
         )
 endif()
 
@@ -110,6 +129,22 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         imgui
     NO_RUNTIME_COPY     # header only -> the consumer will also add this dependency
     )
+    
+if(MDL_ENABLE_OPENGL_EXAMPLES OR MDL_ENABLE_VULKAN_EXAMPLES)
+    target_add_dependencies(TARGET ${PROJECT_NAME}
+        DEPENDS
+            glfw
+        NO_RUNTIME_COPY
+        )
+endif()
+
+if(MDL_ENABLE_VULKAN_EXAMPLES)
+    target_add_dependencies(TARGET ${PROJECT_NAME}
+        DEPENDS
+            vulkan
+        NO_RUNTIME_COPY
+        )
+endif()
 
 # make sure the plugins are build before samples are build
 if(TARGET shaders-plugin-dds)

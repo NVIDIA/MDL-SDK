@@ -1,9 +1,8 @@
 //===-- CodeGen/MachineFrameInfo.h - Abstract Stack Frame Rep. --*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -15,6 +14,8 @@
 #define LLVM_CODEGEN_MACHINEFRAMEINFO_H
 
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/CodeGen/Register.h"
+#include "llvm/Support/Alignment.h"
 #include "llvm/Support/DataTypes.h"
 #include <cassert>
 #include <vector>
@@ -28,9 +29,14 @@ class AllocaInst;
 
 /// The CalleeSavedInfo class tracks the information need to locate where a
 /// callee saved register is in the current frame.
+/// Callee saved reg can also be saved to a different register rather than
+/// on the stack by setting DstReg instead of FrameIdx.
 class CalleeSavedInfo {
-  unsigned Reg;
-  int FrameIdx;
+  Register Reg;
+  union {
+    int FrameIdx;
+    unsigned DstReg;
+  };
   /// Flag indicating whether the register is actually restored in the epilog.
   /// In most cases, if a register is saved, it is also restored. There are
   /// some situations, though, when this is not the case. For example, the
@@ -44,17 +50,29 @@ class CalleeSavedInfo {
   /// by implicit uses on the return instructions, however, the required
   /// changes in the ARM backend would be quite extensive.
   bool Restored;
+  /// Flag indicating whether the register is spilled to stack or another
+  /// register.
+  bool SpilledToReg;
 
 public:
   explicit CalleeSavedInfo(unsigned R, int FI = 0)
-  : Reg(R), FrameIdx(FI), Restored(true) {}
+  : Reg(R), FrameIdx(FI), Restored(true), SpilledToReg(false) {}
 
   // Accessors.
-  unsigned getReg()                        const { return Reg; }
+  Register getReg()                        const { return Reg; }
   int getFrameIdx()                        const { return FrameIdx; }
-  void setFrameIdx(int FI)                       { FrameIdx = FI; }
+  unsigned getDstReg()                     const { return DstReg; }
+  void setFrameIdx(int FI) {
+    FrameIdx = FI;
+    SpilledToReg = false;
+  }
+  void setDstReg(Register SpillReg) {
+    DstReg = SpillReg;
+    SpilledToReg = true;
+  }
   bool isRestored()                        const { return Restored; }
   void setRestored(bool R)                       { Restored = R; }
+  bool isSpilledToReg()                    const { return SpilledToReg; }
 };
 
 /// The MachineFrameInfo class represents an abstract stack frame until
@@ -113,7 +131,7 @@ private:
     uint64_t Size;
 
     // The required alignment of this stack slot.
-    unsigned Alignment;
+    Align Alignment;
 
     // If true, the value of the stack object is set before
     // entering the function and is not modified inside the function. By
@@ -164,17 +182,16 @@ private:
 
     uint8_t SSPLayout;
 
-    StackObject(uint64_t Size, unsigned Alignment, int64_t SPOffset,
+    StackObject(uint64_t Size, Align Alignment, int64_t SPOffset,
                 bool IsImmutable, bool IsSpillSlot, const AllocaInst *Alloca,
                 bool IsAliased, uint8_t StackID = 0)
-      : SPOffset(SPOffset), Size(Size), Alignment(Alignment),
-        isImmutable(IsImmutable), isSpillSlot(IsSpillSlot),
-        StackID(StackID), Alloca(Alloca), isAliased(IsAliased),
-        SSPLayout(SSPLK_None) {}
+        : SPOffset(SPOffset), Size(Size), Alignment(Alignment),
+          isImmutable(IsImmutable), isSpillSlot(IsSpillSlot), StackID(StackID),
+          Alloca(Alloca), isAliased(IsAliased), SSPLayout(SSPLK_None) {}
   };
 
   /// The alignment of the stack.
-  unsigned StackAlignment;
+  Align StackAlignment;
 
   /// Can the stack be realigned. This can be false if the target does not
   /// support stack realignment, or if the user asks us not to realign the
@@ -244,7 +261,7 @@ private:
   /// native alignment maintained by the compiler, dynamic alignment code will
   /// be needed.
   ///
-  unsigned MaxAlignment = 0;
+  Align MaxAlignment;
 
   /// Set to true if this function adjusts the stack -- e.g.,
   /// when calling another function. This is only valid during and after
@@ -266,10 +283,14 @@ private:
   /// It is only valid during and after prolog/epilog code insertion.
   unsigned MaxCallFrameSize = ~0u;
 
+  /// The number of bytes of callee saved registers that the target wants to
+  /// report for the current function in the CodeView S_FRAMEPROC record.
+  unsigned CVBytesOfCalleeSavedRegisters = 0;
+
   /// The prolog/epilog code inserter fills in this vector with each
-  /// callee saved register saved in the frame.  Beyond its use by the prolog/
-  /// epilog code inserter, this data used for debug info and exception
-  /// handling.
+  /// callee saved register saved in either the frame or a different
+  /// register.  Beyond its use by the prolog/ epilog code inserter,
+  /// this data is used for debug info and exception handling.
   std::vector<CalleeSavedInfo> CSInfo;
 
   /// Has CSInfo been set yet?
@@ -284,7 +305,7 @@ private:
 
   /// Required alignment of the local object blob, which is the strictest
   /// alignment of any object in it.
-  unsigned LocalFrameMaxAlign = 0;
+  Align LocalFrameMaxAlign;
 
   /// Whether the local object blob needs to be allocated together. If not,
   /// PEI should ignore the isPreAllocated flags on the stack objects and
@@ -318,8 +339,8 @@ private:
 public:
   explicit MachineFrameInfo(unsigned StackAlignment, bool StackRealignable,
                             bool ForcedRealign)
-      : StackAlignment(StackAlignment), StackRealignable(StackRealignable),
-        ForcedRealign(ForcedRealign) {}
+      : StackAlignment(assumeAligned(StackAlignment)),
+        StackRealignable(StackRealignable), ForcedRealign(ForcedRealign) {}
 
   /// Return true if there are any stack objects in this function.
   bool hasStackObjects() const { return !Objects.empty(); }
@@ -399,10 +420,12 @@ public:
 
   /// Required alignment of the local object blob,
   /// which is the strictest alignment of any object in it.
-  void setLocalFrameMaxAlign(unsigned Align) { LocalFrameMaxAlign = Align; }
+  void setLocalFrameMaxAlign(Align Alignment) {
+    LocalFrameMaxAlign = Alignment;
+  }
 
   /// Return the required alignment of the local object blob.
-  unsigned getLocalFrameMaxAlign() const { return LocalFrameMaxAlign; }
+  Align getLocalFrameMaxAlign() const { return LocalFrameMaxAlign; }
 
   /// Get whether the local allocation blob should be allocated together or
   /// let PEI allocate the locals in it directly.
@@ -438,19 +461,34 @@ public:
     Objects[ObjectIdx+NumFixedObjects].Size = Size;
   }
 
+  LLVM_ATTRIBUTE_DEPRECATED(inline unsigned getObjectAlignment(int ObjectIdx)
+                                const,
+                            "Use getObjectAlign instead") {
+    return getObjectAlign(ObjectIdx).value();
+  }
+
   /// Return the alignment of the specified stack object.
-  unsigned getObjectAlignment(int ObjectIdx) const {
-    assert(unsigned(ObjectIdx+NumFixedObjects) < Objects.size() &&
+  Align getObjectAlign(int ObjectIdx) const {
+    assert(unsigned(ObjectIdx + NumFixedObjects) < Objects.size() &&
            "Invalid Object Idx!");
-    return Objects[ObjectIdx+NumFixedObjects].Alignment;
+    return Objects[ObjectIdx + NumFixedObjects].Alignment;
   }
 
   /// setObjectAlignment - Change the alignment of the specified stack object.
-  void setObjectAlignment(int ObjectIdx, unsigned Align) {
-    assert(unsigned(ObjectIdx+NumFixedObjects) < Objects.size() &&
+  void setObjectAlignment(int ObjectIdx, Align Alignment) {
+    assert(unsigned(ObjectIdx + NumFixedObjects) < Objects.size() &&
            "Invalid Object Idx!");
-    Objects[ObjectIdx+NumFixedObjects].Alignment = Align;
-    ensureMaxAlignment(Align);
+    Objects[ObjectIdx + NumFixedObjects].Alignment = Alignment;
+
+    // Only ensure max alignment for the default stack.
+    if (getStackID(ObjectIdx) == 0)
+      ensureMaxAlignment(Alignment);
+  }
+
+  LLVM_ATTRIBUTE_DEPRECATED(inline void setObjectAlignment(int ObjectIdx,
+                                                           unsigned Align),
+                            "Use the version that takes Align instead") {
+    setObjectAlignment(ObjectIdx, assumeAligned(Align));
   }
 
   /// Return the underlying Alloca of the specified
@@ -528,7 +566,7 @@ public:
   void setStackSize(uint64_t Size) { StackSize = Size; }
 
   /// Estimate and return the size of the stack frame.
-  unsigned estimateStackSize(const MachineFunction &MF) const;
+  uint64_t estimateStackSize(const MachineFunction &MF) const;
 
   /// Return the correction for frame offsets.
   int getOffsetAdjustment() const { return OffsetAdjustment; }
@@ -538,10 +576,21 @@ public:
 
   /// Return the alignment in bytes that this function must be aligned to,
   /// which is greater than the default stack alignment provided by the target.
-  unsigned getMaxAlignment() const { return MaxAlignment; }
+  LLVM_ATTRIBUTE_DEPRECATED(unsigned getMaxAlignment() const,
+                            "Use getMaxAlign instead") {
+    return MaxAlignment.value();
+  }
+  /// Return the alignment in bytes that this function must be aligned to,
+  /// which is greater than the default stack alignment provided by the target.
+  Align getMaxAlign() const { return MaxAlignment; }
 
   /// Make sure the function is at least Align bytes aligned.
-  void ensureMaxAlignment(unsigned Align);
+  void ensureMaxAlignment(Align Alignment);
+
+  LLVM_ATTRIBUTE_DEPRECATED(inline void ensureMaxAlignment(unsigned Align),
+                            "Use the version that uses Align instead") {
+    ensureMaxAlignment(assumeAligned(Align));
+  }
 
   /// Return true if this function adjusts the stack -- e.g.,
   /// when calling another function. This is only valid during and after
@@ -602,6 +651,15 @@ public:
     return MaxCallFrameSize != ~0u;
   }
   void setMaxCallFrameSize(unsigned S) { MaxCallFrameSize = S; }
+
+  /// Returns how many bytes of callee-saved registers the target pushed in the
+  /// prologue. Only used for debug info.
+  unsigned getCVBytesOfCalleeSavedRegisters() const {
+    return CVBytesOfCalleeSavedRegisters;
+  }
+  void setCVBytesOfCalleeSavedRegisters(unsigned S) {
+    CVBytesOfCalleeSavedRegisters = S;
+  }
 
   /// Create a new object at a fixed location on the stack.
   /// All fixed objects should be created before other objects are created for
@@ -668,6 +726,8 @@ public:
     assert(unsigned(ObjectIdx+NumFixedObjects) < Objects.size() &&
            "Invalid Object Idx!");
     Objects[ObjectIdx+NumFixedObjects].StackID = ID;
+    // If ID > 0, MaxAlignment may now be overly conservative.
+    // If ID == 0, MaxAlignment will need to be updated separately.
   }
 
   /// Returns true if the specified index corresponds to a dead object.
@@ -694,12 +754,26 @@ public:
 
   /// Create a new statically sized stack object, returning
   /// a nonnegative identifier to represent it.
-  int CreateStackObject(uint64_t Size, unsigned Alignment, bool isSpillSlot,
+  int CreateStackObject(uint64_t Size, Align Alignment, bool isSpillSlot,
                         const AllocaInst *Alloca = nullptr, uint8_t ID = 0);
+  LLVM_ATTRIBUTE_DEPRECATED(
+      inline int CreateStackObject(uint64_t Size, unsigned Alignment,
+                                   bool isSpillSlot,
+                                   const AllocaInst *Alloca = nullptr,
+                                   uint8_t ID = 0),
+      "Use CreateStackObject that takes an Align instead") {
+    return CreateStackObject(Size, assumeAligned(Alignment), isSpillSlot,
+                             Alloca, ID);
+  }
 
   /// Create a new statically sized stack object that represents a spill slot,
   /// returning a nonnegative identifier to represent it.
-  int CreateSpillStackObject(uint64_t Size, unsigned Alignment);
+  int CreateSpillStackObject(uint64_t Size, Align Alignment);
+  LLVM_ATTRIBUTE_DEPRECATED(
+      inline int CreateSpillStackObject(uint64_t Size, unsigned Alignment),
+      "Use CreateSpillStackObject that takes an Align instead") {
+    return CreateSpillStackObject(Size, assumeAligned(Alignment));
+  }
 
   /// Remove or mark dead a statically sized stack object.
   void RemoveStackObject(int ObjectIdx) {
@@ -710,7 +784,13 @@ public:
   /// Notify the MachineFrameInfo object that a variable sized object has been
   /// created.  This must be created whenever a variable sized object is
   /// created, whether or not the index returned is actually used.
-  int CreateVariableSizedObject(unsigned Alignment, const AllocaInst *Alloca);
+  int CreateVariableSizedObject(Align Alignment, const AllocaInst *Alloca);
+  /// FIXME: Remove this function when transition to Align is over.
+  LLVM_ATTRIBUTE_DEPRECATED(int CreateVariableSizedObject(
+                                unsigned Alignment, const AllocaInst *Alloca),
+                            "Use the version that takes an Align instead") {
+    return CreateVariableSizedObject(assumeAligned(Alignment), Alloca);
+  }
 
   /// Returns a reference to call saved info vector for the current function.
   const std::vector<CalleeSavedInfo> &getCalleeSavedInfo() const {
@@ -721,8 +801,8 @@ public:
 
   /// Used by prolog/epilog inserter to set the function's callee saved
   /// information.
-  void setCalleeSavedInfo(const std::vector<CalleeSavedInfo> &CSI) {
-    CSInfo = CSI;
+  void setCalleeSavedInfo(std::vector<CalleeSavedInfo> CSI) {
+    CSInfo = std::move(CSI);
   }
 
   /// Has the callee saved info been calculated yet?

@@ -1,9 +1,8 @@
 (*===-- llvm/llvm.mli - LLVM OCaml Interface ------------------------------===*
  *
- *                     The LLVM Compiler Infrastructure
- *
- * This file is distributed under the University of Illinois Open Source
- * License. See LICENSE.TXT for details.
+ * Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+ * See https://llvm.org/LICENSE.txt for license information.
+ * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
  *
  *===----------------------------------------------------------------------===*)
 
@@ -77,6 +76,7 @@ module TypeKind : sig
   | Vector
   | Metadata
   | X86_mmx
+  | Token
 end
 
 (** The linkage of a global value, accessed with {!linkage} and
@@ -260,6 +260,14 @@ module Opcode : sig
   | AtomicRMW
   | Resume
   | LandingPad
+  | AddrSpaceCast
+  | CleanupRet
+  | CatchRet
+  | CatchPad
+  | CleanupPad
+  | CatchSwitch
+  | FNeg
+  | CallBr
 end
 
 (** The type of a clause of a [landingpad] instruction.
@@ -336,8 +344,10 @@ module ValueKind : sig
   | ConstantVector
   | Function
   | GlobalAlias
+  | GlobalIFunc
   | GlobalVariable
   | UndefValue
+  | PoisonValue
   | Instruction of Opcode.t
 end
 
@@ -657,6 +667,10 @@ val is_packed : lltype -> bool
     [false] otherwise. See the method [llvm::StructType::isOpaque]. *)
 val is_opaque : lltype -> bool
 
+(** [is_literal sty] returns [true] if the structure type [sty] is literal.
+    [false] otherwise. See the method [llvm::StructType::isLiteral]. *)
+val is_literal : lltype -> bool
+
 
 (** {7 Operations on pointer, vector, and array types} *)
 
@@ -802,6 +816,11 @@ val set_operand : llvalue -> int -> llvalue -> unit
 val num_operands : llvalue -> int
 
 
+(** [indices i] returns the indices for the ExtractValue or InsertValue
+    instruction [i].
+    See the [llvm::getIndices] methods. *)
+val indices : llvalue -> int array
+
 (** {7 Operations on constants of (mostly) any type} *)
 
 (** [is_constant v] returns [true] if the value [v] is a constant, [false]
@@ -824,6 +843,10 @@ val const_pointer_null : lltype -> llvalue
     See the method [llvm::UndefValue::get]. *)
 val undef : lltype -> llvalue
 
+(** [poison ty] returns the poison value of the type [ty].
+    See the method [llvm::PoisonValue::get]. *)
+val poison : lltype -> llvalue
+
 (** [is_null v] returns [true] if the value [v] is the null (zero) value.
     See the method [llvm::Constant::isNullValue]. *)
 val is_null : llvalue -> bool
@@ -831,6 +854,10 @@ val is_null : llvalue -> bool
 (** [is_undef v] returns [true] if the value [v] is an undefined value, [false]
     otherwise. Similar to [llvm::isa<UndefValue>]. *)
 val is_undef : llvalue -> bool
+
+(** [is_poison v] returns [true] if the value [v] is a poison value, [false]
+    otherwise. Similar to [llvm::isa<PoisonValue>]. *)
+val is_poison : llvalue -> bool
 
 (** [constexpr_opcode v] returns an [Opcode.t] corresponding to constexpr
     value [v], or [Opcode.Invalid] if [v] is not a constexpr. *)
@@ -1277,7 +1304,7 @@ val const_shufflevector : llvalue -> llvalue -> llvalue -> llvalue
 val const_extractvalue : llvalue -> int array -> llvalue
 
 (** [const_insertvalue agg val idxs] inserts the value [val] in the specified
-    indexs [idxs] in the aggegate [agg]. Each [idxs] must be less than the size
+    indexs [idxs] in the aggregate [agg]. Each [idxs] must be less than the size
     of the aggregate. See the method [llvm::ConstantExpr::getInsertValue]. *)
 val const_insertvalue : llvalue -> llvalue -> int array -> llvalue
 
@@ -1824,7 +1851,12 @@ val remove_enum_call_site_attr : llvalue -> llattrkind -> AttrIndex.t -> unit
 val remove_string_call_site_attr : llvalue -> string -> AttrIndex.t -> unit
 
 
-(** {7 Operations on call instructions (only)} *)
+(** {7 Operations on call and invoke instructions (only)} *)
+
+(** [num_arg_operands ci] returns the number of arguments for the call or
+    invoke instruction [ci].  See the method
+    [llvm::CallInst::getNumArgOperands]. *)
+val num_arg_operands : llvalue -> int
 
 (** [is_tail_call ci] is [true] if the call instruction [ci] is flagged as
     eligible for tail call optimization, [false] otherwise.
@@ -1835,6 +1867,14 @@ val is_tail_call : llvalue -> bool
     call optimization if [tc] is [true], clears otherwise.
     See the method [llvm::CallInst::setTailCall]. *)
 val set_tail_call : bool -> llvalue -> unit
+
+(** [get_normal_dest ii] is the normal destination basic block of an invoke
+    instruction. See the method [llvm::InvokeInst::getNormalDest()]. *)
+val get_normal_dest : llvalue -> llbasicblock
+
+(** [get_unwind_dest ii] is the unwind destination basic block of an invoke
+    instruction. See the method [llvm::InvokeInst::getUnwindDest()]. *)
+val get_unwind_dest : llvalue -> llbasicblock
 
 
 (** {7 Operations on load/store instructions (only)} *)
@@ -1857,16 +1897,16 @@ val set_volatile : bool -> llvalue -> unit
 val is_terminator : llvalue -> bool
 
 (** [successor v i] returns the successor at index [i] for the value [v].
-    See the method [llvm::TerminatorInst::getSuccessor]. *)
+    See the method [llvm::Instruction::getSuccessor]. *)
 val successor : llvalue -> int -> llbasicblock
 
 (** [set_successor v i o] sets the successor of the value [v] at the index [i] to
     the value [o].
-    See the method [llvm::TerminatorInst::setSuccessor]. *)
+    See the method [llvm::Instruction::setSuccessor]. *)
 val set_successor : llvalue -> int -> llbasicblock -> unit
 
 (** [num_successors v] returns the number of successors for the value [v].
-    See the method [llvm::TerminatorInst::getNumSuccessors]. *)
+    See the method [llvm::Instruction::getNumSuccessors]. *)
 val num_successors : llvalue -> int
 
 (** [successors v] returns the successors of [v]. *)
@@ -2067,6 +2107,10 @@ val build_invoke : llvalue -> llvalue array -> llbasicblock ->
     See the method [llvm::LLVMBuilder::CreateLandingPad]. *)
 val build_landingpad : lltype -> llvalue -> int -> string -> llbuilder ->
                          llvalue
+
+(** [is_cleanup lp] returns [true] if [landingpad] instruction lp is a cleanup.
+    See the method [llvm::LandingPadInst::isCleanup]. *)
+val is_cleanup : llvalue -> bool
 
 (** [set_cleanup lp] sets the cleanup flag in the [landingpad]instruction.
     See the method [llvm::LandingPadInst::setCleanup]. *)
@@ -2555,6 +2599,12 @@ val build_is_not_null : llvalue -> string -> llbuilder -> llvalue
     instruction builder [b].
     See the method [llvm::LLVMBuilder::CreatePtrDiff]. *)
 val build_ptrdiff : llvalue -> llvalue -> string -> llbuilder -> llvalue
+
+(** [build_freeze x name b] creates a
+    [%name = freeze %x]
+    instruction at the position specified by the instruction builder [b].
+    See the method [llvm::LLVMBuilder::CreateFreeze]. *)
+val build_freeze : llvalue -> string -> llbuilder -> llvalue
 
 
 (** {6 Memory buffers} *)

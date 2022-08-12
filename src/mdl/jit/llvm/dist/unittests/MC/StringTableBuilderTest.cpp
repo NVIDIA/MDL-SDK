@@ -1,9 +1,8 @@
 //===----------- StringTableBuilderTest.cpp -------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -104,4 +103,137 @@ TEST(StringTableBuilderTest, ELFInOrder) {
   EXPECT_EQ(9U, B.getOffset("foobar"));
 }
 
+TEST(StringTableBuilderTest, MachOInOrder) {
+  StringTableBuilder B(StringTableBuilder::MachO);
+
+  B.add("foo");
+  B.add("bar");
+  B.add("fooba");
+
+  B.finalizeInOrder();
+
+  std::string Expected;
+  Expected += '\x00';
+  Expected += "foo";
+  Expected += '\x00';
+  Expected += "bar";
+  Expected += '\x00';
+  Expected += "fooba";
+  Expected += '\x00';
+
+  // Mach-O pads to 4 bytes
+  Expected += '\x00';
+
+  SmallString<64> Data;
+  raw_svector_ostream OS(Data);
+  B.write(OS);
+
+  EXPECT_EQ(Expected, Data);
+  EXPECT_EQ(1U, B.getOffset("foo"));
+  EXPECT_EQ(5U, B.getOffset("bar"));
+  EXPECT_EQ(9U, B.getOffset("fooba"));
+}
+
+TEST(StringTableBuilderTest, MachO64InOrder) {
+  StringTableBuilder B(StringTableBuilder::MachO64);
+
+  B.add("foo");
+  B.add("bar");
+  B.add("f");
+
+  B.finalizeInOrder();
+
+  std::string Expected;
+  Expected += '\x00';
+  Expected += "foo";
+  Expected += '\x00';
+  Expected += "bar";
+  Expected += '\x00';
+  Expected += "f";
+  Expected += '\x00';
+
+  // 64 bit Mach-O pads to 8 bytes
+  Expected += '\x00';
+  Expected += '\x00';
+  Expected += '\x00';
+  Expected += '\x00';
+  Expected += '\x00';
+
+  SmallString<64> Data;
+  raw_svector_ostream OS(Data);
+  B.write(OS);
+
+  EXPECT_EQ(Expected, Data);
+  EXPECT_EQ(1U, B.getOffset("foo"));
+  EXPECT_EQ(5U, B.getOffset("bar"));
+  EXPECT_EQ(9U, B.getOffset("f"));
+}
+
+TEST(StringTableBuilderTest, MachOLinkedInOrder) {
+  StringTableBuilder B(StringTableBuilder::MachOLinked);
+
+  B.add("foo");
+  B.add("bar");
+  B.add("foob");
+
+  B.finalizeInOrder();
+
+  std::string Expected;
+  Expected += ' ';
+  Expected += '\x00';
+  Expected += "foo";
+  Expected += '\x00';
+  Expected += "bar";
+  Expected += '\x00';
+  Expected += "foob";
+  Expected += '\x00';
+
+  // Mach-O pads to 4 bytes
+  Expected += '\x00';
+
+  SmallString<64> Data;
+  raw_svector_ostream OS(Data);
+  B.write(OS);
+
+  EXPECT_EQ(Expected, Data);
+  EXPECT_EQ(2U, B.getOffset("foo"));
+  EXPECT_EQ(6U, B.getOffset("bar"));
+  EXPECT_EQ(10U, B.getOffset("foob"));
+}
+
+TEST(StringTableBuilderTest, MachO64LinkedInOrder) {
+  StringTableBuilder B(StringTableBuilder::MachO64Linked);
+
+  B.add("foo");
+  B.add("ba");
+  B.add("f");
+
+  B.finalizeInOrder();
+
+  std::string Expected;
+  Expected += ' ';
+  Expected += '\x00';
+  Expected += "foo";
+  Expected += '\x00';
+  Expected += "ba";
+  Expected += '\x00';
+  Expected += "f";
+  Expected += '\x00';
+
+  // 64 bit Mach-O pads to 8 bytes
+  Expected += '\x00';
+  Expected += '\x00';
+  Expected += '\x00';
+  Expected += '\x00';
+  Expected += '\x00';
+
+  SmallString<64> Data;
+  raw_svector_ostream OS(Data);
+  B.write(OS);
+
+  EXPECT_EQ(Expected, Data);
+  EXPECT_EQ(2U, B.getOffset("foo"));
+  EXPECT_EQ(6U, B.getOffset("ba"));
+  EXPECT_EQ(9U, B.getOffset("f"));
+}
 }

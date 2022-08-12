@@ -1,9 +1,8 @@
 //===- llvm/ADT/GraphTraits.h - Graph traits template -----------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -25,6 +24,13 @@ namespace llvm {
 // GraphTraits - This class should be specialized by different graph types...
 // which is why the default version is empty.
 //
+// This template evolved from supporting `BasicBlock` to also later supporting
+// more complex types (e.g. CFG and DomTree).
+//
+// GraphTraits can be used to create a view over a graph interpreting it
+// differently without requiring a copy of the original graph. This could
+// be achieved by carrying more data in NodeRef. See LoopBodyTraits for one
+// example.
 template<class GraphType>
 struct GraphTraits {
   // Elements to provide:

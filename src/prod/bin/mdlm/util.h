@@ -120,8 +120,6 @@ namespace mdlm
         static void array_to_vector(int ac, char *av[], std::vector<std::string> & v);
 
         /// Valid MDL identifier
-        static bool is_valid_mdl_identifier(const std::string & identifier);
-        static bool is_valid_module_name(const std::string & identifier);
         static bool is_valid_archive_name(const std::string & identifier);
 
         static bool equivalent(const std::string & file1, const std::string & file2);

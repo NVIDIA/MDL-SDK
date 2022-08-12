@@ -63,7 +63,6 @@ public:
     /// Destructor of Mdl_compatibility_api_impl.
     virtual ~Mdl_compatibility_api_impl();
 
-public:
     // public API methods
 
     mi::Sint32 compare_modules(
@@ -101,7 +100,6 @@ private:
     Mdl_compatibility_api_impl(Mdl_compatibility_api_impl const &) = delete;
     Mdl_compatibility_api_impl &operator=(Mdl_compatibility_api_impl const &) = delete;
 
-private:
     mi::neuraylib::INeuray *m_neuray;
 
     SYSTEM::Access_module<MDLC::Mdlc_module> m_mdlc_module;

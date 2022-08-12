@@ -1,9 +1,8 @@
 //===- Cloning.h - Clone various parts of LLVM programs ---------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -20,9 +19,8 @@
 
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Twine.h"
-#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/AssumptionCache.h"
-#include "llvm/IR/CallSite.h"
+#include "llvm/Analysis/InlineCost.h"
 #include "llvm/IR/ValueHandle.h"
 #include "llvm/Transforms/Utils/ValueMapper.h"
 #include <functional>
@@ -31,6 +29,7 @@
 
 namespace llvm {
 
+class AAResults;
 class AllocaInst;
 class BasicBlock;
 class BlockFrequencyInfo;
@@ -46,9 +45,9 @@ class LoopInfo;
 class Module;
 class ProfileSummaryInfo;
 class ReturnInst;
+class DomTreeUpdater;
 
 /// Return an exact copy of the specified module
-///
 std::unique_ptr<Module> CloneModule(const Module &M);
 std::unique_ptr<Module> CloneModule(const Module &M, ValueToValueMapTy &VMap);
 
@@ -60,17 +59,15 @@ std::unique_ptr<Module>
 CloneModule(const Module &M, ValueToValueMapTy &VMap,
             function_ref<bool(const GlobalValue *)> ShouldCloneDefinition);
 
-/// ClonedCodeInfo - This struct can be used to capture information about code
+/// This struct can be used to capture information about code
 /// being cloned, while it is being cloned.
 struct ClonedCodeInfo {
-  /// ContainsCalls - This is set to true if the cloned code contains a normal
-  /// call instruction.
+  /// This is set to true if the cloned code contains a normal call instruction.
   bool ContainsCalls = false;
 
-  /// ContainsDynamicAllocas - This is set to true if the cloned code contains
-  /// a 'dynamic' alloca.  Dynamic allocas are allocas that are either not in
-  /// the entry block or they are in the entry block but are not a constant
-  /// size.
+  /// This is set to true if the cloned code contains a 'dynamic' alloca.
+  /// Dynamic allocas are allocas that are either not in the entry block or they
+  /// are in the entry block but are not a constant size.
   bool ContainsDynamicAllocas = false;
 
   /// All cloned call sites that have operand bundles attached are appended to
@@ -81,7 +78,7 @@ struct ClonedCodeInfo {
   ClonedCodeInfo() = default;
 };
 
-/// CloneBasicBlock - Return a copy of the specified basic block, but without
+/// Return a copy of the specified basic block, but without
 /// embedding the block into a particular function.  The block returned is an
 /// exact copy of the specified basic block, without any remapping having been
 /// performed.  Because of this, this is only suitable for applications where
@@ -108,13 +105,12 @@ struct ClonedCodeInfo {
 /// If you would like to collect additional information about the cloned
 /// function, you can specify a ClonedCodeInfo object with the optional fifth
 /// parameter.
-///
 BasicBlock *CloneBasicBlock(const BasicBlock *BB, ValueToValueMapTy &VMap,
                             const Twine &NameSuffix = "", Function *F = nullptr,
                             ClonedCodeInfo *CodeInfo = nullptr,
                             DebugInfoFinder *DIFinder = nullptr);
 
-/// CloneFunction - Return a copy of the specified function and add it to that
+/// Return a copy of the specified function and add it to that
 /// function's module.  Also, any references specified in the VMap are changed
 /// to refer to their mapped value instead of the original one.  If any of the
 /// arguments to the function are in the VMap, the arguments are deleted from
@@ -153,7 +149,7 @@ void CloneAndPruneIntoFromInst(Function *NewFunc, const Function *OldFunc,
                                const char *NameSuffix = "",
                                ClonedCodeInfo *CodeInfo = nullptr);
 
-/// CloneAndPruneFunctionInto - This works exactly like CloneFunctionInto,
+/// This works exactly like CloneFunctionInto,
 /// except that it does some simple constant prop and DCE on the fly.  The
 /// effect of this is to copy significantly less code in cases where (for
 /// example) a function call with constant arguments is inlined, and those
@@ -171,32 +167,32 @@ void CloneAndPruneFunctionInto(Function *NewFunc, const Function *OldFunc,
                                ClonedCodeInfo *CodeInfo = nullptr,
                                Instruction *TheCall = nullptr);
 
-/// InlineFunctionInfo - This class captures the data input to the
-/// InlineFunction call, and records the auxiliary results produced by it.
+/// This class captures the data input to the InlineFunction call, and records
+/// the auxiliary results produced by it.
 class InlineFunctionInfo {
 public:
-  explicit InlineFunctionInfo(CallGraph *cg = nullptr,
-                              std::function<AssumptionCache &(Function &)>
-                                  *GetAssumptionCache = nullptr,
-                              ProfileSummaryInfo *PSI = nullptr,
-                              BlockFrequencyInfo *CallerBFI = nullptr,
-                              BlockFrequencyInfo *CalleeBFI = nullptr)
+  explicit InlineFunctionInfo(
+      CallGraph *cg = nullptr,
+      function_ref<AssumptionCache &(Function &)> GetAssumptionCache = nullptr,
+      ProfileSummaryInfo *PSI = nullptr,
+      BlockFrequencyInfo *CallerBFI = nullptr,
+      BlockFrequencyInfo *CalleeBFI = nullptr)
       : CG(cg), GetAssumptionCache(GetAssumptionCache), PSI(PSI),
         CallerBFI(CallerBFI), CalleeBFI(CalleeBFI) {}
 
-  /// CG - If non-null, InlineFunction will update the callgraph to reflect the
+  /// If non-null, InlineFunction will update the callgraph to reflect the
   /// changes it makes.
   CallGraph *CG;
-  std::function<AssumptionCache &(Function &)> *GetAssumptionCache;
+  function_ref<AssumptionCache &(Function &)> GetAssumptionCache;
   ProfileSummaryInfo *PSI;
   BlockFrequencyInfo *CallerBFI, *CalleeBFI;
 
-  /// StaticAllocas - InlineFunction fills this in with all static allocas that
-  /// get copied into the caller.
+  /// InlineFunction fills this in with all static allocas that get copied into
+  /// the caller.
   SmallVector<AllocaInst *, 4> StaticAllocas;
 
-  /// InlinedCalls - InlineFunction fills this in with callsites that were
-  /// inlined from the callee.  This is only filled in if CG is non-null.
+  /// InlineFunction fills this in with callsites that were inlined from the
+  /// callee. This is only filled in if CG is non-null.
   SmallVector<WeakTrackingVH, 8> InlinedCalls;
 
   /// All of the new call sites inlined into the caller.
@@ -204,7 +200,7 @@ public:
   /// 'InlineFunction' fills this in by scanning the inlined instructions, and
   /// only if CG is null. If CG is non-null, instead the value handle
   /// `InlinedCalls` above is used.
-  SmallVector<CallSite, 8> InlinedCallSites;
+  SmallVector<CallBase *, 8> InlinedCallSites;
 
   void reset() {
     StaticAllocas.clear();
@@ -213,7 +209,7 @@ public:
   }
 };
 
-/// InlineFunction - This function inlines the called function into the basic
+/// This function inlines the called function into the basic
 /// block of the caller.  This returns false if it is not possible to inline
 /// this call.  The program is still in a well defined state if this occurs
 /// though.
@@ -232,13 +228,10 @@ public:
 /// and all varargs at the callsite will be passed to any calls to
 /// ForwardVarArgsTo. The caller of InlineFunction has to make sure any varargs
 /// are only used by ForwardVarArgsTo.
-bool InlineFunction(CallInst *C, InlineFunctionInfo &IFI,
-                    AAResults *CalleeAAR = nullptr, bool InsertLifetime = true);
-bool InlineFunction(InvokeInst *II, InlineFunctionInfo &IFI,
-                    AAResults *CalleeAAR = nullptr, bool InsertLifetime = true);
-bool InlineFunction(CallSite CS, InlineFunctionInfo &IFI,
-                    AAResults *CalleeAAR = nullptr, bool InsertLifetime = true,
-                    Function *ForwardVarArgsTo = nullptr);
+InlineResult InlineFunction(CallBase &CB, InlineFunctionInfo &IFI,
+                            AAResults *CalleeAAR = nullptr,
+                            bool InsertLifetime = true,
+                            Function *ForwardVarArgsTo = nullptr);
 
 /// Clones a loop \p OrigLoop.  Returns the loop and the blocks in \p
 /// Blocks.
@@ -262,11 +255,62 @@ void remapInstructionsInBlocks(const SmallVectorImpl<BasicBlock *> &Blocks,
 /// we replace them with the uses of corresponding Phi inputs. ValueMapping
 /// is used to map the original instructions from BB to their newly-created
 /// copies. Returns the split block.
-BasicBlock *
-DuplicateInstructionsInSplitBetween(BasicBlock *BB, BasicBlock *PredBB,
-                                    Instruction *StopAt,
-                                    ValueToValueMapTy &ValueMapping,
-                                    DominatorTree *DT = nullptr);
+BasicBlock *DuplicateInstructionsInSplitBetween(BasicBlock *BB,
+                                                BasicBlock *PredBB,
+                                                Instruction *StopAt,
+                                                ValueToValueMapTy &ValueMapping,
+                                                DomTreeUpdater &DTU);
+
+/// Updates profile information by adjusting the entry count by adding
+/// entryDelta then scaling callsite information by the new count divided by the
+/// old count. VMap is used during inlinng to also update the new clone
+void updateProfileCallee(
+    Function *Callee, int64_t entryDelta,
+    const ValueMap<const Value *, WeakTrackingVH> *VMap = nullptr);
+
+/// Find the 'llvm.experimental.noalias.scope.decl' intrinsics in the specified
+/// basic blocks and extract their scope. These are candidates for duplication
+/// when cloning.
+void identifyNoAliasScopesToClone(
+    ArrayRef<BasicBlock *> BBs, SmallVectorImpl<MDNode *> &NoAliasDeclScopes);
+
+/// Find the 'llvm.experimental.noalias.scope.decl' intrinsics in the specified
+/// instruction range and extract their scope. These are candidates for
+/// duplication when cloning.
+void identifyNoAliasScopesToClone(
+    BasicBlock::iterator Start, BasicBlock::iterator End,
+    SmallVectorImpl<MDNode *> &NoAliasDeclScopes);
+
+/// Duplicate the specified list of noalias decl scopes.
+/// The 'Ext' string is added as an extension to the name.
+/// Afterwards, the ClonedScopes contains the mapping of the original scope
+/// MDNode onto the cloned scope.
+/// Be aware that the cloned scopes are still part of the original scope domain.
+void cloneNoAliasScopes(
+    ArrayRef<MDNode *> NoAliasDeclScopes,
+    DenseMap<MDNode *, MDNode *> &ClonedScopes,
+    StringRef Ext, LLVMContext &Context);
+
+/// Adapt the metadata for the specified instruction according to the
+/// provided mapping. This is normally used after cloning an instruction, when
+/// some noalias scopes needed to be cloned.
+void adaptNoAliasScopes(
+    llvm::Instruction *I, const DenseMap<MDNode *, MDNode *> &ClonedScopes,
+    LLVMContext &Context);
+
+/// Clone the specified noalias decl scopes. Then adapt all instructions in the
+/// NewBlocks basicblocks to the cloned versions.
+/// 'Ext' will be added to the duplicate scope names.
+void cloneAndAdaptNoAliasScopes(ArrayRef<MDNode *> NoAliasDeclScopes,
+                                ArrayRef<BasicBlock *> NewBlocks,
+                                LLVMContext &Context, StringRef Ext);
+
+/// Clone the specified noalias decl scopes. Then adapt all instructions in the
+/// [IStart, IEnd] (IEnd included !) range to the cloned versions. 'Ext' will be
+/// added to the duplicate scope names.
+void cloneAndAdaptNoAliasScopes(ArrayRef<MDNode *> NoAliasDeclScopes,
+                                Instruction *IStart, Instruction *IEnd,
+                                LLVMContext &Context, StringRef Ext);
 } // end namespace llvm
 
 #endif // LLVM_TRANSFORMS_UTILS_CLONING_H

@@ -65,9 +65,6 @@ namespace SCENE
 //
 // - JOURNAL_CHANGE_TRANSFORM: changes of the world-to-object transformation matrix in an Instance
 //
-// - JOURNAL_CHANGE_SHADOW: some light changes (type, spread, distance) (2), some attributes on
-//   Options (1)
-//
 // - JOURNAL_CHANGE_NON_SHADER_ATTRIBUTE: all changes of predefined attributes (1)
 // - JOURNAL_CHANGE_VISIBLE_FLAG, JOURNAL_CHANGE_DISABLE_FLAG: needed by generate_change_lists
 //   (renderapi), is always set together with JOURNAL_CHANGE_NON_SHADER_ATTRIBUTE because
@@ -112,26 +109,25 @@ namespace SCENE
 //
 // The neuray API implementation in api/api/neuray is supposed to adhere to these rules.
 //
-static const DB::Journal_type
-    JOURNAL_CHANGE_UNKNOWN          = DB::Journal_type(~0),        // all bits on
-    JOURNAL_CHANGE_NOTHING          = DB::Journal_type(0x0),       // no bit set
-    JOURNAL_CHANGE_FIELD            = DB::Journal_type(0x01),      // bit 0 set
-    JOURNAL_CHANGE_NON_SHADER_ATTRIBUTE	= DB::Journal_type(0x02),  // bit 1 set
-    JOURNAL_CHANGE_SHADER_ATTRIBUTE = DB::Journal_type(0x04),      // bit 2 set
-    JOURNAL_CHANGE_TRANSFORM        = DB::Journal_type(0x08),      // bit 3 set
-    JOURNAL_CHANGE_SHADOW           = DB::Journal_type(0x10),      // bit 4 set
-    JOURNAL_CHANGE_GEOMETRY         = DB::Journal_type(0x20),      // bit 5 set
-    JOURNAL_CHANGE_TOPOLOGY         = DB::Journal_type(0x40),      // bit 6 set
-    JOURNAL_CHANGE_SHADER           = DB::Journal_type(0x80),      // bit 7 set
-    JOURNAL_CHANGE_LIGHT_FIELD      = DB::Journal_type(0x100),     // bit 8 set
-    JOURNAL_CHANGE_LIGHT_GEOMETRY   = DB::Journal_type(0x200),     // bit 9 set
-    JOURNAL_CHANGE_DISABLE_FLAG     = DB::Journal_type(0x400),     // bit 10 set
-    JOURNAL_CHANGE_VISIBLE_FLAG     = DB::Journal_type(0x800),     // bit 11 set
-    JOURNAL_CHANGE_DECAL_FIELD      = DB::Journal_type(0x1000),    // bit 12 set
-    JOURNAL_CHANGE_DECAL            = DB::Journal_type(0x2000),    // bit 13 set
-    JOURNAL_CHANGE_PROJECTOR_FIELD  = DB::Journal_type(0x4000),    // bit 14 set
-    JOURNAL_CHANGE_PROJECTOR        = DB::Journal_type(0x8000),    // bit 15 set
-    JOURNAL_CHANGE_DICE             = DB::Journal_type(0x8000000); // bit 31 set
+    static const DB::Journal_type
+        JOURNAL_CHANGE_UNKNOWN              = DB::Journal_type(~0),        // all bits on
+        JOURNAL_CHANGE_NOTHING              = DB::Journal_type(0x0),       // no bit set
+        JOURNAL_CHANGE_FIELD                = DB::Journal_type(0x01),      // bit 0 set
+        JOURNAL_CHANGE_NON_SHADER_ATTRIBUTE = DB::Journal_type(0x02),      // bit 1 set
+        JOURNAL_CHANGE_SHADER_ATTRIBUTE     = DB::Journal_type(0x04),      // bit 2 set
+        JOURNAL_CHANGE_TRANSFORM            = DB::Journal_type(0x08),      // bit 3 set
+        JOURNAL_CHANGE_GEOMETRY             = DB::Journal_type(0x10),      // bit 4 set
+        JOURNAL_CHANGE_TOPOLOGY             = DB::Journal_type(0x20),      // bit 5 set
+        JOURNAL_CHANGE_SHADER               = DB::Journal_type(0x40),      // bit 6 set
+        JOURNAL_CHANGE_LIGHT_FIELD          = DB::Journal_type(0x80),      // bit 7 set
+        JOURNAL_CHANGE_LIGHT_GEOMETRY       = DB::Journal_type(0x100),     // bit 8 set
+        JOURNAL_CHANGE_DISABLE_FLAG         = DB::Journal_type(0x200),     // bit 9 set
+        JOURNAL_CHANGE_VISIBLE_FLAG         = DB::Journal_type(0x400),     // bit 10 set
+        JOURNAL_CHANGE_DECAL_FIELD          = DB::Journal_type(0x800),     // bit 11 set
+        JOURNAL_CHANGE_DECAL                = DB::Journal_type(0x1000),    // bit 12 set
+        JOURNAL_CHANGE_PROJECTOR_FIELD      = DB::Journal_type(0x2000),    // bit 13 set
+        JOURNAL_CHANGE_PROJECTOR            = DB::Journal_type(0x4000),    // bit 14 set
+        JOURNAL_CHANGE_DICE                 = DB::Journal_type(0x8000);    // bit 15 set
 }
 }
 

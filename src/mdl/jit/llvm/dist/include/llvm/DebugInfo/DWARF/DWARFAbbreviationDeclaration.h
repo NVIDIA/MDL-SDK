@@ -1,9 +1,8 @@
 //===- DWARFAbbreviationDeclaration.h ---------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -112,6 +111,16 @@ public:
     return AttributeSpecs[idx].Attr;
   }
 
+  bool getAttrIsImplicitConstByIndex(uint32_t idx) const {
+    assert(idx < AttributeSpecs.size());
+    return AttributeSpecs[idx].isImplicitConst();
+  }
+
+  int64_t getAttrImplicitConstValueByIndex(uint32_t idx) const {
+    assert(idx < AttributeSpecs.size());
+    return AttributeSpecs[idx].getImplicitConstValue();
+  }
+
   /// Get the index of the specified attribute.
   ///
   /// Searches the this abbreviation declaration for the index of the specified
@@ -131,11 +140,11 @@ public:
   /// \param Attr DWARF attribute to search for.
   /// \param U the DWARFUnit the contains the DIE.
   /// \returns Optional DWARF form value if the attribute was extracted.
-  Optional<DWARFFormValue> getAttributeValue(const uint32_t DIEOffset,
+  Optional<DWARFFormValue> getAttributeValue(const uint64_t DIEOffset,
                                              const dwarf::Attribute Attr,
                                              const DWARFUnit &U) const;
 
-  bool extract(DataExtractor Data, uint32_t* OffsetPtr);
+  bool extract(DataExtractor Data, uint64_t* OffsetPtr);
   void dump(raw_ostream &OS) const;
 
   // Return an optional byte size of all attribute data in this abbreviation

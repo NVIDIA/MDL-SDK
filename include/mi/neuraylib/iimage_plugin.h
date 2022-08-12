@@ -231,7 +231,7 @@ public:
     virtual bool write( const ITile* tile, Uint32 z, Uint32 level = 0) = 0;
 };
 
-/*@}*/ // end group mi_neuray_plugins
+/**@}*/ // end group mi_neuray_plugins
 
 } // namespace neuraylib
 

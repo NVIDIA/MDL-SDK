@@ -512,7 +512,8 @@ bool Encapsulate_tool::create_encapsulated_module(
     Allocator_builder builder(get_allocator());
 
     // first, write the module
-    mi::base::Handle<Buffer_output_stream> os(builder.create<Buffer_output_stream>(get_allocator()));
+    mi::base::Handle<Buffer_output_stream> os(
+        builder.create<Buffer_output_stream>(get_allocator()));
     mi::base::Handle<mi::mdl::IMDL_exporter> exporter(m_compiler->create_exporter());
 
     exporter->export_module(os.get(), module, desc.resource_callback);
@@ -530,7 +531,7 @@ bool Encapsulate_tool::create_encapsulated_module(
 
     // add checksum for fast duplicate detection
     MD5_hasher hasher;
-    hasher.update(reinterpret_cast<unsigned char*>(os->get_data()), os->get_data_size());
+    hasher.update(reinterpret_cast<unsigned char const *>(os->get_data()), os->get_data_size());
     MD5_hash hash;
     hasher.final(hash.data);
     sorted_md5_map["main.mdl"] = hash;

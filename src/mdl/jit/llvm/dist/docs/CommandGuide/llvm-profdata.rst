@@ -1,6 +1,8 @@
 llvm-profdata - Profile data tool
 =================================
 
+.. program:: llvm-profdata
+
 SYNOPSIS
 --------
 
@@ -17,6 +19,7 @@ COMMANDS
 
 * :ref:`merge <profdata-merge>`
 * :ref:`show <profdata-show>`
+* :ref:`overlap <profdata-overlap>`
 
 .. program:: llvm-profdata merge
 
@@ -64,7 +67,7 @@ OPTIONS
 
  Specify an input file name along with a weight. The profile counts of the
  supplied ``filename`` will be scaled (multiplied) by the supplied
- ``weight``, where where ``weight`` is a decimal integer >= 1.
+ ``weight``, where ``weight`` is a decimal integer >= 1.
  Input files specified without using this option are assigned a default
  weight of 1. Examples are shown below.
 
@@ -73,6 +76,16 @@ OPTIONS
   Specify a file which contains a list of files to merge. The entries in this
   file are newline-separated. Lines starting with '#' are skipped. Entries may
   be of the form <filename> or <weight>,<filename>.
+
+.. option:: -remapping-file=path, -r=path
+
+  Specify a file which contains a remapping from symbol names in the input
+  profile to the symbol names that should be used in the output profile. The
+  file should consist of lines of the form ``<input-symbol> <output-symbol>``.
+  Blank lines and lines starting with ``#`` are skipped.
+
+  The :doc:`llvm-cxxmap <llvm-cxxmap>` tool can be used to generate the symbol
+  remapping file.
 
 .. option:: -instr (default)
 
@@ -88,6 +101,13 @@ OPTIONS
 
  Emit the profile using a binary encoding. For instrumentation-based profile
  the output format is the indexed binary format. 
+
+ .. option:: -extbinary
+
+ Emit the profile using an extensible binary encoding. This option can only
+ be used with sample-based profile. The extensible binary encoding can be
+ more compact with compression enabled and can be loaded faster than the
+ default binary encoding.
 
  .. option:: -text
 
@@ -110,6 +130,60 @@ OPTIONS
 
  Use N threads to perform profile merging. When N=0, llvm-profdata auto-detects
  an appropriate number of threads to use. This is the default.
+
+.. option:: -failure-mode=[any|all]
+
+ Set the failure mode. There are two options: 'any' causes the merge command to
+ fail if any profiles are invalid, and 'all' causes the merge command to fail
+ only if all profiles are invalid. If 'all' is set, information from any
+ invalid profiles is excluded from the final merged product. The default
+ failure mode is 'any'.
+
+.. option:: -prof-sym-list=path
+
+ Specify a file which contains a list of symbols to generate profile symbol
+ list in the profile. This option can only be used with sample-based profile
+ in extbinary format. The entries in this file are newline-separated.
+
+.. option:: -compress-all-sections=[true|false]
+
+ Compress all sections when writing the profile. This option can only be used
+ with sample-based profile in extbinary format.
+
+.. option:: -use-md5=[true|false]
+
+ Use MD5 to represent string in name table when writing the profile.
+ This option can only be used with sample-based profile in extbinary format.
+
+.. option:: -gen-partial-profile=[true|false]
+
+ Mark the profile to be a partial profile which only provides partial profile
+ coverage for the optimized target. This option can only be used with
+ sample-based profile in extbinary format.
+
+.. option:: -supplement-instr-with-sample=path_to_sample_profile
+
+ Supplement an instrumentation profile with sample profile. The sample profile
+ is the input of the flag. Output will be in instrumentation format (only works
+ with -instr).
+
+.. option:: -zero-counter-threshold=threshold_float_number
+
+ For the function which is cold in instr profile but hot in sample profile, if
+ the ratio of the number of zero counters divided by the the total number of
+ counters is above the threshold, the profile of the function will be regarded
+ as being harmful for performance and will be dropped.
+
+.. option:: -instr-prof-cold-threshold=threshold_int_number
+
+ User specified cold threshold for instr profile which will override the cold
+ threshold got from profile summary.
+
+.. option:: -suppl-min-size-threshold=threshold_int_number
+
+ If the size of a function is smaller than the threshold, assume it can be
+ inlined by PGO early inliner and it will not be adjusted based on sample
+ profile.
 
 EXAMPLES
 ^^^^^^^^
@@ -193,7 +267,7 @@ OPTIONS
  annotations.
 
 .. option:: -topn=n
-	     
+
  Instruct the profile dumper to show the top ``n`` functions with the
  hottest basic blocks in the summary section. By default, the topn functions
  are not dumped.
@@ -205,6 +279,96 @@ OPTIONS
 .. option:: -memop-sizes
 
  Show the profiled sizes of the memory intrinsic calls for shown functions.
+
+.. option:: -value-cutoff=n
+
+ Show only those functions whose max count values are greater or equal to ``n``.
+ By default, the value-cutoff is set to 0.
+
+.. option:: -list-below-cutoff
+
+ Only output names of functions whose max count value are below the cutoff
+ value.
+
+.. option:: -showcs
+
+ Only show context sensitive profile counts. The default is to filter all
+ context sensitive profile counts.
+
+.. option:: -show-prof-sym-list=[true|false]
+
+ Show profile symbol list if it exists in the profile. This option is only
+ meaningful for sample-based profile in extbinary format.
+
+.. option:: -show-sec-info-only=[true|false]
+
+ Show basic information about each section in the profile. This option is
+ only meaningful for sample-based profile in extbinary format.
+
+.. program:: llvm-profdata overlap
+
+.. _profdata-overlap:
+
+OVERLAP
+-------
+
+SYNOPSIS
+^^^^^^^^
+
+:program:`llvm-profdata overlap` [*options*] [*base profile file*] [*test profile file*]
+
+DESCRIPTION
+^^^^^^^^^^^
+
+:program:`llvm-profdata overlap` takes two profile data files and displays the
+*overlap* of counter distribution between the whole files and between any of the
+specified functions.
+
+In this command, *overlap* is defined as follows:
+Suppose *base profile file* has the following counts:
+{c1_1, c1_2, ..., c1_n, c1_u_1, c2_u_2, ..., c2_u_s},
+and *test profile file* has
+{c2_1, c2_2, ..., c2_n, c2_v_1, c2_v_2, ..., c2_v_t}.
+Here c{1|2}_i (i = 1 .. n) are matched counters and c1_u_i (i = 1 .. s) and
+c2_v_i (i = 1 .. v) are unmatched counters (or counters only existing in)
+*base profile file* and *test profile file*, respectively.
+Let sum_1 = c1_1 + c1_2 +  ... + c1_n +  c1_u_1 + c2_u_2 + ... + c2_u_s, and
+sum_2 = c2_1 + c2_2 + ... + c2_n + c2_v_1 + c2_v_2 + ... + c2_v_t.
+*overlap* = min(c1_1/sum_1, c2_1/sum_2) + min(c1_2/sum_1, c2_2/sum_2) + ...
++ min(c1_n/sum_1, c2_n/sum_2).
+
+The result overlap distribution is a percentage number, ranging from 0.0% to
+100.0%, where 0.0% means there is no overlap and 100.0% means a perfect
+overlap.
+
+Here is an example, if *base profile file* has counts of {400, 600}, and
+*test profile file* has matched counts of {60000, 40000}. The *overlap* is 80%.
+
+OPTIONS
+^^^^^^^
+
+.. option:: -function=string
+
+ Print details for a function if the function's name contains the given string.
+
+.. option:: -help
+
+ Print a summary of command line options.
+
+.. option:: -o=output or -o output
+
+ Specify the output file name.  If *output* is ``-`` or it isn't specified,
+ then the output is sent to standard output.
+
+.. option:: -value-cutoff=n
+
+ Show only those functions whose max count values are greater or equal to ``n``.
+ By default, the value-cutoff is set to max of unsigned long long.
+
+.. option:: -cs
+
+ Only show overlap for the context sensitive profile counts. The default is to show
+ non-context sensitive profile counts.
 
 EXIT STATUS
 -----------

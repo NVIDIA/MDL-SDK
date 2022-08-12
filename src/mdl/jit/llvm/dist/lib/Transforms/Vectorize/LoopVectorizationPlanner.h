@@ -1,9 +1,8 @@
 //===- LoopVectorizationPlanner.h - Planner for LoopVectorization ---------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 ///
@@ -32,9 +31,13 @@
 
 namespace llvm {
 
+class LoopVectorizationLegality;
+class LoopVectorizationCostModel;
+class PredicatedScalarEvolution;
+class VPRecipeBuilder;
+
 /// VPlan-based builder utility analogous to IRBuilder.
 class VPBuilder {
-private:
   VPBasicBlock *BB = nullptr;
   VPBasicBlock::iterator InsertPt = VPBasicBlock::iterator();
 
@@ -139,6 +142,10 @@ public:
     return createInstruction(Instruction::BinaryOps::Or, {LHS, RHS});
   }
 
+  VPValue *createSelect(VPValue *Cond, VPValue *TrueVal, VPValue *FalseVal) {
+    return createNaryOp(Instruction::Select, {Cond, TrueVal, FalseVal});
+  }
+
   //===--------------------------------------------------------------------===//
   // RAII helpers.
   //===--------------------------------------------------------------------===//
@@ -169,9 +176,22 @@ public:
 /// Information about vectorization costs
 struct VectorizationFactor {
   // Vector width with best cost
-  unsigned Width;
+  ElementCount Width;
   // Cost of the loop with that width
   unsigned Cost;
+
+  // Width 1 means no vectorization, cost 0 means uncomputed cost.
+  static VectorizationFactor Disabled() {
+    return {ElementCount::getFixed(1), 0};
+  }
+
+  bool operator==(const VectorizationFactor &rhs) const {
+    return Width == rhs.Width && Cost == rhs.Cost;
+  }
+
+  bool operator!=(const VectorizationFactor &rhs) const {
+    return !(*this == rhs);
+  }
 };
 
 /// Planner drives the vectorization process after having passed
@@ -192,10 +212,13 @@ class LoopVectorizationPlanner {
   /// The legality analysis.
   LoopVectorizationLegality *Legal;
 
-  /// The profitablity analysis.
+  /// The profitability analysis.
   LoopVectorizationCostModel &CM;
 
-  using VPlanPtr = std::unique_ptr<VPlan>;
+  /// The interleaved access analysis.
+  InterleavedAccessInfo &IAI;
+
+  PredicatedScalarEvolution &PSE;
 
   SmallVector<VPlanPtr, 4> VPlans;
 
@@ -207,30 +230,39 @@ class LoopVectorizationPlanner {
     VPCallbackILV(InnerLoopVectorizer &ILV) : ILV(ILV) {}
 
     Value *getOrCreateVectorValues(Value *V, unsigned Part) override;
+    Value *getOrCreateScalarValue(Value *V,
+                                  const VPIteration &Instance) override;
   };
 
   /// A builder used to construct the current plan.
   VPBuilder Builder;
 
-  unsigned BestVF = 0;
+  /// The best number of elements of the vector types used in the
+  /// transformed loop. BestVF = None means that vectorization is
+  /// disabled.
+  Optional<ElementCount> BestVF = None;
   unsigned BestUF = 0;
 
 public:
   LoopVectorizationPlanner(Loop *L, LoopInfo *LI, const TargetLibraryInfo *TLI,
                            const TargetTransformInfo *TTI,
                            LoopVectorizationLegality *Legal,
-                           LoopVectorizationCostModel &CM)
-      : OrigLoop(L), LI(LI), TLI(TLI), TTI(TTI), Legal(Legal), CM(CM) {}
+                           LoopVectorizationCostModel &CM,
+                           InterleavedAccessInfo &IAI,
+                           PredicatedScalarEvolution &PSE)
+      : OrigLoop(L), LI(LI), TLI(TLI), TTI(TTI), Legal(Legal), CM(CM), IAI(IAI),
+        PSE(PSE) {}
 
-  /// Plan how to best vectorize, return the best VF and its cost.
-  VectorizationFactor plan(bool OptForSize, unsigned UserVF);
+  /// Plan how to best vectorize, return the best VF and its cost, or None if
+  /// vectorization and interleaving should be avoided up front.
+  Optional<VectorizationFactor> plan(ElementCount UserVF, unsigned UserIC);
 
   /// Use the VPlan-native path to plan how to best vectorize, return the best
   /// VF and its cost.
-  VectorizationFactor planInVPlanNativePath(bool OptForSize, unsigned UserVF);
+  VectorizationFactor planInVPlanNativePath(ElementCount UserVF);
 
   /// Finalize the best decision and dispose of all other VPlans.
-  void setBestPlan(unsigned VF, unsigned UF);
+  void setBestPlan(ElementCount VF, unsigned UF);
 
   /// Generate the IR code for the body of the vectorized loop according to the
   /// best selected VPlan.
@@ -241,11 +273,21 @@ public:
       O << *Plan;
   }
 
+  /// Look through the existing plans and return true if we have one with all
+  /// the vectorization factors in question.
+  bool hasPlanWithVFs(const ArrayRef<ElementCount> VFs) const {
+    return any_of(VPlans, [&](const VPlanPtr &Plan) {
+      return all_of(VFs, [&](const ElementCount &VF) {
+        return Plan->hasVF(VF);
+      });
+    });
+  }
+
   /// Test a \p Predicate on a \p Range of VF's. Return the value of applying
   /// \p Predicate on Range.Start, possibly decreasing Range.End such that the
   /// returned value holds for the entire \p Range.
   static bool
-  getDecisionAndClampRange(const std::function<bool(unsigned)> &Predicate,
+  getDecisionAndClampRange(const std::function<bool(ElementCount)> &Predicate,
                            VFRange &Range);
 
 protected:
@@ -257,7 +299,7 @@ protected:
   /// Build VPlans for power-of-2 VF's between \p MinVF and \p MaxVF inclusive,
   /// according to the information gathered by Legal when it checked if it is
   /// legal to vectorize the loop.
-  void buildVPlans(unsigned MinVF, unsigned MaxVF);
+  void buildVPlans(ElementCount MinVF, ElementCount MaxVF);
 
 private:
   /// Build a VPlan according to the information gathered by Legal. \return a
@@ -267,14 +309,21 @@ private:
 
   /// Build a VPlan using VPRecipes according to the information gather by
   /// Legal. This method is only used for the legacy inner loop vectorizer.
-  VPlanPtr
-  buildVPlanWithVPRecipes(VFRange &Range, SmallPtrSetImpl<Value *> &NeedDef,
-                          SmallPtrSetImpl<Instruction *> &DeadInstructions);
+  VPlanPtr buildVPlanWithVPRecipes(
+      VFRange &Range, SmallPtrSetImpl<Instruction *> &DeadInstructions,
+      const DenseMap<Instruction *, Instruction *> &SinkAfter);
 
   /// Build VPlans for power-of-2 VF's between \p MinVF and \p MaxVF inclusive,
   /// according to the information gathered by Legal when it checked if it is
   /// legal to vectorize the loop. This method creates VPlans using VPRecipes.
-  void buildVPlansWithVPRecipes(unsigned MinVF, unsigned MaxVF);
+  void buildVPlansWithVPRecipes(ElementCount MinVF, ElementCount MaxVF);
+
+  /// Adjust the recipes for any inloop reductions. The chain of instructions
+  /// leading from the loop exit instr to the phi need to be converted to
+  /// reductions, with one operand being vector and the other being the scalar
+  /// reduction chain.
+  void adjustRecipesForInLoopReductions(VPlanPtr &Plan,
+                                        VPRecipeBuilder &RecipeBuilder);
 };
 
 } // namespace llvm

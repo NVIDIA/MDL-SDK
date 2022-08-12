@@ -36,6 +36,7 @@
 
 #include "generator_jit_type_map.h"
 #include "generator_jit_llvm.h"
+#include "generator_jit_opt_pass_gate.h"
 
 namespace mi {
 namespace mdl {
@@ -60,7 +61,7 @@ class Link_unit_jit : public Allocator_interface_implement<ILink_unit>
             Link_unit_jit          &unit,
             mi::mdl::IModule_cache *cache)
         : m_unit(unit)
-         , m_cache(unit.get_module_cache())
+        , m_cache(unit.get_module_cache())
         {
             unit.set_module_cache(cache);
         }
@@ -77,15 +78,8 @@ class Link_unit_jit : public Allocator_interface_implement<ILink_unit>
     };
 
 public:
-    /// Possible targets for the generated code.
-    enum Target_kind {
-        TK_PTX,      ///< Generate CUDA PTX code.
-        TK_LLVM_IR,  ///< Generate LLVM IR (LLVM 7.0 compatible)
-        TK_NATIVE,   ///< Generate native code
-        TK_HLSL      ///< Generate HLSL code.
-    };
-
-    typedef Type_mapper::Type_mapping_mode Type_mapping_mode;
+    typedef Type_mapper::Type_mapping_mode    Type_mapping_mode;
+    typedef ICode_generator::Target_language  Target_language;
 
     /// Add a lambda function to this link unit.
     ///
@@ -187,8 +181,8 @@ public:
         size_t                                         index,
         IGenerated_code_executable::Prototype_language lang) const MDL_FINAL;
 
-    /// Get the target kind.
-    Target_kind get_target_kind() const { return m_target_kind; }
+    /// Get the target language.
+    Target_language get_target_language() const { return m_target_lang; }
 
     /// Get the LLVM module.
     llvm::Module const *get_llvm_module() const;
@@ -231,7 +225,7 @@ private:
     /// \param alloc                the allocator
     /// \param jitted_code          the jitted code singleton
     /// \param compiler             the MDL compiler
-    /// \param target_kind          the kind of targeted code
+    /// \param target_language      the target language
     /// \param tm_mode              if target is not PTX, the type mapping mode
     /// \param sm_version           if target is PTX, the SM_version we compile for
     /// \param num_texture_spaces   the number of supported texture spaces
@@ -243,7 +237,7 @@ private:
         IAllocator         *alloc,
         Jitted_code        *jitted_code,
         MDL                *compiler,
-        Target_kind        target_kind,
+        Target_language    target_language,
         Type_mapping_mode  tm_mode,
         unsigned           sm_version,
         unsigned           num_texture_spaces,
@@ -268,8 +262,10 @@ private:
     /// Creates the resource manager to be used with this link unit.
     ///
     /// \param icode  the generated code object
+    /// \param use_builtin_resource_handler_cpu \c true, if builtin runtime is used on cpu
     IResource_manager *create_resource_manager(
-        IGenerated_code_executable *icode);
+        IGenerated_code_executable *icode,
+        bool use_builtin_resource_handler_cpu);
 
     /// Update the resource attribute maps for the current lambda function to be compiled.
     ///
@@ -312,8 +308,11 @@ private:
     /// Memory arena for storing strings.
     Memory_arena m_arena;
 
-    /// The kind of targeted code.
-    Target_kind m_target_kind;
+    /// The target language.
+    ICode_generator::Target_language m_target_lang;
+
+    /// @brief  The optimization gate for SL target languages.
+    SLOptPassGate m_opt_pass_gate;
 
     /// The used LLVM context for source-only targets.
     llvm::LLVMContext m_source_only_llvm_context;
@@ -324,6 +323,9 @@ private:
 
     /// The code generator.
     mutable LLVM_code_generator m_code_gen;
+
+    /// The resource attribute map for the native resource manager in case a custom runtime is used.
+    Resource_attr_map m_resource_attr_map;
 
     /// The resource manager for the unit.
     IResource_manager *m_res_manag;
@@ -434,7 +436,7 @@ public:
     ///
     /// \param module        The module to compile.
     /// \param module_cache  The module cache if any.
-    /// \param mode          The compilation mode.
+    /// \param target        The target language.
     /// \param ctx           The code generator thread context.
     ///
     /// \note This method is not used currently for code generation, just
@@ -444,7 +446,7 @@ public:
     IGenerated_code_executable *compile(
         IModule const                  *module,
         IModule_cache                  *module_cache,
-        Compilation_mode               mode,
+        Target_language                target,
         ICode_generator_thread_context *ctx) MDL_FINAL;
 
     /// Compile a lambda function using the JIT into an environment (shader) of a scene.
@@ -567,6 +569,38 @@ public:
         unsigned                       num_texture_results,
         bool                           enable_simd) MDL_FINAL;
 
+    /// Compile a whole MDL module into LLVM-IR.
+    ///
+    /// \param module             The MDL module to generate code from.
+    /// \param module_cache       The module cache if any.
+    /// \param options            The backend options.
+    Generated_code_source *compile_module_to_llvm(
+        mi::mdl::IModule const *module,
+        IModule_cache          *module_cache,
+        Options_impl const     &options);
+
+    /// Compile a whole MDL module into PTX.
+    ///
+    /// \param module             The MDL module to generate code from.
+    /// \param module_cache       The module cache if any.
+    /// \param options            The backend options.
+    Generated_code_source *compile_module_to_ptx(
+        mi::mdl::IModule const *module,
+        IModule_cache          *module_cache,
+        Options_impl const     &options);
+
+    /// Compile a whole MDL module into HLSL or GLSL.
+    ///
+    /// \param mod                The MDL module to generate code from.
+    /// \param module_cache       The module cache if any.
+    /// \param target             The target language, must be HLSL or GLSL.
+    /// \param options            The backend options.
+    Generated_code_source *compile_module_to_sl(
+        mi::mdl::IModule const           *mod,
+        IModule_cache                    *module_cache,
+        ICode_generator::Target_language target,
+        Options_impl const               &options);
+
     /// Fill a code object from a code cache entry.
     ///
     /// \param ctx    the code generator thread context
@@ -600,8 +634,7 @@ public:
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
     /// \param sm_version           the target architecture of the GPU
-    /// \param comp_mode            the compilation mode deciding the target language,
-    ///                             must be PTX or HLSL
+    /// \param target               the target language, must be PTX, HLSL, or GLSL
     /// \param llvm_ir_output       if true generate LLVM-IR (prepared for the target language)
     ///
     /// \return the compiled function or NULL on compilation errors
@@ -614,7 +647,7 @@ public:
         unsigned                       num_texture_spaces,
         unsigned                       num_texture_results,
         unsigned                       sm_version,
-        Compilation_mode               comp_mode,
+        Target_language                target,
         bool                           llvm_ir_output) MDL_FINAL;
 
     /// Compile a distribution function into native code using the JIT.
@@ -654,8 +687,7 @@ public:
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
     /// \param sm_version           the target architecture of the GPU
-    /// \param comp_mode            the compilation mode deciding the target language,
-    ///                             must be PTX or HLSL
+    /// \param target               the target language, must be PTX, HLSL, or GLSL
     /// \param llvm_ir_output       if true generate LLVM-IR (prepared for the target language)
     ///
     /// \return the compiled distribution function or NULL on compilation errors
@@ -667,7 +699,7 @@ public:
         unsigned                       num_texture_spaces,
         unsigned                       num_texture_results,
         unsigned                       sm_version,
-        Compilation_mode               comp_mode,
+        Target_language                target,
         bool                           llvm_ir_output) MDL_FINAL;
 
     /// Get the device library for PTX compilation.
@@ -714,7 +746,7 @@ public:
     /// \return  a new empty link unit.
     Link_unit_jit *create_link_unit(
         ICode_generator_thread_context *ctx,
-        Compilation_mode               mode,
+        Target_language                target,
         bool                           enable_simd,
         unsigned                       sm_version,
         unsigned                       num_texture_spaces,

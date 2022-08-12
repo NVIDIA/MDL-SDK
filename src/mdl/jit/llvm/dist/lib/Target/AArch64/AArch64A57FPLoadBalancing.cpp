@@ -1,9 +1,8 @@
 //===-- AArch64A57FPLoadBalancing.cpp - Balance FP ops statically on A57---===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 // For best-case performance on Cortex-A57, we should try to use a balanced
@@ -377,11 +376,10 @@ bool AArch64A57FPLoadBalancing::runOnBasicBlock(MachineBasicBlock &MBB) {
 
   // Now we have a set of sets, order them by start address so
   // we can iterate over them sequentially.
-  llvm::sort(V.begin(), V.end(),
-             [](const std::vector<Chain*> &A,
-                const std::vector<Chain*> &B) {
-      return A.front()->startsBefore(B.front());
-    });
+  llvm::sort(V,
+             [](const std::vector<Chain *> &A, const std::vector<Chain *> &B) {
+               return A.front()->startsBefore(B.front());
+             });
 
   // As we only have two colors, we can track the global (BB-level) balance of
   // odds versus evens. We aim to keep this near zero to keep both execution
@@ -453,16 +451,16 @@ bool AArch64A57FPLoadBalancing::colorChainSet(std::vector<Chain*> GV,
   // change them to!
   // Final tie-break with instruction order so pass output is stable (i.e. not
   // dependent on malloc'd pointer values).
-  llvm::sort(GV.begin(), GV.end(), [](const Chain *G1, const Chain *G2) {
-      if (G1->size() != G2->size())
-        return G1->size() > G2->size();
-      if (G1->requiresFixup() != G2->requiresFixup())
-        return G1->requiresFixup() > G2->requiresFixup();
-      // Make sure startsBefore() produces a stable final order.
-      assert((G1 == G2 || (G1->startsBefore(G2) ^ G2->startsBefore(G1))) &&
-             "Starts before not total order!");
-      return G1->startsBefore(G2);
-    });
+  llvm::sort(GV, [](const Chain *G1, const Chain *G2) {
+    if (G1->size() != G2->size())
+      return G1->size() > G2->size();
+    if (G1->requiresFixup() != G2->requiresFixup())
+      return G1->requiresFixup() > G2->requiresFixup();
+    // Make sure startsBefore() produces a stable final order.
+    assert((G1 == G2 || (G1->startsBefore(G2) ^ G2->startsBefore(G1))) &&
+           "Starts before not total order!");
+    return G1->startsBefore(G2);
+  });
 
   Color PreferredColor = Parity < 0 ? Color::Even : Color::Odd;
   while (Chain *G = getAndEraseNext(PreferredColor, GV)) {
@@ -554,7 +552,7 @@ bool AArch64A57FPLoadBalancing::colorChain(Chain *G, Color C,
     std::vector<unsigned> ToErase;
     for (auto &U : I.operands()) {
       if (U.isReg() && U.isUse() && Substs.find(U.getReg()) != Substs.end()) {
-        unsigned OrigReg = U.getReg();
+        Register OrigReg = U.getReg();
         U.setReg(Substs[OrigReg]);
         if (U.isKill())
           // Don't erase straight away, because there may be other operands
@@ -613,12 +611,12 @@ void AArch64A57FPLoadBalancing::scanInstruction(
 
     // Create a new chain. Multiplies don't require forwarding so can go on any
     // unit.
-    unsigned DestReg = MI->getOperand(0).getReg();
+    Register DestReg = MI->getOperand(0).getReg();
 
     LLVM_DEBUG(dbgs() << "New chain started for register "
                       << printReg(DestReg, TRI) << " at " << *MI);
 
-    auto G = llvm::make_unique<Chain>(MI, Idx, getColor(DestReg));
+    auto G = std::make_unique<Chain>(MI, Idx, getColor(DestReg));
     ActiveChains[DestReg] = G.get();
     AllChains.push_back(std::move(G));
 
@@ -626,8 +624,8 @@ void AArch64A57FPLoadBalancing::scanInstruction(
 
     // It is beneficial to keep MLAs on the same functional unit as their
     // accumulator operand.
-    unsigned DestReg  = MI->getOperand(0).getReg();
-    unsigned AccumReg = MI->getOperand(3).getReg();
+    Register DestReg = MI->getOperand(0).getReg();
+    Register AccumReg = MI->getOperand(3).getReg();
 
     maybeKillChain(MI->getOperand(1), Idx, ActiveChains);
     maybeKillChain(MI->getOperand(2), Idx, ActiveChains);
@@ -663,7 +661,7 @@ void AArch64A57FPLoadBalancing::scanInstruction(
 
     LLVM_DEBUG(dbgs() << "Creating new chain for dest register "
                       << printReg(DestReg, TRI) << "\n");
-    auto G = llvm::make_unique<Chain>(MI, Idx, getColor(DestReg));
+    auto G = std::make_unique<Chain>(MI, Idx, getColor(DestReg));
     ActiveChains[DestReg] = G.get();
     AllChains.push_back(std::move(G));
 

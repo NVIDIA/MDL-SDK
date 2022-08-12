@@ -1,9 +1,8 @@
 //===- SSAUpdater.cpp - Unstructured SSA Update Tool ----------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -57,11 +56,15 @@ void SSAUpdater::Initialize(Type *Ty, StringRef Name) {
   else
     getAvailableVals(AV).clear();
   ProtoType = Ty;
-  ProtoName = Name;
+  ProtoName = std::string(Name);
 }
 
 bool SSAUpdater::HasValueForBlock(BasicBlock *BB) const {
   return getAvailableVals(AV).count(BB);
+}
+
+Value *SSAUpdater::FindValueForBlock(BasicBlock *BB) const {
+  return getAvailableVals(AV).lookup(BB);
 }
 
 void SSAUpdater::AddAvailableValue(BasicBlock *BB, Value *V) {
@@ -191,11 +194,6 @@ void SSAUpdater::RewriteUse(Use &U) {
   else
     V = GetValueInMiddleOfBlock(User->getParent());
 
-  // Notify that users of the existing value that it is being replaced.
-  Value *OldVal = U.get();
-  if (OldVal != V && OldVal->hasValueHandle())
-    ValueHandleBase::ValueIsRAUWd(OldVal, V);
-
   U.set(V);
 }
 
@@ -255,12 +253,10 @@ public:
     // We can get our predecessor info by walking the pred_iterator list,
     // but it is relatively slow.  If we already have PHI nodes in this
     // block, walk one of them to get the predecessor list instead.
-    if (PHINode *SomePhi = dyn_cast<PHINode>(BB->begin())) {
-      Preds->append(SomePhi->block_begin(), SomePhi->block_end());
-    } else {
-      for (pred_iterator PI = pred_begin(BB), E = pred_end(BB); PI != E; ++PI)
-        Preds->push_back(*PI);
-    }
+    if (PHINode *SomePhi = dyn_cast<PHINode>(BB->begin()))
+      append_range(*Preds, SomePhi->blocks());
+    else
+      append_range(*Preds, predecessors(BB));
   }
 
   /// GetUndefVal - Get an undefined value of the same type as the value
@@ -282,12 +278,6 @@ public:
   /// the specified predecessor block.
   static void AddPHIOperand(PHINode *PHI, Value *Val, BasicBlock *Pred) {
     PHI->addIncoming(Val, Pred);
-  }
-
-  /// InstrIsPHI - Check if an instruction is a PHI.
-  ///
-  static PHINode *InstrIsPHI(Instruction *I) {
-    return dyn_cast<PHINode>(I);
   }
 
   /// ValueIsPHI - Check if a value is a PHI.
@@ -345,8 +335,7 @@ LoadAndStorePromoter(ArrayRef<const Instruction *> Insts,
   SSA.Initialize(SomeVal->getType(), BaseName);
 }
 
-void LoadAndStorePromoter::
-run(const SmallVectorImpl<Instruction *> &Insts) const {
+void LoadAndStorePromoter::run(const SmallVectorImpl<Instruction *> &Insts) {
   // First step: bucket up uses of the alloca by the block they occur in.
   // This is important because we have to handle multiple defs/uses in a block
   // ourselves: SSAUpdater is purely for cross-block references.

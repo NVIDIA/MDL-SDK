@@ -83,10 +83,10 @@ public:
     /// Currently available MDL backends.
     enum Mdl_backend_kind {
         MB_CUDA_PTX,          ///< Generate CUDA PTX code.
-        MB_LLVM_IR,           ///< Generate LLVM IR (LLVM 7.0 compatible).
-        MB_GLSL,              ///< \if MDL_SOURCE_RELEASE Reserved \else Generate GLSL code \endif.
+        MB_LLVM_IR,           ///< Generate LLVM IR (LLVM 12.0 compatible).
+        MB_GLSL,              ///< Generate GLSL code.
         MB_NATIVE,            ///< Generate native code.
-        MB_HLSL,              ///< \if MDL_SOURCE_RELEASE Reserved \else Generate HLSL code \endif.
+        MB_HLSL,              ///< Generate HLSL code.
         MB_FORCE_32_BIT = 0xffffffffU //   Undocumented, for alignment only
     };
 
@@ -114,11 +114,10 @@ public:
         Size &rz) const = 0;
 };
 
-/*@}*/ // end group mi_neuray_mdl_misc
+/**@}*/ // end group mi_neuray_mdl_misc
 
 } // namespace neuraylib
 
 } // namespace mi
 
 #endif // MI_NEURAYLIB_IMDL_BACKEND_API_H
-

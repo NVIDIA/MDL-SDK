@@ -1,9 +1,8 @@
 //===- llvm/Support/KnownBits.h - Stores known zeros/ones -------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -16,6 +15,7 @@
 #define LLVM_SUPPORT_KNOWNBITS_H
 
 #include "llvm/ADT/APInt.h"
+#include "llvm/ADT/Optional.h"
 
 namespace llvm {
 
@@ -98,6 +98,12 @@ public:
   /// Returns true if this value is known to be non-negative.
   bool isNonNegative() const { return Zero.isSignBitSet(); }
 
+  /// Returns true if this value is known to be non-zero.
+  bool isNonZero() const { return !One.isNullValue(); }
+
+  /// Returns true if this value is known to be positive.
+  bool isStrictlyPositive() const { return Zero.isSignBitSet() && !One.isNullValue(); }
+
   /// Make this value negative.
   void makeNegative() {
     One.setSignBit();
@@ -108,29 +114,106 @@ public:
     Zero.setSignBit();
   }
 
-  /// Truncate the underlying known Zero and One bits. This is equivalent
-  /// to truncating the value we're tracking.
-  KnownBits trunc(unsigned BitWidth) {
+  /// Return the minimal unsigned value possible given these KnownBits.
+  APInt getMinValue() const {
+    // Assume that all bits that aren't known-ones are zeros.
+    return One;
+  }
+
+  /// Return the minimal signed value possible given these KnownBits.
+  APInt getSignedMinValue() const {
+    // Assume that all bits that aren't known-ones are zeros.
+    APInt Min = One;
+    // Sign bit is unknown.
+    if (Zero.isSignBitClear())
+      Min.setSignBit();
+    return Min;
+  }
+
+  /// Return the maximal unsigned value possible given these KnownBits.
+  APInt getMaxValue() const {
+    // Assume that all bits that aren't known-zeros are ones.
+    return ~Zero;
+  }
+
+  /// Return the maximal signed value possible given these KnownBits.
+  APInt getSignedMaxValue() const {
+    // Assume that all bits that aren't known-zeros are ones.
+    APInt Max = ~Zero;
+    // Sign bit is unknown.
+    if (One.isSignBitClear())
+      Max.clearSignBit();
+    return Max;
+  }
+
+  /// Return known bits for a truncation of the value we're tracking.
+  KnownBits trunc(unsigned BitWidth) const {
     return KnownBits(Zero.trunc(BitWidth), One.trunc(BitWidth));
   }
 
-  /// Zero extends the underlying known Zero and One bits. This is equivalent
-  /// to zero extending the value we're tracking.
-  KnownBits zext(unsigned BitWidth) {
+  /// Return known bits for an "any" extension of the value we're tracking,
+  /// where we don't know anything about the extended bits.
+  KnownBits anyext(unsigned BitWidth) const {
     return KnownBits(Zero.zext(BitWidth), One.zext(BitWidth));
   }
 
-  /// Sign extends the underlying known Zero and One bits. This is equivalent
-  /// to sign extending the value we're tracking.
-  KnownBits sext(unsigned BitWidth) {
+  /// Return known bits for a zero extension of the value we're tracking.
+  KnownBits zext(unsigned BitWidth) const {
+    unsigned OldBitWidth = getBitWidth();
+    APInt NewZero = Zero.zext(BitWidth);
+    NewZero.setBitsFrom(OldBitWidth);
+    return KnownBits(NewZero, One.zext(BitWidth));
+  }
+
+  /// Return known bits for a sign extension of the value we're tracking.
+  KnownBits sext(unsigned BitWidth) const {
     return KnownBits(Zero.sext(BitWidth), One.sext(BitWidth));
   }
 
-  /// Zero extends or truncates the underlying known Zero and One bits. This is
-  /// equivalent to zero extending or truncating the value we're tracking.
-  KnownBits zextOrTrunc(unsigned BitWidth) {
-    return KnownBits(Zero.zextOrTrunc(BitWidth), One.zextOrTrunc(BitWidth));
+  /// Return known bits for an "any" extension or truncation of the value we're
+  /// tracking.
+  KnownBits anyextOrTrunc(unsigned BitWidth) const {
+    if (BitWidth > getBitWidth())
+      return anyext(BitWidth);
+    if (BitWidth < getBitWidth())
+      return trunc(BitWidth);
+    return *this;
   }
+
+  /// Return known bits for a zero extension or truncation of the value we're
+  /// tracking.
+  KnownBits zextOrTrunc(unsigned BitWidth) const {
+    if (BitWidth > getBitWidth())
+      return zext(BitWidth);
+    if (BitWidth < getBitWidth())
+      return trunc(BitWidth);
+    return *this;
+  }
+
+  /// Return known bits for a sign extension or truncation of the value we're
+  /// tracking.
+  KnownBits sextOrTrunc(unsigned BitWidth) const {
+    if (BitWidth > getBitWidth())
+      return sext(BitWidth);
+    if (BitWidth < getBitWidth())
+      return trunc(BitWidth);
+    return *this;
+  }
+
+  /// Return known bits for a in-register sign extension of the value we're
+  /// tracking.
+  KnownBits sextInReg(unsigned SrcBitWidth) const;
+
+  /// Return a KnownBits with the extracted bits
+  /// [bitPosition,bitPosition+numBits).
+  KnownBits extractBits(unsigned NumBits, unsigned BitPosition) const {
+    return KnownBits(Zero.extractBits(NumBits, BitPosition),
+                     One.extractBits(NumBits, BitPosition));
+  }
+
+  /// Return KnownBits based on this, but updated given that the underlying
+  /// value is known to be greater than or equal to Val.
+  KnownBits makeGE(const APInt &Val) const;
 
   /// Returns the minimum number of trailing zero bits.
   unsigned countMinTrailingZeros() const {
@@ -192,10 +275,152 @@ public:
     return getBitWidth() - Zero.countPopulation();
   }
 
+  /// Create known bits from a known constant.
+  static KnownBits makeConstant(const APInt &C) {
+    return KnownBits(~C, C);
+  }
+
+  /// Compute known bits common to LHS and RHS.
+  static KnownBits commonBits(const KnownBits &LHS, const KnownBits &RHS) {
+    return KnownBits(LHS.Zero & RHS.Zero, LHS.One & RHS.One);
+  }
+
+  /// Compute known bits resulting from adding LHS, RHS and a 1-bit Carry.
+  static KnownBits computeForAddCarry(
+      const KnownBits &LHS, const KnownBits &RHS, const KnownBits &Carry);
+
   /// Compute known bits resulting from adding LHS and RHS.
   static KnownBits computeForAddSub(bool Add, bool NSW, const KnownBits &LHS,
                                     KnownBits RHS);
+
+  /// Compute known bits resulting from multiplying LHS and RHS.
+  static KnownBits computeForMul(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Compute known bits for udiv(LHS, RHS).
+  static KnownBits udiv(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Compute known bits for urem(LHS, RHS).
+  static KnownBits urem(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Compute known bits for srem(LHS, RHS).
+  static KnownBits srem(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Compute known bits for umax(LHS, RHS).
+  static KnownBits umax(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Compute known bits for umin(LHS, RHS).
+  static KnownBits umin(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Compute known bits for smax(LHS, RHS).
+  static KnownBits smax(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Compute known bits for smin(LHS, RHS).
+  static KnownBits smin(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Compute known bits for shl(LHS, RHS).
+  /// NOTE: RHS (shift amount) bitwidth doesn't need to be the same as LHS.
+  static KnownBits shl(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Compute known bits for lshr(LHS, RHS).
+  /// NOTE: RHS (shift amount) bitwidth doesn't need to be the same as LHS.
+  static KnownBits lshr(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Compute known bits for ashr(LHS, RHS).
+  /// NOTE: RHS (shift amount) bitwidth doesn't need to be the same as LHS.
+  static KnownBits ashr(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Determine if these known bits always give the same ICMP_EQ result.
+  static Optional<bool> eq(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Determine if these known bits always give the same ICMP_NE result.
+  static Optional<bool> ne(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Determine if these known bits always give the same ICMP_UGT result.
+  static Optional<bool> ugt(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Determine if these known bits always give the same ICMP_UGE result.
+  static Optional<bool> uge(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Determine if these known bits always give the same ICMP_ULT result.
+  static Optional<bool> ult(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Determine if these known bits always give the same ICMP_ULE result.
+  static Optional<bool> ule(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Determine if these known bits always give the same ICMP_SGT result.
+  static Optional<bool> sgt(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Determine if these known bits always give the same ICMP_SGE result.
+  static Optional<bool> sge(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Determine if these known bits always give the same ICMP_SLT result.
+  static Optional<bool> slt(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Determine if these known bits always give the same ICMP_SLE result.
+  static Optional<bool> sle(const KnownBits &LHS, const KnownBits &RHS);
+
+  /// Insert the bits from a smaller known bits starting at bitPosition.
+  void insertBits(const KnownBits &SubBits, unsigned BitPosition) {
+    Zero.insertBits(SubBits.Zero, BitPosition);
+    One.insertBits(SubBits.One, BitPosition);
+  }
+
+  /// Return a subset of the known bits from [bitPosition,bitPosition+numBits).
+  KnownBits extractBits(unsigned NumBits, unsigned BitPosition) {
+    return KnownBits(Zero.extractBits(NumBits, BitPosition),
+                     One.extractBits(NumBits, BitPosition));
+  }
+
+  /// Update known bits based on ANDing with RHS.
+  KnownBits &operator&=(const KnownBits &RHS);
+
+  /// Update known bits based on ORing with RHS.
+  KnownBits &operator|=(const KnownBits &RHS);
+
+  /// Update known bits based on XORing with RHS.
+  KnownBits &operator^=(const KnownBits &RHS);
+
+  /// Compute known bits for the absolute value.
+  KnownBits abs(bool IntMinIsPoison = false) const;
+
+  KnownBits byteSwap() {
+    return KnownBits(Zero.byteSwap(), One.byteSwap());
+  }
+
+  KnownBits reverseBits() {
+    return KnownBits(Zero.reverseBits(), One.reverseBits());
+  }
 };
+
+inline KnownBits operator&(KnownBits LHS, const KnownBits &RHS) {
+  LHS &= RHS;
+  return LHS;
+}
+
+inline KnownBits operator&(const KnownBits &LHS, KnownBits &&RHS) {
+  RHS &= LHS;
+  return std::move(RHS);
+}
+
+inline KnownBits operator|(KnownBits LHS, const KnownBits &RHS) {
+  LHS |= RHS;
+  return LHS;
+}
+
+inline KnownBits operator|(const KnownBits &LHS, KnownBits &&RHS) {
+  RHS |= LHS;
+  return std::move(RHS);
+}
+
+inline KnownBits operator^(KnownBits LHS, const KnownBits &RHS) {
+  LHS ^= RHS;
+  return LHS;
+}
+
+inline KnownBits operator^(const KnownBits &LHS, KnownBits &&RHS) {
+  RHS ^= LHS;
+  return std::move(RHS);
+}
 
 } // end namespace llvm
 

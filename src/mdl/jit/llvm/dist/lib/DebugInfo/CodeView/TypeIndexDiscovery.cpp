@@ -1,13 +1,13 @@
 //===- TypeIndexDiscovery.cpp -----------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-#include "llvm/DebugInfo/CodeView/TypeIndexDiscovery.h"
 
+#include "llvm/DebugInfo/CodeView/TypeIndexDiscovery.h"
+#include "llvm/DebugInfo/CodeView/TypeRecord.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Support/Endian.h"
 
@@ -364,13 +364,15 @@ static bool discoverTypeIndices(ArrayRef<uint8_t> Content, SymbolKind Kind,
   // values.  One idea is to define some structures representing these types
   // that would allow the use of offsetof().
   switch (Kind) {
-  case SymbolKind::S_GPROC32:
-  case SymbolKind::S_LPROC32:
   case SymbolKind::S_GPROC32_ID:
   case SymbolKind::S_LPROC32_ID:
   case SymbolKind::S_LPROC32_DPC:
   case SymbolKind::S_LPROC32_DPC_ID:
     Refs.push_back({TiRefKind::IndexRef, 24, 1}); // LF_FUNC_ID
+    break;
+  case SymbolKind::S_GPROC32:
+  case SymbolKind::S_LPROC32:
+    Refs.push_back({TiRefKind::TypeRef, 24, 1}); // Type
     break;
   case SymbolKind::S_UDT:
     Refs.push_back({TiRefKind::TypeRef, 0, 1}); // UDT

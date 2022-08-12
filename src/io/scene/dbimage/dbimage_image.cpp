@@ -62,7 +62,7 @@ std::string g_empty_str;
 std::string hash_to_string( const mi::base::Uuid& hash)
 {
     char buffer[35];
-    snprintf( &buffer[0], sizeof( buffer), "0x%08x%08x%08x%08x",
+    snprintf( buffer, sizeof( buffer), "0x%08x%08x%08x%08x",
               hash.m_id1, hash.m_id2, hash.m_id3, hash.m_id4);
     return buffer;
 }
@@ -369,7 +369,7 @@ Uv_to_id::Uv_to_id( mi::Sint32 min_u, mi::Sint32 max_u, mi::Sint32 min_v, mi::Si
     m_count_v = max_v - min_v + 1;
     m_min_u   = min_u;
     m_min_v   = min_v;
-    m_ids.resize( m_count_u * m_count_v, m_count_u * m_count_v == 1 ? 0 : ~0u);
+    m_ids.resize( (mi::Size)m_count_u * m_count_v, (mi::Size)m_count_u * m_count_v == 1 ? 0 : ~0u);
 }
 
 mi::Uint32 Uv_to_id::get( mi::Sint32 u, mi::Sint32 v) const
@@ -576,7 +576,7 @@ mi::Sint32 Image::reset_image_set(
             filenames.m_container_membername = image_set->get_container_membername( f, i);
             if( !filenames.m_container_membername.empty())
                 filenames.m_resolved_container_membername
-                    = tmp_resolved_container_filename + ":" + filenames.m_container_membername;
+                    = tmp_resolved_container_filename + ':' + filenames.m_container_membername;
         }
 
         tmp_frames.push_back( std::move( frame));
@@ -918,7 +918,7 @@ SERIAL::Serializable* Image::deserialize( SERIAL::Deserializer* deserializer)
                 uvfn.m_container_membername
                     = HAL::Ospath::convert_to_platform_specific_path( uvfn.m_container_membername);
                 uvfn.m_resolved_container_membername = m_resolved_container_filename.empty()
-                    ? "" : m_resolved_container_filename + ":" + uvfn.m_container_membername;
+                    ? "" : m_resolved_container_filename + ':' + uvfn.m_container_membername;
         }
     }
 
@@ -935,17 +935,17 @@ SERIAL::Serializable* Image::deserialize( SERIAL::Deserializer* deserializer)
 
             // Update m_resolved_container_membername based on m_resolved_container_filename above.
             uvfn.m_resolved_container_membername = m_resolved_container_filename.empty()
-                ? "" : m_resolved_container_filename + ":" + uvfn.m_container_membername;
+                ? "" : m_resolved_container_filename + ':' + uvfn.m_container_membername;
 
             // Re-resolve m_resolved_filename
             if( !uvfn.m_resolved_filename.empty()
                     && !DISK::is_file( uvfn.m_resolved_filename.c_str())) {
                 // TODO Fix this for files with uvtile or frame markers
                 uvfn.m_resolved_filename
-                    = path_module->search( PATH::MDL, m_original_filename.c_str());
+                    = path_module->search( PATH::MDL, m_original_filename);
                 if( uvfn.m_resolved_filename.empty())
                     uvfn.m_resolved_filename
-                        = path_module->search( PATH::RESOURCE, m_original_filename.c_str());
+                        = path_module->search( PATH::RESOURCE, m_original_filename);
             }
         }
 
@@ -1287,7 +1287,7 @@ Image_set* Image::resolve_filename( const std::string& filename, const char* sel
     // Handle plain files and containers
     if( (mode_index == 0) && (frames_index == 0)) {
 
-        std::string resolved_filename = path_module->search( PATH::RESOURCE, filename.c_str());
+        std::string resolved_filename = path_module->search( PATH::RESOURCE, filename);
         if( !resolved_filename.empty())
             return new File_image_set( filename, selector, resolved_filename);
 
@@ -1302,7 +1302,7 @@ Image_set* Image::resolve_filename( const std::string& filename, const char* sel
             std::string archive_path = filename.substr( 0, p + 4);
             std::string archive_name = HAL::Ospath::basename( archive_path);
             std::string resolved_archive_filename
-                = path_module->search( PATH::MDL, archive_name.c_str());
+                = path_module->search( PATH::MDL, archive_name);
             std::string member_name = filename.substr( p + 5);
             if( resolved_archive_filename.empty())
                 return nullptr;
@@ -1315,7 +1315,7 @@ Image_set* Image::resolve_filename( const std::string& filename, const char* sel
             // Try to resolve relative MDLE files via the MDL search path. Member name is not
             // checked. No support for uvtiles nor animated textures.
             std::string resolved_mdle_path
-                = path_module->search( PATH::MDL, mdle_path.c_str());
+                = path_module->search( PATH::MDL, mdle_path);
             if( resolved_mdle_path.empty())
                 return nullptr;
             std::string member_name = filename.substr( p + 6);
@@ -1740,8 +1740,8 @@ void Image_impl::dump() const
             mi::base::Handle<const mi::neuraylib::ICanvas> canvas( uvtile.m_mipmap->get_level( 0));
             s << "    Pixel type: " << canvas->get_type() << std::endl;
             s << "    Pixels: " << canvas->get_resolution_x()
-              << "x" << canvas->get_resolution_y()
-              << "x" << canvas->get_layers_size() << std::endl;
+              << 'x' << canvas->get_resolution_y()
+              << 'x' << canvas->get_layers_size() << std::endl;
             s << "    Gamma: " << canvas->get_gamma() << std::endl;
         }
 

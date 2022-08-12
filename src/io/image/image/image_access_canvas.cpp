@@ -141,15 +141,15 @@ bool Access_canvas::read_rect(
 
     // Compute the pointer to the lower left corner of the rectangle that falls into this
     // tile, and stride per row (canvas, source).
-    const mi::Difference source_stride = m_canvas_width * canvas_bytes_per_pixel;
+    const mi::Difference source_stride = (mi::Difference)m_canvas_width * canvas_bytes_per_pixel;
     mi::base::Handle<const mi::neuraylib::ITile> tile( m_canvas->get_tile( canvas_layer));
     const mi::Uint8* tile_data = static_cast<const mi::Uint8*>( tile->get_data());
     const mi::Uint8* source =
-            tile_data + canvas_y * source_stride + canvas_x * canvas_bytes_per_pixel;
+            tile_data + canvas_y * source_stride + (mi::Difference)canvas_x * canvas_bytes_per_pixel;
 
     // Compute the pointer to the lower left corner of the rectangle that falls into this
     // tile, and stride per row (buffer, dest).
-    mi::Difference dest_stride = width * buffer_bytes_per_pixel + buffer_padding;
+    mi::Difference dest_stride = (mi::Difference)width * buffer_bytes_per_pixel + buffer_padding;
     mi::Uint8* dest = buffer;
     if( buffer_topdown) {
         dest += (height - 1) * dest_stride;
@@ -284,11 +284,11 @@ bool Edit_canvas::read_rect(
     mi::base::Handle<const mi::neuraylib::ITile> tile( m_canvas->get_tile( canvas_layer));
     const mi::Uint8* const tile_data = static_cast<const mi::Uint8*>( tile->get_data());
     const mi::Uint8* const source =
-            tile_data + canvas_y * source_stride + canvas_x * canvas_bytes_per_pixel;
+            tile_data + canvas_y * source_stride + (mi::Difference)canvas_x * canvas_bytes_per_pixel;
 
     // Compute the pointer to the lower left corner of the rectangle that falls into this
     // tile, and stride per row (buffer, dest).
-    mi::Difference dest_stride = width * buffer_bytes_per_pixel + buffer_padding;
+    mi::Difference dest_stride = (mi::Difference)width * buffer_bytes_per_pixel + buffer_padding;
     mi::Uint8* dest = buffer;
     if( buffer_topdown) {
         dest += (height - 1) * dest_stride;
@@ -337,7 +337,7 @@ bool Edit_canvas::write_rect(
     mi::base::Handle<mi::neuraylib::ITile> tile( m_canvas->get_tile( canvas_layer));
     mi::Uint8* const tile_data = static_cast<mi::Uint8*>( tile->get_data());
     mi::Uint8* const dest =
-            tile_data + canvas_y * dest_stride + canvas_x * canvas_bytes_per_pixel;
+            tile_data + canvas_y * dest_stride + (mi::Difference)canvas_x * canvas_bytes_per_pixel;
 
     // Compute the pointer to the lower left corner of the rectangle that falls into this
     // tile, and stride per row (buffer, source).

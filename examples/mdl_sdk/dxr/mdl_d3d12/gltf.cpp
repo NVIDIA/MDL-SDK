@@ -27,6 +27,9 @@
  *****************************************************************************/
 
 #include "gltf.h"
+#include "gltf_nv_materials_mdl.h"
+#include "mdl_sdk.h"
+
 #include <fx/gltf.h>
 
 namespace mi { namespace examples { namespace mdl_d3d12
@@ -689,11 +692,11 @@ void add_volume(
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 
-bool Loader_gltf::load(const std::string& file_name, const Scene_options& options)
+bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_options& options)
 {
-    m_scene = Scene();
-    m_scene.root.kind = Node::Kind::Empty;
-    m_scene.root.index = static_cast<size_t>(-1);
+    m_scene = std::make_unique<IScene_loader::Scene>();
+    m_scene->root.kind = Node::Kind::Empty;
+    m_scene->root.index = static_cast<size_t>(-1);
 
     // extend quotas to 2 GB
     fx::gltf::ReadQuotas quotas;
@@ -940,7 +943,7 @@ bool Loader_gltf::load(const std::string& file_name, const Scene_options& option
             mesh.primitives.push_back(std::move(part));
         }
 
-            m_scene.meshes.push_back(std::move(mesh));
+            m_scene->meshes.push_back(std::move(mesh));
     }
 
     // process all cameras
@@ -956,11 +959,49 @@ bool Loader_gltf::load(const std::string& file_name, const Scene_options& option
             cam.vertical_fov = c.perspective.yfov;
             cam.near_plane_distance = c.perspective.znear > 0.0f ? c.perspective.znear : 0.01f;
             cam.far_plane_distance = c.perspective.zfar > 0.0f ? c.perspective.zfar : 1000.0f;
-            m_scene.cameras.push_back(std::move(cam));
+            m_scene->cameras.push_back(std::move(cam));
         }
     }
 
     // process all materials
+
+    // read MDL materials extension, scene level
+    if (fx::gltf::read_extension(doc, m_scene->ext_NV_materials_mdl))
+    {
+        log_info("found `NV_material_mdl` extension in document.");
+
+        // get the directory of the glTF file
+        std::string scene_directory = file_name;
+        std::replace(scene_directory.begin(), scene_directory.end(), '\\', '/');
+        size_t last_slash = scene_directory.rfind('/');
+        scene_directory = scene_directory.substr(0, last_slash);
+
+        for (const auto& gltf_image : doc.images)
+        {
+            m_scene->resources.push_back({});
+            std::string& resource_db_name = m_scene->resources.back().resource_db_name;
+
+            // image referenced by URI
+            if (!gltf_image.uri.empty())
+            {
+                // TODO absolute path computation?
+                std::string file_path = scene_directory + "/" + gltf_image.uri;
+                resource_db_name = "mdldxr::" + file_path + "_image";
+
+                // if the image is not loaded yet, do so
+                mi::base::Handle<const mi::neuraylib::IImage> image(
+                    sdk.get_transaction().access<mi::neuraylib::IImage>(resource_db_name.c_str()));
+                if (!image)
+                {
+                    mi::base::Handle<mi::neuraylib::IImage> new_image(
+                        sdk.get_transaction().create<mi::neuraylib::IImage>("Image"));
+                    new_image->reset_file(file_path.c_str());
+                    sdk.get_transaction().store(new_image.get(), resource_db_name.c_str());
+                }
+            }
+        }
+    }
+
     for (const auto& m : doc.materials)
     {
         Material mat;
@@ -1022,6 +1063,12 @@ bool Loader_gltf::load(const std::string& file_name, const Scene_options& option
             mat.emissive_strength.emissive_strength = m.materialEmissiveStrength.emissiveStrength;
         }
 
+        // read MDL materials extension, material level
+        if (fx::gltf::read_extension(m, mat.ext_NV_materials_mdl))
+        {
+            log_info("found `NV_material_mdl` extension on material: " + m.name);
+        }
+
         mat.normal_texture = get_texture(doc, m.normalTexture);
         mat.normal_scale_factor = m.normalTexture.scale;
 
@@ -1054,7 +1101,7 @@ bool Loader_gltf::load(const std::string& file_name, const Scene_options& option
         // physically plausible
         // mat.single_sided = !m.doubleSided;
 
-        m_scene.materials.push_back(std::move(mat));
+        m_scene->materials.push_back(std::move(mat));
     }
 
     // process the scene graph
@@ -1070,11 +1117,11 @@ bool Loader_gltf::load(const std::string& file_name, const Scene_options& option
             if (src_child.mesh >= 0 || src_child.mesh < doc.meshes.size())
             {
                 node.index = src_child.mesh;
-                bool empty = m_scene.meshes[node.index].primitives.size() == 0;
+                bool empty = m_scene->meshes[node.index].primitives.size() == 0;
 
                 node.kind = empty ? Node::Kind::Empty : Node::Kind::Mesh;
-                if (m_scene.meshes[node.index].name.empty())
-                    m_scene.meshes[node.index].name = node.name +
+                if (m_scene->meshes[node.index].name.empty())
+                    m_scene->meshes[node.index].name = node.name +
                         (empty ? "_Node" : "_Mesh");
             }
 
@@ -1082,8 +1129,8 @@ bool Loader_gltf::load(const std::string& file_name, const Scene_options& option
             {
                 node.kind = Node::Kind::Camera;
                 node.index = src_child.camera;
-                if (m_scene.cameras[node.index].name.empty())
-                    m_scene.cameras[node.index].name = node.name + "_Camera";
+                if (m_scene->cameras[node.index].name.empty())
+                    m_scene->cameras[node.index].name = node.name + "_Camera";
             }
 
             // read (non-standardized) scene data from the extra fields
@@ -1098,7 +1145,7 @@ bool Loader_gltf::load(const std::string& file_name, const Scene_options& option
 
     auto s = doc.scenes[doc.scene]; // default scene
     for (const auto& n : s.nodes)
-        visit(m_scene.root, doc.nodes[n]);
+        visit(m_scene->root, doc.nodes[n]);
 
     return true;
 }
@@ -1107,12 +1154,12 @@ bool Loader_gltf::load(const std::string& file_name, const Scene_options& option
 
 void Loader_gltf::replace_all_materials(const std::string & mdl_name)
 {
-    m_scene.materials.clear();
+    m_scene->materials.clear();
 
-    m_scene.materials.emplace_back(IScene_loader::Material());
-    m_scene.materials.back().name = mdl_name;
+    m_scene->materials.emplace_back(IScene_loader::Material());
+    m_scene->materials.back().name = mdl_name;
 
-    for (auto& m : m_scene.meshes)
+    for (auto& m : m_scene->meshes)
         for (auto& p : m.primitives)
             p.material = 0;
 }

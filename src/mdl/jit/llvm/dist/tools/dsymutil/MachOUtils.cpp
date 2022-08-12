@@ -1,9 +1,8 @@
 //===-- MachOUtils.cpp - Mach-o specific helpers for dsymutil  ------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -11,7 +10,7 @@
 #include "BinaryHolder.h"
 #include "DebugMap.h"
 #include "LinkUtils.h"
-#include "NonRelocatableStringpool.h"
+#include "llvm/CodeGen/NonRelocatableStringpool.h"
 #include "llvm/MC/MCAsmLayout.h"
 #include "llvm/MC/MCMachObjectWriter.h"
 #include "llvm/MC/MCObjectStreamer.h"
@@ -36,7 +35,7 @@ llvm::Error ArchAndFile::createTempFile() {
   if (!T)
     return T.takeError();
 
-  File = llvm::Optional<sys::fs::TempFile>(std::move(*T));
+  File = std::make_unique<sys::fs::TempFile>(std::move(*T));
   return Error::success();
 }
 
@@ -51,7 +50,7 @@ ArchAndFile::~ArchAndFile() {
 std::string getArchName(StringRef Arch) {
   if (Arch.startswith("thumb"))
     return (llvm::Twine("arm") + Arch.drop_front(5)).str();
-  return Arch;
+  return std::string(Arch);
 }
 
 static bool runLipo(StringRef SDKPath, SmallVectorImpl<StringRef> &Args) {
@@ -164,7 +163,15 @@ static bool transferSymbol(NListTy NList, bool IsLittleEndian,
   if ((NList.n_type & MachO::N_TYPE) == MachO::N_UNDF)
     return false;
 
+  // Do not transfer N_AST symbols as their content is copied into a section of
+  // the Mach-O companion file.
+  if (NList.n_type == MachO::N_AST)
+    return false;
+
   StringRef Name = StringRef(Strings.begin() + NList.n_strx);
+
+  // An N_SO with a filename opens a debugging scope and another one without a
+  // name closes it. Don't transfer anything in the debugging scope.
   if (InDebugNote) {
     InDebugNote =
         (NList.n_type != MachO::N_SO) || (!Name.empty() && Name[0] != '\0');
@@ -232,27 +239,36 @@ getSection(const object::MachOObjectFile &Obj,
 // Transfer \a Segment from \a Obj to the output file. This calls into \a Writer
 // to write these load commands directly in the output file at the current
 // position.
+//
 // The function also tries to find a hole in the address map to fit the __DWARF
 // segment of \a DwarfSegmentSize size. \a EndAddress is updated to point at the
 // highest segment address.
+//
 // When the __LINKEDIT segment is transferred, its offset and size are set resp.
 // to \a LinkeditOffset and \a LinkeditSize.
+//
+// When the eh_frame section is transferred, its offset and size are set resp.
+// to \a EHFrameOffset and \a EHFrameSize.
 template <typename SegmentTy>
 static void transferSegmentAndSections(
     const object::MachOObjectFile::LoadCommandInfo &LCI, SegmentTy Segment,
     const object::MachOObjectFile &Obj, MachObjectWriter &Writer,
-    uint64_t LinkeditOffset, uint64_t LinkeditSize, uint64_t DwarfSegmentSize,
-    uint64_t &GapForDwarf, uint64_t &EndAddress) {
+    uint64_t LinkeditOffset, uint64_t LinkeditSize, uint64_t EHFrameOffset,
+    uint64_t EHFrameSize, uint64_t DwarfSegmentSize, uint64_t &GapForDwarf,
+    uint64_t &EndAddress) {
   if (StringRef("__DWARF") == Segment.segname)
     return;
 
-  Segment.fileoff = Segment.filesize = 0;
-
-  if (StringRef("__LINKEDIT") == Segment.segname) {
+  if (StringRef("__TEXT") == Segment.segname && EHFrameSize > 0) {
+    Segment.fileoff = EHFrameOffset;
+    Segment.filesize = EHFrameSize;
+  } else if (StringRef("__LINKEDIT") == Segment.segname) {
     Segment.fileoff = LinkeditOffset;
     Segment.filesize = LinkeditSize;
     // Resize vmsize by rounding to the page size.
     Segment.vmsize = alignTo(LinkeditSize, 0x1000);
+  } else {
+    Segment.fileoff = Segment.filesize = 0;
   }
 
   // Check if the end address of the last segment and our current
@@ -273,7 +289,12 @@ static void transferSegmentAndSections(
   Writer.W.OS.write(reinterpret_cast<char *>(&Segment), sizeof(Segment));
   for (unsigned i = 0; i < nsects; ++i) {
     auto Sect = getSection(Obj, Segment, LCI, i);
-    Sect.offset = Sect.reloff = Sect.nreloc = 0;
+    if (StringRef("__eh_frame") == Sect.sectname) {
+      Sect.offset = EHFrameOffset;
+      Sect.reloff = Sect.nreloc = 0;
+    } else {
+      Sect.offset = Sect.reloff = Sect.nreloc = 0;
+    }
     if (Obj.isLittleEndian() != sys::IsLittleEndianHost)
       MachO::swapStruct(Sect);
     Writer.W.OS.write(reinterpret_cast<char *>(&Sect), sizeof(Sect));
@@ -333,8 +354,9 @@ static unsigned segmentLoadCommandSize(bool Is64Bit, unsigned NumSections) {
 // Stream a dSYM companion binary file corresponding to the binary referenced
 // by \a DM to \a OutFile. The passed \a MS MCStreamer is setup to write to
 // \a OutFile and it must be using a MachObjectWriter object to do so.
-bool generateDsymCompanion(const DebugMap &DM, MCStreamer &MS,
-                           raw_fd_ostream &OutFile) {
+bool generateDsymCompanion(llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> VFS,
+                           const DebugMap &DM, SymbolMapTranslator &Translator,
+                           MCStreamer &MS, raw_fd_ostream &OutFile) {
   auto &ObjectStreamer = static_cast<MCObjectStreamer &>(MS);
   MCAssembler &MCAsm = ObjectStreamer.getAssembler();
   auto &Writer = static_cast<MachObjectWriter &>(MCAsm.getWriter());
@@ -344,7 +366,7 @@ bool generateDsymCompanion(const DebugMap &DM, MCStreamer &MS,
   MCAsmLayout Layout(MCAsm);
   MCAsm.layout(Layout);
 
-  BinaryHolder InputBinaryHolder(false);
+  BinaryHolder InputBinaryHolder(VFS, false);
 
   auto ObjectEntry = InputBinaryHolder.getObjectEntry(DM.getBinaryPath());
   if (!ObjectEntry) {
@@ -368,25 +390,37 @@ bool generateDsymCompanion(const DebugMap &DM, MCStreamer &MS,
   bool Is64Bit = Writer.is64Bit();
   MachO::symtab_command SymtabCmd = InputBinary.getSymtabLoadCommand();
 
-  // Get UUID.
-  MachO::uuid_command UUIDCmd;
-  memset(&UUIDCmd, 0, sizeof(UUIDCmd));
-  UUIDCmd.cmd = MachO::LC_UUID;
-  UUIDCmd.cmdsize = sizeof(MachO::uuid_command);
-  for (auto &LCI : InputBinary.load_commands()) {
-    if (LCI.C.cmd == MachO::LC_UUID) {
-      UUIDCmd = InputBinary.getUuidCommand(LCI);
-      break;
-    }
-  }
-
   // Compute the number of load commands we will need.
   unsigned LoadCommandSize = 0;
   unsigned NumLoadCommands = 0;
-  // We will copy the UUID if there is one.
-  if (UUIDCmd.cmd != 0) {
-    ++NumLoadCommands;
-    LoadCommandSize += sizeof(MachO::uuid_command);
+
+  // Get LC_UUID and LC_BUILD_VERSION.
+  MachO::uuid_command UUIDCmd;
+  SmallVector<MachO::build_version_command, 2> BuildVersionCmd;
+  memset(&UUIDCmd, 0, sizeof(UUIDCmd));
+  for (auto &LCI : InputBinary.load_commands()) {
+    switch (LCI.C.cmd) {
+    case MachO::LC_UUID:
+      if (UUIDCmd.cmd)
+        return error("Binary contains more than one UUID");
+      UUIDCmd = InputBinary.getUuidCommand(LCI);
+      ++NumLoadCommands;
+      LoadCommandSize += sizeof(UUIDCmd);
+      break;
+   case MachO::LC_BUILD_VERSION: {
+      MachO::build_version_command Cmd;
+      memset(&Cmd, 0, sizeof(Cmd));
+      Cmd = InputBinary.getBuildVersionLoadCommand(LCI);
+      ++NumLoadCommands;
+      LoadCommandSize += sizeof(Cmd);
+      // LLDB doesn't care about the build tools for now.
+      Cmd.ntools = 0;
+      BuildVersionCmd.push_back(Cmd);
+      break;
+    }
+    default:
+      break;
+    }
   }
 
   // If we have a valid symtab to copy, do it.
@@ -395,6 +429,27 @@ bool generateDsymCompanion(const DebugMap &DM, MCStreamer &MS,
   if (ShouldEmitSymtab) {
     LoadCommandSize += sizeof(MachO::symtab_command);
     ++NumLoadCommands;
+  }
+
+  // If we have a valid eh_frame to copy, do it.
+  uint64_t EHFrameSize = 0;
+  StringRef EHFrameData;
+  for (const object::SectionRef &Section : InputBinary.sections()) {
+    Expected<StringRef> NameOrErr = Section.getName();
+    if (!NameOrErr) {
+      consumeError(NameOrErr.takeError());
+      continue;
+    }
+    StringRef SectionName = *NameOrErr;
+    SectionName = SectionName.substr(SectionName.find_first_not_of("._"));
+    if (SectionName == "eh_frame") {
+      if (Expected<StringRef> ContentsOrErr = Section.getContents()) {
+        EHFrameData = *ContentsOrErr;
+        EHFrameSize = Section.getSize();
+      } else {
+        consumeError(ContentsOrErr.takeError());
+      }
+    }
   }
 
   unsigned HeaderSize =
@@ -431,7 +486,12 @@ bool generateDsymCompanion(const DebugMap &DM, MCStreamer &MS,
   }
 
   SmallString<0> NewSymtab;
-  NonRelocatableStringpool NewStrings;
+  std::function<StringRef(StringRef)> TranslationLambda =
+      Translator ? [&](StringRef Input) { return Translator(Input); }
+                 : static_cast<std::function<StringRef(StringRef)>>(nullptr);
+  // Legacy dsymutil puts an empty string at the start of the line table.
+  // thus we set NonRelocatableStringpool(,PutEmptyString=true)
+  NonRelocatableStringpool NewStrings(TranslationLambda, true);
   unsigned NListSize = Is64Bit ? sizeof(MachO::nlist_64) : sizeof(MachO::nlist);
   unsigned NumSyms = 0;
   uint64_t NewStringsSize = 0;
@@ -452,9 +512,17 @@ bool generateDsymCompanion(const DebugMap &DM, MCStreamer &MS,
   assert(OutFile.tell() == HeaderSize);
   if (UUIDCmd.cmd != 0) {
     Writer.W.write<uint32_t>(UUIDCmd.cmd);
-    Writer.W.write<uint32_t>(UUIDCmd.cmdsize);
+    Writer.W.write<uint32_t>(sizeof(UUIDCmd));
     OutFile.write(reinterpret_cast<const char *>(UUIDCmd.uuid), 16);
     assert(OutFile.tell() == HeaderSize + sizeof(UUIDCmd));
+  }
+  for (auto Cmd : BuildVersionCmd) {
+    Writer.W.write<uint32_t>(Cmd.cmd);
+    Writer.W.write<uint32_t>(sizeof(Cmd));
+    Writer.W.write<uint32_t>(Cmd.platform);
+    Writer.W.write<uint32_t>(Cmd.minos);
+    Writer.W.write<uint32_t>(Cmd.sdk);
+    Writer.W.write<uint32_t>(Cmd.ntools);
   }
 
   assert(SymtabCmd.cmd && "No symbol table.");
@@ -463,7 +531,10 @@ bool generateDsymCompanion(const DebugMap &DM, MCStreamer &MS,
     Writer.writeSymtabLoadCommand(SymtabStart, NumSyms, StringStart,
                                   NewStringsSize);
 
-  uint64_t DwarfSegmentStart = StringStart + NewStringsSize;
+  uint64_t EHFrameStart = StringStart + NewStringsSize;
+  EHFrameStart = alignTo(EHFrameStart, 0x1000);
+
+  uint64_t DwarfSegmentStart = EHFrameStart + EHFrameSize;
   DwarfSegmentStart = alignTo(DwarfSegmentStart, 0x1000);
 
   // Write the load commands for the segments and sections we 'import' from
@@ -472,15 +543,15 @@ bool generateDsymCompanion(const DebugMap &DM, MCStreamer &MS,
   uint64_t GapForDwarf = UINT64_MAX;
   for (auto &LCI : InputBinary.load_commands()) {
     if (LCI.C.cmd == MachO::LC_SEGMENT)
-      transferSegmentAndSections(LCI, InputBinary.getSegmentLoadCommand(LCI),
-                                 InputBinary, Writer, SymtabStart,
-                                 StringStart + NewStringsSize - SymtabStart,
-                                 DwarfSegmentSize, GapForDwarf, EndAddress);
+      transferSegmentAndSections(
+          LCI, InputBinary.getSegmentLoadCommand(LCI), InputBinary, Writer,
+          SymtabStart, StringStart + NewStringsSize - SymtabStart, EHFrameStart,
+          EHFrameSize, DwarfSegmentSize, GapForDwarf, EndAddress);
     else if (LCI.C.cmd == MachO::LC_SEGMENT_64)
-      transferSegmentAndSections(LCI, InputBinary.getSegment64LoadCommand(LCI),
-                                 InputBinary, Writer, SymtabStart,
-                                 StringStart + NewStringsSize - SymtabStart,
-                                 DwarfSegmentSize, GapForDwarf, EndAddress);
+      transferSegmentAndSections(
+          LCI, InputBinary.getSegment64LoadCommand(LCI), InputBinary, Writer,
+          SymtabStart, StringStart + NewStringsSize - SymtabStart, EHFrameStart,
+          EHFrameSize, DwarfSegmentSize, GapForDwarf, EndAddress);
   }
 
   uint64_t DwarfVMAddr = alignTo(EndAddress, 0x1000);
@@ -514,19 +585,26 @@ bool generateDsymCompanion(const DebugMap &DM, MCStreamer &MS,
     // Reproduce that behavior for now (there is corresponding code in
     // transferSymbol).
     OutFile << '\0';
-    std::vector<DwarfStringPoolEntryRef> Strings = NewStrings.getEntries();
+    std::vector<DwarfStringPoolEntryRef> Strings =
+        NewStrings.getEntriesForEmission();
     for (auto EntryRef : Strings) {
-      if (EntryRef.getIndex() == -1U)
-        break;
       OutFile.write(EntryRef.getString().data(),
                     EntryRef.getString().size() + 1);
     }
   }
-
   assert(OutFile.tell() == StringStart + NewStringsSize);
 
+  // Pad till the EH frame start.
+  OutFile.write_zeros(EHFrameStart - (StringStart + NewStringsSize));
+  assert(OutFile.tell() == EHFrameStart);
+
+  // Transfer eh_frame.
+  if (EHFrameSize > 0)
+    OutFile << EHFrameData;
+  assert(OutFile.tell() == EHFrameStart + EHFrameSize);
+
   // Pad till the Dwarf segment start.
-  OutFile.write_zeros(DwarfSegmentStart - (StringStart + NewStringsSize));
+  OutFile.write_zeros(DwarfSegmentStart - (EHFrameStart + EHFrameSize));
   assert(OutFile.tell() == DwarfSegmentStart);
 
   // Emit the Dwarf sections contents.

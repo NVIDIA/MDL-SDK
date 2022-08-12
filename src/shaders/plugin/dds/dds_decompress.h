@@ -99,7 +99,7 @@ public:
     ///
     /// The buffer has get_block_dimension() scanlines. This value might be invalidated by
     /// later #set_target_format() calls.
-    const mi::Uint8* get_buffer() const { return &m_buffer[0]; }
+    const mi::Uint8* get_buffer() const { return m_buffer.data(); }
 
     /// Returns the buffer of decompressed pixel data in target format for one scanline.
     ///

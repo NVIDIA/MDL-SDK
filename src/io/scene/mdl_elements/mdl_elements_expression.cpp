@@ -539,10 +539,10 @@ IExpression_direct_call* Expression_factory::create_direct_call(
     const IType* type,
     DB::Tag module_tag,
     const Mdl_tag_ident& definition_ident,
-    const std::string& definition_db_name,
+    const char* definition_db_name,
     IExpression_list* arguments) const
 {
-    if( !type || !definition_ident.first || definition_db_name.empty() || !arguments)
+    if( !type || !definition_ident.first || !definition_db_name || !arguments)
         return nullptr;
 
     return new Expression_direct_call(
@@ -808,7 +808,7 @@ IExpression* Expression_factory::create_cast(
     ASSERT(M_SCENE, src_expr);
     ASSERT(M_SCENE, target_type);
     ASSERT(M_SCENE, errors);
-    
+
     mi::base::Handle<const IType> src_type(src_expr->get_type());
 
     mi::base::Handle<const IType> stripped_src_type(src_type->skip_all_type_aliases());
@@ -984,7 +984,10 @@ IExpression* Expression_factory::deserialize( SERIAL::Deserializer* deserializer
             mi::base::Handle<IExpression_list> arguments( deserialize_list( deserializer));
             return create_direct_call(
                 type.get(),
-                module_tag, Mdl_tag_ident(tag, ident), definition_db_name, arguments.get());
+                module_tag,
+                Mdl_tag_ident( tag, ident),
+                definition_db_name.c_str(),
+                arguments.get());
         }
         case IExpression::EK_TEMPORARY: {
             mi::base::Handle<IType_factory> tf( m_value_factory->get_type_factory());
@@ -1251,7 +1254,7 @@ void Expression_factory::dump_static(
 #if 0 // sometimes useful, but generates too much output
             mi::base::Handle<const IType> type( expr_call->get_type());
             mi::base::Handle<const mi::IString> type_dumped( tf->dump( type.get(), depth));
-            s << type_dumped->get_c_str() << " ";
+            s << type_dumped->get_c_str() << ' ';
 #endif
             if( name)
                 s << name << " = ";
@@ -1261,7 +1264,7 @@ void Expression_factory::dump_static(
                 return;
             }
             if( transaction)
-                s << "\"" << transaction->tag_to_name( tag) << "\"";
+                s << '\"' << transaction->tag_to_name( tag) << '\"';
             else
                 s << "tag " << tag.get_uint();
             return;
@@ -1272,7 +1275,7 @@ void Expression_factory::dump_static(
             s << "parameter ";
             mi::base::Handle<const IType> type( expr_parameter->get_type());
             mi::base::Handle<const mi::IString> type_dumped( tf->dump( type.get(), depth));
-            s << type_dumped->get_c_str() << " ";
+            s << type_dumped->get_c_str() << ' ';
             if( name)
                 s << name << " = ";
             mi::Size index = expr_parameter->get_index();
@@ -1286,13 +1289,13 @@ void Expression_factory::dump_static(
 #if 0 // sometimes useful, but generates too much output
             mi::base::Handle<const IType> type( expr_direct_call->get_type());
             mi::base::Handle<const mi::IString> type_dumped( tf->dump( type.get(), depth));
-            s << type_dumped->get_c_str() << " ";
+            s << type_dumped->get_c_str() << ' ';
 #endif
             if( name)
                 s << name << " = ";
             DB::Tag tag = expr_direct_call->get_definition(/*transaction=*/nullptr);
             if( transaction)
-                s << "\"" << transaction->tag_to_name( tag) << "\" (";
+                s << '\"' << transaction->tag_to_name( tag) << "\" (";
             else
                 s << "tag " << tag.get_uint() << " (";
             mi::base::Handle<const IExpression_list> arguments( expr_direct_call->get_arguments());
@@ -1300,13 +1303,13 @@ void Expression_factory::dump_static(
             s << (n > 0 ? "\n" : "");
             const std::string& prefix = get_prefix( depth);
             for( mi::Size i = 0; i < n; ++i) {
-                const char* name = arguments->get_name( i);
+                const char* arg_name = arguments->get_name( i);
                 mi::base::Handle<const IExpression> argument( arguments->get_expression( i));
                 s << prefix << "    ";
-                dump_static( transaction, tf, argument.get(), name, depth+1, s);
+                dump_static( transaction, tf, argument.get(), arg_name, depth+1, s);
                 s << (i < n-1 ? ",\n" : "\n");
             }
-            s << (n > 0 ? prefix : "") << ")";
+            s << (n > 0 ? prefix : "") << ')';
             return;
         }
         case IExpression::EK_TEMPORARY: {
@@ -1316,7 +1319,7 @@ void Expression_factory::dump_static(
 #if 0 // sometimes useful, but generates too much output
             mi::base::Handle<const IType> type( expr_temporary->get_type());
             mi::base::Handle<const mi::IString> type_dumped( tf->dump( type.get(), depth));
-            s << type_dumped->get_c_str() << " ";
+            s << type_dumped->get_c_str() << ' ';
 #endif
             if( name)
                 s << name << " = ";
@@ -1354,13 +1357,13 @@ void Expression_factory::dump_static(
     for( mi::Size i = 0; i < n; ++i) {
         mi::base::Handle<const IExpression> expr( list->get_expression( i));
         s << prefix << "    ";
-        std::ostringstream name;
-        name << i << ": " << list->get_name( i);
-        dump_static( transaction, tf, expr.get(), name.str().c_str(), depth+1, s);
+        std::ostringstream elem_name;
+        elem_name << i << ": " << list->get_name( i);
+        dump_static( transaction, tf, expr.get(), elem_name.str().c_str(), depth+1, s);
         s << ";\n";
     }
 
-    s << (n > 0 ? prefix : "") << "]";
+    s << (n > 0 ? prefix : "") << ']';
 }
 
 void Expression_factory::dump_static(
@@ -1377,20 +1380,20 @@ void Expression_factory::dump_static(
     s << "annotation ";
     if( name)
         s << name << " = ";
-    s << "\"" << anno->get_name() << "\" (";
+    s << '\"' << anno->get_name() << "\" (";
 
     mi::base::Handle<const IExpression_list> arguments( anno->get_arguments());
     mi::Size n = arguments->get_size();
     s << (n > 0 ? "\n" : "");
     const std::string& prefix = get_prefix( depth);
     for( mi::Size i = 0; i < n; ++i) {
-        const char* name = arguments->get_name( i);
+        const char* arg_name = arguments->get_name( i);
         mi::base::Handle<const IExpression> argument( arguments->get_expression( i));
         s << prefix << "    ";
-        dump_static( transaction, tf, argument.get(), name, depth+1, s);
+        dump_static( transaction, tf, argument.get(), arg_name, depth+1, s);
         s << (i < n-1 ? ",\n" : "\n");
     }
-    s << (n > 0 ? prefix : "") << ")";
+    s << (n > 0 ? prefix : "") << ')';
 }
 
 void Expression_factory::dump_static(
@@ -1415,9 +1418,9 @@ void Expression_factory::dump_static(
     for( mi::Size i = 0; i < n; ++i) {
         mi::base::Handle<const IAnnotation> anno( block->get_annotation( i));
         s << prefix << "    ";
-        std::ostringstream name;
-        name << i;
-        dump_static( transaction, tf, anno.get(), name.str().c_str(), depth+1, s);
+        std::ostringstream anno_name;
+        anno_name << i;
+        dump_static( transaction, tf, anno.get(), anno_name.str().c_str(), depth+1, s);
         s << ";\n";
     }
 
@@ -1446,9 +1449,9 @@ void Expression_factory::dump_static(
     for( mi::Size i = 0; i < n; ++i) {
         mi::base::Handle<const IAnnotation_block> block( list->get_annotation_block( i));
         s << prefix << "    ";
-        std::ostringstream name;
-        name << i << ": " << list->get_name( i);
-        dump_static( transaction, tf, block.get(), name.str().c_str(), depth+1, s);
+        std::ostringstream anno_name;
+        anno_name << i << ": " << list->get_name( i);
+        dump_static( transaction, tf, block.get(), anno_name.str().c_str(), depth+1, s);
         s << ";\n";
     }
 
@@ -1674,7 +1677,7 @@ mi::Size Annotation_definition_list::get_memory_consumption() const
 class Factories
 {
 public:
-    Factories() : m_tf(), m_vf( &m_tf), m_ef( &m_vf) { }
+    Factories() : m_vf( &m_tf), m_ef( &m_vf) { }
     Type_factory m_tf;
     Value_factory m_vf;
     Expression_factory m_ef;

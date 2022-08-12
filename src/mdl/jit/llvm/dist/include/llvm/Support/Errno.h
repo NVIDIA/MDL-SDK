@@ -1,9 +1,8 @@
 //===- llvm/Support/Errno.h - Portable+convenient errno handling -*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -30,14 +29,9 @@ std::string StrError();
 /// Like the no-argument version above, but uses \p errnum instead of errno.
 std::string StrError(int errnum);
 
-#if defined(__GNUC__) && (__GNUC__ >= 7)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wnoexcept-type"
-#endif
-
 template <typename FailT, typename Fun, typename... Args>
-inline auto RetryAfterSignal(const FailT &Fail, const Fun &F,
-                             const Args &... As) -> decltype(F(As...)) {
+inline decltype(auto) RetryAfterSignal(const FailT &Fail, const Fun &F,
+                                       const Args &... As) {
   decltype(F(As...)) Res;
   do {
     errno = 0;
@@ -45,10 +39,6 @@ inline auto RetryAfterSignal(const FailT &Fail, const Fun &F,
   } while (Res == Fail && errno == EINTR);
   return Res;
 }
-
-#if defined(__GNUC__) && (__GNUC__ >= 7)
-#pragma GCC diagnostic pop
-#endif
 
 }  // namespace sys
 }  // namespace llvm

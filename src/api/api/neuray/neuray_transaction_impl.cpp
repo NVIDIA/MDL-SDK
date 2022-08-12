@@ -357,15 +357,15 @@ const char* Transaction_impl::name_of(
 
 const char* Transaction_impl::get_time_stamp() const
 {
-    DB::Transaction_id transaction_id = m_db_transaction->get_id();
+    const DB::Transaction_id transaction_id = m_db_transaction->get_id();
 
     // Note that get_update_sequence_number() returns the sequence number for the *next* update.
-    mi::Uint32 next_sequence_number = m_db_transaction->get_update_sequence_number();
-    mi::Sint32 current_sequence_number = static_cast<mi::Sint32>( next_sequence_number) - 1;
+    const mi::Uint32 next_sequence_number = m_db_transaction->get_update_sequence_number();
+    const mi::Sint32 current_sequence_number = static_cast<mi::Sint32>( next_sequence_number) - 1;
 
-    std::ostringstream s;
-    s << transaction_id() << "::" << current_sequence_number;
-    m_timestamp = s.str();
+    m_timestamp = std::to_string( transaction_id());
+    m_timestamp += "::";
+    m_timestamp += std::to_string( current_sequence_number);
     return m_timestamp.c_str();
 }
 
@@ -399,11 +399,8 @@ bool Transaction_impl::has_changed_since_time_stamp(
 
 const char* Transaction_impl::get_id() const
 {
-    if( m_id_as_string.empty()) {
-        std::ostringstream stream;
-        stream << m_id_as_uint;
-        m_id_as_string = stream.str();
-    }
+    if( m_id_as_string.empty())
+        m_id_as_string = std::to_string( m_id_as_uint);
     return m_id_as_string.c_str();
 }
 
@@ -601,11 +598,11 @@ const char* Transaction_impl::get_time_stamp( DB::Tag tag) const
 {
     ASSERT( M_NEURAY_API, tag.is_valid());
 
-    DB::Tag_version tag_version = m_db_transaction->get_tag_version( tag);
+    const DB::Tag_version tag_version = m_db_transaction->get_tag_version( tag);
 
-    std::ostringstream s;
-    s << tag_version.m_transaction_id() << "::" << tag_version.m_version;
-    m_timestamp = s.str();
+    m_timestamp = std::to_string( tag_version.m_transaction_id());
+    m_timestamp += "::";
+    m_timestamp += std::to_string( tag_version.m_version);
     return m_timestamp.c_str();
 }
 
@@ -701,14 +698,18 @@ void Transaction_impl::check_no_referenced_elements( const char* committed_or_ab
     for( Elements::const_iterator it = m_elements.begin(); it != m_elements.end(); ++it) {
         DB::Tag tag = (*it)->get_tag();
         const char* name = m_db_transaction->tag_to_name( tag);
-        std::ostringstream s;
-        if( name)
-            s << "\"" << name << "\"";
-        else
-            s << "with tag " << tag.get_uint();
+        std::string s;
+        if( name) {
+            s = '\"';
+            s += name;
+            s += '\"';
+        } else {
+            s = "with tag ";
+            s += std::to_string( tag.get_uint());
+        }
         LOG::mod_log->error( SYSTEM::M_NEURAY_API, LOG::Mod_log::C_DATABASE,
             "DB element %s is still referenced while transaction %u is %s.",
-            s.str().c_str(), m_id_as_uint, committed_or_aborted);
+            s.c_str(), m_id_as_uint, committed_or_aborted);
     }
 }
 

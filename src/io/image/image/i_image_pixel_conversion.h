@@ -598,15 +598,15 @@ MI_HOST_DEVICE_INLINE bool copy(
 }
 
 inline void extract_channel(
-    const char* source, char* dest, mi::Size count, Pixel_type Type, mi::Size channel_index)
+    const char* __restrict source, char* __restrict dest, mi::Size count, Pixel_type Type, mi::Size channel_index)
 {
     if( (channel_index == 3) && !has_alpha( Type)) {
         if( Type == PT_RGB) {
             memset( dest, 0xff, count);
         } else if( Type == PT_RGBE || Type == PT_RGB_16 || Type == PT_RGB_FP) {
-            float* p = static_cast<float*>( static_cast<void*>( dest));
+            float* const __restrict p = static_cast<float*>( static_cast<void*>( dest));
             for( mi::Size i = 0; i < count; ++i)
-                *p++ = 1.0f;
+                p[i] = 1.0f;
         } else {
             ASSERT( M_IMAGE, false);
         }
@@ -643,14 +643,14 @@ MI_HOST_DEVICE_INLINE void Pixel_converter<Source,Dest>::convert(
     const mi::Difference source_stride, const mi::Difference dest_stride)
 {
     // use source2 and dest2 instead of source and dest for easier pointer arithmetic
-    const char* source2 = reinterpret_cast<const char*>( source);
-    char* dest2         = reinterpret_cast<char*>(       dest);
+    const char* __restrict source2 = reinterpret_cast<const char*>( source);
+    char* __restrict dest2         = reinterpret_cast<char*>(       dest);
 
     for( mi::Size y = 0; y < height; ++y) {
 
         // use source3 and dest3 instead of source2 and dest2 inside a row
-        const Source_base_type* const source3 = reinterpret_cast<const Source_base_type*>( source2);
-        Dest_base_type*         const dest3   = reinterpret_cast<Dest_base_type*>(         dest2);
+        const Source_base_type* const __restrict source3 = reinterpret_cast<const Source_base_type*>( source2);
+        Dest_base_type*         const __restrict dest3   = reinterpret_cast<Dest_base_type*>(         dest2);
 
         // call 3-args variant instead of explicit loop to benefit from its SSE specializations
         convert( source3, dest3, width);
@@ -664,8 +664,8 @@ template <Pixel_type Source, Pixel_type Dest>
 MI_HOST_DEVICE_INLINE void Pixel_converter<Source,Dest>::convert(
     const void* const source, void* const dest, const mi::Size count)
 {
-    const Source_base_type* const source2 = static_cast<const Source_base_type*>( source);
-    Dest_base_type* const dest2           = static_cast<Dest_base_type*>( dest);
+    const Source_base_type* const __restrict source2 = static_cast<const Source_base_type*>( source);
+    Dest_base_type* const __restrict dest2           = static_cast<Dest_base_type*>( dest);
     convert( source2, dest2, count);
 }
 
@@ -675,8 +675,8 @@ MI_HOST_DEVICE_INLINE void Pixel_converter<Source,Dest>::convert(
     const mi::Size width, const mi::Size height,
     const mi::Difference source_stride, const mi::Difference dest_stride)
 {
-    const Source_base_type* const source2 = static_cast<const Source_base_type*>( source);
-    Dest_base_type* const dest2           = static_cast<Dest_base_type*>( dest);
+    const Source_base_type* const __restrict source2 = static_cast<const Source_base_type*>( source);
+    Dest_base_type* const __restrict dest2           = static_cast<Dest_base_type*>( dest);
     convert( source2, dest2, width, height, source_stride, dest_stride);
 }
 
@@ -705,8 +705,8 @@ MI_HOST_DEVICE_INLINE void Pixel_copier<Type>::copy(
     const mi::Difference source_stride, const mi::Difference dest_stride)
 {
     // use source2 and dest2 instead of source and dest for easier pointer arithmetic
-    const char* source2 = reinterpret_cast<const char*>( source);
-    char* dest2         = reinterpret_cast<char*>( dest);
+    const char* __restrict source2 = reinterpret_cast<const char*>( source);
+    char* __restrict dest2         = reinterpret_cast<char*>( dest);
 
     const mi::Size bytes_per_row = width * Pixel_type_traits<Type>::s_components_per_pixel
                                          * sizeof( typename Pixel_type_traits<Type>::Base_type);
@@ -737,8 +737,8 @@ template <Pixel_type Type>
 MI_HOST_DEVICE_INLINE void Pixel_copier<Type>::copy(
     const void* const source, void* dest, const mi::Size count)
 {
-    const Base_type* const source2 = static_cast<const Base_type*>( source);
-    Base_type* const dest2         = static_cast<Base_type*>( dest);
+    const Base_type* const __restrict source2 = static_cast<const Base_type*>( source);
+    Base_type* const __restrict dest2         = static_cast<Base_type*>( dest);
     copy( source2, dest2, count);
 }
 
@@ -748,8 +748,8 @@ MI_HOST_DEVICE_INLINE void Pixel_copier<Type>::copy(
     const mi::Size width, const mi::Size height,
     const mi::Difference source_stride, const mi::Difference dest_stride)
 {
-    const Base_type* const source2 = static_cast<const Base_type*>( source);
-    Base_type* const dest2         = static_cast<Base_type*>( dest);
+    const Base_type* const __restrict source2 = static_cast<const Base_type*>( source);
+    Base_type* const __restrict dest2         = static_cast<Base_type*>( dest);
     copy( source2, dest2, width, height, source_stride, dest_stride);
 }
 
@@ -791,13 +791,13 @@ template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_SINT8, PT_RGBA>::conver
 template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_SINT8, PT_RGBE>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
-    to_rgbe( src[0] * mi::Float32( 1.0/255.0), dest);
+    to_rgbe(mi::Float32( src[0]) * mi::Float32( 1.0/255.0), dest);
 }
 
 template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_SINT8, PT_RGBEA>::convert(
     const Source_base_type* const src, Dest_base_type* const dest)
 {
-    to_rgbe( src[0] * mi::Float32( 1.0/255.0), dest);
+    to_rgbe(mi::Float32( src[0]) * mi::Float32( 1.0/255.0), dest);
     dest[4] = 255;
 }
 
@@ -1374,7 +1374,7 @@ template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBEA, PT_RGBA_16>::con
     quantize_u(dest[0],tmp[0]);
     quantize_u(dest[1],tmp[1]);
     quantize_u(dest[2],tmp[2]);
-    dest[3] = mi::Uint16( src[4] * mi::Float32( 65535.0/255.0));
+    dest[3] = mi::Uint16(mi::Float32( src[4]) * mi::Float32( 65535.0/255.0));
 }
 
 template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGBEA, PT_RGB_FP>::convert(
@@ -1790,8 +1790,8 @@ MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_FP,PT_RGB>::convert(
     const Source_base_type* const source, Dest_base_type* const dest, const mi::Size count)
 {
     // use source2 and dest2 instead of source and dest for easier pointer arithmetic
-    const float* source2 = reinterpret_cast<const float*>( source);
-    char* dest2          = reinterpret_cast<char*>(        dest);
+    const float* __restrict source2 = reinterpret_cast<const float*>( source);
+    char* __restrict dest2          = reinterpret_cast<char*>(        dest);
 
     mi::Size i = 0;
 
@@ -1812,8 +1812,8 @@ MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_FP,PT_RGB>::convert(
 #endif
 
     // use source3 and dest3 instead of source2 and dest2 inside a row
-    const Source_base_type* source3 = reinterpret_cast<const Source_base_type*>( source2);
-    Dest_base_type*         dest3   = reinterpret_cast<Dest_base_type*>(         dest2);
+    const Source_base_type* __restrict source3 = reinterpret_cast<const Source_base_type*>( source2);
+    Dest_base_type* __restrict         dest3   = reinterpret_cast<Dest_base_type*>(         dest2);
 
     for( ; i < count; ++i) {
         convert( source3, dest3);
@@ -1828,8 +1828,8 @@ template <>
 MI_HOST_DEVICE_INLINE void Pixel_converter<PT_COLOR,PT_RGBA>::convert(
     const Source_base_type* const source, Dest_base_type* const dest, const mi::Size count)
 {
-    const float* source2 = reinterpret_cast<const float*>( source);
-    char* dest2          = reinterpret_cast<char*>(        dest);
+    const float* __restrict source2 = reinterpret_cast<const float*>( source);
+    char* __restrict dest2          = reinterpret_cast<char*>(        dest);
 
     mi::Size i = 0;
 
@@ -1849,8 +1849,8 @@ MI_HOST_DEVICE_INLINE void Pixel_converter<PT_COLOR,PT_RGBA>::convert(
     i = count/4*4; // for falling through to the tail handling/non-SSE case below
 #endif
 
-    const Source_base_type* source3 = reinterpret_cast<const Source_base_type*>( source2);
-    Dest_base_type*         dest3   = reinterpret_cast<Dest_base_type*>(         dest2);
+    const Source_base_type* __restrict source3 = reinterpret_cast<const Source_base_type*>( source2);
+    Dest_base_type* __restrict         dest3   = reinterpret_cast<Dest_base_type*>(         dest2);
 
     for( ; i < count; ++i) {
         convert( source3, dest3);

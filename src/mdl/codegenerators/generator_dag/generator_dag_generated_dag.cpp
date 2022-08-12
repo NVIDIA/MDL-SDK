@@ -2115,6 +2115,7 @@ void Generated_code_dag::compile(IModule const *module)
     // first step
     IAllocator *alloc = m_arena.get_allocator();
 
+    // .. handle module annotations if any, ...
     if (IDeclaration_module const *mod_decl = module->get_module_declaration()) {
         gen_module_annotations(dag_builder, mod_decl);
     }
@@ -2255,11 +2256,8 @@ void Generated_code_dag::compile_type(
 
     IAnnotation_block const *annotations = NULL;
 
-    IDeclaration const *decl = def->get_declaration();
-    if (is_reexported) {
-        // this is a re-exported type
-        decl = NULL;
-    }
+    // no declaration fore re-exported types (as this point to the original module
+    IDeclaration const *decl = is_reexported ? NULL : def->get_declaration();
 
     IType const *type = def->get_type();
     type = m_type_factory.import(type);
@@ -3937,6 +3935,8 @@ Generated_code_dag::Material_instance *Instance_cloner::clone(
 
     curr->m_material_index       = src->m_material_index;
     curr->m_default_param_values = src->m_default_param_values;
+
+    // ensure values are owned by the clone
     for (size_t i = 0, n = curr->m_default_param_values.size(); i < n; ++i) {
         curr->m_default_param_values[i] = m_value_factory->import(curr->m_default_param_values[i]);
     }
@@ -3944,9 +3944,11 @@ Generated_code_dag::Material_instance *Instance_cloner::clone(
     curr->m_properties  = src->m_properties;
 
     if (flags & Material_instance::CF_RECALC_HASH) {
+        // recalculate the hash values if requested
         curr->calc_hashes();
     } else {
-        curr->m_hash                 = src->m_hash;
+        // copy the hash values
+        curr->m_hash = src->m_hash;
         for (size_t i = 0; i < sizeof(curr->m_slot_hashes)/sizeof(curr->m_slot_hashes[0]); ++i) {
             curr->m_slot_hashes[i] = src->m_slot_hashes[i];
         }

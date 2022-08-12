@@ -67,13 +67,13 @@ public:
     }
 
     /// Access to the base type.
-    IType *skip_type_alias() MDL_FINAL {
+    IType *skip_type_alias() MDL_OVERRIDE {
         IType const *tp = this;
         return const_cast<IType *>(tp->skip_type_alias());
     }
 
     /// Access to the base type.
-    IType const *skip_type_alias() const MDL_FINAL {
+    IType const *skip_type_alias() const MDL_OVERRIDE {
         IType const *tp = this;
         while (is<IType_alias>(tp)) {
             tp = static_cast<IType_alias const *>(tp)->get_aliased_type();
@@ -578,6 +578,10 @@ inline Type_array_size const *impl_cast(IType_array_size const *t) {
 }
 
 /// Implementation of the array type.
+///
+/// \note Array types are "normalized" in the MDL compiler, i.e.
+///       uniform T[] is represented as (uniform T)[], NOT uniform (T[])
+///       This normalization is done under the hood, so even if the second form is constructed.
 class Type_array : public Type_base<IType_array>
 {
     typedef Type_base<IType_array> Base;
@@ -607,6 +611,19 @@ public:
     /// Get the number of compound elements.
     int get_compound_size() const MDL_FINAL { return m_size; }
 
+    /// If this type is an alias type, skip all aliases and return the base type,
+    /// else the type itself.
+    IType_array *skip_type_alias() MDL_FINAL { return const_cast<IType_array *>(m_aliased_type); }
+
+    /// If this type is an alias type, skip all aliases and return the base type,
+    /// else the type itself.
+    IType_array const *skip_type_alias() const MDL_FINAL { return m_aliased_type; }
+
+    /// Get the type modifiers of a type
+    IType::Modifiers get_type_modifiers() const MDL_FINAL {
+        return m_element_type->get_type_modifiers();
+    }
+
     // ---------------------- non-interface ----------------------
 
     /// Get the owner id.
@@ -620,10 +637,12 @@ private:
     /// \param abs_size      the abstract array size
     explicit Type_array(
         size_t                owner_id,
+        IType_array const     *aliased_type,
         IType const           *element_type,
         Type_array_size const *abs_size)
     : Base()
     , m_owner_id(owner_id)
+    , m_aliased_type(aliased_type != NULL ? aliased_type : this)
     , m_element_type(element_type)
     , m_deferred_size(abs_size)
     , m_size(-1)
@@ -637,11 +656,13 @@ private:
     /// \param element_type  the element type of this array type
     /// \param length        the array size
     explicit Type_array(
-        size_t      owner_id,
-        IType const *element_type,
-        int         length)
+        size_t            owner_id,
+        IType_array const *aliased_type,
+        IType const       *element_type,
+        int               length)
     : Base()
     , m_owner_id(owner_id)
+    , m_aliased_type(aliased_type != NULL ? aliased_type : this)
     , m_element_type(element_type)
     , m_deferred_size(NULL)
     , m_size(length)
@@ -651,6 +672,9 @@ private:
 private:
     /// An id representing the owner of this type (for debugging).
     size_t const m_owner_id;
+
+    /// The alias free type of this type (aka no modifiers).
+    IType_array const *m_aliased_type;
 
     /// The element type of this array.
     IType const *m_element_type;
@@ -1099,8 +1123,27 @@ IType const *Type_factory::create_alias(
         // import the name into our symbol table
         name = m_symtab->get_symbol(name->get_name());
     } else {
+        // no name and no modifiers, this is a no-op
         if (modifiers == IType::MK_NONE) {
             return type;
+        }
+    }
+
+    if (IType_array const *a_type = as<IType_array>(type)) {
+        // create an alias of an array type: ensure normalization
+        if (modifiers != IType::MK_NONE) {
+            IType const *e_type = a_type->get_element_type();
+
+            e_type = create_alias(e_type, /*name=*/NULL, modifiers);
+            if (a_type->is_immediate_sized()) {
+                type = create_array(e_type, a_type->get_size());
+            } else {
+                type = create_array(e_type, a_type->get_deferred_size());
+            }
+            if (name == NULL) {
+                return type;
+            }
+            modifiers = IType::MK_NONE;
         }
     }
 
@@ -1429,7 +1472,25 @@ IType const *Type_factory::create_array(
 
     Type_cache::const_iterator it = m_type_cache.find(key);
     if (it == m_type_cache.end()) {
-        IType const *array_type = m_builder.create<Type_array>(m_id, element_type, int(size));
+        // first create the alias free variant
+        IType_array const *base_type   = NULL;
+        IType const       *base_e_type = element_type->skip_type_alias();
+
+        if (base_e_type != element_type) {
+            Type_cache_key base_key(size, base_e_type);
+
+            Type_cache::const_iterator base_it = m_type_cache.find(base_key);
+            if (base_it == m_type_cache.end()) {
+                base_type = m_builder.create<Type_array>(m_id, base_type, base_e_type, int(size));
+
+                base_it = m_type_cache.insert(Type_cache::value_type(base_key, base_type)).first;
+            }
+            base_type = static_cast<IType_array const *>(base_it->second);
+        }
+
+        // now the requested array type
+        IType const *array_type = m_builder.create<Type_array>(
+            m_id, base_type, element_type, int(size));
 
         it = m_type_cache.insert(Type_cache::value_type(key, array_type)).first;
     }
@@ -1737,7 +1798,25 @@ IType const *Type_factory::create_array(
 
     Type_cache::const_iterator it = m_type_cache.find(key);
     if (it == m_type_cache.end()) {
-        IType const *array_type = m_builder.create<Type_array>(m_id, element_type, array_size);
+        // first create the alias free variant
+        IType_array const *base_type   = NULL;
+        IType const       *base_e_type = element_type->skip_type_alias();
+
+        if (base_e_type != element_type) {
+            Type_cache_key base_key(base_e_type, array_size);
+
+            Type_cache::const_iterator base_it = m_type_cache.find(base_key);
+            if (base_it == m_type_cache.end()) {
+                base_type = m_builder.create<Type_array>(m_id, base_type, base_e_type, array_size);
+
+                base_it = m_type_cache.insert(Type_cache::value_type(base_key, base_type)).first;
+            }
+            base_type = static_cast<IType_array const *>(base_it->second);
+        }
+
+        // now the requested array type
+        IType const *array_type = m_builder.create<Type_array>(
+            m_id, base_type, element_type, array_size);
 
         it = m_type_cache.insert(Type_cache::value_type(key, array_type)).first;
     }
@@ -1972,7 +2051,25 @@ IType const *Type_factory::create_array(
 
     Type_cache::const_iterator it = m_type_cache.find(key);
     if (it == m_type_cache.end()) {
-        IType const *array_type = m_builder.create<Type_array>(m_id, element_type, array_size);
+        // first create the alias free variant
+        IType_array const *base_type   = NULL;
+        IType const       *base_e_type = element_type->skip_type_alias();
+
+        if (base_e_type != element_type) {
+            Type_cache_key base_key(base_e_type, array_size);
+
+            Type_cache::const_iterator base_it = m_type_cache.find(base_key);
+            if (base_it == m_type_cache.end()) {
+                base_type = m_builder.create<Type_array>(m_id, base_type, base_e_type, array_size);
+
+                base_it = m_type_cache.insert(Type_cache::value_type(base_key, base_type)).first;
+            }
+            base_type = static_cast<IType_array const *>(base_it->second);
+        }
+
+        // now the requested array type
+        IType const *array_type = m_builder.create<Type_array>(
+            m_id, base_type, element_type, array_size);
 
         it = m_type_cache.insert(Type_cache::value_type(key, array_type)).first;
     }

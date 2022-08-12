@@ -137,7 +137,7 @@ namespace multiscatter
         const float3 &multiscatter_tint)
     {
         // assuming the glossy BSDF was sampled before
-        float w = (data->event_type != BSDF_EVENT_ABSORB) ? data->bsdf_over_pdf.x : 0.0f; // uniform at this point (no tint applied)
+        float w = (data->event_type != BSDF_EVENT_ABSORB) ? math::average(data->bsdf_over_pdf) : 0.0f;
 
         // assuming 0 <= w <= 1, we can reject samples with probability w, rejection basically means 
         // that we use multi-scattering then
@@ -162,7 +162,7 @@ namespace multiscatter
             if(data->event_type != BSDF_EVENT_GLOSSY_TRANSMISSION)
                 data->pdf += (1.0f - rho1) * (float)(1.0 / M_PI);
 
-            data->bsdf_over_pdf = tint;
+            data->bsdf_over_pdf *= tint / w;
             return -1.0f;
 
         // reject glossy sample

@@ -33,7 +33,9 @@
 #ifndef API_API_NEURAY_MATERIAL_INSTANCE_IMPL_H
 #define API_API_NEURAY_MATERIAL_INSTANCE_IMPL_H
 
+#define MI_NEURAYLIB_DEPRECATED_13_0
 #include <mi/neuraylib/imaterial_instance.h>
+#undef MI_NEURAYLIB_DEPRECATED_13_0
 
 #include <mi/base/handle.h>
 #include <mi/base/interface_implement.h>

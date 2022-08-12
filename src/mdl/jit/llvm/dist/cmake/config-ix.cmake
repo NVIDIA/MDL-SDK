@@ -7,12 +7,14 @@ include(CheckIncludeFile)
 include(CheckLibraryExists)
 include(CheckSymbolExists)
 include(CheckFunctionExists)
+include(CheckStructHasMember)
 include(CheckCCompilerFlag)
+include(CMakePushCheckState)
 
 include(CheckCompilerVersion)
 include(HandleLLVMStdlib)
 
-if( UNIX AND NOT (BEOS OR HAIKU) )
+if( UNIX AND NOT (APPLE OR BEOS OR HAIKU) )
   # Used by check_symbol_exists:
   list(APPEND CMAKE_REQUIRED_LIBRARIES "m")
 endif()
@@ -22,12 +24,24 @@ if( CMAKE_SYSTEM MATCHES "FreeBSD-9.2-RELEASE" AND
   list(APPEND CMAKE_REQUIRED_LIBRARIES "cxxrt")
 endif()
 
+# Do checks with _XOPEN_SOURCE and large-file API on AIX, because we will build
+# with those too.
+if (UNIX AND ${CMAKE_SYSTEM_NAME} MATCHES "AIX")
+          list(APPEND CMAKE_REQUIRED_DEFINITIONS "-D_XOPEN_SOURCE=700")
+          list(APPEND CMAKE_REQUIRED_DEFINITIONS "-D_LARGE_FILE_API")
+endif()
+
+# Do checks with _FILE_OFFSET_BITS=64 on Solaris, because we will build
+# with those too.
+if (UNIX AND ${CMAKE_SYSTEM_NAME} MATCHES "SunOS")
+          list(APPEND CMAKE_REQUIRED_DEFINITIONS "-D_FILE_OFFSET_BITS=64")
+endif()
+
 # include checks
 check_include_file(dlfcn.h HAVE_DLFCN_H)
 check_include_file(errno.h HAVE_ERRNO_H)
 check_include_file(fcntl.h HAVE_FCNTL_H)
 check_include_file(link.h HAVE_LINK_H)
-check_include_file(malloc.h HAVE_MALLOC_H)
 check_include_file(malloc/malloc.h HAVE_MALLOC_MALLOC_H)
 if( NOT PURE_WINDOWS )
   check_include_file(pthread.h HAVE_PTHREAD_H)
@@ -40,10 +54,10 @@ check_include_file(sys/resource.h HAVE_SYS_RESOURCE_H)
 check_include_file(sys/stat.h HAVE_SYS_STAT_H)
 check_include_file(sys/time.h HAVE_SYS_TIME_H)
 check_include_file(sys/types.h HAVE_SYS_TYPES_H)
+check_include_file(sysexits.h HAVE_SYSEXITS_H)
 check_include_file(termios.h HAVE_TERMIOS_H)
 check_include_file(unistd.h HAVE_UNISTD_H)
 check_include_file(valgrind/valgrind.h HAVE_VALGRIND_VALGRIND_H)
-check_include_file(zlib.h HAVE_ZLIB_H)
 check_include_file(fenv.h HAVE_FENV_H)
 check_symbol_exists(FE_ALL_EXCEPT "fenv.h" HAVE_DECL_FE_ALL_EXCEPT)
 check_symbol_exists(FE_INEXACT "fenv.h" HAVE_DECL_FE_INEXACT)
@@ -102,22 +116,51 @@ if(HAVE_LIBPTHREAD)
   set(LLVM_PTHREAD_LIB ${CMAKE_THREAD_LIBS_INIT})
 endif()
 
+if(LLVM_ENABLE_ZLIB)
+  if(LLVM_ENABLE_ZLIB STREQUAL FORCE_ON)
+    find_package(ZLIB REQUIRED)
+  elseif(NOT LLVM_USE_SANITIZER MATCHES "Memory.*")
+    find_package(ZLIB)
+  endif()
+  if(ZLIB_FOUND)
+    # Check if zlib we found is usable; for example, we may have found a 32-bit
+    # library on a 64-bit system which would result in a link-time failure.
+    cmake_push_check_state()
+    list(APPEND CMAKE_REQUIRED_INCLUDES ${ZLIB_INCLUDE_DIRS})
+    list(APPEND CMAKE_REQUIRED_LIBRARIES ${ZLIB_LIBRARY})
+    check_symbol_exists(compress2 zlib.h HAVE_ZLIB)
+    cmake_pop_check_state()
+    if(LLVM_ENABLE_ZLIB STREQUAL FORCE_ON AND NOT HAVE_ZLIB)
+      message(FATAL_ERROR "Failed to configure zlib")
+    endif()
+  endif()
+  set(LLVM_ENABLE_ZLIB "${HAVE_ZLIB}")
+endif()
+
+if(LLVM_ENABLE_LIBXML2)
+  if(LLVM_ENABLE_LIBXML2 STREQUAL FORCE_ON)
+    find_package(LibXml2 REQUIRED)
+  elseif(NOT LLVM_USE_SANITIZER MATCHES "Memory.*")
+    find_package(LibXml2)
+  endif()
+  if(LibXml2_FOUND)
+    # Check if libxml2 we found is usable; for example, we may have found a 32-bit
+    # library on a 64-bit system which would result in a link-time failure.
+    cmake_push_check_state()
+    list(APPEND CMAKE_REQUIRED_INCLUDES ${LIBXML2_INCLUDE_DIRS})
+    list(APPEND CMAKE_REQUIRED_LIBRARIES ${LIBXML2_LIBRARIES})
+    check_symbol_exists(xmlReadMemory libxml/xmlreader.h HAVE_LIBXML2)
+    cmake_pop_check_state()
+    if(LLVM_ENABLE_LIBXML2 STREQUAL FORCE_ON AND NOT HAVE_LIBXML2)
+      message(FATAL_ERROR "Failed to configure libxml2")
+    endif()
+  endif()
+  set(LLVM_ENABLE_LIBXML2 "${HAVE_LIBXML2}")
+endif()
+
 # Don't look for these libraries if we're using MSan, since uninstrumented third
 # party code may call MSan interceptors like strlen, leading to false positives.
 if(NOT LLVM_USE_SANITIZER MATCHES "Memory.*")
-  set(HAVE_LIBZ 0)
-  if(LLVM_ENABLE_ZLIB)
-    foreach(library z zlib_static zlib)
-      string(TOUPPER ${library} library_suffix)
-      check_library_exists(${library} compress2 "" HAVE_LIBZ_${library_suffix})
-      if(HAVE_LIBZ_${library_suffix})
-        set(HAVE_LIBZ 1)
-        set(ZLIB_LIBRARIES "${library}")
-        break()
-      endif()
-    endforeach()
-  endif()
-
   # Don't look for these libraries on Windows.
   if (NOT PURE_WINDOWS)
     # Skip libedit if using ASan as it contains memory leaks.
@@ -126,41 +169,24 @@ if(NOT LLVM_USE_SANITIZER MATCHES "Memory.*")
     else()
       set(HAVE_LIBEDIT 0)
     endif()
-    if(LLVM_ENABLE_TERMINFO)
-      set(HAVE_TERMINFO 0)
-      foreach(library tinfo terminfo curses ncurses ncursesw)
-        string(TOUPPER ${library} library_suffix)
-        check_library_exists(${library} setupterm "" HAVE_TERMINFO_${library_suffix})
-        if(HAVE_TERMINFO_${library_suffix})
-          set(HAVE_TERMINFO 1)
-          set(TERMINFO_LIBS "${library}")
-          break()
-        endif()
-      endforeach()
+    if(LLVM_ENABLE_TERMINFO STREQUAL FORCE_ON)
+      set(MAYBE_REQUIRED REQUIRED)
     else()
-      set(HAVE_TERMINFO 0)
+      set(MAYBE_REQUIRED)
     endif()
-
-    find_library(ICONV_LIBRARY_PATH NAMES iconv libiconv libiconv-2 c)
-    set(LLVM_LIBXML2_ENABLED 0)
-    set(LIBXML2_FOUND 0)
-    if((LLVM_ENABLE_LIBXML2) AND ((CMAKE_SYSTEM_NAME MATCHES "Linux") AND (ICONV_LIBRARY_PATH) OR APPLE))
-      find_package(LibXml2)
-      if (LIBXML2_FOUND)
-        set(LLVM_LIBXML2_ENABLED 1)
-        if ((CMAKE_OSX_SYSROOT) AND (EXISTS ${CMAKE_OSX_SYSROOT}/${LIBXML2_INCLUDE_DIR}))
-          include_directories(${CMAKE_OSX_SYSROOT}/${LIBXML2_INCLUDE_DIR})
-        else()
-          include_directories(${LIBXML2_INCLUDE_DIR})
-        endif()
-        set(LIBXML2_LIBS "xml2")
-      endif()
+    if(LLVM_ENABLE_TERMINFO)
+      find_library(TERMINFO_LIB NAMES terminfo tinfo curses ncurses ncursesw ${MAYBE_REQUIRED})
     endif()
+    if(TERMINFO_LIB)
+      set(LLVM_ENABLE_TERMINFO 1)
+    else()
+      set(LLVM_ENABLE_TERMINFO 0)
+    endif()
+  else()
+    set(LLVM_ENABLE_TERMINFO 0)
   endif()
-endif()
-
-if (LLVM_ENABLE_LIBXML2 STREQUAL "FORCE_ON" AND NOT LLVM_LIBXML2_ENABLED)
-  message(FATAL_ERROR "Failed to congifure libxml2")
+else()
+  set(LLVM_ENABLE_TERMINFO 0)
 endif()
 
 check_library_exists(xar xar_open "" HAVE_LIBXAR)
@@ -181,20 +207,17 @@ if(C_SUPPORTS_WERROR_UNGUARDED_AVAILABILITY_NEW)
   set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} -Werror=unguarded-availability-new")
 endif()
 
+# Determine whether we can register EH tables.
+check_symbol_exists(__register_frame "${CMAKE_CURRENT_LIST_DIR}/unwind.h" HAVE_REGISTER_FRAME)
+check_symbol_exists(__deregister_frame "${CMAKE_CURRENT_LIST_DIR}/unwind.h" HAVE_DEREGISTER_FRAME)
+
 check_symbol_exists(_Unwind_Backtrace "unwind.h" HAVE__UNWIND_BACKTRACE)
 check_symbol_exists(getpagesize unistd.h HAVE_GETPAGESIZE)
 check_symbol_exists(sysconf unistd.h HAVE_SYSCONF)
 check_symbol_exists(getrusage sys/resource.h HAVE_GETRUSAGE)
 check_symbol_exists(setrlimit sys/resource.h HAVE_SETRLIMIT)
 check_symbol_exists(isatty unistd.h HAVE_ISATTY)
-
-if(MACOSX)
-  check_symbol_exists(futimens sys/stat.MOT_HERE HAVE_FUTIMENS)
-  message(STATUS "ATTENTION: forced 'futimens' to be not found")
-else()
-  check_symbol_exists(futimens sys/stat.h HAVE_FUTIMENS)
-endif()
-
+check_symbol_exists(futimens sys/stat.h HAVE_FUTIMENS)
 check_symbol_exists(futimes sys/time.h HAVE_FUTIMES)
 check_symbol_exists(posix_fallocate fcntl.h HAVE_POSIX_FALLOCATE)
 # AddressSanitizer conflicts with lib/Support/Unix/Signals.inc
@@ -214,7 +237,6 @@ check_symbol_exists(malloc_zone_statistics malloc/malloc.h
 check_symbol_exists(getrlimit "sys/types.h;sys/time.h;sys/resource.h" HAVE_GETRLIMIT)
 check_symbol_exists(posix_spawn spawn.h HAVE_POSIX_SPAWN)
 check_symbol_exists(pread unistd.h HAVE_PREAD)
-check_symbol_exists(realpath stdlib.h HAVE_REALPATH)
 check_symbol_exists(sbrk unistd.h HAVE_SBRK)
 check_symbol_exists(strerror string.h HAVE_STRERROR)
 check_symbol_exists(strerror_r string.h HAVE_STRERROR_R)
@@ -255,14 +277,17 @@ if( HAVE_DLFCN_H )
   endif()
 endif()
 
+CHECK_STRUCT_HAS_MEMBER("struct stat" st_mtimespec.tv_nsec
+    "sys/types.h;sys/stat.h" HAVE_STRUCT_STAT_ST_MTIMESPEC_TV_NSEC)
+CHECK_STRUCT_HAS_MEMBER("struct stat" st_mtim.tv_nsec
+    "sys/types.h;sys/stat.h" HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC)
+
 check_symbol_exists(__GLIBC__ stdio.h LLVM_USING_GLIBC)
 if( LLVM_USING_GLIBC )
   add_definitions( -D_GNU_SOURCE )
   list(APPEND CMAKE_REQUIRED_DEFINITIONS "-D_GNU_SOURCE")
 endif()
 # This check requires _GNU_SOURCE
-check_symbol_exists(sched_getaffinity sched.h HAVE_SCHED_GETAFFINITY)
-check_symbol_exists(CPU_COUNT sched.h HAVE_CPU_COUNT)
 if (NOT PURE_WINDOWS)
   if (LLVM_PTHREAD_LIB)
     list(APPEND CMAKE_REQUIRED_LIBRARIES ${LLVM_PTHREAD_LIB})
@@ -326,6 +351,15 @@ else()
   unset(HAVE_FFI_CALL CACHE)
 endif( LLVM_ENABLE_FFI )
 
+# Whether we can use std::is_trivially_copyable to verify llvm::is_trivially_copyable.
+CHECK_CXX_SOURCE_COMPILES("
+#include <type_traits>
+struct T { int val; };
+static_assert(std::is_trivially_copyable<T>::value, \"ok\");
+int main() { return 0;}
+" HAVE_STD_IS_TRIVIALLY_COPYABLE)
+
+
 # Define LLVM_HAS_ATOMICS if gcc or MSVC atomic builtins are supported.
 include(CheckAtomic)
 
@@ -387,12 +421,16 @@ elseif (LLVM_NATIVE_ARCH MATCHES "sparc")
   set(LLVM_NATIVE_ARCH Sparc)
 elseif (LLVM_NATIVE_ARCH MATCHES "powerpc")
   set(LLVM_NATIVE_ARCH PowerPC)
+elseif (LLVM_NATIVE_ARCH MATCHES "ppc64le")
+  set(LLVM_NATIVE_ARCH PowerPC)
 elseif (LLVM_NATIVE_ARCH MATCHES "aarch64")
   set(LLVM_NATIVE_ARCH AArch64)
 elseif (LLVM_NATIVE_ARCH MATCHES "arm64")
   set(LLVM_NATIVE_ARCH AArch64)
 elseif (LLVM_NATIVE_ARCH MATCHES "arm")
   set(LLVM_NATIVE_ARCH ARM)
+elseif (LLVM_NATIVE_ARCH MATCHES "avr")
+  set(LLVM_NATIVE_ARCH AVR)
 elseif (LLVM_NATIVE_ARCH MATCHES "mips")
   set(LLVM_NATIVE_ARCH Mips)
 elseif (LLVM_NATIVE_ARCH MATCHES "xcore")
@@ -451,7 +489,8 @@ if( MSVC )
   set(strdup "_strdup")
 
   # See if the DIA SDK is available and usable.
-  set(MSVC_DIA_SDK_DIR "$ENV{VSINSTALLDIR}DIA SDK")
+  set(MSVC_DIA_SDK_DIR "$ENV{VSINSTALLDIR}DIA SDK" CACHE PATH
+      "Path to the DIA SDK")
 
   # Due to a bug in MSVC 2013's installation software, it is possible
   # for MSVC 2013 to write the DIA SDK into the Visual Studio 2012
@@ -460,7 +499,7 @@ if( MSVC )
   # though that we should handle it.  We do so by simply checking that
   # the DIA SDK folder exists.  Should this happen you will need to
   # uninstall VS 2012 and then re-install VS 2013.
-  if (IS_DIRECTORY ${MSVC_DIA_SDK_DIR})
+  if (IS_DIRECTORY "${MSVC_DIA_SDK_DIR}")
     set(HAVE_DIA_SDK 1)
   else()
     set(HAVE_DIA_SDK 0)
@@ -490,13 +529,6 @@ if( LLVM_ENABLE_THREADS )
   message(STATUS "Threads enabled.")
 else( LLVM_ENABLE_THREADS )
   message(STATUS "Threads disabled.")
-endif()
-
-if (LLVM_ENABLE_ZLIB )
-  # Check if zlib is available in the system.
-  if ( NOT HAVE_ZLIB_H OR NOT HAVE_LIBZ )
-    set(LLVM_ENABLE_ZLIB 0)
-  endif()
 endif()
 
 if (LLVM_ENABLE_DOXYGEN)
@@ -543,6 +575,20 @@ endif()
 find_program(GOLD_EXECUTABLE NAMES ${LLVM_DEFAULT_TARGET_TRIPLE}-ld.gold ld.gold ${LLVM_DEFAULT_TARGET_TRIPLE}-ld ld DOC "The gold linker")
 set(LLVM_BINUTILS_INCDIR "" CACHE PATH
 	"PATH to binutils/include containing plugin-api.h for gold plugin.")
+
+if(CMAKE_GENERATOR STREQUAL "Ninja")
+  execute_process(COMMAND ${CMAKE_MAKE_PROGRAM} --version
+    OUTPUT_VARIABLE NINJA_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  set(NINJA_VERSION ${NINJA_VERSION} CACHE STRING "Ninja version number" FORCE)
+  message(STATUS "Ninja version: ${NINJA_VERSION}")
+endif()
+
+if(CMAKE_GENERATOR STREQUAL "Ninja" AND
+    NOT "${NINJA_VERSION}" VERSION_LESS "1.9.0" AND
+    CMAKE_HOST_APPLE AND CMAKE_HOST_SYSTEM_VERSION VERSION_GREATER "15.6.0")
+  set(LLVM_TOUCH_STATIC_LIBRARIES ON)
+endif()
 
 if(CMAKE_HOST_APPLE AND APPLE)
   if(NOT CMAKE_XCRUN)
@@ -596,16 +642,19 @@ function(find_python_module module)
   string(REPLACE "." "_" module_name ${module})
   string(TOUPPER ${module_name} module_upper)
   set(FOUND_VAR PY_${module_upper}_FOUND)
+  if (DEFINED ${FOUND_VAR})
+    return()
+  endif()
 
-  execute_process(COMMAND "${PYTHON_EXECUTABLE}" "-c" "import ${module}"
+  execute_process(COMMAND "${Python3_EXECUTABLE}" "-c" "import ${module}"
     RESULT_VARIABLE status
     ERROR_QUIET)
 
   if(status)
-    set(${FOUND_VAR} 0 PARENT_SCOPE)
+    set(${FOUND_VAR} OFF CACHE BOOL "Failed to find python module '${module}'")
     message(STATUS "Could NOT find Python module ${module}")
   else()
-    set(${FOUND_VAR} 1 PARENT_SCOPE)
+  set(${FOUND_VAR} ON CACHE BOOL "Found python module '${module}'")
     message(STATUS "Found Python module ${module}")
   endif()
 endfunction()

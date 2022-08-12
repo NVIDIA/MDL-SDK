@@ -55,6 +55,7 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         mdl::mdl_core
         mdl_core::shared
         opengl
+        glfw
         imgui
         cuda
         freeimage

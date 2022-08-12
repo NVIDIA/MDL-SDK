@@ -31,6 +31,7 @@
 #include <mi/math/function.h>
 #include <mi/base/handle.h>
 #include "mdl/compiler/compilercore/compilercore_streams.h"
+#include "mdl/compiler/compilercore/compilercore_cstring_hash.h"
 #include "mdl/compiler/compilercore/compilercore_half.h"
 #include "mdl/compiler/compilercore/compilercore_tools.h"
 
@@ -218,6 +219,12 @@ bool Value::is_all_one()
 
 // Returns true if this value is finite (i.e. neither Inf nor NaN).
 bool Value::is_finite()
+{
+    return false;
+}
+
+// Check, if this value is NaN.
+bool Value::is_nan()
 {
     return false;
 }
@@ -1292,16 +1299,22 @@ bool Value_half::is_finite()
     return mi::math::isfinite(m_value) != 0;
 }
 
-// Check if something is a Plus zero, aka +0.0.
+// Check if this value is a Plus zero, aka +0.0.
 bool Value_half::is_plus_zero()
 {
     return m_value == 0.0f && !mi::math::sign_bit(m_value);
 }
 
-// Check if something is a Minus zero, aka -0.0.
+// Check if this value is a Minus zero, aka -0.0.
 bool Value_half::is_minus_zero()
 {
     return m_value == 0.0f && mi::math::sign_bit(m_value);
+}
+
+// Check if this value is NaN.
+bool Value_half::is_nan()
+{
+    return mi::math::isnan(m_value);
 }
 
 // ---------------------------------- Value_float ----------------------------------
@@ -1485,16 +1498,22 @@ bool Value_float::is_finite()
     return mi::math::isfinite(m_value) != 0;
 }
 
-// Check if something is a Plus zero, aka +0.0.
+// Check if this value is a Plus zero, aka +0.0.
 bool Value_float::is_plus_zero()
 {
     return m_value == 0.0f && !mi::math::sign_bit(m_value);
 }
 
-// Check if something is a Minus zero, aka -0.0.
+// Check if this value is a Minus zero, aka -0.0.
 bool Value_float::is_minus_zero()
 {
     return m_value == 0.0f && mi::math::sign_bit(m_value);
+}
+
+// Check if this value is NaN.
+bool Value_float::is_nan()
+{
+    return mi::math::isnan(m_value);
 }
 
 // ---------------------------------- Value_double ----------------------------------
@@ -1666,16 +1685,49 @@ bool Value_double::is_finite()
     return mi::math::isfinite(m_value) != 0;
 }
 
-// Check if something is a Plus zero, aka +0.0.
+// Check if this value is a Plus zero, aka +0.0.
 bool Value_double::is_plus_zero()
 {
     return m_value == 0.0f && !mi::math::sign_bit(m_value);
 }
 
-// Check if something is a Minus zero, aka -0.0.
+// Check if this value is a Minus zero, aka -0.0.
 bool Value_double::is_minus_zero()
 {
     return m_value == 0.0f && mi::math::sign_bit(m_value);
+}
+
+// Check if this value is NaN.
+bool Value_double::is_nan()
+{
+    return mi::math::isnan(m_value);
+}
+
+// ---------------------------------- Value_string ----------------------------------
+
+// Constructor.
+Value_string::Value_string(Memory_arena *arena, Type_string *type, char const *value)
+: Base(type)
+, m_value(Arena_strdup(*arena, value))
+{
+}
+
+// Get the kind of value.
+Value::Kind Value_string::get_kind()
+{
+    return s_kind;
+}
+
+// Get the type of this value.
+Type_string *Value_string::get_type()
+{
+    return cast<Type_string>(m_type);
+}
+
+// Returns true if this value is finite (i.e. neither Inf nor NaN).
+bool Value_string::is_finite()
+{
+    return true;
 }
 
 // ---------------------------------- Value_compound ----------------------------------
@@ -2360,6 +2412,18 @@ bool Value_vector::is_all_one()
     return all_all_one;
 }
 
+// Returns true if any component of this value is NaN.
+bool Value_vector::is_nan()
+{
+    bool   any_nan = false;
+    size_t n = m_values.size();
+
+    for (size_t i = 0; i < n; ++i) {
+        any_nan |= m_values[i]->is_nan();
+    }
+    return any_nan;
+}
+
 // ---------------------------------- Value_matrix ----------------------------------
 
 // Constructor.
@@ -2643,6 +2707,18 @@ bool Value_matrix::is_one()
     return false;
 }
 
+// Returns true if any component of this value is NaN.
+bool Value_matrix::is_nan()
+{
+    bool   any_nan = false;
+    size_t n = m_values.size();
+
+    for (size_t i = 0; i < n; ++i) {
+        any_nan |= m_values[i]->is_nan();
+    }
+    return any_nan;
+}
+
 // ---------------------------------- Value array ----------------------------------
 
 // Constructor.
@@ -2854,6 +2930,19 @@ Value_double *Value_factory::get_double(double value)
     if (!res.second) {
         m_builder.get_arena()->drop(v);
         return cast<Value_double>(*res.first);
+    }
+    return v;
+}
+
+// Get a value of type string.
+Value_string *Value_factory::get_string(char const *value)
+{
+    Value_string *v = m_builder.create<Value_string>(
+        m_builder.get_arena(), m_tf.get_string(), value);
+    std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
+    if (!res.second) {
+        m_builder.get_arena()->drop(v);
+        return cast<Value_string>(*res.first);
     }
     return v;
 }
@@ -3171,6 +3260,8 @@ size_t Value_factory::Value_hash::operator() (Value *value) const
             u.d = cast<Value_double>(value)->get_value();
             return h + (u.z[0] ^ u.z[1]);
         }
+    case Value::VK_STRING:
+        return h + cstring_hash()(cast<Value_string>(value)->get_value());
     case Value::VK_VECTOR:
     case Value::VK_MATRIX:
     case Value::VK_ARRAY:
@@ -3222,6 +3313,8 @@ bool Value_factory::Value_equal::operator()(Value *a, Value *b) const
     case Value::VK_DOUBLE:
         return bit_equal_float(
             cast<Value_double>(a)->get_value(), cast<Value_double>(b)->get_value());
+    case Value::VK_STRING:
+        return strcmp(cast<Value_string>(a)->get_value(), cast<Value_string>(b)->get_value()) == 0;
     case Value::VK_VECTOR:
     case Value::VK_MATRIX:
     case Value::VK_ARRAY:

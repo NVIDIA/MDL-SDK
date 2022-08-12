@@ -1,9 +1,8 @@
 //===- llvm/Value.h - Definition of the Value class -------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -15,8 +14,11 @@
 #define LLVM_IR_VALUE_H
 
 #include "llvm-c/Types.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/IR/Use.h"
+#include "llvm/Support/Alignment.h"
 #include "llvm/Support/CBindingWrapping.h"
 #include "llvm/Support/Casting.h"
 #include <cassert>
@@ -42,11 +44,11 @@ class GlobalVariable;
 class InlineAsm;
 class Instruction;
 class LLVMContext;
+class MDNode;
 class Module;
 class ModuleSlotTracker;
 class raw_ostream;
 template<typename ValueTy> class StringMapEntry;
-class StringRef;
 class Twine;
 class Type;
 class User;
@@ -71,8 +73,6 @@ using ValueName = StringMapEntry<Value *>;
 /// objects that watch it and listen to RAUW and Destroy events.  See
 /// llvm/IR/ValueHandle.h for details.
 class Value {
-  // The least-significant bit of the first word of Value *must* be zero:
-  //   http://www.llvm.org/docs/ProgrammersManual.html#the-waymarking-algorithm
   Type *VTy;
   Use *UseList;
 
@@ -111,12 +111,13 @@ protected:
   ///
   /// Note, this should *NOT* be used directly by any class other than User.
   /// User uses this value to find the Use list.
-  enum : unsigned { NumUserOperandsBits = 28 };
+  enum : unsigned { NumUserOperandsBits = 27 };
   unsigned NumUserOperands : NumUserOperandsBits;
 
   // Use the same type as the bitfield above so that MSVC will pack them.
   unsigned IsUsedByMD : 1;
   unsigned HasName : 1;
+  unsigned HasMetadata : 1; // Has metadata attached to this?
   unsigned HasHungOffUses : 1;
   unsigned HasDescriptor : 1;
 
@@ -254,7 +255,8 @@ public:
 
 private:
   void destroyValueName();
-  void doRAUW(Value *New, bool NoMetadata);
+  enum class ReplaceMetadataUses { No, Yes };
+  void doRAUW(Value *New, ReplaceMetadataUses);
   void setNameImpl(const Twine &Name);
 
 public:
@@ -279,6 +281,10 @@ public:
   /// \note It is an error to call V->takeName(V).
   void takeName(Value *V);
 
+#ifndef NDEBUG
+  std::string getNameOrAsOperand() const;
+#endif
+
   /// Change all uses of this to point to a new Value.
   ///
   /// Go through the uses list for this definition and make each use point to
@@ -292,10 +298,29 @@ public:
   /// "V" instead of "this". This function skips metadata entries in the list.
   void replaceNonMetadataUsesWith(Value *V);
 
+  /// Go through the uses list for this definition and make each use point
+  /// to "V" if the callback ShouldReplace returns true for the given Use.
+  /// Unlike replaceAllUsesWith() this function does not support basic block
+  /// values or constant users.
+  void replaceUsesWithIf(Value *New,
+                         llvm::function_ref<bool(Use &U)> ShouldReplace) {
+    assert(New && "Value::replaceUsesWithIf(<null>) is invalid!");
+    assert(New->getType() == getType() &&
+           "replaceUses of value with new value of different type!");
+
+    for (use_iterator UI = use_begin(), E = use_end(); UI != E;) {
+      Use &U = *UI;
+      ++UI;
+      if (!ShouldReplace(U))
+        continue;
+      U.set(New);
+    }
+  }
+
   /// replaceUsesOutsideBlock - Go through the uses list for this definition and
   /// make each use point to "V" instead of "this" when the use is outside the
   /// block. 'This's use list is expected to have at least one element.
-  /// Unlike replaceAllUsesWith this function does not support basic block
+  /// Unlike replaceAllUsesWith() this function does not support basic block
   /// values or constant users.
   void replaceUsesOutsideBlock(Value *V, BasicBlock *BB);
 
@@ -405,23 +430,63 @@ public:
     return materialized_users();
   }
 
-  /// Return true if there is exactly one user of this value.
+  /// Return true if there is exactly one use of this value.
   ///
   /// This is specialized because it is a common request and does not require
   /// traversing the whole use list.
-  bool hasOneUse() const {
-    const_use_iterator I = use_begin(), E = use_end();
-    if (I == E) return false;
-    return ++I == E;
-  }
+  bool hasOneUse() const { return hasSingleElement(uses()); }
 
-  /// Return true if this Value has exactly N users.
+  /// Return true if this Value has exactly N uses.
   bool hasNUses(unsigned N) const;
 
-  /// Return true if this value has N users or more.
+  /// Return true if this value has N uses or more.
   ///
   /// This is logically equivalent to getNumUses() >= N.
   bool hasNUsesOrMore(unsigned N) const;
+
+  /// Return true if there is exactly one user of this value.
+  ///
+  /// Note that this is not the same as "has one use". If a value has one use,
+  /// then there certainly is a single user. But if value has several uses,
+  /// it is possible that all uses are in a single user, or not.
+  ///
+  /// This check is potentially costly, since it requires traversing,
+  /// in the worst case, the whole use list of a value.
+  bool hasOneUser() const;
+
+  /// Return true if there is exactly one use of this value that cannot be
+  /// dropped.
+  ///
+  /// This is specialized because it is a common request and does not require
+  /// traversing the whole use list.
+  Use *getSingleUndroppableUse();
+
+  /// Return true if there this value.
+  ///
+  /// This is specialized because it is a common request and does not require
+  /// traversing the whole use list.
+  bool hasNUndroppableUses(unsigned N) const;
+
+  /// Return true if this value has N uses or more.
+  ///
+  /// This is logically equivalent to getNumUses() >= N.
+  bool hasNUndroppableUsesOrMore(unsigned N) const;
+
+  /// Remove every uses that can safely be removed.
+  ///
+  /// This will remove for example uses in llvm.assume.
+  /// This should be used when performing want to perform a tranformation but
+  /// some Droppable uses pervent it.
+  /// This function optionally takes a filter to only remove some droppable
+  /// uses.
+  void dropDroppableUses(llvm::function_ref<bool(const Use *)> ShouldDrop =
+                             [](const Use *) { return true; });
+
+  /// Remove every use of this value in \p User that can safely be removed.
+  void dropDroppableUsesIn(User &Usr);
+
+  /// Remove the droppable use \p U.
+  static void dropDroppableUse(Use &U);
 
   /// Check if this value is used in the specified basic block.
   bool isUsedInBasicBlock(const BasicBlock *BB) const;
@@ -487,42 +552,114 @@ public:
   /// Return true if there is metadata referencing this value.
   bool isUsedByMetadata() const { return IsUsedByMD; }
 
+protected:
+  /// Get the current metadata attachments for the given kind, if any.
+  ///
+  /// These functions require that the value have at most a single attachment
+  /// of the given kind, and return \c nullptr if such an attachment is missing.
+  /// @{
+  MDNode *getMetadata(unsigned KindID) const;
+  MDNode *getMetadata(StringRef Kind) const;
+  /// @}
+
+  /// Appends all attachments with the given ID to \c MDs in insertion order.
+  /// If the Value has no attachments with the given ID, or if ID is invalid,
+  /// leaves MDs unchanged.
+  /// @{
+  void getMetadata(unsigned KindID, SmallVectorImpl<MDNode *> &MDs) const;
+  void getMetadata(StringRef Kind, SmallVectorImpl<MDNode *> &MDs) const;
+  /// @}
+
+  /// Appends all metadata attached to this value to \c MDs, sorting by
+  /// KindID. The first element of each pair returned is the KindID, the second
+  /// element is the metadata value. Attachments with the same ID appear in
+  /// insertion order.
+  void
+  getAllMetadata(SmallVectorImpl<std::pair<unsigned, MDNode *>> &MDs) const;
+
+  /// Return true if this value has any metadata attached to it.
+  bool hasMetadata() const { return (bool)HasMetadata; }
+
+  /// Return true if this value has the given type of metadata attached.
+  /// @{
+  bool hasMetadata(unsigned KindID) const {
+    return getMetadata(KindID) != nullptr;
+  }
+  bool hasMetadata(StringRef Kind) const {
+    return getMetadata(Kind) != nullptr;
+  }
+  /// @}
+
+  /// Set a particular kind of metadata attachment.
+  ///
+  /// Sets the given attachment to \c MD, erasing it if \c MD is \c nullptr or
+  /// replacing it if it already exists.
+  /// @{
+  void setMetadata(unsigned KindID, MDNode *Node);
+  void setMetadata(StringRef Kind, MDNode *Node);
+  /// @}
+
+  /// Add a metadata attachment.
+  /// @{
+  void addMetadata(unsigned KindID, MDNode &MD);
+  void addMetadata(StringRef Kind, MDNode &MD);
+  /// @}
+
+  /// Erase all metadata attachments with the given kind.
+  ///
+  /// \returns true if any metadata was removed.
+  bool eraseMetadata(unsigned KindID);
+
+  /// Erase all metadata attached to this Value.
+  void clearMetadata();
+
+public:
   /// Return true if this value is a swifterror value.
   ///
   /// swifterror values can be either a function argument or an alloca with a
   /// swifterror attribute.
   bool isSwiftError() const;
 
-  /// Strip off pointer casts, all-zero GEPs, and aliases.
+  /// Strip off pointer casts, all-zero GEPs and address space casts.
   ///
   /// Returns the original uncasted value.  If this is called on a non-pointer
   /// value, it returns 'this'.
   const Value *stripPointerCasts() const;
   Value *stripPointerCasts() {
     return const_cast<Value *>(
-                         static_cast<const Value *>(this)->stripPointerCasts());
+        static_cast<const Value *>(this)->stripPointerCasts());
   }
 
-  /// Strip off pointer casts, all-zero GEPs, aliases and invariant group
-  /// info.
+  /// Strip off pointer casts, all-zero GEPs, address space casts, and aliases.
+  ///
+  /// Returns the original uncasted value.  If this is called on a non-pointer
+  /// value, it returns 'this'.
+  const Value *stripPointerCastsAndAliases() const;
+  Value *stripPointerCastsAndAliases() {
+    return const_cast<Value *>(
+        static_cast<const Value *>(this)->stripPointerCastsAndAliases());
+  }
+
+  /// Strip off pointer casts, all-zero GEPs and address space casts
+  /// but ensures the representation of the result stays the same.
+  ///
+  /// Returns the original uncasted value with the same representation. If this
+  /// is called on a non-pointer value, it returns 'this'.
+  const Value *stripPointerCastsSameRepresentation() const;
+  Value *stripPointerCastsSameRepresentation() {
+    return const_cast<Value *>(static_cast<const Value *>(this)
+                                   ->stripPointerCastsSameRepresentation());
+  }
+
+  /// Strip off pointer casts, all-zero GEPs and invariant group info.
   ///
   /// Returns the original uncasted value.  If this is called on a non-pointer
   /// value, it returns 'this'. This function should be used only in
   /// Alias analysis.
   const Value *stripPointerCastsAndInvariantGroups() const;
   Value *stripPointerCastsAndInvariantGroups() {
-    return const_cast<Value *>(
-        static_cast<const Value *>(this)->stripPointerCastsAndInvariantGroups());
-  }
-
-  /// Strip off pointer casts and all-zero GEPs.
-  ///
-  /// Returns the original uncasted value.  If this is called on a non-pointer
-  /// value, it returns 'this'.
-  const Value *stripPointerCastsNoFollowAliases() const;
-  Value *stripPointerCastsNoFollowAliases() {
-    return const_cast<Value *>(
-          static_cast<const Value *>(this)->stripPointerCastsNoFollowAliases());
+    return const_cast<Value *>(static_cast<const Value *>(this)
+                                   ->stripPointerCastsAndInvariantGroups());
   }
 
   /// Strip off pointer casts and all-constant inbounds GEPs.
@@ -535,29 +672,66 @@ public:
               static_cast<const Value *>(this)->stripInBoundsConstantOffsets());
   }
 
-  /// Accumulate offsets from \a stripInBoundsConstantOffsets().
+  /// Accumulate the constant offset this value has compared to a base pointer.
+  /// Only 'getelementptr' instructions (GEPs) are accumulated but other
+  /// instructions, e.g., casts, are stripped away as well.
+  /// The accumulated constant offset is added to \p Offset and the base
+  /// pointer is returned.
   ///
-  /// Stores the resulting constant offset stripped into the APInt provided.
-  /// The provided APInt will be extended or truncated as needed to be the
-  /// correct bitwidth for an offset of this pointer type.
+  /// The APInt \p Offset has to have a bit-width equal to the IntPtr type for
+  /// the address space of 'this' pointer value, e.g., use
+  /// DataLayout::getIndexTypeSizeInBits(Ty).
   ///
-  /// If this is called on a non-pointer value, it returns 'this'.
+  /// If \p AllowNonInbounds is true, offsets in GEPs are stripped and
+  /// accumulated even if the GEP is not "inbounds".
+  ///
+  /// If \p ExternalAnalysis is provided it will be used to calculate a offset
+  /// when a operand of GEP is not constant.
+  /// For example, for a value \p ExternalAnalysis might try to calculate a
+  /// lower bound. If \p ExternalAnalysis is successful, it should return true.
+  ///
+  /// If this is called on a non-pointer value, it returns 'this' and the
+  /// \p Offset is not modified.
+  ///
+  /// Note that this function will never return a nullptr. It will also never
+  /// manipulate the \p Offset in a way that would not match the difference
+  /// between the underlying value and the returned one. Thus, if no constant
+  /// offset was found, the returned value is the underlying one and \p Offset
+  /// is unchanged.
+  const Value *stripAndAccumulateConstantOffsets(
+      const DataLayout &DL, APInt &Offset, bool AllowNonInbounds,
+      function_ref<bool(Value &Value, APInt &Offset)> ExternalAnalysis =
+          nullptr) const;
+  Value *stripAndAccumulateConstantOffsets(const DataLayout &DL, APInt &Offset,
+                                           bool AllowNonInbounds) {
+    return const_cast<Value *>(
+        static_cast<const Value *>(this)->stripAndAccumulateConstantOffsets(
+            DL, Offset, AllowNonInbounds));
+  }
+
+  /// This is a wrapper around stripAndAccumulateConstantOffsets with the
+  /// in-bounds requirement set to false.
   const Value *stripAndAccumulateInBoundsConstantOffsets(const DataLayout &DL,
-                                                         APInt &Offset) const;
+                                                         APInt &Offset) const {
+    return stripAndAccumulateConstantOffsets(DL, Offset,
+                                             /* AllowNonInbounds */ false);
+  }
   Value *stripAndAccumulateInBoundsConstantOffsets(const DataLayout &DL,
                                                    APInt &Offset) {
-    return const_cast<Value *>(static_cast<const Value *>(this)
-        ->stripAndAccumulateInBoundsConstantOffsets(DL, Offset));
+    return stripAndAccumulateConstantOffsets(DL, Offset,
+                                             /* AllowNonInbounds */ false);
   }
 
   /// Strip off pointer casts and inbounds GEPs.
   ///
   /// Returns the original pointer value.  If this is called on a non-pointer
   /// value, it returns 'this'.
-  const Value *stripInBoundsOffsets() const;
-  Value *stripInBoundsOffsets() {
+  const Value *stripInBoundsOffsets(function_ref<void(const Value *)> Func =
+                                        [](const Value *) {}) const;
+  inline Value *stripInBoundsOffsets(function_ref<void(const Value *)> Func =
+                                  [](const Value *) {}) {
     return const_cast<Value *>(
-                      static_cast<const Value *>(this)->stripInBoundsOffsets());
+        static_cast<const Value *>(this)->stripInBoundsOffsets(Func));
   }
 
   /// Returns the number of bytes known to be dereferenceable for the
@@ -572,7 +746,7 @@ public:
   ///
   /// Returns an alignment which is either specified explicitly, e.g. via
   /// align attribute of a function argument, or guaranteed by DataLayout.
-  unsigned getPointerAlignment(const DataLayout &DL) const;
+  Align getPointerAlignment(const DataLayout &DL) const;
 
   /// Translate PHI node to its predecessor from the given basic block.
   ///
@@ -745,7 +919,7 @@ template <class Compare> void Value::sortUseList(Compare Cmp) {
 
   // Fix the Prev pointers.
   for (Use *I = UseList, **Prev = &UseList; I; I = I->Next) {
-    I->setPrev(Prev);
+    I->Prev = Prev;
     Prev = &I->Next;
   }
 }

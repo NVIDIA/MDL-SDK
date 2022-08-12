@@ -67,10 +67,9 @@ public:
     /// Destructor of Mdl_evaluator_api_impl.
     virtual ~Mdl_evaluator_api_impl();
 
-public:
     // public API methods
 
-    const mi::neuraylib::IValue_bool* is_material_parameter_enabled(
+    const mi::neuraylib::IValue_bool* deprecated_is_material_parameter_enabled(
         mi::neuraylib::ITransaction* trans,
         mi::neuraylib::IValue_factory* fact,
         const mi::neuraylib::IMaterial_instance* inst,
@@ -107,7 +106,6 @@ private:
     Mdl_evaluator_api_impl(Mdl_evaluator_api_impl const &) = delete;
     Mdl_evaluator_api_impl &operator=(Mdl_evaluator_api_impl const &) = delete;
 
-private:
     mi::neuraylib::INeuray *m_neuray;
 
     SYSTEM::Access_module<MDLC::Mdlc_module> m_mdlc_module;

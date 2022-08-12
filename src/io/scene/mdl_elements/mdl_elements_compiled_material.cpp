@@ -82,13 +82,10 @@ Mdl_compiled_material::Mdl_compiled_material(
     mi::Float32 mdl_meters_per_scene_unit,
     mi::Float32 mdl_wavelength_min,
     mi::Float32 mdl_wavelength_max,
-    bool load_resources)
+    bool resolve_resources)
 : m_tf(get_type_factory())
 , m_vf(get_value_factory())
 , m_ef(get_expression_factory())
-, m_body()
-, m_temporaries()
-, m_arguments()
 , m_mdl_meters_per_scene_unit(mdl_meters_per_scene_unit)
 , m_mdl_wavelength_min(mdl_wavelength_min)
 , m_mdl_wavelength_max(mdl_wavelength_max)
@@ -108,7 +105,7 @@ Mdl_compiled_material::Mdl_compiled_material(
         module_filename,
         module_name,
         /*prototype_tag*/ DB::Tag(),
-        load_resources,
+        resolve_resources,
         &m_module_idents);
 
     const mi::mdl::DAG_call* constructor = instance->get_constructor();
@@ -590,7 +587,7 @@ bool Mdl_compiled_material::is_valid(
             std::string message = "The identifier of the imported module '"
                 + get_db_name(module->get_mdl_name())
                 + "' has changed.";
-            add_context_error(context, message, -1);
+            add_error_message(context, message, -1);
             return false;
         }
         if (!module->is_valid(transaction, context))

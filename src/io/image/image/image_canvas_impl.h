@@ -107,6 +107,12 @@ public:
 
     /// Constructor.
     ///
+    /// Creates a memory-based canvas from the given canvas.
+    /// \param other              The canvas to copy from.
+    Canvas_impl(const mi::neuraylib::ICanvas* other);
+
+    /// Constructor.
+    ///
     /// Creates a file-based canvas that represents the given file on disk (or a pink dummy 1x1
     /// canvas in case of errors).
     ///

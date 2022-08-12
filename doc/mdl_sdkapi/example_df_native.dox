@@ -31,7 +31,7 @@
 <div align="right">
     [\link mi_neuray_example_df_cuda Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
-    [\link mi_neuray_example_derivatives Next\endlink]
+    [\link mi_neuray_example_df_vulkan Next\endlink]
 </div>
 
 This example demonstrates how to generate target code for the native backend (CPU) from an MDL material and use the generated BSDF functions in a CPU based renderer to account for the \c surface.scattering, \c emission, \c thin_walled and \c geometry.cutout_opacity expressions of the material.
@@ -188,14 +188,14 @@ At this point the target code for the native backend is available for the render
 \endcode
 
 and here, the renderer uses three \c target_code functions to evaluate the material emission contribution for the current \c shading_state.
-- \c target_code->execute_bsdf_init() to initialize the emission distribution function for the current \c shading_state and function index \c edf_function_index.
+- \c target_code->execute_edf_init() to initialize the emission distribution function for the current \c shading_state and function index \c edf_function_index.
 - \c target_code->execute_edf_evaluate() to evaluate material emission distribution function for the current view direction \c eval_data.k1 and function index \c edf_function_index.
 - \c target_code->execute() to obtain the emission \c intensity for the function index \c surface_emission_intensity_function_index.
 
 \code
     uint64_t edf_function_index = ray.is_inside ? rc.backface_edf_function_index : rc.surface_edf_function_index;
     // shader initialization for the current hit point
-    rc.target_code->execute_bsdf_init(
+    rc.target_code->execute_edf_init(
         edf_function_index,
         rc.shading_state,
         nullptr,
@@ -243,7 +243,7 @@ For detailed instructions, please refer to the \link mi_neuray_getting_started G
 <div align="right">
     [\link mi_neuray_example_df_cuda Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
-    [\link mi_neuray_example_derivatives Next\endlink]
+    [\link mi_neuray_example_vulkan Next\endlink]
 </div>
 
 */

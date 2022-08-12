@@ -64,6 +64,8 @@ public:
         TK_MIN10FLOAT,  ///< minimum 10bit float
         TK_MIN16FLOAT,  ///< minimum 16bit float
 
+        TK_STRING,      ///< The string type.
+
         TK_VECTOR,      ///< A vector type.
         TK_MATRIX,      ///< A matrix type.
         TK_ARRAY,       ///< An array type.
@@ -71,6 +73,8 @@ public:
         TK_FUNCTION,    ///< A function type.
 
         TK_TEXTURE,     ///< A texture type.
+
+        TK_TEMPLATE,    ///< A template type (used for "function templates").
 
         TK_ERROR,       ///< The error type.
     };
@@ -428,6 +432,22 @@ public:
     explicit Type_min16float();
 };
 
+/// The HLSL string type.
+class Type_string : public Type
+{
+    typedef Type Base;
+public:
+    /// The kind of this subclass.
+    static Kind const s_kind = TK_STRING;
+
+    /// Get the type kind.
+    Kind get_kind() HLSL_FINAL;
+
+public:
+    /// Constructor.
+    explicit Type_string();
+};
+
 /// A compound type.
 class Type_compound : public Type
 {
@@ -725,6 +745,9 @@ public:
     /// \param index    The index of the parameter in the parameter list.
     Parameter *get_parameter(size_t index);
 
+    /// Check if this function type is a "function template".
+    bool is_template() const;
+
 private:
     /// Constructor.
     ///
@@ -784,6 +807,22 @@ public:
 private:
     /// The texture shape of this sampler.
     Texture_shape m_shape;
+};
+
+/// The HLSL template type.
+class Type_template : public Type
+{
+    typedef Type Base;
+public:
+    /// The kind of this subclass.
+    static Kind const s_kind = TK_TEMPLATE;
+
+    /// Get the type kind.
+    Kind get_kind() HLSL_FINAL;
+
+public:
+    /// Constructor.
+    explicit Type_template();
 };
 
 /// Cast to subtype or return NULL if types do not match.
@@ -1161,6 +1200,9 @@ public:
     /// Get the (singleton) min16float type instance.
     Type_min16float *get_min16float();
 
+    /// Get the (singleton) string type instance.
+    Type_string *get_string();
+
     /// Get a vector type 1instance.
     ///
     /// \param element_type The type of the vector elements.
@@ -1216,6 +1258,19 @@ public:
     /// \param shape    the texture shape of this texture
     Type_texture *get_texture(
         Texture_shape shape);
+
+    /// Get the template type instance.
+    ///
+    /// \note Because so far no intrinsic has more that one template type, we have only one
+    ///       instance. This might be changed in the future.
+    Type_template *get_template();
+
+    /// If a given type has an unsigned variant, return it.
+    ///
+    /// \param type  the type that should be converted to unsigned
+    ///
+    /// \return the corresponding unsigned type or NULL if such type does not exists
+    Type *to_unsigned_type(Type *type);
 
     /// Return the symbol table of this type factory.
     Symbol_table &get_symbol_table() { return m_symtab; }

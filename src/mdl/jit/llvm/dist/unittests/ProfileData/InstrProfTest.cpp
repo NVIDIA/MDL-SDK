@@ -1,9 +1,8 @@
 //===- unittest/ProfileData/InstrProfTest.cpp -------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -40,22 +39,24 @@ struct InstrProfTest : ::testing::Test {
   InstrProfWriter Writer;
   std::unique_ptr<IndexedInstrProfReader> Reader;
 
-  void SetUp() { Writer.setOutputSparse(false); }
+  void SetUp() override { Writer.setOutputSparse(false); }
 
-  void readProfile(std::unique_ptr<MemoryBuffer> Profile) {
-    auto ReaderOrErr = IndexedInstrProfReader::create(std::move(Profile));
+  void readProfile(std::unique_ptr<MemoryBuffer> Profile,
+                   std::unique_ptr<MemoryBuffer> Remapping = nullptr) {
+    auto ReaderOrErr = IndexedInstrProfReader::create(std::move(Profile),
+                                                      std::move(Remapping));
     EXPECT_THAT_ERROR(ReaderOrErr.takeError(), Succeeded());
     Reader = std::move(ReaderOrErr.get());
   }
 };
 
 struct SparseInstrProfTest : public InstrProfTest {
-  void SetUp() { Writer.setOutputSparse(true); }
+  void SetUp() override { Writer.setOutputSparse(true); }
 };
 
 struct MaybeSparseInstrProfTest : public InstrProfTest,
                                   public ::testing::WithParamInterface<bool> {
-  void SetUp() { Writer.setOutputSparse(GetParam()); }
+  void SetUp() override { Writer.setOutputSparse(GetParam()); }
 };
 
 TEST_P(MaybeSparseInstrProfTest, write_and_read_empty_profile) {
@@ -174,7 +175,7 @@ TEST_F(InstrProfTest, get_profile_summary) {
     ASSERT_EQ(288230376151711744U, NinetyFivePerc->MinCount);
     ASSERT_EQ(72057594037927936U, NinetyNinePerc->MinCount);
   };
-  ProfileSummary &PS = Reader->getSummary();
+  ProfileSummary &PS = Reader->getSummary(/* IsCS */ false);
   VerifySummary(PS);
 
   // Test that conversion of summary to and from Metadata works.
@@ -188,8 +189,8 @@ TEST_F(InstrProfTest, get_profile_summary) {
 
   // Test that summary can be attached to and read back from module.
   Module M("my_module", Context);
-  M.setProfileSummary(MD);
-  MD = M.getProfileSummary();
+  M.setProfileSummary(MD, ProfileSummary::PSK_Instr);
+  MD = M.getProfileSummary(/* IsCS */ false);
   ASSERT_TRUE(MD);
   PSFromMD = ProfileSummary::getFromMD(MD);
   ASSERT_TRUE(PSFromMD);
@@ -800,7 +801,7 @@ TEST_P(MaybeSparseInstrProfTest, get_max_function_count) {
   auto Profile = Writer.writeBuffer();
   readProfile(std::move(Profile));
 
-  ASSERT_EQ(1ULL << 63, Reader->getMaximumFunctionCount());
+  ASSERT_EQ(1ULL << 63, Reader->getMaximumFunctionCount(/* IsCS */ false));
 }
 
 TEST_P(MaybeSparseInstrProfTest, get_weighted_function_counts) {
@@ -888,7 +889,7 @@ TEST_P(MaybeSparseInstrProfTest, instr_prof_bogus_symtab_empty_func_name) {
 // Testing symtab creator interface used by value profile transformer.
 TEST_P(MaybeSparseInstrProfTest, instr_prof_symtab_module_test) {
   LLVMContext Ctx;
-  std::unique_ptr<Module> M = llvm::make_unique<Module>("MyModule.cpp", Ctx);
+  std::unique_ptr<Module> M = std::make_unique<Module>("MyModule.cpp", Ctx);
   FunctionType *FTy = FunctionType::get(Type::getVoidTy(Ctx),
                                         /*isVarArg=*/false);
   Function::Create(FTy, Function::ExternalLinkage, "Gfoo", M.get());
@@ -990,6 +991,44 @@ TEST_P(MaybeSparseInstrProfTest, instr_prof_symtab_compression_test) {
   }
 }
 
+TEST_P(MaybeSparseInstrProfTest, remapping_test) {
+  Writer.addRecord({"_Z3fooi", 0x1234, {1, 2, 3, 4}}, Err);
+  Writer.addRecord({"file:_Z3barf", 0x567, {5, 6, 7}}, Err);
+  auto Profile = Writer.writeBuffer();
+  readProfile(std::move(Profile), llvm::MemoryBuffer::getMemBuffer(R"(
+    type i l
+    name 3bar 4quux
+  )"));
+
+  std::vector<uint64_t> Counts;
+  for (StringRef FooName : {"_Z3fooi", "_Z3fool"}) {
+    EXPECT_THAT_ERROR(Reader->getFunctionCounts(FooName, 0x1234, Counts),
+                      Succeeded());
+    ASSERT_EQ(4u, Counts.size());
+    EXPECT_EQ(1u, Counts[0]);
+    EXPECT_EQ(2u, Counts[1]);
+    EXPECT_EQ(3u, Counts[2]);
+    EXPECT_EQ(4u, Counts[3]);
+  }
+
+  for (StringRef BarName : {"file:_Z3barf", "file:_Z4quuxf"}) {
+    EXPECT_THAT_ERROR(Reader->getFunctionCounts(BarName, 0x567, Counts),
+                      Succeeded());
+    ASSERT_EQ(3u, Counts.size());
+    EXPECT_EQ(5u, Counts[0]);
+    EXPECT_EQ(6u, Counts[1]);
+    EXPECT_EQ(7u, Counts[2]);
+  }
+
+  for (StringRef BadName : {"_Z3foof", "_Z4quuxi", "_Z3barl", "", "_ZZZ",
+                            "_Z3barf", "otherfile:_Z4quuxf"}) {
+    EXPECT_THAT_ERROR(Reader->getFunctionCounts(BadName, 0x1234, Counts),
+                      Failed());
+    EXPECT_THAT_ERROR(Reader->getFunctionCounts(BadName, 0x567, Counts),
+                      Failed());
+  }
+}
+
 TEST_F(SparseInstrProfTest, preserve_no_records) {
   Writer.addRecord({"foo", 0x1234, {0}}, Err);
   Writer.addRecord({"bar", 0x4321, {0, 0}}, Err);
@@ -1004,5 +1043,26 @@ TEST_F(SparseInstrProfTest, preserve_no_records) {
 
 INSTANTIATE_TEST_CASE_P(MaybeSparse, MaybeSparseInstrProfTest,
                         ::testing::Bool(),);
+
+#if defined(_LP64) && defined(EXPENSIVE_CHECKS)
+TEST(ProfileReaderTest, ReadsLargeFiles) {
+  const size_t LargeSize = 1ULL << 32; // 4GB
+
+  auto RawProfile = WritableMemoryBuffer::getNewUninitMemBuffer(LargeSize);
+  if (!RawProfile)
+    return;
+  auto RawProfileReaderOrErr = InstrProfReader::create(std::move(RawProfile));
+  ASSERT_TRUE(InstrProfError::take(RawProfileReaderOrErr.takeError()) ==
+              instrprof_error::unrecognized_format);
+
+  auto IndexedProfile = WritableMemoryBuffer::getNewUninitMemBuffer(LargeSize);
+  if (!IndexedProfile)
+    return;
+  auto IndexedReaderOrErr =
+      IndexedInstrProfReader::create(std::move(IndexedProfile), nullptr);
+  ASSERT_TRUE(InstrProfError::take(IndexedReaderOrErr.takeError()) ==
+              instrprof_error::bad_magic);
+}
+#endif
 
 } // end anonymous namespace

@@ -71,6 +71,8 @@ create_from_base_preset(
         ${_GENERATOR_FILES}
     )
 
+target_compile_definitions(${PROJECT_NAME} PUBLIC "MI_NEURAYLIB_DEPRECATED_13_0")
+
 # customize name
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "")
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "_pymdlsdk")
@@ -109,20 +111,25 @@ endif()
 target_add_tool_dependency(TARGET ${PROJECT_NAME} TOOL python)
 target_add_tool_dependency(TARGET ${PROJECT_NAME} TOOL swig)
 
+get_property(_GENERATOR_IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(_GENERATOR_IS_MULTI_CONFIG)
+    set(CONFIG_DIR "/$(configuration)")
+endif()
+
 # run template processing for the interface classes
 add_custom_command(
     OUTPUT
-        ${_GENERATED_DIR}/$(configuration)/processed_headers.d
+        ${_GENERATED_DIR}${CONFIG_DIR}/processed_headers.d
     COMMAND ${CMAKE_COMMAND} -E echo "SWIG template instantiation ..."
     COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}/processed_headers
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}/$(configuration)
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}${CONFIG_DIR}
     COMMAND ${python_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/instantiate_templates_inline.py
         ${CMAKE_CURRENT_SOURCE_DIR}/mdl_python_swig.i
         ""
         ${MDL_INCLUDE_FOLDER}
         ${_GENERATED_DIR}/processed_headers
-        ${_GENERATED_DIR}/$(configuration)/processed_headers.d
+        ${_GENERATED_DIR}${CONFIG_DIR}/processed_headers.d
     DEPENDS
         ${CMAKE_CURRENT_SOURCE_DIR}/instantiate_templates_inline.py
         ${CMAKE_CURRENT_SOURCE_DIR}/mdl_python_swig.i
@@ -141,7 +148,9 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E echo "SWIG binding code generation ..."
     COMMAND ${swig_PATH}
         -c++ -python -doxygen
+        -w564
         -DSWIGWORDSIZE64
+        -DMI_NEURAYLIB_DEPRECATED_13_0
         ${_SWIG_MDL_SOURCE_RELEASE_OPTIONS}
         -I-
         -I${CMAKE_CURRENT_SOURCE_DIR}
@@ -154,7 +163,7 @@ add_custom_command(
         -module pymdlsdk
         ${CMAKE_CURRENT_SOURCE_DIR}/mdl_python_swig.i
     DEPENDS
-        ${_GENERATED_DIR}/$(configuration)/processed_headers.d
+        ${_GENERATED_DIR}${CONFIG_DIR}/processed_headers.d
         ${CMAKE_CURRENT_SOURCE_DIR}/mdl_python_swig.i
         ${PROJECT_SOURCES}
     VERBATIM
@@ -169,7 +178,7 @@ add_custom_command(
     DEPENDS
         ${CMAKE_CURRENT_SOURCE_DIR}/mdl_python_swig.i
         ${_GENERATED_DIR}/mdl_python_swig.cpp
-        ${_GENERATED_DIR}/$(configuration)/processed_headers.d
+        ${_GENERATED_DIR}${CONFIG_DIR}/processed_headers.d
     VERBATIM
     )
 

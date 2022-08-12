@@ -1,9 +1,8 @@
 //===-- OProfileJITEventListener.cpp - Tell OProfile about JITted code ----===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -40,7 +39,7 @@ class OProfileJITEventListener : public JITEventListener {
   std::unique_ptr<OProfileWrapper> Wrapper;
 
   void initialize();
-  std::map<const char*, OwningBinary<ObjectFile>> DebugObjects;
+  std::map<ObjectKey, OwningBinary<ObjectFile>> DebugObjects;
 
 public:
   OProfileJITEventListener(std::unique_ptr<OProfileWrapper> LibraryWrapper)
@@ -50,10 +49,10 @@ public:
 
   ~OProfileJITEventListener();
 
-  void NotifyObjectEmitted(const ObjectFile &Obj,
-                           const RuntimeDyld::LoadedObjectInfo &L) override;
+  void notifyObjectLoaded(ObjectKey Key, const ObjectFile &Obj,
+                          const RuntimeDyld::LoadedObjectInfo &L) override;
 
-  void NotifyFreeingObject(const ObjectFile &Obj) override;
+  void notifyFreeingObject(ObjectKey Key) override;
 };
 
 void OProfileJITEventListener::initialize() {
@@ -78,9 +77,9 @@ OProfileJITEventListener::~OProfileJITEventListener() {
   }
 }
 
-void OProfileJITEventListener::NotifyObjectEmitted(
-                                       const ObjectFile &Obj,
-                                       const RuntimeDyld::LoadedObjectInfo &L) {
+void OProfileJITEventListener::notifyObjectLoaded(
+    ObjectKey Key, const ObjectFile &Obj,
+    const RuntimeDyld::LoadedObjectInfo &L) {
   if (!Wrapper->isAgentAvailable()) {
     return;
   }
@@ -137,18 +136,18 @@ void OProfileJITEventListener::NotifyObjectEmitted(
     }
   }
 
-  DebugObjects[Obj.getData().data()] = std::move(DebugObjOwner);
+  DebugObjects[Key] = std::move(DebugObjOwner);
 }
 
-void OProfileJITEventListener::NotifyFreeingObject(const ObjectFile &Obj) {
+void OProfileJITEventListener::notifyFreeingObject(ObjectKey Key) {
   if (Wrapper->isAgentAvailable()) {
 
     // If there was no agent registered when the original object was loaded then
     // we won't have created a debug object for it, so bail out.
-    if (DebugObjects.find(Obj.getData().data()) == DebugObjects.end())
+    if (DebugObjects.find(Key) == DebugObjects.end())
       return;
 
-    const ObjectFile &DebugObj = *DebugObjects[Obj.getData().data()].getBinary();
+    const ObjectFile &DebugObj = *DebugObjects[Key].getBinary();
 
     // Use symbol info to iterate functions in the object.
     for (symbol_iterator I = DebugObj.symbol_begin(),
@@ -171,14 +170,14 @@ void OProfileJITEventListener::NotifyFreeingObject(const ObjectFile &Obj) {
     }
   }
 
-  DebugObjects.erase(Obj.getData().data());
+  DebugObjects.erase(Key);
 }
 
 }  // anonymous namespace.
 
 namespace llvm {
 JITEventListener *JITEventListener::createOProfileJITEventListener() {
-  return new OProfileJITEventListener(llvm::make_unique<OProfileWrapper>());
+  return new OProfileJITEventListener(std::make_unique<OProfileWrapper>());
 }
 
 } // namespace llvm

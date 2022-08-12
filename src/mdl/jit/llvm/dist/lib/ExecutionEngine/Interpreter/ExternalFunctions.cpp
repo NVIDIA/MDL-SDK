@@ -1,9 +1,8 @@
 //===-- ExternalFunctions.cpp - Implement External Functions --------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -33,7 +32,6 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/Mutex.h"
-#include "llvm/Support/UniqueLock.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cassert>
 #include <cmath>
@@ -42,6 +40,7 @@
 #include <cstdio>
 #include <cstring>
 #include <map>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -103,8 +102,9 @@ static ExFunc lookupFunction(const Function *F) {
   // composite function name should be.
   std::string ExtName = "lle_";
   FunctionType *FT = F->getFunctionType();
-  for (unsigned i = 0, e = FT->getNumContainedTypes(); i != e; ++i)
-    ExtName += getTypeID(FT->getContainedType(i));
+  ExtName += getTypeID(FT->getReturnType());
+  for (Type *T : FT->params())
+    ExtName += getTypeID(T);
   ExtName += ("_" + F->getName()).str();
 
   sys::ScopedLock Writer(*FunctionsLock);
@@ -227,7 +227,8 @@ static bool ffiInvoke(RawFunc Fn, Function *F, ArrayRef<GenericValue> ArgVals,
   Type *RetTy = FTy->getReturnType();
   ffi_type *rtype = ffiTypeFor(RetTy);
 
-  if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, NumArgs, rtype, &args[0]) == FFI_OK) {
+  if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, NumArgs, rtype, args.data()) ==
+      FFI_OK) {
     SmallVector<uint8_t, 128> ret;
     if (RetTy->getTypeID() != Type::VoidTyID)
       ret.resize(TD.getTypeStoreSize(RetTy));
@@ -257,7 +258,7 @@ GenericValue Interpreter::callExternalFunction(Function *F,
                                                ArrayRef<GenericValue> ArgVals) {
   TheInterpreter = this;
 
-  unique_lock<sys::Mutex> Guard(*FunctionsLock);
+  std::unique_lock<sys::Mutex> Guard(*FunctionsLock);
 
   // Do a lookup to see if the function is in our cache... this should just be a
   // deferred annotation!
@@ -273,7 +274,7 @@ GenericValue Interpreter::callExternalFunction(Function *F,
   RawFunc RawFn;
   if (RF == RawFunctions->end()) {
     RawFn = (RawFunc)(intptr_t)
-      sys::DynamicLibrary::SearchForAddressOfSymbol(F->getName());
+      sys::DynamicLibrary::SearchForAddressOfSymbol(std::string(F->getName()));
     if (!RawFn)
       RawFn = (RawFunc)(intptr_t)getPointerToGlobalIfAvailable(F);
     if (RawFn != 0)
@@ -418,7 +419,7 @@ static GenericValue lle_X_printf(FunctionType *FT,
   char Buffer[10000];
   std::vector<GenericValue> NewArgs;
   NewArgs.push_back(PTOGV((void*)&Buffer[0]));
-  NewArgs.insert(NewArgs.end(), Args.begin(), Args.end());
+  llvm::append_range(NewArgs, Args);
   GenericValue GV = lle_X_sprintf(FT, NewArgs);
   outs() << Buffer;
   return GV;

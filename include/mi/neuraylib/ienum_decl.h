@@ -124,7 +124,7 @@ public:
     virtual const char* get_enum_type_name() const = 0;
 };
 
-/*@}*/ // end group mi_neuray_types
+/**@}*/ // end group mi_neuray_types
 
 } // namespace mi
 

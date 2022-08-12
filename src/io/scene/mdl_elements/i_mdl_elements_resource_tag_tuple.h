@@ -36,13 +36,15 @@
 #include <base/data/db/i_db_tag.h>
 #include <base/data/serial/i_serializer.h>
 
+#include "i_mdl_elements_type.h"
+
 namespace MI {
 
 namespace SERIAL { class Serializer; class Deserializer; }
 
 namespace MDL {
 
-/// An entry in the resource tag map/vector, mapping accessible resources to a tag.
+/// An entry in the resource vector, mapping accessible resources to a tag.
 class Resource_tag_tuple
 {
 public:
@@ -66,15 +68,44 @@ public:
     Resource_tag_tuple( const mi::mdl::Resource_tag_tuple& t)
       : m_kind( t.m_kind),
         m_mdl_file_path( t.m_url),
-        m_selector( t.m_selector),
+        m_selector(t.m_selector),
         m_tag( t.m_tag)
-    {
-    }
+     {
+     }
 
     mi::mdl::Resource_tag_tuple::Kind m_kind;           ///< The resource kind.
     std::string                       m_mdl_file_path;  ///< The MDL file path.
     std::string                       m_selector;       ///< The selector.
     DB::Tag                           m_tag;            ///< The assigned tag.
+};
+
+/// An entry in the resource vector, mapping accessible resources to a tag.
+///
+/// Also includes IType::Kind and IType_texture::Shape.
+class Resource_tag_tuple_ext : public Resource_tag_tuple
+{
+public:
+    /// Default constructor.
+    Resource_tag_tuple_ext()
+      : m_type_kind( IType::TK_TEXTURE),
+        m_texture_shape( IType_texture::TS_2D)
+    { }
+
+    /// Constructor.
+    Resource_tag_tuple_ext(
+        const mi::mdl::Resource_tag_tuple& t,
+        IType::Kind type_kind,
+        IType_texture::Shape texture_shape)
+      : Resource_tag_tuple( t),
+        m_type_kind( type_kind),
+        m_texture_shape( texture_shape)
+    {
+    }
+
+    // The type kind.
+    IType::Kind m_type_kind;
+    /// The texture shape. Invalid if m_type_kind != TK_TEXTURE.
+    IType_texture::Shape m_texture_shape;
 };
 
 inline void write( SERIAL::Serializer* serializer, const Resource_tag_tuple& r)
@@ -91,6 +122,20 @@ inline void read( SERIAL::Deserializer* deserializer, Resource_tag_tuple* r)
    SERIAL::read( deserializer, &r->m_mdl_file_path);
    SERIAL::read( deserializer, &r->m_selector);
    SERIAL::read( deserializer, &r->m_tag);
+}
+
+inline void write( SERIAL::Serializer* serializer, const Resource_tag_tuple_ext& r)
+{
+   write( serializer, *static_cast<const Resource_tag_tuple*>( &r));
+   SERIAL::write_enum( serializer, r.m_type_kind);
+   SERIAL::write_enum( serializer, r.m_texture_shape);
+}
+
+inline void read( SERIAL::Deserializer* deserializer, Resource_tag_tuple_ext* r)
+{
+   read( deserializer, static_cast<Resource_tag_tuple*>( r));
+   SERIAL::read_enum( deserializer, &r->m_type_kind);
+   SERIAL::read_enum( deserializer, &r->m_texture_shape);
 }
 
 // See base/lib/mem/i_mem_consumption.h

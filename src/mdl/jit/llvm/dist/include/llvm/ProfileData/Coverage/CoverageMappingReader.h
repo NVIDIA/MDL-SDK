@@ -1,9 +1,8 @@
 //===- CoverageMappingReader.h - Code coverage mapping reader ---*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -68,10 +67,10 @@ public:
     increment();
     return *this;
   }
-  bool operator==(const CoverageMappingIterator &RHS) {
+  bool operator==(const CoverageMappingIterator &RHS) const {
     return Reader == RHS.Reader;
   }
-  bool operator!=(const CoverageMappingIterator &RHS) {
+  bool operator!=(const CoverageMappingIterator &RHS) const {
     return Reader != RHS.Reader;
   }
   Expected<CoverageMappingRecord &> operator*() {
@@ -112,20 +111,6 @@ protected:
   Error readIntMax(uint64_t &Result, uint64_t MaxPlus1);
   Error readSize(uint64_t &Result);
   Error readString(StringRef &Result);
-};
-
-/// Reader for the raw coverage filenames.
-class RawCoverageFilenamesReader : public RawCoverageReader {
-  std::vector<StringRef> &Filenames;
-
-public:
-  RawCoverageFilenamesReader(StringRef Data, std::vector<StringRef> &Filenames)
-      : RawCoverageReader(Data), Filenames(Filenames) {}
-  RawCoverageFilenamesReader(const RawCoverageFilenamesReader &) = delete;
-  RawCoverageFilenamesReader &
-  operator=(const RawCoverageFilenamesReader &) = delete;
-
-  Error read();
 };
 
 /// Checks if the given coverage mapping data is exported for
@@ -189,6 +174,8 @@ public:
           FilenamesBegin(FilenamesBegin), FilenamesSize(FilenamesSize) {}
   };
 
+  using DecompressedData = std::vector<std::unique_ptr<SmallVector<char, 0>>>;
+
 private:
   std::vector<StringRef> Filenames;
   std::vector<ProfileMappingRecord> MappingRecords;
@@ -198,17 +185,51 @@ private:
   std::vector<CounterExpression> Expressions;
   std::vector<CounterMappingRegion> MappingRegions;
 
-  BinaryCoverageReader() = default;
+  // Used to tie the lifetimes of coverage function records to the lifetime of
+  // this BinaryCoverageReader instance. Needed to support the format change in
+  // D69471, which can split up function records into multiple sections on ELF.
+  std::string FuncRecords;
+
+  // Used to tie the lifetimes of decompressed strings to the lifetime of this
+  // BinaryCoverageReader instance.
+  DecompressedData Decompressed;
+
+  BinaryCoverageReader(std::string &&FuncRecords)
+      : FuncRecords(std::move(FuncRecords)) {}
 
 public:
   BinaryCoverageReader(const BinaryCoverageReader &) = delete;
   BinaryCoverageReader &operator=(const BinaryCoverageReader &) = delete;
 
+  static Expected<std::vector<std::unique_ptr<BinaryCoverageReader>>>
+  create(MemoryBufferRef ObjectBuffer, StringRef Arch,
+         SmallVectorImpl<std::unique_ptr<MemoryBuffer>> &ObjectFileBuffers);
+
   static Expected<std::unique_ptr<BinaryCoverageReader>>
-  create(std::unique_ptr<MemoryBuffer> &ObjectBuffer,
-         StringRef Arch);
+  createCoverageReaderFromBuffer(StringRef Coverage, std::string &&FuncRecords,
+                                 InstrProfSymtab &&ProfileNames,
+                                 uint8_t BytesInAddress,
+                                 support::endianness Endian);
 
   Error readNextRecord(CoverageMappingRecord &Record) override;
+};
+
+/// Reader for the raw coverage filenames.
+class RawCoverageFilenamesReader : public RawCoverageReader {
+  std::vector<StringRef> &Filenames;
+
+  // Read an uncompressed sequence of filenames.
+  Error readUncompressed(uint64_t NumFilenames);
+
+public:
+  RawCoverageFilenamesReader(StringRef Data, std::vector<StringRef> &Filenames)
+      : RawCoverageReader(Data), Filenames(Filenames) {}
+  RawCoverageFilenamesReader(const RawCoverageFilenamesReader &) = delete;
+  RawCoverageFilenamesReader &
+  operator=(const RawCoverageFilenamesReader &) = delete;
+
+  Error read(CovMapVersion Version,
+             BinaryCoverageReader::DecompressedData &Decompressed);
 };
 
 } // end namespace coverage

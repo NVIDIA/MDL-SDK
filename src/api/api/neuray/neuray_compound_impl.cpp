@@ -36,10 +36,11 @@
 #include "neuray_compound_impl.h"
 #include "neuray_number_impl.h"
 
+#include <cstring>
+
 #include <mi/base/config.h>
 #include <mi/neuraylib/inumber.h>
 
-#include <sstream>
 #include <base/lib/log/i_log_assert.h>
 
 // disable C4800: 'T' : forcing value to bool 'true' or 'false' (performance warning)
@@ -54,12 +55,14 @@ namespace NEURAY {
 template <typename I, typename T, mi::Size ROWS, mi::Size COLUMNS>
 Compound_impl<I, T, ROWS, COLUMNS>::Compound_impl()
 {
-    std::ostringstream s;
-    s << get_element_type_name() << "<" << ROWS;
-    if( COLUMNS != 1)
-        s << "," << COLUMNS;
-    s << ">";
-    m_type_name = s.str();
+    m_type_name = get_element_type_name();
+    m_type_name += '<';
+    m_type_name += std::to_string( ROWS);
+    if( COLUMNS != 1) {
+        m_type_name += ',';
+    	  m_type_name += std::to_string( COLUMNS);
+    }
+    m_type_name += '>';
 
     m_storage = new T[ROWS*COLUMNS];
     for( mi::Size i = 0; i < ROWS*COLUMNS; ++i)
@@ -82,11 +85,8 @@ const char* Compound_impl<I, T, ROWS, COLUMNS>::get_type_name() const
 template <typename I, typename T, mi::Size ROWS, mi::Size COLUMNS>
 const char* Compound_impl<I, T, ROWS, COLUMNS>::get_key( mi::Size index) const
 {
-    std::string key;
-    if( !index_to_key( index, key))
+    if( !index_to_key( index, m_cached_key))
         return nullptr;
-
-    m_cached_key = key;
     return m_cached_key.c_str();
 }
 
@@ -562,23 +562,22 @@ Color_impl::Color_impl()
 
 bool Color_impl::key_to_index( const char* key, mi::Size& index) const
 {
-    if( !key)
+    if( !key || key[0] == '\0' || key[1] != '\0')
         return false;
 
-    std::string key_string( key);
-    if( key_string == "r") { index = 0; return true; }
-    if( key_string == "g") { index = 1; return true; }
-    if( key_string == "b") { index = 2; return true; }
-    if( key_string == "a") { index = 3; return true; }
+    if( key[0] == 'r') { index = 0; return true; }
+    if( key[0] == 'g') { index = 1; return true; }
+    if( key[0] == 'b') { index = 2; return true; }
+    if( key[0] == 'a') { index = 3; return true; }
     return false;
 }
 
 bool Color_impl::index_to_key( mi::Size index, std::string& key) const
 {
-    if( index == 0) { key = "r"; return true; }
-    if( index == 1) { key = "g"; return true; }
-    if( index == 2) { key = "b"; return true; }
-    if( index == 3) { key = "a"; return true; }
+    if( index == 0) { key = 'r'; return true; }
+    if( index == 1) { key = 'g'; return true; }
+    if( index == 2) { key = 'b'; return true; }
+    if( index == 3) { key = 'a'; return true; }
     return false;
 }
 
@@ -622,21 +621,20 @@ Color3_impl::Color3_impl()
 
 bool Color3_impl::key_to_index( const char* key, mi::Size& index) const
 {
-    if( !key)
+    if( !key || key[0] == '\0' || key[1] != '\0')
         return false;
 
-    std::string key_string( key);
-    if( key_string == "r") { index = 0; return true; }
-    if( key_string == "g") { index = 1; return true; }
-    if( key_string == "b") { index = 2; return true; }
+    if( key[0] == 'r') { index = 0; return true; }
+    if( key[0] == 'g') { index = 1; return true; }
+    if( key[0] == 'b') { index = 2; return true; }
     return false;
 }
 
 bool Color3_impl::index_to_key( mi::Size index, std::string& key) const
 {
-    if( index == 0) { key = "r"; return true; }
-    if( index == 1) { key = "g"; return true; }
-    if( index == 2) { key = "b"; return true; }
+    if( index == 0) { key = 'r'; return true; }
+    if( index == 1) { key = 'g'; return true; }
+    if( index == 2) { key = 'b'; return true; }
     return false;
 }
 
@@ -679,21 +677,20 @@ Spectrum_impl::Spectrum_impl()
 
 bool Spectrum_impl::key_to_index( const char* key, mi::Size& index) const
 {
-    if( !key)
+    if (!key || key[0] == '\0' || key[1] != '\0')
         return false;
 
-    std::string key_string( key);
-    if( key_string == "0") { index = 0; return true; }
-    if( key_string == "1") { index = 1; return true; }
-    if( key_string == "2") { index = 2; return true; }
+    if( key[0] == '0') { index = 0; return true; }
+    if( key[0] == '1') { index = 1; return true; }
+    if( key[0] == '2') { index = 2; return true; }
     return false;
 }
 
 bool Spectrum_impl::index_to_key( mi::Size index, std::string& key) const
 {
-    if( index == 0) { key = "0"; return true; }
-    if( index == 1) { key = "1"; return true; }
-    if( index == 2) { key = "2"; return true; }
+    if( index == 0) { key = '0'; return true; }
+    if( index == 1) { key = '1'; return true; }
+    if( index == 2) { key = '2'; return true; }
     return false;
 }
 

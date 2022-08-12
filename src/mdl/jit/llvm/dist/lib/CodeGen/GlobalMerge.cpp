@@ -1,9 +1,8 @@
 //===- GlobalMerge.cpp - Internal globals merging -------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -83,6 +82,8 @@
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Use.h"
 #include "llvm/IR/User.h"
+#include "llvm/InitializePasses.h"
+#include "llvm/MC/SectionKind.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
@@ -220,11 +221,12 @@ bool GlobalMerge::doMerge(SmallVectorImpl<GlobalVariable*> &Globals,
                           Module &M, bool isConst, unsigned AddrSpace) const {
   auto &DL = M.getDataLayout();
   // FIXME: Find better heuristics
-  std::stable_sort(Globals.begin(), Globals.end(),
-                   [&DL](const GlobalVariable *GV1, const GlobalVariable *GV2) {
-                     return DL.getTypeAllocSize(GV1->getValueType()) <
-                            DL.getTypeAllocSize(GV2->getValueType());
-                   });
+  llvm::stable_sort(
+      Globals, [&DL](const GlobalVariable *GV1, const GlobalVariable *GV2) {
+        // We don't support scalable global variables.
+        return DL.getTypeAllocSize(GV1->getValueType()).getFixedSize() <
+               DL.getTypeAllocSize(GV2->getValueType()).getFixedSize();
+      });
 
   // If we want to just blindly group all globals together, do so.
   if (!GlobalMergeGroupByUse) {
@@ -331,7 +333,7 @@ bool GlobalMerge::doMerge(SmallVectorImpl<GlobalVariable*> &Globals,
         Function *ParentFn = I->getParent()->getParent();
 
         // If we're only optimizing for size, ignore non-minsize functions.
-        if (OnlyOptimizeForSize && !ParentFn->optForMinSize())
+        if (OnlyOptimizeForSize && !ParentFn->hasMinSize())
           continue;
 
         size_t UGSIdx = GlobalUsesByFunction[ParentFn];
@@ -386,11 +388,11 @@ bool GlobalMerge::doMerge(SmallVectorImpl<GlobalVariable*> &Globals,
   //
   // Multiply that by the size of the set to give us a crude profitability
   // metric.
-  std::stable_sort(UsedGlobalSets.begin(), UsedGlobalSets.end(),
-            [](const UsedGlobalSet &UGS1, const UsedGlobalSet &UGS2) {
-              return UGS1.Globals.count() * UGS1.UsageCount <
-                     UGS2.Globals.count() * UGS2.UsageCount;
-            });
+  llvm::stable_sort(UsedGlobalSets,
+                    [](const UsedGlobalSet &UGS1, const UsedGlobalSet &UGS2) {
+                      return UGS1.Globals.count() * UGS1.UsageCount <
+                             UGS2.Globals.count() * UGS2.UsageCount;
+                    });
 
   // We can choose to merge all globals together, but ignore globals never used
   // with another global.  This catches the obviously non-profitable cases of
@@ -457,12 +459,14 @@ bool GlobalMerge::doMerge(const SmallVectorImpl<GlobalVariable *> &Globals,
 
     bool HasExternal = false;
     StringRef FirstExternalName;
-    unsigned MaxAlign = 1;
+    Align MaxAlign;
     unsigned CurIdx = 0;
     for (j = i; j != -1; j = GlobalSet.find_next(j)) {
       Type *Ty = Globals[j]->getValueType();
-      unsigned Align = DL.getPreferredAlignment(Globals[j]);
-      unsigned Padding = alignTo(MergedSize, Align) - MergedSize;
+
+      // Make sure we use the same alignment AsmPrinter would use.
+      Align Alignment = DL.getPreferredAlign(Globals[j]);
+      unsigned Padding = alignTo(MergedSize, Alignment) - MergedSize;
       MergedSize += Padding;
       MergedSize += DL.getTypeAllocSize(Ty);
       if (MergedSize > MaxOffset) {
@@ -477,7 +481,7 @@ bool GlobalMerge::doMerge(const SmallVectorImpl<GlobalVariable *> &Globals,
       Inits.push_back(Globals[j]->getInitializer());
       StructIdxs.push_back(CurIdx++);
 
-      MaxAlign = std::max(MaxAlign, Align);
+      MaxAlign = std::max(MaxAlign, Alignment);
 
       if (Globals[j]->hasExternalLinkage() && !HasExternal) {
         HasExternal = true;
@@ -516,11 +520,13 @@ bool GlobalMerge::doMerge(const SmallVectorImpl<GlobalVariable *> &Globals,
         GlobalVariable::NotThreadLocal, AddrSpace);
 
     MergedGV->setAlignment(MaxAlign);
+    MergedGV->setSection(Globals[i]->getSection());
 
     const StructLayout *MergedLayout = DL.getStructLayout(MergedTy);
     for (ssize_t k = i, idx = 0; k != j; k = GlobalSet.find_next(k), ++idx) {
       GlobalValue::LinkageTypes Linkage = Globals[k]->getLinkage();
-      std::string Name = Globals[k]->getName();
+      std::string Name(Globals[k]->getName());
+      GlobalValue::VisibilityTypes Visibility = Globals[k]->getVisibility();
       GlobalValue::DLLStorageClassTypes DLLStorage =
           Globals[k]->getDLLStorageClass();
 
@@ -546,6 +552,7 @@ bool GlobalMerge::doMerge(const SmallVectorImpl<GlobalVariable *> &Globals,
       if (Linkage != GlobalValue::InternalLinkage || !IsMachO) {
         GlobalAlias *GA = GlobalAlias::create(Tys[StructIdxs[idx]], AddrSpace,
                                               Linkage, Name, GEP, &M);
+        GA->setVisibility(Visibility);
         GA->setDLLStorageClass(DLLStorage);
       }
 
@@ -599,16 +606,15 @@ bool GlobalMerge::doInitialization(Module &M) {
   IsMachO = Triple(M.getTargetTriple()).isOSBinFormatMachO();
 
   auto &DL = M.getDataLayout();
-  DenseMap<unsigned, SmallVector<GlobalVariable *, 16>> Globals, ConstGlobals,
-                                                        BSSGlobals;
+  DenseMap<std::pair<unsigned, StringRef>, SmallVector<GlobalVariable *, 16>>
+      Globals, ConstGlobals, BSSGlobals;
   bool Changed = false;
   setMustKeepGlobalVariables(M);
 
   // Grab all non-const globals.
   for (auto &GV : M.globals()) {
     // Merge is safe for "normal" internal or external globals only
-    if (GV.isDeclaration() || GV.isThreadLocal() ||
-        GV.hasSection() || GV.hasImplicitSection())
+    if (GV.isDeclaration() || GV.isThreadLocal() || GV.hasImplicitSection())
       continue;
 
     // It's not safe to merge globals that may be preempted
@@ -623,6 +629,7 @@ bool GlobalMerge::doInitialization(Module &M) {
     assert(PT && "Global variable is not a pointer!");
 
     unsigned AddressSpace = PT->getAddressSpace();
+    StringRef Section = GV.getSection();
 
     // Ignore all 'special' globals.
     if (GV.getName().startswith("llvm.") ||
@@ -636,27 +643,27 @@ bool GlobalMerge::doInitialization(Module &M) {
     Type *Ty = GV.getValueType();
     if (DL.getTypeAllocSize(Ty) < MaxOffset) {
       if (TM &&
-          TargetLoweringObjectFile::getKindForGlobal(&GV, *TM).isBSSLocal())
-        BSSGlobals[AddressSpace].push_back(&GV);
+          TargetLoweringObjectFile::getKindForGlobal(&GV, *TM).isBSS())
+        BSSGlobals[{AddressSpace, Section}].push_back(&GV);
       else if (GV.isConstant())
-        ConstGlobals[AddressSpace].push_back(&GV);
+        ConstGlobals[{AddressSpace, Section}].push_back(&GV);
       else
-        Globals[AddressSpace].push_back(&GV);
+        Globals[{AddressSpace, Section}].push_back(&GV);
     }
   }
 
   for (auto &P : Globals)
     if (P.second.size() > 1)
-      Changed |= doMerge(P.second, M, false, P.first);
+      Changed |= doMerge(P.second, M, false, P.first.first);
 
   for (auto &P : BSSGlobals)
     if (P.second.size() > 1)
-      Changed |= doMerge(P.second, M, false, P.first);
+      Changed |= doMerge(P.second, M, false, P.first.first);
 
   if (EnableGlobalMergeOnConst)
     for (auto &P : ConstGlobals)
       if (P.second.size() > 1)
-        Changed |= doMerge(P.second, M, true, P.first);
+        Changed |= doMerge(P.second, M, true, P.first.first);
 
   return Changed;
 }

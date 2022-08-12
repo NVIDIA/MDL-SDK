@@ -682,7 +682,7 @@ public:
 
 mi_static_assert(sizeof(IFunction_definition::Semantics) == sizeof(Uint32));
 
-/*@}*/ // end group mi_neuray_mdl_elements
+/**@}*/ // end group mi_neuray_mdl_elements
 
 } // namespace neuraylib
 

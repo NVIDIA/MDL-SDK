@@ -163,15 +163,27 @@ mi::Uint32 Mdl_material_target::Resource_callback::get_resource_index(
 mi::Uint32 Mdl_material_target::Resource_callback::get_string_index(
     mi::neuraylib::IValue_string const *s)
 {
+    // of the string was known to the compiler the mapped id MUST match
+    // the one of the target code
     mi::base::Handle<const mi::neuraylib::ITarget_code> target_code(
         m_target->get_target_code());
-
-    for (mi::Size i = 0, n = target_code->get_string_constant_count(); i < n; ++i)
+    mi::Size n = target_code->get_string_constant_count();
+    for (mi::Size i = 0; i < n; ++i)
         if (strcmp(target_code->get_string_constant(i), s->get_value()) == 0)
             return static_cast<mi::Uint32>(i);
 
-    log_info("TODO: Assigning new string constant not implemented.", SRC);
-    return 0;
+    // invalid (or empty) string
+    const char* name = s->get_value();
+    if (!name)
+    {
+        return 0;
+    }
+
+    // additional new string mappings:
+    // store string constant at the material
+    size_t mat_string_index = m_material->map_string_constant(name);
+    assert(mat_string_index >= n); // the new IDs must not collide with the ones of the target code
+    return mat_string_index;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -193,6 +205,7 @@ Mdl_material_target::Mdl_material_target(Base_application* app, Mdl_sdk* sdk)
     , m_shader_cache_name("")
     , m_read_only_data_segment(nullptr)
     , m_target_resources()
+    , m_target_string_constants()
 {
     // add the empty resources
     for (size_t i = 0, n = static_cast<size_t>(Mdl_resource_kind::_Count); i < n; ++i)
@@ -398,6 +411,30 @@ size_t Mdl_material_target::get_material_resource_count(
 
 // ------------------------------------------------------------------------------------------------
 
+uint32_t Mdl_material_target::map_string_constant(const std::string& string_value)
+{
+    // the empty string is also the invalid string
+    if (string_value == "")
+        return 0;
+
+    // if the constant is already mapped, use it
+    for (auto& c : m_target_string_constants)
+        if (c.value == string_value)
+            return c.runtime_string_id;
+
+    // map the new constant. keep this mapping dense in order to easy the data layout on the GPU
+    uint32_t runtime_id =
+        m_target_string_constants.empty() ? 1 : m_target_string_constants.back().runtime_string_id + 1;
+    Mdl_string_constant entry;
+    entry.runtime_string_id = runtime_id;
+    entry.value = string_value;
+
+    m_target_string_constants.push_back(entry);
+    return runtime_id;
+}
+
+// ------------------------------------------------------------------------------------------------
+
 bool Mdl_material_target::visit_materials(std::function<bool(Mdl_material*)> action)
 {
     std::lock_guard<std::mutex> lock(m_materials_mtx);
@@ -582,6 +619,22 @@ bool Mdl_material_target::generate()
         m_target_resources[Mdl_resource_kind::Texture].emplace_back(assignment);
     }
 
+    // add all string constants known to the link unit
+    m_target_string_constants.clear();
+    for (size_t i = 1, n = m_target_code->get_string_constant_count(); i < n; ++i)
+    {
+        Mdl_string_constant constant;
+        constant.runtime_string_id = i;
+        constant.value = m_target_code->get_string_constant(i);
+        m_target_string_constants.push_back(constant);
+    }
+
+    // add TEXCOORD_0 to demonstrate renderer driven scene data elements
+    // NOTE, if this is added manually, MDL code will not create any runtime function call
+    // that with the 'scene_data_id'. Instead, only the render can call this outside of the
+    // generated code.
+    map_string_constant("TEXCOORD_0");
+
     // create per material resources, parameter bindings, ...
     // ------------------------------------------------------------
 
@@ -756,8 +809,7 @@ bool Mdl_material_target::generate()
     // texture coordinates optional
     m_hlsl_source_code += "\n";
     m_hlsl_source_code += "#define SCENE_DATA_ID_TEXCOORD_0 " +
-        std::to_string(
-            std::max(m_target_code->get_string_constant_count(), mi::Size(1))) + "\n";
+        std::to_string(map_string_constant("TEXCOORD_0")) + "\n"; // registered before
 
     m_hlsl_source_code += "\n";
     m_hlsl_source_code += "#include \"content/common.hlsl\"\n";

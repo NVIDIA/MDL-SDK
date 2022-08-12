@@ -113,6 +113,15 @@ void Definition::set_own_scope(Scope *scope)
     scope->set_owner_definition(this);
 }
 
+// Remove the scope that this definition creates.
+void Definition::remove_own_scope()
+{
+    if (m_own_scope != NULL) {
+        m_own_scope->set_owner_definition(NULL);
+        m_own_scope = NULL;
+    }
+}
+
 // Copy the default initializers from one definition to another.
 void Definition::copy_initializers(Module *module, Definition const *prev_def)
 {
@@ -374,6 +383,24 @@ void Definition::set_namespace(
     m_u.name_space = name_space;
 }
 
+// Remove this definition from its parent scope.
+void Definition::remove_from_parent()
+{
+    Scope *parent = m_def_scope;
+    if (parent != NULL) {
+        Definition *next = m_same_next;
+        Definition *prev = m_same_prev;
+
+        if (next != NULL) {
+            next->m_same_prev= prev;
+        }
+        if (prev != NULL) {
+            prev->m_same_next = next;
+        }
+        parent->remove_definition(this);
+    }
+}
+
 // Constructor.
 Definition::Definition(
     Kind           kind,
@@ -457,6 +484,41 @@ Definition::Definition(
     m_flags.clear_bit(Definition::DEF_IS_EXPORTED);
     // but set the "imported" flag
     m_flags.set_bit(Definition::DEF_IS_IMPORTED);
+}
+
+// Remove a definition from this scope.
+bool Scope::remove_definition(
+    Definition *def)
+{
+    for (Definition **p_def = &m_definitions; *p_def != NULL; p_def = &((*p_def)->m_next)) {
+        if ((*p_def)->m_sym == def->m_sym) {
+            // found the overload set, remove def from the overload set
+            Definition *prev = def->m_same_prev;
+            Definition *next = def->m_same_next;
+
+            if (prev != NULL) {
+                prev->m_same_next = next;
+            }
+            if (next != NULL) {
+                next->m_same_prev = prev;
+            }
+            def->m_same_prev = def->m_same_next = NULL;
+
+            if (prev == NULL && next == NULL) {
+                // the set would be empty if def is removed, so remove it from the list
+                *p_def = def->m_next;
+                def->m_next = NULL;
+            }
+            if (*p_def == def) {
+                // we remove the head of the overload set, move one forward
+                MDL_ASSERT(next != NULL && "non-empty set has no element");
+                next->m_next = def->m_next;
+                *p_def = next;
+            }
+            return true;
+        }
+    }
+    return false;
 }
 
 // Re-enter the definitions for all defined symbols in the scope.
@@ -2085,6 +2147,13 @@ unsigned mdl_removed_version(unsigned flags)
         return 0xFFFFFFFF;
     }
     return rem;
+}
+
+// Check if the version flags indicate a removed version.
+bool is_mdl_removed_version(unsigned flags)
+{
+    unsigned rem = (flags >> 8) & 0xFF;
+    return rem != 0;
 }
 
 // Check if a entity is available in the given MDL language level.

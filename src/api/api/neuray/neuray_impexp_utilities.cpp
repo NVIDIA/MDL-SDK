@@ -139,8 +139,8 @@ mi::neuraylib::IExport_result* Impexp_utilities::create_export_result(
     const char* argument)
 {
     char buffer[1024];
-    snprintf( &buffer[0], sizeof( buffer)-1, message, argument);
-    return create_export_result( transaction, message_number, message_severity, &buffer[0]);
+    snprintf( buffer, sizeof( buffer)-1, message, argument);
+    return create_export_result( transaction, message_number, message_severity, buffer);
 }
 
 namespace {
@@ -285,14 +285,14 @@ std::string Impexp_utilities::get_extension( const std::string& uri)
 
     std::string::size_type last_dot = uri_string.rfind( '.');
     if( last_dot == std::string::npos)
-        return "";
+        return std::string();
 
     std::string::size_type last_slash = uri_string.rfind( '/');
     if( last_slash == std::string::npos)
         last_slash = 0;
 
     if( last_slash > last_dot)
-        return "";
+        return std::string();
 
     return uri_string.substr( last_dot);
 }
@@ -373,15 +373,15 @@ std::string Impexp_utilities::convert_uri_to_filename( const std::string& uri)
 
     const std::string& scheme = uri_class.get_scheme();
     if( !scheme.empty() && scheme != "file")
-        return "";
+        return std::string();
 
     const std::string& authority = uri_class.get_authority();
     if( !authority.empty())
-        return "";
+        return std::string();
 
     std::string path = uri_class.get_path();
     if( path.empty())
-        return "";
+        return std::string();
 
 #ifndef MI_PLATFORM_WINDOWS
     // nothing to do

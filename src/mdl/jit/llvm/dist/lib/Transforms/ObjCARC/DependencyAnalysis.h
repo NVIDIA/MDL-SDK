@@ -1,9 +1,8 @@
 //===- DependencyAnalysis.h - ObjC ARC Optimization ---*- C++ -*-----------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 /// \file
@@ -22,6 +21,8 @@
 
 #ifndef LLVM_LIB_TRANSFORMS_OBJCARC_DEPENDENCYANALYSIS_H
 #define LLVM_LIB_TRANSFORMS_OBJCARC_DEPENDENCYANALYSIS_H
+
+#ifdef LLVM_ENABLE_OBJC
 
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Analysis/ObjCARCInstKind.h"
@@ -51,12 +52,12 @@ enum DependenceKind {
   RetainRVDep                 ///< Blocks objc_retainAutoreleasedReturnValue.
 };
 
-void FindDependencies(DependenceKind Flavor,
-                      const Value *Arg,
-                      BasicBlock *StartBB, Instruction *StartInst,
-                      SmallPtrSetImpl<Instruction *> &DependingInstructions,
-                      SmallPtrSetImpl<const BasicBlock *> &Visited,
-                      ProvenanceAnalysis &PA);
+/// Find dependent instructions. If there is exactly one dependent instruction,
+/// return it. Otherwise, return null.
+llvm::Instruction *findSingleDependency(DependenceKind Flavor, const Value *Arg,
+                                        BasicBlock *StartBB,
+                                        Instruction *StartInst,
+                                        ProvenanceAnalysis &PA);
 
 bool
 Depends(DependenceKind Flavor, Instruction *Inst, const Value *Arg,
@@ -85,5 +86,7 @@ static inline bool CanDecrementRefCount(const Instruction *Inst,
 
 } // namespace objcarc
 } // namespace llvm
+
+#endif
 
 #endif

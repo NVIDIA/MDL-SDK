@@ -187,7 +187,7 @@ public:
 
         int n = snprintf(nullptr, 0, "<%s [%s, RefCounter: %d] at %p>", m_typename.c_str(), (m_pointee ? "valid" : "invalid"), (int)counter, m_pointee);
         std::string str(n + 1, '\0');
-        snprintf(&str[0], n + 1, "<%s [%s, RefCounter: %d] at %p>", m_typename.c_str(), (m_pointee ? "valid" : "invalid"), (int)counter, m_pointee);
+        snprintf(str.data(), n + 1, "<%s [%s, RefCounter: %d] at %p>", m_typename.c_str(), (m_pointee ? "valid" : "invalid"), (int)counter, m_pointee);
         m_debug_string = str.substr(0, n);
         return m_debug_string.c_str();
     }

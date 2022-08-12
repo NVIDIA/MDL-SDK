@@ -1438,9 +1438,6 @@ string DAG_mangler::mangle(
 {
     Definition const *def = impl_cast<Definition>(idef);
 
-    string result(get_allocator());
-    string symbol_name(def->get_sym()->get_name(), get_allocator());
-
 #if 0
     Scope const *scope = def->get_def_scope();
     while (ISymbol const *scope_name = scope->get_scope_name()) {
@@ -1450,13 +1447,14 @@ string DAG_mangler::mangle(
     }
 #endif
 
-    if (module_name != NULL && module_name[0]) {
-        if (module_name[0] != ':')
-            result = "::";
-        result += module_name;
-        result += "::";
+    if (module_name != NULL && module_name[0] != '\0') {
+        if (module_name[0] != ':') {
+            m_printer.print("::");
+        }
+        m_printer.print(module_name);
+        m_printer.print("::");
     }
-    result += symbol_name;
+    m_printer.print(def->get_sym()->get_name());
 
     // if this entity is removed at some version, add a marker
     unsigned version_flags = def->get_version_flags();
@@ -1465,54 +1463,58 @@ string DAG_mangler::mangle(
         // was removed at some version, we report the version *until* it exists
         switch (IMDL::MDL_version(removed_ver)) {
         case IMDL::MDL_VERSION_1_0:
-            result += "$0.9";
+            m_printer.print("$0.9");
             break;
         case IMDL::MDL_VERSION_1_1:
-            result += "$1.0";
+            m_printer.print("$1.0");
             break;
         case IMDL::MDL_VERSION_1_2:
-            result += "$1.1";
+            m_printer.print("$1.1");
             break;
         case IMDL::MDL_VERSION_1_3:
-            result += "$1.2";
+            m_printer.print("$1.2");
             break;
         case IMDL::MDL_VERSION_1_4:
-            result += "$1.3";
+            m_printer.print("$1.3");
             break;
         case IMDL::MDL_VERSION_1_5:
-            result += "$1.4";
+            m_printer.print("$1.4");
             break;
         case IMDL::MDL_VERSION_1_6:
-            result += "$1.5";
+            m_printer.print("$1.5");
             break;
         case IMDL::MDL_VERSION_1_7:
-            result += "$1.6";
+            m_printer.print("$1.6");
             break;
         case IMDL::MDL_VERSION_1_8:
-            result += "$1.7";
+            m_printer.print("$1.7");
             break;
         }
     }
 
-    if ((symbol_name == "operator.") || (symbol_name == "operator[]"))
-        return result;
+    char const *symbol_name = def->get_sym()->get_name();
+    if (strncmp(symbol_name, "operator", 8) == 0 &&
+        (strcmp(symbol_name + 8, ".") == 0 || strcmp(symbol_name + 8, "[]") == 0)) {
+        return m_printer.get_line();
+    }
     if (with_signature_suffix && need_signature_suffix(def)) {
-        result += "(";
+        m_printer.print('(');
         IType_function const *fun_type = cast<IType_function>(def->get_type());
         int count = fun_type->get_parameter_count();
         for (int i = 0; i < count; ++i) {
-            if (i > 0)
-                result += ",";
+            if (i > 0) {
+                m_printer.print(',');
+            }
 
             IType const   *p_type = NULL;
             ISymbol const *p_sym = NULL;
             fun_type->get_parameter(i, p_type, p_sym);
 
-            result += mangle_parameter_type(p_type);
+            add_mangle_parameter_type(p_type);
         }
-        result += ")";
+        m_printer.print(')');
     }
-    return result;
+    return m_printer.get_line();
 }
 
 // Mangle a definition.
@@ -1559,7 +1561,7 @@ string DAG_mangler::mangle(
 }
 
 // Mangle a parameter type.
-string DAG_mangler::mangle_parameter_type(IType const *type)
+void DAG_mangler::add_mangle_parameter_type(IType const *type)
 {
     type = type->skip_type_alias();
 
@@ -1578,7 +1580,12 @@ string DAG_mangler::mangle_parameter_type(IType const *type)
     } else {
         m_printer.print(type);
     }
+}
 
+// Mangle a parameter type.
+string DAG_mangler::mangle_parameter_type(IType const *type)
+{
+    add_mangle_parameter_type(type);
     return m_printer.get_line();
 }
 

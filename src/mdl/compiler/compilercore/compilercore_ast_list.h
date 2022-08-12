@@ -31,6 +31,7 @@
 
 #include <cstddef>
 #include "compilercore_cc_conf.h"
+#include "compilercore_assert.h"
 
 namespace mi {
 namespace mdl {
@@ -41,7 +42,9 @@ class Ast_list_iterator {
     typedef Ast_list_iterator<T> Self;
 public:
     Ast_list_iterator &operator++() {
-        if (this->m_ptr != NULL) this->m_ptr = m_ptr->m_next;
+        if (this->m_ptr != NULL) {
+            this->m_ptr = m_ptr->m_next;
+        }
         return *this;
     }
     T &operator*() { return *this->m_ptr; }
@@ -82,6 +85,9 @@ public:
     ///
     /// \param id  the element to be added
     void push(T *id) {
+        MDL_ASSERT(id->m_prev == NULL && id->m_next == NULL &&
+            "element might already be in a list");
+
         id->m_prev = m_last;
         if (m_last == NULL) { m_first = id; }
         else                { m_last->m_next = id; }

@@ -129,7 +129,9 @@ class Transaction : private STLEXT::Non_copyable
 
     /// Is the transaction still open? This can be used by jobs to query, if they shall abort their
     /// operation.
-    virtual bool is_open() = 0;
+    ///
+    /// \param closing_is_open Consider a transaction that is closing, but not fully closed, as open
+    virtual bool is_open(bool closing_is_open=true) = 0;
 
     /// Reserve and return a free tag id. This tag id must be used to store a database element or
     /// job in a later call to store. It can be used e.g. with groups of database elements where
@@ -481,7 +483,7 @@ class Transaction : private STLEXT::Non_copyable
     ///                                 - -1: Invalid parameters (\p job is \c NULL, or \c count is
     ///                                       zero but the scheduling is not ONCE_PER_HOST).
     ///                                 - -2: Invalid scheduling mode (transaction-less or
-    ///                                       asynchronous execution is retricted to local jobs).
+    ///                                       asynchronous execution is restricted to local jobs).
     ///                                 - -3: Invalid job priority (negative value).
     virtual Sint32 execute_fragmented(
         Fragmented_job* job,
@@ -502,7 +504,7 @@ class Transaction : private STLEXT::Non_copyable
     ///                                 - -1: Invalid parameters (\p job is \c NULL or \c count is
     ///                                       zero).
     ///                                 - -2: Invalid scheduling mode (transaction-less or
-    ///                                       asynchronous execution is retricted to local jobs).
+    ///                                       asynchronous execution is restricted to local jobs).
     ///                                 - -3: Invalid job priority (negative value).
     virtual Sint32 execute_fragmented_async(
         Fragmented_job* job,

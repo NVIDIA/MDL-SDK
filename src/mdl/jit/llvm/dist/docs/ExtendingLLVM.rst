@@ -47,11 +47,13 @@ function and then be turned into an instruction if warranted.
 
 #. ``llvm/include/llvm/IR/Intrinsics*.td``:
 
-   Add an entry for your intrinsic.  Describe its memory access characteristics
-   for optimization (this controls whether it will be DCE'd, CSE'd, etc). Note
-   that any intrinsic using one of the ``llvm_any*_ty`` types for an argument or
-   return type will be deemed by ``tblgen`` as overloaded and the corresponding
-   suffix will be required on the intrinsic's name.
+   Add an entry for your intrinsic.  Describe its memory access
+   characteristics for optimization (this controls whether it will be
+   DCE'd, CSE'd, etc). If any arguments need to be immediates, these
+   must be indicated with the ImmArg property. Note that any intrinsic
+   using one of the ``llvm_any*_ty`` types for an argument or return
+   type will be deemed by ``tblgen`` as overloaded and the
+   corresponding suffix will be required on the intrinsic's name.
 
 #. ``llvm/lib/Analysis/ConstantFolding.cpp``:
 
@@ -145,7 +147,7 @@ complicated behavior in a single node (rotate).
    code you wrote in ``LegalizeOp`` above to decompose your new node into other
    legal nodes for this target.
 
-#. ``lib/Target/TargetSelectionDAG.td``:
+#. ``include/llvm/Target/TargetSelectionDAG.td``:
 
    Most current targets supported by LLVM generate code using the DAGToDAG
    method, where SelectionDAG nodes are pattern matched to target-specific
@@ -244,18 +246,14 @@ Adding a fundamental type
 
    add enum for the new type; add static ``Type*`` for this type
 
-#. ``llvm/lib/IR/Type.cpp`` and ``llvm/lib/IR/ValueTypes.cpp``:
+#. ``llvm/lib/IR/Type.cpp`` and ``llvm/lib/CodeGen/ValueTypes.cpp``:
 
    add mapping from ``TypeID`` => ``Type*``; initialize the static ``Type*``
 
-#. ``llvm/llvm/llvm-c/Core.cpp``:
+#. ``llvm/include/llvm-c/Core.h`` and ``llvm/lib/IR/Core.cpp``:
 
    add enum ``LLVMTypeKind`` and modify
    ``LLVMTypeKind LLVMGetTypeKind(LLVMTypeRef Ty)`` for the new type
-
-#. ``llvm/include/llvm/IR/TypeBuilder.h``:
-
-   add new class to represent new type in the hierarchy
 
 #. ``llvm/lib/AsmParser/LLLexer.cpp``:
 
@@ -267,12 +265,11 @@ Adding a fundamental type
 
 #. ``llvm/lib/Bitcode/Writer/BitcodeWriter.cpp``:
 
-   modify ``static void WriteTypeTable(const ValueEnumerator &VE,
-   BitstreamWriter &Stream)`` to serialize your type
+   modify ``void ModuleBitcodeWriter::writeTypeTable()`` to serialize your type
 
 #. ``llvm/lib/Bitcode/Reader/BitcodeReader.cpp``:
 
-   modify ``bool BitcodeReader::ParseTypeType()`` to read your data type
+   modify ``Error BitcodeReader::parseTypeTableBody()`` to read your data type
 
 #. ``include/llvm/Bitcode/LLVMBitCodes.h``:
 
@@ -290,18 +287,14 @@ Adding a derived type
    add new class to represent new class in the hierarchy; add forward
    declaration to the TypeMap value type
 
-#. ``llvm/lib/IR/Type.cpp`` and ``llvm/lib/IR/ValueTypes.cpp``:
+#. ``llvm/lib/IR/Type.cpp`` and ``llvm/lib/CodeGen/ValueTypes.cpp``:
 
    add support for derived type, notably `enum TypeID` and `is`, `get` methods.
 
-#. ``llvm/llvm/llvm-c/Core.cpp``:
+#. ``llvm/include/llvm-c/Core.h`` and ``llvm/lib/IR/Core.cpp``:
 
    add enum ``LLVMTypeKind`` and modify
    `LLVMTypeKind LLVMGetTypeKind(LLVMTypeRef Ty)` for the new type
-
-#. ``llvm/include/llvm/IR/TypeBuilder.h``:
-
-   add new class to represent new class in the hierarchy
 
 #. ``llvm/lib/AsmParser/LLLexer.cpp``:
 
@@ -310,12 +303,11 @@ Adding a derived type
 
 #. ``llvm/lib/Bitcode/Writer/BitcodeWriter.cpp``:
 
-   modify ``static void WriteTypeTable(const ValueEnumerator &VE,
-   BitstreamWriter &Stream)`` to serialize your type
+   modify ``void ModuleBitcodeWriter::writeTypeTable()`` to serialize your type
 
 #. ``llvm/lib/Bitcode/Reader/BitcodeReader.cpp``:
 
-   modify ``bool BitcodeReader::ParseTypeType()`` to read your data type
+   modify ``Error BitcodeReader::parseTypeTableBody()`` to read your data type
 
 #. ``include/llvm/Bitcode/LLVMBitCodes.h``:
 

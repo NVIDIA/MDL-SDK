@@ -32,6 +32,10 @@
 
 #include "pch.h"
 
+#define MI_NEURAYLIB_DEPRECATED_13_0
+#include <mi/neuraylib/iscene_element.h>
+#undef MI_NEURAYLIB_DEPRECATED_13_0
+
 #include <mi/base/handle.h>
 
 #include "neuray_compiled_material_impl.h"
@@ -85,8 +89,7 @@ mi::base::IInterface* Function_call_impl::create_api_class(
 }
 
 Function_call_impl::Function_call_impl( bool materials_are_functions)
-  : Parent_type(),
-    m_materials_are_functions( materials_are_functions)
+  : m_materials_are_functions( materials_are_functions)
 {
 }
 
@@ -344,7 +347,7 @@ mi::neuraylib::ICompiled_material* Function_call_impl::create_compiled_material(
         = get_transaction()->create<mi::neuraylib::ICompiled_material>(
             "__Compiled_material");
     static_cast<Compiled_material_impl*>( api_instance)->get_db_element()->swap(
-        *db_instance.get());
+        *db_instance);
     return api_instance;
 }
 

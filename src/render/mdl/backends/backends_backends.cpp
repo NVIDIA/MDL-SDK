@@ -28,6 +28,12 @@
 
 #include "pch.h"
 
+//#define ADD_EXTRA_TIMERS
+
+#ifdef ADD_EXTRA_TIMERS
+#include <chrono>
+#endif
+
 #include <cstring>
 #include <map>
 #include <string>
@@ -2102,6 +2108,25 @@ mi::Sint32 Target_value_layout::set_value(
 
 // ------------------------- LLVM based link unit -------------------------
 
+static mi::mdl::ICode_generator::Target_language map_target_language(
+    mi::neuraylib::IMdl_backend_api::Mdl_backend_kind kind)
+{
+    switch (kind) {
+    case mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX:
+        return mi::mdl::ICode_generator::TL_PTX;
+    case mi::neuraylib::IMdl_backend_api::MB_LLVM_IR:
+        return mi::mdl::ICode_generator::TL_LLVM_IR;
+    case mi::neuraylib::IMdl_backend_api::MB_GLSL:
+        return mi::mdl::ICode_generator::TL_GLSL;
+    case mi::neuraylib::IMdl_backend_api::MB_NATIVE:
+        return mi::mdl::ICode_generator::TL_NATIVE;
+    case mi::neuraylib::IMdl_backend_api::MB_HLSL:
+        return mi::mdl::ICode_generator::TL_HLSL;
+    default:
+        // should not happen
+        return mi::mdl::ICode_generator::TL_NATIVE;
+    }
+}
 
 // Constructor from an LLVM backend.
 Link_unit::Link_unit(
@@ -2126,7 +2151,6 @@ Link_unit::Link_unit(
 {
 }
 
-
 // Destructor.
 Link_unit::~Link_unit()
 {
@@ -2139,19 +2163,18 @@ mi::Sint32 Link_unit::add_environment(
     char const                   *fname,
     MDL::Execution_context       *context)
 {
-    if (function_call == NULL || m_transaction == NULL)
-    {
-        MDL::add_context_error(context, "Invalid parameters (NULL pointer).", -1);
+    if (function_call == NULL || m_transaction == NULL) {
+        MDL::add_error_message(context, "Invalid parameters (NULL pointer).", -1);
         return -1;
     }
     DB::Tag_set tags_seen;
     if (!function_call->is_valid(m_transaction, tags_seen, context)) {
-        MDL::add_context_error(context, "Invalid function call.", -1);
+        MDL::add_error_message(context, "Invalid function call.", -1);
         return -1;
     }
     DB::Tag def_tag = function_call->get_function_definition(m_transaction);
     if (!def_tag.is_valid()) {
-        MDL::add_context_error(context, "Function does not point to a valid definition.", -1);
+        MDL::add_error_message(context, "Function does not point to a valid definition.", -1);
         return -1;
     }
     // check internal space configuration
@@ -2161,7 +2184,7 @@ mi::Sint32 Link_unit::add_environment(
     mi::base::Handle<mi::mdl::IGenerated_code_dag const> code_dag(module->get_code_dag());
 
     if (m_internal_space != code_dag->get_internal_space()) {
-        MDL::add_context_error(context, "Functions and materials compiled with different "
+        MDL::add_error_message(context, "Functions and materials compiled with different "
             "internal_space configurations cannot be mixed.", -1);
         return -1;
     }
@@ -2175,7 +2198,7 @@ mi::Sint32 Link_unit::add_environment(
     mi::base::Handle<mi::mdl::ILambda_function> lambda(
         builder.env_from_call(function_call, fname));
     if (!lambda.is_valid_interface()) {
-        MDL::add_context_error(context,
+        MDL::add_error_message(context,
             builder.get_error_string(), builder.get_error_code());
         return -1;
     }
@@ -2214,7 +2237,7 @@ mi::Sint32 Link_unit::add_environment(
         &arg_block_index,
         NULL);
     if (!res) {
-        MDL::add_context_error(context,
+        MDL::add_error_message(context,
             "The backend failed to compile the function.", -3);
         return -1;
     }
@@ -2232,7 +2255,7 @@ mi::Sint32 Link_unit::add_material_expression(
 {
     if (!compiled_material->is_valid(m_transaction, context)) {
         if (context)
-            MDL::add_context_error(context,
+            MDL::add_error_message(context,
                 "The compiled material is invalid.", -1);
         return -1;
     }
@@ -2254,7 +2277,7 @@ mi::Sint32 Link_unit::add_material_df(
 {
     if (!compiled_material->is_valid(m_transaction, context)) {
         if (context)
-            MDL::add_context_error(context,
+            MDL::add_error_message(context,
                 "The compiled material is invalid.", -1);
         return -1;
     }
@@ -2280,12 +2303,12 @@ mi::Sint32 Link_unit::add_material_single_init(
         strcmp(function_descriptions[0].path, "init") == 0);
 
     if (compiled_material == NULL) {
-        MDL::add_context_error(context, "Invalid parameters (NULL pointer).", -1);
+        MDL::add_error_message(context, "Invalid parameters (NULL pointer).", -1);
         return -1;
     }
     if (!compiled_material->is_valid(m_transaction, context)) {
         if (context)
-            MDL::add_context_error(context,
+            MDL::add_error_message(context,
                 "The compiled material is invalid.", -1);
         return -1;
     }
@@ -2300,7 +2323,7 @@ mi::Sint32 Link_unit::add_material_single_init(
 
     // check internal space configuration
     if (m_internal_space != compiled_material->get_internal_space()) {
-        MDL::add_context_error(context, "Materials compiled with different internal_space "
+        MDL::add_error_message(context, "Materials compiled with different internal_space "
             "configurations cannot be mixed.", -1);
         return -1;
     }
@@ -2314,7 +2337,7 @@ mi::Sint32 Link_unit::add_material_single_init(
     std::vector<std::string> base_fname_list;
     for (mi::Size i = 0; i < description_count; ++i) {
         if (function_descriptions[i].path == NULL) {
-            function_descriptions[i].return_code = MDL::add_context_error(
+            function_descriptions[i].return_code = MDL::add_error_message(
                 context,
                 "Invalid parameters (NULL pointer) for function at index " + std::to_string(i),
                 -1);
@@ -2377,7 +2400,7 @@ mi::Sint32 Link_unit::add_material_single_init(
     DB::Tag tag = mat_body->get_definition(m_transaction);
     if (!tag.is_valid()) {
         if (context)
-            MDL::add_context_error(context, "The material constructor is invalid.", -1);
+            MDL::add_error_message(context, "The material constructor is invalid.", -1);
         return -1;
     }
 
@@ -2399,14 +2422,14 @@ mi::Sint32 Link_unit::add_material_single_init(
     // selecting multiply used expressions for expression lambdas and
     // rewriting the graphs to use them
     // Note: We currently don't support storing expression lambdas of type double
-    //       in HLSL, so disable it.
+    //       in GLSL/HLSL, so disable it.
     mi::mdl::IDistribution_function::Error_code ec = dist_func->initialize(
         material_constructor,
         func_list.data(),
         func_list.size(),
         include_geometry_normal,
         m_calc_derivatives,
-        /*allow_double_expr_lambdas=*/ m_be_kind != mi::neuraylib::IMdl_backend_api::MB_HLSL,
+        /*allow_double_expr_lambdas=*/!target_is_structured_language(),
         &resolver);
 
     // restore optimizations after expression paths have been processed
@@ -2414,7 +2437,7 @@ mi::Sint32 Link_unit::add_material_single_init(
 
     if (ec != mi::mdl::IDistribution_function::EC_NONE) {
         if (context)
-            MDL::add_context_error(context, "Error initializing material function group.", -1);
+            MDL::add_error_message(context, "Error initializing material function group.", -1);
         function_descriptions[0].return_code = -1;
         for (size_t i = 1; i < description_count; ++i) {
             switch (func_list[i - 1].error_code) {
@@ -2422,33 +2445,33 @@ mi::Sint32 Link_unit::add_material_single_init(
                 function_descriptions[i].return_code = 0;
                 break;
             case mi::mdl::IDistribution_function::EC_INVALID_PARAMETERS:
-                MDL::add_context_error(
+                MDL::add_error_message(
                     context,
-                    "Invalid parameters for function at index " + std::to_string(i) + ".",
+                    "Invalid parameters for function at index " + std::to_string(i) + '.',
                     -1);
                 function_descriptions[i].return_code = -1;
                 break;
             case mi::mdl::IDistribution_function::EC_INVALID_PATH:
-                MDL::add_context_error(
+                MDL::add_error_message(
                     context,
-                    "Invalid path (non-existing) for function at index " + std::to_string(i) + ".",
+                    "Invalid path (non-existing) for function at index " + std::to_string(i) + '.',
                     -2);
                 function_descriptions[i].return_code = -2;
                 break;
             case mi::mdl::IDistribution_function::EC_UNSUPPORTED_EXPRESSION_TYPE:
-                MDL::add_context_error(
+                MDL::add_error_message(
                     context,
-                    "Unsupported expression type for function at index " + std::to_string(i) + ".",
+                    "Unsupported expression type for function at index " + std::to_string(i) + '.',
                     -1000);
                 function_descriptions[i].return_code = -1000;
                 break;
             case mi::mdl::IDistribution_function::EC_UNSUPPORTED_DISTRIBUTION_TYPE:
             case mi::mdl::IDistribution_function::EC_UNSUPPORTED_BSDF:
             case mi::mdl::IDistribution_function::EC_UNSUPPORTED_EDF:
-                MDL::add_context_error(
+                MDL::add_error_message(
                     context,
                     "Unsupported distribution type for function at index " +
-                        std::to_string(i) + ".",
+                        std::to_string(i) + '.',
                     -1000);
                 function_descriptions[i].return_code = -1000;
                 break;
@@ -2527,7 +2550,7 @@ mi::Sint32 Link_unit::add_material_single_init(
         main_func_indices.size()))
     {
         MDL::convert_and_log_messages(m_unit->access_messages(), context);
-        MDL::add_context_error(context,
+        MDL::add_error_message(context,
             "The JIT backend failed to compile the function group.", -300);
         function_descriptions[0].return_code = -300;
         return -1;
@@ -2606,12 +2629,12 @@ mi::Sint32 Link_unit::add_material(
     }
 
     if (compiled_material == NULL) {
-        MDL::add_context_error(context, "Invalid parameters (NULL pointer).", -1);
+        MDL::add_error_message(context, "Invalid parameters (NULL pointer).", -1);
         return -1;
     }
     if (!compiled_material->is_valid(m_transaction, context)) {
         if (context)
-            MDL::add_context_error(context,
+            MDL::add_error_message(context,
                 "The compiled material is invalid.", -1);
         return -1;
     }
@@ -2629,7 +2652,7 @@ mi::Sint32 Link_unit::add_material(
 
     // check internal space configuration
     if (m_internal_space != compiled_material->get_internal_space()) {
-        MDL::add_context_error(context, "Materials compiled with different internal_space "
+        MDL::add_error_message(context, "Materials compiled with different internal_space "
             "configurations cannot be mixed.", -1);
         return -1;
     }
@@ -2655,7 +2678,7 @@ mi::Sint32 Link_unit::add_material(
 
     for (mi::Size i = 0; i < description_count; ++i) {
         if (function_descriptions[i].path == NULL) {
-            function_descriptions[i].return_code = MDL::add_context_error(
+            function_descriptions[i].return_code = MDL::add_error_message(
                 context,
                 "Invalid parameters (NULL pointer) for function at index " + std::to_string(i),
                 -1);
@@ -2667,8 +2690,8 @@ mi::Sint32 Link_unit::add_material(
             compiled_material->lookup_sub_expression(function_descriptions[i].path));
 
         if (!field) {
-            MDL::add_context_error(context, "Invalid path (non-existing) for function at index "
-                + std::to_string(i) + ".", -2);
+            MDL::add_error_message(context, "Invalid path (non-existing) for function at index "
+                + std::to_string(i) + '.', -2);
             function_descriptions[i].return_code = -2;
             return -1;
         }
@@ -2721,7 +2744,7 @@ mi::Sint32 Link_unit::add_material(
                     //    break;
 
                     default:
-                        MDL::add_context_error(
+                        MDL::add_error_message(
                             context,
                             "VDFs are not supported for function at index" +
                             std::to_string(i),
@@ -2737,18 +2760,18 @@ mi::Sint32 Link_unit::add_material(
                 //  - a main df containing the DF part and array and struct constants and
                 //  - a number of expression lambdas containing the non-DF part
                 // Note: We currently don't support storing expression lambdas of type double
-                //       in HLSL, so disable it.
+                //       in GLSL/HLSL, so disable it.
                 mi::base::Handle<mi::mdl::IDistribution_function> dist_func(
                     builder.from_material_df(
                         compiled_material,
                         function_descriptions[i].path,
                         function_name.c_str(),
                         include_geometry_normal,
-                        m_be_kind != mi::neuraylib::IMdl_backend_api::MB_HLSL));
+                        /*allow_double_expr_result=*/!target_is_structured_language()));
 
                 if (!dist_func.is_valid_interface())
                 {
-                    MDL::add_context_error(
+                    MDL::add_error_message(
                         context, builder.get_error_string(), builder.get_error_code() * 100);
                     function_descriptions[i].return_code = builder.get_error_code() * 100;
                     return -1;
@@ -2832,7 +2855,7 @@ mi::Sint32 Link_unit::add_material(
 
                 if (!lambda.is_valid_interface())
                 {
-                    MDL::add_context_error(
+                    MDL::add_error_message(
                         context, builder.get_error_string(), builder.get_error_code() * 10);
                     function_descriptions[i].return_code = builder.get_error_code() * 10;
                     return -1;
@@ -2890,9 +2913,9 @@ mi::Sint32 Link_unit::add_material(
                 1))
             {
                 MDL::convert_and_log_messages(m_unit->access_messages(), context);
-                MDL::add_context_error(context,
+                MDL::add_error_message(context,
                     "The JIT backend failed to compile the function at index "
-                    + std::to_string(i) + ".", -300);
+                    + std::to_string(i) + '.', -300);
                 function_descriptions[i].return_code = -300;
                 return -1;
             }
@@ -2909,7 +2932,7 @@ mi::Sint32 Link_unit::add_material(
                 &index))
             {
                 MDL::convert_and_log_messages(m_unit->access_messages(), context);
-                MDL::add_context_error(
+                MDL::add_error_message(
                     context, "The JIT backend failed to compile the function at index" +
                     std::to_string(i), -30);
                 function_descriptions[i].return_code = -30;
@@ -3013,7 +3036,8 @@ static bool supports_simd(mi::neuraylib::IMdl_backend_api::Mdl_backend_kind kind
 {
     if (kind == mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX)
         return false;
-    if (kind == mi::neuraylib::IMdl_backend_api::MB_HLSL) {
+    if (kind == mi::neuraylib::IMdl_backend_api::MB_GLSL ||
+        kind == mi::neuraylib::IMdl_backend_api::MB_HLSL) {
         // FIXME: disabled so far
         return false;
     }
@@ -3066,8 +3090,10 @@ Mdl_llvm_backend::Mdl_llvm_backend(
     // by default we support exceptions
     options.set_option(MDL_JIT_OPTION_DISABLE_EXCEPTIONS, "false");
 
-    // by default we disable the read-only segment
-    options.set_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT, "false");
+    // by default the read-only segment is disabled for all BE except HLSL
+    // "for historical reasons"
+    options.set_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT,
+        kind == mi::neuraylib::IMdl_backend_api::MB_HLSL ? "true" :"false");
 
     // by default we generate LLVM IR
     options.set_option(MDL_JIT_OPTION_WRITE_BITCODE, "false");
@@ -3087,8 +3113,20 @@ Mdl_llvm_backend::Mdl_llvm_backend(
     // do we map strings to identifiers?
     options.set_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS, string_ids ? "true" : "false");
 
-    // by default we disable HLSL resource data
-    options.set_option(MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA, "false");
+    // by default we disable GLSL/HLSL resource data
+    options.set_option(MDL_JIT_OPTION_SL_USE_RESOURCE_DATA, "false");
+
+    // by default, no function remap
+    options.set_option(MDL_JIT_OPTION_SL_REMAP_FUNCTIONS, "");
+
+    // Argh, why are the defaults for HLSl/GLSL different
+    if (kind == mi::neuraylib::IMdl_backend_api::MB_HLSL) {
+        options.set_option(MDL_JIT_OPTION_SL_CORE_STATE_API_NAME, "Shading_state_material");
+        options.set_option(MDL_JIT_OPTION_SL_ENV_STATE_API_NAME,  "Shading_state_environment");
+    } else if (kind == mi::neuraylib::IMdl_backend_api::MB_GLSL) {
+        options.set_option(MDL_JIT_OPTION_SL_CORE_STATE_API_NAME, "State");
+        options.set_option(MDL_JIT_OPTION_SL_ENV_STATE_API_NAME,  "State_env");
+    }
 
     // by default we don't use a renderer provided microfacet roughness adaption function
     options.set_option(MDL_JIT_OPTION_USE_RENDERER_ADAPT_MICROFACET_ROUGHNESS, "false");
@@ -3098,6 +3136,9 @@ Mdl_llvm_backend::Mdl_llvm_backend(
 
     // by default we generate no auxiliary methods on distribution functions
     options.set_option(MDL_JIT_OPTION_ENABLE_AUXILIARY, "false");
+
+    // by default we generate pdf functions
+    options.set_option(MDL_JIT_OPTION_ENABLE_PDF, "true");
 }
 
 /// Currently supported SM versions.
@@ -3117,6 +3158,24 @@ static struct Sm_versions { char const *name; unsigned code; } const known_sms[]
     { "86", 86 },
 };
 
+static mi::Sint32 set_state_mode_option(
+    mi::mdl::Options &options,
+    char const *name,
+    char const *value)
+{
+    static char const * const allowed[] = {
+        "field", "arg", "func", "zero"
+    };
+
+    for (size_t i = 0, n = sizeof(allowed) / sizeof(allowed[0]); i < n; ++i) {
+        if (strcmp(allowed[i], value) == 0) {
+            options.set_option(name, value);
+            return 0;
+        }
+    }
+    return -2;
+}
+
 mi::Sint32 Mdl_llvm_backend::set_option(
     char const *name,
     char const *value)
@@ -3127,7 +3186,7 @@ mi::Sint32 Mdl_llvm_backend::set_option(
         return -2;
 
     // common options
-    mi::mdl::Options& jit_options = m_jit->access_options();
+    mi::mdl::Options &jit_options = m_jit->access_options();
 
     if (strcmp(name, "compile_constants") == 0) {
         if (strcmp(value, "off") == 0) {
@@ -3197,7 +3256,7 @@ mi::Sint32 Mdl_llvm_backend::set_option(
            (strcmp(value, "fixed_2") == 0) ||
            (strcmp(value, "fixed_4") == 0) ||
            (strcmp(value, "fixed_8") == 0) ||
-           (strcmp(value, "pointer") == 0 && m_kind != mi::neuraylib::IMdl_backend_api::MB_HLSL))
+           (strcmp(value, "pointer") == 0 && !target_is_structured_language()))
         {
             jit_options.set_option(MDL_JIT_OPTION_LINK_LIBBSDF_DF_HANDLE_SLOT_MODE, value);
             return 0;
@@ -3216,6 +3275,20 @@ mi::Sint32 Mdl_llvm_backend::set_option(
             return -2;
         }
         jit_options.set_option(MDL_JIT_OPTION_ENABLE_AUXILIARY, value);
+        return 0;
+    }
+    if (strcmp(name, "enable_pdf") == 0)
+    {
+        if (strcmp(value, "off") == 0) {
+            value = "false";
+        }
+        else if (strcmp(value, "on") == 0) {
+            value = "true";
+        }
+        else {
+            return -2;
+        }
+        jit_options.set_option(MDL_JIT_OPTION_ENABLE_PDF, value);
         return 0;
     }
     if (strcmp(name, "enable_exceptions") == 0) {
@@ -3251,8 +3324,6 @@ mi::Sint32 Mdl_llvm_backend::set_option(
     }
 
     if (strcmp(name, "texture_runtime_with_derivs") == 0) {
-        if (m_kind == mi::neuraylib::IMdl_backend_api::MB_GLSL)
-            return -1;
         if (strcmp(value, "off") == 0) {
             value = "false";
             m_calc_derivatives = false;
@@ -3267,9 +3338,10 @@ mi::Sint32 Mdl_llvm_backend::set_option(
     }
 
     if (strcmp(name, "use_renderer_adapt_microfacet_roughness") == 0) {
-        // TODO: currently only supported for HLSL backend
-        if (m_kind != mi::neuraylib::IMdl_backend_api::MB_HLSL)
+        // TODO: currently only supported for GLSL/HLSL backend
+        if (!target_is_structured_language()) {
             return -1;
+        }
         if (strcmp(value, "off") == 0) {
             value = "false";
         } else if (strcmp(value, "on") == 0) {
@@ -3282,16 +3354,11 @@ mi::Sint32 Mdl_llvm_backend::set_option(
     }
 
     if (strcmp(name, "use_renderer_adapt_normal") == 0) {
-        // TODO: currently not supported for GLSL backend
-        if (m_kind == mi::neuraylib::IMdl_backend_api::MB_GLSL)
-            return -1;
         if (strcmp(value, "off") == 0) {
             value = "false";
-        }
-        else if (strcmp(value, "on") == 0) {
+        } else if (strcmp(value, "on") == 0) {
             value = "true";
-        }
-        else {
+        } else {
             return -2;
         }
         jit_options.set_option(MDL_JIT_OPTION_USE_RENDERER_ADAPT_NORMAL, value);
@@ -3308,7 +3375,7 @@ mi::Sint32 Mdl_llvm_backend::set_option(
         return 0;
     }
 
-
+    // specific options
     switch (m_kind) {
     case mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX:
         if (strcmp(name, "sm_version") == 0) {
@@ -3386,7 +3453,155 @@ mi::Sint32 Mdl_llvm_backend::set_option(
         break;
 
     case mi::neuraylib::IMdl_backend_api::MB_GLSL:
+        if (strcmp(name, "glsl_version") == 0) {
+            char const *version = "3.30";
+            if (strcmp(value, "100") == 0) {
+                version = "1.00";
+            } else if (strcmp(value, "150") == 0) {
+                version = "1.50";
+            } else if (strcmp(value, "300") == 0) {
+                version = "3.00";
+            } else if (strcmp(value, "310") == 0) {
+                version = "3.10";
+            } else if (strcmp(value, "330") == 0) {
+                version = "3.30";
+            } else if (strcmp(value, "400") == 0) {
+                version = "4.00";
+            } else if (strcmp(value, "410") == 0) {
+                version = "4.10";
+            } else if (strcmp(value, "420") == 0) {
+                version = "4.20";
+            } else if (strcmp(value, "430") == 0) {
+                version = "4.30";
+            } else if (strcmp(value, "440") == 0) {
+                version = "4.40";
+            } else if (strcmp(value, "450") == 0) {
+                version = "4.50";
+            } else if (strcmp(value, "460") == 0) {
+                version = "4.60";
+            } else {
+                return -2;
+            }
+            jit_options.set_option(MDL_JIT_OPTION_GLSL_VERSION, version);
+            return 0;
+        }
+        if (strcmp(name, "glsl_profile") == 0) {
+            char const *profile = "core";
+            if (strcmp(value, "core") == 0) {
+                profile = value;
+            } else if (strcmp(value, "es") == 0) {
+                profile = value;
+            } else if (strcmp(value, "compatibility") == 0) {
+                profile = value;
+            } else {
+                return -2;
+            }
+            jit_options.set_option(MDL_JIT_OPTION_GLSL_PROFILE, profile);
+            return 0;
+        }
+        if (strcmp(name, "glsl_enabled_extensions") == 0) {
+            jit_options.set_option(MDL_JIT_OPTION_GLSL_ENABLED_EXTENSIONS, value);
+            return 0;
+        }
+        if (strcmp(name, "glsl_required_extensions") == 0) {
+            jit_options.set_option(MDL_JIT_OPTION_GLSL_REQUIRED_EXTENSIONS, value);
+            return 0;
+        }
+        if (strcmp(name, "glsl_max_const_data") == 0) {
+            jit_options.set_option(MDL_JIT_OPTION_GLSL_MAX_CONST_DATA, value);
+            return 0;
+        }
+        if (strcmp(name, "glsl_remap_functions") == 0) {
+            jit_options.set_option(MDL_JIT_OPTION_SL_REMAP_FUNCTIONS, value);
+            return 0;
+        }
+        if (strcmp(name, "glsl_state_animation_time_mode") == 0) {
+            return set_state_mode_option(
+                jit_options, MDL_JIT_OPTION_SL_STATE_ANIMATION_TIME_MODE, value);
+        }
+        if (strcmp(name, "glsl_state_geometry_normal_mode") == 0) {
+            return set_state_mode_option(
+                jit_options, MDL_JIT_OPTION_SL_STATE_GEOMETRY_NORMAL_MODE, value);
+        }
+        if (strcmp(name, "glsl_state_motion_mode") == 0) {
+            return set_state_mode_option(
+                jit_options, MDL_JIT_OPTION_SL_STATE_MOTION_MODE, value);
+        }
+        if (strcmp(name, "glsl_state_normal_mode") == 0) {
+            return set_state_mode_option(
+                jit_options, MDL_JIT_OPTION_SL_STATE_NORMAL_MODE, value);
+        }
+        if (strcmp(name, "glsl_state_object_id_mode") == 0) {
+            return set_state_mode_option(
+                jit_options, MDL_JIT_OPTION_SL_STATE_OBJECT_ID_MODE, value);
+        }
+        if (strcmp(name, "glsl_state_position_mode") == 0) {
+            return set_state_mode_option(
+                jit_options, MDL_JIT_OPTION_SL_STATE_POSITION_MODE, value);
+        }
+        if (strcmp(name, "glsl_state_texture_space_max_mode") == 0) {
+            return set_state_mode_option(
+                jit_options, MDL_JIT_OPTION_SL_STATE_TEXTURE_SPACE_MAX_MODE, value);
+        }
+        if (strcmp(name, "glsl_state_texture_coordinate_mode") == 0) {
+            return set_state_mode_option(
+                jit_options, MDL_JIT_OPTION_SL_STATE_TEXTURE_COORDINATE_MODE, value);
+        }
+        if (strcmp(name, "glsl_state_texture_tangent_u_mode") == 0) {
+            return set_state_mode_option(
+                jit_options, MDL_JIT_OPTION_SL_STATE_TEXTURE_TANGENT_U_MODE, value);
+        }
+        if (strcmp(name, "glsl_state_texture_tangent_v_mode") == 0) {
+            return set_state_mode_option(
+                jit_options, MDL_JIT_OPTION_SL_STATE_TEXTURE_TANGENT_V_MODE, value);
+        }
+        if (strcmp(name, "glsl_state_geometry_tangent_u_mode") == 0) {
+            return set_state_mode_option(
+                jit_options, MDL_JIT_OPTION_SL_STATE_GEOMETRY_TANGENT_U_MODE, value);
+        }
+        if (strcmp(name, "glsl_state_geometry_tangent_v_mode") == 0) {
+            return set_state_mode_option(
+                jit_options, MDL_JIT_OPTION_SL_STATE_GEOMETRY_TANGENT_V_MODE, value);
+        }
+        if (strcmp(name, "glsl_place_uniforms_into_ssbo") == 0) {
+            if (strcmp(value, "off") == 0) {
+                value = "false";
+            } else if (strcmp(value, "on") == 0) {
+                value = "true";
+            } else {
+                return -2;
+            }
+            jit_options.set_option(MDL_JIT_OPTION_GLSL_PLACE_UNIFORMS_INTO_SSBO, value);
+            return 0;
+        }
+        if (strcmp(name, "glsl_uniform_ssbo_name") == 0) {
+            jit_options.set_option(MDL_JIT_OPTION_GLSL_UNIFORM_SSBO_NAME, value);
+            return 0;
+        }
+        if (strcmp(name, "glsl_uniform_ssbo_binding") == 0) {
+            jit_options.set_option(MDL_JIT_OPTION_GLSL_UNIFORM_SSBO_BINDING, value);
+            return 0;
+        }
+        if (strcmp(name, "glsl_uniform_ssbo_set") == 0) {
+            jit_options.set_option(MDL_JIT_OPTION_GLSL_UNIFORM_SSBO_SET, value);
+            return 0;
+        }
+
+        if (strcmp(name, "glsl_use_resource_data") == 0) {
+            if (strcmp(value, "on") == 0) {
+                m_use_builtin_resource_handler = true;
+                value = "true";
+            } else if (strcmp(value, "off") == 0) {
+                m_use_builtin_resource_handler = false;
+                value = "false";
+            } else {
+                return -2;
+            }
+            jit_options.set_option(MDL_JIT_OPTION_SL_USE_RESOURCE_DATA, value);
+            return 0;
+        }
         break;
+
     case mi::neuraylib::IMdl_backend_api::MB_NATIVE:
         if (strcmp(name, "use_builtin_resource_handler") == 0) {
             if (strcmp(value, "on") == 0) {
@@ -3416,7 +3631,7 @@ mi::Sint32 Mdl_llvm_backend::set_option(
             } else {
                 return -2;
             }
-            jit_options.set_option(MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA, value);
+            jit_options.set_option(MDL_JIT_OPTION_SL_USE_RESOURCE_DATA, value);
             return 0;
         }
         break;
@@ -3483,17 +3698,17 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
     MDL::Execution_context       *context)
 {
     if (transaction == NULL || function_call == NULL) {
-        MDL::add_context_error(context, "Invalid parameters (NULL pointer).", -1);
+        MDL::add_error_message(context, "Invalid parameters (NULL pointer).", -1);
         return NULL;
     }
     DB::Tag_set tags_seen;
     if (!function_call->is_valid(transaction, tags_seen, context)) {
-        MDL::add_context_error(context, "Invalid function call.", -1);
+        MDL::add_error_message(context, "Invalid function call.", -1);
         return NULL;
     }
     DB::Tag def_tag = function_call->get_function_definition(transaction);
     if (!def_tag.is_valid()) {
-        MDL::add_context_error(context, "Function does not point to a valid definition.", -1);
+        MDL::add_error_message(context, "Function does not point to a valid definition.", -1);
         return NULL;
     }
 
@@ -3506,7 +3721,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
     mi::base::Handle<mi::mdl::ILambda_function> lambda(
         builder.env_from_call(function_call, fname));
     if (!lambda.is_valid_interface()) {
-        MDL::add_context_error(context,
+        MDL::add_error_message(context,
             builder.get_error_string(), builder.get_error_code());
         return NULL;
     }
@@ -3548,6 +3763,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
                 m_enable_simd));
         break;
     case mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX:
+    case mi::neuraylib::IMdl_backend_api::MB_GLSL:
     case mi::neuraylib::IMdl_backend_api::MB_HLSL:
         code = mi::base::make_handle(
             m_jit->compile_into_source(
@@ -3559,8 +3775,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
                 m_num_texture_spaces,
                 m_num_texture_results,
                 m_sm_version,
-                m_kind == mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX ?
-                    mi::mdl::ICode_generator_jit::CM_PTX : mi::mdl::ICode_generator_jit::CM_HLSL,
+                map_target_language(m_kind),
                 !m_output_target_lang));
         break;
     case mi::neuraylib::IMdl_backend_api::MB_NATIVE:
@@ -3576,7 +3791,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
     }
 
     if (!code.is_valid_interface()) {
-        MDL::add_context_error(context,
+        MDL::add_error_message(context,
             "The backend failed to generate target code for the function.", -3);
         return NULL;
     }
@@ -3584,7 +3799,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
     MDL::convert_and_log_messages(code->access_messages(), context);
 
     if (!code->is_valid()) {
-        MDL::add_context_error(context,
+        MDL::add_error_message(context,
             "The backend failed to generate target code for the function.", -3);
         return NULL;
     }
@@ -3600,11 +3815,16 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
     // Enter the resource-table here
     fill_resource_tables(tc_reg, tc);
 
-    size_t ro_size = 0;
-    char const *data = code->get_ro_data_segment(ro_size);
+    // copy data segments
+    for (size_t i = 0, n = code->get_data_segment_count(); i < n; ++i) {
+        mi::mdl::IGenerated_code_executable::Segment const *desc = code->get_data_segment(i);
 
-    if (data) {
-        tc->add_ro_segment("RO", reinterpret_cast<const unsigned char*>(data), ro_size);
+        if (desc) {
+            tc->add_ro_segment(
+                desc->name,
+                desc->data,
+                desc->size);
+        }
     }
 
     // copy the string constant table
@@ -3623,11 +3843,11 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
     MDL::Execution_context           *context)
 {
     if (!transaction || !compiled_material || !path) {
-        MDL::add_context_error(context, "Invalid parameters (NULL pointer).", -1);
+        MDL::add_error_message(context, "Invalid parameters (NULL pointer).", -1);
         return NULL;
     }
     if (!compiled_material->is_valid(transaction, context)) {
-        MDL::add_context_error(context, "Compiled material is invalid.", -1);
+        MDL::add_error_message(context, "Compiled material is invalid.", -1);
         return NULL;
     }
 
@@ -3640,7 +3860,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
     mi::base::Handle<mi::mdl::ILambda_function> lambda(
         builder.from_sub_expr(compiled_material, path, fname));
     if (!lambda.is_valid_interface()) {
-        MDL::add_context_error(context,
+        MDL::add_error_message(context,
             builder.get_error_string(), builder.get_error_code());
         return NULL;
     }
@@ -3687,6 +3907,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
                 m_enable_simd));
         break;
     case mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX:
+    case mi::neuraylib::IMdl_backend_api::MB_GLSL:
     case mi::neuraylib::IMdl_backend_api::MB_HLSL:
         code = mi::base::make_handle(
             m_jit->compile_into_source(
@@ -3698,8 +3919,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
                 m_num_texture_spaces,
                 m_num_texture_results,
                 m_sm_version,
-                m_kind == mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX ?
-                    mi::mdl::ICode_generator_jit::CM_PTX : mi::mdl::ICode_generator_jit::CM_HLSL,
+                map_target_language(m_kind),
                 !m_output_target_lang));
         break;
     case mi::neuraylib::IMdl_backend_api::MB_NATIVE:
@@ -3718,7 +3938,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
     }
 
     if (!code.is_valid_interface()) {
-        MDL::add_context_error(context,
+        MDL::add_error_message(context,
             "The backend failed to generate target code for the function.", -3);
         return NULL;
     }
@@ -3726,7 +3946,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
     MDL::convert_and_log_messages(code->access_messages(), context);
 
     if (!code->is_valid()) {
-        MDL::add_context_error(context,
+        MDL::add_error_message(context,
             "The backend failed to generate target code for the function.", -3);
         return NULL;
     }
@@ -3747,10 +3967,16 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_material_expressi
         tc->init_argument_block(0, transaction, args.get());
     }
 
-    size_t ro_size = 0;
-    char const *data = code->get_ro_data_segment(ro_size);
-    if (data != NULL) {
-        tc->add_ro_segment("RO", reinterpret_cast<const unsigned char*>(data), ro_size);
+    // copy data segments
+    for (size_t i = 0, n = code->get_data_segment_count(); i < n; ++i) {
+        mi::mdl::IGenerated_code_executable::Segment const *desc = code->get_data_segment(i);
+
+        if (desc) {
+            tc->add_ro_segment(
+                desc->name,
+                desc->data,
+                desc->size);
+        }
     }
 
     // copy the string constant table
@@ -3769,7 +3995,7 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
     MDL::Execution_context* context)
 {
     if (!compiled_material->is_valid(transaction, context)) {
-        MDL::add_context_error(context, "Compiled material is invalid.", -1);
+        MDL::add_error_message(context, "Compiled material is invalid.", -1);
         return NULL;
     }
 
@@ -3784,16 +4010,16 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
     //  - a main df containing the DF part and array and struct constants and
     //  - a number of expression lambdas containing the non-DF part
     // Note: We currently don't support storing expression lambdas of type double
-    //       in HLSL, so disable it.
+    //       in GLSL/HLSL, so disable it.
     mi::base::Handle<mi::mdl::IDistribution_function> dist_func(
         lambda_builder.from_material_df(
             compiled_material,
             path,
             base_fname,
             get_context_option<bool>(context, MDL_CTX_OPTION_INCLUDE_GEO_NORMAL),
-            get_kind() != mi::neuraylib::IMdl_backend_api::MB_HLSL));
+            /*allow_double_expr_lambda=*/!target_is_structured_language()));
     if (!dist_func.is_valid_interface()) {
-       MDL::add_context_error(
+       MDL::add_error_message(
            context, lambda_builder.get_error_string(), lambda_builder.get_error_code());
         return NULL;
     }
@@ -3844,6 +4070,7 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
     mi::base::Handle<mi::mdl::IGenerated_code_executable> code;
     switch (m_kind) {
     case mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX:
+    case mi::neuraylib::IMdl_backend_api::MB_GLSL:
     case mi::neuraylib::IMdl_backend_api::MB_HLSL:
         code = mi::base::make_handle(
             m_jit->compile_distribution_function_gpu(
@@ -3854,8 +4081,7 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
                 m_num_texture_spaces,
                 m_num_texture_results,
                 m_sm_version,
-                m_kind == mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX ?
-                    mi::mdl::ICode_generator_jit::CM_PTX : mi::mdl::ICode_generator_jit::CM_HLSL,
+                map_target_language(m_kind),
                 !m_output_target_lang));
         break;
     case mi::neuraylib::IMdl_backend_api::MB_NATIVE:
@@ -3873,7 +4099,7 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
     }
 
     if (!code.is_valid_interface()) {
-        MDL::add_context_error(
+        MDL::add_error_message(
             context, "The backend failed to generate target code for the material.", -3);
         return NULL;
     }
@@ -3881,7 +4107,7 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
     MDL::convert_and_log_messages(code->access_messages(), context);
 
     if (!code->is_valid()) {
-        MDL::add_context_error(
+        MDL::add_error_message(
             context, "The backend failed to generate target code for the material.", -3);
         return NULL;
     }
@@ -3902,10 +4128,16 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::translate_material_df(
         tc->init_argument_block(0, transaction, args.get());
     }
 
-    size_t ro_size = 0;
-    const char* data = code->get_ro_data_segment(ro_size);
-    if (data) {
-        tc->add_ro_segment("RO", reinterpret_cast<const unsigned char*>(data), ro_size);
+    // copy data segments
+    for (size_t i = 0, n = code->get_data_segment_count(); i < n; ++i) {
+        mi::mdl::IGenerated_code_executable::Segment const *desc = code->get_data_segment(i);
+
+        if (desc) {
+            tc->add_ro_segment(
+                desc->name,
+                desc->data,
+                desc->size);
+        }
     }
 
     // copy the string constant table
@@ -3939,32 +4171,9 @@ mi::mdl::ILink_unit *Mdl_llvm_backend::create_link_unit(
     update_jit_context_options(*cg_ctx.get(), NULL, context);
 
     if (m_jit.is_valid_interface()) {
-        mi::mdl::ICode_generator_jit::Compilation_mode comp_mode;
-
-        switch (get_kind()) {
-        case mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX:
-            comp_mode = mi::mdl::ICode_generator_jit::CM_PTX;
-            break;
-
-        case mi::neuraylib::IMdl_backend_api::MB_LLVM_IR:
-            comp_mode = mi::mdl::ICode_generator_jit::CM_LLVM_IR;
-            break;
-
-        case mi::neuraylib::IMdl_backend_api::MB_NATIVE:
-            comp_mode = mi::mdl::ICode_generator_jit::CM_NATIVE;
-            break;
-
-        case mi::neuraylib::IMdl_backend_api::MB_HLSL:
-            comp_mode = mi::mdl::ICode_generator_jit::CM_HLSL;
-            break;
-
-        default:
-            return NULL;
-        }
-
         return m_jit->create_link_unit(
             cg_ctx.get(),
-            comp_mode,
+            map_target_language(get_kind()),
             get_enable_simd(),
             get_sm_version(),
             get_num_texture_spaces(),
@@ -3982,11 +4191,15 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_link_unit(
 
     update_jit_context_options(*cg_ctx.get(), lu->get_internal_space(), context);
 
+#ifdef ADD_EXTRA_TIMERS
+    std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+#endif
+
     mi::base::Handle<mi::mdl::IGenerated_code_executable> code(
         m_jit->compile_unit(cg_ctx.get(), mi::base::make_handle(lu->get_compilation_unit()).get()));
 
     if (!code.is_valid_interface()) {
-        MDL::add_context_error(context,
+        MDL::add_error_message(context,
             "The JIT backend failed to compile the unit.", -2);
         return NULL;
     }
@@ -3994,13 +4207,21 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_link_unit(
     MDL::convert_and_log_messages(code->access_messages(), context);
 
     if (!code->is_valid()) {
-        MDL::add_context_error(context,
+        MDL::add_error_message(context,
             "The JIT backend failed to compile the unit.", -2);
         return NULL;
     }
 
+#ifdef ADD_EXTRA_TIMERS
+    std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+#endif
+
     mi::base::Handle<Target_code> tc(lu->get_target_code());
     tc->finalize(code.get(), lu->get_transaction(), m_calc_derivatives);
+
+#ifdef ADD_EXTRA_TIMERS
+    std::chrono::steady_clock::time_point t3 = std::chrono::steady_clock::now();
+#endif
 
     // Enter the resource-table here
     fill_resource_tables(*lu->get_tc_reg(), tc.get());
@@ -4010,6 +4231,10 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_link_unit(
     for (size_t i = 0, n_args = code->get_string_constant_count(); i < n_args; ++i) {
         tc->add_string_constant_index(i, code->get_string_constant(i));
     }
+
+#ifdef ADD_EXTRA_TIMERS
+    std::chrono::steady_clock::time_point t4 = std::chrono::steady_clock::now();
+#endif
 
     // Create all target argument blocks, now that all resources are known
     {
@@ -4024,16 +4249,47 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_link_unit(
         }
     }
 
-    size_t ro_size = 0;
-    char const *data = code->get_ro_data_segment(ro_size);
-    if (data != NULL) {
-        tc->add_ro_segment("RO", reinterpret_cast<const unsigned char*>(data), ro_size);
+#ifdef ADD_EXTRA_TIMERS
+    std::chrono::steady_clock::time_point t5 = std::chrono::steady_clock::now();
+#endif
+
+    // copy data segments
+    for (size_t i = 0, n = code->get_data_segment_count(); i < n; ++i) {
+        mi::mdl::IGenerated_code_executable::Segment const *desc = code->get_data_segment(i);
+
+        if (desc) {
+            tc->add_ro_segment(
+                desc->name,
+                desc->data,
+                desc->size);
+        }
     }
+
+#ifdef ADD_EXTRA_TIMERS
+    std::chrono::steady_clock::time_point t6 = std::chrono::steady_clock::now();
+
+    std::chrono::duration<double> et = t6 - t1;
+    printf("TLU |||| Total time                 : %f seconds.\n", et.count());
+
+    et = t2 - t1;
+    printf("TLU | Compile unit                  : %f seconds.\n", et.count());
+
+    et = t3 - t2;
+    printf("TLU | Finalize target code          : %f seconds.\n", et.count());
+
+    et = t4 - t3;
+    printf("TLU | Fill res/string tables        : %f seconds.\n", et.count());
+
+    et = t5 - t4;
+    printf("TLU | Init argument block           : %f seconds.\n", et.count());
+
+    et = t6 - t5;
+    printf("TLU | Add ro data segment           : %f seconds.\n", et.count());
+#endif
 
     tc->retain();
     return tc.get();
 }
-
 
 mi::base::Lock Df_data_helper::m_lock;
 
@@ -4115,7 +4371,7 @@ void Df_data_helper::Df_data_tile::get_pixel(
     mi::Uint32 y_offset,
     mi::Float32* floats) const
 {
-    mi::Uint32 p = ((y_offset * m_resolution_x) + x_offset);
+    mi::Size p = ((y_offset * (mi::Size)m_resolution_x) + x_offset);
     floats[0] = floats[1] = floats[2] = m_data[p];
     floats[3] = 1.0f;
 }

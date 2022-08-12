@@ -97,7 +97,8 @@ if(MDL_ENABLE_OPENGL_EXAMPLES)
     # add dependencies
     target_add_dependencies(TARGET ${PROJECT_NAME} 
         DEPENDS 
-            opengl 
+            opengl
+            glfw
         )
 
     # additional definitions

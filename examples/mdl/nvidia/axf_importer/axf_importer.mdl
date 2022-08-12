@@ -1,0 +1,1001 @@
+/******************************************************************************
+ * Copyright 2022 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+mdl 1.7;
+
+import ::df::*;
+import ::base::*;
+import ::tex::*;
+import ::anno::*;
+import ::state::*;
+import ::math::*;
+
+// the version of this module loosely follows the corresponding
+// version of the AxF SDK the axf importer uses / supports
+module [[
+	anno::version(1, 7, 100),
+	anno::display_name("Materials used by the AxF importer")
+]];
+
+
+export enum brdf_type
+[[
+    anno::description("BRDF types supported for AxF SVBRDFs"),
+    anno::hidden()
+]]
+{
+    brdf_ward_geislermoroder,
+    brdf_cooktorrance,
+    brdf_ggx,
+    brdf_count
+};
+
+
+export enum fresnel_type
+[[
+    anno::description("Fresnel types supported for AxF SVBRDFs"),
+    anno::hidden()
+]]
+{
+    fresnel_none,
+    fresnel_schlick,
+    fresnel_fresnel,
+    fresnel_count
+};
+
+
+export material svbrdf(
+    uniform texture_2d diffuse_texture = texture_2d()
+    [[
+        anno::hidden()
+    ]],
+    uniform texture_2d specular_texture = texture_2d()
+    [[
+        anno::hidden()
+    ]],
+    uniform texture_2d normal_texture = texture_2d()
+    [[
+        anno::hidden()
+    ]],
+    uniform texture_2d specular_brdf_texture_u = texture_2d()
+    [[
+        anno::hidden()
+    ]],
+    uniform texture_2d specular_brdf_texture_v = texture_2d()
+    [[
+        anno::hidden()
+    ]],
+    uniform texture_2d specular_brdf_texture_rotation = texture_2d()
+    [[
+        anno::hidden()
+    ]],
+    uniform texture_2d specular_brdf_texture_f0 = texture_2d()
+    [[
+        anno::hidden()
+    ]],
+    uniform brdf_type brdf_type = brdf_ward_geislermoroder
+    [[
+        anno::hidden()
+    ]],
+    uniform bool isotropic = true
+    [[
+        anno::hidden()
+    ]],
+    uniform fresnel_type fresnel_type = fresnel_none
+    [[
+        anno::hidden()
+    ]],
+    uniform texture_2d specular_brdf_texture_fresnel = texture_2d()
+    [[
+        anno::hidden()
+    ]],
+    uniform bool has_clearcoat = false
+    [[
+        anno::hidden()
+    ]],
+    uniform texture_2d clearcoat_normal_texture = texture_2d()
+    [[
+        anno::hidden()
+    ]],
+    uniform texture_2d clearcoat_ior_texture = texture_2d()
+    [[
+        anno::hidden()
+    ]],
+    uniform texture_2d clearcoat_color_texture = texture_2d()
+    [[
+        anno::hidden()
+    ]],
+    base::texture_coordinate_info coordinate_override = base::texture_coordinate_info()
+    [[
+        anno::hidden(),
+        anno::description("By default, texturing is using object uv coordinates. Procedural coordinate"
+                        " generators like base::coordinate_projection can be attached here to override the default behavior")
+    ]],
+    uniform bool use_sample_size = true
+    [[
+        anno::display_name("Use sample size"),
+        anno::description("Set to true if the real world measurements of the measured sample are known"),
+        anno::in_group("Real world size")
+    ]],
+    uniform float sample_size_u = 0.1
+    [[
+        anno::display_name("Sample size U"),
+        anno::description("The size of the measured sample in m, measured in the U direction"),
+        anno::soft_range(0.01, 1000),
+        anno::in_group("Real world size")
+    ]],
+    uniform float sample_size_v = 0.1
+    [[
+        anno::display_name("Sample size V"),
+        anno::description("The size of the measured sample in m, measured in the V direction"),
+        anno::soft_range(0.01, 1000),
+        anno::in_group("Real world size")
+    ]],
+    uniform float scene_to_meter = state::meters_per_scene_unit()
+    [[
+        anno::display_name("Scene to m conversion factor"),
+        anno::description("Conversion factor from modeling scale used in the scene and m. Only used if \"Use real world size\" is true and for displacement"),
+        anno::soft_range(0.01, 1000),
+        anno::in_group("Real world size")
+    ]],
+    uniform float scale_u = 1.0
+    [[
+        anno::display_name("Scale V"),
+        anno::description("Scale factor in V direction"),
+        anno::soft_range(0.01, 100),
+        anno::in_group("Material placement")
+    ]],
+    uniform float scale_v = 1.0
+    [[
+        anno::display_name("Scale U"),
+        anno::description("Scale factor in U direction"),
+        anno::soft_range(0.01, 100),
+        anno::in_group("Material placement")
+    ]],
+    uniform float rotate_uv = 0.0
+    [[
+        anno::display_name("Rotation angle"),
+        anno::description("Changes the orientation of the textures on the object"),
+        anno::soft_range(0.0, 6.284),
+        anno::in_group("Material placement")
+    ]],
+    uniform tex::wrap_mode wrap = tex::wrap_repeat
+    [[
+        anno::display_name("Texture wrapping behavior"),
+        anno::description("Controls the wrapping behavior of the texture if it fits multiple times on an object"),
+        anno::in_group("Material placement")
+    ]],
+    uniform float normal_texture_strength = 1.0
+    [[
+        anno::display_name("Normal texture strength"),
+        anno::description("Can be used to tweak the bumpiness of the material. At 1.0 it will match the measured bumpiness"),
+        anno::soft_range(0.01, 100.0),
+        anno::in_group("Creative control")
+    ]],
+    float3 geometry_normal = state::normal()
+    [[
+        anno::display_name("Geometry normal"),
+        anno::description("Allows the use of an additional bump mapping effect"),
+        anno::in_group("Creative control")
+    ]],
+    uniform float scale_height = 1.0
+    [[
+        anno::display_name("Scale height texture"),
+        anno::description("Scale factor for the displacement mapping effect"),
+        anno::in_group("Creative control")
+    ]],
+    uniform texture_2d height_texture = texture_2d()
+    [[
+        anno::hidden()
+    ]],
+    uniform texture_2d alpha_texture = texture_2d()
+    [[
+        anno::hidden()
+    ]],
+    uniform texture_2d transmission_color_texture = texture_2d()
+    [[
+        anno::hidden()
+    ]],
+    uniform texture_2d specular_amount_texture = texture_2d()
+    [[
+        anno::hidden()
+    ]]
+)
+[[
+    anno::display_name("AxF SVBRDF material"),
+    anno::hidden(),
+    anno::description("MDL implementation of the SVBRDF model used in AxF files"),
+    anno::author("NVIDIA Corporation"),
+    anno::copyright_notice("Copyright 2022 NVIDIA Corporation. All rights reserved."),
+    anno::key_words(string[]("axf","svbrdf"))
+]]
+ = let {
+
+    uniform float3 scale = use_sample_size ? float3(scene_to_meter / sample_size_u, scene_to_meter / sample_size_v, 1.0) : float3(scale_u, scale_v, 1.0);
+    base::texture_coordinate_info coordinate = base::transform_coordinate(
+        base::rotation_translation_scale(
+            rotation: float3(0.0, 0.0, rotate_uv),
+            translation: float3(0.0),
+            scaling: scale
+            ),
+            coordinate: coordinate_override
+        );
+
+    base::texture_return diffuse = base::file_texture(
+        texture: diffuse_texture,
+        uvw: coordinate,
+        wrap_u: wrap,
+        wrap_v: wrap,
+        mono_source: base::mono_maximum
+        );
+
+    base::texture_return specular = base::file_texture(
+        texture: specular_texture,
+        uvw: coordinate,
+        wrap_u: wrap,
+        wrap_v: wrap,
+        mono_source: base::mono_maximum
+        );
+
+    float specular_brdf_u = base::file_texture(
+        texture: specular_brdf_texture_u,
+        uvw: coordinate,
+        wrap_u: wrap,
+        wrap_v: wrap,
+        mono_source: base::mono_maximum
+        ).mono;
+    float specular_brdf_v = isotropic ? specular_brdf_u : base::file_texture(
+        texture: specular_brdf_texture_v,
+        uvw: coordinate,
+        wrap_u: wrap,
+        wrap_v: wrap,
+        mono_source: base::mono_maximum
+        ).mono;
+
+    float3 tangent_u = (isotropic) 
+        ? coordinate_override.tangent_u 
+        : base::anisotropy_conversion(
+            tangent_u: coordinate_override.tangent_u, 
+            anisotropy_rotation:  base::file_texture(
+                texture: specular_brdf_texture_rotation,
+                uvw: coordinate,
+                wrap_u: wrap,
+                wrap_v: wrap,
+                mono_source: base::mono_maximum
+                ).mono).tangent_u;
+
+    float3 normal = base::tangent_space_normal_texture(
+        texture: normal_texture,
+        factor: normal_texture_strength,
+        uvw: coordinate,
+        wrap_u: wrap,
+        wrap_v: wrap,
+        flip_tangent_u : false,
+        flip_tangent_v : false,
+        offset: 0.0,
+        scale: 1.0
+        );
+
+    //
+    // glossy/specular component with optional Fresnel
+    //
+
+    bsdf glossy_component0 =
+        brdf_type == brdf_ward_geislermoroder ?
+            df::ward_geisler_moroder_bsdf(
+                roughness_u: specular_brdf_u,
+                roughness_v: specular_brdf_v,
+                tangent_u: tangent_u) :
+            (brdf_type == brdf_cooktorrance ?
+                df::custom_curve_layer(
+                    normal_reflectivity: base::file_texture(
+                        texture: specular_brdf_texture_f0,
+                        uvw: coordinate,
+                        wrap_u: wrap,
+                        wrap_v: wrap,
+                        mono_source: base::mono_maximum
+                        ).mono,
+                    layer: df::microfacet_beckmann_vcavities_bsdf(
+                        roughness_u: specular_brdf_u,
+                        roughness_v: specular_brdf_v,
+                        tangent_u: tangent_u),
+                    normal: normal) :
+            // brdf_type == brdf_ggx
+                df::microfacet_ggx_smith_bsdf(
+                    roughness_u: specular_brdf_u,
+                    roughness_v: specular_brdf_v,
+                    tangent_u: tangent_u)
+                );
+
+    base::texture_return fresnel_tex = (fresnel_type == fresnel_schlick || fresnel_type == fresnel_fresnel) ?
+        base::file_texture(
+            texture: specular_brdf_texture_fresnel,
+            uvw: coordinate,
+            wrap_u: wrap,
+            wrap_v: wrap,
+            mono_source: base::mono_maximum) : base::texture_return();
+
+    bsdf glossy_component = (fresnel_type == fresnel_schlick) ? 
+        df::custom_curve_layer(normal_reflectivity: fresnel_tex.mono, layer: glossy_component0, normal: normal) :
+        ((fresnel_type == fresnel_fresnel) ? df::fresnel_layer(ior: fresnel_tex.mono, layer: glossy_component0, normal: normal) : glossy_component0);
+
+    //
+    // dirac transmission component
+    //
+    
+    base::texture_return s = base::file_texture(
+        texture: specular_amount_texture,
+        uvw: coordinate,
+        wrap_u: wrap,
+        wrap_v: wrap,
+        mono_source: base::mono_maximum);
+    base::texture_return rho_t = base::file_texture(
+        texture: transmission_color_texture,
+        uvw: coordinate,
+        wrap_u: wrap,
+        wrap_v: wrap,
+        mono_source: base::mono_maximum);
+    
+    bool has_transmission = tex::texture_isvalid(transmission_color_texture);
+    bsdf transmission_component = has_transmission ?
+        df::custom_curve_layer(
+            weight: s.mono,
+            normal_reflectivity: fresnel_tex.mono,
+            grazing_reflectivity: 1.0f,
+            layer: bsdf(),
+            base: df::specular_bsdf(mode: df::scatter_transmit)) :
+        bsdf();
+
+    bsdf base = has_transmission ?
+        df::color_unbounded_mix(
+            df::color_bsdf_component[3](
+                df::color_bsdf_component(specular.tint, glossy_component),
+                df::color_bsdf_component(diffuse.tint, df::diffuse_reflection_bsdf()),
+                df::color_bsdf_component(rho_t.tint, transmission_component))
+            ) :
+        df::color_normalized_mix(
+            df::color_bsdf_component[2](
+                df::color_bsdf_component(specular.tint, glossy_component),
+                df::color_bsdf_component(diffuse.tint, df::diffuse_reflection_bsdf()))
+            );
+
+    float clearcoat_ior = has_clearcoat ? base::file_texture(
+        texture:  clearcoat_ior_texture,
+        uvw: coordinate,
+        wrap_u: wrap,
+        wrap_v: wrap,
+        mono_source: base::mono_maximum).mono : 0.0f;
+    color clearcoat_color = (has_clearcoat && tex::texture_isvalid(clearcoat_color_texture)) ? base::file_texture(
+        texture:  clearcoat_color_texture,
+        uvw: coordinate,
+        wrap_u: wrap,
+        wrap_v: wrap,
+        mono_source: base::mono_maximum).tint  : color(1.0);
+    float3 clearcoat_normal = (has_clearcoat && tex::texture_isvalid(clearcoat_normal_texture)) ? base::tangent_space_normal_texture(
+        texture: clearcoat_normal_texture,
+        uvw: coordinate,
+        wrap_u: wrap,
+        wrap_v: wrap,
+        flip_tangent_u : false,
+        flip_tangent_v : false,
+        offset: 0.0,
+        scale: 1.0
+        ) : state::normal();
+
+    bsdf coated = has_clearcoat ? 
+        df::fresnel_layer(ior: clearcoat_ior, weight: 1.0, layer: df::specular_bsdf(tint: clearcoat_color), base: base, normal: clearcoat_normal) : 
+        base;
+    
+    bsdf surface = df::weighted_layer(
+        weight: 1.0,
+        normal: normal,
+        layer: coated
+        );
+
+    // height texture is in millimeters, respect that in the scale
+    uniform float displacement_scale = scale_height * scene_to_meter * 0.001;
+    
+    float3 displacement_value = tex::texture_isvalid(height_texture) && (displacement_scale > 0.0) ? base::file_texture(
+        texture: height_texture,
+        uvw: coordinate,
+        wrap_u: wrap,
+        wrap_v: wrap,
+        color_scale: color(displacement_scale),
+        mono_source: base::mono_maximum).mono * state::normal() : float3(0.0);
+
+    float cutout_value = tex::texture_isvalid(alpha_texture) ? base::file_texture(
+        texture: alpha_texture,
+        uvw: coordinate,
+        wrap_u: wrap,
+        wrap_v: wrap,
+        mono_source: base::mono_maximum).mono : 1.0f;
+
+} in material(
+    surface: material_surface(
+        scattering: surface
+        ),
+    geometry: material_geometry(
+        normal: geometry_normal,
+        displacement: displacement_value,
+        cutout_opacity: cutout_value
+        ),
+    thin_walled: true
+    );
+
+
+//!! magic.
+int hash(int seed, int i)
+{
+    return (i ^ seed) * 1075385539;
+}
+int rnd_init(int3 pos)
+{
+    return hash(hash(hash(0, pos.x), pos.y), pos.z);
+}
+
+int rnd_next(int seed) {
+    // xorshift32 using signed int
+    seed ^= seed << 13;
+    seed ^= seed >>> 17;
+    seed ^= seed << 5;
+    return seed;
+}
+
+float rnd_value(int seed)
+{
+    return math::abs(float(seed) * 4.6566e-10f);
+}
+
+// apply random rotation (using "Fast Random Rotation Matrices" by James Arvo)
+float3 rotate_pos(float3 pos, float3 xi)
+{
+    float theta = math::PI * 2.0f * xi.x;
+    float phi = math::PI * 2.0f * xi.y;
+    float z = xi.z * 2.0f;
+
+    float r = math::sqrt(z);
+    float[2] sp_cp = math::sincos(phi);
+    float Vx = sp_cp[0] * r;
+    float Vy = sp_cp[1] * r;
+    float Vz = math::sqrt(2.0f - z);
+
+    float[2] st_ct = math::sincos(theta);
+    float Sx = Vx * st_ct[1] - Vy * st_ct[0];
+    float Sy = Vx * st_ct[0] + Vy * st_ct[1];
+
+    float3x3 M(
+        Vx * Sx - st_ct[1], Vx * Sy - st_ct[0], Vx * Vz,
+        Vy * Sx + st_ct[0], Vy * Sy - st_ct[1], Vy * Vz,
+        Vz * Sx, Vz * Sy, 1.0f - z);
+
+    return M * pos;
+}
+
+struct flake_noise_value {
+    // flake priority (in [0..1], 0: no flake, flakes with higher priority shadow flakes "below" them)
+    float priority;
+
+    // current pseudo random number generator seed
+    int   rnd_seed;
+};
+
+// flake noise function with controllable flake size, and probability
+flake_noise_value flake_noise(
+    float3 pos,
+    uniform float flake_diameter,
+    uniform float flake_probability)
+{
+    float3 base_pos = math::floor(pos);
+    int3 base_pos_i = int3(base_pos);
+    
+    flake_noise_value val(0.0f, 0);
+
+    for (int i = -1; i < 2; ++i) {
+        for (int j = -1; j < 2; ++j) {
+            for (int k = -1; k < 2; ++k) {
+
+                int seed = rnd_init(base_pos_i + int3(i, j, k));
+
+                seed = rnd_next(seed);
+                if (rnd_value(seed) > flake_probability)
+                    continue;
+
+                seed = rnd_next(seed);
+                float priority = rnd_value(seed);
+                if (priority < val.priority)
+                    continue;                
+
+                float3 flake_pos = base_pos + float3(i, j, k) + float3(0.5f);
+
+                float3 p = pos - flake_pos;
+                if (math::dot(p, p) >= flake_diameter * flake_diameter * 4.0f)
+                    continue;
+
+                float3 xi_rot;
+                seed = rnd_next(seed);
+                xi_rot.x = rnd_value(seed);
+                seed = rnd_next(seed);
+                xi_rot.y = rnd_value(seed);
+                seed = rnd_next(seed);
+                xi_rot.z = rnd_value(seed);
+                p = rotate_pos(p, xi_rot);
+                
+                if (math::abs(p.x) <= flake_diameter &&
+                    math::abs(p.y) <= flake_diameter &&
+                    math::abs(p.z) <= flake_diameter)
+                {
+                    val.priority = priority;
+                    val.rnd_seed = seed;
+                }
+            }
+        }
+    }
+
+    return val;
+}
+
+
+// constants for numerical fitted curve to observed flake noise density behavior
+const float4 ABCD = float4(-26.19771808f, 26.39663835f, 85.53857017f, -102.35069432f);
+const float2 EF = float2(-101.42634862f, 118.45082288f);
+// compute a flake probability for a given flake coverage density x
+float density_to_probability(
+    uniform float4 abcd,
+    uniform float2 ef,
+    uniform float x)
+{
+    float xx = x * x;
+    return (abcd.x * xx + abcd.y * x) / (abcd.z * xx * x + abcd.w * xx  + ef.x * x + ef.y);
+}
+
+// statistically controlled (area/volume coverage density) flake noise 
+flake_noise_value flake_noise(
+    float3 position,
+    uniform float density = 0.5f)
+{
+    float probability = density_to_probability(ABCD, EF, math::saturate(density));
+
+    return flake_noise(pos: position, flake_diameter: 1.5f / math::sqrt(3.0f), flake_probability: probability);
+}
+
+// utility to importance sample a cdf
+int sample_cdf(
+    int [<cdf_size>] cdf,
+    int first_pos,
+    int last_pos,
+    float xi)
+{
+    xi *= float(cdf[last_pos]);
+    int m = (first_pos + last_pos) / 2;
+    while (last_pos > first_pos) {
+        if (xi < cdf[m])
+            last_pos = m;
+        else
+            first_pos = m + 1;
+        m = (first_pos + last_pos) / 2;
+    }
+    return m;
+}
+
+// sample a flake color, weight, and normal
+struct flake_value {
+    float weight;
+    float3 col;
+    float3 normal;
+    float f0;
+};
+flake_value sample_flake(
+    float3 uvw,
+    float3 ct_coeffs,
+    float3 ct_spreads,
+    float3 ct_f0s,
+    int [<flake_importance_data_size>] flake_importance_data,
+    float [<flake_orientation_falloff_size>] flake_orientation_falloff,
+    float flake_intensity_scale)
+{
+    flake_value val;
+
+    const int num_c = 16;
+    const int num_l = 64;
+    if (flake_intensity_scale <= 0.0f || flake_importance_data_size != num_l + num_c * num_c) {
+        // no flake data available
+        val.normal = state::normal();
+        return val;
+    }
+
+    flake_noise_value noise_val = flake_noise(position: uvw, density: 1.0f);
+    if (noise_val.priority <= 0.0f) {
+        // should rarely happen, since with requested density 1 (i.e. full coverage)
+        val.normal = state::normal();
+        return val;
+    }
+    
+    int rnd_seed = noise_val.rnd_seed;    
+
+    // sample intensity
+    rnd_seed = rnd_next(rnd_seed);
+    float xi0 = rnd_value(rnd_seed);
+    int pos = sample_cdf(flake_importance_data, 0, num_l - 1, xi0);
+    rnd_seed = rnd_next(rnd_seed);
+    xi0 = rnd_value(rnd_seed);
+    float l = (float(pos) + xi0) / float(num_l) * flake_intensity_scale;
+
+    // sample chromaticity
+    rnd_seed = rnd_next(rnd_seed);
+    xi0 = rnd_value(rnd_seed);
+    pos = sample_cdf(flake_importance_data, num_l, num_l + num_c * num_c - 1, xi0);
+    pos -= num_l;
+    
+    int r_idx = pos / num_c;
+    int g_idx = pos % num_c;
+
+    rnd_seed = rnd_next(rnd_seed);
+    xi0 = rnd_value(rnd_seed);
+    float r = (float(r_idx) + xi0) * (1.0f / float(num_c));
+    rnd_seed = rnd_next(rnd_seed);
+    xi0 = rnd_value(rnd_seed);
+    float g = (float(g_idx) + xi0) * (1.0f / float(num_c));
+    float rg = r + g;
+    if (rg > 1.0f) {
+        float inv_rg = 1.0f / rg;
+        r *= inv_rg;
+        g *= inv_rg;
+        return val;
+    }
+
+    // sample normal
+    val.col = float3(r, g, math::max(1.0f - r - g, 0.0f));
+    float m = math::max_value(val.col);
+    val.col /= m;
+    val.weight = l * m;
+
+    rnd_seed = rnd_next(rnd_seed);
+    xi0 = rnd_value(rnd_seed);
+    float sum_w = (ct_coeffs.x + ct_coeffs.y + ct_coeffs.z);
+    bool choose_z = (xi0 * sum_w > ct_coeffs.x + ct_coeffs.y);
+    bool choose_y = (xi0 * sum_w > ct_coeffs.x);
+    float flake_roughness = choose_z ? ct_spreads.z : (choose_y ? ct_spreads.y : ct_spreads.x);
+    val.f0 = choose_z ? ct_f0s.z : (choose_y ? ct_f0s.y : ct_f0s.x);
+
+    // create a flake normal by importance sampling the Beckmann distribution with given roughness
+    rnd_seed = rnd_next(rnd_seed);
+    xi0 = rnd_value(rnd_seed);
+    float xi1 = rnd_value(rnd_next(rnd_seed));
+
+    float phi = math::PI * 2.0f * xi0;
+    float tantheta = math::sqrt(-flake_roughness * flake_roughness * math::log(1.0f - xi1));
+    float sintheta = tantheta / math::sqrt(1.0f + tantheta * tantheta);
+    float costheta = math::sqrt(1.0f - sintheta * sintheta);
+
+    float[2] scphi = math::sincos(phi);
+    val.normal =
+        state::texture_tangent_u(0) * scphi[1] * sintheta +
+        state::texture_tangent_v(0) * scphi[0] * sintheta +
+        state::normal() * costheta;
+
+    float theta = math::acos(math::saturate(costheta));    
+    val.weight *= flake_orientation_falloff[
+        math::min(
+            int(float(flake_orientation_falloff_size) * theta * (0.5f / math::PI) + 0.5f),
+            flake_orientation_falloff_size - 1)];
+    
+    return val;
+}
+
+
+
+export material carpaint(
+    uniform color[<brdf_colors_size>] brdf_colors = color[](color(1.0))
+    [[
+        anno::hidden()
+    ]],
+    uniform float clearcoat_scale = 1.0
+    [[
+        anno::hidden()
+    ]],
+    uniform float brdf_scale = 1.0
+    [[
+        anno::hidden()
+    ]],
+    uniform float ior = 1.0
+    [[
+        anno::hidden()
+    ]],
+    uniform float ct_diffuse = 0.0
+    [[
+        anno::hidden()
+    ]],
+    uniform float3 ct_coeffs = float3(0.0, 0.0, 0.0)
+    [[
+        anno::hidden()
+    ]],
+    uniform float3 ct_f0s = float3(0.0, 0.0, 0.0)
+    [[
+        anno::hidden()
+    ]],
+    uniform float3 ct_spreads = float3(0.0, 0.0, 0.0)
+    [[
+        anno::hidden()
+    ]],
+    uniform texture_2d clearcoat_normal_texture = texture_2d()
+    [[
+        anno::hidden()
+    ]],
+    base::texture_coordinate_info coordinate_override = base::texture_coordinate_info()
+    [[
+        anno::hidden(),
+        anno::description("By default, texturing is using object uv coordinates. Procedural coordinate"
+                        " generators like base::coordinate_projection can be attached here to override the default behavior")
+    ]],
+    uniform bool use_sample_size = true
+    [[
+        anno::display_name("Use sample size"),
+        anno::description("Set to true if the real world measurements of the measured sample are known"),
+        anno::in_group("Real world size")
+    ]],
+    uniform float sample_size_u = 0.1
+    [[
+        anno::display_name("Sample size U"),
+        anno::description("The size of the measured sample in m, measured in the U direction"),
+        anno::soft_range(0.01, 1000),
+        anno::in_group("Real world size")
+    ]],
+    uniform float sample_size_v = 0.1
+    [[
+        anno::display_name("Sample size V"),
+        anno::description("The size of the measured sample in m, measured in the V direction"),
+        anno::soft_range(0.01, 1000),
+        anno::in_group("Real world size")
+    ]],
+    uniform float scene_to_meter = state::meters_per_scene_unit()
+    [[
+        anno::display_name("Scene to m conversion factor"),
+        anno::description("Conversion factor from modeling scale used in the scene and m. Only used if \"Use real world size\" is true"),
+        anno::soft_range(0.01, 1000),
+        anno::in_group("Real world size")
+    ]],
+    uniform float scale_u = 1.0
+    [[
+        anno::display_name("Scale V"),
+        anno::description("Scale factor in V direction"),
+        anno::soft_range(0.01, 100),
+        anno::in_group("Material placement")
+    ]],
+    uniform float scale_v = 1.0
+    [[
+        anno::display_name("Scale U"),
+        anno::description("Scale factor in U direction"),
+        anno::soft_range(0.01, 100),
+        anno::in_group("Material placement")
+    ]],
+    uniform float rotate_uv = 0.0
+    [[
+        anno::display_name("Rotation angle"),
+        anno::description("Changes the orientation of the textures on the object"),
+        anno::soft_range(0.0, 6.284),
+        anno::in_group("Material placement")
+    ]],
+    uniform tex::wrap_mode wrap = tex::wrap_repeat
+    [[
+        anno::display_name("Texture wrapping behavior"),
+        anno::description("Controls the wrapping behavior of the texture if it fits multiple times on an object"),
+        anno::in_group("Material placement")
+    ]],
+    float3 geometry_normal = state::normal()
+    [[
+        anno::display_name("Geometry normal"),
+        anno::description("Allows the use of an additional bump mapping effect"),
+        anno::in_group("Creative control")
+    ]],
+    uniform bool enable_flakes = false
+    [[
+        anno::display_name("Enable flakes"),
+        anno::description("Enables the additional flake component"),
+        anno::in_group("Flakes")
+    ]],
+    uniform float3 flake_uvw_scale = float3(1.0f, 1.0f, 1.0f)
+    [[
+        anno::hidden()
+    ]],
+    uniform int[<flake_importace_data_size>] flake_importance_data = int[]()
+    [[
+        anno::hidden()
+    ]],
+    uniform float flake_peak_intensity_scale = 0.0f
+    [[
+        anno::hidden()
+    ]],
+    uniform float flake_size = 1.0f
+    [[
+        anno::display_name("Flake size"),
+        anno::description("Artistic control to modifiy flake size"),
+        anno::in_group("Flakes")
+    ]],
+    uniform float flake_bsdf_roughness = 0.01f
+    [[
+        anno::display_name("Flake roughness"),
+        anno::description("Artistic flake reflection roughness control"),
+        anno::in_group("Flakes")
+    ]],
+    uniform float flake_intensity_scale = 1.0f
+    [[
+        anno::display_name("Flake brightness"),
+        anno::description("Artistic flake brightness control"),
+        anno::in_group("Flakes")
+    ]],
+    uniform bool precise_sub_clearcoat_component = false
+    [[
+        anno::display_name("Measured sub-clearcoat BRDF"),
+        anno::description("Use a measured BRDF for sub-clearcoat layer. Enables correct rendering for refracting clearcoats and color shifting paints.")
+    ]],
+    uniform bsdf_measurement sub_clearcoat_measurement = bsdf_measurement()
+    [[
+        anno::hidden()
+    ]],
+    uniform float[<flake_orientation_falloff_size>] flake_orientation_falloff = float[]()
+    [[
+        anno::hidden()
+    ]],
+    uniform texture_2d brdf_colors_2d = texture_2d()
+    [[
+        anno::hidden()
+    ]],
+    uniform bool brdf_colors_2d_included_in_measurement = true
+    [[
+        anno::hidden()
+    ]]
+)
+[[
+    anno::display_name("AxF carpaint material"),
+    anno::hidden(),
+    anno::description("MDL approximation of the AxF carpaint material"),
+    anno::author("NVIDIA Corporation"),
+    anno::copyright_notice("Copyright 2022 NVIDIA Corporation. All rights reserved."),
+    anno::key_words(string[]("axf","carpaint"))
+]]
+ = let {
+
+    uniform float3 scale = use_sample_size ? float3(scene_to_meter / sample_size_u, scene_to_meter / sample_size_v, 1.0) : float3(scale_u, scale_v, 1.0);
+    base::texture_coordinate_info coordinate = base::transform_coordinate(
+        base::rotation_translation_scale(
+            rotation: float3(0.0, 0.0, rotate_uv),
+            translation: float3(0.0),
+            scaling: scale
+            ),
+            coordinate: coordinate_override
+        );
+
+    bsdf clearcoat_component = df::specular_bsdf(tint: color(clearcoat_scale));
+
+    bsdf ct0 = df::custom_curve_layer(
+        normal_reflectivity: ct_f0s.x,
+        layer: df::microfacet_beckmann_vcavities_bsdf(roughness_u: ct_spreads.x)
+        );
+    bsdf ct1 = df::custom_curve_layer(
+        normal_reflectivity: ct_f0s.y,
+        layer: df::microfacet_beckmann_vcavities_bsdf(roughness_u: ct_spreads.y)
+        );
+    bsdf ct2 = df::custom_curve_layer(
+        normal_reflectivity: ct_f0s.z,
+        layer: df::microfacet_beckmann_vcavities_bsdf(roughness_u: ct_spreads.z)
+        );
+
+    float3 flake_uvw = coordinate.position * flake_uvw_scale / flake_size;
+    flake_value flake_c = enable_flakes ? sample_flake(flake_uvw, ct_coeffs, ct_spreads, ct_f0s, flake_importance_data, flake_orientation_falloff, flake_peak_intensity_scale * flake_intensity_scale) : flake_value();
+    bsdf flake_base_component = df::weighted_layer(
+        weight: 1.0f,
+        normal: flake_c.normal,
+        layer: df::directional_factor(
+            normal_tint: color(flake_c.col) * flake_c.f0,
+            grazing_tint: color(flake_c.col),
+            base: df::simple_glossy_bsdf(roughness_u: flake_bsdf_roughness)));
+
+
+    float flake_r = math::min(flake_c.weight, 1.0f);
+    float w_g = (1.0f - flake_r) * brdf_scale;
+    float w_f = flake_r * brdf_scale;
+
+
+    bool use_measured_brdf = precise_sub_clearcoat_component && df::bsdf_measurement_isvalid(sub_clearcoat_measurement);
+    float brdf_base_weight = use_measured_brdf ? 1.0f : w_g * (ct_coeffs.x + ct_coeffs.y + ct_coeffs.z) + ct_diffuse * brdf_scale;
+
+    bsdf brdf_base_component_measured = df::measured_bsdf(measurement: sub_clearcoat_measurement);
+    bsdf brdf_base_component_mapped_tmp = df::normalized_mix(
+        df::bsdf_component[](
+            df::bsdf_component(weight: ct_diffuse * brdf_scale / brdf_base_weight, component: df::diffuse_reflection_bsdf()),
+            df::bsdf_component(weight: ct_coeffs.x * w_g / brdf_base_weight, component: ct0),
+            df::bsdf_component(weight: ct_coeffs.y * w_g / brdf_base_weight, component: ct1),
+            df::bsdf_component(weight: ct_coeffs.z * w_g / brdf_base_weight, component: ct2)
+            )
+        );
+    // for older importer versions:
+    // - they provide an approximate 1d and not yet the 2d BRDF colors texture
+    // - this is only to be used for the non-measured variant (the baked version contained the coloring already)
+    bsdf brdf_base_component_mapped = !tex::texture_isvalid(brdf_colors_2d) ?
+    df::measured_curve_factor(
+        curve_values: brdf_colors, base: brdf_base_component_mapped_tmp) :
+    brdf_base_component_mapped_tmp;
+    
+    bsdf brdf_base_component_tmp = use_measured_brdf ? brdf_base_component_measured : brdf_base_component_mapped;
+
+    // apply 2d coloring, if present and needed
+    bool apply_brdf_colors_2d = tex::texture_isvalid(brdf_colors_2d) && (!use_measured_brdf || !brdf_colors_2d_included_in_measurement);
+    bsdf brdf_base_component = apply_brdf_colors_2d ? df::measured_factor(values: brdf_colors_2d, base: brdf_base_component_tmp) : brdf_base_component_tmp;
+
+    float flake_base_weight = w_f;
+    bsdf base_component = enable_flakes  ? df::normalized_mix(
+        df::bsdf_component[](
+            df::bsdf_component(weight: brdf_base_weight, component: brdf_base_component),
+            df::bsdf_component(weight: flake_base_weight, component: flake_base_component)
+            )
+        ) : df::tint(tint: color(brdf_base_weight), base: brdf_base_component);
+
+
+    float3 clearcoat_normal = tex::texture_isvalid(clearcoat_normal_texture) ? base::tangent_space_normal_texture(
+        texture: clearcoat_normal_texture,
+        uvw: coordinate,
+        wrap_u: wrap,
+        wrap_v: wrap,
+        flip_tangent_u : false,
+        flip_tangent_v : false,
+        offset: 0.0,
+        scale: 1.0
+        ) : state::normal();
+
+    bsdf surface = df::fresnel_layer(
+        ior: ior,
+        layer: clearcoat_component,
+        base: base_component,
+        normal: clearcoat_normal
+        );
+
+} in material(
+    surface: material_surface(
+        scattering: surface
+        ),
+    geometry: material_geometry(
+        normal: geometry_normal
+        )
+    );
+
+
+export material volumetric(
+    uniform color sigma_a = color(0.0)
+    [[
+        anno::hidden()
+    ]],
+    uniform color sigma_s = color(0.0)
+    [[
+        anno::hidden()
+    ]],
+    uniform float phasefunc_g = 0.0
+    [[
+        anno::hidden()
+    ]],
+    uniform float ior = 1.0
+    [[
+        anno::hidden()
+    ]]
+)
+[[
+    anno::display_name("AxF volumetric material"),
+    anno::hidden(),
+    anno::description("MDL version of the AxF volumetric material"),
+    anno::author("NVIDIA Corporation"),
+    anno::copyright_notice("Copyright 2022 NVIDIA Corporation. All rights reserved."),
+    anno::key_words(string[]("axf","volumetric"))
+]]
+= material(
+    surface: material_surface(
+        scattering: df::specular_bsdf(mode: df::scatter_reflect_transmit)
+        ),
+    thin_walled: false,
+    ior: color(ior),
+    volume: material_volume(
+        scattering: df::anisotropic_vdf(
+            directional_bias: phasefunc_g),
+        scattering_coefficient: sigma_s,
+        absorption_coefficient: sigma_a
+        )
+    );

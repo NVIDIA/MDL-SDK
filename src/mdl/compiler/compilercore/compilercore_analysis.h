@@ -1049,14 +1049,12 @@ private:
     /// \param from         the modules imported belongs to
     /// \param from_idx     the import index of module from in the current module
     /// \param new_def      the already created new definition for imported
-    /// \param is_exported  if true, re-export all entities
     /// \param err_pos      position for error messages
     void import_type_scope(
         Definition const *imported,
         Module const     *from,
         size_t           from_idx,
         Definition       *new_def,
-        bool             is_exported,
         Position const   &err_pos);
 
     /// Import all entities of a scope (and possible sub-scopes) into the current scope.
@@ -1912,6 +1910,12 @@ private:
     IType const *handle_allowed_var_type(
         IType const    *var_type,
         Position const &pos);
+
+    /// Compute the definition for a reference expression.
+    ///
+    /// \param ref  the reference
+    Definition const *get_definition_for_reference(
+        IExpression_reference *ref);
 
     bool pre_visit(IDeclaration_import *import_decl) MDL_OVERRIDE;
 

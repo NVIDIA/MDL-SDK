@@ -1,9 +1,8 @@
 //===- DebugLoc.h - Debug Location Information ------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -69,26 +68,13 @@ namespace llvm {
     /// Check whether this has a trivial destructor.
     bool hasTrivialDestructor() const { return Loc.hasTrivialDestructor(); }
 
-    /// Create a new DebugLoc.
-    ///
-    /// Create a new DebugLoc at the specified line/col and scope/inline.  This
-    /// forwards to \a DILocation::get().
-    ///
-    /// If \c !Scope, returns a default-constructed \a DebugLoc.
-    ///
-    /// FIXME: Remove this.  Users should use DILocation::get().
-    static DebugLoc get(unsigned Line, unsigned Col, const MDNode *Scope,
-                        const MDNode *InlinedAt = nullptr);
-
     enum { ReplaceLastInlinedAt = true };
     /// Rebuild the entire inlined-at chain for this instruction so that the top of
     /// the chain now is inlined-at the new call site.
     /// \param   InlinedAt    The new outermost inlined-at in the chain.
-    /// \param   ReplaceLast  Replace the last location in the inlined-at chain.
-    static DebugLoc appendInlinedAt(DebugLoc DL, DILocation *InlinedAt,
+    static DebugLoc appendInlinedAt(const DebugLoc &DL, DILocation *InlinedAt,
                                     LLVMContext &Ctx,
-                                    DenseMap<const MDNode *, MDNode *> &Cache,
-                                    bool ReplaceLast = false);
+                                    DenseMap<const MDNode *, MDNode *> &Cache);
 
     unsigned getLine() const;
     unsigned getCol() const;
@@ -111,6 +97,10 @@ namespace llvm {
 
     /// Return \c this as a bar \a MDNode.
     MDNode *getAsMDNode() const { return Loc; }
+
+    /// Check if the DebugLoc corresponds to an implicit code.
+    bool isImplicitCode() const;
+    void setImplicitCode(bool ImplicitCode);
 
     bool operator==(const DebugLoc &DL) const { return Loc == DL.Loc; }
     bool operator!=(const DebugLoc &DL) const { return Loc != DL.Loc; }

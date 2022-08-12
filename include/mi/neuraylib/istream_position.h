@@ -57,7 +57,7 @@ public:
     virtual bool is_valid() const = 0;
 };
 
-/*@}*/ // end group mi_neuray_impexp
+/**@}*/ // end group mi_neuray_impexp
 
 } // namespace neuraylib
 

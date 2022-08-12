@@ -188,7 +188,7 @@ private:
 
 public:
     using Base_data_type = typename Storage::Data_t;
-    using Data_type = Wrapped_data<Base_data_type>;
+    using Data_type = Wrapped_data<struct Bitset_data,Base_data_type>;
 
 
     /** \brief Sets all bits to 0. */

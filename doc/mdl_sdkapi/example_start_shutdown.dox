@@ -113,12 +113,12 @@ mi_neuray_getting_started Section for a description of how the example programs 
         the interface pointer. See the #mi::base::Handle documentation for details.
 
         Note that it is also possible to use other handle class implementations, e.g.,
-        \c std::tr1::shared_ptr<T> (or \c boost::shared_ptr<T>). In case you prefer to use such
+        \c std::shared_ptr<T> (or \c boost::shared_ptr<T>). In case you prefer to use such
         handle classes, you have to ensure that their destructor calls the \c release() method of
         the interface pointer. This can be achieved by passing an appropriate argument as second
         parameter, e.g.,
         \code
-std::tr1::shared_ptr<T> p ( load_and_get_ineuray(), std::mem_fun (&T::release));
+std::shared_ptr<T> p ( load_and_get_ineuray(), std::mem_fun (&T::release));
         \endcode
         <!-- Workaround to prevent a layout problem after dd tags. -->
     </dd>

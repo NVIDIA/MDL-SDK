@@ -1,11 +1,12 @@
 //===- PtrState.cpp -------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
+
+#ifdef LLVM_ENABLE_OBJC
 
 #include "PtrState.h"
 #include "DependencyAnalysis.h"
@@ -233,7 +234,7 @@ bool BottomUpPtrState::HandlePotentialAlterRefCount(Instruction *Inst,
   Sequence S = GetSeq();
 
   // Check for possible releases.
-  if (!CanAlterRefCount(Inst, Ptr, PA, Class))
+  if (!CanDecrementRefCount(Inst, Ptr, PA, Class))
     return false;
 
   LLVM_DEBUG(dbgs() << "            CanAlterRefCount: Seq: " << S << "; "
@@ -276,6 +277,10 @@ void BottomUpPtrState::HandlePotentialUse(BasicBlock *BB, Instruction *Inst,
     } else {
       InsertAfter = std::next(Inst->getIterator());
     }
+
+    if (InsertAfter != BB->end())
+      InsertAfter = skipDebugIntrinsics(InsertAfter);
+
     InsertReverseInsertPt(&*InsertAfter);
   };
 
@@ -380,7 +385,7 @@ bool TopDownPtrState::HandlePotentialAlterRefCount(Instruction *Inst,
                                                    ARCInstKind Class) {
   // Check for possible releases. Treat clang.arc.use as a releasing instruction
   // to prevent sinking a retain past it.
-  if (!CanAlterRefCount(Inst, Ptr, PA, Class) &&
+  if (!CanDecrementRefCount(Inst, Ptr, PA, Class) &&
       Class != ARCInstKind::IntrinsicUser)
     return false;
 
@@ -431,3 +436,5 @@ void TopDownPtrState::HandlePotentialUse(Instruction *Inst, const Value *Ptr,
     llvm_unreachable("top-down pointer in release state!");
   }
 }
+
+#endif

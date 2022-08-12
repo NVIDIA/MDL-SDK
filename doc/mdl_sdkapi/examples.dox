@@ -59,16 +59,20 @@ Section for a description of how the example programs can be compiled.
 - \subpage mi_neuray_example_execution_ptx <br>
   Executes material sub-expressions of a compiled MDL material for the PTX backend with CUDA.
 
-\if  MDL_BIN_RELEASE
 - \subpage mi_neuray_example_execution_glsl <br>
   Executes material sub-expressions of a compiled MDL material for the GLSL backend with OpenGL.
-\endif
+
+- \subpage mi_neuray_example_execution_glsl_vk <br>
+  Executes material sub-expressions of a compiled MDL material for the GLSL backend with Vulkan.
 
 - \subpage mi_neuray_example_df_cuda <br>
   Uses compiled material distribution functions in a CUDA based renderer.
   
 - \subpage mi_neuray_example_df_native <br>
   CPU based renderer using compiled materials and MDL native backend.
+
+- \subpage mi_neuray_example_df_vulkan <br>
+  Vulkan based renderer using compiled materials and the GLSL backend.
   
 - \subpage mi_neuray_example_derivatives <br>
   Enable automatic derivatives for texture filtering.
@@ -104,6 +108,9 @@ Section for a description of how the example programs can be compiled.
 
 - \subpage mi_neuray_example_optix7 <br>
   Optimize evaluation of materials.
+  
+- \subpage mi_neuray_example_axf_to_mdl <br>
+  Converts a AxF file to MDL.
 
 \subpage mi_neuray_example_topics
 

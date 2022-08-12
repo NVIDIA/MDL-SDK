@@ -48,7 +48,6 @@ else()
         PRIVATE
             ${MDL_DEPENDENCY_GL_INCLUDE}
             ${MDL_DEPENDENCY_GLEW_INCLUDE}
-            ${MDL_DEPENDENCY_GLFW_INCLUDE}
         )
 
     if(NOT __TARGET_ADD_DEPENDENCY_NO_LINKING)
@@ -57,7 +56,6 @@ else()
                 PRIVATE
                     ${MDL_DEPENDENCY_GL_SHARED} # imported projects
                     ${MDL_DEPENDENCY_GLEW_LIBS} # static library (part)
-                    ${MDL_DEPENDENCY_GLFW_LIBS} # static library (part)
                 )
         else()
             # shared library
@@ -65,7 +63,6 @@ else()
                 PRIVATE
                     ${MDL_DEPENDENCY_GL_SHARED}
                     ${MDL_DEPENDENCY_GLEW_SHARED}
-                    ${MDL_DEPENDENCY_GLFW_SHARED}
                 )
         endif()
     endif()
@@ -76,7 +73,6 @@ else()
         target_copy_to_output_dir(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
             FILES
                 ${MDL_DEPENDENCY_GLEW_SHARED}
-                ${MDL_DEPENDENCY_GLFW_SHARED}
             )
     endif()
 endif()

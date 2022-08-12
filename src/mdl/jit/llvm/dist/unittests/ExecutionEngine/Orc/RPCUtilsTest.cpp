@@ -1,13 +1,12 @@
 //===----------- RPCUtilsTest.cpp - Unit tests the Orc RPC utils ----------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ExecutionEngine/Orc/RPCUtils.h"
+#include "llvm/ExecutionEngine/Orc/Shared/RPCUtils.h"
 #include "QueueChannel.h"
 #include "gtest/gtest.h"
 
@@ -15,19 +14,18 @@
 
 using namespace llvm;
 using namespace llvm::orc;
-using namespace llvm::orc::rpc;
+using namespace llvm::orc::shared;
 
 class RPCFoo {};
 
 namespace llvm {
 namespace orc {
-namespace rpc {
+namespace shared {
 
-  template <>
-  class RPCTypeName<RPCFoo> {
-  public:
-    static const char* getName() { return "RPCFoo"; }
-  };
+template <> class SerializationTypeName<RPCFoo> {
+public:
+  static const char *getName() { return "RPCFoo"; }
+};
 
   template <>
   class SerializationTraits<QueueChannel, RPCFoo, RPCFoo> {
@@ -41,7 +39,7 @@ namespace rpc {
     }
   };
 
-} // end namespace rpc
+  } // namespace shared
 } // end namespace orc
 } // end namespace llvm
 
@@ -97,65 +95,64 @@ void registerDummyErrorSerialization() {
 
 namespace llvm {
 namespace orc {
-namespace rpc {
+namespace shared {
 
-  template <>
-  class SerializationTraits<QueueChannel, RPCFoo, RPCBar> {
-  public:
-    static Error serialize(QueueChannel&, const RPCBar&) {
-      return Error::success();
-    }
+template <> class SerializationTraits<QueueChannel, RPCFoo, RPCBar> {
+public:
+  static Error serialize(QueueChannel &, const RPCBar &) {
+    return Error::success();
+  }
 
-    static Error deserialize(QueueChannel&, RPCBar&) {
-      return Error::success();
-    }
+  static Error deserialize(QueueChannel &, RPCBar &) {
+    return Error::success();
+  }
 };
 
-} // end namespace rpc
+} // end namespace shared
 } // end namespace orc
 } // end namespace llvm
 
 namespace DummyRPCAPI {
 
-  class VoidBool : public Function<VoidBool, void(bool)> {
-  public:
-    static const char* getName() { return "VoidBool"; }
-  };
+class VoidBool : public RPCFunction<VoidBool, void(bool)> {
+public:
+  static const char *getName() { return "VoidBool"; }
+};
 
-  class IntInt : public Function<IntInt, int32_t(int32_t)> {
-  public:
-    static const char* getName() { return "IntInt"; }
-  };
+class IntInt : public RPCFunction<IntInt, int32_t(int32_t)> {
+public:
+  static const char *getName() { return "IntInt"; }
+};
 
-  class VoidString : public Function<VoidString, void(std::string)> {
-  public:
-    static const char* getName() { return "VoidString"; }
-  };
+class VoidString : public RPCFunction<VoidString, void(std::string)> {
+public:
+  static const char *getName() { return "VoidString"; }
+};
 
-  class AllTheTypes
-      : public Function<AllTheTypes, void(int8_t, uint8_t, int16_t, uint16_t,
-                                          int32_t, uint32_t, int64_t, uint64_t,
-                                          bool, std::string, std::vector<int>,
-                                          std::set<int>, std::map<int, bool>)> {
-  public:
-    static const char* getName() { return "AllTheTypes"; }
-  };
+class AllTheTypes
+    : public RPCFunction<AllTheTypes,
+                         void(int8_t, uint8_t, int16_t, uint16_t, int32_t,
+                              uint32_t, int64_t, uint64_t, bool, std::string,
+                              std::vector<int>, std::set<int>,
+                              std::map<int, bool>)> {
+public:
+  static const char *getName() { return "AllTheTypes"; }
+};
 
-  class CustomType : public Function<CustomType, RPCFoo(RPCFoo)> {
-  public:
-    static const char* getName() { return "CustomType"; }
-  };
+class CustomType : public RPCFunction<CustomType, RPCFoo(RPCFoo)> {
+public:
+  static const char *getName() { return "CustomType"; }
+};
 
-  class ErrorFunc : public Function<ErrorFunc, Error()> {
-  public:
-    static const char* getName() { return "ErrorFunc"; }
-  };
+class ErrorFunc : public RPCFunction<ErrorFunc, Error()> {
+public:
+  static const char *getName() { return "ErrorFunc"; }
+};
 
-  class ExpectedFunc : public Function<ExpectedFunc, Expected<uint32_t>()> {
-  public:
-    static const char* getName() { return "ExpectedFunc"; }
-  };
-
+class ExpectedFunc : public RPCFunction<ExpectedFunc, Expected<uint32_t>()> {
+public:
+  static const char *getName() { return "ExpectedFunc"; }
+};
 }
 
 class DummyRPCEndpoint : public SingleThreadedRPCEndpoint<QueueChannel> {
@@ -216,6 +213,17 @@ TEST(DummyRPC, TestCallAsyncVoidBool) {
   }
 
   ServerThread.join();
+
+  // The client should have made two calls to send: One implicit call to
+  // negotiate the VoidBool function key, and a second to make the VoidBool
+  // call.
+  EXPECT_EQ(Channels.first->SendCalls, 2U)
+      << "Expected one send call to have been made by client";
+
+  // The server should have made two calls to send: One to send the response to
+  // the negotiate call, and another to send the response to the VoidBool call.
+  EXPECT_EQ(Channels.second->SendCalls, 2U)
+      << "Expected two send calls to have been made by server";
 }
 
 TEST(DummyRPC, TestCallAsyncIntInt) {

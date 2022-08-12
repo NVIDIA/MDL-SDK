@@ -54,6 +54,14 @@ class ICode_generator : public
     mi::base::IInterface>
 {
 public:
+    /// The target language.
+    enum Target_language {
+        TL_NATIVE  = 0,   ///< Compile into native code.
+        TL_PTX     = 1,   ///< Compile into PTX assembler.
+        TL_HLSL    = 2,   ///< Compile into HLSL code.
+        TL_GLSL    = 3,   ///< Compile into GLSL code.
+        TL_LLVM_IR = 4    ///< Compile into LLVM IR (LLVM 12.0 compatible).
+    };
 
     /// The name of the code generator option to set the internal space.
     #define MDL_CG_OPTION_INTERNAL_SPACE "internal_space"
@@ -520,13 +528,13 @@ public:
         size_t       idx,
         bool         valid) = 0;
 
-    /// Analyze one root of a lambda function.
+    /// Analyze one root of a lambda function or the body expression, in case ther are no roots.
     ///
-    /// \param[in]  proj           the root number
+    /// \param[in]  proj           the root number, ignored if there are no roots but a body expression
     /// \param[in]  name_resolver  a call name resolver
     /// \param[out] result         the analysis result
     ///
-    /// \return true on success, false if proj is out of bounds
+    /// \return true on success, false if proj is out of bounds or in case of no roots, if there is no body.
     virtual bool analyze(
         size_t                    proj,
         ICall_name_resolver const *name_resolver,
@@ -1021,7 +1029,6 @@ public:
 };
 
 
-
 /// An interface for handling different thread contexts inside the JIT code generator.
 ///
 /// When the code generator is used from different threads, every thread should have its own
@@ -1102,15 +1109,111 @@ class ICode_generator_jit : public
     /// The name of the option to generate auxiliary methods on distribution functions.
     #define MDL_JIT_OPTION_ENABLE_AUXILIARY "jit_enable_auxiliary"
 
+    /// The name of the option to generate PDF functions.
+    #define MDL_JIT_OPTION_ENABLE_PDF "jit_enable_pdf"
+
     /// The name of the option to let the the JIT code generator create a LLVM bitcode
     /// instead of LLVM IR (ascii) code.
     #define MDL_JIT_OPTION_WRITE_BITCODE "jit_write_bitcode"
 
-    /// The name of the option to enable/disable the builtin texture runtime of the native backend
+    /// The name of the option to enable/disable the builtin texture runtime of the native backend.
     #define MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU "jit_use_builtin_resource_handler_cpu"
 
-    /// The name of the option to enable the HLSL resource data struct argument.
-    #define MDL_JIT_OPTION_HLSL_USE_RESOURCE_DATA "jit_hlsl_use_resource_data"
+    /// The name of the option that steers access to state::normal().
+    #define MDL_JIT_OPTION_SL_STATE_NORMAL_MODE "jit_sl_state_normal_mode"
+
+    /// The name of the entity representing state::normal().
+    #define MDL_JIT_OPTION_SL_STATE_NORMAL_NAME "jit_sl_state_normal_name"
+
+    /// The name of the option that steers access to state::geometry_normal().
+    #define MDL_JIT_OPTION_SL_STATE_GEOMETRY_NORMAL_MODE "jit_sl_state_geometry_normal_mode"
+
+    /// The name of the entity representing state::geometry_normal().
+    #define MDL_JIT_OPTION_SL_STATE_GEOMETRY_NORMAL_NAME "jit_sl_state_geometry_normal_name"
+
+    /// The name of the option that steers access to state::position().
+    #define MDL_JIT_OPTION_SL_STATE_POSITION_MODE "jit_sl_state_position_mode"
+
+    /// The name of the entity representing state::position().
+    #define MDL_JIT_OPTION_SL_STATE_POSITION_NAME "jit_sl_state_position_name"
+
+    /// The name of the option that steers access to state::motion().
+    #define MDL_JIT_OPTION_SL_STATE_MOTION_MODE "jit_sl_state_motion_mode"
+
+    /// The name of the entity representing state::motion().
+    #define MDL_JIT_OPTION_SL_STATE_MOTION_NAME "jit_sl_state_motion_name"
+
+    /// The name of the option that steers access to state::texture_space_max().
+    #define MDL_JIT_OPTION_SL_STATE_TEXTURE_SPACE_MAX_MODE "jit_sl_state_texture_space_max_mode"
+
+    /// The name of the entity representing state::texture_space_max().
+    #define MDL_JIT_OPTION_SL_STATE_TEXTURE_SPACE_MAX_NAME "jit_sl_state_texture_space_max_name"
+
+    /// The name of the option that steers access to state::animation_time().
+    #define MDL_JIT_OPTION_SL_STATE_ANIMATION_TIME_MODE "jit_sl_state_animation_time_mode"
+
+    /// The name of the entity representing state::animation_name().
+    #define MDL_JIT_OPTION_SL_STATE_ANIMATION_TIME_NAME "jit_sl_state_animation_time_name"
+
+    /// The name of the option that steers access to state::texture_coordinate().
+    #define MDL_JIT_OPTION_SL_STATE_TEXTURE_COORDINATE_MODE "jit_sl_state_texture_coordinate_mode"
+
+    /// The name of the oentity representing state::texture_coordinate().
+    #define MDL_JIT_OPTION_SL_STATE_TEXTURE_COORDINATE_NAME "jit_sl_state_texture_coordinate_name"
+
+    /// The name of the option that steers access to state::texture_tangent_u().
+    #define MDL_JIT_OPTION_SL_STATE_TEXTURE_TANGENT_U_MODE "jit_sl_state_texture_tangent_u_mode"
+
+    /// The name of the entity representing state::texture_tangent_u().
+    #define MDL_JIT_OPTION_SL_STATE_TEXTURE_TANGENT_U_NAME "jit_sl_state_texture_tangent_u_name"
+
+    /// The name of the option that steers access to state::texture_tangent_v().
+    #define MDL_JIT_OPTION_SL_STATE_TEXTURE_TANGENT_V_MODE "jit_sl_state_texture_tangent_v_mode"
+
+    /// The name of the entity representing state::texture_tangent_v().
+    #define MDL_JIT_OPTION_SL_STATE_TEXTURE_TANGENT_V_NAME "jit_sl_state_texture_tangent_v_name"
+
+    /// The name of the option that steers access to state::geometry_tangent_u().
+    #define MDL_JIT_OPTION_SL_STATE_GEOMETRY_TANGENT_U_MODE "jit_sl_state_geometry_tangent_u_mode"
+
+    /// The name of the entity representing state::geometry_tangent_u().
+    #define MDL_JIT_OPTION_SL_STATE_GEOMETRY_TANGENT_U_NAME "jit_sl_state_geometry_tangent_u_name"
+
+    /// The name of the option that steers access to state::geometry_tangent_v().
+    #define MDL_JIT_OPTION_SL_STATE_GEOMETRY_TANGENT_V_MODE "jit_sl_state_geometry_tangent_v_mode"
+
+    /// The name of the entity representing state::geometry_tangent_v().
+    #define MDL_JIT_OPTION_SL_STATE_GEOMETRY_TANGENT_V_NAME "jit_sl_state_geometry_tangent_v_name"
+
+    /// The name of the option that steers access to the uniform world-to-object transform.
+    #define MDL_JIT_OPTION_SL_STATE_TRANSFORM_W2O_MODE "jit_sl_state_transform_w2o_mode"
+
+    /// The name of the entity representing the uniform world-to-object transform.
+    #define MDL_JIT_OPTION_SL_STATE_TRANSFORM_W2O_NAME "jit_sl_state_transform_w2o_name"
+
+    /// The name of the option that steers access to the uniform object-to-world transform.
+    #define MDL_JIT_OPTION_SL_STATE_TRANSFORM_O2W_MODE "jit_sl_state_transform_o2w_mode"
+
+    /// The name of the entity representing the uniform object-to-world transform.
+    #define MDL_JIT_OPTION_SL_STATE_TRANSFORM_O2W_NAME "jit_sl_state_transform_o2w_name"
+
+    /// The name of the option that steers access to the uniform state::object_id().
+    #define MDL_JIT_OPTION_SL_STATE_OBJECT_ID_MODE "jit_sl_state_object_id_mode"
+
+    /// The name of the entity representing the uniform state::object_id().
+    #define MDL_JIT_OPTION_SL_STATE_OBJECT_ID_NAME "jit_sl_state_object_id_name"
+
+    /// The name of the option to enable the HLSL/GLSL resource data struct argument.
+    #define MDL_JIT_OPTION_SL_USE_RESOURCE_DATA "jit_sl_use_resource_data"
+
+    /// The name of the option that sets the function replacement list for GLSL/HLSL.
+    #define MDL_JIT_OPTION_SL_REMAP_FUNCTIONS "jit_sl_remap_functions"
+
+    /// The name of the option that sets the name of the Core State struct for GLSL/HLSL.
+    #define MDL_JIT_OPTION_SL_CORE_STATE_API_NAME "jit_sl_core_state_api_name"
+
+    /// The name of the option that sets the name of the Environment State struct for GLSL/HLSL.
+    #define MDL_JIT_OPTION_SL_ENV_STATE_API_NAME "jit_sl_env_state_api_name"
 
     /// The name of the option to enable using a renderer provided function to adapt microfacet
     /// roughness.
@@ -1134,20 +1237,47 @@ class ICode_generator_jit : public
     /// the number of functions for which target code will be generated.
     #define MDL_JIT_OPTION_VISIBLE_FUNCTIONS "jit_visible_functions"
 
+    /// The name of the option to set the GLSL target language version for every
+    /// compiled module when selecting GLSL target language.
+    #define MDL_JIT_OPTION_GLSL_VERSION "jit_glsl_version"
+
+    /// The name of the option to set the GLSL target language profile for every
+    /// compiled module in the GLSL backend.
+    #define MDL_JIT_OPTION_GLSL_PROFILE "jit_glsl_profile"
+
+    /// The name of the option to set the GLSL target language enabled extensions
+    /// compiled module in the GLSL backend.
+    #define MDL_JIT_OPTION_GLSL_ENABLED_EXTENSIONS "jit_glsl_enabled_extensions"
+
+    /// The name of the option to set the GLSL target language required extensions
+    /// compiled module in the GLSL backend.
+    #define MDL_JIT_OPTION_GLSL_REQUIRED_EXTENSIONS "jit_glsl_required_extensions"
+
+    /// The name of the option that limits the maximum size of constant data in a
+    /// compiled module in the GLSL backend.
+    #define MDL_JIT_OPTION_GLSL_MAX_CONST_DATA "jit_glsl_max_const_data"
+
+    /// The name of the option that steers if uniform initializers should be placed into
+    /// a shader storage buffer object (SSBO).
+    #define MDL_JIT_OPTION_GLSL_PLACE_UNIFORMS_INTO_SSBO "jit_glsl_place_uniforms_into_ssbo"
+
+    /// The name of the option that assigns a name to the storage buffer object (SSBO) used for
+    /// uniforms.
+    #define MDL_JIT_OPTION_GLSL_UNIFORM_SSBO_NAME "jit_glsl_uniform_ssbo_name"
+
+    /// The name of the option that assigns a binding to the storage buffer object (SSBO) used for
+    /// uniforms.
+    #define MDL_JIT_OPTION_GLSL_UNIFORM_SSBO_BINDING "jit_glsl_uniform_ssbo_binding"
+
+    /// The name of the option that assigns a set to the storage buffer object (SSBO) used for
+    /// uniforms.
+    #define MDL_JIT_OPTION_GLSL_UNIFORM_SSBO_SET "jit_glsl_uniform_ssbo_set"
+
     /// The name of the option to set a user-specified LLVM implementation for the state module.
     #define MDL_JIT_BINOPTION_LLVM_STATE_MODULE "jit_llvm_state_module"
 
     /// The name of the option to set a user-specified LLVM renderer module.
     #define MDL_JIT_BINOPTION_LLVM_RENDERER_MODULE "jit_llvm_renderer_module"
-
-public:
-    /// The compilation mode for whole module compilation.
-    enum Compilation_mode {
-        CM_NATIVE  = 0,   ///< Compile into native code.
-        CM_PTX     = 1,   ///< Compile into PTX assembler.
-        CM_HLSL    = 2,   ///< Compile into HLSL code.
-        CM_LLVM_IR = 3    ///< Compile into LLVM IR (LLVM 7.0 compatible).
-    };
 
 public:
     /// Creates a new thread context.
@@ -1157,7 +1287,7 @@ public:
     ///
     /// \param module        The module to compile.
     /// \param module_cache  The module cache if any.
-    /// \param mode          The compilation mode.
+    /// \param target        The target language.
     /// \param ctx           The code generator thread context.
     ///
     /// \note This method is not used currently for code generation, just
@@ -1167,7 +1297,7 @@ public:
     virtual IGenerated_code_executable *compile(
         IModule const                  *module,
         IModule_cache                  *module_cache,
-        Compilation_mode               mode,
+        Target_language                target,
         ICode_generator_thread_context *ctx) = 0;
 
     /// Compile a lambda function using the JIT into an environment (shader) of a scene.
@@ -1316,8 +1446,7 @@ public:
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
     /// \param sm_version           the target architecture of the GPU
-    /// \param comp_mode            the compilation mode deciding the target language,
-    ///                             must be PTX or HLSL
+    /// \param target language      the target language, must be PTX, HLSL, or GLSL
     /// \param llvm_ir_output       if true generate LLVM-IR (prepared for the target language)
     ///
     /// \return the compiled function or NULL on compilation errors
@@ -1330,7 +1459,7 @@ public:
         unsigned                       num_texture_spaces,
         unsigned                       num_texture_results,
         unsigned                       sm_version,
-        Compilation_mode               comp_mode,
+        Target_language                target,
         bool                           llvm_ir_output) = 0;
 
     /// Compile a distribution function into native code using the JIT.
@@ -1386,20 +1515,19 @@ public:
     /// \param num_texture_spaces   the number of supported texture spaces
     /// \param num_texture_results  the number of texture result entries
     /// \param sm_version           the target architecture of the GPU
-    /// \param comp_mode            the compilation mode deciding the target language,
-    ///                             must be PTX or HLSL
+    /// \param target               the target language, must be PTX, HLSL, or GLSL
     /// \param llvm_ir_output       if true generate LLVM-IR (prepared for the target language)
     ///
     /// \return the compiled distribution function or NULL on compilation errors
     virtual IGenerated_code_executable *compile_distribution_function_gpu(
-        IDistribution_function const   *dist_func,
+        IDistribution_function const *dist_func,
         IModule_cache                  *module_cache,
         ICall_name_resolver const      *name_resolver,
         ICode_generator_thread_context *ctx,
         unsigned                       num_texture_spaces,
         unsigned                       num_texture_results,
         unsigned                       sm_version,
-        Compilation_mode               comp_mode,
+        Target_language                target,
         bool                           llvm_ir_output) = 0;
 
     /// Get the device library for PTX compilation.
@@ -1437,7 +1565,7 @@ public:
     /// Create a link unit.
     ///
     /// \param ctx                  the code generator thread context
-    /// \param mode                 the compilation mode
+    /// \param target               the target language
     /// \param enable_simd          if LLVM-IR is targeted, specifies whether to use SIMD
     ///                             instructions
     /// \param sm_version           if PTX is targeted, the SM version we compile for
@@ -1447,7 +1575,7 @@ public:
     /// \return  a new empty link unit.
     virtual ILink_unit *create_link_unit(
         ICode_generator_thread_context *ctx,
-        Compilation_mode               mode,
+        Target_language                target,
         bool                           enable_simd,
         unsigned                       sm_version,
         unsigned                       num_texture_spaces,

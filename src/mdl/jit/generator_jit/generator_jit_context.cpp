@@ -155,7 +155,7 @@ Function_context::Function_context(
                     directory = filename.substr(0, p);
                     filename  = filename.substr(p + 1);
                 } else {
-                    size_t p = filename.rfind('\\');
+                    p = filename.rfind('\\');
                     if (p != string::npos) {
                         directory = filename.substr(0, p);
                         filename  = filename.substr(p + 1);
@@ -176,13 +176,15 @@ Function_context::Function_context(
                 /*File=*/di_file,
                 start_line,
                 di_func_type,
-                func_def != NULL ?
-                    !func_def->get_property(mi::mdl::IDefinition::DP_IS_EXPORTED) :
-                    /*assume local*/true,
-                /*isDefinition=*/true,
                 start_line,
                 llvm::DINode::FlagPrototyped,
-                code_gen.is_optimized());
+                llvm::DISubprogram::toSPFlags(
+                    /*IsLocalToUnit=*/func_def != NULL ?
+                        !func_def->get_property(mi::mdl::IDefinition::DP_IS_EXPORTED) :
+                        /*assume local*/true,
+                    /*IsDefinition=*/true,
+                    /*IsOptimized=*/code_gen.is_optimized()
+                ));
         }
     }
     // create the function scope
@@ -769,7 +771,7 @@ void Function_context::create_return(llvm::Value *expr)
             res_type = v_tp->getElementType();
 
             // reduce the alignment of the store to this size
-            st->setAlignment(res_type->getPrimitiveSizeInBits() / 8);
+            st->setAlignment(llvm::Align(res_type->getPrimitiveSizeInBits() / 8));
         }
     }
     create_jmp(m_end_bb);
@@ -901,10 +903,10 @@ llvm::Constant *Function_context::get_constant(llvm::Type *type, int v)
     } else if (type->isDoubleTy()) {
         return llvm::ConstantFP::get(m_llvm_context, llvm::APFloat(double(v)));
     } else if (type->isVectorTy()) {
-        llvm::VectorType *v_tp = llvm::cast<llvm::VectorType>(type);
+        llvm::FixedVectorType *v_tp = llvm::cast<llvm::FixedVectorType>(type);
 
         llvm::Constant *c = get_constant(v_tp->getElementType(), v);
-        return llvm::ConstantVector::getSplat(unsigned(v_tp->getNumElements()), c);
+        return llvm::ConstantVector::getSplat(v_tp->getElementCount(), c);
     }
     MDL_ASSERT(!"Cannot create constant of unexpected type");
     return NULL;
@@ -924,10 +926,10 @@ llvm::Constant *Function_context::get_constant(llvm::Type *type, double v)
     } else if (type->isDoubleTy()) {
         return llvm::ConstantFP::get(m_llvm_context, llvm::APFloat(double(v)));
     } else if (type->isVectorTy()) {
-        llvm::VectorType *v_tp = llvm::cast<llvm::VectorType>(type);
+        llvm::FixedVectorType *v_tp = llvm::cast<llvm::FixedVectorType>(type);
 
         llvm::Constant *c = get_constant(v_tp->getElementType(), v);
-        return llvm::ConstantVector::getSplat(unsigned(v_tp->getNumElements()), c);
+        return llvm::ConstantVector::getSplat(v_tp->getElementCount(), c);
     }
     MDL_ASSERT(!"Cannot create constant of unexpected type");
     return NULL;
@@ -975,22 +977,22 @@ llvm::Value *Function_context::get_constant(mi::mdl::IValue const *v)
                         cast<mi::mdl::IValue_compound>(arr_v->get_value(i));
 
                     for (size_t j = 0; j < v_size; ++j) {
-                        llvm::Value *v = get_constant(vec_v->get_value(j));
+                        llvm::Value *elem_v = get_constant(vec_v->get_value(j));
 
-                        elems[i * v_size + j] = llvm::cast<llvm::Constant>(v);
+                        elems[i * v_size + j] = llvm::cast<llvm::Constant>(elem_v);
                     }
                 }
                 n_elemns *= v_size;
             } else {
                 for (size_t i = 0; i < n_elemns; ++i) {
-                    llvm::Value *v = get_constant(arr_v->get_value(i));
+                    llvm::Value *elem_v = get_constant(arr_v->get_value(i));
 
-                    elems[i] = llvm::cast<llvm::Constant>(v);
+                    elems[i] = llvm::cast<llvm::Constant>(elem_v);
                 }
             }
 
-            mi::mdl::IType const *v_type = v->get_type();
-            llvm::Type           *tp     = m_type_mapper.lookup_type(m_llvm_context, v_type);
+            mi::mdl::IType const *mdl_tp = v->get_type();
+            llvm::Type           *tp     = m_type_mapper.lookup_type(m_llvm_context, mdl_tp);
 
             if (tp->isVectorTy()) {
                 // encode into a vector
@@ -1001,7 +1003,7 @@ llvm::Value *Function_context::get_constant(mi::mdl::IValue const *v)
 
                 if (e_tp->isVectorTy()) {
                     // encode a matrix into an array of vectors (small vector mode)
-                    mi::mdl::IType_matrix const *m_type = cast<mi::mdl::IType_matrix>(v_type);
+                    mi::mdl::IType_matrix const *m_type = cast<mi::mdl::IType_matrix>(mdl_tp);
                     mi::mdl::IType_vector const *v_type = m_type->get_element_type();
 
                     int n_cols = m_type->get_columns();
@@ -1035,10 +1037,10 @@ llvm::Value *Function_context::get_constant(mi::mdl::IValue const *v)
             llvm::SmallVector<llvm::Value *, 8> values(n_elemns);
             bool all_are_const = true;
             for (size_t i = 0; i < n_elemns; ++i) {
-                llvm::Value *v = get_constant(arr_v->get_value(i));
-                values[i] = v;
+                llvm::Value *elem_v = get_constant(arr_v->get_value(i));
+                values[i] = elem_v;
 
-                all_are_const &= llvm::isa<llvm::Constant>(v);
+                all_are_const &= llvm::isa<llvm::Constant>(elem_v);
             }
 
             llvm::Type *type = m_type_mapper.lookup_type(m_llvm_context, arr_v->get_type());
@@ -1069,10 +1071,10 @@ llvm::Value *Function_context::get_constant(mi::mdl::IValue const *v)
             llvm::SmallVector<llvm::Value *, 8> values(n_elemns);
             bool all_are_const = true;
             for (size_t i = 0; i < n_elemns; ++i) {
-                llvm::Value *v = get_constant(arr_v->get_value(i));
-                values[i] = v;
+                llvm::Value *elem_v = get_constant(arr_v->get_value(i));
+                values[i] = elem_v;
 
-                all_are_const &= llvm::isa<llvm::Constant>(v);
+                all_are_const &= llvm::isa<llvm::Constant>(elem_v);
             }
 
             if (all_are_const) {
@@ -1110,8 +1112,8 @@ llvm::Value *Function_context::get_constant(mi::mdl::IValue const *v)
 }
 
 // Get a vector3 constant.
-llvm::Constant *Function_context::get_constant(
-    llvm::VectorType *vtype, float x, float y, float z)
+llvm::Constant* Function_context::get_constant(
+    llvm::FixedVectorType *vtype, float x, float y, float z)
 {
     size_t l = vtype->getNumElements();
     llvm::SmallVector<llvm::Constant *, 4> cnst;
@@ -1129,7 +1131,7 @@ llvm::Constant *Function_context::get_constant(
 
 // Get a vector4 constant.
 llvm::Constant *Function_context::get_constant(
-    llvm::VectorType *vtype, float x, float y, float z, float w)
+    llvm::FixedVectorType *vtype, float x, float y, float z, float w)
 {
     size_t l = vtype->getNumElements();
     llvm::SmallVector<llvm::Constant *, 4> cnst;
@@ -1721,9 +1723,10 @@ llvm::Value *Function_context::create_cross(llvm::Value *lhs, llvm::Value *rhs)
 // Creates a splat vector from a scalar value.
 llvm::Value *Function_context::create_vector_splat(llvm::VectorType *res_type, llvm::Value *v)
 {
-    llvm::Value *res = llvm::UndefValue::get(res_type);
+    llvm::FixedVectorType *fixed_res_type = llvm::cast<llvm::FixedVectorType>(res_type);
+    llvm::Value *res = llvm::UndefValue::get(fixed_res_type);
 
-    for (unsigned i = 0, n = unsigned(res_type->getNumElements()); i < n; ++i) {
+    for (unsigned i = 0, n = unsigned(fixed_res_type->getNumElements()); i < n; ++i) {
         llvm::Value *idx = get_constant(int(i));
         res = m_ir_builder.CreateInsertElement(res, v, idx);
     }
@@ -1753,10 +1756,19 @@ llvm::Value *Function_context::create_splat(llvm::Type *res_type, llvm::Value *v
 // Get the number of elements for a vector or an array.
 unsigned Function_context::get_num_elements(llvm::Value *val)
 {
-    if (llvm::VectorType *v_tp = llvm::dyn_cast<llvm::VectorType>(val->getType()))
+    if (llvm::FixedVectorType *v_tp = llvm::dyn_cast<llvm::FixedVectorType>(val->getType()))
         return unsigned(v_tp->getNumElements());
     else
         return unsigned(llvm::cast<llvm::ArrayType>(val->getType())->getNumElements());
+}
+
+// Get the element type for a fixed vector or an array.
+llvm::Type *Function_context::get_element_type(llvm::Type *type)
+{
+    if (llvm::FixedVectorType *v_tp = llvm::dyn_cast<llvm::FixedVectorType>(type))
+        return v_tp->getElementType();
+    else
+        return llvm::cast<llvm::ArrayType>(type)->getElementType();
 }
 
 // Creates a ExtractValue or ExtractElement instruction.
@@ -2047,11 +2059,13 @@ void Function_context::set_curr_pos(mi::mdl::Position const &pos)
 {
     m_curr_pos = &pos;
     if (m_full_debug_info) {
+        llvm::DIScope *scope = get_debug_info_scope();
         m_ir_builder.SetCurrentDebugLocation(
-            llvm::DebugLoc::get(
+            llvm::DILocation::get(
+                scope->getContext(),
                 m_curr_pos->get_start_line(),
                 m_curr_pos->get_start_column(),
-                get_debug_info_scope()
+                scope
             )
         );
     }
@@ -2094,7 +2108,8 @@ void Function_context::add_debug_info(mi::mdl::IDefinition const *var_def) {
         start_line = pos->get_start_line();
         start_column = pos->get_start_column();
     }
-    llvm::DebugLoc debug_loc = llvm::DebugLoc::get(start_line, start_column, scope);
+    llvm::DILocation *debug_loc = llvm::DILocation::get(
+        scope->getContext(), start_line, start_column, scope);
 
     llvm::DILocalVariable *var;
     if (is_parameter)
@@ -2340,7 +2355,7 @@ static unsigned get_type_num_elements(llvm::Type const *type)
 {
     if (llvm::ArrayType const *at = llvm::dyn_cast<llvm::ArrayType>(type))
         return unsigned(at->getNumElements());
-    if (llvm::VectorType const *vt = llvm::dyn_cast<llvm::VectorType>(type))
+    if (llvm::FixedVectorType const *vt = llvm::dyn_cast<llvm::FixedVectorType>(type))
         return unsigned(vt->getNumElements());
     MDL_ASSERT(llvm::isa<llvm::StructType>(type));
     return type->getStructNumElements();
@@ -2351,8 +2366,10 @@ static unsigned get_type_num_elements(llvm::Type const *type)
 // Get the type of the first element a struct, array or vector type.
 static llvm::Type *get_type_first_type(llvm::Type const *type)
 {
-    if (llvm::SequentialType const *ct = llvm::dyn_cast<llvm::SequentialType>(type))
-        return ct->getElementType();
+    if (llvm::ArrayType const *at = llvm::dyn_cast<llvm::ArrayType>(type))
+        return at->getElementType();
+    if (llvm::VectorType const *vt = llvm::dyn_cast<llvm::VectorType>(type))
+        return vt->getElementType();
     MDL_ASSERT(llvm::isa<llvm::StructType>(type));
     return type->getStructElementType(0);
 }
@@ -2371,14 +2388,15 @@ llvm::Value *Function_context::load_and_convert(llvm::Type *dst_type, llvm::Valu
 
         if (src_type->isAggregateType() && llvm::isa<llvm::VectorType>(dst_type)) {
             // vector types could have a higher natural alignment, so load them by elements
+            llvm::FixedVectorType *dest_vtype = llvm::cast<llvm::FixedVectorType>(dst_type);
             MDL_ASSERT(
-                get_type_num_elements(src_type) >= uint64_t(dst_type->getVectorNumElements())
+                get_type_num_elements(src_type) >= uint64_t(dest_vtype->getNumElements())
             );
 
             llvm::Value *a   = m_ir_builder.CreateLoad(ptr);
             llvm::Value *res = llvm::UndefValue::get(dst_type);
 
-            for (unsigned i = 0, n = dst_type->getVectorNumElements(); i < n; ++i) {
+            for (unsigned i = 0, n = dest_vtype->getNumElements(); i < n; ++i) {
                 unsigned idxs[] = { i };
                 llvm::Value *v   = m_ir_builder.CreateExtractValue(a, idxs);
                 res = m_ir_builder.CreateInsertElement(res, v, get_constant(int(i)));
@@ -2437,8 +2455,9 @@ llvm::Value *Function_context::load_and_convert(llvm::Type *dst_type, llvm::Valu
                 MDL_ASSERT(
                     get_type_num_elements(dst_type) == cols &&
                     get_type_num_elements(dst_type->getStructElementType(0)) == rows &&
-                    src_type->getArrayElementType()->getVectorElementType() ==
-                        dst_type->getStructElementType(0)->getStructElementType(0));
+                    llvm::cast<llvm::FixedVectorType>(
+                        src_type->getArrayElementType())->getElementType() ==
+                    dst_type->getStructElementType(0)->getStructElementType(0));
 
                 llvm::Value *a = m_ir_builder.CreateLoad(ptr);
                 llvm::Value *res = llvm::UndefValue::get(dst_type);
@@ -2472,13 +2491,13 @@ llvm::Value *Function_context::load_and_convert(llvm::Type *dst_type, llvm::Valu
             return res;
         } else if (llvm::isa<llvm::VectorType>(src_type) && dst_type->isAggregateType()) {
             // special case: float3x3 vector to float3x3 struct (same for double)
-            if (src_type->getVectorNumElements() == 9 &&
-                dst_type->isStructTy())
+            llvm::FixedVectorType *src_vtype = llvm::cast<llvm::FixedVectorType>(src_type);
+            if (src_vtype->getNumElements() == 9 && dst_type->isStructTy())
             {
                 MDL_ASSERT(
                     get_type_num_elements(dst_type) == 3 &&
                     get_type_num_elements(get_type_first_type(dst_type)) == 3 &&
-                    src_type->getVectorElementType() ==
+                    src_vtype->getElementType() ==
                         get_type_first_type(get_type_first_type(dst_type)));
 
                 llvm::Value *a = m_ir_builder.CreateLoad(ptr);
@@ -2496,8 +2515,8 @@ llvm::Value *Function_context::load_and_convert(llvm::Type *dst_type, llvm::Valu
             } else {
                 // we only check the type of the first element of the struct...
                 MDL_ASSERT(
-                    src_type->getVectorNumElements() == get_type_num_elements(dst_type) &&
-                    src_type->getVectorElementType() == get_type_first_type(dst_type));
+                    src_vtype->getNumElements() == get_type_num_elements(dst_type) &&
+                    src_vtype->getElementType() == get_type_first_type(dst_type));
 
                 llvm::Value *a   = m_ir_builder.CreateLoad(ptr);
                 llvm::Value *res = llvm::UndefValue::get(dst_type);
@@ -2574,7 +2593,8 @@ llvm::StoreInst *Function_context::convert_and_store(llvm::Value *value, llvm::V
 
         if (llvm::isa<llvm::VectorType>(src_type) && dst_type->isAggregateType()) {
             MDL_ASSERT(
-                uint64_t(src_type->getVectorNumElements()) >= get_type_num_elements(dst_type)
+                uint64_t(llvm::cast<llvm::FixedVectorType>(src_type)->getNumElements())
+                    >= get_type_num_elements(dst_type)
             );
 
             llvm::Value *a   = value;
@@ -2623,15 +2643,16 @@ llvm::StoreInst *Function_context::convert_and_store(llvm::Value *value, llvm::V
             value = m_ir_builder.CreateICmpNE(
                 value, llvm::ConstantInt::getNullValue(value->getType()));
         } else {
+            llvm::FixedVectorType *dst_vtype = llvm::cast<llvm::FixedVectorType>(dst_type);
             MDL_ASSERT(
-                src_type->isAggregateType() && llvm::isa<llvm::VectorType>(dst_type) &&
-                get_type_num_elements(src_type) >= uint64_t(dst_type->getVectorNumElements())
+                src_type->isAggregateType() &&
+                get_type_num_elements(src_type) >= uint64_t(dst_vtype->getNumElements())
             );
 
             llvm::Value *a   = value;
             llvm::Value *res = llvm::UndefValue::get(dst_type);
 
-            for (unsigned i = 0, n = dst_type->getVectorNumElements(); i < n; ++i) {
+            for (unsigned i = 0, n = dst_vtype->getNumElements(); i < n; ++i) {
                 unsigned idxs[] = { i };
                 llvm::Value *v   = m_ir_builder.CreateExtractValue(a, idxs);
                 res = m_ir_builder.CreateInsertElement(res, v, get_constant(int(i)));
@@ -2654,7 +2675,8 @@ llvm::StoreInst *Function_context::store_int2_zero(llvm::Value *ptr)
         zero = llvm::ConstantAggregateZero::get(dst_type);
     } else if (dst_type->isVectorTy()) {
         zero = llvm::ConstantVector::getSplat(
-            2, llvm::ConstantInt::get(m_type_mapper.get_int_type(), 0));
+            llvm::ElementCount::getFixed(2),
+            llvm::ConstantInt::get(m_type_mapper.get_int_type(), 0));
     } else {
         MDL_ASSERT(!"unsupported int2 representation");
 
@@ -2720,7 +2742,7 @@ static mi::mdl::string optix_mangled_name(
 }
 
 // Get the tex_lookup function for a given vtable index.
-llvm::Value *Function_context::get_tex_lookup_func(
+llvm::FunctionCallee Function_context::get_tex_lookup_func(
     llvm::Value                                    *self,
     mi::mdl::Type_mapper::Tex_handler_vtable_index index)
 {
@@ -3180,7 +3202,10 @@ llvm::Value *Function_context::get_tex_lookup_func(
             // get the function at index from the vtable
             llvm::Value *f_adr  = create_simple_gep_in_bounds(
                 vtable, get_constant(index));
-            return m_ir_builder.CreateLoad(f_adr);
+            llvm::Value *func_addr = m_ir_builder.CreateLoad(f_adr);
+            return llvm::FunctionCallee(
+                llvm::cast<llvm::FunctionType>(func_addr->getType()->getPointerElementType()),
+                func_addr);
         }
         break;
     case TLCM_DIRECT:
@@ -3379,7 +3404,10 @@ llvm::Value *Function_context::get_tex_lookup_func(
             llvm::PointerType *fp_type =
                 llvm::cast<llvm::PointerType>(vtable_type->getElementType(index));
 
-            return m_ir_builder.CreatePointerCast(f_ptr, fp_type);
+            llvm::Value *f_casted_ptr = m_ir_builder.CreatePointerCast(f_ptr, fp_type);
+            return llvm::FunctionCallee(
+                llvm::cast<llvm::FunctionType>(f_casted_ptr->getType()->getPointerElementType()),
+                f_casted_ptr);
         }
         break;
     }
@@ -3395,7 +3423,7 @@ llvm::Value *Function_context::get_tex_lookup_func(
         llvm::cast<llvm::PointerType>(vtable_type->getElementType(index));
     llvm::FunctionType *f_type = llvm::cast<llvm::FunctionType>(fp_type->getElementType());
 
-    return llvm::UndefValue::get(f_type);
+    return llvm::FunctionCallee(f_type, llvm::UndefValue::get(f_type));
 }
 
 // Get the current line (computed from current position debug info)

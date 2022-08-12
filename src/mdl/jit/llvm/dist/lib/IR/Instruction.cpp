@@ -1,9 +1,8 @@
 //===-- Instruction.cpp - Implement the Instruction class -----------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -44,8 +43,18 @@ Instruction::Instruction(Type *ty, unsigned it, Use *Ops, unsigned NumOps,
 
 Instruction::~Instruction() {
   assert(!Parent && "Instruction still linked in the program!");
-  if (hasMetadataHashEntry())
-    clearMetadataHashEntries();
+
+  // Replace any extant metadata uses of this instruction with undef to
+  // preserve debug info accuracy. Some alternatives include:
+  // - Treat Instruction like any other Value, and point its extant metadata
+  //   uses to an empty ValueAsMetadata node. This makes extant dbg.value uses
+  //   trivially dead (i.e. fair game for deletion in many passes), leading to
+  //   stale dbg.values being in effect for too long.
+  // - Call salvageDebugInfoOrMarkUndef. Not needed to make instruction removal
+  //   correct. OTOH results in wasted work in some common cases (e.g. when all
+  //   instructions in a BasicBlock are deleted).
+  if (isUsedByMetadata())
+    ValueAsMetadata::handleRAUW(this, UndefValue::get(getType()));
 }
 
 
@@ -98,6 +107,15 @@ void Instruction::moveBefore(BasicBlock &BB,
   BB.getInstList().splice(I, getParent()->getInstList(), getIterator());
 }
 
+bool Instruction::comesBefore(const Instruction *Other) const {
+  assert(Parent && Other->Parent &&
+         "instructions without BB parents have no order");
+  assert(Parent == Other->Parent && "cross-BB instruction order comparison");
+  if (!Parent->isInstrOrderValid())
+    Parent->renumberInstructions();
+  return Order < Other->Order;
+}
+
 void Instruction::setHasNoUnsignedWrap(bool b) {
   cast<OverflowingBinaryOperator>(this)->setHasNoUnsignedWrap(b);
 }
@@ -139,7 +157,9 @@ void Instruction::dropPoisonGeneratingFlags() {
     cast<GetElementPtrInst>(this)->setIsInBounds(false);
     break;
   }
+  // TODO: FastMathFlags!
 }
+
 
 bool Instruction::isExact() const {
   return cast<PossiblyExactOperator>(this)->isExact();
@@ -173,6 +193,11 @@ void Instruction::setHasNoSignedZeros(bool B) {
 void Instruction::setHasAllowReciprocal(bool B) {
   assert(isa<FPMathOperator>(this) && "setting fast-math flag on invalid op");
   cast<FPMathOperator>(this)->setHasAllowReciprocal(B);
+}
+
+void Instruction::setHasAllowContract(bool B) {
+  assert(isa<FPMathOperator>(this) && "setting fast-math flag on invalid op");
+  cast<FPMathOperator>(this)->setHasAllowContract(B);
 }
 
 void Instruction::setHasApproxFunc(bool B) {
@@ -302,6 +327,10 @@ const char *Instruction::getOpcodeName(unsigned OpCode) {
   case CatchRet: return "catchret";
   case CatchPad: return "catchpad";
   case CatchSwitch: return "catchswitch";
+  case CallBr: return "callbr";
+
+  // Standard unary operators...
+  case FNeg: return "fneg";
 
   // Standard binary operators...
   case Add: return "add";
@@ -363,6 +392,7 @@ const char *Instruction::getOpcodeName(unsigned OpCode) {
   case InsertValue:    return "insertvalue";
   case LandingPad:     return "landingpad";
   case CleanupPad:     return "cleanuppad";
+  case Freeze:         return "freeze";
 
   default: return "<Invalid operator> ";
   }
@@ -403,6 +433,10 @@ static bool haveSameSpecialState(const Instruction *I1, const Instruction *I2,
     return CI->getCallingConv() == cast<InvokeInst>(I2)->getCallingConv() &&
            CI->getAttributes() == cast<InvokeInst>(I2)->getAttributes() &&
            CI->hasIdenticalOperandBundleSchema(*cast<InvokeInst>(I2));
+  if (const CallBrInst *CI = dyn_cast<CallBrInst>(I1))
+    return CI->getCallingConv() == cast<CallBrInst>(I2)->getCallingConv() &&
+           CI->getAttributes() == cast<CallBrInst>(I2)->getAttributes() &&
+           CI->hasIdenticalOperandBundleSchema(*cast<CallBrInst>(I2));
   if (const InsertValueInst *IVI = dyn_cast<InsertValueInst>(I1))
     return IVI->getIndices() == cast<InsertValueInst>(I2)->getIndices();
   if (const ExtractValueInst *EVI = dyn_cast<ExtractValueInst>(I1))
@@ -424,6 +458,9 @@ static bool haveSameSpecialState(const Instruction *I1, const Instruction *I2,
            RMWI->isVolatile() == cast<AtomicRMWInst>(I2)->isVolatile() &&
            RMWI->getOrdering() == cast<AtomicRMWInst>(I2)->getOrdering() &&
            RMWI->getSyncScopeID() == cast<AtomicRMWInst>(I2)->getSyncScopeID();
+  if (const ShuffleVectorInst *SVI = dyn_cast<ShuffleVectorInst>(I1))
+    return SVI->getShuffleMask() ==
+           cast<ShuffleVectorInst>(I2)->getShuffleMask();
 
   return true;
 }
@@ -448,6 +485,7 @@ bool Instruction::isIdenticalToWhenDefined(const Instruction *I) const {
   if (!std::equal(op_begin(), op_end(), I->op_begin()))
     return false;
 
+  // WARNING: this logic must be kept in sync with EliminateDuplicatePHINodes()!
   if (const PHINode *thisPHI = dyn_cast<PHINode>(this)) {
     const PHINode *otherPHI = cast<PHINode>(I);
     return std::equal(thisPHI->block_begin(), thisPHI->block_end(),
@@ -513,9 +551,9 @@ bool Instruction::mayReadFromMemory() const {
   case Instruction::CatchRet:
     return true;
   case Instruction::Call:
-    return !cast<CallInst>(this)->doesNotAccessMemory();
   case Instruction::Invoke:
-    return !cast<InvokeInst>(this)->doesNotAccessMemory();
+  case Instruction::CallBr:
+    return !cast<CallBase>(this)->doesNotReadMemory();
   case Instruction::Store:
     return !cast<StoreInst>(this)->isUnordered();
   }
@@ -533,9 +571,9 @@ bool Instruction::mayWriteToMemory() const {
   case Instruction::CatchRet:
     return true;
   case Instruction::Call:
-    return !cast<CallInst>(this)->onlyReadsMemory();
   case Instruction::Invoke:
-    return !cast<InvokeInst>(this)->onlyReadsMemory();
+  case Instruction::CallBr:
+    return !cast<CallBase>(this)->onlyReadsMemory();
   case Instruction::Load:
     return !cast<LoadInst>(this)->isUnordered();
   }
@@ -592,12 +630,43 @@ bool Instruction::mayThrow() const {
 
 bool Instruction::isSafeToRemove() const {
   return (!isa<CallInst>(this) || !this->mayHaveSideEffects()) &&
-         !isa<TerminatorInst>(this);
+         !this->isTerminator();
 }
 
-const Instruction *Instruction::getNextNonDebugInstruction() const {
+bool Instruction::willReturn() const {
+  if (const auto *CB = dyn_cast<CallBase>(this))
+    // FIXME: Temporarily assume that all side-effect free intrinsics will
+    // return. Remove this workaround once all intrinsics are appropriately
+    // annotated.
+    return CB->hasFnAttr(Attribute::WillReturn) ||
+           (isa<IntrinsicInst>(CB) && CB->onlyReadsMemory());
+  return true;
+}
+
+bool Instruction::isLifetimeStartOrEnd() const {
+  auto II = dyn_cast<IntrinsicInst>(this);
+  if (!II)
+    return false;
+  Intrinsic::ID ID = II->getIntrinsicID();
+  return ID == Intrinsic::lifetime_start || ID == Intrinsic::lifetime_end;
+}
+
+bool Instruction::isDebugOrPseudoInst() const {
+  return isa<DbgInfoIntrinsic>(this) || isa<PseudoProbeInst>(this);
+}
+
+const Instruction *
+Instruction::getNextNonDebugInstruction(bool SkipPseudoOp) const {
   for (const Instruction *I = getNextNode(); I; I = I->getNextNode())
-    if (!isa<DbgInfoIntrinsic>(I))
+    if (!isa<DbgInfoIntrinsic>(I) && !(SkipPseudoOp && isa<PseudoProbeInst>(I)))
+      return I;
+  return nullptr;
+}
+
+const Instruction *
+Instruction::getPrevNonDebugInstruction(bool SkipPseudoOp) const {
+  for (const Instruction *I = getPrevNode(); I; I = I->getPrevNode())
+    if (!isa<DbgInfoIntrinsic>(I) && !(SkipPseudoOp && isa<PseudoProbeInst>(I)))
       return I;
   return nullptr;
 }
@@ -615,6 +684,56 @@ bool Instruction::isAssociative() const {
   default:
     return false;
   }
+}
+
+bool Instruction::isCommutative() const {
+  if (auto *II = dyn_cast<IntrinsicInst>(this))
+    return II->isCommutative();
+  // TODO: Should allow icmp/fcmp?
+  return isCommutative(getOpcode());
+}
+
+unsigned Instruction::getNumSuccessors() const {
+  switch (getOpcode()) {
+#define HANDLE_TERM_INST(N, OPC, CLASS)                                        \
+  case Instruction::OPC:                                                       \
+    return static_cast<const CLASS *>(this)->getNumSuccessors();
+#include "llvm/IR/Instruction.def"
+  default:
+    break;
+  }
+  llvm_unreachable("not a terminator");
+}
+
+BasicBlock *Instruction::getSuccessor(unsigned idx) const {
+  switch (getOpcode()) {
+#define HANDLE_TERM_INST(N, OPC, CLASS)                                        \
+  case Instruction::OPC:                                                       \
+    return static_cast<const CLASS *>(this)->getSuccessor(idx);
+#include "llvm/IR/Instruction.def"
+  default:
+    break;
+  }
+  llvm_unreachable("not a terminator");
+}
+
+void Instruction::setSuccessor(unsigned idx, BasicBlock *B) {
+  switch (getOpcode()) {
+#define HANDLE_TERM_INST(N, OPC, CLASS)                                        \
+  case Instruction::OPC:                                                       \
+    return static_cast<CLASS *>(this)->setSuccessor(idx, B);
+#include "llvm/IR/Instruction.def"
+  default:
+    break;
+  }
+  llvm_unreachable("not a terminator");
+}
+
+void Instruction::replaceSuccessorWith(BasicBlock *OldBB, BasicBlock *NewBB) {
+  for (unsigned Idx = 0, NumSuccessors = Instruction::getNumSuccessors();
+       Idx != NumSuccessors; ++Idx)
+    if (getSuccessor(Idx) == OldBB)
+      setSuccessor(Idx, NewBB);
 }
 
 Instruction *Instruction::cloneImpl() const {
@@ -675,56 +794,4 @@ Instruction *Instruction::clone() const {
   New->SubclassOptionalData = SubclassOptionalData;
   New->copyMetadata(*this);
   return New;
-}
-
-void Instruction::updateProfWeight(uint64_t S, uint64_t T) {
-  auto *ProfileData = getMetadata(LLVMContext::MD_prof);
-  if (ProfileData == nullptr)
-    return;
-
-  auto *ProfDataName = dyn_cast<MDString>(ProfileData->getOperand(0));
-  if (!ProfDataName || (!ProfDataName->getString().equals("branch_weights") &&
-                        !ProfDataName->getString().equals("VP")))
-    return;
-
-  MDBuilder MDB(getContext());
-  SmallVector<Metadata *, 3> Vals;
-  Vals.push_back(ProfileData->getOperand(0));
-  APInt APS(128, S), APT(128, T);
-  if (ProfDataName->getString().equals("branch_weights"))
-    for (unsigned i = 1; i < ProfileData->getNumOperands(); i++) {
-      // Using APInt::div may be expensive, but most cases should fit 64 bits.
-      APInt Val(128,
-                mdconst::dyn_extract<ConstantInt>(ProfileData->getOperand(i))
-                    ->getValue()
-                    .getZExtValue());
-      Val *= APS;
-      Vals.push_back(MDB.createConstant(
-          ConstantInt::get(Type::getInt64Ty(getContext()),
-                           Val.udiv(APT).getLimitedValue())));
-    }
-  else if (ProfDataName->getString().equals("VP"))
-    for (unsigned i = 1; i < ProfileData->getNumOperands(); i += 2) {
-      // The first value is the key of the value profile, which will not change.
-      Vals.push_back(ProfileData->getOperand(i));
-      // Using APInt::div may be expensive, but most cases should fit 64 bits.
-      APInt Val(128,
-                mdconst::dyn_extract<ConstantInt>(ProfileData->getOperand(i + 1))
-                    ->getValue()
-                    .getZExtValue());
-      Val *= APS;
-      Vals.push_back(MDB.createConstant(
-          ConstantInt::get(Type::getInt64Ty(getContext()),
-                           Val.udiv(APT).getLimitedValue())));
-    }
-  setMetadata(LLVMContext::MD_prof, MDNode::get(getContext(), Vals));
-}
-
-void Instruction::setProfWeight(uint64_t W) {
-  assert((isa<CallInst>(this) || isa<InvokeInst>(this)) &&
-         "Can only set weights for call and invoke instrucitons");
-  SmallVector<uint32_t, 1> Weights;
-  Weights.push_back(W);
-  MDBuilder MDB(getContext());
-  setMetadata(LLVMContext::MD_prof, MDB.createBranchWeights(Weights));
 }

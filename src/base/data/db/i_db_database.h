@@ -369,13 +369,13 @@ class Database
     virtual Transaction* get_transaction(
         Transaction_id id) = 0;
 
-// currently unused, prevent accidential use
+// currently unused, prevent accidental use
 private:
   //
   // The function below are experimental and should not be used in production code
   //
 
-    // Cancel all fragmented jobs in the datbase
+    // Cancel all fragmented jobs in the database
     virtual void cancel_all_fragmented_jobs() = 0;
 
 public:
@@ -391,7 +391,7 @@ public:
     ///                                 - -1: Invalid parameters (\p job is \c NULL or \c count is
     ///                                       zero).
     ///                                 - -2: Invalid scheduling mode (transaction-less or
-    ///                                       asynchronous execution is retricted to local jobs).
+    ///                                       asynchronous execution is restricted to local jobs).
     virtual Sint32 execute_fragmented(
         Fragmented_job* job,
         size_t count) = 0;  
@@ -411,7 +411,7 @@ public:
     ///                                 - -1: Invalid parameters (\p job is \c NULL or \c count is
     ///                                       zero).
     ///                                 - -2: Invalid scheduling mode (transaction-less or
-    ///                                       asynchronous execution is retricted to local jobs).
+    ///                                       asynchronous execution is restricted to local jobs).
     virtual Sint32 execute_fragmented_async(
         Fragmented_job* job,
         size_t count,

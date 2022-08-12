@@ -37,6 +37,7 @@
 #include <llvm/ADT/ilist_node.h>
 #include <llvm/ADT/GraphTraits.h>
 #include <llvm/IR/Dominators.h>
+#include <llvm/IR/Instructions.h>
 #include <llvm/Support/GenericDomTree.h>
 #include <llvm/Support/GenericDomTreeConstruction.h>
 #include <llvm/Transforms/Utils/Cloning.h>
@@ -51,7 +52,7 @@
 // by Johan Janssen and Henk Corporaal.
 
 namespace llvm {
-namespace hlsl {
+namespace sl {
 // forward
 class CNSFunction;
 class Node;
@@ -552,13 +553,13 @@ private:
     Loops          m_all_loops;
 };
 
-}  // namespace hlsl
+}  // namespace sl
 
 template <>
-struct GraphTraits<hlsl::Node *> {
-    typedef hlsl::Node                     NodeType;
-    typedef hlsl::Node                     *NodeRef;
-    typedef hlsl::Node::NodeList::iterator ChildIteratorType;
+struct GraphTraits<sl::Node *> {
+    typedef sl::Node                     NodeType;
+    typedef sl::Node                     *NodeRef;
+    typedef sl::Node::NodeList::iterator ChildIteratorType;
 
     static NodeType *getEntryNode(NodeType *N) { return N; }
 
@@ -571,10 +572,10 @@ struct GraphTraits<hlsl::Node *> {
 };
 
 template <>
-struct GraphTraits<Inverse<hlsl::Node *> > {
-    typedef hlsl::Node                     NodeType;
-    typedef hlsl::Node                     *NodeRef;
-    typedef hlsl::Node::NodeList::iterator ChildIteratorType;
+struct GraphTraits<Inverse<sl::Node *> > {
+    typedef sl::Node                     NodeType;
+    typedef sl::Node                     *NodeRef;
+    typedef sl::Node::NodeList::iterator ChildIteratorType;
 
     static NodeType *getEntryNode(NodeType *N) { return N; }
 
@@ -587,16 +588,16 @@ struct GraphTraits<Inverse<hlsl::Node *> > {
 };
 
 template<>
-struct GraphTraits<hlsl::CNSFunction *> : public GraphTraits<hlsl::Node *> {
-    typedef hlsl::CNSFunction                     GraphType;
-    typedef hlsl::Node                        NodeType;
-    typedef hlsl::CNSFunction::NodeList::iterator ChildIteratorType;
+struct GraphTraits<sl::CNSFunction *> : public GraphTraits<sl::Node *> {
+    typedef sl::CNSFunction                     GraphType;
+    typedef sl::Node                        NodeType;
+    typedef sl::CNSFunction::NodeList::iterator ChildIteratorType;
 
     //    Return the entry node of the graph
     static NodeType *getEntryNode(GraphType *G) { return G->front(); }
 
     //    nodes_iterator/begin/end - Allow iteration over all nodes in the graph
-    typedef hlsl::CNSFunction::NodeList::iterator nodes_iterator;
+    typedef sl::CNSFunction::NodeList::iterator nodes_iterator;
 
     static nodes_iterator nodes_begin(GraphType *G) {
         return G->begin();
@@ -612,7 +613,7 @@ struct GraphTraits<hlsl::CNSFunction *> : public GraphTraits<hlsl::Node *> {
     }
 };
 
-namespace hlsl {
+namespace sl {
 
 // -----------------------------------------------------------------------------------------------
 
@@ -966,7 +967,7 @@ bool CNSLimitGraph::removeIrreducibleControlFlow()
     size_t dumpID = 0;
 
     for (;;) {
-        dumpLimitGraph(m_func.getName(), dumpID++);
+        dumpLimitGraph(m_func.getName().str(), dumpID++);
 
         applyT2();
         if (m_work_list.size() == 1) {
@@ -982,7 +983,7 @@ bool CNSLimitGraph::removeIrreducibleControlFlow()
 
         NodeSet candidates = computeCNSCandidates();
 
-        dumpLimitGraph(m_func.getName(), dumpID++);
+        dumpLimitGraph(m_func.getName().str(), dumpID++);
 
         // Select node for splitting: So far use the one with less number of instructions
         Node *best = NULL;
@@ -1090,7 +1091,7 @@ bool CNSLimitGraph::removeIrreducibleControlFlow()
             std::set<BasicBlock*> phiUpdateBlocks;
             // dbgs() << "Looking at " << P->blocks().size() << " predecessor blocks\n";
             for (BasicBlock *BB : P->blocks()) {
-                TerminatorInst *term = BB->getTerminator();
+                Instruction *term = BB->getTerminator();
                 unsigned numSuccessors = term->getNumSuccessors();
 
                 for (unsigned idx = 0; idx < numSuccessors; ++idx) {
@@ -1251,5 +1252,5 @@ void CNSLimitGraph::dumpLimitGraph(std::string const &baseName, size_t dumpID)
 #endif
 }
 
-}  // namespace hlsl
+}  // namespace sl
 }  // namespace llvm

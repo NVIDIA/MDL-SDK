@@ -85,7 +85,7 @@ private:
     /// Note that a structure type name can become invalid because it was unregistered between check
     /// and the actual construction. Hence, create_api_class() checks whether the constructor was
     /// successful.
-    bool successfully_constructed() { return m_successfully_constructed; }
+    bool successfully_constructed() const { return m_successfully_constructed; }
 
     /// Indicates whether the value has the correct value type.
     ///
@@ -149,7 +149,7 @@ private:
     /// Note that a structure type name can become invalid because it was unregistered between check
     /// and the actual construction. Hence, create_api_class() checks whether the constructor was
     /// successful.
-    bool successfully_constructed() { return m_successfully_constructed; }
+    bool successfully_constructed() const { return m_successfully_constructed; }
 
     /// Indicates whether the value has the correct value type.
     ///

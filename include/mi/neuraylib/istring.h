@@ -57,7 +57,7 @@ public:
     virtual void set_c_str( const char* str) = 0;
 };
 
-/*@}*/ // end group mi_neuray_simple_types
+/**@}*/ // end group mi_neuray_simple_types
 
 } // namespace mi
 

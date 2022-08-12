@@ -34,6 +34,8 @@
 
 #include "neuray_mdle_api_impl.h"
 
+#include <cassert>
+
 #include <mi/base/handle.h>
 #include <mi/base/interface_implement.h>
 #include <mi/neuraylib/iarray.h>
@@ -95,7 +97,7 @@ public:
     /// \param size  Number of bytes to read
     ///
     /// \returns    The total number of bytes successfully read.
-    Uint64 read(void *ptr, Uint64 size) final
+    Uint64 read(void* ptr, Uint64 size) final
     {
         return m_buffer_reader->read(reinterpret_cast<char*>(ptr), static_cast<mi::Sint64>(size));
     }
@@ -136,11 +138,11 @@ public:
 
     /// Get the UTF8 encoded name of the resource on which this reader operates.
     /// \returns    The name of the resource or NULL.
-    char const *get_filename() const final { return nullptr; }
+    const char* get_filename() const final { return nullptr; }
 
     /// Get the UTF8 encoded absolute MDL resource name on which this reader operates.
     /// \returns    The absolute MDL url of the resource or NULL.
-    char const *get_mdl_url() const final { return nullptr; }
+    const char* get_mdl_url() const final { return nullptr; }
 
     /// Returns the associated hash of this resource.
     ///
@@ -154,8 +156,7 @@ public:
     /// \param buffer       the buffer this reader operates on
     explicit Buffer_resource_reader(
         mi::neuraylib::IBuffer* buffer)
-    : Base()
-    , m_buffer_reader(new DISK::Memory_reader_impl(buffer))
+    : m_buffer_reader(new DISK::Memory_reader_impl(buffer))
     {
     }
 
@@ -166,9 +167,7 @@ private:
     Buffer_resource_reader &operator=(
         Buffer_resource_reader const &) = delete;
 
-    ~Buffer_resource_reader() final
-    {
-    }
+    ~Buffer_resource_reader() { }
 
     /// The File handle.
     mi::base::Handle<mi::neuraylib::IReader> m_buffer_reader;
@@ -256,7 +255,7 @@ Mdle_resource_mapper::Mdle_resource_mapper(
 }
 
 // Retrieve the "resource name" of an MDL resource value.
-char const *Mdle_resource_mapper::get_resource_name(
+const char* Mdle_resource_mapper::get_resource_name(
     const mi::mdl::IValue_resource* v,
     bool support_strict_relative_path)
 {
@@ -282,8 +281,8 @@ char const *Mdle_resource_mapper::get_resource_name(
     if (!result || strcmp(result, "") == 0)
     {
         std::string message = "Unable to resolve resource: " + std::string(v->get_string_value())
-                            + " (Tag: " + std::to_string(v->get_tag_value()) + ").";
-        add_error_message(m_context, message.c_str(), -1);
+                            + " (Tag: " + std::to_string( v->get_tag_value()) + ").";
+        add_error_message(m_context, message, -1);
         return "";
     }
 
@@ -304,7 +303,7 @@ char const *Mdle_resource_mapper::get_resource_name(
     // keep a list of all files
 
     // handle in-memory resources
-    if (in_memory_resources.size() > 0)
+    if (!in_memory_resources.empty())
     {
         Resource_desc desc;
         desc.mdle_file_name_mask = mdle_name;
@@ -361,7 +360,7 @@ size_t Mdle_resource_mapper::get_resource_count() const
 }
 
 // Get the resource path that should be used in the MDLE main module.
-char const *Mdle_resource_mapper::get_mlde_resource_path(size_t index) const
+const char* Mdle_resource_mapper::get_mlde_resource_path(size_t index) const
 {
     if (index >= m_resources.size())
         return nullptr;
@@ -371,7 +370,7 @@ char const *Mdle_resource_mapper::get_mlde_resource_path(size_t index) const
 
 
 // Get a stream reader interface that gives access to the requested resource data.
-mi::mdl::IMDL_resource_reader *Mdle_resource_mapper::get_resource_reader(size_t index) const
+mi::mdl::IMDL_resource_reader* Mdle_resource_mapper::get_resource_reader(size_t index) const
 {
     if (index >= m_resources.size())
         return nullptr;
@@ -424,7 +423,7 @@ mi::mdl::IMDL_resource_reader *Mdle_resource_mapper::get_resource_reader(size_t 
     else
     {
         mi::mdl::MDL_zip_container_error_code  err;
-        mi::mdl::File_handle *file = mi::mdl::File_handle::open(
+        mi::mdl::File_handle* file = mi::mdl::File_handle::open(
             m_mdl->get_mdl_allocator(), fn.c_str(), err);
 
         if (file == nullptr || file->get_kind() != mi::mdl::File_handle::FH_FILE)
@@ -443,7 +442,7 @@ mi::mdl::IMDL_resource_reader *Mdle_resource_mapper::get_resource_reader(size_t 
 }
 
 // Get a stream reader interface that gives access to the requested addition data file.
-mi::mdl::IMDL_resource_reader *Mdle_resource_mapper::get_additional_data_reader(const char* path)
+mi::mdl::IMDL_resource_reader* Mdle_resource_mapper::get_additional_data_reader(const char* path)
 {
     // resolved / absolute file path
     mi::mdl::string absolute_path(m_mdl->get_mdl_allocator());
@@ -477,7 +476,7 @@ mi::mdl::IMDL_resource_reader *Mdle_resource_mapper::get_additional_data_reader(
     }
 
     mi::mdl::MDL_zip_container_error_code  err;
-    mi::mdl::File_handle *file = mi::mdl::File_handle::open(
+    mi::mdl::File_handle* file = mi::mdl::File_handle::open(
         m_mdl->get_mdl_allocator(), absolute_path.c_str(), err);
 
     if (!file)
@@ -513,14 +512,14 @@ std::string Mdle_resource_mapper::generate_mdle_name(const std::string& base_nam
     static int counter = 0;
     std::string n_test = "./resources/" + name;
     while (m_reserved_mdle_names.find(n_test) != m_reserved_mdle_names.end())
-        n_test = "./resources/" + name + "_" + std::to_string(counter++);
+        n_test = "./resources/" + name + "_" + std::to_string( counter++);
 
     m_reserved_mdle_names.insert(n_test);
     return n_test + ext;
 }
 
 
-Mdle_api_impl::Mdle_api_impl(mi::neuraylib::INeuray *neuray)
+Mdle_api_impl::Mdle_api_impl(mi::neuraylib::INeuray* neuray)
 : m_neuray(neuray)
 , m_mdlc_module(true)
 {
@@ -557,7 +556,7 @@ mi::Sint32 Mdle_api_impl::export_mdle(
     mi::neuraylib::IMdl_execution_context* context) const
 {
     MDL::Execution_context default_context;
-    MDL::Execution_context *mdl_context = unwrap_and_clear_context(context, default_context);
+    MDL::Execution_context* mdl_context = unwrap_and_clear_context(context, default_context);
 
     if (!file_name || !mdle_data || !transaction) {
         add_error_message(mdl_context, "Invalid parameters (NULL pointer).", -1);
@@ -704,7 +703,7 @@ mi::Sint32 Mdle_api_impl::export_mdle(
     mi::base::Handle<const mi::IString> thumbnail(
         mdle_data->get_value<mi::IString>("thumbnail_path"));
 
-    std::string thumbnail_path("");
+    std::string thumbnail_path;
     if (thumbnail && strcmp(thumbnail->get_c_str(), "") != 0) {
         thumbnail_path = thumbnail->get_c_str();
 
@@ -853,7 +852,7 @@ mi::Sint32 Mdle_api_impl::validate_mdle(
     mi::neuraylib::IMdl_execution_context* context) const
 {
     MDL::Execution_context default_context;
-    MDL::Execution_context *mdl_context = unwrap_and_clear_context(context, default_context);
+    MDL::Execution_context* mdl_context = unwrap_and_clear_context(context, default_context);
 
     mi::base::Handle<mi::mdl::IMDL> imdl(m_mdlc_module->get_mdl());
     mi::base::Handle<mi::mdl::IEncapsulate_tool> encapsulator(imdl->create_encapsulate_tool());
@@ -870,7 +869,7 @@ mi::neuraylib::IReader* Mdle_api_impl::get_user_file(
     mi::neuraylib::IMdl_execution_context* context) const
 {
     MDL::Execution_context default_context;
-    MDL::Execution_context *mdl_context = unwrap_and_clear_context(context, default_context);
+    MDL::Execution_context* mdl_context = unwrap_and_clear_context(context, default_context);
 
     if (!mlde_file_name || !user_file_name)
     {
@@ -904,7 +903,7 @@ mi::Sint32 Mdle_api_impl::compare_mdle(
     mi::neuraylib::IMdl_execution_context* context) const
 {
     MDL::Execution_context default_context;
-    MDL::Execution_context *mdl_context = unwrap_and_clear_context(context, default_context);
+    MDL::Execution_context* mdl_context = unwrap_and_clear_context(context, default_context);
     mi::base::Handle<mi::mdl::IMDL> imdl(m_mdlc_module->get_mdl());
     mi::base::Handle<mi::mdl::IEncapsulate_tool> encapsulator(imdl->create_encapsulate_tool());
     mi::mdl::MDL_zip_container_mdle* mdle_a = nullptr;
@@ -965,7 +964,7 @@ mi::Sint32 Mdle_api_impl::get_hash(
     mi::neuraylib::IMdl_execution_context* context) const
 {
     MDL::Execution_context default_context;
-    MDL::Execution_context *mdl_context = unwrap_and_clear_context(context, default_context);
+    MDL::Execution_context* mdl_context = unwrap_and_clear_context(context, default_context);
 
     mi::base::Handle<mi::mdl::IMDL> imdl(m_mdlc_module->get_mdl());
     mi::base::Handle<mi::mdl::IEncapsulate_tool> encapsulator(imdl->create_encapsulate_tool());

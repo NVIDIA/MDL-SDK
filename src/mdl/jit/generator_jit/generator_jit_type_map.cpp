@@ -84,25 +84,25 @@ Type_mapper::Type_mapper(
 , m_type_predicate(llvm::Type::getInt1Ty(context))
 
 , m_type_bool(llvm::IntegerType::get(context, tm_mode & TM_BOOL1_SUPPORTED ? 1 : 8))
-, m_type_bool2(llvm::VectorType::get(m_type_bool, 2))
-, m_type_bool3(llvm::VectorType::get(m_type_bool, 3))
-, m_type_bool4(llvm::VectorType::get(m_type_bool, 4))
+, m_type_bool2(llvm::FixedVectorType::get(m_type_bool, 2))
+, m_type_bool3(llvm::FixedVectorType::get(m_type_bool, 3))
+, m_type_bool4(llvm::FixedVectorType::get(m_type_bool, 4))
 
 // int is 32bit in MDL
 , m_type_int(llvm::Type::getInt32Ty(context))
-, m_type_int2(llvm::VectorType::get(m_type_int, 2))
-, m_type_int3(llvm::VectorType::get(m_type_int, 3))
-, m_type_int4(llvm::VectorType::get(m_type_int, 4))
+, m_type_int2(llvm::FixedVectorType::get(m_type_int, 2))
+, m_type_int3(llvm::FixedVectorType::get(m_type_int, 3))
+, m_type_int4(llvm::FixedVectorType::get(m_type_int, 4))
 
 , m_type_float(llvm::Type::getFloatTy(context))
-, m_type_float2(llvm::VectorType::get(m_type_float, 2))
-, m_type_float3(llvm::VectorType::get(m_type_float, 3))
-, m_type_float4(llvm::VectorType::get(m_type_float, 4))
+, m_type_float2(llvm::FixedVectorType::get(m_type_float, 2))
+, m_type_float3(llvm::FixedVectorType::get(m_type_float, 3))
+, m_type_float4(llvm::FixedVectorType::get(m_type_float, 4))
 
-, m_type_double(llvm::Type::getDoubleTy(context))
-, m_type_double2(llvm::VectorType::get(m_type_double, 2))
-, m_type_double3(llvm::VectorType::get(m_type_double, 3))
-, m_type_double4(llvm::VectorType::get(m_type_double, 4))
+, m_type_double(tm_mode & TM_NO_DOUBLE ? m_type_float : llvm::Type::getDoubleTy(context))
+, m_type_double2(llvm::FixedVectorType::get(m_type_double, 2))
+, m_type_double3(llvm::FixedVectorType::get(m_type_double, 3))
+, m_type_double4(llvm::FixedVectorType::get(m_type_double, 4))
 
 , m_type_color(NULL)
 
@@ -180,6 +180,10 @@ Type_mapper::Type_mapper(
 , m_deriv_type_set(0, Deriv_type_set::hasher(), Deriv_type_set::key_equal(), alloc)
 , m_type_arr_cache(0, Type_array_map::hasher(), Type_array_map::key_equal(), alloc)
 {
+    for (int i = 0; i <= STATE_FIELD_LAST; ++i) {
+        m_state_field[i] = -1;
+    }
+
     switch (tm_mode & TM_VECTOR_MASK) {
     case TM_ALL_SCALAR:
         // don't use vector types at all
@@ -244,25 +248,25 @@ Type_mapper::Type_mapper(
         break;
     case TM_BIG_VECTORS:
         // matrix types are big vectors ...
-        m_type_float2x2  = llvm::VectorType::get(m_type_float,  2 * 2);
-        m_type_float3x2  = llvm::VectorType::get(m_type_float,  3 * 2);
-        m_type_float4x2  = llvm::VectorType::get(m_type_float,  4 * 2);
-        m_type_float2x3  = llvm::VectorType::get(m_type_float,  2 * 3);
-        m_type_float3x3  = llvm::VectorType::get(m_type_float,  3 * 3);
-        m_type_float4x3  = llvm::VectorType::get(m_type_float,  4 * 3);
-        m_type_float2x4  = llvm::VectorType::get(m_type_float,  2 * 4);
-        m_type_float3x4  = llvm::VectorType::get(m_type_float,  3 * 4);
-        m_type_float4x4  = llvm::VectorType::get(m_type_float,  4 * 4);
+        m_type_float2x2  = llvm::FixedVectorType::get(m_type_float,  2 * 2);
+        m_type_float3x2  = llvm::FixedVectorType::get(m_type_float,  3 * 2);
+        m_type_float4x2  = llvm::FixedVectorType::get(m_type_float,  4 * 2);
+        m_type_float2x3  = llvm::FixedVectorType::get(m_type_float,  2 * 3);
+        m_type_float3x3  = llvm::FixedVectorType::get(m_type_float,  3 * 3);
+        m_type_float4x3  = llvm::FixedVectorType::get(m_type_float,  4 * 3);
+        m_type_float2x4  = llvm::FixedVectorType::get(m_type_float,  2 * 4);
+        m_type_float3x4  = llvm::FixedVectorType::get(m_type_float,  3 * 4);
+        m_type_float4x4  = llvm::FixedVectorType::get(m_type_float,  4 * 4);
 
-        m_type_double2x2 = llvm::VectorType::get(m_type_double, 2 * 2);
-        m_type_double3x2 = llvm::VectorType::get(m_type_double, 3 * 2);
-        m_type_double4x2 = llvm::VectorType::get(m_type_double, 4 * 2);
-        m_type_double2x3 = llvm::VectorType::get(m_type_double, 2 * 3);
-        m_type_double3x3 = llvm::VectorType::get(m_type_double, 3 * 3);
-        m_type_double4x3 = llvm::VectorType::get(m_type_double, 4 * 3);
-        m_type_double2x4 = llvm::VectorType::get(m_type_double, 2 * 4);
-        m_type_double3x4 = llvm::VectorType::get(m_type_double, 3 * 4);
-        m_type_double4x4 = llvm::VectorType::get(m_type_double, 4 * 4);
+        m_type_double2x2 = llvm::FixedVectorType::get(m_type_double, 2 * 2);
+        m_type_double3x2 = llvm::FixedVectorType::get(m_type_double, 3 * 2);
+        m_type_double4x2 = llvm::FixedVectorType::get(m_type_double, 4 * 2);
+        m_type_double2x3 = llvm::FixedVectorType::get(m_type_double, 2 * 3);
+        m_type_double3x3 = llvm::FixedVectorType::get(m_type_double, 3 * 3);
+        m_type_double4x3 = llvm::FixedVectorType::get(m_type_double, 4 * 3);
+        m_type_double2x4 = llvm::FixedVectorType::get(m_type_double, 2 * 4);
+        m_type_double3x4 = llvm::FixedVectorType::get(m_type_double, 3 * 4);
+        m_type_double4x4 = llvm::FixedVectorType::get(m_type_double, 4 * 4);
         break;
     }
 
@@ -361,90 +365,6 @@ Type_mapper::Type_mapper(
         construct_bsdf_measurement_attribuute_entry_type(context);
     m_type_bsdf_measurement_attribute_entry_ptr =
         get_ptr(m_type_bsdf_measurement_attribute_entry);
-}
-
-// Get the index of a state field in the current state struct.
-int Type_mapper::get_state_index(
-    State_field state_field)
-{
-    switch (state_field) {
-
-    // Environment context
-    case STATE_ENV_DIRECTION:
-        // always 0
-        return 0;
-    case STATE_ENV_RO_DATA_SEG:
-        // always 1
-        return 1;
-
-    // Core context
-    case STATE_CORE_NORMAL:
-        return 0;
-    case STATE_CORE_GEOMETRY_NORMAL:
-        return 1;
-    case STATE_CORE_POSITION:
-        return 2;
-    case STATE_CORE_ANIMATION_TIME:
-        return 3;
-    case STATE_CORE_TEXTURE_COORDINATE:
-        return 4;
-    case STATE_CORE_TANGENT_U:
-        if (use_bitangents())
-            return -1;
-        return 5;
-    case STATE_CORE_TANGENT_V:
-        if (use_bitangents())
-            return -1;
-        return 6;
-    case STATE_CORE_BITANGENTS:
-        if (use_bitangents())
-            return 5;
-        return -1;
-    case STATE_CORE_TEXT_RESULTS:
-        if (use_bitangents())
-            return 6;
-        return 7;
-    case STATE_CORE_RO_DATA_SEG:
-        if (use_bitangents())
-            return 7;
-        return 8;
-    case STATE_CORE_W2O_TRANSFORM:
-        if (state_includes_uniform_state()) {
-            if (use_bitangents())
-                return 8;
-            return 9;
-        }
-        return -1;
-    case STATE_CORE_O2W_TRANSFORM:
-        if (state_includes_uniform_state()) {
-            if (use_bitangents())
-                return 9;
-            return 10;
-        }
-        return -1;
-    case STATE_CORE_OBJECT_ID:
-        if (state_includes_uniform_state()) {
-            if (use_bitangents())
-                return 10;
-            return 11;
-        }
-        return -1;
-    case STATE_CORE_METERS_PER_SCENE_UNIT:
-        if (state_includes_uniform_state()) {
-            if (use_bitangents())
-                return 11;
-            return 12;
-        }
-        return -1;
-    case STATE_CORE_ARG_BLOCK_OFFSET:
-        if (state_includes_arg_block_offset()) {
-            if (use_bitangents())
-                return 12;
-            return 13;
-        }
-        return -1;
-    }
-    return -1;
 }
 
 // Get an llvm type for an MDL type.
@@ -765,6 +685,7 @@ bool Type_mapper::need_reference_return(mi::mdl::IType const *type) const
         // returned as atomic tags
         return false;
     case mi::mdl::IType::TK_VECTOR:
+    case mi::mdl::IType::TK_COLOR:
         if ((m_tm_mode & TM_VECTOR_MASK) == TM_ALL_SCALAR) {
             // returned as an array, needs reference
             return true;
@@ -784,13 +705,6 @@ bool Type_mapper::need_reference_return(mi::mdl::IType const *type) const
     case mi::mdl::IType::TK_ARRAY:
         // use reference for arrays
         return true;
-    case mi::mdl::IType::TK_COLOR:
-        if ((m_tm_mode & TM_VECTOR_MASK) == TM_ALL_SCALAR) {
-            // returned as an array, needs reference
-            return true;
-        }
-        // else returned as a LLVM vector type
-        return false;
     case mi::mdl::IType::TK_FUNCTION:
         // should not happen
         break;
@@ -841,8 +755,9 @@ restart:
         // pass tags by value
         return false;
     case mi::mdl::IType::TK_VECTOR:
+    case mi::mdl::IType::TK_COLOR:
         if ((m_tm_mode & TM_VECTOR_MASK) == TM_ALL_SCALAR) {
-            // returned as an array, needs reference
+            // returned as an LLVM array, needs reference
             return true;
         }
         // else represented by LLVM vector types, pass by value
@@ -857,13 +772,6 @@ restart:
     case mi::mdl::IType::TK_ARRAY:
         // try by reference to safe memory and CPU cycles
         return true;
-    case mi::mdl::IType::TK_COLOR:
-        if ((m_tm_mode & TM_VECTOR_MASK) == TM_ALL_SCALAR) {
-            // represented by LLVM array type, needs reference
-            return true;
-        }
-        // else represented by a LLVM vector type, pass by value
-        return false;
     case mi::mdl::IType::TK_FUNCTION:
         MDL_ASSERT(!"unhandled function type");
         return false;
@@ -1284,12 +1192,14 @@ llvm::StructType *Type_mapper::construct_state_environment_type(
         rodatasegment_type,   // read-only data segment
     };
 
+    m_state_field[STATE_ENV_DIRECTION]   = 0;
+    m_state_field[STATE_ENV_RO_DATA_SEG] = 1;
+
     llvm::StructType *res = llvm::StructType::create(
         context, members, "State_environment", /*is_packed=*/false);
 
 #if defined(DEBUG) || defined(ENABLE_ASSERT)
-    if (target_supports_pointers())
-    {
+    if (target_supports_pointers()) {
         // check struct layout offsets and size
         // must match between LLVM layout and C++ layout from the native
         // compiler
@@ -1337,40 +1247,48 @@ llvm::StructType *Type_mapper::construct_state_core_type(
                 llvm::ArrayType::get(deriv_float3_type, num_texture_spaces));
     }
 
-    llvm::Type *texres_type = target_supports_pointers()
-        ? get_ptr(float4_type)
-        : static_cast<llvm::Type *>(llvm::ArrayType::get(float4_type, num_texture_results));
-
-    llvm::Type *rodatasegment_type = target_supports_pointers()
-        ? byte_ptr_type
-        : int_type;
-
     llvm::SmallVector<llvm::Type *, 13> members;
-    members.push_back(float3_type);          // normal
-    members.push_back(float3_type);          // geom_normal
-    members.push_back(pos_type);             // position
-    members.push_back(float_type);           // animation time
-    members.push_back(tex_coord_type);       // texture_coordinate(index)
+
+    int i = 0;
+
+#define FIELD(type, name) do { m_state_field[name] = i++; members.push_back(type); } while(0)
+
+    FIELD(float3_type,    STATE_CORE_NORMAL);              // normal
+    FIELD(float3_type,    STATE_CORE_GEOMETRY_NORMAL);     // geom_normal
+    FIELD(pos_type,       STATE_CORE_POSITION);            // position
+    FIELD(float_type,     STATE_CORE_ANIMATION_TIME);      // animation time
+    FIELD(tex_coord_type, STATE_CORE_TEXTURE_COORDINATE);  // texture_coordinate(index)
 
     if (use_bitangents()) {
         llvm::Type *bitangents_type = target_supports_pointers()
             ? get_ptr(float4_type)
             : static_cast<llvm::Type *>(llvm::ArrayType::get(float4_type, num_texture_spaces));
 
-        members.push_back(bitangents_type);  // tangents_bitangentssign(index)
+        FIELD(bitangents_type, STATE_CORE_BITANGENTS);    // tangents_bitangentssign(index)
     } else {
-        members.push_back(coord_type);       // tangent_u(index)
-        members.push_back(coord_type);       // tangent_v(index)
+        FIELD(coord_type, STATE_CORE_TANGENT_U);          // tangent_u(index)
+        FIELD(coord_type, STATE_CORE_TANGENT_V);          // tangent_v(index)
     }
 
-    members.push_back(texres_type);          // texture_results
-    members.push_back(rodatasegment_type);   // read-only data segment
-    members.push_back(float4x4_type);        // world-to-object transform matrix
-    members.push_back(float4x4_type);        // object-to-world transform matrix
-    members.push_back(int_type);             // state::object_id() result
-    members.push_back(float_type);           // state::meters_per_scene_unit() result
+    if (num_texture_results > 0 || target_supports_pointers()) {
+        llvm::Type *texres_type = target_supports_pointers()
+            ? get_ptr(float4_type)
+            : static_cast<llvm::Type *>(llvm::ArrayType::get(float4_type, num_texture_results));
+        FIELD(texres_type, STATE_CORE_TEXT_RESULTS);      // texture_results
+    }
+
+    llvm::Type *rodataseg_type = target_supports_pointers()
+        ? byte_ptr_type
+        : int_type;
+
+    FIELD(rodataseg_type, STATE_CORE_RO_DATA_SEG);            // read-only data segment
+    FIELD(float4x4_type,  STATE_CORE_W2O_TRANSFORM);          // world-to-object transform matrix
+    FIELD(float4x4_type,  STATE_CORE_O2W_TRANSFORM);          // object-to-world transform matrix
+    FIELD(int_type,       STATE_CORE_OBJECT_ID);              // object_id() result
+    FIELD(float_type,     STATE_CORE_METERS_PER_SCENE_UNIT);  // meters_per_scene_unit() result
+
     if (state_includes_arg_block_offset()) {
-        members.push_back(int_type);
+        FIELD(int_type, STATE_CORE_ARG_BLOCK_OFFSET);         // argument block offset
     }
 
     res = llvm::StructType::create(
@@ -1583,6 +1501,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
     llvm::Type *arr_int_4_ptr_type         = get_arr_int_4_ptr_type();
     llvm::Type *float_type                 = get_float_type();
     llvm::Type *int_type                   = get_int_type();
+    llvm::Type *string_type                = get_string_type();
 
     llvm::FunctionType *tex_lookup_float4_2d_type   = NULL;
     llvm::FunctionType *tex_lookup_float3_2d_type   = NULL;
@@ -2064,7 +1983,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
         llvm::Type *args[] = {
             self_ptr_type,
             m_type_state_core_ptr,
-            int_type
+            string_type
         };
 
         scene_data_isvalid_type =
@@ -2075,7 +1994,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
         llvm::Type *args[] = {
             self_ptr_type,
             m_type_state_core_ptr,
-            int_type,
+            string_type,
             float_type,
             bool_type
         };
@@ -2089,7 +2008,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
             arr_float_2_ptr_type,
             self_ptr_type,
             m_type_state_core_ptr,
-            int_type,
+            string_type,
             arr_float_2_ptr_type,
             bool_type
         };
@@ -2103,7 +2022,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
             arr_float_3_ptr_type,
             self_ptr_type,
             m_type_state_core_ptr,
-            int_type,
+            string_type,
             arr_float_3_ptr_type,
             bool_type
         };
@@ -2117,7 +2036,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
             arr_float_4_ptr_type,
             self_ptr_type,
             m_type_state_core_ptr,
-            int_type,
+            string_type,
             arr_float_4_ptr_type,
             bool_type
         };
@@ -2130,7 +2049,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
         llvm::Type *args[] = {
             self_ptr_type,
             m_type_state_core_ptr,
-            int_type,
+            string_type,
             int_type,
             bool_type
         };
@@ -2144,7 +2063,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
             arr_int_2_ptr_type,
             self_ptr_type,
             m_type_state_core_ptr,
-            int_type,
+            string_type,
             arr_int_2_ptr_type,
             bool_type
         };
@@ -2158,7 +2077,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
             arr_int_3_ptr_type,
             self_ptr_type,
             m_type_state_core_ptr,
-            int_type,
+            string_type,
             arr_int_3_ptr_type,
             bool_type
         };
@@ -2172,7 +2091,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
             arr_int_4_ptr_type,
             self_ptr_type,
             m_type_state_core_ptr,
-            int_type,
+            string_type,
             arr_int_4_ptr_type,
             bool_type
         };
@@ -2186,7 +2105,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
             arr_float_3_ptr_type,
             self_ptr_type,
             m_type_state_core_ptr,
-            int_type,
+            string_type,
             arr_float_3_ptr_type,
             bool_type
         };
@@ -2241,7 +2160,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
                 get_ptr(get_deriv_float_type()),
                 self_ptr_type,
                 m_type_state_core_ptr,
-                int_type,
+                string_type,
                 get_ptr(get_deriv_float_type()),
                 bool_type
             };
@@ -2255,7 +2174,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
                 get_ptr(get_deriv_arr_float_2_type()),
                 self_ptr_type,
                 m_type_state_core_ptr,
-                int_type,
+                string_type,
                 get_ptr(get_deriv_arr_float_2_type()),
                 bool_type
             };
@@ -2269,7 +2188,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
                 get_ptr(get_deriv_arr_float_3_type()),
                 self_ptr_type,
                 m_type_state_core_ptr,
-                int_type,
+                string_type,
                 get_ptr(get_deriv_arr_float_3_type()),
                 bool_type
             };
@@ -2283,7 +2202,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
                 get_ptr(get_deriv_arr_float_4_type()),
                 self_ptr_type,
                 m_type_state_core_ptr,
-                int_type,
+                string_type,
                 get_ptr(get_deriv_arr_float_4_type()),
                 bool_type
             };
@@ -2297,7 +2216,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
                 get_ptr(get_deriv_arr_float_3_type()),
                 self_ptr_type,
                 m_type_state_core_ptr,
-                int_type,
+                string_type,
                 get_ptr(get_deriv_arr_float_3_type()),
                 bool_type
             };

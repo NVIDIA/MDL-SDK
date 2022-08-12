@@ -54,7 +54,7 @@ public:
     virtual base::Uuid get_uuid() const = 0;
 };
 
-/*@}*/ // end group mi_neuray_simple_types
+/**@}*/ // end group mi_neuray_simple_types
 
 } // namespace mi
 

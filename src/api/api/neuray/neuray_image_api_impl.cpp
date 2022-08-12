@@ -109,6 +109,16 @@ mi::IArray* Image_api_impl::create_mipmaps(
     return array;
 }
 
+mi::neuraylib::ITile* Image_api_impl::clone_tile( const mi::neuraylib::ITile* tile) const
+{
+    return m_impl.clone_tile( tile);
+}
+
+mi::neuraylib::ICanvas* Image_api_impl::clone_canvas( const mi::neuraylib::ICanvas* canvas) const
+{
+    return m_impl.clone_canvas( canvas);
+}
+
 mi::Sint32 Image_api_impl::read_raw_pixels(
     mi::Uint32 width,
     mi::Uint32 height,
@@ -198,10 +208,22 @@ bool Image_api_impl::supports_format_for_encoding( const char* image_format) con
     return m_impl.supports_format_for_encoding( image_format);
 }
 
+mi::neuraylib::ITile* Image_api_impl::convert(
+    const mi::neuraylib::ITile* tile, const char* pixel_type) const
+{
+    return m_impl.convert( tile, pixel_type);
+}
+
 mi::neuraylib::ICanvas* Image_api_impl::convert(
     const mi::neuraylib::ICanvas* canvas, const char* pixel_type) const
 {
     return m_impl.convert( canvas, pixel_type);
+}
+
+void Image_api_impl::adjust_gamma(
+    mi::neuraylib::ITile* tile, mi::Float32 old_gamma, mi::Float32 new_gamma) const
+{
+    return m_impl.adjust_gamma( tile, old_gamma, new_gamma);
 }
 
 void Image_api_impl::adjust_gamma( mi::neuraylib::ICanvas* canvas, mi::Float32 new_gamma) const

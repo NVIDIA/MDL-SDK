@@ -422,61 +422,6 @@ const mi::neuraylib::IDeserialized_module_name* Mdl_impexp_api_impl::deserialize
     return MDL::deserialize_module_name( module_name, mdle_callback, context_impl);
 }
 
-namespace {
-
-/// Writer output stream.
-class Writer_output_stream : public mi::base::Interface_implement<mi::mdl::IOutput_stream>
-{
-public:
-
-    /// Constructor.
-    Writer_output_stream(mi::neuraylib::IWriter* writer) : m_writer(writer), m_error(false) { }
-
-    /// Write a character to the stream.
-    virtual void write_char(char c)
-    {
-        mi::Sint64 out_len = m_writer->write(&c, 1);
-        if (1 != out_len)
-            m_error = true;
-    }
-
-    /// Write a string to the stream.
-    virtual void write(const char* s)
-    {
-        size_t in_len = strlen(s);
-        mi::Sint64 out_len = m_writer->write(s, in_len);
-        if (in_len != static_cast<size_t>(out_len))
-            m_error = true;
-    }
-
-    /// Flush stream.
-    virtual void flush()
-    {
-        if (!m_writer->flush())
-            m_error = true;
-    }
-
-    /// Remove the last character from output stream if possible.
-    ///
-    /// \param c  remove this character from the output stream
-    ///
-    /// \return true if c was the last character in the stream and it was successfully removed,
-    /// false otherwise
-    virtual bool unput(char c) {
-        // unsupported
-        return false;
-    }
-
-    /// Check error status.
-    bool has_error() const { return m_error; }
-
-private:
-    mi::neuraylib::IWriter* m_writer;
-    bool m_error;
-};
-
-} // end namespace
-
 mi::Sint32 Mdl_impexp_api_impl::export_module_common(
     mi::neuraylib::ITransaction* transaction,
     const char* module_name,
@@ -505,7 +450,7 @@ mi::Sint32 Mdl_impexp_api_impl::export_module_common(
         HAL::Ospath::split(filename, path, basename);
         HAL::Ospath::splitext(basename, new_mdl_module_name, ext);
         new_mdl_module_name = "::" + new_mdl_module_name;
-        if (!MDL::is_valid_module_name(new_mdl_module_name.c_str()))
+        if (!MDL::is_valid_module_name(new_mdl_module_name))
             return -6005;
     }
 
@@ -531,13 +476,12 @@ mi::Sint32 Mdl_impexp_api_impl::export_module_common(
         export_result_ext.get());
 
     // export the MDL module
-    Writer_output_stream writer_stream(writer);
-    mdl_exporter->export_module(&writer_stream, module, &resource_callback);
-
-    if (writer_stream.has_error())
+    mi::base::Handle<MDL::IOutput_stream> output_stream( MDL::get_output_stream( writer));
+    mdl_exporter->export_module( output_stream.get(), module, &resource_callback);
+    if( output_stream->has_error())
         return -6003;
 
-    return -static_cast<mi::Sint32>(export_result_ext->get_error_number());
+    return -static_cast<mi::Sint32>( export_result_ext->get_error_number());
 }
 
 mi::Sint32 Mdl_impexp_api_impl::start()

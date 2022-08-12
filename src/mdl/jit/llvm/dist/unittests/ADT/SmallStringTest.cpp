@@ -1,9 +1,8 @@
 //===- llvm/unittest/ADT/SmallStringTest.cpp ------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -72,6 +71,12 @@ TEST_F(SmallStringTest, AssignSmallVector) {
   EXPECT_STREQ("abc", theString.c_str());
 }
 
+TEST_F(SmallStringTest, AssignStringRefs) {
+  theString.assign({"abc", "def", "ghi"});
+  EXPECT_EQ(9u, theString.size());
+  EXPECT_STREQ("abcdefghi", theString.c_str());
+}
+
 TEST_F(SmallStringTest, AppendIterPair) {
   StringRef abc = "abc";
   theString.append(abc.begin(), abc.end());
@@ -95,6 +100,33 @@ TEST_F(SmallStringTest, AppendSmallVector) {
   theString.append(abcVec);
   EXPECT_EQ(6u, theString.size());
   EXPECT_STREQ("abcabc", theString.c_str());
+}
+
+TEST_F(SmallStringTest, AppendStringRefs) {
+  theString.append({"abc", "def", "ghi"});
+  EXPECT_EQ(9u, theString.size());
+  EXPECT_STREQ("abcdefghi", theString.c_str());
+  StringRef Jkl = "jkl";
+  std::string Mno = "mno";
+  SmallString<4> Pqr("pqr");
+  const char *Stu = "stu";
+  theString.append({Jkl, Mno, Pqr, Stu});
+  EXPECT_EQ(21u, theString.size());
+  EXPECT_STREQ("abcdefghijklmnopqrstu", theString.c_str());
+}
+
+TEST_F(SmallStringTest, StringRefConversion) {
+  StringRef abc = "abc";
+  theString.assign(abc.begin(), abc.end());
+  StringRef theStringRef = theString;
+  EXPECT_EQ("abc", theStringRef);
+}
+
+TEST_F(SmallStringTest, StdStringConversion) {
+  StringRef abc = "abc";
+  theString.assign(abc.begin(), abc.end());
+  std::string theStdString = std::string(theString);
+  EXPECT_EQ("abc", theStdString);
 }
 
 TEST_F(SmallStringTest, Substr) {
@@ -170,7 +202,7 @@ TEST_F(SmallStringTest, Realloc) {
   EXPECT_EQ("abcdyyy", theString.slice(0, 7));
 }
 
-TEST(StringRefTest, Comparisons) {
+TEST_F(SmallStringTest, Comparisons) {
   EXPECT_EQ(-1, SmallString<10>("aab").compare("aad"));
   EXPECT_EQ( 0, SmallString<10>("aab").compare("aab"));
   EXPECT_EQ( 1, SmallString<10>("aab").compare("aaa"));
@@ -204,4 +236,12 @@ TEST(StringRefTest, Comparisons) {
   EXPECT_EQ( 1, SmallString<10>("V8_q0").compare_numeric("V1_q0"));
 }
 
+// Check gtest prints SmallString as a string instead of a container of chars.
+// The code is in utils/unittest/googletest/internal/custom/gtest-printers.h
+TEST_F(SmallStringTest, GTestPrinter) {
+  EXPECT_EQ(R"("foo")", ::testing::PrintToString(SmallString<1>("foo")));
+  const SmallVectorImpl<char> &ErasedSmallString = SmallString<1>("foo");
+  EXPECT_EQ(R"("foo")", ::testing::PrintToString(ErasedSmallString));
 }
+
+} // namespace

@@ -35,14 +35,11 @@
 #include <string>
 #include <map>
 
+#include <mi/base/handle.h>
 #include <mi/neuraylib/iexpression.h>
 #include <mi/neuraylib/itransaction.h>
 #include <mi/neuraylib/itype.h>
 #include <mi/neuraylib/ivalue.h>
-
-#include <api/api/neuray/neuray_expression_impl.h>
-
-#include <mi/base/handle.h>
 
 #include <base/lib/log/i_log_assert.h>
 
@@ -62,6 +59,7 @@
 #include <mdl/compiler/compilercore/compilercore_symbols.h>
 #include <mdl/compiler/compilercore/compilercore_tools.h>
 
+#include "neuray_expression_impl.h"
 #include "neuray_function_call_impl.h"
 #include "neuray_material_instance_impl.h"
 #include "neuray_mdl_evaluator_api_impl.h"
@@ -113,7 +111,6 @@ public:
         EC_INVALID_CALL      = 8,   ///< call points to invalid definition
     };
 
-public:
     /// Constructor.
     ///
     /// \param compiler  the MDL compiler
@@ -130,7 +127,6 @@ public:
     , m_sym_tab(m_arena)
     , m_type_fact(m_arena, m_compiler, &m_sym_tab)
     , m_value_fact(m_arena, m_type_fact)
-    , m_user_types()
     , m_max_size(8*1024*1024)
     , m_max_cycles(1024)
     , m_error(EC_OK)
@@ -1084,7 +1080,6 @@ private:
             m_error = code;
     }
 
-private:
     /// The compiler
     mi::mdl::MDL *m_compiler;
 
@@ -1136,7 +1131,7 @@ Mdl_evaluator_api_impl::~Mdl_evaluator_api_impl()
     m_neuray = nullptr;
 }
 
-mi::neuraylib::IValue_bool const *Mdl_evaluator_api_impl::is_material_parameter_enabled(
+mi::neuraylib::IValue_bool const *Mdl_evaluator_api_impl::deprecated_is_material_parameter_enabled(
     mi::neuraylib::ITransaction             *trans,
     mi::neuraylib::IValue_factory           *fact,
     mi::neuraylib::IMaterial_instance const *inst,

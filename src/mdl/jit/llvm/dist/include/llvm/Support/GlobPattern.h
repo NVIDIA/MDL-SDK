@@ -1,9 +1,8 @@
 //===-- GlobPattern.h - glob pattern matcher implementation -*- C++ -*-----===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -17,20 +16,30 @@
 
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/Optional.h"
-#include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Error.h"
 #include <vector>
 
 // This class represents a glob pattern. Supported metacharacters
-// are "*", "?", "[<chars>]" and "[^<chars>]".
+// are "*", "?", "\", "[<chars>]", "[^<chars>]", and "[!<chars>]".
 namespace llvm {
-class BitVector;
+
 template <typename T> class ArrayRef;
+class StringRef;
 
 class GlobPattern {
 public:
   static Expected<GlobPattern> create(StringRef Pat);
   bool match(StringRef S) const;
+
+  // Returns true for glob pattern "*". Can be used to avoid expensive
+  // preparation/acquisition of the input for match().
+  bool isTrivialMatchAll() const {
+    if (Prefix && Prefix->empty()) {
+      assert(!Suffix);
+      return true;
+    }
+    return false;
+  }
 
 private:
   bool matchOne(ArrayRef<BitVector> Pat, StringRef S) const;

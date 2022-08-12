@@ -238,6 +238,9 @@ public:
     /// Access last element.
     Stmt const *back() const { return m_stmts.back(); }
 
+    /// Delete first element.
+    void pop_front() { m_stmts.pop_front(); }
+
     /// Delete last element.
     void pop_back() { m_stmts.pop_back(); }
 

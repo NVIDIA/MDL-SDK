@@ -1,9 +1,8 @@
 //===- PassManager internal APIs and implementation details -----*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 /// \file
@@ -48,7 +47,13 @@ struct PassConcept {
                                 ExtraArgTs... ExtraArgs) = 0;
 
   /// Polymorphic method to access the name of a pass.
-  virtual StringRef name() = 0;
+  virtual StringRef name() const = 0;
+
+  /// Polymorphic method to to let a pass optionally exempted from skipping by
+  /// PassInstrumentation.
+  /// To opt-in, pass should implement `static bool isRequired()`. It's no-op
+  /// to have `isRequired` always return false since that is the default.
+  virtual bool isRequired() const = 0;
 };
 
 /// A template wrapper used to implement the polymorphic API.
@@ -80,7 +85,23 @@ struct PassModel : PassConcept<IRUnitT, AnalysisManagerT, ExtraArgTs...> {
     return Pass.run(IR, AM, ExtraArgs...);
   }
 
-  StringRef name() override { return PassT::name(); }
+  StringRef name() const override { return PassT::name(); }
+
+  template <typename T>
+  using has_required_t = decltype(std::declval<T &>().isRequired());
+
+  template <typename T>
+  static std::enable_if_t<is_detected<has_required_t, T>::value, bool>
+  passIsRequiredImpl() {
+    return T::isRequired();
+  }
+  template <typename T>
+  static std::enable_if_t<!is_detected<has_required_t, T>::value, bool>
+  passIsRequiredImpl() {
+    return false;
+  }
+
+  bool isRequired() const override { return passIsRequiredImpl<PassT>(); }
 
   PassT Pass;
 };
@@ -250,7 +271,7 @@ struct AnalysisPassConcept {
       ExtraArgTs... ExtraArgs) = 0;
 
   /// Polymorphic method to access the name of a pass.
-  virtual StringRef name() = 0;
+  virtual StringRef name() const = 0;
 };
 
 /// Wrapper to model the analysis pass concept.
@@ -290,13 +311,14 @@ struct AnalysisPassModel : AnalysisPassConcept<IRUnitT, PreservedAnalysesT,
       AnalysisResultConcept<IRUnitT, PreservedAnalysesT, InvalidatorT>>
   run(IRUnitT &IR, AnalysisManager<IRUnitT, ExtraArgTs...> &AM,
       ExtraArgTs... ExtraArgs) override {
-    return llvm::make_unique<ResultModelT>(Pass.run(IR, AM, ExtraArgs...));
+    return std::make_unique<ResultModelT>(
+        Pass.run(IR, AM, std::forward<ExtraArgTs>(ExtraArgs)...));
   }
 
   /// The model delegates to a static \c PassT::name method.
   ///
   /// The returned string ref must point to constant immutable data!
-  StringRef name() override { return PassT::name(); }
+  StringRef name() const override { return PassT::name(); }
 
   PassT Pass;
 };

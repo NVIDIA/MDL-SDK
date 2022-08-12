@@ -168,7 +168,7 @@ public:
 
 mi_static_assert( sizeof( IMdl_compiler::Mdl_backend_kind)== sizeof( Uint32));
 
-/*@}*/ // end group mi_neuray_mdl_compiler
+/**@}*/ // end group mi_neuray_mdl_compiler
 
 } // namespace neuraylib
 

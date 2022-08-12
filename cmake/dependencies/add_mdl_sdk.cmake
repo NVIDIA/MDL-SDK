@@ -54,6 +54,22 @@ if(NOT __TARGET_ADD_DEPENDENCY_NO_RUNTIME_COPY)
                 ${CMAKE_BINARY_DIR}/src/shaders/plugin/dds/$(Configuration)
                 ${CMAKE_BINARY_DIR}/src/shaders/plugin/freeimage/$(Configuration)
             )
+    else()
+        # for unix systems we can set the rpath to guide the library resolution
+        target_add_rpath(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
+            RPATHS
+                ${CMAKE_BINARY_DIR}/prod/lib/mdl_sdk/${CMAKE_BUILD_TYPE}
+                ${CMAKE_BINARY_DIR}/shaders/plugin/dds/${CMAKE_BUILD_TYPE}
+                ${CMAKE_BINARY_DIR}/shaders/plugin/freeimage/${CMAKE_BUILD_TYPE}
+            )
+
+        # add the shared lib path as RPATH
+        foreach(_SHARED ${MDL_DEPENDENCY_FREEIMAGE_SHARED})
+        get_filename_component(_SHARED_DIR ${_SHARED} DIRECTORY)
+        target_add_rpath(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
+                RPATHS ${_SHARED_DIR}
+            )
+        endforeach()
     endif()
 
     # on linux, the user has to setup the LD_LIBRARY_PATH when running examples

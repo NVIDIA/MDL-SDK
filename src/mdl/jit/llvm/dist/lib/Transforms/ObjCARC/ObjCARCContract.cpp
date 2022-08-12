@@ -1,9 +1,8 @@
 //===- ObjCARCContract.cpp - ObjC ARC Optimization ------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 /// \file
@@ -23,6 +22,8 @@
 ///
 //===----------------------------------------------------------------------===//
 
+#ifdef LLVM_ENABLE_OBJC
+
 // TODO: ObjCARCContract could insert PHI nodes when uses aren't
 // dominated by single calls.
 
@@ -31,12 +32,18 @@
 #include "ObjCARC.h"
 #include "ProvenanceAnalysis.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/EHPersonalities.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/InlineAsm.h"
+#include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Operator.h"
+#include "llvm/IR/PassManager.h"
+#include "llvm/InitializePasses.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/ObjCARC.h"
 
 using namespace llvm;
 using namespace llvm::objcarc;
@@ -51,59 +58,63 @@ STATISTIC(NumStoreStrongs, "Number objc_storeStrong calls formed");
 //===----------------------------------------------------------------------===//
 
 namespace {
-  /// Late ARC optimizations
-  ///
-  /// These change the IR in a way that makes it difficult to be analyzed by
-  /// ObjCARCOpt, so it's run late.
-  class ObjCARCContract : public FunctionPass {
-    bool Changed;
-    AliasAnalysis *AA;
-    DominatorTree *DT;
-    ProvenanceAnalysis PA;
-    ARCRuntimeEntryPoints EP;
+/// Late ARC optimizations
+///
+/// These change the IR in a way that makes it difficult to be analyzed by
+/// ObjCARCOpt, so it's run late.
 
-    /// A flag indicating whether this optimization pass should run.
-    bool Run;
+class ObjCARCContract {
+  bool Changed;
+  AAResults *AA;
+  DominatorTree *DT;
+  ProvenanceAnalysis PA;
+  ARCRuntimeEntryPoints EP;
 
-    /// The inline asm string to insert between calls and RetainRV calls to make
-    /// the optimization work on targets which need it.
-    const MDString *RVInstMarker;
+  /// A flag indicating whether this optimization pass should run.
+  bool Run;
 
-    /// The set of inserted objc_storeStrong calls. If at the end of walking the
-    /// function we have found no alloca instructions, these calls can be marked
-    /// "tail".
-    SmallPtrSet<CallInst *, 8> StoreStrongCalls;
+  /// The inline asm string to insert between calls and RetainRV calls to make
+  /// the optimization work on targets which need it.
+  const MDString *RVInstMarker;
 
-    /// Returns true if we eliminated Inst.
-    bool tryToPeepholeInstruction(
-        Function &F, Instruction *Inst, inst_iterator &Iter,
-        SmallPtrSetImpl<Instruction *> &DepInsts,
-        SmallPtrSetImpl<const BasicBlock *> &Visited,
-        bool &TailOkForStoreStrong,
-        const DenseMap<BasicBlock *, ColorVector> &BlockColors);
+  /// The set of inserted objc_storeStrong calls. If at the end of walking the
+  /// function we have found no alloca instructions, these calls can be marked
+  /// "tail".
+  SmallPtrSet<CallInst *, 8> StoreStrongCalls;
 
-    bool optimizeRetainCall(Function &F, Instruction *Retain);
+  /// Returns true if we eliminated Inst.
+  bool tryToPeepholeInstruction(
+      Function &F, Instruction *Inst, inst_iterator &Iter,
+      bool &TailOkForStoreStrong,
+      const DenseMap<BasicBlock *, ColorVector> &BlockColors);
 
-    bool
-    contractAutorelease(Function &F, Instruction *Autorelease,
-                        ARCInstKind Class,
-                        SmallPtrSetImpl<Instruction *> &DependingInstructions,
-                        SmallPtrSetImpl<const BasicBlock *> &Visited);
+  bool optimizeRetainCall(Function &F, Instruction *Retain);
 
-    void tryToContractReleaseIntoStoreStrong(
-        Instruction *Release, inst_iterator &Iter,
-        const DenseMap<BasicBlock *, ColorVector> &BlockColors);
+  bool contractAutorelease(Function &F, Instruction *Autorelease,
+                           ARCInstKind Class);
 
-    void getAnalysisUsage(AnalysisUsage &AU) const override;
-    bool doInitialization(Module &M) override;
-    bool runOnFunction(Function &F) override;
+  void tryToContractReleaseIntoStoreStrong(
+      Instruction *Release, inst_iterator &Iter,
+      const DenseMap<BasicBlock *, ColorVector> &BlockColors);
 
-  public:
-    static char ID;
-    ObjCARCContract() : FunctionPass(ID) {
-      initializeObjCARCContractPass(*PassRegistry::getPassRegistry());
-    }
-  };
+public:
+  bool init(Module &M);
+  bool run(Function &F, AAResults *AA, DominatorTree *DT);
+};
+
+class ObjCARCContractLegacyPass : public FunctionPass {
+  ObjCARCContract OCARCC;
+
+public:
+  void getAnalysisUsage(AnalysisUsage &AU) const override;
+  bool doInitialization(Module &M) override;
+  bool runOnFunction(Function &F) override;
+
+  static char ID;
+  ObjCARCContractLegacyPass() : FunctionPass(ID) {
+    initializeObjCARCContractLegacyPassPass(*PassRegistry::getPassRegistry());
+  }
+};
 }
 
 //===----------------------------------------------------------------------===//
@@ -114,8 +125,7 @@ namespace {
 /// return value. We do this late so we do not disrupt the dataflow analysis in
 /// ObjCARCOpt.
 bool ObjCARCContract::optimizeRetainCall(Function &F, Instruction *Retain) {
-  ImmutableCallSite CS(GetArgRCIdentityRoot(Retain));
-  const Instruction *Call = CS.getInstruction();
+  const auto *Call = dyn_cast<CallBase>(GetArgRCIdentityRoot(Retain));
   if (!Call)
     return false;
   if (Call->getParent() != Retain->getParent())
@@ -140,7 +150,7 @@ bool ObjCARCContract::optimizeRetainCall(Function &F, Instruction *Retain) {
 
   // We do not have to worry about tail calls/does not throw since
   // retain/retainRV have the same properties.
-  Constant *Decl = EP.get(ARCRuntimeEntryPointKind::RetainRV);
+  Function *Decl = EP.get(ARCRuntimeEntryPointKind::RetainRV);
   cast<CallInst>(Retain)->setCalledFunction(Decl);
 
   LLVM_DEBUG(dbgs() << "New: " << *Retain << "\n");
@@ -148,32 +158,17 @@ bool ObjCARCContract::optimizeRetainCall(Function &F, Instruction *Retain) {
 }
 
 /// Merge an autorelease with a retain into a fused call.
-bool ObjCARCContract::contractAutorelease(
-    Function &F, Instruction *Autorelease, ARCInstKind Class,
-    SmallPtrSetImpl<Instruction *> &DependingInstructions,
-    SmallPtrSetImpl<const BasicBlock *> &Visited) {
+bool ObjCARCContract::contractAutorelease(Function &F, Instruction *Autorelease,
+                                          ARCInstKind Class) {
   const Value *Arg = GetArgRCIdentityRoot(Autorelease);
 
   // Check that there are no instructions between the retain and the autorelease
   // (such as an autorelease_pop) which may change the count.
-  CallInst *Retain = nullptr;
-  if (Class == ARCInstKind::AutoreleaseRV)
-    FindDependencies(RetainAutoreleaseRVDep, Arg,
-                     Autorelease->getParent(), Autorelease,
-                     DependingInstructions, Visited, PA);
-  else
-    FindDependencies(RetainAutoreleaseDep, Arg,
-                     Autorelease->getParent(), Autorelease,
-                     DependingInstructions, Visited, PA);
-
-  Visited.clear();
-  if (DependingInstructions.size() != 1) {
-    DependingInstructions.clear();
-    return false;
-  }
-
-  Retain = dyn_cast_or_null<CallInst>(*DependingInstructions.begin());
-  DependingInstructions.clear();
+  DependenceKind DK = Class == ARCInstKind::AutoreleaseRV
+                          ? RetainAutoreleaseRVDep
+                          : RetainAutoreleaseDep;
+  auto *Retain = dyn_cast_or_null<CallInst>(
+      findSingleDependency(DK, Arg, Autorelease->getParent(), Autorelease, PA));
 
   if (!Retain || GetBasicARCInstKind(Retain) != ARCInstKind::Retain ||
       GetArgRCIdentityRoot(Retain) != Arg)
@@ -189,7 +184,7 @@ bool ObjCARCContract::contractAutorelease(
                        "        Retain: "
                     << *Retain << "\n");
 
-  Constant *Decl = EP.get(Class == ARCInstKind::AutoreleaseRV
+  Function *Decl = EP.get(Class == ARCInstKind::AutoreleaseRV
                               ? ARCRuntimeEntryPointKind::RetainAutoreleaseRV
                               : ARCRuntimeEntryPointKind::RetainAutorelease);
   Retain->setCalledFunction(Decl);
@@ -203,7 +198,7 @@ bool ObjCARCContract::contractAutorelease(
 static StoreInst *findSafeStoreForStoreStrongContraction(LoadInst *Load,
                                                          Instruction *Release,
                                                          ProvenanceAnalysis &PA,
-                                                         AliasAnalysis *AA) {
+                                                         AAResults *AA) {
   StoreInst *Store = nullptr;
   bool SawRelease = false;
 
@@ -314,8 +309,8 @@ findRetainForStoreStrongContraction(Value *New, StoreInst *Store,
 /// Create a call instruction with the correct funclet token. Should be used
 /// instead of calling CallInst::Create directly.
 static CallInst *
-createCallInst(Value *Func, ArrayRef<Value *> Args, const Twine &NameStr,
-               Instruction *InsertBefore,
+createCallInst(FunctionType *FTy, Value *Func, ArrayRef<Value *> Args,
+               const Twine &NameStr, Instruction *InsertBefore,
                const DenseMap<BasicBlock *, ColorVector> &BlockColors) {
   SmallVector<OperandBundleDef, 1> OpBundles;
   if (!BlockColors.empty()) {
@@ -326,7 +321,15 @@ createCallInst(Value *Func, ArrayRef<Value *> Args, const Twine &NameStr,
       OpBundles.emplace_back("funclet", EHPad);
   }
 
-  return CallInst::Create(Func, Args, OpBundles, NameStr, InsertBefore);
+  return CallInst::Create(FTy, Func, Args, OpBundles, NameStr, InsertBefore);
+}
+
+static CallInst *
+createCallInst(FunctionCallee Func, ArrayRef<Value *> Args, const Twine &NameStr,
+               Instruction *InsertBefore,
+               const DenseMap<BasicBlock *, ColorVector> &BlockColors) {
+  return createCallInst(Func.getFunctionType(), Func.getCallee(), Args, NameStr,
+                        InsertBefore, BlockColors);
 }
 
 /// Attempt to merge an objc_release with a store, load, and objc_retain to form
@@ -409,7 +412,7 @@ void ObjCARCContract::tryToContractReleaseIntoStoreStrong(
     Args[0] = new BitCastInst(Args[0], I8XX, "", Store);
   if (Args[1]->getType() != I8X)
     Args[1] = new BitCastInst(Args[1], I8X, "", Store);
-  Constant *Decl = EP.get(ARCRuntimeEntryPointKind::StoreStrong);
+  Function *Decl = EP.get(ARCRuntimeEntryPointKind::StoreStrong);
   CallInst *StoreStrong = createCallInst(Decl, Args, "", Store, BlockColors);
   StoreStrong->setDoesNotThrow();
   StoreStrong->setDebugLoc(Store->getDebugLoc());
@@ -432,109 +435,122 @@ void ObjCARCContract::tryToContractReleaseIntoStoreStrong(
 }
 
 bool ObjCARCContract::tryToPeepholeInstruction(
-  Function &F, Instruction *Inst, inst_iterator &Iter,
-  SmallPtrSetImpl<Instruction *> &DependingInsts,
-  SmallPtrSetImpl<const BasicBlock *> &Visited,
-  bool &TailOkForStoreStrongs,
-  const DenseMap<BasicBlock *, ColorVector> &BlockColors) {
-    // Only these library routines return their argument. In particular,
-    // objc_retainBlock does not necessarily return its argument.
+    Function &F, Instruction *Inst, inst_iterator &Iter,
+    bool &TailOkForStoreStrongs,
+    const DenseMap<BasicBlock *, ColorVector> &BlockColors) {
+  // Only these library routines return their argument. In particular,
+  // objc_retainBlock does not necessarily return its argument.
   ARCInstKind Class = GetBasicARCInstKind(Inst);
-    switch (Class) {
-    case ARCInstKind::FusedRetainAutorelease:
-    case ARCInstKind::FusedRetainAutoreleaseRV:
+  switch (Class) {
+  case ARCInstKind::FusedRetainAutorelease:
+  case ARCInstKind::FusedRetainAutoreleaseRV:
+    return false;
+  case ARCInstKind::Autorelease:
+  case ARCInstKind::AutoreleaseRV:
+    return contractAutorelease(F, Inst, Class);
+  case ARCInstKind::Retain:
+    // Attempt to convert retains to retainrvs if they are next to function
+    // calls.
+    if (!optimizeRetainCall(F, Inst))
       return false;
-    case ARCInstKind::Autorelease:
-    case ARCInstKind::AutoreleaseRV:
-      return contractAutorelease(F, Inst, Class, DependingInsts, Visited);
-    case ARCInstKind::Retain:
-      // Attempt to convert retains to retainrvs if they are next to function
-      // calls.
-      if (!optimizeRetainCall(F, Inst))
-        return false;
-      // If we succeed in our optimization, fall through.
-      LLVM_FALLTHROUGH;
-    case ARCInstKind::RetainRV:
-    case ARCInstKind::ClaimRV: {
-      // If we're compiling for a target which needs a special inline-asm
-      // marker to do the return value optimization, insert it now.
-      if (!RVInstMarker)
-        return false;
-      BasicBlock::iterator BBI = Inst->getIterator();
-      BasicBlock *InstParent = Inst->getParent();
-
-      // Step up to see if the call immediately precedes the RV call.
-      // If it's an invoke, we have to cross a block boundary. And we have
-      // to carefully dodge no-op instructions.
-      do {
-        if (BBI == InstParent->begin()) {
-          BasicBlock *Pred = InstParent->getSinglePredecessor();
-          if (!Pred)
-            goto decline_rv_optimization;
-          BBI = Pred->getTerminator()->getIterator();
-          break;
-        }
-        --BBI;
-      } while (IsNoopInstruction(&*BBI));
-
-      if (&*BBI == GetArgRCIdentityRoot(Inst)) {
-        LLVM_DEBUG(dbgs() << "Adding inline asm marker for the return value "
-                             "optimization.\n");
-        Changed = true;
-        InlineAsm *IA = InlineAsm::get(
-            FunctionType::get(Type::getVoidTy(Inst->getContext()),
-                              /*isVarArg=*/false),
-            RVInstMarker->getString(),
-            /*Constraints=*/"", /*hasSideEffects=*/true);
-
-        createCallInst(IA, None, "", Inst, BlockColors);
-      }
-    decline_rv_optimization:
+    // If we succeed in our optimization, fall through.
+    LLVM_FALLTHROUGH;
+  case ARCInstKind::RetainRV:
+  case ARCInstKind::ClaimRV: {
+    // If we're compiling for a target which needs a special inline-asm
+    // marker to do the return value optimization, insert it now.
+    if (!RVInstMarker)
       return false;
-    }
-    case ARCInstKind::InitWeak: {
-      // objc_initWeak(p, null) => *p = null
-      CallInst *CI = cast<CallInst>(Inst);
-      if (IsNullOrUndef(CI->getArgOperand(1))) {
-        Value *Null =
-          ConstantPointerNull::get(cast<PointerType>(CI->getType()));
-        Changed = true;
-        new StoreInst(Null, CI->getArgOperand(0), CI);
+    BasicBlock::iterator BBI = Inst->getIterator();
+    BasicBlock *InstParent = Inst->getParent();
 
-        LLVM_DEBUG(dbgs() << "OBJCARCContract: Old = " << *CI << "\n"
-                          << "                 New = " << *Null << "\n");
-
-        CI->replaceAllUsesWith(Null);
-        CI->eraseFromParent();
+    // Step up to see if the call immediately precedes the RV call.
+    // If it's an invoke, we have to cross a block boundary. And we have
+    // to carefully dodge no-op instructions.
+    do {
+      if (BBI == InstParent->begin()) {
+        BasicBlock *Pred = InstParent->getSinglePredecessor();
+        if (!Pred)
+          goto decline_rv_optimization;
+        BBI = Pred->getTerminator()->getIterator();
+        break;
       }
-      return true;
+      --BBI;
+    } while (IsNoopInstruction(&*BBI));
+
+    if (GetRCIdentityRoot(&*BBI) == GetArgRCIdentityRoot(Inst)) {
+      LLVM_DEBUG(dbgs() << "Adding inline asm marker for the return value "
+                           "optimization.\n");
+      Changed = true;
+      InlineAsm *IA =
+          InlineAsm::get(FunctionType::get(Type::getVoidTy(Inst->getContext()),
+                                           /*isVarArg=*/false),
+                         RVInstMarker->getString(),
+                         /*Constraints=*/"", /*hasSideEffects=*/true);
+
+      createCallInst(IA, None, "", Inst, BlockColors);
     }
-    case ARCInstKind::Release:
-      // Try to form an objc store strong from our release. If we fail, there is
-      // nothing further to do below, so continue.
-      tryToContractReleaseIntoStoreStrong(Inst, Iter, BlockColors);
-      return true;
-    case ARCInstKind::User:
-      // Be conservative if the function has any alloca instructions.
-      // Technically we only care about escaping alloca instructions,
-      // but this is sufficient to handle some interesting cases.
-      if (isa<AllocaInst>(Inst))
-        TailOkForStoreStrongs = false;
-      return true;
-    case ARCInstKind::IntrinsicUser:
-      // Remove calls to @clang.arc.use(...).
-      Inst->eraseFromParent();
-      return true;
-    default:
-      return true;
+  decline_rv_optimization:
+    return false;
+  }
+  case ARCInstKind::InitWeak: {
+    // objc_initWeak(p, null) => *p = null
+    CallInst *CI = cast<CallInst>(Inst);
+    if (IsNullOrUndef(CI->getArgOperand(1))) {
+      Value *Null = ConstantPointerNull::get(cast<PointerType>(CI->getType()));
+      Changed = true;
+      new StoreInst(Null, CI->getArgOperand(0), CI);
+
+      LLVM_DEBUG(dbgs() << "OBJCARCContract: Old = " << *CI << "\n"
+                        << "                 New = " << *Null << "\n");
+
+      CI->replaceAllUsesWith(Null);
+      CI->eraseFromParent();
     }
+    return true;
+  }
+  case ARCInstKind::Release:
+    // Try to form an objc store strong from our release. If we fail, there is
+    // nothing further to do below, so continue.
+    tryToContractReleaseIntoStoreStrong(Inst, Iter, BlockColors);
+    return true;
+  case ARCInstKind::User:
+    // Be conservative if the function has any alloca instructions.
+    // Technically we only care about escaping alloca instructions,
+    // but this is sufficient to handle some interesting cases.
+    if (isa<AllocaInst>(Inst))
+      TailOkForStoreStrongs = false;
+    return true;
+  case ARCInstKind::IntrinsicUser:
+    // Remove calls to @llvm.objc.clang.arc.use(...).
+    Changed = true;
+    Inst->eraseFromParent();
+    return true;
+  default:
+    return true;
+  }
 }
 
 //===----------------------------------------------------------------------===//
 //                              Top Level Driver
 //===----------------------------------------------------------------------===//
 
-bool ObjCARCContract::runOnFunction(Function &F) {
+bool ObjCARCContract::init(Module &M) {
+  // If nothing in the Module uses ARC, don't do anything.
+  Run = ModuleHasARC(M);
+  if (!Run)
+    return false;
+
+  EP.init(&M);
+
+  // Initialize RVInstMarker.
+  const char *MarkerKey = "clang.arc.retainAutoreleasedReturnValueMarker";
+  RVInstMarker = dyn_cast_or_null<MDString>(M.getModuleFlag(MarkerKey));
+
+  return false;
+}
+
+bool ObjCARCContract::run(Function &F, AAResults *A, DominatorTree *D) {
   if (!EnableARCOpts)
     return false;
 
@@ -543,10 +559,9 @@ bool ObjCARCContract::runOnFunction(Function &F) {
     return false;
 
   Changed = false;
-  AA = &getAnalysis<AAResultsWrapperPass>().getAAResults();
-  DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-
-  PA.setAA(&getAnalysis<AAResultsWrapperPass>().getAAResults());
+  AA = A;
+  DT = D;
+  PA.setAA(A);
 
   DenseMap<BasicBlock *, ColorVector> BlockColors;
   if (F.hasPersonalityFn() &&
@@ -566,8 +581,6 @@ bool ObjCARCContract::runOnFunction(Function &F) {
   // For ObjC library calls which return their argument, replace uses of the
   // argument with uses of the call return value, if it dominates the use. This
   // reduces register pressure.
-  SmallPtrSet<Instruction *, 4> DependingInstructions;
-  SmallPtrSet<const BasicBlock *, 4> Visited;
   for (inst_iterator I = inst_begin(&F), E = inst_end(&F); I != E;) {
     Instruction *Inst = &*I++;
 
@@ -575,8 +588,8 @@ bool ObjCARCContract::runOnFunction(Function &F) {
 
     // First try to peephole Inst. If there is nothing further we can do in
     // terms of undoing objc-arc-expand, process the next inst.
-    if (tryToPeepholeInstruction(F, Inst, I, DependingInstructions, Visited,
-                                 TailOkForStoreStrongs, BlockColors))
+    if (tryToPeepholeInstruction(F, Inst, I, TailOkForStoreStrongs,
+                                 BlockColors))
       continue;
 
     // Otherwise, try to undo objc-arc-expand.
@@ -649,7 +662,6 @@ bool ObjCARCContract::runOnFunction(Function &F) {
       }
     };
 
-
     Value *Arg = cast<CallInst>(Inst)->getArgOperand(0);
     Value *OrigArg = Arg;
 
@@ -712,40 +724,47 @@ bool ObjCARCContract::runOnFunction(Function &F) {
 //                             Misc Pass Manager
 //===----------------------------------------------------------------------===//
 
-char ObjCARCContract::ID = 0;
-INITIALIZE_PASS_BEGIN(ObjCARCContract, "objc-arc-contract",
+char ObjCARCContractLegacyPass::ID = 0;
+INITIALIZE_PASS_BEGIN(ObjCARCContractLegacyPass, "objc-arc-contract",
                       "ObjC ARC contraction", false, false)
 INITIALIZE_PASS_DEPENDENCY(AAResultsWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
-INITIALIZE_PASS_END(ObjCARCContract, "objc-arc-contract",
+INITIALIZE_PASS_END(ObjCARCContractLegacyPass, "objc-arc-contract",
                     "ObjC ARC contraction", false, false)
 
-void ObjCARCContract::getAnalysisUsage(AnalysisUsage &AU) const {
+void ObjCARCContractLegacyPass::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<AAResultsWrapperPass>();
   AU.addRequired<DominatorTreeWrapperPass>();
   AU.setPreservesCFG();
 }
 
-Pass *llvm::createObjCARCContractPass() { return new ObjCARCContract(); }
-
-bool ObjCARCContract::doInitialization(Module &M) {
-  // If nothing in the Module uses ARC, don't do anything.
-  Run = ModuleHasARC(M);
-  if (!Run)
-    return false;
-
-  EP.init(&M);
-
-  // Initialize RVInstMarker.
-  RVInstMarker = nullptr;
-  if (NamedMDNode *NMD =
-          M.getNamedMetadata("clang.arc.retainAutoreleasedReturnValueMarker"))
-    if (NMD->getNumOperands() == 1) {
-      const MDNode *N = NMD->getOperand(0);
-      if (N->getNumOperands() == 1)
-        if (const MDString *S = dyn_cast<MDString>(N->getOperand(0)))
-          RVInstMarker = S;
-    }
-
-  return false;
+Pass *llvm::createObjCARCContractPass() {
+  return new ObjCARCContractLegacyPass();
 }
+
+bool ObjCARCContractLegacyPass::doInitialization(Module &M) {
+  return OCARCC.init(M);
+}
+
+bool ObjCARCContractLegacyPass::runOnFunction(Function &F) {
+  auto *AA = &getAnalysis<AAResultsWrapperPass>().getAAResults();
+  auto *DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+  return OCARCC.run(F, AA, DT);
+}
+
+PreservedAnalyses ObjCARCContractPass::run(Function &F,
+                                           FunctionAnalysisManager &AM) {
+  ObjCARCContract OCAC;
+  OCAC.init(*F.getParent());
+
+  bool Changed = OCAC.run(F, &AM.getResult<AAManager>(F),
+                          &AM.getResult<DominatorTreeAnalysis>(F));
+  if (Changed) {
+    PreservedAnalyses PA;
+    PA.preserveSet<CFGAnalyses>();
+    return PA;
+  }
+  return PreservedAnalyses::all();
+}
+
+#endif

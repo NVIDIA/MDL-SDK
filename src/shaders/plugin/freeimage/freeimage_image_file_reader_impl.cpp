@@ -37,8 +37,16 @@
 
 #include <cassert>
 #include <cstring>
+
 #include <io/image/image/i_image_utilities.h>
 
+// #define DUMP_PIXEL_X 25
+// #define DUMP_PIXEL_Y 1
+
+#if defined(DUMP_PIXEL_X) && defined(DUMP_PIXEL_Y)
+#include <mi/math/color.h>
+#include <iostream>
+#endif
 
 namespace MI {
 
@@ -213,6 +221,13 @@ mi::neuraylib::ITile* Image_file_reader_impl::read( mi::Uint32 z, mi::Uint32 lev
     bool success = copy_from_bitmap_to_tile( m_bitmap, tile.get());
     if( !success)
         return nullptr;
+
+#if defined(DUMP_PIXEL_X) && defined(DUMP_PIXEL_Y)
+    mi::math::Color c;
+    tile->get_pixel( DUMP_PIXEL_X, DUMP_PIXEL_Y, &c.r);
+    std::cout << "FreeImage plugin reader: " 
+              << c.r << ' ' << c.g << ' ' << c.b << ' ' << c.a << std::endl;
+#endif
 
     tile->retain();
     return tile.get();

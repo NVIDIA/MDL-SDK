@@ -1,9 +1,8 @@
 //===- llvm/Analysis/MemoryDependenceAnalysis.h - Memory Deps ---*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -20,7 +19,6 @@
 #include "llvm/ADT/PointerIntPair.h"
 #include "llvm/ADT/PointerSumType.h"
 #include "llvm/ADT/SmallPtrSet.h"
-#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Metadata.h"
@@ -36,8 +34,8 @@
 
 namespace llvm {
 
+class AAResults;
 class AssumptionCache;
-class CallSite;
 class DominatorTree;
 class Function;
 class Instruction;
@@ -304,7 +302,7 @@ private:
     /// The maximum size of the dereferences of the pointer.
     ///
     /// May be UnknownSize if the sizes are unknown.
-    LocationSize Size = MemoryLocation::UnknownSize;
+    LocationSize Size = LocationSize::afterPointer();
     /// The AA tags associated with dereferences of the pointer.
     ///
     /// The members may be null if there are no tags or conflicting tags.
@@ -357,18 +355,21 @@ private:
   ReverseDepMapType ReverseNonLocalDeps;
 
   /// Current AA implementation, just a cache.
-  AliasAnalysis &AA;
+  AAResults &AA;
   AssumptionCache &AC;
   const TargetLibraryInfo &TLI;
   DominatorTree &DT;
   PhiValues &PV;
   PredIteratorCache PredCache;
 
+  unsigned DefaultBlockScanLimit;
+
 public:
-  MemoryDependenceResults(AliasAnalysis &AA, AssumptionCache &AC,
-                          const TargetLibraryInfo &TLI,
-                          DominatorTree &DT, PhiValues &PV)
-      : AA(AA), AC(AC), TLI(TLI), DT(DT), PV(PV) {}
+  MemoryDependenceResults(AAResults &AA, AssumptionCache &AC,
+                          const TargetLibraryInfo &TLI, DominatorTree &DT,
+                          PhiValues &PV, unsigned DefaultBlockScanLimit)
+      : AA(AA), AC(AC), TLI(TLI), DT(DT), PV(PV),
+        DefaultBlockScanLimit(DefaultBlockScanLimit) {}
 
   /// Handle invalidation in the new PM.
   bool invalidate(Function &F, const PreservedAnalyses &PA,
@@ -398,7 +399,7 @@ public:
   /// invalidated on the next non-local query or when an instruction is
   /// removed.  Clients must copy this data if they want it around longer than
   /// that.
-  const NonLocalDepInfo &getNonLocalCallDependency(CallSite QueryCS);
+  const NonLocalDepInfo &getNonLocalCallDependency(CallBase *QueryCall);
 
   /// Perform a full dependency query for an access to the QueryInst's
   /// specified memory location, returning the set of instructions that either
@@ -451,12 +452,10 @@ public:
                                         Instruction *QueryInst = nullptr,
                                         unsigned *Limit = nullptr);
 
-  MemDepResult getSimplePointerDependencyFrom(const MemoryLocation &MemLoc,
-                                              bool isLoad,
-                                              BasicBlock::iterator ScanIt,
-                                              BasicBlock *BB,
-                                              Instruction *QueryInst,
-                                              unsigned *Limit = nullptr);
+  MemDepResult
+  getSimplePointerDependencyFrom(const MemoryLocation &MemLoc, bool isLoad,
+                                 BasicBlock::iterator ScanIt, BasicBlock *BB,
+                                 Instruction *QueryInst, unsigned *Limit);
 
   /// This analysis looks for other loads and stores with invariant.group
   /// metadata and the same pointer operand. Returns Unknown if it does not
@@ -466,32 +465,21 @@ public:
   /// with the same queried instruction.
   MemDepResult getInvariantGroupPointerDependency(LoadInst *LI, BasicBlock *BB);
 
-  /// Looks at a memory location for a load (specified by MemLocBase, Offs, and
-  /// Size) and compares it against a load.
-  ///
-  /// If the specified load could be safely widened to a larger integer load
-  /// that is 1) still efficient, 2) safe for the target, and 3) would provide
-  /// the specified memory location value, then this function returns the size
-  /// in bytes of the load width to use.  If not, this returns zero.
-  static unsigned getLoadLoadClobberFullWidthSize(const Value *MemLocBase,
-                                                  int64_t MemLocOffs,
-                                                  unsigned MemLocSize,
-                                                  const LoadInst *LI);
-
   /// Release memory in caches.
   void releaseMemory();
 
 private:
-  MemDepResult getCallSiteDependencyFrom(CallSite C, bool isReadOnlyCall,
-                                         BasicBlock::iterator ScanIt,
-                                         BasicBlock *BB);
+  MemDepResult getCallDependencyFrom(CallBase *Call, bool isReadOnlyCall,
+                                     BasicBlock::iterator ScanIt,
+                                     BasicBlock *BB);
   bool getNonLocalPointerDepFromBB(Instruction *QueryInst,
                                    const PHITransAddr &Pointer,
                                    const MemoryLocation &Loc, bool isLoad,
                                    BasicBlock *BB,
                                    SmallVectorImpl<NonLocalDepResult> &Result,
                                    DenseMap<BasicBlock *, Value *> &Visited,
-                                   bool SkipFirstBlock = false);
+                                   bool SkipFirstBlock = false,
+                                   bool IsIncomplete = false);
   MemDepResult GetNonLocalInfoForBlock(Instruction *QueryInst,
                                        const MemoryLocation &Loc, bool isLoad,
                                        BasicBlock *BB, NonLocalDepInfo *Cache,
@@ -512,8 +500,13 @@ class MemoryDependenceAnalysis
 
   static AnalysisKey Key;
 
+  unsigned DefaultBlockScanLimit;
+
 public:
   using Result = MemoryDependenceResults;
+
+  MemoryDependenceAnalysis();
+  MemoryDependenceAnalysis(unsigned DefaultBlockScanLimit) : DefaultBlockScanLimit(DefaultBlockScanLimit) { }
 
   MemoryDependenceResults run(Function &F, FunctionAnalysisManager &AM);
 };

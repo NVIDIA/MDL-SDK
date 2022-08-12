@@ -1,9 +1,8 @@
 //===----- PostRAHazardRecognizer.cpp - hazard recognizer -----------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -33,6 +32,7 @@
 #include "llvm/CodeGen/ScheduleHazardRecognizer.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
@@ -82,11 +82,9 @@ bool PostRAHazardRecognizer::runOnMachineFunction(MachineFunction &Fn) {
     for (MachineInstr &MI : MBB) {
       // If we need to emit noops prior to this instruction, then do so.
       unsigned NumPreNoops = HazardRec->PreEmitNoops(&MI);
-      for (unsigned i = 0; i != NumPreNoops; ++i) {
-        HazardRec->EmitNoop();
-        TII->insertNoop(MBB, MachineBasicBlock::iterator(MI));
-        ++NumNoops;
-      }
+      HazardRec->EmitNoops(NumPreNoops);
+      TII->insertNoops(MBB, MachineBasicBlock::iterator(MI), NumPreNoops);
+      NumNoops += NumPreNoops;
 
       HazardRec->EmitInstruction(&MI);
       if (HazardRec->atIssueLimit()) {

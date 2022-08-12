@@ -1,5 +1,4 @@
 set(LLVM_LINK_COMPONENTS
-  ${LLVM_TARGETS_TO_BUILD}
   DebugInfoDWARF
   Object
   Support
@@ -14,6 +13,7 @@ add_llvm_tool(llvm-xray
   xray-color-helper.cpp
   xray-converter.cpp
   xray-extract.cpp
+  xray-fdr-dump.cpp
   xray-graph-diff.cpp
   xray-graph.cpp
   xray-registry.cpp

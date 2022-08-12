@@ -1,9 +1,8 @@
 //===-- AArch64ELFObjectWriter.cpp - AArch64 ELF Writer -------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -44,7 +43,7 @@ protected:
 } // end anonymous namespace
 
 AArch64ELFObjectWriter::AArch64ELFObjectWriter(uint8_t OSABI, bool IsILP32)
-    : MCELFObjectTargetWriter(/*Is64Bit*/ true, OSABI, ELF::EM_AARCH64,
+    : MCELFObjectTargetWriter(/*Is64Bit*/ !IsILP32, OSABI, ELF::EM_AARCH64,
                               /*HasRelocationAddend*/ true),
       IsILP32(IsILP32) {}
 
@@ -58,7 +57,7 @@ AArch64ELFObjectWriter::AArch64ELFObjectWriter(uint8_t OSABI, bool IsILP32)
 static bool isNonILP32reloc(const MCFixup &Fixup,
                             AArch64MCExpr::VariantKind RefKind,
                             MCContext &Ctx) {
-  if ((unsigned)Fixup.getKind() != AArch64::fixup_aarch64_movw)
+  if (Fixup.getTargetKind() != AArch64::fixup_aarch64_movw)
     return false;
   switch (RefKind) {
   case AArch64MCExpr::VK_ABS_G3:
@@ -107,13 +106,17 @@ unsigned AArch64ELFObjectWriter::getRelocType(MCContext &Ctx,
                                               const MCValue &Target,
                                               const MCFixup &Fixup,
                                               bool IsPCRel) const {
+  unsigned Kind = Fixup.getTargetKind();
+  if (Kind >= FirstLiteralRelocationKind)
+    return Kind - FirstLiteralRelocationKind;
   AArch64MCExpr::VariantKind RefKind =
       static_cast<AArch64MCExpr::VariantKind>(Target.getRefKind());
   AArch64MCExpr::VariantKind SymLoc = AArch64MCExpr::getSymbolLoc(RefKind);
   bool IsNC = AArch64MCExpr::isNotChecked(RefKind);
 
   assert((!Target.getSymA() ||
-          Target.getSymA()->getKind() == MCSymbolRefExpr::VK_None) &&
+          Target.getSymA()->getKind() == MCSymbolRefExpr::VK_None ||
+          Target.getSymA()->getKind() == MCSymbolRefExpr::VK_PLT) &&
          "Should only be expression-level modifiers here");
 
   assert((!Target.getSymB() ||
@@ -121,14 +124,17 @@ unsigned AArch64ELFObjectWriter::getRelocType(MCContext &Ctx,
          "Should only be expression-level modifiers here");
 
   if (IsPCRel) {
-    switch ((unsigned)Fixup.getKind()) {
+    switch (Kind) {
     case FK_Data_1:
       Ctx.reportError(Fixup.getLoc(), "1-byte data relocations not supported");
       return ELF::R_AARCH64_NONE;
     case FK_Data_2:
       return R_CLS(PREL16);
-    case FK_Data_4:
-      return R_CLS(PREL32);
+    case FK_Data_4: {
+      return Target.getAccessVariant() == MCSymbolRefExpr::VK_PLT
+                 ? R_CLS(PLT32)
+                 : R_CLS(PREL32);
+    }
     case FK_Data_8:
       if (IsILP32) {
         Ctx.reportError(Fixup.getLoc(),
@@ -138,7 +144,9 @@ unsigned AArch64ELFObjectWriter::getRelocType(MCContext &Ctx,
       } else
         return ELF::R_AARCH64_PREL64;
     case AArch64::fixup_aarch64_pcrel_adr_imm21:
-      assert(SymLoc == AArch64MCExpr::VK_NONE && "unexpected ADR relocation");
+      if (SymLoc != AArch64MCExpr::VK_ABS)
+        Ctx.reportError(Fixup.getLoc(),
+                        "invalid symbol kind for ADR relocation");
       return R_CLS(ADR_PREL_LO21);
     case AArch64::fixup_aarch64_pcrel_adrp_imm21:
       if (SymLoc == AArch64MCExpr::VK_ABS && !IsNC)
@@ -169,6 +177,8 @@ unsigned AArch64ELFObjectWriter::getRelocType(MCContext &Ctx,
     case AArch64::fixup_aarch64_ldr_pcrel_imm19:
       if (SymLoc == AArch64MCExpr::VK_GOTTPREL)
         return R_CLS(TLSIE_LD_GOTTPREL_PREL19);
+      if (SymLoc == AArch64MCExpr::VK_GOT)
+        return R_CLS(GOT_LD_PREL19);
       return R_CLS(LD_PREL_LO19);
     case AArch64::fixup_aarch64_pcrel_branch14:
       return R_CLS(TSTBR14);
@@ -181,7 +191,7 @@ unsigned AArch64ELFObjectWriter::getRelocType(MCContext &Ctx,
   } else {
     if (IsILP32 && isNonILP32reloc(Fixup, RefKind, Ctx))
       return ELF::R_AARCH64_NONE;
-    switch ((unsigned)Fixup.getKind()) {
+    switch (Fixup.getTargetKind()) {
     case FK_Data_1:
       Ctx.reportError(Fixup.getLoc(), "1-byte data relocations not supported");
       return ELF::R_AARCH64_NONE;
@@ -312,7 +322,11 @@ unsigned AArch64ELFObjectWriter::getRelocType(MCContext &Ctx,
       if (SymLoc == AArch64MCExpr::VK_ABS && IsNC)
         return R_CLS(LDST64_ABS_LO12_NC);
       if (SymLoc == AArch64MCExpr::VK_GOT && IsNC) {
+        AArch64MCExpr::VariantKind AddressLoc =
+            AArch64MCExpr::getAddressFrag(RefKind);
         if (!IsILP32) {
+          if (AddressLoc == AArch64MCExpr::VK_LO15)
+            return ELF::R_AARCH64_LD64_GOTPAGE_LO15;
           return ELF::R_AARCH64_LD64_GOT_LO12_NC;
         } else {
           Ctx.reportError(Fixup.getLoc(), "ILP32 64-bit load/store "
@@ -389,6 +403,20 @@ unsigned AArch64ELFObjectWriter::getRelocType(MCContext &Ctx,
         return R_CLS(MOVW_SABS_G0);
       if (RefKind == AArch64MCExpr::VK_ABS_G0_NC)
         return R_CLS(MOVW_UABS_G0_NC);
+      if (RefKind == AArch64MCExpr::VK_PREL_G3)
+        return ELF::R_AARCH64_MOVW_PREL_G3;
+      if (RefKind == AArch64MCExpr::VK_PREL_G2)
+        return ELF::R_AARCH64_MOVW_PREL_G2;
+      if (RefKind == AArch64MCExpr::VK_PREL_G2_NC)
+        return ELF::R_AARCH64_MOVW_PREL_G2_NC;
+      if (RefKind == AArch64MCExpr::VK_PREL_G1)
+        return R_CLS(MOVW_PREL_G1);
+      if (RefKind == AArch64MCExpr::VK_PREL_G1_NC)
+        return ELF::R_AARCH64_MOVW_PREL_G1_NC;
+      if (RefKind == AArch64MCExpr::VK_PREL_G0)
+        return R_CLS(MOVW_PREL_G0);
+      if (RefKind == AArch64MCExpr::VK_PREL_G0_NC)
+        return R_CLS(MOVW_PREL_G0_NC);
       if (RefKind == AArch64MCExpr::VK_DTPREL_G2)
         return ELF::R_AARCH64_TLSLD_MOVW_DTPREL_G2;
       if (RefKind == AArch64MCExpr::VK_DTPREL_G1)
@@ -429,5 +457,5 @@ unsigned AArch64ELFObjectWriter::getRelocType(MCContext &Ctx,
 
 std::unique_ptr<MCObjectTargetWriter>
 llvm::createAArch64ELFObjectWriter(uint8_t OSABI, bool IsILP32) {
-  return llvm::make_unique<AArch64ELFObjectWriter>(OSABI, IsILP32);
+  return std::make_unique<AArch64ELFObjectWriter>(OSABI, IsILP32);
 }

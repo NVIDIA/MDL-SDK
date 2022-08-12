@@ -1,9 +1,8 @@
 //===-- AArch64MachObjectWriter.cpp - ARM Mach Object Writer --------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -38,8 +37,8 @@ class AArch64MachObjectWriter : public MCMachObjectTargetWriter {
                                   unsigned &Log2Size, const MCAssembler &Asm);
 
 public:
-  AArch64MachObjectWriter(uint32_t CPUType, uint32_t CPUSubtype)
-      : MCMachObjectTargetWriter(true /* is64Bit */, CPUType, CPUSubtype) {}
+  AArch64MachObjectWriter(uint32_t CPUType, uint32_t CPUSubtype, bool IsILP32)
+      : MCMachObjectTargetWriter(!IsILP32 /* is64Bit */, CPUType, CPUSubtype) {}
 
   void recordRelocation(MachObjectWriter *Writer, MCAssembler &Asm,
                         const MCAsmLayout &Layout, const MCFragment *Fragment,
@@ -55,7 +54,7 @@ bool AArch64MachObjectWriter::getAArch64FixupKindMachOInfo(
   RelocType = unsigned(MachO::ARM64_RELOC_UNSIGNED);
   Log2Size = ~0U;
 
-  switch ((unsigned)Fixup.getKind()) {
+  switch (Fixup.getTargetKind()) {
   default:
     return false;
 
@@ -140,7 +139,7 @@ static bool canUseLocalRelocation(const MCSectionMachO &Section,
     return false;
 
   if (RefSec.getSegmentName() == "__DATA" &&
-      RefSec.getSectionName() == "__objc_classrefs")
+      RefSec.getName() == "__objc_classrefs")
     return false;
 
   // FIXME: ld64 currently handles internal pointer-sized relocations
@@ -374,7 +373,11 @@ void AArch64MachObjectWriter::recordRelocation(
        Type == MachO::ARM64_RELOC_PAGE21 ||
        Type == MachO::ARM64_RELOC_PAGEOFF12) &&
       Value) {
-    assert((Value & 0xff000000) == 0 && "Added relocation out of range!");
+    if (!isInt<24>(Value)) {
+      Asm.getContext().reportError(Fixup.getLoc(),
+                                   "addend too big for relocation");
+      return;
+    }
 
     MachO::any_relocation_info MRE;
     MRE.r_word0 = FixupOffset;
@@ -405,6 +408,8 @@ void AArch64MachObjectWriter::recordRelocation(
 }
 
 std::unique_ptr<MCObjectTargetWriter>
-llvm::createAArch64MachObjectWriter(uint32_t CPUType, uint32_t CPUSubtype) {
-  return llvm::make_unique<AArch64MachObjectWriter>(CPUType, CPUSubtype);
+llvm::createAArch64MachObjectWriter(uint32_t CPUType, uint32_t CPUSubtype,
+                                    bool IsILP32) {
+  return std::make_unique<AArch64MachObjectWriter>(CPUType, CPUSubtype,
+                                                   IsILP32);
 }

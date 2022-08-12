@@ -1,9 +1,8 @@
 //===- StringTableBuilder.cpp - String table building utility -------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -34,11 +33,17 @@ void StringTableBuilder::initSize() {
   case DWARF:
     Size = 0;
     break;
+  case MachOLinked:
+  case MachO64Linked:
+    Size = 2;
+    break;
   case MachO:
+  case MachO64:
   case ELF:
     // Start the table with a NUL byte.
     Size = 1;
     break;
+  case XCOFF:
   case WinCOFF:
     // Make room to write the table size later.
     Size = 4;
@@ -68,9 +73,12 @@ void StringTableBuilder::write(uint8_t *Buf) const {
     if (!Data.empty())
       memcpy(Buf + P.second, Data.data(), Data.size());
   }
-  if (K != WinCOFF)
-    return;
-  support::endian::write32le(Buf, Size);
+  // The COFF formats store the size of the string table in the first 4 bytes.
+  // For Windows, the format is little-endian; for AIX, it is big-endian.
+  if (K == WinCOFF)
+    support::endian::write32le(Buf, Size);
+  else if (K == XCOFF)
+    support::endian::write32be(Buf, Size);
 }
 
 // Returns the character at Pos from end of a string.
@@ -158,8 +166,23 @@ void StringTableBuilder::finalizeStringTable(bool Optimize) {
     }
   }
 
-  if (K == MachO)
+  if (K == MachO || K == MachOLinked)
     Size = alignTo(Size, 4); // Pad to multiple of 4.
+  if (K == MachO64 || K == MachO64Linked)
+    Size = alignTo(Size, 8); // Pad to multiple of 8.
+
+  // According to ld64 the string table of a final linked Mach-O binary starts
+  // with " ", i.e. the first byte is ' ' and the second byte is zero. In
+  // 'initSize()' we reserved the first two bytes for holding this string.
+  if (K == MachOLinked || K == MachO64Linked)
+    StringIndexMap[CachedHashStringRef(" ")] = 0;
+
+  // The first byte in an ELF string table must be null, according to the ELF
+  // specification. In 'initSize()' we reserved the first byte to hold null for
+  // this purpose and here we actually add the string to allow 'getOffset()' to
+  // be called on an empty string.
+  if (K == ELF)
+    StringIndexMap[CachedHashStringRef("")] = 0;
 }
 
 void StringTableBuilder::clear() {

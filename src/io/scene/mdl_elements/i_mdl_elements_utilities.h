@@ -49,6 +49,7 @@
 #include <mi/mdl/mdl_mdl.h>
 #include <mi/mdl/mdl_messages.h>
 #include <mi/mdl/mdl_modules.h>
+#include <mi/mdl/mdl_streams.h>
 #include <mi/neuraylib/typedefs.h>
 #include <mi/neuraylib/ifunction_definition.h>
 #include <mi/neuraylib/imdl_loading_wait_handle.h>
@@ -792,17 +793,17 @@ mi::mdl::IThread_context* create_thread_context( Execution_context* context);
 /// subset, the relevant ones, are copied by this method.)
 Execution_context* create_execution_context( mi::mdl::IThread_context* ctx);
 
-/// Adds an error message to the given execution context
-/// \param context  the execution context.
-/// \param message  the message string.
-/// \param result   an error code which will be set as the current context result.
-mi::Sint32 add_context_error(
-    MDL::Execution_context* context,
-    const std::string& message,
-    mi::Sint32 result);
 
+// **********  Readers, writers & streams **********************************************************
 
-// **********  Readers & streams *******************************************************************
+/// An mi::mdl::IOutput_stream with the extra functionality to check for errors.
+class IOutput_stream : public mi::base::Interface_declare<
+    0xb3f136fb,0xba77,0x4ec6,0x9e,0xe6,0x95,0x18,0xdf,0x4a,0xb2,0x6d, mi::mdl::IOutput_stream>
+{
+public:
+    /// Indicates whether the stream is in an error state.
+    virtual bool has_error() const = 0;
+};
 
 /// Wraps an MDL input stream as IReader.
 mi::neuraylib::IReader* get_reader( mi::mdl::IInput_stream* stream);
@@ -814,6 +815,9 @@ mi::neuraylib::IReader* get_reader( mi::mdl::IMDL_resource_reader* resource_read
 mi::mdl::IInput_stream* get_input_stream(
     mi::neuraylib::IReader* reader, const std::string& filename);
 
+/// Wraps an IWriter as MDL output stream.
+MDL::IOutput_stream* get_output_stream( mi::neuraylib::IWriter* writer);
+
 /// Wraps an IReader as MDL MDLE input stream.
 mi::mdl::IMdle_input_stream* get_mdle_input_stream(
     mi::neuraylib::IReader* reader, const std::string& filename);
@@ -824,7 +828,6 @@ mi::mdl::IMDL_resource_reader* get_resource_reader(
     const std::string& file_path,
     const std::string& filename,
     const mi::base::Uuid& hash);
-
 
 /// Returns a reader to a resource from an MDL archive or MDLE file.
 mi::neuraylib::IReader* get_container_resource_reader(
@@ -843,7 +846,7 @@ IMAGE::IMdl_container_callback* create_mdl_container_callback();
 /// \param tex_tag            A texture tag.
 /// \param[out] valid         The result of texture_isvalid().
 /// \param[out] first_frame   The first frame of of the texture.
-/// \param[out] first_frame   The last frame of of the texture.
+/// \param[out] last_frame    The last frame of of the texture.
 void get_texture_attributes(
     DB::Transaction* transaction,
     DB::Tag tex_tag,
@@ -863,7 +866,7 @@ void get_texture_attributes(
 /// \param[out] height        The height of the texture.
 /// \param[out] depth         The depth of the texture.
 /// \param[out] first_frame   The first frame of of the texture.
-/// \param[out] first_frame   The last frame of of the texture.
+/// \param[out] last_frame    The last frame of of the texture.
 void get_texture_attributes(
     DB::Transaction* transaction,
     DB::Tag tex_tag,
@@ -1010,7 +1013,6 @@ private:
     /// \return      The clone of \p node.
     const mi::mdl::DAG_node* clone_dag_node( const mi::mdl::DAG_node* node);
 
-private:
     /// Shared between #int_expr_call_to_mdl_dag_node() and
     /// #int_expr_direct_call_to_mdl_dag_node().
     ///
@@ -1078,7 +1080,6 @@ public:
 private:
     DB::Tag get_module_tag(const char* entity_name) const;
 
-private:
     DB::Transaction* m_transaction;
 
     using Module_set = std::set<const mi::mdl::IModule*>;
@@ -1428,34 +1429,12 @@ private:
 
 // ********** Call_evaluator ***********************************************************************
 
-/// Helper mixin that adds access to the tag of a resource value using an owner.
-template<typename T, typename I>
-class Call_evaluator_base : public I
-{
-public:
-    /// Constructor.
-    ///
-    /// \param owner  the owner of a resource
-    Call_evaluator_base(T const *owner)
-    : m_owner(owner)
-    {}
-
-    /// Get the resource tag for a given resource owned by the owner.
-    DB::Tag get_resource_tag(mi::mdl::IValue_resource const *r) const {
-        return DB::Tag(this->m_owner->get_resource_tag(r));
-    }
-
-private:
-    T const *m_owner;
-};
-
 /// Evaluates calls during material compilation.
 ///
 /// Used to fold resource-related calls into constants.
 template<typename T>
-class Call_evaluator : public Call_evaluator_base<T, mi::mdl::ICall_evaluator>
+class Call_evaluator : public mi::mdl::ICall_evaluator
 {
-    typedef Call_evaluator_base<T, mi::mdl::ICall_evaluator> Base;
 public:
     /// Constructor.
     ///
@@ -1463,12 +1442,12 @@ public:
     /// \param transaction              the current transaction
     /// \param has_resource_attributes  true, if resource attributes can be folded
     Call_evaluator(
-        T const *owner,
+        const T* owner,
         DB::Transaction* transaction,
         bool has_resource_attributes)
-    : Base(owner)
-    , m_transaction(transaction)
-    , m_has_resource_attributes(has_resource_attributes)
+      : m_owner( owner),
+        m_transaction( transaction),
+        m_has_resource_attributes( has_resource_attributes)
     {}
 
     /// Destructor.
@@ -1577,7 +1556,7 @@ private:
         const mi::mdl::IValue* tex,
         const mi::mdl::IValue* offset) const;
 
-private:
+    const T* m_owner;
     DB::Transaction* m_transaction;
     bool m_has_resource_attributes;
 };
@@ -1635,7 +1614,7 @@ bool convert_hash( const mi::base::Uuid& hash_in, unsigned char hash_out[16]);
 /// \param s       String containing a valid frame and/or uv-tile marker.
 /// \param f       The frame number of the uv-tile.
 /// \param u       The u coordinate of the uv-tile.
-/// \param u       The v coordinate of the uv-tile.
+/// \param v       The v coordinate of the uv-tile.
 /// \return        String with the frame and/or uv-tile marker replaced by the coordinates of the
 ///                uv-tile, or the empty string in case of errors.
 std::string frame_uvtile_marker_to_string( std::string s, mi::Size f, mi::Sint32 u, mi::Sint32 v);

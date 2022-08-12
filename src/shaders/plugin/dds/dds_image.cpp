@@ -297,7 +297,7 @@ bool Image::load_header_dx10(
 
 
     std::string message = "Unsupported DDS subformat "
-        + get_dxgi_format_string( header_dx10.m_dxgi_format) + ".";
+        + get_dxgi_format_string( header_dx10.m_dxgi_format) + '.';
     log( mi::base::MESSAGE_SEVERITY_ERROR, message.c_str());
     return false;
 
@@ -342,7 +342,7 @@ bool Image::load( mi::neuraylib::IReader* reader)
                 size /= 2;
 
             std::vector<mi::Uint8> buffer( size);
-            mi::Sint64 bytes_read = reader->read( reinterpret_cast<char*>( &buffer[0]), size);
+            mi::Sint64 bytes_read = reader->read( reinterpret_cast<char*>( buffer.data()), size);
             if( bytes_read != size) {
                 clear();
                 return false;
@@ -352,7 +352,7 @@ bool Image::load( mi::neuraylib::IReader* reader)
                 expand_half( buffer);
 
             // Create miplevel
-            Surface surface( width, height, depth, buffer.size(), &buffer[0]);
+            Surface surface( width, height, depth, buffer.size(), buffer.data());
             flip_surface( surface);
 
             m_texture.add_surface( surface);
@@ -395,7 +395,7 @@ bool Image::load( mi::neuraylib::IReader* reader)
                     size /= 2;
 
                 std::vector<mi::Uint8> buffer( size);
-                mi::Sint64 bytes_read = reader->read( reinterpret_cast<char*>( &buffer[0]), size);
+                mi::Sint64 bytes_read = reader->read( reinterpret_cast<char*>( buffer.data()), size);
                 if( bytes_read != size) {
                     clear();
                     return false;
@@ -409,7 +409,7 @@ bool Image::load( mi::neuraylib::IReader* reader)
                 // Copy miplevel of this face into corresponding miplevel layer
                 Surface& surface = m_texture.get_surface( s);
                 mi::Uint8* pixels = surface.get_pixels() + face * size;
-                memcpy( pixels, &buffer[0], size);
+                memcpy( pixels, buffer.data(), size);
 
                 width  = std::max( width  >> 1, 1u);
                 height = std::max( height >> 1, 1u);
@@ -801,19 +801,17 @@ void Image::reorder_rgb_or_rgba( Header& header)
 
 void Image::swap( void* addr1, void* addr2, mi::Uint32 size)
 {
-    mi::Uint8* tmp = new mi::Uint8[size];
-    memcpy( tmp, addr1, size);
+    std::vector<mi::Uint8> tmp((mi::Uint8*)addr1, (mi::Uint8*)addr1+size);
     memcpy( addr1, addr2, size);
-    memcpy( addr2, tmp, size);
-    delete [] tmp;
+    memcpy( addr2, tmp.data(), size);
 }
 
 void Image::expand_half( std::vector<mi::Uint8>& buffer)
 {
     mi::Size n = buffer.size() / 2;
     buffer.resize( buffer.size() * 2);
-    const unsigned short* hp = reinterpret_cast<const unsigned short*>( &buffer[0]);
-    float* fp = reinterpret_cast<float*>( &buffer[0]);
+    const unsigned short* hp = reinterpret_cast<const unsigned short*>( buffer.data());
+    float* fp = reinterpret_cast<float*>( buffer.data());
     for( mi::Size i = 0; i < n; ++i)
         fp[n-1-i] = half_to_float( hp[n-1-i] );
 }

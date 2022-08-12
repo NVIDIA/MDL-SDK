@@ -197,7 +197,7 @@ on the underlying interface pointer. The destructor calls \c release()
 on the interface pointer, copy constructor and assignment operator
 take care of retaining and releasing the interface pointer as
 necessary. Note that it is also possible to use other handle class
-implementations, e.g., \c std::tr1::shared_ptr<T> (or \c
+implementations, e.g., \c std::shared_ptr<T> (or \c
 boost::shared_ptr<T>). See \ref mi_neuray_example_start_shutdown for
 details.
 		

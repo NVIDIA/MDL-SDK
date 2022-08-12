@@ -129,7 +129,7 @@ public:
     virtual const char* get_reference_name() const = 0;
 };
 
-/*@}*/ // end group mi_neuray_simple_types
+/**@}*/ // end group mi_neuray_simple_types
 
 } // namespace mi
 

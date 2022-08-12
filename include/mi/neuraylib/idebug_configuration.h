@@ -64,7 +64,7 @@ public:
     virtual const IString* get_option( const char* key) const = 0;
 };
 
-/*@}*/ // end group mi_neuray_configuration
+/**@}*/ // end group mi_neuray_configuration
 
 } // namespace neuraylib
 

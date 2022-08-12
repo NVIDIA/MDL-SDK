@@ -59,8 +59,8 @@ class IScope;
 /// then you have to serialize all transaction uses. This does not only apply to methods of
 /// #mi::neuraylib::ITransaction, but all methods that implicitly use the transaction. For example,
 /// such a use can happen by methods of DB elements returned from #access() or #edit() calls, or by
-/// objects returned from factories taking the transaction as \ifnot DICE_API argument, like
-/// #mi::neuraylib::IMdl_factory::create_module_builder(). \else argument. \endif.
+/// objects returned from factories taking the transaction as an \ifnot DICE_API argument, like
+/// #mi::neuraylib::IMdl_factory::create_module_builder(). \else argument. \endif
 ///
 /// \par Concurrent accesses to database elements within a transaction
 /// Access to database elements is provided by #access() (read-only) and #edit() (for modification).
@@ -158,8 +158,8 @@ public:
     ///                     #mi::neuraylib::IImage. \if IRAY_API Names of user-defined classes are
     ///                     also valid arguments. \endif Note that you can not create instances of
     ///                     #mi::neuraylib::IAttribute_set or #mi::neuraylib::IScene_element, only
-    ///                     instances of the derived interfaces \if IRAY_API (see also
-    ///                     #mi::neuraylib::IAttribute_container) \endif .
+    ///                     instances of the derived interfaces. \if IRAY_API (See also
+    ///                     #mi::neuraylib::IAttribute_container). \endif
     /// \param argc         The number of elements in \p argv. Passed to the constructor of factory
     ///                     of the object to create.
     /// \param argv         The array of arguments passed to the constructor. Passed to the
@@ -211,8 +211,8 @@ public:
     ///                     #mi::neuraylib::IImage. \if IRAY_API Names of user-defined classes are
     ///                     also valid arguments. \endif Note that you can not create instances of
     ///                     #mi::neuraylib::IAttribute_set or #mi::neuraylib::IScene_element, only
-    ///                     instances of the derived interfaces \if IRAY_API (see also
-    ///                     #mi::neuraylib::IAttribute_container) \endif .
+    ///                     instances of the derived interfaces. \if IRAY_API (See also
+    ///                     #mi::neuraylib::IAttribute_container). \endif
     /// \param argc         The number of elements in \p argv. Passed to the constructor of factory
     ///                     of the object to create.
     /// \param argv         The array of arguments passed to the constructor. Passed to the
@@ -301,7 +301,7 @@ public:
     /// \param db_element The #mi::base::IInterface to store.
     /// \param name       The name under which to store \p db_element. If there exists already a DB
     ///                   element with that name then it will be overwritten \if IRAY_API (but see
-    ///                   also return code -9 below) \endif .
+    ///                   also return code -9 below) \endif
     /// \param privacy    The privacy level under which to store \p db_element (in the range from 0
     ///                   to the privacy level of the scope of this transaction). In addition, the
     ///                   constant #LOCAL_SCOPE can be used as a shortcut to indicate the privacy
@@ -323,12 +323,9 @@ public:
     ///
     ///        - -9: There is already an element of name \p name and overwriting elements of that
     ///              type is not supported. This applies to elements of type
-    ///              #mi::neuraylib::IModule, #mi::neuraylib::IMaterial_definition, and
-    ///              #mi::neuraylib::IFunction_definition.
-    ///              It also applies to elements of type #mi::neuraylib::IFunction_call
-    ///              and #mi::neuraylib::IMaterial_instance that are used as defaults
-    ///              in an #mi::neuraylib::IMaterial_definition or
-    ///              #mi::neuraylib::IFunction_definition.
+    ///              #mi::neuraylib::IModule and #mi::neuraylib::IFunction_definition. It also
+    ///              applies to elements of type #mi::neuraylib::IFunction_call that are used as
+    ///              defaults in an #mi::neuraylib::IFunction_definition.
     virtual Sint32 store(
         base::IInterface* db_element, const char* name, Uint8 privacy = LOCAL_SCOPE) = 0;
 
@@ -414,8 +411,8 @@ public:
 
     /// Creates a copy of a database element.
     ///
-    /// Note that DB elements of type #mi::neuraylib::IModule, #mi::neuraylib::IMaterial_definition,
-    /// and #mi::neuraylib::IFunction_definition can not be copied.
+    /// Note that DB elements of type #mi::neuraylib::IModule and
+    /// #mi::neuraylib::IFunction_definition can not be copied.
     ///
     /// \param source    The name of the element to be copied.
     /// \param target    The desired name of the copy.
@@ -433,12 +430,9 @@ public:
     ///                  - -6: DB elements of this type cannot be copied.
     ///                  - -9: There is already an element of name \p name and overwriting elements
     ///                        of that type is not supported. This applies to elements of type
-    ///                        #mi::neuraylib::IModule, #mi::neuraylib::IMaterial_definition, and
-    ///                        #mi::neuraylib::IFunction_definition.
+    ///                        #mi::neuraylib::IModule and #mi::neuraylib::IFunction_definition.
     ///                        It also applies to elements of type #mi::neuraylib::IFunction_call
-    ///                        and #mi::neuraylib::IMaterial_instance that are used as defaults
-    ///                        in an #mi::neuraylib::IMaterial_definition or
-    ///                        #mi::neuraylib::IFunction_definition.
+    ///                        that are used as defaults in an #mi::neuraylib::IFunction_definition.
     virtual Sint32 copy( const char* source, const char* target, Uint8 privacy = 0) = 0;
 
     /// Removes the element with the name \p name from the database.
@@ -589,7 +583,7 @@ public:
     virtual Sint32 get_privacy_level( const char* name) const = 0;
 };
 
-/*@}*/ // end group mi_neuray_database_access
+/**@}*/ // end group mi_neuray_database_access
 
 } // namespace neuraylib
 

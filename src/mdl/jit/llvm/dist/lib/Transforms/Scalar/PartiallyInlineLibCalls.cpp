@@ -1,9 +1,8 @@
 //===--- PartiallyInlineLibCalls.cpp - Partially inline libcalls ----------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -17,6 +16,8 @@
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/InitializePasses.h"
+#include "llvm/Support/DebugCounter.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
@@ -24,6 +25,8 @@ using namespace llvm;
 
 #define DEBUG_TYPE "partially-inline-libcalls"
 
+DEBUG_COUNTER(PILCounter, "partially-inline-libcalls-transform",
+              "Controls transformations in partially-inline-libcalls");
 
 static bool optimizeSQRT(CallInst *Call, Function *CalledFunc,
                          BasicBlock &CurrBB, Function::iterator &BB,
@@ -31,6 +34,9 @@ static bool optimizeSQRT(CallInst *Call, Function *CalledFunc,
   // There is no need to change the IR, since backend will emit sqrt
   // instruction if the call has already been marked read-only.
   if (Call->onlyReadsMemory())
+    return false;
+
+  if (!DebugCounter::shouldExecute(PILCounter))
     return false;
 
   // Do the following transformation:
@@ -156,7 +162,7 @@ public:
       return false;
 
     TargetLibraryInfo *TLI =
-        &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
+        &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI(F);
     const TargetTransformInfo *TTI =
         &getAnalysis<TargetTransformInfoWrapperPass>().getTTI(F);
     return runPartiallyInlineLibCalls(F, TLI, TTI);

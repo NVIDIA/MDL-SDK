@@ -1,9 +1,8 @@
 //===-- llvm/Support/ManagedStatic.h - Static Global wrapper ----*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -49,17 +48,18 @@ template <typename T, size_t N> struct object_deleter<T[N]> {
 /// ManagedStaticBase - Common base class for ManagedStatic instances.
 class ManagedStaticBase {
 protected:
-  // This should only be used as a static variable, which guarantees that this
-  // will be zero initialized.
 #ifdef LLVM_USE_CONSTEXPR_CTOR
-  mutable std::atomic<void *> Ptr{nullptr};
-  mutable void (*DeleterFn)(void*) = nullptr;
+  mutable std::atomic<void *> Ptr{};
+  mutable void (*DeleterFn)(void *) = nullptr;
   mutable const ManagedStaticBase *Next = nullptr;
 #else
-    mutable std::atomic<void *> Ptr;
-    mutable void(*DeleterFn)(void*);
-    mutable const ManagedStaticBase *Next;
+  // This should only be used as a static variable, which guarantees that this
+  // will be zero initialized.
+  mutable std::atomic<void *> Ptr;
+  mutable void (*DeleterFn)(void *);
+  mutable const ManagedStaticBase *Next;
 #endif
+
   void RegisterManagedStatic(void *(*creator)(), void (*deleter)(void*)) const;
 
 public:
@@ -102,6 +102,12 @@ public:
   }
 
   const C *operator->() const { return &**this; }
+
+  // Extract the instance, leaving the ManagedStatic uninitialized. The
+  // user is then responsible for the lifetime of the returned instance.
+  C *claim() {
+    return static_cast<C *>(Ptr.exchange(nullptr));
+  }
 };
 
 /// llvm_shutdown - Deallocate and destroy all ManagedStatic variables.

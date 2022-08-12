@@ -1,9 +1,8 @@
 //===- InfoStreamBuilder.cpp - PDB Info Stream Creation ---------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -32,15 +31,20 @@ InfoStreamBuilder::InfoStreamBuilder(msf::MSFBuilder &Msf,
 
 void InfoStreamBuilder::setVersion(PdbRaw_ImplVer V) { Ver = V; }
 
+void InfoStreamBuilder::addFeature(PdbRaw_FeatureSig Sig) {
+  Features.push_back(Sig);
+}
+
+void InfoStreamBuilder::setHashPDBContentsToGUID(bool B) {
+  HashPDBContentsToGUID = B;
+}
+
 void InfoStreamBuilder::setAge(uint32_t A) { Age = A; }
 
 void InfoStreamBuilder::setSignature(uint32_t S) { Signature = S; }
 
 void InfoStreamBuilder::setGuid(GUID G) { Guid = G; }
 
-void InfoStreamBuilder::addFeature(PdbRaw_FeatureSig Sig) {
-  Features.push_back(Sig);
-}
 
 Error InfoStreamBuilder::finalizeMsfLayout() {
   uint32_t Length = sizeof(InfoStreamHeader) +

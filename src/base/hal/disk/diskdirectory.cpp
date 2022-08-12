@@ -418,7 +418,7 @@ bool Directory::exists(
     if (!path || *path == '\0')  return false;
 
     std::string newpath(path);
-    char *new_path = &newpath[0];
+    char *new_path = newpath.data();
 
     // let's strip off any trailing *'s, forward- or back-slashes
     size_t len = strlen(new_path);

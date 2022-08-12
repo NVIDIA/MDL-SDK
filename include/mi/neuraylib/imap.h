@@ -95,7 +95,7 @@ public:
     virtual Sint32 erase( const char* key) = 0;
 };
 
-/*@}*/ // end group mi_neuray_collections
+/**@}*/ // end group mi_neuray_collections
 
 } // namespace mi
 

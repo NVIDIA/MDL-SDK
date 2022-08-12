@@ -5253,7 +5253,7 @@ export float3 blend_normals(
 //
 
 // utility, describing the how the lookup works
-float volume_lookup_float(
+float3 volume_lookup_float3(
     uniform texture_3d vol,
     uniform float4x4 transform,
     uniform bool density_relative_to_size)
@@ -5265,7 +5265,7 @@ float volume_lookup_float(
     float4 uvw4 = transform * float4(position.x, position.y, position.z, 1.0f);
     float3 uvw = float3(uvw4.x, uvw4.y, uvw4.z);
 
-    float density = tex::lookup_float(vol, uvw, tex::wrap_clip);
+    float3 density = tex::lookup_float3(vol, uvw, tex::wrap_clip);
 
     // we offer two modes:
     // - volume density doesn't change with scaling (cloud gets optically thicker if scaled up)
@@ -5284,19 +5284,31 @@ export struct volume_coefficients {
 
 // from scalar density (typically between 0 and 1) used as multiplier for uniform color coefficients
 export volume_coefficients lookup_volume_coefficients(
-    uniform texture_3d density,
-    uniform color scattering_multiplier,
-    uniform color absorption_multiplier,
-    uniform color scattering_offset = float3(0.0f),
-    uniform color absorption_offset = float3(0.0f),
-    uniform float4x4 transform = float4x4(1.0f),
-    uniform float density_multiplier = 1.0f,
-    uniform bool density_relative_to_size = false)
+    uniform texture_3d density
+        [[ anno::description("The input 3D texture") ]],
+    uniform color scattering_multiplier
+        [[ anno::description("Multiplier applied to the scattering coefficient") ]],
+    uniform color absorption_multiplier
+        [[ anno::description("Multiplier applied to the absorption coefficient") ]],
+    uniform color scattering_offset = float3(0.0f)
+        [[ anno::description("Offset applied to the scattering coefficient") ]],
+    uniform color absorption_offset = float3(0.0f)
+        [[ anno::description("Offset applied to the absorption coefficient") ]],
+    uniform float4x4 transform = float4x4(1.0f)
+        [[ anno::description("Transform applied when looking up the density value from the texture") ]],
+    uniform float density_multiplier = 1.0f
+        [[ anno::description("Scaling applied to the density value") ]],
+    uniform bool density_relative_to_size = false
+        [[ anno::description("If true, volume density changes with instance scale") ]]
+    )
 [[
-    anno::noinline()
+    anno::noinline(),
+    anno::description("Returns the volume coefficients from an inhomogeneous volume density texture.")
 ]]
 {
-    float density_val = volume_lookup_float(density, transform, density_relative_to_size) * density_multiplier;
+    color density_val = color(
+        volume_lookup_float3(density, transform, density_relative_to_size) * density_multiplier
+    );
 
     return volume_coefficients(
         scattering_coefficient: scattering_multiplier * density_val + scattering_offset * density_multiplier,
@@ -5323,4 +5335,42 @@ export color blackbody_emission(
 ]]
 {
     return math::blackbody(math::lerp(temperature1, temperature2, math::saturate(blend_value)));
+}
+
+
+export color volume_blackbody_emission(
+    uniform texture_3d temperature
+        [[ anno::description("Temperature field in arbitrary units") ]],
+    uniform texture_3d density = texture_3d()
+        [[ anno::description("Density of emissive particles") ]],
+    uniform float temperature_mult = 1.0f
+        [[ anno::description("Mulitplier to convert the temperature to Kelvin") ]],
+    uniform float temperature_offset = 0.0f
+        [[ anno::description("Offset to convert the temperature to Kelvin") ]],
+    uniform float scale = 1.0f
+        [[ anno::description("Scale final emission") ]],
+    uniform color tint = color(1,1,1)
+        [[ anno::description("Arbitrary color modification") ]]
+)
+[[
+    anno::description("Blackbody emission intensity for a field of heated particles."),
+    anno::noinline()
+]]
+{
+    float3 position = state::transform_point(state::coordinate_internal, state::coordinate_object, state::position());
+
+    float temp_sample = tex::lookup_float(temperature, position, tex::wrap_clip);
+    // Clamp to 500K, because the rational fit has a pole / is negaitve below.
+    // The luminance at this temperature is 0 anyways.
+    float t = math::max(500.0, temp_sample * temperature_mult + temperature_offset);
+    // Rational fit for blackbody luminance
+    float intensity_log = (1.0 + t*(-8.81488646e+02 + t*(-9.73116632e+04 + t*(1.29971736e+02 + t*4.83600971e-04))))
+                / (-3.83985730e-02 + t*(-4.60407613e+03 + t*(1.92388064e+02 + t*(4.00569612e+00 + t*1.14000081e-05))));
+    float intensity = math::exp(intensity_log) * scale / 1000.0f; // Fit is for um^-1 but need nm^-1 -> /1000
+
+    if(tex::texture_isvalid(density))
+        intensity *= tex::lookup_float(density, position, tex::wrap_clip);
+
+    intensity = math::max(0.0, intensity);
+    return math::blackbody(t) * intensity * tint;
 }

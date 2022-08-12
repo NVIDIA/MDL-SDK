@@ -104,6 +104,106 @@ mi::mdl::IType_name* create_return_type_name(
     return create_type_name( module, return_mdl_type);
 }
 
+/// Skips a potential cast expression by extracting and returning its argument (unless the
+/// parameter name is explicitly "cast").
+///
+/// Otherwise returns the original expression, \c NULL in case of errors.
+const IExpression* skip_cast(
+    DB::Transaction* transaction, const IExpression* expr, const std::string& param_name)
+{
+    if( !expr)
+        return nullptr;
+
+    mi::base::Handle<const IExpression_call> expr_call(
+        expr->get_interface<IExpression_call>());
+    if( !expr_call) {
+        expr->retain();
+        return expr;
+    }
+
+    DB::Tag tag = expr_call->get_call();
+    SERIAL::Class_id class_id = transaction->get_class_id( tag);
+    if( class_id != Mdl_function_call::id)
+        return nullptr;
+
+    DB::Access<Mdl_function_call> fcall( tag, transaction);
+    DB::Tag def_tag = fcall->get_function_definition( transaction);
+    if( !def_tag)
+        return nullptr;
+
+    DB::Access<Mdl_function_definition> fdef( def_tag, transaction);
+    if( fdef->get_semantic() != mi::neuraylib::IFunction_definition::DS_CAST) {
+        expr->retain();
+        return expr;
+    }
+
+    if( param_name == "cast") {
+        expr->retain();
+        return expr;
+    }
+
+    mi::base::Handle<const IExpression_list> args( fcall->get_arguments());
+    return args->get_expression( "cast");
+}
+
+/// Find the expression a path is pointing on.
+///
+/// \param transaction  the current transaction
+/// \param path         the path
+/// \param args         the material arguments
+const IExpression* find_path(
+    DB::Transaction* transaction, const std::string& path, const IExpression_list* args)
+{
+    size_t pos = path.find( '.');
+    std::string param( path.substr( 0, pos));
+
+    mi::base::Handle<const IExpression> expr( args->get_expression( param.c_str()));
+    if( !expr)
+        return nullptr;
+
+    for( ; pos != std::string::npos; ) {
+
+        size_t p = path.find( '.', pos + 1);
+        param = path.substr( pos + 1, p != std::string::npos ? p - pos - 1 : p);
+        pos = p;
+
+        expr = skip_cast( transaction, expr.get(), param);
+        if( !expr)
+            return nullptr;
+
+        IExpression::Kind kind = expr->get_kind();
+        if( kind == IExpression::EK_CALL) {
+
+            const mi::base::Handle<const IExpression_call> call(
+                expr->get_interface<IExpression_call>());
+
+            DB::Tag tag = call->get_call();
+            SERIAL::Class_id class_id = transaction->get_class_id( tag);
+            if( class_id != Mdl_function_call::id)
+                return nullptr;
+
+            DB::Access<Mdl_function_call> fcall( tag, transaction);
+            mi::base::Handle<const IExpression_list> args( fcall->get_arguments());
+            expr = args->get_expression( param.c_str());
+
+        } else if (kind == IExpression::EK_DIRECT_CALL) {
+
+            mi::base::Handle<const IExpression_direct_call> call(
+                expr->get_interface<IExpression_direct_call>());
+            mi::base::Handle<const IExpression_list> args( call->get_arguments());
+            expr = args->get_expression( param.c_str());
+
+        } else
+            return nullptr;
+
+        if( !expr)
+            return nullptr;
+    }
+
+    expr->retain();
+    return expr.get();
+}
+
 } // anonymous
 
 Mdl_module_builder::Mdl_module_builder(
@@ -614,7 +714,7 @@ mi::Sint32 Mdl_module_builder::add_function(
 
         mi::base::Handle<const IType> parameter_type( parameters->get_type( i));
         mi::mdl::IType_name* tn = ast_builder.create_type_name( parameter_type);
-        if( parameter_type->get_all_type_modifiers() & mi::mdl::IType::MK_UNIFORM)
+        if( parameter_type->get_all_type_modifiers() & IType::MK_UNIFORM)
             tn->set_qualifier( mi::mdl::FQ_UNIFORM);
         m_symbol_importer->collect_imports( tn);
 
@@ -775,7 +875,7 @@ mi::Sint32 Mdl_module_builder::add_annotation(
 
         mi::base::Handle<const IType> parameter_type( parameters->get_type( i));
         mi::mdl::IType_name* tn = ast_builder.create_type_name( parameter_type);
-        if( parameter_type->get_all_type_modifiers() & mi::mdl::IType::MK_UNIFORM)
+        if( parameter_type->get_all_type_modifiers() & IType::MK_UNIFORM)
             tn->set_qualifier( mi::mdl::FQ_UNIFORM);
         m_symbol_importer->collect_imports( tn);
 
@@ -1214,7 +1314,7 @@ mi::Sint32 Mdl_module_builder::set_module_annotations(
     }
 
     static_cast<mi::mdl::Module*>( m_module.get())->replace_declarations(
-        &declarations[0], declarations.size());
+        declarations.data(), declarations.size());
 
     analyze_module( context);
     if( context->get_error_messages_count() > 0)
@@ -1344,7 +1444,7 @@ mi::Sint32 Mdl_module_builder::remove_entity(
     }
 
     static_cast<mi::mdl::Module*>( m_module.get())->replace_declarations(
-        &declarations[0], declarations.size());
+        declarations.data(), declarations.size());
 
     analyze_module( context);
     if( context->get_error_messages_count() > 0)
@@ -1851,7 +1951,7 @@ mi::Sint32 Mdl_module_builder::deprecated_add_call_based(
 
         // check paths and get expression
         mi::base::Handle<const IExpression> expr(
-            find_path( m_transaction, param.m_path, old_callee_args));
+            find_path( m_transaction, param.m_path, old_callee_args.get()));
         if( !expr) {
             add_error_message( context,
                 STRING::formatted_string( "Invalid path \"%s\".", param.m_path.c_str()), -72);
@@ -2160,7 +2260,7 @@ void Mdl_module_builder::create_module( Execution_context* context)
         }
         DB::Access<Mdl_module> db_module( tag, m_transaction);
         if( !db_module->supports_reload()) {
-            add_context_error( context, "Cannot override standard and built-in modules.", -4);
+            add_error_message( context, "Cannot override standard and built-in modules.", -4);
             return;
         }
     }
@@ -2513,8 +2613,8 @@ void analyze_uniform_args(
 
             mi::base::Handle<const IType> parameter_type( parameter_types->get_type( i));
             mi::Uint32 modifiers = parameter_type->get_all_type_modifiers();
-            bool p_is_uniform = (modifiers & mi::neuraylib::IType::MK_UNIFORM) != 0;
-            bool p_is_varying = (modifiers & mi::neuraylib::IType::MK_VARYING) != 0;
+            bool p_is_uniform = (modifiers & IType::MK_UNIFORM) != 0;
+            bool p_is_varying = (modifiers & IType::MK_VARYING) != 0;
 
             if( ternary_condition_is_uniform && is_ternary_operator && i == 0) {
                 p_is_uniform = true;

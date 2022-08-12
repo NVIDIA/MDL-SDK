@@ -61,34 +61,30 @@ index.
 
   - \ref mi_neuray_example_execution_native "MDL material state (CPU)"
   - \ref mi_neuray_example_execution_ptx "MDL material state (PTX)"
-\if  MDL_BIN_RELEASE
   - \ref mi_neuray_example_execution_glsl "MDL material state (GLSL)"
-\endif
 
   - \ref mi_neuray_example_execution_native "Execution of generated code (CPU)"
   - \ref mi_neuray_example_execution_ptx "Execution of generated code (PTX)"
   - \ref mi_neuray_example_optix7 "Execution of generated code (OptiX 7)"
-\if  MDL_BIN_RELEASE
   - \ref mi_neuray_example_execution_glsl "Execution of generated code (GLSL)"
-\endif
 
   - \ref mi_neuray_example_execution_ptx "Loading textures (PTX)"
-\if  MDL_BIN_RELEASE
   - \ref mi_neuray_example_execution_glsl "Loading textures (GLSL)"
-\endif
 
   - \ref mi_neuray_example_execution_ptx "Texture access functions (PTX)"
-\if  MDL_BIN_RELEASE
   - \ref mi_neuray_example_execution_glsl "Texture access functions (GLSL)"
 
   - \ref mi_neuray_example_execution_glsl "Constant data (GLSL)"
-\endif
 
-  - \ref mi_neuray_example_df_cuda "Generated BSDF functions"
-  - \ref mi_neuray_example_df_cuda "Changing compiled material arguments at runtime"
+  - \ref mi_neuray_example_execution_glsl_vk "Configuration of the GLSL backend for Vulkan"
+
+  - \ref mi_neuray_example_df_cuda "Generated BSDF functions (PTX)"
+  - \ref mi_neuray_example_df_cuda "Changing compiled material arguments at runtime (PTX)"
   
-  - \ref mi_neuray_example_df_native "Generated BSDF functions"
-  - \ref mi_neuray_example_df_native "Changing compiled material arguments at runtime"
+  - \ref mi_neuray_example_df_native "Generated BSDF functions (CPU)"
+  - \ref mi_neuray_example_df_native "Changing compiled material arguments at runtime (CPU)"
+
+  - \ref mi_neuray_example_df_vulkan "Generated BSDF functions (GLSL)"
 
   - \ref mi_neuray_example_derivatives "Automatic derivatives"
 
@@ -123,4 +119,7 @@ index.
 
   - \ref mi_neuray_example_optix7 "Linking and optimizing generated MDL code with renderer code"
   - \ref mi_neuray_example_optix7 "Limiting the number of exported PTX functions"
+  
+  - \ref mi_neuray_example_axf_to_mdl "AxF to MDL material format conversion"
+  
 */

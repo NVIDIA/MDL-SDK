@@ -170,7 +170,7 @@ public:
     /// \param name   The tag of the element to return.
     /// \return       The element in the database or \c NULL if no such element exists or
     ///               the transaction is already closed.
-    const mi::base::IInterface* access( const DB::Tag tag);
+    const mi::base::IInterface* access( DB::Tag tag);
 
     template<class T>
     const T* access( DB::Tag tag)

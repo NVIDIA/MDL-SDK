@@ -23,11 +23,11 @@
    ;; Attributes
    `(,(regexp-opt
        '("alwaysinline" "argmemonly" "builtin" "cold" "convergent" "inaccessiblememonly"
-         "inaccessiblemem_or_argmemonly" "inlinehint" "jumptable" "minsize" "naked" "nobuiltin"
-         "noduplicate" "noimplicitfloat" "noinline" "nonlazybind" "noredzone" "noreturn"
-         "norecurse" "nounwind" "optnone" "optsize" "readnone" "readonly" "returns_twice"
-         "speculatable" "ssp" "sspreq" "sspstrong" "safestack" "sanitize_address" "sanitize_hwaddress"
-         "sanitize_thread" "sanitize_memory" "strictfp" "uwtable" "writeonly") 'symbols) . font-lock-constant-face)
+         "inaccessiblemem_or_argmemonly" "inlinehint" "jumptable" "minsize" "mustprogress" "naked" "nobuiltin"
+         "noduplicate" "nofree" "noimplicitfloat" "noinline" "nonlazybind" "noredzone" "noreturn"
+         "norecurse" "noundef" "nounwind" "optnone" "optsize" "readnone" "readonly" "returns_twice"
+         "speculatable" "ssp" "sspreq" "sspstrong" "safestack" "sanitize_address" "sanitize_hwaddress" "sanitize_memtag"
+         "sanitize_thread" "sanitize_memory" "strictfp" "uwtable" "willreturn" "writeonly" "immarg") 'symbols) . font-lock-constant-face)
    ;; Variables
    '("%[-a-zA-Z$._][-a-zA-Z$._0-9]*" . font-lock-variable-name-face)
    ;; Labels
@@ -62,11 +62,11 @@
    `(,(regexp-opt '("add" "sub" "mul" "sdiv" "udiv" "urem" "srem" "and" "or" "xor"
                     "setne" "seteq" "setlt" "setgt" "setle" "setge") 'symbols) . font-lock-keyword-face)
    ;; Floating-point operators
-   `(,(regexp-opt '("fadd" "fsub" "fmul" "fdiv" "frem") 'symbols) . font-lock-keyword-face)
+   `(,(regexp-opt '("fadd" "fsub" "fneg" "fmul" "fdiv" "frem") 'symbols) . font-lock-keyword-face)
    ;; Special instructions
-   `(,(regexp-opt '("phi" "tail" "call" "select" "to" "shl" "lshr" "ashr" "fcmp" "icmp" "va_arg" "landingpad") 'symbols) . font-lock-keyword-face)
+   `(,(regexp-opt '("phi" "tail" "call" "select" "to" "shl" "lshr" "ashr" "fcmp" "icmp" "va_arg" "landingpad" "freeze") 'symbols) . font-lock-keyword-face)
    ;; Control instructions
-   `(,(regexp-opt '("ret" "br" "switch" "invoke" "resume" "unwind" "unreachable" "indirectbr") 'symbols) . font-lock-keyword-face)
+   `(,(regexp-opt '("ret" "br" "switch" "invoke" "resume" "unwind" "unreachable" "indirectbr" "callbr") 'symbols) . font-lock-keyword-face)
    ;; Memory operators
    `(,(regexp-opt '("malloc" "alloca" "free" "load" "store" "getelementptr" "fence" "cmpxchg" "atomicrmw") 'symbols) . font-lock-keyword-face)
    ;; Casts

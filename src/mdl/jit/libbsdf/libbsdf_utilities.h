@@ -539,6 +539,13 @@ BSDF_INLINE float3 refract(
         : math::normalize((-k * b + n * (b * nk - math::sqrt(1.0f - refract))));
 }
 
+// check for total internal reflection
+BSDF_INLINE bool is_tir(const float2 &ior, const float kh)
+{
+    const float b = ior.x / ior.y;
+    return ((b * b * (1.0f - kh * kh)) > 1.0f);
+}
+
 // build orthonormal basis around bumped normal, attempting to keep tangent orientation
 BSDF_INLINE bool get_bumped_basis(
     float3 &x_axis,
@@ -1188,15 +1195,14 @@ BSDF_INLINE float2 fresnel_dielectric(const float n_a, const float n_b, const fl
 // compute the reflection color tint caused by a thin-film coating
 // for reference, see Born/Wolf - "Principles of Optics", section 13.4.2, equation 30
 BSDF_INLINE float3 thin_film_factor(
-    const float coating_thickness,
+    float coating_thickness,
     const float3 &coating_ior3,
     const float3 &base_ior3,
     const float3 &base_k3,
     const float3 &incoming_ior3,
     const float kh)
 {
-    if (coating_thickness <= 0.0f)
-        return make_float3(1.0f, 1.0f, 1.0f);
+    coating_thickness = math::max(coating_thickness, 0.0f);
 
     float3 xyz = make_float3(0.0f, 0.0f, 0.0f);
 
@@ -1374,6 +1380,82 @@ BSDF_INLINE float3 thin_film_factor(
     const float3 incoming_ior = make<float3>(material_ior.x);
     return thin_film_factor(coating_thickness, coating_ior3, base_ior, base_k, incoming_ior, kh);
 }
+
+BSDF_INLINE float3 thin_film_factor(
+    float coating_thickness,
+    const float coating_ior,
+    const float base_ior,
+    const float incoming_ior,
+    const float kh)
+{
+    coating_thickness = math::max(coating_thickness, 0.0f);
+
+    const float sin0_sqr = math::max(1.0f - kh * kh, 0.0f);
+    const float eta01 = incoming_ior / coating_ior;
+    const float eta01_sqr = eta01 * eta01;
+    const float sin1_sqr = eta01_sqr * sin0_sqr;
+    if (sin1_sqr > 1.0f) // TIR at first interface
+        return make_float3(1.0f, 1.0f, 1.0f);
+
+    const float cos1 = math::sqrt(math::max(1.0f - sin1_sqr, 0.0f));
+
+    const float2 R01 = fresnel_dielectric(incoming_ior, coating_ior, kh, cos1);
+    float2 phi12_sin, phi12_cos;
+    const float2 R12 = fresnel_conductor(phi12_sin, phi12_cos, coating_ior, base_ior, /*base_k=*/0.0f, cos1, sin1_sqr);
+
+    const float tmp = (float)(4.0 * M_PI) * coating_ior * coating_thickness * cos1;
+
+    const float R01R12_s = math::max(R01.x * R12.x, 0.0f);
+    const float r01r12_s = math::sqrt(R01R12_s);
+    const float R01R12_p = math::max(R01.y * R12.y, 0.0f);
+    const float r01r12_p = math::sqrt(R01R12_p);
+
+    float3 xyz = make_float3(0.0f, 0.0f, 0.0f);
+
+    //!! using low res color matching functions here
+    const float lambda_min = 400.0f;
+    const float lambda_step = (float)((700.0 - 400.0) / 16.0);
+    const float3 cie_xyz[16] = {
+        {0.02986f, 0.00310f, 0.13609f}, {0.20715f, 0.02304f, 0.99584f},
+        {0.36717f, 0.06469f, 1.89550f}, {0.28549f, 0.13661f, 1.67236f},
+        {0.08233f, 0.26856f, 0.76653f}, {0.01723f, 0.48621f, 0.21889f},
+        {0.14400f, 0.77341f, 0.05886f}, {0.40957f, 0.95850f, 0.01280f},
+        {0.74201f, 0.97967f, 0.00060f}, {1.03325f, 0.84591f, 0.00000f},
+        {1.08385f, 0.62242f, 0.00000f}, {0.79203f, 0.36749f, 0.00000f},
+        {0.38751f, 0.16135f, 0.00000f}, {0.13401f, 0.05298f, 0.00000f},
+        {0.03531f, 0.01375f, 0.00000f}, {0.00817f, 0.00317f, 0.00000f}};
+
+    float lambda = lambda_min;
+    for (unsigned int i = 0; i < 16; ++i) {
+        const float phi = tmp / lambda;
+
+        float phi_s, phi_c;
+        math::sincos(phi, &phi_s, &phi_c);
+        const float cos_phi_s = phi_c * phi12_cos.x - phi_s * phi12_sin.x; // cos(a+b) = cos(a) * cos(b) - sin(a) * sin(b)
+        const float tmp_s = 2.0f * r01r12_s * cos_phi_s;
+        const float R_s = (R01.x + R12.x + tmp_s) / (1.0f + R01R12_s + tmp_s);
+
+        const float cos_phi_p = phi_c * phi12_cos.y - phi_s * phi12_sin.y; // cos(a+b) = cos(a) * cos(b) - sin(a) * sin(b)
+        const float tmp_p = 2.0f * r01r12_p * cos_phi_p;
+        const float R_p = (R01.y + R12.y + tmp_p) / (1.0f + R01R12_p + tmp_p);
+
+        xyz += cie_xyz[i] * (0.5f * (R_s + R_p));
+
+        lambda += lambda_step;
+    }
+
+    xyz *= float(1.0 / 16.0);
+
+    // ("normalized" such that the loop for no shifted wave gives reflectivity (1,1,1))
+    return make_float3(
+        xyz.x * (float)( 3.240600 / 0.433509) + xyz.y * (float)(-1.537200 / 0.433509)
+                                              + xyz.z * (float)(-0.498600 / 0.433509),
+        xyz.x * (float)(-0.968900 / 0.341582) + xyz.y * (float)( 1.875800 / 0.341582)
+                                              + xyz.z * (float)( 0.041500 / 0.341582),
+        xyz.x * (float)( 0.055700 / 0.326950) + xyz.y * (float)(-0.204000 / 0.326950)
+                                              + xyz.z * (float)( 1.057000 / 0.326950));
+}
+
 
 // evaluate measured color curve
 BSDF_INLINE float3 measured_curve_factor(

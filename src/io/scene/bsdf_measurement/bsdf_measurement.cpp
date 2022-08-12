@@ -66,7 +66,7 @@ const char* magic_transmission = "MBSDF_DATA_TRANSMISSION=\n";
 std::string hash_to_string( const mi::base::Uuid& hash)
 {
     char buffer[35];
-    snprintf( &buffer[0], sizeof( buffer), "0x%08x%08x%08x%08x",
+    snprintf( buffer, sizeof( buffer), "0x%08x%08x%08x%08x",
               hash.m_id1, hash.m_id2, hash.m_id3, hash.m_id4);
     return buffer;
 }
@@ -93,11 +93,12 @@ Bsdf_measurement::Bsdf_measurement()
 {
 }
 
-mi::Sint32 Bsdf_measurement::reset_file( DB::Transaction* transaction, const std::string& original_filename)
+mi::Sint32 Bsdf_measurement::reset_file(
+    DB::Transaction* transaction, const std::string& original_filename)
 {
     SYSTEM::Access_module<PATH::Path_module> m_path_module( false);
     const std::string resolved_filename
-        = m_path_module->search( PATH::RESOURCE, original_filename.c_str());
+        = m_path_module->search( PATH::RESOURCE, original_filename);
 #if 0
     LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_IO,
         "Configured resource search path:");
@@ -192,12 +193,12 @@ mi::Sint32 Bsdf_measurement::reset_mdl(
     std::ostringstream s;
     s << "Loading BSDF measurement ";
     if( !m_resolved_filename.empty())
-        s << "\"" << m_resolved_filename << "\"";
+        s << '\"' << m_resolved_filename << '\"';
     else if( !m_resolved_container_filename.empty())
-        s << "\"" << m_resolved_container_membername << "\" in \""
-          << m_resolved_container_filename << "\"";
+        s << '\"' << m_resolved_container_membername << "\" in \""
+          << m_resolved_container_filename << '\"';
     else
-        s << "from MDL file path \"" << m_mdl_file_path << "\"";
+        s << "from MDL file path \"" << m_mdl_file_path << '\"';
     s << ", reflection: " << dump_data( reflection.get());
     s << ", transmission: " << dump_data( transmission.get());
     LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_IO, "%s", s.str().c_str());
@@ -304,10 +305,10 @@ SERIAL::Serializable* Bsdf_measurement::deserialize( SERIAL::Deserializer* deser
         // (no error since we no longer require all resources to be present on all nodes).
         if( !DISK::is_file( m_resolved_filename.c_str())) {
             SYSTEM::Access_module<PATH::Path_module> m_path_module( false);
-            m_resolved_filename = m_path_module->search( PATH::MDL, m_original_filename.c_str());
+            m_resolved_filename = m_path_module->search( PATH::MDL, m_original_filename);
             if( m_resolved_filename.empty())
                 m_resolved_filename = m_path_module->search(
-                    PATH::RESOURCE, m_original_filename.c_str());
+                    PATH::RESOURCE, m_original_filename);
         }
     }
 
@@ -497,7 +498,7 @@ size_t Bsdf_measurement_impl::get_size() const
     resolution_theta = m_reflection ? m_reflection->get_resolution_theta() : 0;
     resolution_phi   = m_reflection ? m_reflection->get_resolution_phi()   : 0;
     type             = m_reflection ? m_reflection->get_type() : mi::neuraylib::BSDF_SCALAR;
-    size             = resolution_theta * resolution_theta * resolution_phi;
+    size             = static_cast<mi::Size>( resolution_theta) * resolution_theta * resolution_phi;
     if( type == mi::neuraylib::BSDF_RGB)
         size *= 3;
     result += size * sizeof( mi::Float32);
@@ -505,7 +506,7 @@ size_t Bsdf_measurement_impl::get_size() const
     resolution_theta = m_transmission ? m_transmission->get_resolution_theta() : 0;
     resolution_phi   = m_transmission ? m_transmission->get_resolution_phi()   : 0;
     type             = m_transmission ? m_transmission->get_type() : mi::neuraylib::BSDF_SCALAR;
-    size             = resolution_theta * resolution_theta * resolution_phi;
+    size             = static_cast<mi::Size>( resolution_theta) * resolution_theta * resolution_phi;
     if( type == mi::neuraylib::BSDF_RGB)
         size *= 3;
     result += size * sizeof( mi::Float32);
@@ -536,7 +537,7 @@ void Bsdf_measurement_impl::serialize_bsdf_data(
     SERIAL::write(serializer, resolution_phi);
     SERIAL::write(serializer, static_cast<mi::Uint32>( type));
 
-    mi::Size size = resolution_theta * resolution_theta * resolution_phi;
+    mi::Size size = static_cast<mi::Size>( resolution_theta) * resolution_theta * resolution_phi;
     if( type == mi::neuraylib::BSDF_RGB)
         size *= 3;
     mi::base::Handle<const mi::neuraylib::IBsdf_buffer> buffer( bsdf_data->get_bsdf_buffer());
@@ -565,7 +566,7 @@ mi::neuraylib::IBsdf_isotropic_data* Bsdf_measurement_impl::deserialize_bsdf_dat
     mi::base::Handle<mi::neuraylib::Bsdf_buffer> bsdf_buffer( bsdf_data->get_bsdf_buffer());
     mi::Float32* data = bsdf_buffer->get_data();
 
-    mi::Size size = resolution_theta * resolution_theta * resolution_phi;
+    mi::Size size = static_cast<mi::Size>( resolution_theta) * resolution_theta * resolution_phi;
     if( type == mi::neuraylib::BSDF_RGB)
         size *= 3;
     deserializer->read( reinterpret_cast<char*>( data), size * sizeof( mi::Float32));
@@ -609,7 +610,7 @@ mi::neuraylib::IBsdf_isotropic_data* import_data_from_reader( mi::neuraylib::IRe
         new mi::neuraylib::Bsdf_isotropic_data( resolution_theta, resolution_phi, type));
     mi::base::Handle<mi::neuraylib::Bsdf_buffer> bsdf_buffer( bsdf_data->get_bsdf_buffer());
     mi::Float32* data = bsdf_buffer->get_data();
-    mi::Size size = resolution_theta * resolution_theta * resolution_phi;
+    mi::Size size = static_cast<mi::Size>( resolution_theta) * resolution_theta * resolution_phi;
     if( type == mi::neuraylib::BSDF_RGB)
         size *= 3;
     if( !read( reader, reinterpret_cast<char*>( data), size * sizeof( mi::Float32)))
@@ -631,7 +632,7 @@ bool import_measurement_from_reader(
     transmission.reset();
 
     // header
-    if( !reader->readline( &buffer[0], sizeof( buffer)))
+    if( !reader->readline( buffer, sizeof( buffer)))
         return false;
     buffer_str = buffer;
     if( buffer_str != magic_header)
@@ -639,7 +640,7 @@ bool import_measurement_from_reader(
 
     // skip metadata
     do {
-        if( !reader->readline( &buffer[0], sizeof( buffer)))
+        if( !reader->readline( buffer, sizeof( buffer)))
             return false;
         if( reader->eof())
             return true;
@@ -653,7 +654,7 @@ bool import_measurement_from_reader(
         reflection = import_data_from_reader( reader);
         if( !reflection)
             return false;
-        if( !reader->readline( &buffer[0], sizeof( buffer)))
+        if( !reader->readline( buffer, sizeof( buffer)))
             return false;
         if( reader->eof())
             return true;
@@ -667,7 +668,7 @@ bool import_measurement_from_reader(
             reflection.reset();
             return false;
         }
-        if( !reader->readline( &buffer[0], sizeof( buffer))) {
+        if( !reader->readline( buffer, sizeof( buffer))) {
             reflection.reset();
             return false;
         }
@@ -709,7 +710,8 @@ bool import_from_reader(
 
 namespace {
 
-bool export_to_file(mi::neuraylib::IWriter* writer, const mi::neuraylib::IBsdf_isotropic_data* bsdf_data)
+bool export_to_file(
+    mi::neuraylib::IWriter* writer, const mi::neuraylib::IBsdf_isotropic_data* bsdf_data)
 {
     const mi::neuraylib::Bsdf_type type = bsdf_data->get_type();
     const mi::Uint32 resolution_theta   = bsdf_data->get_resolution_theta();
@@ -723,7 +725,7 @@ bool export_to_file(mi::neuraylib::IWriter* writer, const mi::neuraylib::IBsdf_i
     if( !writer->write( reinterpret_cast<const char*>( &resolution_phi), 4))
         return false;
 
-    mi::Size size = resolution_theta * resolution_theta * resolution_phi;
+    mi::Size size = static_cast<mi::Size>( resolution_theta) * resolution_theta * resolution_phi;
     if( type == mi::neuraylib::BSDF_RGB)
         size *= 3;
     mi::base::Handle<const mi::neuraylib::IBsdf_buffer> buffer( bsdf_data->get_bsdf_buffer());

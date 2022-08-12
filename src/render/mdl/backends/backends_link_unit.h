@@ -74,7 +74,6 @@ public:
         DB::Transaction        *transaction,
         MDL::Execution_context *context);
 
-
     /// Add an MDL environment function call as a function to this link unit.
     ///
     /// \param i_call                      The MDL function call for the environment.
@@ -285,6 +284,13 @@ public:
     /// Get the internal space used in this link unit
     const char* get_internal_space() const {
         return m_internal_space.c_str();
+    }
+
+    // Target is as structured language language.
+    bool target_is_structured_language() const {
+        return
+            m_be_kind == mi::neuraylib::IMdl_backend_api::MB_GLSL ||
+            m_be_kind == mi::neuraylib::IMdl_backend_api::MB_HLSL;
     }
 
     /// Destructor.

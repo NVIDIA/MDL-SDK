@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright (c) 2018-2022, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,16 +31,24 @@
 
 #include <unordered_map>
 #include <vector>
+#include <list>
 
 #include <mi/base/handle.h>
 #include <mdl/compiler/compilercore/compilercore_allocator.h>
+#include <mdl/compiler/compiler_hlsl/compiler_hlsl_declarations.h>
+#include <mdl/compiler/compiler_hlsl/compiler_hlsl_definitions.h>
+#include <mdl/compiler/compiler_hlsl/compiler_hlsl_exprs.h>
+#include <mdl/compiler/compiler_hlsl/compiler_hlsl_printers.h>
+#include <mdl/compiler/compiler_hlsl/compiler_hlsl_stmts.h>
 #include <mdl/compiler/compiler_hlsl/compiler_hlsl_types.h>
+#include <mdl/compiler/compiler_hlsl/compiler_hlsl_type_cache.h>
 
 #include <llvm/Pass.h>
 
 #include "generator_jit_llvm.h"
-#include "generator_jit_hlsl_function.h"
-#include "generator_jit_hlsl_depgraph.h"
+#include "generator_jit_sl_function.h"
+#include "generator_jit_sl_depgraph.h"
+#include "generator_jit_sl_utils.h"
 #include "generator_jit_type_map.h"
 
 namespace mi {
@@ -48,6 +56,8 @@ namespace mdl {
 
 // forward
 class IOutput_stream;
+class Messages_impl;
+class Options_impl;
 
 namespace hlsl {
 
@@ -60,6 +70,7 @@ class Def_function;
 class Def_param;
 class Def_variable;
 class Expr;
+class Expr_binary;
 class Expr_factory;
 class ICompiler;
 class Location;
@@ -73,367 +84,165 @@ class Type_factory;
 class Type_name;
 class Value;
 
-struct Type_walk_element
-{
-    llvm::Type  *llvm_type;
-    size_t       gep_depth;
-    llvm::Value *field_index_val;
-    unsigned     field_index_offs;  ///!< offset to be added to field_index_val
-    llvm::Type  *field_type;
-
-    Type_walk_element(
-        llvm::Type  *llvm_type,
-        size_t       gep_depth,
-        llvm::Value *field_index_val,
-        unsigned     field_index_offs,
-        llvm::Type  *field_type)
-    : llvm_type(llvm_type)
-    , gep_depth(gep_depth)
-    , field_index_val(field_index_val)
-    , field_index_offs(field_index_offs)
-    , field_type(field_type)
-    {}
-
-    uint64_t get_total_size_and_update_offset(llvm::DataLayout const *dl, uint64_t offs)
-    {
-        uint64_t cur_align = dl->getABITypeAlignment(field_type);
-        uint64_t aligned_offs = (offs + cur_align - 1) & ~(cur_align - 1);
-        uint64_t cur_type_size = dl->getTypeAllocSize(field_type);
-        uint64_t total_size = aligned_offs - offs + cur_type_size;
-        offs = aligned_offs + cur_type_size;
-        return total_size;
-    }
+/// Type traits for the HLSl AST.
+struct HLSLAstTraits {
+    typedef hlsl::ICompiler             ICompiler;
+    typedef hlsl::IPrinter              IPrinter;
+    typedef hlsl::Compilation_unit      Compilation_unit;
+    typedef hlsl::Definition_table      Definition_table;
+    typedef hlsl::Definition            Definition;
+    typedef hlsl::Def_function          Def_function;
+    typedef hlsl::Def_variable          Def_variable;
+    typedef hlsl::Def_param             Def_param;
+    typedef hlsl::Scope                 Scope;
+    typedef hlsl::Symbol_table          Symbol_table;
+    typedef hlsl::Symbol                Symbol;
+    typedef hlsl::Type_factory          Type_factory;
+    typedef hlsl::Type                  Type;
+    typedef hlsl::Type_void             Type_void;
+    typedef hlsl::Type_bool             Type_bool;
+    typedef hlsl::Type_int              Type_int;
+    typedef hlsl::Type_uint             Type_uint;
+    typedef hlsl::Type_float            Type_float;
+    typedef hlsl::Type_double           Type_double;
+    typedef hlsl::Type_scalar           Type_scalar;
+    typedef hlsl::Type_vector           Type_vector;
+    typedef hlsl::Type_array            Type_array;
+    typedef hlsl::Type_struct           Type_struct;
+    typedef hlsl::Type_function         Type_function;
+    typedef hlsl::Type_matrix           Type_matrix;
+    typedef hlsl::Type_compound         Type_compound;
+    typedef hlsl::Value_factory         Value_factory;
+    typedef hlsl::Value                 Value;
+    typedef hlsl::Value_scalar          Value_scalar;
+    typedef hlsl::Value_fp              Value_fp;
+    typedef hlsl::Value_vector          Value_vector;
+    typedef hlsl::Value_matrix          Value_matrix;
+    typedef hlsl::Value_array           Value_array;
+    typedef hlsl::Name                  Name;
+    typedef hlsl::Type_name             Type_name;
+    typedef hlsl::Type_qualifier        Type_qualifier;
+    typedef hlsl::Declaration           Declaration;
+    typedef hlsl::Declaration_struct    Declaration_struct;
+    typedef hlsl::Declaration_field     Declaration_field;
+    typedef hlsl::Declaration_function  Declaration_function;
+    typedef hlsl::Declaration_variable  Declaration_variable;
+    typedef hlsl::Declaration_param     Declaration_param;
+    typedef hlsl::Field_declarator      Field_declarator;
+    typedef hlsl::Init_declarator       Init_declarator;
+    typedef hlsl::Stmt_factory          Stmt_factory;
+    typedef hlsl::Stmt                  Stmt;
+    typedef hlsl::Stmt_compound         Stmt_compound;
+    typedef hlsl::Stmt_expr             Stmt_expr;
+    typedef hlsl::Expr_factory          Expr_factory;
+    typedef hlsl::Expr                  Expr;
+    typedef hlsl::Expr_binary           Expr_binary;
+    typedef hlsl::Expr_unary            Expr_unary;
+    typedef hlsl::Expr_ref              Expr_ref;
+    typedef hlsl::Expr_call             Expr_call;
+    typedef hlsl::Expr_compound         Expr_compound;
+    typedef hlsl::Expr_literal          Expr_literal;
+    typedef hlsl::Parameter_qualifier   Parameter_qualifier;
+    typedef hlsl::Location              Location;
 };
 
-typedef std::vector<Type_walk_element> Type_walk_stack;
-
-/// This pass generates an HLSL AST from an LLVM module and dumps it into an output stream.
-class HLSLWriterPass : public llvm::ModulePass
+/// Base HLSL Writer pass.
+class HLSLWriterBasePass : public llvm::ModulePass
 {
-    friend class InsertValueObject;
+    typedef llvm::ModulePass Base;
 
-public:
-    static char ID;
+protected:
+    /// Type traits for HLSL.
+    typedef HLSLAstTraits TypeTraits;
 
-public:
+    /// The zero location.
+    static Location const zero_loc;
+
+    /// The prototype language.
+    static const IGenerated_code_executable::Prototype_language proto_lang;
+
+protected:
     /// Constructor.
     ///
+    /// \param pid                  the pass ID
     /// \param alloc                the allocator
     /// \param type_mapper          the type mapper
-    /// \param out                  the output stream the HLSL code is written to
-    /// \param num_texture_spaces   the number of supported texture spaces
-    /// \param num_texture_results  the number of texture result entries
+    /// \param options              backend options
+    /// \param messages             backend messages
     /// \param enable_debug         true, if debug info should be generated
-    /// \param exp_func_list        the list of exported functions for which prototypes must
-    ///                             be generated
-    HLSLWriterPass(
-        mi::mdl::IAllocator                                  *alloc,
-        Type_mapper const                                    &type_mapper,
-        mi::mdl::IOutput_stream                              &out,
-        unsigned                                             num_texture_spaces,
-        unsigned                                             num_texture_results,
-        bool                                                 enable_debug,
-        mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list,
-        mi::mdl::Df_handle_slot_mode                         df_handle_slot_mode);
+    HLSLWriterBasePass(
+        char                        &pid,
+        mi::mdl::IAllocator         *alloc,
+        Type_mapper const           &type_mapper,
+        mi::mdl::Options_impl const &options,
+        mi::mdl::Messages_impl      &messages,
+        bool                        enable_debug);
 
-    void getAnalysisUsage(llvm::AnalysisUsage &usage) const final;
+    /// Return the name for this pass.
+    llvm::StringRef getPassName() const final;
 
-    llvm::StringRef getPassName() const final {
-        return "HLSL writer";
+protected:
+    /// Create a new compilation unit with the given name.
+    ///
+    /// \param compiler  the HLSL compiler
+    /// \param name      the (file) name of the unit
+    static Compilation_unit *create_compilation_unit(
+        ICompiler *compiler,
+        char const *name);
+
+    /// Generate HLSL predefined entities into the definition table of a given unit.
+    ///
+    /// \param unit  a new (empty) compilation unit
+    static void fillPredefinedEntities(
+        Compilation_unit *unit);
+
+    /// Fill type debug info from a module.
+    void enter_type_debug_info(llvm::Module const &llvm_module)
+    {
+        return m_debug_types.enter_type_debug_info(llvm_module);
     }
 
-    bool runOnModule(llvm::Module &M) final;
-
-private:
-    /// Generate HLSL predefined entities into the definition table.
-    void fillPredefinedEntities();
-
-    /// Create the HLSL definition for a user defined LLVM function.
-    hlsl::Def_function *create_definition(llvm::Function * func);
-
-    /// Get the definition for a LLVM function, if one exists.
-    hlsl::Def_function *get_definition(llvm::Function * func);
-
-    /// Generate HLSL AST for the given function.
-    void translate_function(
-        llvm::hlsl::StructuredFunction const *ast_func);
-
-    /// Translate a region into HLSL AST.
-    hlsl::Stmt *translate_region(llvm::hlsl::Region const *region);
-
-    /// Translate a block-region into HLSL AST.
-    hlsl::Stmt *translate_block(llvm::hlsl::Region const *region);
-
-    /// Translate a natural loop-region into HLSL AST.
-    hlsl::Stmt *translate_natural(llvm::hlsl::RegionNaturalLoop const *region);
-
-    /// Translate a if-then-region into HLSL AST.
-    hlsl::Stmt *translate_if_then(llvm::hlsl::RegionIfThen const *region);
-
-    /// Translate a if-then-else-region into HLSL AST.
-    hlsl::Stmt *translate_if_then_else(llvm::hlsl::RegionIfThenElse const *region);
-
-    /// Translate a break-region into HLSL AST.
-    hlsl::Stmt *translate_break(llvm::hlsl::RegionBreak const *region);
-
-    /// Translate a continue-region into HLSL AST.
-    hlsl::Stmt *translate_continue(llvm::hlsl::RegionContinue const *region);
-
-    /// Translate a return-region into HLSL AST.
-    hlsl::Stmt *translate_return(llvm::hlsl::RegionReturn const *region);
-
-    /// Return the base pointer of the given pointer after skipping all bitcasts and GEPs.
-    llvm::Value *get_base_pointer(llvm::Value *pointer);
-
-    /// Recursive part of process_pointer_address implementation.
-    llvm::Value *process_pointer_address_recurse(
-        Type_walk_stack &stack,
-        llvm::Value *pointer,
-        uint64_t write_size);
-
-    /// Initialize the type walk stack for the given pointer and the size to be written
-    /// and return the base pointer. The stack will be filled until the largest sub-element
-    /// is found which is smaller or equal to the write size.
-    llvm::Value *process_pointer_address(
-        Type_walk_stack &stack,
-        llvm::Value *pointer,
-        uint64_t write_size);
-
-    /// Get the definition for a compound type field.
+    /// Find the debug type info for a given (composite) type name.
     ///
-    /// \param type    the compound type
-    /// \param sym     the symbol of the field
+    /// \param name  an LLVM type name
+    llvm::DICompositeType *find_composite_type_info(llvm::StringRef const &name) const
+    {
+        return m_debug_types.find_composite_type_info(name);
+    }
+
+    /// Find the subelement name if exists.
+    llvm::DIType *find_subelement_type_info(
+        llvm::DICompositeType *type_info,
+        unsigned              field_index)
+    {
+        return m_debug_types.find_subelement_type_info(type_info, field_index);
+    }
+
+    /// Find the API debug type info for a given struct type.
     ///
-    /// \return the definition of the fielkd or NULL if the field or the type was not found
-    hlsl::Definition *get_field_definition(
-        hlsl::Type   *type,
-        hlsl::Symbol *sym);
+    /// \param s_type  an LLVM struct type
+    sl::DebugTypeHelper::API_type_info const *find_api_type_info(
+        llvm::StructType *s_type) const;
 
-    /// Create an lvalue expression for the compound element given by the type walk stack.
-    hlsl::Expr *create_compound_elem_expr(
-        Type_walk_stack &stack,
-        llvm::Value     *base_pointer);
-
-    /// Return true, if the index is valid for the given composite type.
-    /// We define valid here as is not out of bounds according to the type.
-    static bool is_valid_composite_index(llvm::Type *type, size_t index);
-
-    /// Go to the next element in the stack.
-    /// \returns false, on failure
-    bool move_to_next_compound_elem(Type_walk_stack &stack);
-
-    /// Add statements to zero initializes the given lvalue expression.
-    template <unsigned N>
-    void create_zero_init(llvm::SmallVector<hlsl::Stmt *, N> &stmts, hlsl::Expr *lval_expr);
-
-    /// Translate a call into one or more statements, if it is a supported intrinsic call.
-    template <unsigned N>
-    bool translate_intrinsic_call(llvm::SmallVector<hlsl::Stmt *, N> &stmts, llvm::CallInst *call);
-
-    /// Translate a struct select into an if statement writing to the given variable.
-    hlsl::Stmt *translate_struct_select(llvm::SelectInst *select, hlsl::Def_variable *dst_var);
-
-    /// Convert the given LLVM value to the given LLVM type and return an HLSL expression for it.
-    /// \returns nullptr, if the conversion is not possible, the converted value otherwise
-    hlsl::Expr *convert_to(llvm::Value *val, llvm::Type *dest_type);
-
-    /// Convert the given HLSL value to the given HLSL type and return an HLSL expression for it.
-    /// \returns nullptr, if the conversion is not possible, the converted value otherwise
-    hlsl::Expr *convert_to(hlsl::Expr *val, hlsl::Type *dest_type);
-
-
-    /// Translate an LLVM store instruction into one or more HLSL statements.
-    template <unsigned N>
-    void translate_store(llvm::SmallVector<hlsl::Stmt *, N> &stmts, llvm::StoreInst *inst);
-
-    /// Translate an LLVM ConstantInt value to an HLSL Value.
-    hlsl::Value *translate_constant_int(llvm::ConstantInt *ci);
-
-    /// Translate an LLVM ConstantFP value to an HLSL Value.
-    hlsl::Value *translate_constant_fp(llvm::ConstantFP *cf);
-
-    /// Translate an LLVM ConstantDataVector value to an HLSL Value.
-    hlsl::Value *translate_constant_data_vector(llvm::ConstantDataVector *cv);
-
-    /// Translate an LLVM ConstantDataArray value to an HLSL compound initializer.
-    hlsl::Expr *translate_constant_data_array(llvm::ConstantDataArray *cv);
-
-    /// Translate an LLVM ConstantStruct value to an HLSL expression.
-    /// \param cv         the constant value
-    /// \param is_global  if true, compound expressions will be used,
-    ///                   otherwise constructor calls will be generated where needed
-    hlsl::Expr *translate_constant_struct_expr(llvm::ConstantStruct *cv, bool is_global);
-
-    /// Translate an LLVM ConstantVector value to an HLSL Value.
-    hlsl::Value *translate_constant_vector(llvm::ConstantVector *cv);
-
-    /// Translate an LLVM ConstantArray value to an HLSL compound expression.
-    /// \param cv         the constant value
-    /// \param is_global  if true, compound expressions will be used,
-    ///                   otherwise constructor calls will be generated where needed
-    hlsl::Expr *translate_constant_array(llvm::ConstantArray *cv, bool is_global);
-
-    /// Translate an LLVM ConstantAggregateZero value to an HLSL compound expression.
-    /// \param cv         the constant value
-    /// \param is_global  if true, compound expressions will be used,
-    ///                   otherwise constructor calls will be generated where needed
-    hlsl::Expr *translate_constant_array(llvm::ConstantAggregateZero *cv, bool is_global);
-
-    /// Translate an LLVM ConstantArray value to an HLSL matrix value.
-    hlsl::Value *translate_constant_matrix(llvm::ConstantArray *cv);
-
-    /// Translate an LLVM ConstantAggregateZero value to an HLSL Value.
-    hlsl::Value *translate_constant_aggregate_zero(llvm::ConstantAggregateZero *cv);
-
-    /// Translate an LLVM Constant value to an HLSL Value.
-    hlsl::Value *translate_constant(llvm::Constant *ci);
-
-    /// Translate an LLVM Constant value to an HLSL expression.
+    /// Add API type info.
     ///
-    /// \param ci         the constant value
-    /// \param is_global  if true, compound expressions will be used,
-    ///                   otherwise constructor calls will be generated where needed
-    hlsl::Expr *translate_constant_expr(llvm::Constant *ci, bool is_global);
+    /// \param llvm_type_name  name of the API type in the LLVM-IR
+    /// \param api_type_name   name of the API type in the target language
+    /// \param fields          field names
+    void add_api_type_info(
+        char const              *llvm_type_name,
+        char const              *api_type_name,
+        Array_ref<char const *> fields)
+    {
+        return m_debug_types.add_api_type_info(llvm_type_name, api_type_name, fields);
+    }
 
-    /// Translate an LLVM value to an HLSL expression.
+    /// Return the "inner" element type of array types.
     ///
-    /// \param value    the LLVM value to translate
-    hlsl::Expr *translate_expr(llvm::Value *value);
-
-    /// If a given type has an unsigned variant, return it.
+    /// \param type  the type to process
     ///
-    /// \param type  the type
-    ///
-    /// \return type itself, if it si unsigned, the unsigned type, if it is signed, NULL otherwise.
-    hlsl::Type *to_unsigned_type(hlsl::Type *type);
-
-    /// Translate a binary LLVM instruction to an HLSL expression.
-    hlsl::Expr *translate_expr_bin(llvm::Instruction *inst);
-
-    /// Find a function parameter of the given type in the current function.
-    hlsl::Definition *find_parameter_of_type(llvm::Type *t);
-
-    /// Translate an LLVM select instruction to an HLSL expression.
-    hlsl::Expr *translate_expr_select(llvm::SelectInst *inst);
-
-    /// Translate an LLVM call instruction to an HLSL expression.
-    ///
-    /// \param inst     the call instruction to translate
-    /// \param dst_var  if non-NULL, the call result should be written to this variable/parameter
-    hlsl::Expr *translate_expr_call(
-        llvm::CallInst   *inst,
-        hlsl::Definition *dst_var);
-
-    /// Translate an LLVM cast instruction to an HLSL expression.
-    hlsl::Expr *translate_expr_cast(llvm::CastInst *inst);
-
-    /// Creates a HLSL cast expression to the given destination type.
-    ///
-    /// \param dst_type  the destination type
-    /// \param expr      the expression to cast
-    hlsl::Expr *create_cast(hlsl::Type *dst_type, hlsl::Expr *expr);
-
-    /// Translate an LLVM load instruction to an HLSL expression.
-    hlsl::Expr *translate_expr_load(llvm::LoadInst *inst);
-
-    /// Translate an LLVM store instruction to an HLSL expression.
-    hlsl::Expr *translate_expr_store(llvm::StoreInst *inst);
-
-    /// Translate an LLVM pointer value to an HLSL lvalue expression.
-    hlsl::Expr *translate_lval_expression(llvm::Value *pointer);
-
-    /// Translate an LLVM ShuffleVector instruction to an HLSL expression.
-    hlsl::Expr *translate_expr_shufflevector(llvm::ShuffleVectorInst *inst);
-
-    /// Translate an LLVM InsertElement instruction to an HLSL expression.
-    hlsl::Expr *translate_expr_insertelement(llvm::InsertElementInst *inst);
-
-    /// Translate an LLVM InsertValue instruction to an HLSL expression.
-    hlsl::Expr *translate_expr_insertvalue(llvm::InsertValueInst *inst);
-
-    /// Translate an LLVM ExtractElement instruction to an HLSL expression.
-    hlsl::Expr *translate_expr_extractelement(llvm::ExtractElementInst *inst);
-
-    /// Translate an LLVM ExtractValue instruction to an HLSL expression.
-    hlsl::Expr *translate_expr_extractvalue(llvm::ExtractValueInst *inst);
-
-    /// Check if a given LLVM array type is the representation of the HLSL matrix type.
-    bool is_matrix_type(llvm::ArrayType *type) const;
-
-    /// Get the type of the i-th subelement. For vector and array types, this is the
-    /// element type and, for matrix types, this is the column type, if the index is not of bounds.
-    /// For structs, it is the type of the i-th field.
-    hlsl::Type *get_compound_sub_type(hlsl::Type_compound *comp_type, unsigned i);
-
-    /// Load and process type debug info.
-    void process_type_debug_info(llvm::Module const &module);
-
-    /// Convert an LLVM type to an HLSL type.
-    hlsl::Type *convert_type(llvm::Type *type);
-
-    /// Add a field to a struct declaration.
-    hlsl::Type_struct::Field add_struct_field(
-        hlsl::Declaration_struct *decl_struct,
-        hlsl::Type               *type,
-        hlsl::Symbol             *sym);
-
-    /// Add a field to a struct declaration.
-    hlsl::Type_struct::Field add_struct_field(
-        hlsl::Declaration_struct *decl_struct,
-        hlsl::Type               *type,
-        char const               *name);
-
-    /// Convert an LLVM struct type to an HLSL type.
-    hlsl::Type *convert_struct_type(llvm::StructType *type);
-
-    /// Create an HLSL struct definition and type with the given names for the given
-    /// LLVM struct type.
-    ///
-    /// \param type             the LLVM struct type
-    /// \param type_name        the name for the HLSL struct type
-    /// \param num_field_names  the number of field names, must match the number of fields
-    ///                         in the LLVM struct type
-    /// \param field_names      the names of the fields of the HLSL struct type
-    /// \param add_to_unit      if true, add the type to the unit, so it will be printed
-    hlsl::Type_struct *create_struct_from_llvm(
-        llvm::StructType *type,
-        char const *type_name,
-        size_t num_field_names,
-        char const * const *field_names,
-        bool add_to_unit);
-
-    /// Create the HLSL state core struct for the corresponding LLVM struct type.
-    hlsl::Type_struct *create_state_core_struct_type(llvm::StructType *type);
-
-    /// Create the HLSL state environment struct for the corresponding LLVM struct type.
-    hlsl::Type_struct *create_state_env_struct_type(llvm::StructType *type);
-
-    /// Create the HLSL resource data struct for the corresponding LLVM struct type.
-    hlsl::Type_struct *create_res_data_struct_type(llvm::StructType *type);
-
-    /// Create the Bsdf_sample_data struct type used by libbsdf.
-    hlsl::Type_struct *create_bsdf_sample_data_struct_types(llvm::StructType *type);
-
-    /// Create the Bsdf_evaluate_data struct type used by libbsdf.
-    hlsl::Type_struct *create_bsdf_evaluate_data_struct_types(llvm::StructType *type);
-
-    /// Create the Bsdf_pdf_data struct type used by libbsdf.
-    hlsl::Type_struct *create_bsdf_pdf_data_struct_types(llvm::StructType *type);
-
-    /// Create the Bsdf_auxiliary_data struct type used by libbsdf.
-    hlsl::Type_struct *create_bsdf_auxiliary_data_struct_types(llvm::StructType *type);
-
-    /// Create the Edf_sample_data struct type used by libbsdf.
-    hlsl::Type_struct *create_edf_sample_data_struct_types(llvm::StructType *type);
-
-    /// Create the Edf_evaluate_data struct type used by libbsdf.
-    hlsl::Type_struct *create_edf_evaluate_data_struct_types(llvm::StructType *type);
-
-    /// Create the Edf_pdf_data struct type used by libbsdf.
-    hlsl::Type_struct *create_edf_pdf_data_struct_types(llvm::StructType *type);
-
-    /// Create the Edf_auxiliary_data struct type used by libbsdf.
-    hlsl::Type_struct *create_edf_auxiliary_data_struct_types(llvm::StructType *type);
+    /// \return if type is an array type, return the inner element type, else type itself.
+    static hlsl::Type *inner_element_type(hlsl::Type *type);
 
     /// Get an HLSL symbol for an LLVM string.
     hlsl::Symbol *get_sym(llvm::StringRef const &str);
@@ -446,8 +255,8 @@ private:
     /// \param str    an LLVM string (representing an LLVM symbol name)
     /// \param templ  if str contains invalid characters, use this as a template
     ///
-    /// \return amn unique HLSL symbol
-    hlsl::Symbol *get_unique_hlsl_sym(
+    /// \return an unique HLSL symbol
+    hlsl::Symbol *get_unique_sym(
         llvm::StringRef const &str,
         char const            *templ);
 
@@ -456,52 +265,118 @@ private:
     /// \param str    a string (representing a symbol name)
     /// \param templ  if str contains invalid characters, use this as a template
     ///
-    /// \return amn unique HLSL symbol
-    hlsl::Symbol *get_unique_hlsl_sym(
+    /// \return an unique HLSL symbol
+    hlsl::Symbol *get_unique_sym(
         char const *str,
         char const *templ);
 
+    /// Get an HLSL name for the given location and symbol.
+    ///
+    /// \param loc   the location of the reference
+    /// \param sym   the symbol of the referenced entity
+    hlsl::Name *get_name(
+        Location     loc,
+        hlsl::Symbol *sym);
+
+    /// Get an HLSL name for the given location and a C-string.
+    ///
+    /// \param loc   the location of the reference
+    /// \param str   the name of the referenced entity
+    hlsl::Name *get_name(
+        Location   loc,
+        char const *str);
+
+    /// Get an HLSL name for the given location and LLVM string reference.
+    ///
+    /// \param loc   the location of the reference
+    /// \param str   the name of the referenced entity
+    hlsl::Name *get_name(
+        Location              loc,
+        llvm::StringRef const &str);
+
     /// Get an HLSL type name for an LLVM type.
-    hlsl::Type_name *get_type_name(llvm::Type *type);
+    ///
+    /// \param type  the LLVM type
+    hlsl::Type_name *get_type_name(
+        llvm::Type *type);
 
     /// Get an HLSL type name for an HLSL type.
-    hlsl::Type_name *get_type_name(hlsl::Type *type);
+    ///
+    /// \param type  the HLSl type
+    hlsl::Type_name *get_type_name(
+        hlsl::Type *type);
 
     /// Get an HLSL type name for an HLSL symbol.
-    hlsl::Type_name *get_type_name(hlsl::Symbol *sym);
+    ///
+    /// \param sym  the HLSl type symbol
+    hlsl::Type_name *get_type_name(
+        hlsl::Symbol *sym);
 
-    /// Get an HLSL name for the given location and LLVM string.
-    hlsl::Name *get_name(Location loc, llvm::StringRef const &str);
+    /// Add array specifier to a declaration if necessary.
+    ///
+    /// \param decl  the declaration
+    /// \param type  the HLSL type
+    template<typename Decl_type>
+    void add_array_specifiers(
+        Decl_type  *decl,
+        hlsl::Type *type);
 
-    /// Get an HLSL name for the given location and string.
-    hlsl::Name *get_name(Location loc, const char *str);
+    /// Add a field to a struct declaration.
+    ///
+    /// \param decl_struct   the HLSl struct declaration
+    /// \param type          the HLSL type of the field to be added
+    /// \param sym           the symbol of the field to be added
+    hlsl::Type_struct::Field add_struct_field(
+        hlsl::Declaration_struct *decl_struct,
+        hlsl::Type               *type,
+        hlsl::Symbol             *sym);
 
-    /// Get an HLSL name for the given location and symbol.
-    hlsl::Name *get_name(Location loc, hlsl::Symbol *sym);
+    /// Add a field to an HLSL struct declaration.
+    ///
+    /// \param decl_struct   the HLSl struct declaration
+    /// \param type          the HLSL type of the field to be added
+    /// \param name          the name of the field to be added
+    hlsl::Type_struct::Field add_struct_field(
+        hlsl::Declaration_struct *decl_struct,
+        hlsl::Type               *type,
+        char const               *name);
 
-    /// Add a parameter to the given function and the current definition table
-    /// and return its symbol.
-    /// Ensures, that the parameter has a unique name in the current scope.
-    hlsl::Symbol *add_func_parameter(
-        hlsl::Declaration_function *func,
-        char const *param_name,
-        hlsl::Type *param_type);
+    /// Create the HLSL resource data struct for the corresponding LLVM struct type.
+    ///
+    /// \param type  the LLVM type that represents the Res_data tuple
+    hlsl::Type_struct *create_res_data_struct_type(
+        llvm::StructType *type);
 
-    /// Get the HLSL symbol of a generated struct constructor.
-    /// This generates the struct constructor, if it does not exist, yet.
-    hlsl::Def_function *get_struct_constructor(hlsl::Type_struct *type);
+    /// Convert an LLVM struct type to an HLSL type.
+    ///
+    /// \param type  the LLVM struct type
+    hlsl::Type *convert_struct_type(
+        llvm::StructType *type);
 
-    /// Get a name for a given vector index, if possible.
+    /// Convert an LLVM type to an HLSL type.
+    ///
+    /// \param type  the LLVM type
+    hlsl::Type *convert_type(
+        llvm::Type *type);
+
+    /// Create the HLSL definition for a user defined LLVM function.
+    ///
+    /// \param func  an LLVM function
+    hlsl::Def_function *create_definition(
+        llvm::Function *func);
+
+    /// Check if a given LLVM array type is the representation of the HLSL matrix type.
+    ///
+    /// \param type  an LLVM array type
+    bool is_matrix_type(
+        llvm::ArrayType *type) const;
+
+    /// Get the name for a given vector index, if possible.
     /// Translates constants 0 - 3 to x, y, z, w. Otherwise returns nullptr.
-    char const *get_vector_index_str(uint64_t index);
-
-    /// Get an HLSL symbol for a given vector index, if possible.
-    /// Translates constants 0 - 3 to x, y, z, w. Otherwise returns nullptr.
-    hlsl::Symbol *get_vector_index_sym(uint64_t index);
-
-    /// Get an HLSL symbol for a given LLVM vector index, if possible.
-    /// Translates constants 0 - 3 to x, y, z, w. Otherwise returns nullptr.
-    hlsl::Symbol *get_vector_index_sym(llvm::Value *index);
+    ///
+    /// \param index  the vector index
+    char const *get_vector_index_str(
+        uint64_t index) const;
 
     /// Create a reference to an entity of the given name and type.
     ///
@@ -509,7 +384,7 @@ private:
     /// \param type       the HLSL type of the entity
     hlsl::Expr_ref *create_reference(
         hlsl::Type_name *type_name,
-        hlsl::Type      *type);
+        hlsl::Type *type);
 
     /// Create a reference to an entity of the given symbol and HLSL type.
     ///
@@ -517,7 +392,7 @@ private:
     /// \param type       the HLSL type of the entity
     hlsl::Expr_ref *create_reference(
         hlsl::Symbol *sym,
-        hlsl::Type   *type);
+        hlsl::Type *type);
 
     /// Create a reference to an entity of the given symbol and LLVM type.
     ///
@@ -525,7 +400,7 @@ private:
     /// \param type       the LLVM type of the entity
     hlsl::Expr_ref *create_reference(
         hlsl::Symbol *sym,
-        llvm::Type   *type);
+        llvm::Type *type);
 
     /// Create a reference to an entity.
     ///
@@ -533,149 +408,162 @@ private:
     hlsl::Expr_ref *create_reference(
         hlsl::Definition *def);
 
-    /// Create a select or array_subscript expression on a field of a compound.
-    hlsl::Expr *create_compound_access(hlsl::Expr *struct_expr, unsigned comp_index);
-
-    /// Create a select or array_subscript expression on an element of a vector.
-    hlsl::Expr *create_vector_access(hlsl::Expr *vec, unsigned index);
-
-    /// Create an array_subscript expression on an element of an array.
-    hlsl::Expr *create_array_access(hlsl::Expr *array, unsigned index);
-
-    /// Create an array_subscript expression on an matrix.
-    hlsl::Expr *create_matrix_access(hlsl::Expr *matrix, unsigned index);
-
-    /// Create a select expression on a field of a struct.
-    hlsl::Expr *create_field_access(hlsl::Expr *struct_expr, unsigned field_index);
-
-    /// Create an assign expression, assigning an expression to a variable.
+    /// Create a new unary expression.
     ///
-    /// \param def       the symbol of the variable to be assigned
-    /// \param expr      the expression to be assigned to the variable
-    hlsl::Expr *create_assign_expr(hlsl::Definition *var_def, hlsl::Expr *expr);
-
-    /// Create an assign statement, assigning an expression to an lvalue expression.
+    /// \param loc    the location
+    /// \param op     the operator
+    /// \param arg    the argument of the operator
     ///
-    /// \param lvalue_expr  the lvalue expression
-    /// \param expr         the expression to be assigned to the lvalue expression
-    hlsl::Stmt *create_assign_stmt(hlsl::Expr *lvalue, hlsl::Expr *expr);
+    /// \returns    the created expression
+    hlsl::Expr *create_unary(
+        hlsl::Location const       &loc,
+        hlsl::Expr_unary::Operator op,
+        hlsl::Expr                 *arg);
 
-    /// Create an assign statement, assigning an expression to a variable.
+    /// Create a new binary expression.
     ///
-    /// \param def       the symbol of the variable to be assigned
-    /// \param expr      the expression to be assigned to the variable
-    hlsl::Stmt *create_assign_stmt(hlsl::Definition *var_def, hlsl::Expr *expr);
+    /// \param op     the operator
+    /// \param left   the left argument of the operator
+    /// \param right  the right argument of the operator
+    ///
+    /// \returns    the created expression
+    hlsl::Expr *create_binary(
+        hlsl::Expr_binary::Operator op,
+        hlsl::Expr                  *left,
+        hlsl::Expr                  *right);
 
-    /// Add array specifier to a declaration if necessary.
+    /// Create a call to a GLSL runtime function.
     ///
-    /// \param decl  the declaration
-    /// \param type  the type
-    template<typename Decl_type>
-    void add_array_specifiers(Decl_type *decl, hlsl::Type *type);
+    /// \param loc    the location of the call
+    /// \param func   the LLVM intrinsic function representing the runtime function
+    /// \param args   converted arguments of the call
+    hlsl::Expr *create_runtime_call(
+        hlsl::Location const          &loc,
+        llvm::Function                *func,
+        Array_ref<hlsl::Expr *> const &args);
 
     /// Get the constructor for the given HLSL type.
     ///
     /// \param type  the type
-    hlsl::Def_function *lookup_constructor(hlsl::Type *type);
-
-    /// Generates a constructor call for the given HLSL type.
-    ///
-    /// \param type  the type
-    /// \param args  the arguments to the constructor call
-    /// \param loc   the location for the call
-    hlsl::Expr *create_constructor_call(
+    /// \param args  arguments to the constructor
+    hlsl::Def_function *lookup_constructor(
         hlsl::Type                    *type,
-        Array_ref<hlsl::Expr *> const &args,
-        hlsl::Location                 loc);
+        Array_ref<hlsl::Expr *> const &args) const;
 
-    /// Generates a new local variable for an HLSL symbol and an LLVM type.
+    /// Creates a bitcast expression from float to int.
     ///
-    /// \param var_sym  the variable symbol
-    /// \param type     the LLVM type of the local to create
-    hlsl::Def_variable *create_local_var(
-        hlsl::Symbol *var_sym,
-        llvm::Type   *type,
-        bool          add_decl_statement = true);
+    /// \param dst  the destination type, either int or an int vector
+    hlsl::Expr *create_float2int_bitcast(
+        hlsl::Type *dst,
+        hlsl::Expr *arg);
 
-    /// Generates a new local variable for an LLVM value and use this variable as the value's
-    /// result in further generated HLSL code.
+    /// Creates a bitcast expression from int to float.
     ///
-    /// \param value            the LLVM value
-    /// \param do_not_register  if true, do not map this variable as the result for value
-    hlsl::Def_variable *create_local_var(
-        llvm::Value *value,
-        bool        do_not_register = false,
-        bool        add_decl_statement = true);
+    /// \param dst  the destination type, either int or an int vector
+    hlsl::Expr *create_int2float_bitcast(
+        hlsl::Type *dst,
+        hlsl::Expr *arg);
 
-    /// Generates a new local const variable to hold an LLVM constant.
+    /// Create a type cast expression.
     ///
-    /// \param cv  the LLVM constant
-    hlsl::Def_variable *create_local_const(llvm::Constant *cv);
+    /// \param dst  the destination type
+    /// \param arg  the expression to cast
+    hlsl::Expr *create_type_cast(
+        hlsl::Type *dst,
+        hlsl::Expr *arg);
 
-    /// Generates a new global static const variable to hold an LLVM constant.
+    /// Returns true if a compound expression is allowed in the given context.
     ///
-    /// \param cv  the LLVM constant
-    hlsl::Def_variable *create_global_const(llvm::Constant *cv);
-
-    /// Get or create the in- and out-variables for a PHI node.
-    std::pair<hlsl::Def_variable *, hlsl::Def_variable *> get_phi_vars(llvm::PHINode *phi);
-
-    /// Get the definition of the in-variable of a PHI node.
-    hlsl::Def_variable *get_phi_in_var(llvm::PHINode *phi);
-
-    /// Get the definition of the out-variable of a PHI node, where the in-variable
-    /// will be written to at the start of a block.
-    hlsl::Def_variable *get_phi_out_var(llvm::PHINode *phi);
-
-    /// Returns true, if for the given LLVM value a variable or parameter exists.
-    bool has_local_var(llvm::Value *value) {
-        return m_local_var_map.find(value) != m_local_var_map.end();
+    /// \param is_global  true if we are inside a global initializer
+    static bool compound_allowed(bool is_global) {
+        // currently Slang supports compound expressions only as global initializers
+        return is_global;
     }
 
-    /// Joins two statements into a compound statement.
-    /// If one or both statements already are compound statements, they will be merged.
-    /// If one statement is "empty" (nullptr), the other will be returned.
-    hlsl::Stmt *join_statements(hlsl::Stmt *head, hlsl::Stmt *tail);
+    /// Creates an initializer.
+    ///
+    /// \param loc   the location
+    /// \param type  the type
+    /// \param args  arguments, number must match the type
+    hlsl::Expr *create_initializer(
+        hlsl::Location const          &loc,
+        hlsl::Type                    *type,
+        Array_ref<hlsl::Expr *> const &args);
+
+    /// Set the type qualifier for a global constant in HLSL.
+    ///
+    /// \param tq  the type qualifier
+    ///
+    /// \note This sets static for HLSL
+    static void set_global_constant_qualifier(Type_qualifier &tq);
+
+    /// Convert a function type parameter qualifier to a AST parameter qualifier.
+    ///
+    /// \param param  a function type parameter
+    static hlsl::Parameter_qualifier convert_type_modifier_to_param_qualifier(
+        hlsl::Type_function::Parameter *param);
+
+    /// Set the out parameter qualifier.
+    ///
+    /// \param param  a type name
+    static void make_out_parameter(
+        hlsl::Type_name *param);
 
     /// Convert the LLVM debug location (if any is attached to the given instruction)
     /// to an HLSL location.
-    hlsl::Location convert_location(llvm::Instruction *inst);
+    ///
+    /// \param inst  an LLVM instruction
+    hlsl::Location convert_location(
+        llvm::Instruction *inst);
 
-    /// Returns true, if the expression is a reference to the given definition.
-    bool is_ref_to_def(hlsl::Expr *expr, hlsl::Definition *def) {
-        if (hlsl::Expr_ref *ref = hlsl::as<hlsl::Expr_ref>(expr)) {
-            return ref->get_definition() == def;
-        }
-        return false;
+    /// Called for every function that is just a prototype in the original LLVM module.
+    ///
+    /// \param func        the LLVM function (declaration)
+    /// \param mapped_sym  if non-NULL, the mapped symbol for this function
+    hlsl::Def_function *create_prototype(
+        llvm::Function &func,
+        hlsl::Symbol   *mapped_sym)
+    {
+        // none for HLSL yet
+        return nullptr;
     }
 
-private:
+    /// Return true if the user of an instruction requires its materialization
+    ///
+    /// \param user   the user instruction
+    bool must_be_materialized(
+        llvm::Instruction *user);
+
+    /// Finalize the compilation unit and write it to the given output stream.
+    ///
+    /// \param code    the generated source code
+    /// \param remaps  list of remapped entities
+    void finalize(
+        Generated_code_source            *code,
+        list<hlsl::Symbol *>::Type const &remaps);
+
+    /// HLSL has C-style type casts.
+    static bool has_c_style_type_casts() { return true; }
+
+    /// Generates a new global static const variable to hold an LLVM value.
+    hlsl::Definition *create_global_const(
+        llvm::StringRef name, hlsl::Expr *c_expr);
+
+    /// Dump the current AST.
+    void dump_ast();
+
+protected:
     /// MDL allocator used for generating the HLSL AST.
     IAllocator *m_alloc;
 
     /// the Type mapper.
     Type_mapper const &m_type_mapper;
 
-    /// Output stream where the HLSL code will be written to.
-    mi::mdl::IOutput_stream &m_out;
-
-    /// List of exported functions for which prototypes should be generated.
-    mi::mdl::LLVM_code_generator::Exported_function_list &m_exp_func_list;
-
     /// The HLSL compiler.
-    mi::base::Handle<ICompiler> m_hlsl_compiler;
+    mi::base::Handle<Compiler> m_compiler;
 
     /// The HLSL compilation unit.
     mi::base::Handle<Compilation_unit> m_unit;
-
-    /// The dependence graph for the unit.
-    Dep_graph m_dg;
-
-    /// The current function's dependence node.
-    DG_node *m_curr_node;
-
-    /// The currently translated function.
-    llvm::Function *m_curr_func;
 
     /// The HLSL declaration factory of the compilation unit.
     Decl_factory &m_decl_factory;
@@ -686,15 +574,15 @@ private:
     /// The HLSL statement factory of the compilation unit.
     Stmt_factory &m_stmt_factory;
 
-    /// The HLSL type factory of the compilation unit.
-    Type_factory &m_type_factory;
+    /// The HLSL type cache, holding all predefined hlsl types.
+    Type_cache m_tc;
 
     /// The HLSL value factory of the compilation unit.
     Value_factory &m_value_factory;
 
     /// The HLSL symbol table of the compilation unit.
     Symbol_table &m_symbol_table;
-
+ 
     /// The HLSL definition table of the compilation unit.
     Definition_table &m_def_tab;
 
@@ -703,86 +591,20 @@ private:
     /// The type cache mapping from LLVM to HLSL types.
     Type2type_map m_type_cache;
 
-    /// The start block of the current HLSL function.
-    hlsl::Stmt_compound *m_cur_start_block;
-
-    typedef ptr_hash_map<llvm::Value, hlsl::Definition *>::Type Variable_map;
-
-    /// The map from LLVM values to local HLSL definitions for the current HLSL function.
-    Variable_map m_local_var_map;
-
-    /// The map from LLVM values to global HLSL definitions for the current HLSL function.
-    Variable_map m_global_var_map;
-
-    typedef ptr_hash_map<
-        llvm::PHINode,
-        std::pair<hlsl::Def_variable *, hlsl::Def_variable *>
-    >::Type Phi_map;
-
-    /// The map from PHI nodes to in- and out-variables used to implement the PHIs.
-    Phi_map m_phi_var_in_out_map;
-
-    typedef ptr_hash_map<hlsl::Type_struct, hlsl::Def_function *>::Type Struct_map;
-
-    /// A map from HLSL type structs to the function names of generated constructor functions.
-    Struct_map m_struct_constructor_map;
-
-    typedef ptr_hash_map<llvm::Function, hlsl::Def_function *>::Type Function_map;
-
-    /// The map from LLVM functions to HLSL function definitions.
-    Function_map m_llvm_function_map;
-
-    /// If non-null, the definition of the current out-parameter used to pass the result.
-    hlsl::Def_param *m_out_def;
-
-    /// The number of supported texture spaces.
-    unsigned m_num_texture_spaces;
-
-    /// The number of texture result entries.
-    unsigned m_num_texture_results;
-
-    /// Specified the layout of the BSDF_evaluate_data and BSDF_auxiliary_data structs.
-    mi::mdl::Df_handle_slot_mode m_df_handle_slot_mode;
-
-    /// If true, use debug info.
-    bool m_use_dbg;
-
-    /// The data layout of the current module.
-    llvm::DataLayout const *m_cur_data_layout;
+    /// Debug info on types.
+    sl::DebugTypeHelper m_debug_types;
 
     typedef hash_map<string, unsigned, string_hash<string> >::Type Ref_fname_id_map;
 
     /// References source files.
     Ref_fname_id_map m_ref_fnames;
 
-    typedef hash_map<string, llvm::DICompositeType *, string_hash<string> >::Type Struct_info_map;
-
-    /// Debug info regarding struct types.
-    Struct_info_map  m_struct_dbg_info;
-
     /// ID used to create unique names.
     unsigned m_next_unique_name_id;
-};
 
-/// Creates a HLSL writer pass.
-///
-/// \param[in]  alloc                the allocator
-/// \param[in]  type_mapper          the type mapper
-/// \param[in]  out                  the output stream the HLSL code is written to
-/// \param[in]  num_texture_spaces   the number of supported texture spaces
-/// \param[in]  num_texture_results  the number of texture result entries
-/// \param[in]  enable_debug         true, if debug info should be generated
-/// \param[in]  df_handle_slot_mode  the layout of the BSDF_{evaluate, auxiliary}_data structs
-/// \param[out] exp_func_list        list of exported functions
-llvm::Pass *createHLSLWriterPass(
-    mi::mdl::IAllocator                                  *alloc,
-    Type_mapper const                                    &type_mapper,
-    mi::mdl::IOutput_stream                              &out,
-    unsigned                                             num_texture_spaces,
-    unsigned                                             num_texture_results,
-    bool                                                 enable_debug,
-    mi::mdl::Df_handle_slot_mode                         df_handle_slot_mode,
-    mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list);
+    /// If true, use debug info.
+    bool m_use_dbg;
+};
 
 }  // hlsl
 }  // mdl

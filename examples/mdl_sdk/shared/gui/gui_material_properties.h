@@ -75,6 +75,32 @@ public:
         const char* db_name);
 };
 
+
+/// Interface between the Gui_section_material and the renderer to provide the Gui
+/// with all available string constants.
+class Section_material_string_handler
+{
+public:
+    virtual ~Section_material_string_handler() = default;
+
+    /// Get the number of string constants that are currently available for this material.
+    /// It includes the invalid resource with ID 0.
+    virtual mi::Size get_string_count() const = 0;
+
+    /// Get the ID of the i`th string that is currently available.
+    virtual mi::Uint32 get_string_id(mi::Size index) const = 0;
+
+    /// Get the string value of the i`th string that is currently available
+    virtual const char* get_string_name(mi::Size index) const = 0;
+
+    /// Get the ID of a given string in case it is currently available. 0, otherwise.
+    virtual mi::Uint32 get_string_id_by_name(const char* string_name) const = 0;
+
+    /// Get length of the longest string present in the target code.
+    /// Used to limit text input buffers.
+    virtual size_t get_max_string_name_length() const = 0;
+};
+
 /// Indicates the extend or impact of the changes made during the last updates.
 enum class Section_material_update_state
 {
@@ -137,7 +163,8 @@ public: // declare internal data structures interfaces
         const mi::neuraylib::ITarget_code* target_code,
         const mi::neuraylib::ITarget_value_layout* argument_block_layout,
         char* argument_block,
-        Section_material_resource_handler* resource_handler);
+        Section_material_resource_handler* resource_handler,
+        Section_material_string_handler* string_handler);
 
     /// Updates the Gui section and renders the material parameters or a level deeper in the
     /// hierarchy.

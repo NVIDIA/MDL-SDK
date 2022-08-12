@@ -523,61 +523,61 @@ inline Float64 ceil( Float64 s) { return std::ceil(s); }
 /// value \p low if \p s < \p low, or the value \p high if \p s > \p high.
 inline  Uint8 clamp(  Uint8 s,  Uint8 low,  Uint8 high)
 {
-    return ( s < low) ? low : ( s > high) ? high : s;
+    return min(high, max(low, s));
 }
 /// Returns the value \p s if it is in the range [\p low, \p high], the
 /// value \p low if \p s < \p low, or the value \p high if \p s > \p high.
 inline Uint16 clamp( Uint16 s, Uint16 low, Uint16 high)
 {
-    return ( s < low) ? low : ( s > high) ? high : s;
+    return min(high, max(low, s));
 }
 /// Returns the value \p s if it is in the range [\p low, \p high], the
 /// value \p low if \p s < \p low, or the value \p high if \p s > \p high.
 inline Uint32 clamp( Uint32 s, Uint32 low, Uint32 high)
 {
-    return ( s < low) ? low : ( s > high) ? high : s;
+    return min(high, max(low, s));
 }
 /// Returns the value \p s if it is in the range [\p low, \p high], the
 /// value \p low if \p s < \p low, or the value \p high if \p s > \p high.
 inline Uint64 clamp( Uint64 s, Uint64 low, Uint64 high)
 {
-    return ( s < low) ? low : ( s > high) ? high : s;
+    return min(high, max(low, s));
 }
 /// Returns the value \p s if it is in the range [\p low, \p high], the
 /// value \p low if \p s < \p low, or the value \p high if \p s > \p high.
 inline  Sint8 clamp(  Sint8 s,  Sint8 low,  Sint8 high)
 {
-    return ( s < low) ? low : ( s > high) ? high : s;
+    return min(high, max(low, s));
 }
 /// Returns the value \p s if it is in the range [\p low, \p high], the
 /// value \p low if \p s < \p low, or the value \p high if \p s > \p high.
 inline Sint16 clamp( Sint16 s, Sint16 low, Sint16 high)
 {
-    return ( s < low) ? low : ( s > high) ? high : s;
+    return min(high, max(low, s));
 }
 /// Returns the value \p s if it is in the range [\p low, \p high], the
 /// value \p low if \p s < \p low, or the value \p high if \p s > \p high.
 inline Sint32 clamp( Sint32 s, Sint32 low, Sint32 high)
 {
-    return ( s < low) ? low : ( s > high) ? high : s;
+    return min(high, max(low, s));
 }
 /// Returns the value \p s if it is in the range [\p low, \p high], the
 /// value \p low if \p s < \p low, or the value \p high if \p s > \p high.
 inline Sint64 clamp( Sint64 s, Sint64 low, Sint64 high)
 {
-    return ( s < low) ? low : ( s > high) ? high : s;
+    return min(high, max(low, s));
 }
 /// Returns the value \p s if it is in the range [\p low, \p high], the
 /// value \p low if \p s < \p low, or the value \p high if \p s > \p high.
 inline Float32 clamp( Float32 s, Float32 low, Float32 high)
 {
-    return ( s < low) ? low : ( s > high) ? high : s;
+    return min(high, max(low, s));
 }
 /// Returns the value \p s if it is in the range [\p low, \p high], the
 /// value \p low if \p s < \p low, or the value \p high if \p s > \p high.
 inline Float64 clamp( Float64 s, Float64 low, Float64 high)
 {
-    return ( s < low) ? low : ( s > high) ? high : s;
+    return min(high, max(low, s));
 }
 
 /// Returns the cosine of \p a. The angle \p a is specified in radians.
@@ -798,9 +798,9 @@ inline Float32 rsqrt( Float32 s) { return 1.0f / std::sqrt(s); }
 inline Float64 rsqrt( Float64 s) { return 1.0  / std::sqrt(s); }
 
 /// Returns the value \p s clamped to the range [0,1].
-inline Float32 saturate( Float32 s) { return (s < 0.f) ? 0.f : (s > 1.f) ? 1.f : s;}
+inline Float32 saturate( Float32 s) { return min(1.f, max(0.f, s)); }
 /// Returns the value \p s clamped to the range [0,1].
-inline Float64 saturate( Float64 s) { return (s < 0.) ? 0.   : (s > 1. ) ? 1.  : s;}
+inline Float64 saturate( Float64 s) { return min(1. , max(0. , s)); }
 
 /// Returns -1 if \c s<0, 0 if \c s==0, and +1 if \c s>0.
 inline Sint8   sign( Sint8   s)

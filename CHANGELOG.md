@@ -1,11 +1,89 @@
 Change Log
 ==========
+MDL SDK 2022 (359000.2512): 06 Aug 2022
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2022.0 (359000.2512) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+    - Added contribution instructions and a Contributor License Agreement (CLA)
+      form to the open source release.
+    - Increased the required Python version to 3.8 as this is required by LLVM.
+    - Added support for building the MDL SDK and the Examples on MacOS on ARM.
+    - Added methods on `IImage_api` to clone canvases and tiles,
+      to convert the pixel type and for gamma correction on tiles.
+    - Disabling the "materials are functions" feature is now deprecated. To that end,
+      the interface `IMaterial_definition` has been deprecated and most of the
+      interface `IMaterial_instance` has been deprecated. Similarly, for the
+      corresponding enumerators of Element_type and
+      `IMdl_evaluator_api::is_material_parameter_enabled()`. See the documentation
+      linked from `IMaterial_instance` for details. The interfaces with the full set of
+      methods and the enumerators are still available if `MI_NEURAYLIB_DEPRECATED_13_0`
+      is defined.
+    - Added `IMdl_factory::is_valid_mdl_identifier()`. Using this method avoids the
+      need to hardcode the list of MDL keywords yourself. The example "Generate MDL
+      identifier" makes now use of this method.
+    - Both overloads of `IModule::get_function_overloads()` now also accept the simple
+      name to identify the material or function definition.
+    - Disabling encoded names is now deprecated. (There are no related API changes,
+      disabling just emits a corresponding warning.)
+    - Added Python bindings wrapper for `IMdl_evaluator_api` to support additional
+      MDL annotations.
+
+- MDL Compiler and Backends
+    - In this version, all backends depend on LLVM now. The LLVM version was lifted from 8.0 to
+      12.0.1.
+      This change is only visible, if LLVM-IR is chosen as the output format.
+    - This version uses GLSL as a new target language. This new backend supports all capabilities
+      of the already
+      existing native, PTX, and HLSL backends, especially:
+        - It can compile functions.
+        - It can compile materials (by using the libbsdf).
+    - The native runtime now blends between frames for animated textures.
+
+- MDL SDK examples
+    - AxF to MDL
+        - New example that demonstrates how to convert X-Rite AxF file format to MDL.
+    - Example DXR
+        - Added support for the NV_materials_mdl glTF vendor extension.
+        - Added error logging for DRED page fault data.
+    - Example Execution GLSL VK
+        - New example that demonstrates how to execute material subexpressions generated
+          with the GLSL backend in Vulkan.
+    - Example DF Vulkan
+        - New example that demonstrates how to integrate MDL into a Vulkan based renderer
+          with the GLSL backend.
+    - Added a Python example that shows how to create an MDL expression graph and
+      how to write the created material to disk.
+    - Update MaterialX dependency to version 1.38.4.
+
+**Fixed Bugs**
+
+- General
+    - Fixed handling of MDL cast operators in the SDK.
+    - Fixed typos and descriptions in support_definitions.mdl.
+    - Fixed issue with Python bindings and deprecated `IMaterial_definition` interface.
+    - Fixed handling of the uniform modifier in the MDL module builder that caused correct
+      graph constructions to fail.
+
+- MDL Compiler and Backends
+    - Fixed missing struct constructors of re-exported structure types.
+    - Fixed bug in material hash calculation.
+
+- MDL SDK examples
+    - Example DXR
+        - Fixed crash when loading a new scene caused by fences being signaled too early
+          due to a race condition.
+
+
 MDL SDK 2021.1.4 (349500.10153): 24 May 2022
 -----------------------------------------------
 
 ABI compatible with the MDL SDK 2021.1.4 (349500.10153) binary release
 (see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
-
 
 **Added and Changed Features**
 
@@ -18,7 +96,7 @@ ABI compatible with the MDL SDK 2021.1.4 (349500.10153) binary release
 
     - Example DF CUDA
         - Added support for cutouts and backface bsdf/edf.
-      
+
     - Example DF Native
         - Added support for derivatives.
         - Added support shadow rays inside cutouts.
@@ -52,8 +130,8 @@ ABI compatible with the MDL SDK 2021.1.2 (349500.8766) binary release
 
     - Remove wrong error message about failures to construct MDL file paths when using the module
       builder.
-      
-- MDL Compiler and Backends      
+
+- MDL Compiler and Backends
 
     - Remove invalid optimization in DAG hashing.
 
@@ -90,7 +168,7 @@ ABI compatible with the MDL SDK 2021.1.1 (349500.8264) binary release
     - Also encode the simple name of function definitions. For almost all functions this does not
       make any change since the simple name is usually an identifier, except for a couple of
       operators from the builtins module.
-    
+
 - MDL Compiler and Backends
 
     - libbsdf: Fixed incorrect child normal orientation usage in `df::(color_)fresnel_layer`,

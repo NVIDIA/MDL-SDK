@@ -1,16 +1,14 @@
-//===--- llvm-mc-fuzzer.cpp - Fuzzer for the MC layer ---------------------===//
+//===-- llvm-mc-assemble-fuzzer.cpp - Fuzzer for the MC layer -------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
 //===----------------------------------------------------------------------===//
 
 #include "llvm-c/Target.h"
-#include "llvm/MC/SubtargetFeature.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCCodeEmitter.h"
@@ -18,21 +16,24 @@
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCObjectFileInfo.h"
+#include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCParser/AsmLexer.h"
 #include "llvm/MC/MCParser/MCTargetAsmParser.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSectionMachO.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
-#include "llvm/MC/MCTargetOptionsCommandFlags.inc"
-#include "llvm/Support/MemoryBuffer.h"
+#include "llvm/MC/MCTargetOptionsCommandFlags.h"
+#include "llvm/MC/SubtargetFeature.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileUtilities.h"
-#include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/Host.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/ToolOutputFile.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
 
@@ -161,7 +162,9 @@ int AssembleOneInput(const uint8_t *Data, size_t Size) {
     abort();
   }
 
-  std::unique_ptr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*MRI, TripleName));
+  MCTargetOptions MCOptions = mc::InitMCTargetOptionsFromFlags();
+  std::unique_ptr<MCAsmInfo> MAI(
+      TheTarget->createMCAsmInfo(*MRI, TripleName, MCOptions));
   if (!MAI) {
     errs() << "Unable to create target asm info!";
     abort();
@@ -193,11 +196,9 @@ int AssembleOneInput(const uint8_t *Data, size_t Size) {
   std::unique_ptr<MCCodeEmitter> CE = nullptr;
   std::unique_ptr<MCAsmBackend> MAB = nullptr;
 
-  MCTargetOptions MCOptions = InitMCTargetOptionsFromFlags();
-
   std::string OutputString;
   raw_string_ostream Out(OutputString);
-  auto FOut = llvm::make_unique<formatted_raw_ostream>(Out);
+  auto FOut = std::make_unique<formatted_raw_ostream>(Out);
 
   std::unique_ptr<MCStreamer> Str;
 
@@ -211,7 +212,7 @@ int AssembleOneInput(const uint8_t *Data, size_t Size) {
     std::error_code EC;
     const std::string OutputFilename = "-";
     auto Out =
-        llvm::make_unique<ToolOutputFile>(OutputFilename, EC, sys::fs::F_None);
+        std::make_unique<ToolOutputFile>(OutputFilename, EC, sys::fs::OF_None);
     if (EC) {
       errs() << EC.message() << '\n';
       abort();
@@ -223,16 +224,16 @@ int AssembleOneInput(const uint8_t *Data, size_t Size) {
     std::unique_ptr<buffer_ostream> BOS;
     raw_pwrite_stream *OS = &Out->os();
     if (!Out->os().supportsSeeking()) {
-      BOS = make_unique<buffer_ostream>(Out->os());
+      BOS = std::make_unique<buffer_ostream>(Out->os());
       OS = BOS.get();
     }
 
     MCCodeEmitter *CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx);
     MCAsmBackend *MAB = TheTarget->createMCAsmBackend(*STI, *MRI, MCOptions);
     Str.reset(TheTarget->createMCObjectStreamer(
-        TheTriple, Ctx, std::unique_ptr<MCAsmBackend>(MAB), *OS,
-        std::unique_ptr<MCCodeEmitter>(CE), *STI, MCOptions.MCRelaxAll,
-        MCOptions.MCIncrementalLinkerCompatible,
+        TheTriple, Ctx, std::unique_ptr<MCAsmBackend>(MAB),
+        MAB->createObjectWriter(*OS), std::unique_ptr<MCCodeEmitter>(CE), *STI,
+        MCOptions.MCRelaxAll, MCOptions.MCIncrementalLinkerCompatible,
         /*DWARFMustBeAtTheEnd*/ false));
   }
   const int Res = AssembleInput(ProgName, TheTarget, SrcMgr, Ctx, *Str, *MAI, *STI,

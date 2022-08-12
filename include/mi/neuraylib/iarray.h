@@ -142,7 +142,7 @@ public:
     virtual bool empty() const = 0;
 };
 
-/*@}*/ // end group mi_neuray_collections
+/**@}*/ // end group mi_neuray_collections
 
 } // namespace mi
 

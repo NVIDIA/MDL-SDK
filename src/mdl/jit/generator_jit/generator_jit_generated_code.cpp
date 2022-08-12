@@ -332,12 +332,12 @@ private:
     }
 
 private:
-    LLVM_code_generator &m_code_gen;
+    LLVM_code_generator         &m_code_gen;
     vector<unsigned char>::Type &m_layout_buf;
-    llvm::DataLayout const *m_data_layout;
-    size_t m_cur_offs;
-    size_t m_total_size;
-    vector<Build_state>::Type m_child_worklist;
+    llvm::DataLayout const      *m_data_layout;
+    size_t                      m_cur_offs;
+    size_t                      m_total_size;
+    vector<Build_state>::Type  m_child_worklist;
 };
 
 // ------------------------------- Generated_code_value_layout ------------------------------
@@ -761,7 +761,7 @@ size_t Generated_code_executable_base<I>::add_function_df_handle(
     return m_func_infos[func_index].m_df_handle_name_table.size() - 1;
 }
 
-/// Get the state properties used by a function.
+// Get the state properties used by a function.
 template <class I>
 IGenerated_code_executable::State_usage Generated_code_executable_base<I>::get_function_state_usage(
     size_t func_index) const
@@ -772,265 +772,44 @@ IGenerated_code_executable::State_usage Generated_code_executable_base<I>::get_f
     return m_func_infos[func_index].m_state_usage;
 }
 
-// ----------------------------------- Generated_code_jit -----------------------------------
-
-// Constructor.
-Generated_code_jit::Generated_code_jit(
-    IAllocator  *alloc,
-    Jitted_code *jitted_code,
-    char const  *filename)
-: Base(alloc)
-, m_builder(alloc)
-, m_llvm_context()
-, m_jitted_code(mi::base::make_handle_dup(jitted_code))
-, m_messages(alloc, filename)
-, m_source_code(alloc)
-, m_render_state_usage(-1)
-, m_mapped_strings(alloc)
-{
-}
-
-// Destructor.
-Generated_code_jit::~Generated_code_jit()
-{
-}
-
-// Get the kind of code generated.
-IGenerated_code::Kind Generated_code_jit::get_kind() const
-{
-    return CK_EXECUTABLE;
-}
-
-// Get the target language.
-char const *Generated_code_jit::get_target_language() const
-{
-    return "executable";
-}
-
-// Check if the code contents are valid.
-bool Generated_code_jit::is_valid() const
-{
-    return m_messages.get_error_message_count() == 0;
-}
-
-// Access messages.
-Messages const &Generated_code_jit::access_messages() const
-{
-    return m_messages;
-}
-
-// Acquires a const interface.
-mi::base::IInterface const *Generated_code_jit::get_interface(
-    mi::base::Uuid const &interface_id) const
-{
-    if (interface_id == IPrinter_interface::IID()) {
-        return m_builder.create<JIT_code_printer>(m_builder.get_allocator());
-    }
-    return Base::get_interface(interface_id);
-}
-
-// Returns the assembler code of the executable code module if available.
-char const *Generated_code_jit::get_source_code(size_t &size) const
-{
-    size = m_source_code.size();
-    return m_source_code.c_str();
-}
-
-// Get the data for the read-only data segment if available.
-char const *Generated_code_jit::get_ro_data_segment(size_t &size) const
-{
-    size = 0;
-    return NULL;
-}
-
-// Get the used state properties of  the generated lambda function code.
-IGenerated_code_executable::State_usage Generated_code_jit::get_state_usage() const
-{
-    return m_render_state_usage;
-}
-
 // Get the number of captured argument block layouts.
-size_t Generated_code_jit::get_captured_argument_layouts_count() const
+template <class I>
+size_t Generated_code_executable_base<I>::get_captured_argument_layouts_count() const
 {
-    // FIXME
-    return 0;
+    return m_captured_arguments_layouts.size();
 }
 
 // Get a captured arguments block layout if available.
-IGenerated_code_value_layout const *Generated_code_jit::get_captured_arguments_layout(
+template <class I>
+IGenerated_code_value_layout const *
+Generated_code_executable_base<I>::get_captured_arguments_layout(
     size_t i) const
 {
-    // FIXME
-    return NULL;
+    if (i >= m_captured_arguments_layouts.size()) {
+        return NULL;
+    }
+    IGenerated_code_value_layout const *layout = m_captured_arguments_layouts[i].get();
+    layout->retain();
+    return layout;
 }
 
 // Get the number of mapped string constants used inside the generated code.
-size_t Generated_code_jit::get_string_constant_count() const
+template <class I>
+size_t Generated_code_executable_base<I>::get_string_constant_count() const
 {
-    return m_mapped_strings.size();
+    return m_mappend_strings.size();
 }
 
 // Get the mapped string constant for a given id.
-char const *Generated_code_jit::get_string_constant(size_t id) const
+template <class I>
+char const *Generated_code_executable_base<I>::get_string_constant(size_t id) const
 {
-    if (id < m_mapped_strings.size()) {
-        return m_mapped_strings[id].c_str();
+    if (id < m_mappend_strings.size()) {
+        return m_mappend_strings[id].c_str();
     }
     return NULL;
 }
 
-// Add a mapped string.
-void Generated_code_jit::add_mapped_string(char const *s, size_t id)
-{
-    if (id >= m_mapped_strings.size()) {
-        m_mapped_strings.resize(id + 1, string(get_allocator()));
-    }
-    m_mapped_strings[id] = string(s, get_allocator());
-}
-
-// Compile a whole module into LLVM-IR.
-void Generated_code_jit::compile_module_to_llvm(
-    IModule const      *module,
-    IModule_cache      *module_cache,
-    Options_impl const &options)
-{
-    Module const *mod = impl_cast<Module>(module);
-    mi::base::Handle<MDL> compiler(mod->get_compiler());
-
-    llvm::LLVMContext llvm_context;
-
-    LLVM_code_generator llvm_generator(
-        m_jitted_code.get(),
-        compiler.get(),
-        module_cache,
-        m_messages,
-        llvm_context,
-        /*target_language=*/LLVM_code_generator::TL_NATIVE,
-        Type_mapper::TM_NATIVE_X86,
-        /*sm_version=*/0,
-        /*has_tex_handler=*/true,
-        Type_mapper::SSM_FULL_SET,
-        /*num_texture_spaces=*/4,
-        /*num_texture_results=*/32,
-        options,
-        /*incremental=*/false,
-        /*state_mapping=*/0,
-        /*res_manag=*/NULL,
-        /*debug=*/false);
-
-    // for now, mark exported functions as entries, so the module will not be empty
-    llvm_generator.mark_exported_funcs_as_entries();
-
-    std::unique_ptr<llvm::Module> llvm_module(llvm_generator.compile_module(module));
-
-    if (llvm_module) {
-        llvm_generator.llvm_ir_compile(llvm_module.get(), m_source_code);
-    } else {
-        size_t file_id = m_messages.register_fname(module->get_filename());
-        m_messages.add_error_message(INTERNAL_COMPILER_ERROR, MESSAGE_CLASS, file_id, NULL,
-            "Compiling LLVM code failed");
-    }
-
-    m_render_state_usage = llvm_generator.get_render_state_usage();
-}
-
-// Compile a whole module into PTX.
-void Generated_code_jit::compile_module_to_ptx(
-    IModule const      *module,
-    IModule_cache      *module_cache,
-    Options_impl const &options)
-{
-    Module const *mod = impl_cast<Module>(module);
-    mi::base::Handle<MDL> compiler(mod->get_compiler());
-
-    llvm::LLVMContext llvm_context;
-
-    unsigned sm_version = 20;
-    LLVM_code_generator llvm_generator(
-        m_jitted_code.get(),
-        compiler.get(),
-        module_cache,
-        m_messages,
-        llvm_context,
-        /*target_language=*/LLVM_code_generator::TL_PTX,
-        Type_mapper::TM_PTX,
-        sm_version,
-        /*has_tex_handler=*/false,
-        Type_mapper::SSM_FULL_SET,
-        /*num_texture_spaces=*/4,
-        /*num_texture_results=*/32,
-        options,
-        /*incremental=*/false,
-        /*state_mapping=*/0,
-        /*res_manag=*/NULL,
-        /*debug=*/false);
-
-    // for now, mark exported functions as entries, so the module will not be empty
-    llvm_generator.mark_exported_funcs_as_entries();
-
-    std::unique_ptr<llvm::Module> llvm_module(llvm_generator.compile_module(module));
-    if (llvm_module) {
-        // FIXME: pass the sm version here. However, this is currently used for debugging
-        // only.
-        llvm_generator.ptx_compile(llvm_module.get(), m_source_code);
-    } else {
-        size_t file_id = m_messages.register_fname(module->get_filename());
-        m_messages.add_error_message(INTERNAL_COMPILER_ERROR, MESSAGE_CLASS, file_id, NULL,
-            "Compiling LLVM code failed");
-    }
-
-    m_render_state_usage = llvm_generator.get_render_state_usage();
-}
-
-// Compile a whole module into HLSL.
-void Generated_code_jit::compile_module_to_hlsl(
-    IModule const      *module,
-    IModule_cache      *module_cache,
-    Options_impl const &options)
-{
-    Module const *mod = impl_cast<Module>(module);
-    mi::base::Handle<MDL> compiler(mod->get_compiler());
-
-    llvm::LLVMContext llvm_context;
-    HLSLOptPassGate opt_pass_gate;
-    llvm_context.setOptPassGate(opt_pass_gate);
-
-    LLVM_code_generator llvm_generator(
-        m_jitted_code.get(),
-        compiler.get(),
-        module_cache,
-        m_messages,
-        llvm_context,
-        /*target_language=*/LLVM_code_generator::TL_HLSL,
-        Type_mapper::TM_HLSL,
-        /*sm_version=*/0,
-        /*has_tex_handler=*/false,
-        Type_mapper::SSM_FULL_SET,
-        /*num_texture_spaces=*/4,
-        /*num_texture_results=*/32,
-        options,
-        /*incremental=*/false,
-        /*state_mapping=*/Type_mapper::SM_INCLUDE_UNIFORM_STATE,  // include uniform state for HLSL
-        /*res_manag=*/NULL,
-        /*debug=*/false);
-
-    // for now, mark exported functions as entries, so the module will not be empty
-    llvm_generator.mark_exported_funcs_as_entries();
-
-    // the HLSL backend expects the RO-data-segment to be used
-    llvm_generator.enable_ro_data_segment();
-
-    std::unique_ptr<llvm::Module> llvm_module(llvm_generator.compile_module(module));
-    if (llvm_module) {
-        llvm_generator.hlsl_compile(llvm_module.get(), m_source_code);
-    } else {
-        size_t file_id = m_messages.register_fname(module->get_filename());
-        m_messages.add_error_message(INTERNAL_COMPILER_ERROR, MESSAGE_CLASS, file_id, NULL,
-            "Compiling LLVM code failed");
-    }
-
-    m_render_state_usage = llvm_generator.get_render_state_usage();
-}
 
 // --------------------------------- Generated_code_source ----------------------------------
 
@@ -1043,15 +822,32 @@ Generated_code_source::Generated_code_source(
 , m_render_state_usage(-1)
 , m_messages(alloc, "<lambda expression>")
 , m_src_code(alloc)
-, m_ro_segment(alloc)
-, m_captured_arguments_layouts(alloc)
-, m_mappend_strings(alloc)
+, m_data_segments(0, alloc)
 {
 }
 
 // Destructor.
 Generated_code_source::~Generated_code_source()
 {
+    Allocator_builder builder(get_allocator());
+
+    for (size_t i = 0, n = m_data_segments.size(); i < n; ++i) {
+        Source_segment *seg = m_data_segments[i];
+        builder.free(seg);
+        m_data_segments[i] = nullptr;
+    }
+}
+
+// Acquires a const interface.
+mi::base::IInterface const *Generated_code_source::get_interface(
+    mi::base::Uuid const &interface_id) const
+{
+    if (interface_id == IPrinter_interface::IID()) {
+        Allocator_builder builder(get_allocator());
+
+        return builder.create<JIT_code_printer>(builder.get_allocator());
+    }
+    return Base::get_interface(interface_id);
 }
 
 // Get the kind of code generated.
@@ -1085,11 +881,48 @@ char const *Generated_code_source::get_source_code(size_t &size) const
     return m_src_code.c_str();
 }
 
-// Get the data for the read-only data segment if available.
-char const *Generated_code_source::get_ro_data_segment(size_t &size) const
+// Get the number of data segments associated with this code.
+size_t Generated_code_source::get_data_segment_count() const
 {
-    size = m_ro_segment.size();
-    return size == 0 ? NULL : &m_ro_segment[0];
+    return m_data_segments.size();
+}
+
+// Get the i'th data segment if available.
+IGenerated_code_executable::Segment const *Generated_code_source::get_data_segment(
+    size_t i) const
+{
+    if (i < m_data_segments.size()) {
+        return &m_data_segments[i]->desc;
+    }
+    return nullptr;
+}
+
+// Add an data segment.
+size_t Generated_code_source::add_data_segment(
+    char const          *name,
+    unsigned char const *data,
+    size_t              size)
+{
+    Allocator_builder builder(get_allocator());
+
+    size_t l  = strlen(name);
+    char   *p = (char *)builder.malloc(sizeof(Source_segment) + size + l);
+    char   *n = p + sizeof(Source_segment) - 1 + size;
+
+    strncpy(n, name, l);
+    n[l] = '\0';
+
+    Source_segment *seg = (Source_segment *)p;
+
+    seg->desc.name = n;
+    seg->desc.data = seg->data;
+    seg->desc.size = size;
+
+    memcpy(seg->data, data, size);
+
+    m_data_segments.push_back(seg);
+
+    return m_data_segments.size() - 1;
 }
 
 // Get the used state properties of  the generated lambda function code.
@@ -1097,49 +930,6 @@ Generated_code_source::State_usage Generated_code_source::get_state_usage() cons
 {
     return m_render_state_usage;
 }
-
-// Get the number of captured argument block layouts.
-size_t Generated_code_source::get_captured_argument_layouts_count() const
-{
-    return m_captured_arguments_layouts.size();
-}
-
-// Get a captured arguments block layout if available.
-IGenerated_code_value_layout const *Generated_code_source::get_captured_arguments_layout(
-    size_t i) const
-{
-    if (i >= m_captured_arguments_layouts.size())
-        return NULL;
-
-    IGenerated_code_value_layout const *layout = m_captured_arguments_layouts[i].get();
-    layout->retain();
-    return layout;
-}
-
-// Get the number of mapped string constants used inside the generated code.
-size_t Generated_code_source::get_string_constant_count() const
-{
-    return m_mappend_strings.size();
-}
-
-// Get the mapped string constant for a given id.
-char const *Generated_code_source::get_string_constant(size_t id) const
-{
-    if (id < m_mappend_strings.size()) {
-        return m_mappend_strings[id].c_str();
-    }
-    return NULL;
-}
-
-// Add a mapped string.
-void Generated_code_source::add_mapped_string(char const *s, size_t id)
-{
-    if (id >= m_mappend_strings.size()) {
-        m_mappend_strings.resize(id + 1, string(get_allocator()));
-    }
-    m_mappend_strings[id] = string(s, get_allocator());
-}
-
 
 // Constructor.
 Generated_code_source::Source_res_manag::Source_res_manag(
@@ -1252,7 +1042,6 @@ Generated_code_lambda_function::Generated_code_lambda_function(
 : Base(jitted_code->get_allocator())
 , m_jitted_code(mi::base::make_handle_dup(jitted_code))
 , m_context()
-, m_module(NULL)
 , m_module_key(0)
 , m_jitted_funcs(get_allocator())
 , m_res_entries(get_allocator())
@@ -1261,13 +1050,11 @@ Generated_code_lambda_function::Generated_code_lambda_function(
 , m_res_data()
 , m_exc_handler(NULL)
 , m_aborted(0)
+, m_ro_segment_desc()
 , m_ro_segment(NULL)
-, m_ro_length(0)
 , m_render_state_usage(
     IGenerated_code_executable::SU_ALL_VARYING_MASK |
     IGenerated_code_executable::SU_ALL_UNIFORM_MASK)
-, m_captured_arguments_layouts(get_allocator())
-, m_mappend_strings(get_allocator())
 {
 }
 
@@ -1280,8 +1067,7 @@ Generated_code_lambda_function::~Generated_code_lambda_function()
         alloc->free((void *)m_ro_segment);
     }
 
-    if (m_module != NULL) {
-        m_module = NULL;  // avoid dangling pointer, module will be deleted by delete_llvm_module
+    if (m_module_key != NULL) {
         m_jitted_code->delete_llvm_module(m_module_key);
     }
 }
@@ -1318,14 +1104,17 @@ char const *Generated_code_lambda_function::get_source_code(size_t &size) const
     return NULL;
 }
 
-// Get the data for the read-only data segment if available.
-char const *Generated_code_lambda_function::get_ro_data_segment(size_t &size) const
+// Get the number of data segments associated with this code.
+size_t Generated_code_lambda_function::get_data_segment_count() const
 {
-    size = m_ro_length;
+    return m_ro_segment_desc.size > 0 ? 1 : 0;
+}
 
-    // return the address aligned by 16, this is, were the data is stored
-    uintptr_t adr = ((uintptr_t)(m_ro_segment) + 15) & ~15;
-    return (char const *)adr;
+// Get the i'th data segment if available.
+IGenerated_code_executable::Segment const *Generated_code_lambda_function::get_data_segment(
+    size_t i) const
+{
+    return m_ro_segment_desc.size > 0 ? &m_ro_segment_desc : NULL;
 }
 
 // Initialize the resource handling of this compiled lambda function.
@@ -1726,47 +1515,6 @@ IGenerated_code_lambda_function::State_usage
     return m_render_state_usage;
 }
 
-// Get the number of captured argument block layouts.
-size_t Generated_code_lambda_function::get_captured_argument_layouts_count() const
-{
-    return m_captured_arguments_layouts.size();
-}
-
-// Get a captured arguments block layout if available.
-IGenerated_code_value_layout const *Generated_code_lambda_function::get_captured_arguments_layout(
-    size_t i) const
-{
-    if (i >= m_captured_arguments_layouts.size())
-        return NULL;
-
-    IGenerated_code_value_layout const *layout = m_captured_arguments_layouts[i].get();
-    layout->retain();
-    return layout;
-}
-
-// Get the number of mapped string constants used inside the generated code.
-size_t Generated_code_lambda_function::get_string_constant_count() const
-{
-    return m_mappend_strings.size();
-}
-
-// Get the mapped string constant for a given id.
-char const *Generated_code_lambda_function::get_string_constant(size_t id) const
-{
-    if (id < m_mappend_strings.size())
-        return m_mappend_strings[id].c_str();
-    return NULL;
-}
-
-// Add a mapped string.
-void Generated_code_lambda_function::add_mapped_string(char const *s, size_t id)
-{
-    if (id >= m_mappend_strings.size()) {
-        m_mappend_strings.resize(id + 1, string(get_allocator()));
-    }
-    m_mappend_strings[id] = string(s, get_allocator());
-}
-
 // Set the entry point the the JIT compiled function.
 void Generated_code_lambda_function::add_entry_point(void *address)
 {
@@ -1778,19 +1526,21 @@ void Generated_code_lambda_function::set_ro_segment(char const *data, size_t siz
 {
     IAllocator *alloc = m_jitted_code->get_allocator();
 
-    if (m_ro_segment != NULL)
+    if (m_ro_segment != NULL) {
         alloc->free((void *)m_ro_segment);
+    }
     m_ro_segment = NULL;
 
-    m_ro_length = size;
+    m_ro_segment_desc.name = "RO";
+    m_ro_segment_desc.size = size;
     if (size > 0) {
         m_ro_segment = (char *)alloc->malloc(size + 15);
 
         // the data will be directly accessible from the JITed code, for that
         // it must be aligned by 16
         uintptr_t adr = ((uintptr_t)m_ro_segment + 15) & ~15;
-        char *p = (char *)adr;
-        memcpy(p, data, size);
+        m_ro_segment_desc.data = (unsigned char *)adr;
+        memcpy((char *)m_ro_segment_desc.data, data, size);
     }
 }
 
@@ -1848,7 +1598,7 @@ size_t Generated_code_lambda_function::register_string(
 // Constructor.
 Generated_code_lambda_function::Lambda_res_manag::Lambda_res_manag(
     Generated_code_lambda_function &lambda,
-    Resource_attr_map const       *resource_map)
+    Resource_attr_map              *resource_map)
 : m_lambda(lambda)
 , m_resource_map(resource_map)
 , m_res_indexes(
@@ -1975,6 +1725,12 @@ void Generated_code_lambda_function::Lambda_res_manag::import_from_resource_attr
 {
     if (resource_map->size() == 0)
         return;
+
+    if (m_resource_map != NULL) {
+        m_resource_map->insert(resource_map->begin(), resource_map->end());
+        return;
+    }
+
     // Sort by index to avoid indeterministic behavior due to pointer hash map.
     mi::mdl::vector<Resource_index_pair>::Type sorted_resources(m_lambda.get_allocator());
     sorted_resources.reserve(resource_map->size());

@@ -60,7 +60,7 @@ unsigned DLL_CALLCONV read_handler( void* buffer, unsigned size, unsigned count,
         return 0;
 
     mi::neuraylib::IReader* reader = static_cast<mi::neuraylib::IReader*>( handle);
-    return static_cast<unsigned>( reader->read( static_cast<char*>( buffer), size*count) / size);
+    return static_cast<unsigned>( reader->read( static_cast<char*>( buffer), (mi::Sint64)size*count) / size);
 }
 
 unsigned DLL_CALLCONV write_handler( void* buffer, unsigned size, unsigned count, fi_handle handle)
@@ -70,7 +70,7 @@ unsigned DLL_CALLCONV write_handler( void* buffer, unsigned size, unsigned count
 
     mi::neuraylib::IWriter* writer = static_cast<mi::neuraylib::IWriter*>( handle);
     return static_cast<unsigned>(
-        writer->write( static_cast<const char*>( buffer), size*count) / size);
+        writer->write( static_cast<const char*>( buffer), (mi::Sint64)size*count) / size);
 }
 
 int DLL_CALLCONV seek_handler( fi_handle handle, long offset, int origin)
@@ -145,7 +145,7 @@ const char* convert_freeimage_pixel_type_to_neuray_pixel_type( FIBITMAP* bitmap,
 {
     convert = false;
 
-    FREE_IMAGE_TYPE type = FreeImage_GetImageType( bitmap);
+    const FREE_IMAGE_TYPE type = FreeImage_GetImageType( bitmap);
 
     // Handle formats with more than 8 bits per pixel.
     if( type != FIT_BITMAP) {
@@ -160,7 +160,7 @@ const char* convert_freeimage_pixel_type_to_neuray_pixel_type( FIBITMAP* bitmap,
     }
 
     // Handle directly supported formats with at most 8 bits per pixel.
-    unsigned int bpp = FreeImage_GetBPP( bitmap);
+    const unsigned int bpp = FreeImage_GetBPP( bitmap);
     if( bpp == 32)
        return "Rgba";
     else if( bpp == 24)
@@ -217,7 +217,8 @@ bool copy_from_bitmap_to_tile( FIBITMAP* bitmap, mi::neuraylib::ITile* tile)
 #if(FI_RGBA_RED == 2) && (FI_RGBA_GREEN == 1) && (FI_RGBA_BLUE == 0) && (FI_RGBA_ALPHA == 3)
     if( strcmp( pixel_type, "Rgb" ) == 0 || strcmp( pixel_type, "Rgba" ) == 0) {
 
-#if 0//defined(_WIN32) && (defined(HAS_SSE) || defined(SSE_INTRINSICS)) //!! meh, otherwise needs special GCC compile flags //!! also, testing with VC2015, there was no real benefit using SSSE3, so most likely memory limited
+#if 0//defined(HAS_SSE) || defined(SSE_INTRINSICS) //!! testing with VC2015, there was no real benefit using SSSE3, so most likely memory limited
+#if defined(_WIN32) && defined(MI_ARCH_X86_64)
         static int ssse3_supported = -1;
         if(ssse3_supported == -1)
         {
@@ -225,6 +226,9 @@ bool copy_from_bitmap_to_tile( FIBITMAP* bitmap, mi::neuraylib::ITile* tile)
             __cpuid(cpuInfo,1);
             ssse3_supported = (cpuInfo[2] & (1 << 9));
         }
+#else
+        constexpr bool ssse3_supported = true;
+#endif
 #endif
         // Copy pixel data pixel by pixel due to the different RGB component order.
         const mi::Uint32 bytes_per_pixel = get_bytes_per_pixel( pixel_type);
@@ -239,7 +243,7 @@ bool copy_from_bitmap_to_tile( FIBITMAP* bitmap, mi::neuraylib::ITile* tile)
                 const mi::Uint32* const __restrict src = reinterpret_cast<const mi::Uint32*>(src_start + y*(size_t)pitch);
                 mi::Uint32 x = 0;
                 const mi::Uint32 xe = x_end;
-#if 0//defined(_WIN32) && (defined(HAS_SSE) || defined(SSE_INTRINSICS)) // actually uses SSSE3 //!! meh, otherwise needs special GCC compile flags
+#if 0//defined(HAS_SSE) || defined(SSE_INTRINSICS) // actually uses SSSE3
                 if(ssse3_supported)
                 {
                     const __m128i mask = _mm_setr_epi8(2,1,0,3, 6,5,4,7, 10,9,8,11, 14,13,12,15);
@@ -261,7 +265,7 @@ bool copy_from_bitmap_to_tile( FIBITMAP* bitmap, mi::neuraylib::ITile* tile)
                 const char* __restrict src = src_start + y*(size_t)pitch;
                 mi::Uint32 x = 0;
                 const mi::Uint32 xe = x_end;
-#if 0//defined(_WIN32) && (defined(HAS_SSE) || defined(SSE_INTRINSICS)) // actually uses SSSE3 //!! meh, otherwise needs special GCC compile flags
+#if 0//defined(HAS_SSE) || defined(SSE_INTRINSICS) // actually uses SSSE3
                 if(ssse3_supported)
                 {
                     const __m128i mask0 = _mm_setr_epi8(2,1,0, 5,4,3, 8,7,6, 11,10,9, 14,13,12, 15); //!! last entry
@@ -298,7 +302,7 @@ bool copy_from_bitmap_to_tile( FIBITMAP* bitmap, mi::neuraylib::ITile* tile)
                     dest[1] = src[FI_RGBA_GREEN];
                     dest[2] = src[FI_RGBA_BLUE];
                 }
-                dest += (tile_width - x_end) * 3;
+                dest += (mi::Size)(tile_width - x_end) * 3;
             }
         }
 
@@ -324,13 +328,13 @@ bool copy_from_bitmap_to_tile( FIBITMAP* bitmap, mi::neuraylib::ITile* tile)
         const char* const __restrict src_start
             = static_cast<char*>( static_cast<void*>( FreeImage_GetBits( bitmap)));
         const size_t pitch = FreeImage_GetPitch( bitmap);
-        if( tile_width * bytes_per_pixel == pitch)
+        if( (size_t)tile_width * bytes_per_pixel == pitch)
             memcpy( dest, src_start, y_end * (size_t)bytes_per_scanline);
         else {
             for( mi::Uint32 y = 0; y < y_end; ++y) {
                 const char* const __restrict src = src_start + y*pitch;
                 memcpy( dest, src, bytes_per_scanline);
-                dest += tile_width * bytes_per_pixel;
+                dest += (mi::Size)tile_width * bytes_per_pixel;
             }
         }
         return true;
@@ -368,7 +372,7 @@ bool copy_from_tile_to_bitmap( const mi::neuraylib::ITile* tile, FIBITMAP* bitma
                 src  += bytes_per_pixel;
                 dest += bytes_per_pixel;
             }
-            src += (tile_width - x_end) * bytes_per_pixel;
+            src += (mi::Size)(tile_width - x_end) * bytes_per_pixel;
         }
         return true;
 
@@ -388,13 +392,13 @@ bool copy_from_tile_to_bitmap( const mi::neuraylib::ITile* tile, FIBITMAP* bitma
             = static_cast<char*>( static_cast<void*>( FreeImage_GetBits( bitmap)));
         const size_t pitch = FreeImage_GetPitch( bitmap);
 
-        if( tile_width * bytes_per_pixel == pitch)
+        if( (size_t)tile_width * bytes_per_pixel == pitch)
             memcpy( dest_start, src, y_end * (size_t)bytes_per_scanline);
         else {
             for( mi::Uint32 y = 0; y < y_end; ++y) {
                 char* const __restrict dest = dest_start + y*pitch;
                 memcpy( dest, src, bytes_per_scanline);
-                src += tile_width * bytes_per_pixel;
+                src += (mi::Size)tile_width * bytes_per_pixel;
             }
         }
         return true;

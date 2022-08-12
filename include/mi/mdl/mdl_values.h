@@ -727,6 +727,13 @@ inline IValue_resource const *as<IValue_resource>(IValue const *value) { //-V659
     return as<IValue_resource>(const_cast<IValue *>(value));
 }
 
+/// Cast to sub-type or return NULL if type does not match or the value is NULL.
+template<typename T>
+inline T const *as_or_null(IValue const *value)
+{
+    return value != NULL ? as<T>(value) : NULL;
+}
+
 /// Check if a value is of a certain type.
 template<typename T>
 bool is(const IValue *value) {

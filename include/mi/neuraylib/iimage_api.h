@@ -162,6 +162,12 @@ public:
     virtual IArray* create_mipmaps(
         const ICanvas* canvas, Float32 gamma_override = 0.0f) const = 0;
 
+    /// Creates a copy of the passed tile.
+    virtual ITile* clone_tile( const ITile* tile) const = 0;
+
+    /// Creates a (deep) copy of the passed canvas.
+    virtual ICanvas* clone_canvas( const ICanvas* canvas) const = 0;
+
     //@}
     /// \name Conversion between canvases and raw memory buffers
     //@{
@@ -327,6 +333,23 @@ public:
     /// \name Utility methods for canvases
     //@{
 
+    /// Converts a tile to a different pixel type.
+    ///
+    /// \note This method creates a copy if the passed-in tiles already has the desired pixel type.
+    /// (It cannot return the passed-in tile since this would require a const cast.) If
+    /// performance is critical, you should compare pixel types yourself and skip the method call if
+    /// pixel type conversion is not needed.)
+    ///
+    /// See #convert(const ICanvas*,const char*)const for details of the conversion process.
+    ///
+    /// \param tile         The tile to convert (or to copy).
+    /// \param pixel_type   The desired pixel type. See \ref mi_neuray_types for a list of supported
+    ///                     pixel types. If this pixel type is the same as the pixel type of \p
+    ///                     tile, then a copy of the tile is returned.
+    /// \return             A tile with the requested pixel type, or \c NULL in case of errors
+    ///                     (\p tile is \c NULL, or \p pixel_type is not valid).
+    virtual ITile* convert( const ITile* tile, const char* pixel_type) const = 0;
+
     /// Converts a canvas to a different pixel type.
     ///
     /// \note This method creates a copy if the passed-in canvas already has the desired pixel type.
@@ -363,6 +386,17 @@ public:
     /// \return             A canvas with the requested pixel type, or \c NULL in case of errors
     ///                     (\p canvas is \c NULL, or \p pixel_type is not valid).
     virtual ICanvas* convert( const ICanvas* canvas, const char* pixel_type) const = 0;
+
+    /// Sets the gamma value of a tile and adjusts the pixel data accordingly.
+    ///
+    /// \note Gamma adjustments are always done in pixel type "Color" or "Rgb_fp". If necessary,
+    ///       the pixel data is converted forth and back automatically (which needs temporary
+    ///       buffers).
+    ///
+    /// \param tile             The tile whose pixel data is to be adjusted.
+    /// \param old_gamma        The old gamma value.
+    /// \param new_gamma        The new gamma value.
+    virtual void adjust_gamma( ITile* tile, Float32 old_gamma, Float32 new_gamma) const = 0;
 
     /// Sets the gamma value of a canvas and adjusts the pixel data accordingly.
     ///
@@ -432,7 +466,7 @@ public:
 
 };
 
-/*@}*/ // end group mi_neuray_rendering / mi_neuray_rtmp
+/**@}*/ // end group mi_neuray_rendering / mi_neuray_rtmp
 
 } // namespace neuraylib
 

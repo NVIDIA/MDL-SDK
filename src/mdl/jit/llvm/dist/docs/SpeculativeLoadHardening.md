@@ -255,7 +255,7 @@ if (untrusted_size_from_caller < sizeof(local_buffer)) {
   memcpy(local_buffer, untrusted_data_from_caller,
          untrusted_size_from_caller);
   // The stack has now been smashed, writing an attacker-controlled
-  // address over the return adress.
+  // address over the return address.
   minor_processing(local_buffer);
   return;
   // Control will speculate to the attacker-written address.
@@ -407,14 +407,12 @@ value to be particularly effective when used below to harden loads.
 
 ##### Indirect Call, Branch, and Return Predicates
 
-(Not yet implemented.)
-
 There is no analogous flag to use when tracing indirect calls, branches, and
 returns. The predicate state must be accumulated through some other means.
 Fundamentally, this is the reverse of the problem posed in CFI: we need to
 check where we came from rather than where we are going. For function-local
 jump tables, this is easily arranged by testing the input to the jump table
-within each destination:
+within each destination (not yet implemented, use retpolines):
 ```
         pushq   %rax
         xorl    %eax, %eax              # Zero out initial predicate state.
@@ -462,7 +460,8 @@ return_addr:
 ```
 
 For an ABI without a "red zone" (and thus unable to read the return address
-from the stack), mitigating returns face similar problems to calls below.
+from the stack), we can compute the expected return address prior to the call
+into a register preserved across the call and use that similarly to the above.
 
 Indirect calls (and returns in the absence of a red zone ABI) pose the most
 significant challenge to propagate. The simplest technique would be to define a
@@ -512,7 +511,7 @@ Once we have the predicate accumulated into a special value for correct vs.
 misspeculated, we need to apply this to loads in a way that ensures they do not
 leak secret data. There are two primary techniques for this: we can either
 harden the loaded value to prevent observation, or we can harden the address
-itself to prevent the load from occuring. These have significantly different
+itself to prevent the load from occurring. These have significantly different
 performance tradeoffs.
 
 
@@ -943,7 +942,7 @@ We can use this broader barrier to speculative loads executing between
 functions. We emit it in the entry block to handle calls, and prior to each
 return. This approach also has the advantage of providing the strongest degree
 of mitigation when mixed with unmitigated code by halting all misspeculation
-entering a function which is mitigated, regardless of what occured in the
+entering a function which is mitigated, regardless of what occurred in the
 caller. However, such a mixture is inherently more risky. Whether this kind of
 mixture is a sufficient mitigation requires careful analysis.
 

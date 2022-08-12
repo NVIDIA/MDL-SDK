@@ -68,8 +68,8 @@ typedef long			ssize_t;
 #endif
 #endif
 
-static const Uint null_index = (Uint)~0;  //< default index-1
-static const Uint max_index  = (Uint)~1;  //< maximum index
+static constexpr Uint null_index = (Uint)~0;  //< default index-1
+static constexpr Uint max_index  = (Uint)~1;  //< maximum index
 
 // =============================================================================
 //

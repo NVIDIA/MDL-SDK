@@ -44,6 +44,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
     class Mdl_material_target;
     enum class Mdl_resource_kind;
     struct Mdl_resource_assignment;
+    struct Mdl_string_constant;
 
     // --------------------------------------------------------------------------------------------
 
@@ -186,6 +187,17 @@ namespace mi { namespace examples { namespace mdl_d3d12
             return m_target_resources.find(kind)->second; // always present
         }
 
+        /// register a new string constant for the target code or return an already mapped value.
+        /// this can be used to force the availability of a certain scene data element
+        /// even though it's not used in the mdl generated code.
+        uint32_t map_string_constant(const std::string& string_value);
+
+        /// get the target string constants
+        const std::vector<Mdl_string_constant>& get_string_constants()
+        {
+            return m_target_string_constants;
+        }
+
         /// iterate over all materials inside a lock.
         ///
         /// \param action   action to run while visiting a material.
@@ -229,6 +241,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// mainly the ones in the body but also the ones in the parameter list of the instance
         /// that is used during compilation of the instance to a compiled material
         std::map<Mdl_resource_kind, std::vector<Mdl_resource_assignment>> m_target_resources;
+
+        /// string constants present in the target code already
+        std::vector<Mdl_string_constant> m_target_string_constants;
 
         /// when resources are managed by the material we need to account for different numbers
         /// of resources for different instances that use the same code with a different parameter

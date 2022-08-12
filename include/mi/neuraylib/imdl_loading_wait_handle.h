@@ -95,7 +95,7 @@ public:
     virtual IMdl_loading_wait_handle* create_wait_handle() const = 0;
 };
 
-/*@}*/ // end group mi_neuray_mdl_misc
+/**@}*/ // end group mi_neuray_mdl_misc
 
 } // namespace neuraylib
 } // namespace mi

@@ -405,6 +405,9 @@ public:
     /// Print a comment.
     void print_comment(char const *comment);
 
+    /// Print a  string with escapes.
+    void print(char const *string, bool escapes);
+
     /// Print a statement.
     void print_condition(Stmt const *stmt);
 
@@ -426,12 +429,18 @@ public:
     void nl(unsigned count = 1);
 
     /// Un-Indent output.
-    ///  \param  depth      The depth to which to un-indent.
+    ///
+    /// \param  depth      The depth to which to un-indent.
     void un_indent(int depth);
 
 private:
     /// Constructor.
-    explicit Printer(IAllocator *alloc, IOutput_stream *stream);
+    ///
+    /// \param alloc   the allocator
+    /// \param stream  the output stream to be used
+    explicit Printer(
+        IAllocator     *alloc,
+        IOutput_stream *stream);
 
 protected:
     /// Print expression.
@@ -516,6 +525,9 @@ private:
 
     /// The current compilation unit if any.
     Compilation_unit const *m_curr_unit;
+
+    /// The quote string.
+    string m_string_quote;
 };
 
 }  // hlsl

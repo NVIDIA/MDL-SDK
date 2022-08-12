@@ -43,8 +43,6 @@ set(PROJECT_HEADERS
     "i_attr_registry.h"
     "i_attr_type.h"
     "i_attr_type_code_traits.h"
-    "i_attr_type_named_value_iterator.h"
-    "i_attr_type_value_iterator.h"
     "i_attr_types.h"
     "i_attr_utilities.h"
 )
@@ -57,7 +55,6 @@ set(PROJECT_SOURCES
     "attr_module.cpp"
     "attr_registry.cpp"
     "attr_type.cpp"
-    "attr_type_value_iterator.cpp"
     "attr_utilities.cpp"
     ${PROJECT_HEADERS}
     )

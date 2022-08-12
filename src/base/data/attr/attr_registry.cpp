@@ -141,16 +141,16 @@ const Attribute_spec* Attribute_registry::get_attribute(
     const std::string& name) const
 {
     // find id
-    map<string, Uint>::const_iterator id_it = m_name_mapping.find(name);
+    robin_hood::unordered_map<string, Uint>::const_iterator id_it = m_name_mapping.find(name);
     if (id_it == m_name_mapping.end())
         // this is not an error - all user-defined attributes will go through this
-        return 0;
+        return nullptr;
 
     set<Attribute_spec>::const_iterator it = m_registry.find( DUMMY_ID_SPEC(id_it->second) );
     if (it == m_registry.end()) {
         mod_log->warning(M_ATTR, Mod_log::C_DATABASE, 2,
             "Failed to find the registered Attribute %s", name.c_str());
-        return 0;
+        return nullptr;
     }
     return &(*it);
 }
@@ -217,7 +217,7 @@ bool Attribute_registry::add_name_mapping(
     const std::string& name,
     Uint id)
 {
-    bool result = m_name_mapping.insert(std::make_pair(name, id)).second;
+    bool result = m_name_mapping.insert(robin_hood::pair<std::string,Uint>(name, id)).second;
     if (!result)
         mod_log->warning(M_ATTR, Mod_log::C_DATABASE, 1,
             "The attribute name %s does already exist.", name.c_str());
@@ -231,9 +231,8 @@ bool Attribute_registry::add_name_mapping(
 Uint Attribute_registry::get_id(
     const std::string& name)
 {
-    std::map<std::string, Uint>::const_iterator it, end=m_name_mapping.end();
-    it = m_name_mapping.find(name);
-    if (it != end)
+    robin_hood::unordered_map<std::string, Uint>::const_iterator it = m_name_mapping.find(name);
+    if (it != m_name_mapping.end())
         return it->second;
     else
         return null_index;

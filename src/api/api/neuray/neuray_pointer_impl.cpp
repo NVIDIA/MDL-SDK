@@ -71,7 +71,7 @@ Pointer_impl::Pointer_impl( mi::neuraylib::ITransaction* transaction, const char
     ASSERT( M_NEURAY_API, value_type_name);
     m_value_type_name = value_type_name;
 
-    m_type_name = "Pointer<" + m_value_type_name + ">";
+    m_type_name = "Pointer<" + m_value_type_name + '>';
 
     std::string mangled_value_type_name
         = (m_value_type_name == "Interface") ? "Void" : m_value_type_name;
@@ -160,7 +160,7 @@ Const_pointer_impl::Const_pointer_impl(
     ASSERT( M_NEURAY_API, value_type_name);
     m_value_type_name = value_type_name;
 
-    m_type_name = "Const_pointer<" + m_value_type_name + ">";
+    m_type_name = "Const_pointer<" + m_value_type_name + '>';
 
     std::string mangled_value_type_name
         = (m_value_type_name == "Interface") ? "Void" : m_value_type_name;

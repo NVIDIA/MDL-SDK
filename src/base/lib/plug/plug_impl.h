@@ -33,6 +33,7 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 
 #include <mi/base/handle.h>
 #include <mi/base/interface_implement.h>
@@ -52,32 +53,29 @@ class Plugin_descriptor_impl
     public STLEXT::Non_copyable
 {
 public:
+	using Plugin_ptr = std::unique_ptr<mi::base::Plugin,void (*)(mi::base::Plugin*)>;
+
     /// Constructor
     ///
     /// \param library     The library this plugin belongs to.
     /// \param plugin      The plugin. Takes over ownership. Must not be \c NULL.
     /// \param path        The plugin library path.
     Plugin_descriptor_impl(
-        LINK::ILibrary* library, mi::base::Plugin* plugin, const char* path)
-      : m_library( library, mi::base::DUP_INTERFACE), m_plugin( plugin), m_path( path) { }
-
-    /// Destructor
-    ///
-    /// Destroys the wrapped plugin.
-    ~Plugin_descriptor_impl() { m_plugin->release(); }
+        const mi::base::Handle<LINK::ILibrary>& library,
+        Plugin_ptr&& plugin,
+        const std::string& path)
+      : m_library( library), m_plugin( std::move(plugin)), m_path( path) { }
 
     // public API methods
 
-    mi::base::Plugin* get_plugin() const { return m_plugin; }
+    mi::base::Plugin* get_plugin() const { return m_plugin.get(); }
 
     const char* get_plugin_library_path() const { return m_path.c_str(); }
 
-    // internal methods
-
 private:
-    mi::base::Handle<LINK::ILibrary> m_library;
-    mi::base::Plugin*                m_plugin;
-    std::string                    m_path;
+    mi::base::Handle<LINK::ILibrary>    m_library;
+    Plugin_ptr  						m_plugin;
+    std::string                         m_path;
 };
 
 /// Implementation of the Plug_module interface

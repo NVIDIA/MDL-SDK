@@ -163,10 +163,8 @@ private:
     /// The list of modules to compile.
     String_list m_input_modules;
 
-
     /// If set and target equals MDL, inline all imports except for stdlib/builtins
     bool m_inline;
 };
 
 #endif
-

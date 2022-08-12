@@ -1,9 +1,8 @@
 //===-- llvm/CodeGen/DwarfUnit.h - Dwarf Compile Unit ---*- C++ -*--===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -17,50 +16,19 @@
 #include "DwarfDebug.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/Optional.h"
-#include "llvm/ADT/StringMap.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/DIE.h"
-#include "llvm/IR/DIBuilder.h"
-#include "llvm/IR/DebugInfo.h"
-#include "llvm/MC/MCDwarf.h"
-#include "llvm/MC/MCExpr.h"
-#include "llvm/MC/MCSection.h"
+#include <string>
 
 namespace llvm {
 
-class MachineLocation;
-class MachineOperand;
-class ConstantInt;
 class ConstantFP;
+class ConstantInt;
 class DbgVariable;
 class DwarfCompileUnit;
-
-// Data structure to hold a range for range lists.
-class RangeSpan {
-public:
-  RangeSpan(MCSymbol *S, MCSymbol *E) : Start(S), End(E) {}
-  const MCSymbol *getStart() const { return Start; }
-  const MCSymbol *getEnd() const { return End; }
-  void setEnd(const MCSymbol *E) { End = E; }
-
-private:
-  const MCSymbol *Start, *End;
-};
-
-class RangeSpanList {
-private:
-  // Index for locating within the debug_range section this particular span.
-  MCSymbol *RangeSym;
-  // List of ranges.
-  SmallVector<RangeSpan, 2> Ranges;
-
-public:
-  RangeSpanList(MCSymbol *Sym, SmallVector<RangeSpan, 2> Ranges)
-      : RangeSym(Sym), Ranges(std::move(Ranges)) {}
-  MCSymbol *getSym() const { return RangeSym; }
-  const SmallVectorImpl<RangeSpan> &getRanges() const { return Ranges; }
-  void addRange(RangeSpan Range) { Ranges.push_back(Range); }
-};
+class MachineOperand;
+class MCDwarfDwoLineTable;
+class MCSymbol;
 
 //===----------------------------------------------------------------------===//
 /// This dwarf writer support class manages information associated with a
@@ -75,6 +43,9 @@ protected:
 
   /// Target of Dwarf emission.
   AsmPrinter *Asm;
+
+  /// Emitted at the end of the CU and used to compute the CU Length field.
+  MCSymbol *EndLabel = nullptr;
 
   // Holders for some common dwarf information.
   DwarfDebug *DD;
@@ -103,16 +74,15 @@ protected:
 
   bool applySubprogramDefinitionAttributes(const DISubprogram *SP, DIE &SPDie);
 
-  bool shareAcrossDWOCUs() const;
   bool isShareableAcrossCUs(const DINode *D) const;
 
 public:
   // Accessors.
   AsmPrinter* getAsmPrinter() const { return Asm; }
+  MCSymbol *getEndLabel() const { return EndLabel; }
   uint16_t getLanguage() const { return CUNode->getSourceLanguage(); }
   const DICompileUnit *getCUNode() const { return CUNode; }
-
-  uint16_t getDwarfVersion() const { return DD->getDwarfVersion(); }
+  DwarfDebug &getDwarfDebug() const { return *DD; }
 
   /// Return true if this compile unit has something to write out.
   bool hasContent() const { return getUnitDie().hasChildren(); }
@@ -150,6 +120,8 @@ public:
   /// type system, since DIEs for the type system can be shared across CUs and
   /// the mappings are kept in DwarfDebug.
   void insertDIE(const DINode *Desc, DIE *D);
+
+  void insertDIE(DIE *D);
 
   /// Add a flag that is true to the DIE.
   void addFlag(DIE &Die, dwarf::Attribute Attribute);
@@ -213,18 +185,18 @@ public:
   void addSourceLine(DIE &Die, const DILocalVariable *V);
   void addSourceLine(DIE &Die, const DIGlobalVariable *G);
   void addSourceLine(DIE &Die, const DISubprogram *SP);
+  void addSourceLine(DIE &Die, const DILabel *L);
   void addSourceLine(DIE &Die, const DIType *Ty);
   void addSourceLine(DIE &Die, const DIObjCProperty *Ty);
 
   /// Add constant value entry in variable DIE.
-  void addConstantValue(DIE &Die, const MachineOperand &MO, const DIType *Ty);
   void addConstantValue(DIE &Die, const ConstantInt *CI, const DIType *Ty);
   void addConstantValue(DIE &Die, const APInt &Val, const DIType *Ty);
   void addConstantValue(DIE &Die, const APInt &Val, bool Unsigned);
+  void addConstantValue(DIE &Die, uint64_t Val, const DIType *Ty);
   void addConstantValue(DIE &Die, bool Unsigned, uint64_t Val);
 
   /// Add constant value entry in variable DIE.
-  void addConstantFPValue(DIE &Die, const MachineOperand &MO);
   void addConstantFPValue(DIE &Die, const ConstantFP *CFP);
 
   /// Add a linkage name, if it isn't empty.
@@ -235,15 +207,6 @@ public:
 
   /// Add thrown types.
   void addThrownTypes(DIE &Die, DINodeArray ThrownTypes);
-
-  // FIXME: Should be reformulated in terms of addComplexAddress.
-  /// Start with the address based on the location provided, and generate the
-  /// DWARF information necessary to find the actual Block variable (navigating
-  /// the Block struct) based on the starting location.  Add the DWARF
-  /// information to the die.  Obsolete, please use addComplexAddress instead.
-  void addBlockByrefAddress(const DbgVariable &DV, DIE &Die,
-                            dwarf::Attribute Attribute,
-                            const MachineLocation &Location);
 
   /// Add a new type attribute to the specified entity.
   ///
@@ -258,6 +221,9 @@ public:
 
   void applySubprogramAttributes(const DISubprogram *SP, DIE &SPDie,
                                  bool SkipSPAttributes = false);
+
+  /// Creates type DIE with specific context.
+  DIE *createTypeDIE(const DIScope *Context, DIE &ContextDIE, const DIType *Ty);
 
   /// Find existing DIE or create new DIE for the given type.
   DIE *getOrCreateTypeDIE(const MDNode *TyNode);
@@ -282,9 +248,9 @@ public:
   /// Compute the size of a header for this unit, not including the initial
   /// length field.
   virtual unsigned getHeaderSize() const {
-    return sizeof(int16_t) + // DWARF version number
-           sizeof(int32_t) + // Offset Into Abbrev. Section
-           sizeof(int8_t) +  // Pointer Size (in bytes)
+    return sizeof(int16_t) +               // DWARF version number
+           Asm->getDwarfOffsetByteSize() + // Offset Into Abbrev. Section
+           sizeof(int8_t) +                // Pointer Size (in bytes)
            (DD->getDwarfVersion() >= 5 ? sizeof(int8_t)
                                        : 0); // DWARF v5 unit type
   }
@@ -311,9 +277,8 @@ public:
                                       const MCSymbol *Label,
                                       const MCSymbol *Sec);
 
-  /// If the \p File has an MD5 checksum, return it as an MD5Result
-  /// allocated in the MCContext.
-  MD5::MD5Result *getMD5AsBytes(const DIFile *File) const;
+  /// Get context owner's DIE.
+  DIE *createTypeDIE(const DICompositeType *Ty);
 
 protected:
   ~DwarfUnit();
@@ -325,25 +290,17 @@ protected:
   /// create a new ID and insert it in the line table.
   virtual unsigned getOrCreateSourceID(const DIFile *File) = 0;
 
-  /// Look in the DwarfDebug map for the MDNode that corresponds to the
-  /// reference.
-  template <typename T> T *resolve(TypedDINodeRef<T> Ref) const {
-    return Ref.resolve();
-  }
-
-  /// If this is a named finished type then include it in the list of types for
-  /// the accelerator tables.
-  void updateAcceleratorTables(const DIScope *Context, const DIType *Ty,
-                               const DIE &TyDIE);
-
   /// Emit the common part of the header for this unit.
   void emitCommonHeader(bool UseOffsets, dwarf::UnitType UT);
 
 private:
   void constructTypeDIE(DIE &Buffer, const DIBasicType *BTy);
+  void constructTypeDIE(DIE &Buffer, const DIStringType *BTy);
   void constructTypeDIE(DIE &Buffer, const DIDerivedType *DTy);
   void constructTypeDIE(DIE &Buffer, const DISubroutineType *CTy);
   void constructSubrangeDIE(DIE &Buffer, const DISubrange *SR, DIE *IndexTy);
+  void constructGenericSubrangeDIE(DIE &Buffer, const DIGenericSubrange *SR,
+                                   DIE *IndexTy);
   void constructArrayTypeDIE(DIE &Buffer, const DICompositeType *CTy);
   void constructEnumTypeDIE(DIE &Buffer, const DICompositeType *CTy);
   DIE &constructMemberDIE(DIE &Buffer, const DIDerivedType *DT);
@@ -363,6 +320,13 @@ private:
   /// Set D as anonymous type for index which can be reused later.
   void setIndexTyDie(DIE *D) { IndexTyDie = D; }
 
+  virtual void finishNonUnitTypeDIE(DIE& D, const DICompositeType *CTy) = 0;
+
+  /// If this is a named finished type then include it in the list of types for
+  /// the accelerator tables.
+  void updateAcceleratorTables(const DIScope *Context, const DIType *Ty,
+                               const DIE &TyDIE);
+
   virtual bool isDwoUnit() const = 0;
   const MCSymbol *getCrossSectionRelativeBaseAddress() const override;
 };
@@ -375,6 +339,7 @@ class DwarfTypeUnit final : public DwarfUnit {
   bool UsedLineTable = false;
 
   unsigned getOrCreateSourceID(const DIFile *File) override;
+  void finishNonUnitTypeDIE(DIE& D, const DICompositeType *CTy) override;
   bool isDwoUnit() const override;
 
 public:
@@ -384,14 +349,11 @@ public:
   void setTypeSignature(uint64_t Signature) { TypeSignature = Signature; }
   void setType(const DIE *Ty) { this->Ty = Ty; }
 
-  /// Get context owner's DIE.
-  DIE *createTypeDIE(const DICompositeType *Ty);
-
   /// Emit the header for this unit, not including the initial length field.
   void emitHeader(bool UseOffsets) override;
   unsigned getHeaderSize() const override {
     return DwarfUnit::getHeaderSize() + sizeof(uint64_t) + // Type Signature
-           sizeof(uint32_t);                               // Type DIE Offset
+           Asm->getDwarfOffsetByteSize();                  // Type DIE Offset
   }
   void addGlobalName(StringRef Name, const DIE &Die,
                      const DIScope *Context) override;

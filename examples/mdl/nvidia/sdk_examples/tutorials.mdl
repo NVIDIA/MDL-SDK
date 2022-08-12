@@ -264,6 +264,20 @@ export checker_value checker(float2 uv, float roughness, float anisotropy)
     return val;
 }
 
+// get a checker pattern based on the UV coordinate.
+// used by the create expression graph python example.
+export color color_checker(
+    float scale = 1.0f,
+    color a = color(1.0),
+    color b = color(0.0))
+{
+    float3 uvw = state::texture_coordinate(0);
+    float2 uv = float2(uvw.x, uvw.y) * scale;
+    bool x =  (int(uv.x) & 1) != 0;
+    bool y =  (int(uv.y) & 1) != 0;
+    return x == y ? a : b;
+}
+
 // a material combining a diffuse, glossy, and specular
 export material example_df(
     float tex_coord_scale = 14.0f,

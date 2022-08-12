@@ -57,7 +57,7 @@
 using namespace mi::examples::profiling;
 
 #define USE_PARALLEL_RENDERING
-#define ADD_EXTRA_TIMERS
+//#define ADD_EXTRA_TIMERS
 
 ///////////////////////////////////////////////////////////////////////////////
 // Global Constants
@@ -1011,6 +1011,10 @@ void compile_material_instance(
     const char* compiled_material_name,
     bool class_compilation)
 {
+#ifdef ADD_EXTRA_TIMERS
+    std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+#endif
+
     mi::base::Handle<const mi::neuraylib::IMaterial_instance> material_instance(
         transaction->access<mi::neuraylib::IMaterial_instance>(instance_name));
     mi::Uint32 flags = class_compilation
@@ -1021,6 +1025,17 @@ void compile_material_instance(
     check_success(print_messages(context));
 
     transaction->store(compiled_material.get(), compiled_material_name);
+
+#ifdef ADD_EXTRA_TIMERS
+    std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+    std::chrono::duration<double> et = t2 - t1;
+
+    if(class_compilation)
+        printf("Material Class Compilation: %f seconds.\n", et.count());
+    else
+        printf("Material Instance Compilation: %f seconds.\n", et.count());
+#endif
+
 }
 
 // Generate and execute native CPU code for a subexpression of a given compiled material.

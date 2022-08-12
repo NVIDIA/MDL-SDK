@@ -619,11 +619,30 @@ bool Mesh::Instance::update_scene_data_infos(D3DCommandList* command_list)
     if (!m_mesh->visit_geometries([&](Mesh::Geometry* part)
     {
         // get material for this part of this instance
-        const IMaterial* material = get_material(part);
+        IMaterial* material = get_material(part);
 
         // map scene data between material and geometry
-        const std::unordered_map<std::string, uint32_t>& scene_data_name_map =
-            material->get_scene_data_name_map();
+
+        // per vertex data
+        std::unordered_map<std::string, uint32_t> scene_data_name_map;
+        for (const auto& vertex_channel : part->get_vertex_layout())
+        {
+            auto found = scene_data_name_map.find(vertex_channel.semantic);
+            if (found == scene_data_name_map.end())
+                scene_data_name_map.insert(std::pair<std::string, uint32_t>(
+                    vertex_channel.semantic,
+                    material->register_scene_data_name(vertex_channel.semantic)));
+        }
+
+        // per instance data
+        for (auto present_data : m_scene_data)
+        {
+            auto found = scene_data_name_map.find(present_data.name);
+            if (found == scene_data_name_map.end())
+                scene_data_name_map.insert(std::pair<std::string, uint32_t>(
+                    present_data.name,
+                    material->register_scene_data_name(present_data.name)));
+        }
 
         // to keep it simple and assuming there are not that many used scene data names as well
         // as small, ideally densely packed, scene data IDs, a dense map is used to store the
@@ -647,7 +666,7 @@ bool Mesh::Instance::update_scene_data_infos(D3DCommandList* command_list)
         // update the per object/instance scene data info
         for (auto present_data : m_scene_data)
         {
-            // check if this data is requested by the material
+            // get the scene data name from the material, along with it's id
             auto found = scene_data_name_map.find(present_data.name);
             if (found == scene_data_name_map.end())
                 continue;
@@ -1020,8 +1039,10 @@ Scene::~Scene()
 
 // ------------------------------------------------------------------------------------------------
 
-bool Scene::build_scene(const IScene_loader::Scene& scene)
+bool Scene::build_scene(std::unique_ptr<const IScene_loader::Scene> scene)
 {
+    m_scene_descripion = std::move(scene);
+
     std::unordered_map<size_t, Mesh*> handled_meshes;
 
     // Loading of materials is done in two steps to be able to parallelize the creation
@@ -1049,7 +1070,7 @@ bool Scene::build_scene(const IScene_loader::Scene& scene)
                     }
 
                     // collect all materials needed
-                    auto& primitives = scene.meshes[src_child.index].primitives;
+                    auto& primitives = m_scene_descripion->meshes[src_child.index].primitives;
                     for (const auto& p : primitives)
                     {
                         // mesh already handles?
@@ -1063,7 +1084,9 @@ bool Scene::build_scene(const IScene_loader::Scene& scene)
 
                     // create mesh
                     Mesh* mesh = new Mesh(
-                        m_app, m_acceleration_structure, scene.meshes[src_child.index]);
+                        m_app,
+                        m_acceleration_structure,
+                        m_scene_descripion->meshes[src_child.index]);
                     child->m_mesh_instance = mesh->create_instance(src_child);
                     handled_meshes[src_child.index] = mesh;
 
@@ -1079,7 +1102,8 @@ bool Scene::build_scene(const IScene_loader::Scene& scene)
                 case IScene_loader::Node::Kind::Camera:
                 {
                     // create individual cameras
-                    child->m_camera = new Camera(m_app, scene.cameras[src_child.index]);
+                    child->m_camera = new Camera(
+                        m_app, m_scene_descripion->cameras[src_child.index]);
                     m_cameras.push_back(child->m_camera);
                     break;
                 }
@@ -1098,8 +1122,8 @@ bool Scene::build_scene(const IScene_loader::Scene& scene)
             for (const auto& c : src_child.children)
                 visit_loaded_nodes(*child, c);
         };
-    visit_loaded_nodes(m_root, scene.root);
-    m_root.set_local_transformation(scene.root.local);
+    visit_loaded_nodes(m_root, m_scene_descripion->root);
+    m_root.set_local_transformation(m_scene_descripion->root.local);
 
     // create the materials
     // ... in parallel, if not forced otherwise
@@ -1114,13 +1138,14 @@ bool Scene::build_scene(const IScene_loader::Scene& scene)
         {
             Mdl_material* mdl_material(material_library->create_material());
             if (!material_library->set_description(mdl_material,
-                it->first < scene.materials.size()
-                    ? Mdl_material_description(scene.materials[it->first])
+                it->first < m_scene_descripion->materials.size()
+                    ? Mdl_material_description(
+                        m_scene_descripion.get(), m_scene_descripion->materials[it->first])
                     : Mdl_material_description()))
             {
                 success.store(false);
                 log_error("Failed to create material: " +
-                    scene.materials[it->first].name, SRC);
+                    m_scene_descripion->materials[it->first].name, SRC);
             }
             it->second = mdl_material;
             m_materials.push_back(it->second);
@@ -1132,13 +1157,14 @@ bool Scene::build_scene(const IScene_loader::Scene& scene)
             {
                 Mdl_material* mdl_material(material_library->create_material());
             if (!material_library->set_description(mdl_material,
-                it->first < scene.materials.size()
-                    ? Mdl_material_description(scene.materials[it->first])
+                it->first < m_scene_descripion->materials.size()
+                    ? Mdl_material_description(
+                        m_scene_descripion.get(), m_scene_descripion->materials[it->first])
                     : Mdl_material_description()))
                 {
                     success.store(false);
                     log_error("Failed to create material: " +
-                        scene.materials[it->first].name, SRC);
+                        m_scene_descripion->materials[it->first].name, SRC);
                 }
                 it->second = mdl_material;
 

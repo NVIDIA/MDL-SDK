@@ -807,7 +807,7 @@ public:
     virtual const IString* dump( const IType_list* list, Size depth = 0) const = 0;
 };
 
-/*@}*/ // end group mi_neuray_mdl_types
+/**@}*/ // end group mi_neuray_mdl_types
 
 } // namespace neuraylib
 

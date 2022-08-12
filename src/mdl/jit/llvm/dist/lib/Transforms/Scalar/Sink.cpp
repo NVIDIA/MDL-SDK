@@ -1,9 +1,8 @@
 //===-- Sink.cpp - Code Sinking -------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -22,6 +21,7 @@
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Module.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
@@ -31,31 +31,6 @@ using namespace llvm;
 
 STATISTIC(NumSunk, "Number of instructions sunk");
 STATISTIC(NumSinkIter, "Number of sinking iterations");
-
-/// AllUsesDominatedByBlock - Return true if all uses of the specified value
-/// occur in blocks dominated by the specified block.
-static bool AllUsesDominatedByBlock(Instruction *Inst, BasicBlock *BB,
-                                    DominatorTree &DT) {
-  // Ignoring debug uses is necessary so debug info doesn't affect the code.
-  // This may leave a referencing dbg_value in the original block, before
-  // the definition of the vreg.  Dwarf generator handles this although the
-  // user might not get the right info at runtime.
-  for (Use &U : Inst->uses()) {
-    // Determine the block of the use.
-    Instruction *UseInst = cast<Instruction>(U.getUser());
-    BasicBlock *UseBlock = UseInst->getParent();
-    if (PHINode *PN = dyn_cast<PHINode>(UseInst)) {
-      // PHI nodes use the operand in the predecessor block, not the block with
-      // the PHI.
-      unsigned Num = PHINode::getIncomingValueNumForOperand(U.getOperandNo());
-      UseBlock = PN->getIncomingBlock(Num);
-    }
-    // Check that it dominates.
-    if (!DT.dominates(BB, UseBlock))
-      return false;
-  }
-  return true;
-}
 
 static bool isSafeToMove(Instruction *Inst, AliasAnalysis &AA,
                          SmallPtrSetImpl<Instruction *> &Stores) {
@@ -72,18 +47,18 @@ static bool isSafeToMove(Instruction *Inst, AliasAnalysis &AA,
         return false;
   }
 
-  if (isa<TerminatorInst>(Inst) || isa<PHINode>(Inst) || Inst->isEHPad() ||
+  if (Inst->isTerminator() || isa<PHINode>(Inst) || Inst->isEHPad() ||
       Inst->mayThrow())
     return false;
 
-  if (auto CS = CallSite(Inst)) {
+  if (auto *Call = dyn_cast<CallBase>(Inst)) {
     // Convergent operations cannot be made control-dependent on additional
     // values.
-    if (CS.hasFnAttr(Attribute::Convergent))
+    if (Call->isConvergent())
       return false;
 
     for (Instruction *S : Stores)
-      if (isModSet(AA.getModRefInfo(S, CS)))
+      if (isModSet(AA.getModRefInfo(S, Call)))
         return false;
   }
 
@@ -97,14 +72,9 @@ static bool IsAcceptableTarget(Instruction *Inst, BasicBlock *SuccToSinkTo,
   assert(Inst && "Instruction to be sunk is null");
   assert(SuccToSinkTo && "Candidate sink target is null");
 
-  // It is not possible to sink an instruction into its own block.  This can
-  // happen with loops.
-  if (Inst->getParent() == SuccToSinkTo)
-    return false;
-
   // It's never legal to sink an instruction into a block which terminates in an
   // EH-pad.
-  if (SuccToSinkTo->getTerminator()->isExceptional())
+  if (SuccToSinkTo->getTerminator()->isExceptionalTerminator())
     return false;
 
   // If the block has multiple predecessors, this would introduce computation
@@ -129,9 +99,7 @@ static bool IsAcceptableTarget(Instruction *Inst, BasicBlock *SuccToSinkTo,
       return false;
   }
 
-  // Finally, check that all the uses of the instruction are actually
-  // dominated by the candidate
-  return AllUsesDominatedByBlock(Inst, SuccToSinkTo, DT);
+  return true;
 }
 
 /// SinkInstruction - Determine whether it is safe to sink the specified machine
@@ -162,25 +130,37 @@ static bool SinkInstruction(Instruction *Inst,
   // decide.
   BasicBlock *SuccToSinkTo = nullptr;
 
-  // Instructions can only be sunk if all their uses are in blocks
-  // dominated by one of the successors.
-  // Look at all the dominated blocks and see if we can sink it in one.
-  DomTreeNode *DTN = DT.getNode(Inst->getParent());
-  for (DomTreeNode::iterator I = DTN->begin(), E = DTN->end();
-      I != E && SuccToSinkTo == nullptr; ++I) {
-    BasicBlock *Candidate = (*I)->getBlock();
-    // A node always immediate-dominates its children on the dominator
-    // tree.
-    if (IsAcceptableTarget(Inst, Candidate, DT, LI))
-      SuccToSinkTo = Candidate;
+  // Find the nearest common dominator of all users as the candidate.
+  BasicBlock *BB = Inst->getParent();
+  for (Use &U : Inst->uses()) {
+    Instruction *UseInst = cast<Instruction>(U.getUser());
+    BasicBlock *UseBlock = UseInst->getParent();
+    // Don't worry about dead users.
+    if (!DT.isReachableFromEntry(UseBlock))
+      continue;
+    if (PHINode *PN = dyn_cast<PHINode>(UseInst)) {
+      // PHI nodes use the operand in the predecessor block, not the block with
+      // the PHI.
+      unsigned Num = PHINode::getIncomingValueNumForOperand(U.getOperandNo());
+      UseBlock = PN->getIncomingBlock(Num);
+    }
+    if (SuccToSinkTo)
+      SuccToSinkTo = DT.findNearestCommonDominator(SuccToSinkTo, UseBlock);
+    else
+      SuccToSinkTo = UseBlock;
+    // The current basic block needs to dominate the candidate.
+    if (!DT.dominates(BB, SuccToSinkTo))
+      return false;
   }
 
-  // If no suitable postdominator was found, look at all the successors and
-  // decide which one we should sink to, if any.
-  for (succ_iterator I = succ_begin(Inst->getParent()),
-      E = succ_end(Inst->getParent()); I != E && !SuccToSinkTo; ++I) {
-    if (IsAcceptableTarget(Inst, *I, DT, LI))
-      SuccToSinkTo = *I;
+  if (SuccToSinkTo) {
+    // The nearest common dominator may be in a parent loop of BB, which may not
+    // be beneficial. Find an ancestor.
+    while (SuccToSinkTo != BB &&
+           !IsAcceptableTarget(Inst, SuccToSinkTo, DT, LI))
+      SuccToSinkTo = DT.getNode(SuccToSinkTo)->getIDom()->getBlock();
+    if (SuccToSinkTo == BB)
+      SuccToSinkTo = nullptr;
   }
 
   // If we couldn't find a block to sink to, ignore this instruction.

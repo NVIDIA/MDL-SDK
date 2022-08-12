@@ -180,7 +180,7 @@ If the interface of an MDL element is given, then its DB name can be obtained fr
   <tr>
     <td>builtin function, affected by encoding</td>
     <td><code>mdl::operator<<(int,int)</code></td>
-    <td><code>mdl::operator%3%3C(int,int)</code></td>
+    <td><code>mdl::operator%3C%3C(int,int)</code></td>
   </tr>
   <tr>
     <td>builtin template-like function</td>
@@ -645,8 +645,8 @@ code that acts on both, functions and materials, just once. The only exception i
 #mi::neuraylib::IMaterial_instance interface.
 
 This feature is now enabled by default. It can still be disabled by
-#mi::neuraylib::IMdl_configuration::set_materials_are_functions(), but this possibility will be
-deprecated and removed in a future release. Likewise for the interfaces
+#mi::neuraylib::IMdl_configuration::set_materials_are_functions(), but this possibility is
+deprecated and will be removed in a future release. Likewise for the interfaces
 #mi::neuraylib::IMaterial_definition and almost all methods of #mi::neuraylib::IMaterial_instance
 (one exception is #mi::neuraylib::IMaterial_instance::create_compiled_material()).
 
@@ -668,14 +668,14 @@ settings.
   interfaces)</b> \n \n
   The method mi::neuraylib::IScene_element::get_element_type() returns
   #mi::neuraylib::ELEMENT_TYPE_FUNCTION_DEFINITION instead of
-  #mi::neuraylib::ELEMENT_TYPE_MATERIAL_DEFINITION. The value
-  #mi::neuraylib::ELEMENT_TYPE_MATERIAL_DEFINITION is only returned by
-  #mi::neuraylib::IMaterial_definition::get_element_type() (for backward compatibility),
+  mi::neuraylib::ELEMENT_TYPE_MATERIAL_DEFINITION. The value
+  mi::neuraylib::ELEMENT_TYPE_MATERIAL_DEFINITION is only returned by
+  mi::neuraylib::IMaterial_definition::get_element_type() (for backward compatibility),
   but no longer by its base class #mi::neuraylib::IScene_element. \n \n Similarly, the method
   mi::neuraylib::IScene_element::get_element_type() returns
   #mi::neuraylib::ELEMENT_TYPE_FUNCTION_CALL instead of
-  #mi::neuraylib::ELEMENT_TYPE_MATERIAL_INSTANCE. The value
-  #mi::neuraylib::ELEMENT_TYPE_MATERIAL_INSTANCE is only returned by
+  mi::neuraylib::ELEMENT_TYPE_MATERIAL_INSTANCE. The value
+  mi::neuraylib::ELEMENT_TYPE_MATERIAL_INSTANCE is only returned by
   #mi::neuraylib::IMaterial_instance::get_element_type() (for backward compatibility), but
   no longer by its base class #mi::neuraylib::IScene_element. \n \n As a consequence,
   #mi::neuraylib::Definition_wrapper::get_type() and
@@ -829,8 +829,8 @@ public:
     /// The method returns overloads of a function or material definition of this module, either
     /// all overloads or just the overloads matching a given set of arguments.
     ///
-    /// \param name             The DB name of a function or material definition from this module
-    ///                         \em without signature.
+    /// \param name             The simple name or the DB name \em without signature of a function
+    ///                         or material definition from this module.
     /// \param arguments        Optional arguments to select specific overload(s). If present, the
     ///                         method returns only the overloads of \p name whose signature
     ///                         matches the provided arguments, i.e., a call to
@@ -860,8 +860,8 @@ public:
     ///       These are the \ref mi_neuray_mdl_template_like_function_definitions plus the field
     ///       access function definitions.
     ///
-    /// \param name             The DB name of a function or material definition from this module
-    ///                         \em without signature.
+    /// \param name             The simple name or the DB name \em without signature of a function
+    ///                         or material definition from this module.
     /// \param parameter_types  A static or dynamic array with elements of type #mi::IString
     ///                         representing positional parameter type names as returned by
     ///                         #mi::neuraylib::IFunction_definition::get_mdl_parameter_type_name().
@@ -929,7 +929,7 @@ public:
         Size index) const = 0;
 };
 
-/*@}*/ // end group mi_neuray_mdl_elements
+/**@}*/ // end group mi_neuray_mdl_elements
 
 } // namespace neuraylib
 

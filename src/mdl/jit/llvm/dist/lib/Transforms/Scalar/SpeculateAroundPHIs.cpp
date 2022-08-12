@@ -1,9 +1,8 @@
 //===- SpeculateAroundPHIs.cpp --------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -33,7 +32,7 @@ STATISTIC(NumSpeculatedInstructions,
 STATISTIC(NumNewRedundantInstructions,
           "Number of new, redundant instructions inserted");
 
-/// Check wether speculating the users of a PHI node around the PHI
+/// Check whether speculating the users of a PHI node around the PHI
 /// will be safe.
 ///
 /// This checks both that all of the users are safe and also that all of their
@@ -66,6 +65,14 @@ isSafeToSpeculatePHIUsers(PHINode &PN, DominatorTree &DT,
     if (UI->getParent() != PhiBB) {
       LLVM_DEBUG(dbgs() << "  Unsafe: use in a different BB: " << *UI << "\n");
       return false;
+    }
+
+    if (const auto *CS = dyn_cast<CallBase>(UI)) {
+      if (CS->isConvergent() || CS->cannotDuplicate()) {
+        LLVM_DEBUG(dbgs() << "  Unsafe: convergent "
+                   "callsite cannot de duplicated: " << *UI << '\n');
+        return false;
+      }
     }
 
     // FIXME: This check is much too conservative. We're not going to move these
@@ -225,7 +232,8 @@ static bool isSafeAndProfitableToSpeculateAroundPHI(
       continue;
 
     int &MatCost = InsertResult.first->second.MatCost;
-    MatCost = TTI.getIntImmCost(IncomingC->getValue(), IncomingC->getType());
+    MatCost = TTI.getIntImmCost(IncomingC->getValue(), IncomingC->getType(),
+                                TargetTransformInfo::TCK_SizeAndLatency);
     NonFreeMat |= MatCost != TTI.TCC_Free;
   }
   if (!NonFreeMat) {
@@ -276,12 +284,15 @@ static bool isSafeAndProfitableToSpeculateAroundPHI(
       int MatCost = IncomingConstantAndCostsAndCount.second.MatCost;
       int &FoldedCost = IncomingConstantAndCostsAndCount.second.FoldedCost;
       if (IID)
-        FoldedCost += TTI.getIntImmCost(IID, Idx, IncomingC->getValue(),
-                                        IncomingC->getType());
+        FoldedCost +=
+          TTI.getIntImmCostIntrin(IID, Idx, IncomingC->getValue(),
+                                  IncomingC->getType(),
+                                  TargetTransformInfo::TCK_SizeAndLatency);
       else
         FoldedCost +=
-            TTI.getIntImmCost(UserI->getOpcode(), Idx, IncomingC->getValue(),
-                              IncomingC->getType());
+            TTI.getIntImmCostInst(UserI->getOpcode(), Idx,
+                                  IncomingC->getValue(), IncomingC->getType(),
+                                  TargetTransformInfo::TCK_SizeAndLatency);
 
       // If we accumulate more folded cost for this incoming constant than
       // materialized cost, then we'll regress any edge with this constant so
@@ -458,7 +469,7 @@ findProfitablePHIs(ArrayRef<PHINode *> PNs,
             if (CostMapIt != SpecCostMap.end())
               Cost += CostMapIt->second;
           }
-        Cost += TTI.getUserCost(I);
+        Cost += TTI.getUserCost(I, TargetTransformInfo::TCK_SizeAndLatency);
         bool Inserted = SpecCostMap.insert({I, Cost}).second;
         (void)Inserted;
         assert(Inserted && "Must not re-insert a cost during the DFS!");
@@ -745,13 +756,10 @@ static bool tryToSpeculatePHIs(SmallVectorImpl<PHINode *> &PNs,
   // For each PHI node in this block, check whether there are immediate folding
   // opportunities from speculation, and whether that speculation will be
   // valid. This determise the set of safe PHIs to speculate.
-  PNs.erase(llvm::remove_if(PNs,
-                            [&](PHINode *PN) {
-                              return !isSafeAndProfitableToSpeculateAroundPHI(
-                                  *PN, CostSavingsMap, PotentialSpecSet,
-                                  UnsafeSet, DT, TTI);
-                            }),
-            PNs.end());
+  llvm::erase_if(PNs, [&](PHINode *PN) {
+    return !isSafeAndProfitableToSpeculateAroundPHI(
+        *PN, CostSavingsMap, PotentialSpecSet, UnsafeSet, DT, TTI);
+  });
   // If no PHIs were profitable, skip.
   if (PNs.empty()) {
     LLVM_DEBUG(dbgs() << "  No safe and profitable PHIs found!\n");
@@ -770,8 +778,10 @@ static bool tryToSpeculatePHIs(SmallVectorImpl<PHINode *> &PNs,
     // speculation if the predecessor is an invoke. This doesn't seem
     // fundamental and we should probably be splitting critical edges
     // differently.
-    if (isa<IndirectBrInst>(PredBB->getTerminator()) ||
-        isa<InvokeInst>(PredBB->getTerminator())) {
+    const auto *TermInst = PredBB->getTerminator();
+    if (isa<IndirectBrInst>(TermInst) ||
+        isa<InvokeInst>(TermInst) ||
+        isa<CallBrInst>(TermInst)) {
       LLVM_DEBUG(dbgs() << "  Invalid: predecessor terminator: "
                         << PredBB->getName() << "\n");
       return false;

@@ -38,6 +38,14 @@
 #include <cstring>
 #include <string>
 
+// #define DUMP_PIXEL_X 25
+// #define DUMP_PIXEL_Y 1
+
+#if defined(DUMP_PIXEL_X) && defined(DUMP_PIXEL_Y)
+#include <mi/math/color.h>
+#include <iostream>
+#endif
+
 namespace MI {
 
 namespace FREEIMAGE {
@@ -180,6 +188,13 @@ bool Image_file_writer_impl::write(
         assert( false);
         return false;
     }
+
+#if defined(DUMP_PIXEL_X) && defined(DUMP_PIXEL_Y)
+    mi::math::Color c;
+    tile->get_pixel( DUMP_PIXEL_X, DUMP_PIXEL_Y, &c.r);
+    std::cout << "FreeImage plugin writer: " 
+              << c.r << ' ' << c.g << ' ' << c.b << ' ' << c.a << std::endl;
+#endif
 
 #ifndef NDEBUG
     const char* tile_pixel_type = tile->get_type();

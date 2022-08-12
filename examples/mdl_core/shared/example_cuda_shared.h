@@ -756,7 +756,13 @@ public:
     /// \param size  will be assigned to the length of the RO data segment
     /// \returns the data segment or nullptr if no RO data segment is available.
     char const *get_ro_data_segment(size_t &size) const {
-        return m_code->get_ro_data_segment(size);
+        mi::mdl::IGenerated_code_executable::Segment const *desc =  m_code->get_data_segment(0);
+        if (desc != nullptr) {
+            size = desc->size;
+            return (char const *)desc->data;
+        }
+        size = 0u;
+        return nullptr;
     }
 
     /// Get the number of textures in the resource collection.
@@ -1547,7 +1553,7 @@ public:
         // After we set the options, we can create a link unit
         m_link_unit = mi::base::make_handle(m_jit_be->create_link_unit(
             /*ctx=*/nullptr,
-            mi::mdl::ICode_generator_jit::CM_PTX,
+            mi::mdl::ICode_generator::TL_PTX,
             /*enable_simd=*/ false,
             /*sm_version=*/ 30,
             /*num_texture_spaces=*/ 1,

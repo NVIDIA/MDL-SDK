@@ -206,20 +206,19 @@ public:
     ///                                    common subexpressions.
     /// \param class_compilation           Flag that selects class compilation instead of instance
     ///                                    compilation.
-    /// \param mdl_meters_per_scene_unit   Conversion ratio between meters and scene units.
-    /// \param mdl_wavelength_min          The smallest supported wavelength.
-    /// \param mdl_wavelength_max          The largest supported wavelength.
-    /// \param errors                      An optional pointer to an mi::Sint32 to which an error
-    ///                                    code will be written. The error codes have the following
+    /// \param context                     execution context to propagate warnings and error
+    ///                                    messages. The error codes have the following
     ///                                    meaning:
     ///                                    -  0: Success.
     ///                                    - -1: An argument of the material instance has an
     ///                                          incorrect type.
-    ///                                    - -2: The thin-walled material instance has different
-    ///                                          transmission for surface and backface.
     ///                                    - -3: An varying argument was attached to an uniform
     ///                                          parameter.
     /// \return                            The DAG material instance, or \c NULL in case of failure.
+    ///
+    /// \note If it is detected, that a thin-walled material instance has different
+    ///       transmission for surface and backface, a warning is generated.
+
     const mi::mdl::IGenerated_code_dag::IMaterial_instance* create_dag_material_instance(
         DB::Transaction* transaction,
         bool use_temporaries,
@@ -280,6 +279,42 @@ public:
     void get_scene_element_references( DB::Tag_set* result) const;
 
 private:
+
+    static mi::Sint32 repair_call(
+        DB::Transaction* transaction,
+        const DB::Access<Mdl_function_call>& call_access,
+        mi::base::Handle<IExpression>& new_expr,
+        const IExpression* default_expr,
+        const IExpression_call* arg_call,
+        IExpression_factory* ef,
+        IValue_factory* vf,
+        bool repair_invalid_calls,
+        bool remove_invalid_calls,
+        mi::Uint32 level,
+        Execution_context* context);
+
+    /// Repairs the given argument list according to the given rules.
+    ///
+    /// \param transaction  the transaction.
+    /// \param arguments    the arguments to repair.
+    /// \param defaults     argument defaults.
+    /// \param repair_calls if \c true, invalid calls will be repaired, if possible.
+    /// \param remove_calls if \c true, invalid calls will be replaced by a default. In case \p
+    ///                     repair_calls is \c true, the call will be removed if the repair
+    ///                     failed.
+    /// \param level        recursion level
+    /// \param context      execution context to propagate error messages.
+    /// \return
+    ///      -  0:   Success
+    ///      - -1:   Repairing failed. See the context for details.
+    static mi::Sint32 repair_arguments(
+        DB::Transaction* transaction,
+        IExpression_list* arguments,
+        const IExpression_list* defaults,
+        bool repair_calls,
+        bool remove_calls,
+        mi::Uint32 level,
+        Execution_context* context);
 
     mi::base::Handle<IType_factory> m_tf;        ///< The type factory.
     mi::base::Handle<IValue_factory> m_vf;       ///< The value factory.

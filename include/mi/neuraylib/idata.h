@@ -324,7 +324,7 @@ public:
     virtual const char* get_type_name() const = 0;
 };
 
-/*@}*/ // end group mi_neuray_types
+/**@}*/ // end group mi_neuray_types
 
 /** \addtogroup mi_neuray_simple_types
 @{
@@ -345,7 +345,7 @@ class IData_simple :
 {
 };
 
-/*@}*/ // end group mi_neuray_simple_types
+/**@}*/ // end group mi_neuray_simple_types
 
 /** \addtogroup mi_neuray_collections
 @{
@@ -529,7 +529,7 @@ public:
     virtual Sint32 set_value( Size index, base::IInterface* value) = 0;
 };
 
-/*@}*/ // end group mi_neuray_collections
+/**@}*/ // end group mi_neuray_collections
 
 /** \addtogroup mi_neuray_simple_types
 @{
@@ -547,7 +547,7 @@ class IVoid :
 {
 };
 
-/*@}*/ // end group mi_neuray_simple_types
+/**@}*/ // end group mi_neuray_simple_types
 
 } // namespace mi
 

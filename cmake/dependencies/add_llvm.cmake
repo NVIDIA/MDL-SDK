@@ -40,66 +40,74 @@
 # up till then we add a build dependency here
 # add includes link dependencies
 
-# set the platform name
-if(${MI_PLATFORM_NAME} MATCHES "linux-aarch64")
+# set platform dependent variables
+if(ARCH_ARM)
     set(_LLVM_PLATFORM_NAME_LOWER_CASE "aarch64")
     set(_LLVM_PLATFORM_NAME_MIXED_CASE "AArch64")
+    set(_LLVM_PLATFORM_UTILS LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}Utils)
 else()
     set(_LLVM_PLATFORM_NAME_LOWER_CASE "x86")
     set(_LLVM_PLATFORM_NAME_MIXED_CASE "X86")
+    set(_LLVM_PLATFORM_UTILS "")
 endif()
 
 # list of llvm Libraries we need
-set(_LLVM_LIB_NAMES 
-    LLVMLinker
-    LLVMipo
-    LLVMVectorize
+set(_LLVM_LIB_NAMES
+    LLVMAggressiveInstCombine
+    LLVMAnalysis
+    LLVMAsmParser
+    LLVMAsmPrinter
+    LLVMBinaryFormat
+    LLVMBitstreamReader
+    LLVMBitReader
     LLVMBitWriter
+    LLVMCFGuard
+    LLVMCodeGen
+    LLVMCore
+    LLVMDebugInfoCodeView
+    LLVMDebugInfoDWARF
+    LLVMDebugInfoPDB
+    LLVMDebugInfoMSF
+    LLVMDemangle
+    LLVMExecutionEngine
+    LLVMFrontendOpenMP
+    LLVMGlobalISel
+    LLVMInstCombine
+    LLVMInstrumentation
+    LLVMipo
+    LLVMIRReader
+    LLVMJITLink
+    LLVMLinker
+    LLVMMC
+    LLVMMCDisassembler
+    LLVMMCJIT
+    LLVMMCParser
     LLVMNVPTXCodeGen
     LLVMNVPTXDesc
     LLVMNVPTXInfo
-    LLVMNVPTXAsmPrinter
-    LLVMTableGen
-    LLVMDebugInfoDWARF
-    LLVMDebugInfoPDB
+    LLVMObject
     LLVMOption
-    LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}Disassembler
+    LLVMOrcJIT
+    LLVMOrcShared
+    LLVMProfileData
+    LLVMRemarks
+    LLVMRuntimeDyld
+    LLVMScalarOpts
+    LLVMSelectionDAG
+    LLVMSupport
+    LLVMTableGen
+    LLVMTarget
+    LLVMTextAPI
+    LLVMTransformUtils
+    LLVMVectorize
     LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}AsmParser
     LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}CodeGen
-    LLVMGlobalISel
-    LLVMSelectionDAG
-    LLVMAsmPrinter
-    LLVMDebugInfoCodeView
     LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}Desc
-    LLVMDemangle
+    LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}Disassembler
     LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}Info
-    LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}AsmPrinter
-    LLVM${_LLVM_PLATFORM_NAME_MIXED_CASE}Utils
-    LLVMIRReader
-    LLVMBitReader
-    LLVMAsmParser
-    LLVMMCDisassembler
-    LLVMMCParser
-    LLVMInstrumentation
-    LLVMMCJIT
-    LLVMOrcJIT
-    LLVMCodeGen
-    LLVMScalarOpts
-    LLVMInstCombine
-    LLVMAggressiveInstCombine
-    LLVMTransformUtils
-    LLVMAnalysis
-    LLVMProfileData
-    LLVMRuntimeDyld
-    LLVMExecutionEngine
-    LLVMTarget
-    LLVMMC
-    LLVMObject
-    LLVMCore
-    LLVMBinaryFormat
-    LLVMSupport
+    ${_LLVM_PLATFORM_UTILS}
     )
-    
+
 target_include_directories(${__TARGET_ADD_DEPENDENCY_TARGET} 
     PRIVATE
         ${mdl-jit-llvm_SOURCE_DIR}/dist/include

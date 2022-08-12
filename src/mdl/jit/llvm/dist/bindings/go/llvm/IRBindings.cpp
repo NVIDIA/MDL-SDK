@@ -1,9 +1,8 @@
 //===- IRBindings.cpp - Additional bindings for ir ------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -51,15 +50,18 @@ void LLVMSetMetadata2(LLVMValueRef Inst, unsigned KindID, LLVMMetadataRef MD) {
   unwrap<Instruction>(Inst)->setMetadata(KindID, N);
 }
 
-void LLVMSetCurrentDebugLocation2(LLVMBuilderRef Bref, unsigned Line,
+void LLVMGoSetCurrentDebugLocation(LLVMBuilderRef Bref, unsigned Line,
                                   unsigned Col, LLVMMetadataRef Scope,
                                   LLVMMetadataRef InlinedAt) {
-  unwrap(Bref)->SetCurrentDebugLocation(
-      DebugLoc::get(Line, Col, Scope ? unwrap<MDNode>(Scope) : nullptr,
-                    InlinedAt ? unwrap<MDNode>(InlinedAt) : nullptr));
+  if (!Scope)
+    unwrap(Bref)->SetCurrentDebugLocation(DebugLoc());
+  else
+    unwrap(Bref)->SetCurrentDebugLocation(DILocation::get(
+        unwrap<MDNode>(Scope)->getContext(), Line, Col, unwrap<MDNode>(Scope),
+        InlinedAt ? unwrap<MDNode>(InlinedAt) : nullptr));
 }
 
-LLVMDebugLocMetadata LLVMGetCurrentDebugLocation2(LLVMBuilderRef Bref) {
+LLVMDebugLocMetadata LLVMGoGetCurrentDebugLocation(LLVMBuilderRef Bref) {
   const auto& Loc = unwrap(Bref)->getCurrentDebugLocation();
   const auto* InlinedAt = Loc.getInlinedAt();
   const LLVMDebugLocMetadata md{

@@ -55,7 +55,7 @@ public:
     Expression_base( const IType* type) : m_type( type, mi::base::DUP_INTERFACE)
     { ASSERT( M_SCENE, type); }
 
-    IExpression::Kind get_kind() const { return E::s_kind; };
+    IExpression::Kind get_kind() const { return E::s_kind; }
 
     const IType* get_type() const { m_type->retain(); return m_type.get(); }
 
@@ -128,15 +128,17 @@ public:
         const IType* type,
         DB::Tag module_tag,
         const Mdl_tag_ident& definition_ident,
-        const std::string& definition_db_name,
+        const char* definition_db_name,
         IExpression_list* arguments)
-        : Base(type)
-        , m_module_tag(module_tag)
-        , m_definition_ident(definition_ident)
-        , m_definition_db_name(definition_db_name)
-        , m_arguments(arguments, mi::base::DUP_INTERFACE)
+      : Base( type),
+        m_module_tag( module_tag),
+        m_definition_ident( definition_ident),
+        m_definition_db_name( definition_db_name),
+        m_arguments( arguments, mi::base::DUP_INTERFACE)
     {
-        ASSERT(M_SCENE, definition_ident.first); ASSERT(M_SCENE, module_tag); ASSERT(M_SCENE, arguments);
+        ASSERT( M_SCENE, definition_ident.first);
+        ASSERT( M_SCENE, module_tag);
+        ASSERT( M_SCENE, arguments);
     }
 
     DB::Tag get_definition( DB::Transaction *transaction) const;
@@ -409,7 +411,7 @@ public:
         const IType* type,
         DB::Tag module_tag,
         const Mdl_tag_ident& definition_ident,
-        const std::string& definition_db_name,
+        const char* definition_db_name,
         IExpression_list* arguments) const;
 
     IExpression_temporary* create_temporary( const IType* type, mi::Size index) const;

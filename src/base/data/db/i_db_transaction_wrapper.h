@@ -57,7 +57,7 @@ class Transaction_wrapper : public Transaction
     /// \param transaction      The wrapped transaction
     Transaction_wrapper(Transaction* transaction) { m_transaction = transaction; }
 
-    bool is_open() { return m_transaction->is_open(); }
+    bool is_open(bool cio) { return m_transaction->is_open(cio); }
 
     Tag reserve_tag() { return m_transaction->reserve_tag(); }
 

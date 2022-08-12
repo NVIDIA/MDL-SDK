@@ -1,4 +1,4 @@
-add_llvm_library(LLVMDebugInfoCodeView
+add_llvm_component_library(LLVMDebugInfoCodeView
   AppendingTypeTableBuilder.cpp
   CodeViewError.cpp
   CodeViewRecordIO.cpp
@@ -27,17 +27,23 @@ add_llvm_library(LLVMDebugInfoCodeView
   RecordSerialization.cpp
   SimpleTypeSerializer.cpp
   StringsAndChecksums.cpp
-  SymbolRecordMapping.cpp
   SymbolDumper.cpp
+  SymbolRecordHelpers.cpp
+  SymbolRecordMapping.cpp
   SymbolSerializer.cpp
   TypeDumpVisitor.cpp
   TypeIndex.cpp
   TypeIndexDiscovery.cpp
   TypeHashing.cpp
+  TypeRecordHelpers.cpp
   TypeRecordMapping.cpp
   TypeStreamMerger.cpp
   TypeTableCollection.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${LLVM_MAIN_INCLUDE_DIR}/llvm/DebugInfo/CodeView
+
+  LINK_COMPONENTS
+  Support
+  DebugInfoMSF
   )

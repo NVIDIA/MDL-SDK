@@ -39,6 +39,7 @@
 #include <mi/neuraylib/ifactory.h>
 
 #include <iosfwd>
+#include <cstring>
 #include <boost/core/noncopyable.hpp>
 
 namespace mi {

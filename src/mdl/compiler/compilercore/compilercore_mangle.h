@@ -182,6 +182,7 @@ public:
     : Base(alloc)
     , m_string("", alloc)
     {
+        m_string.reserve(1024);
     }
 
     /// Write a char to the stream.
@@ -301,7 +302,7 @@ public:
     /// \param owner        the owner module of this type
     string mangle(IType const *type, IModule const *owner);
 
-    /// Mangle a paramater type.
+    /// Mangle a parameter type.
     ///
     /// \param type         the type to mangle
     string mangle_parameter_type(IType const *type);
@@ -315,6 +316,11 @@ private:
 
     /// Check if the name for the given definition must get a signature suffix.
     bool need_signature_suffix(IDefinition const *def) const;
+
+    /// Mangle a parameter type.
+    ///
+    /// \param type         the type to mangle
+    void add_mangle_parameter_type(IType const *type);
 
 private:
     /// The printer for names.

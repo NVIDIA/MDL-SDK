@@ -1,9 +1,8 @@
 //===- llvm/CodeGen/ScheduleDAG.h - Common Base Class -----------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -33,15 +32,15 @@
 namespace llvm {
 
 template<class Graph> class GraphWriter;
+class LLVMTargetMachine;
 class MachineFunction;
 class MachineRegisterInfo;
 class MCInstrDesc;
 struct MCSchedClassDesc;
-class ScheduleDAG;
 class SDNode;
 class SUnit;
+class ScheduleDAG;
 class TargetInstrInfo;
-class TargetMachine;
 class TargetRegisterClass;
 class TargetRegisterInfo;
 
@@ -236,12 +235,8 @@ class TargetRegisterInfo;
       Contents.Reg = Reg;
     }
 
-    raw_ostream &print(raw_ostream &O,
-                       const TargetRegisterInfo *TRI = nullptr) const;
+    void dump(const TargetRegisterInfo *TRI = nullptr) const;
   };
-
-  template <>
-  struct isPodLike<SDep> { static const bool value = true; };
 
   /// Scheduling unit. This is a node in the scheduling DAG.
   class SUnit {
@@ -419,7 +414,7 @@ class TargetRegisterInfo;
     /// dirty.
     void setDepthToAtLeast(unsigned NewDepth);
 
-    /// If NewDepth is greater than this node's depth value, set it to be
+    /// If NewHeight is greater than this node's height value, set it to be
     /// the new height value. This also recursively marks predecessor nodes
     /// dirty.
     void setHeightToAtLeast(unsigned NewHeight);
@@ -459,12 +454,7 @@ class TargetRegisterInfo;
     /// edge occurs first.
     void biasCriticalPath();
 
-    void dump(const ScheduleDAG *G) const;
-    void dumpAll(const ScheduleDAG *G) const;
-    raw_ostream &print(raw_ostream &O,
-                       const SUnit *Entry = nullptr,
-                       const SUnit *Exit = nullptr) const;
-    raw_ostream &print(raw_ostream &O, const ScheduleDAG *G) const;
+    void dumpAttributes() const;
 
   private:
     void ComputeDepth();
@@ -564,7 +554,7 @@ class TargetRegisterInfo;
 
   class ScheduleDAG {
   public:
-    const TargetMachine &TM;            ///< Target processor
+    const LLVMTargetMachine &TM;        ///< Target processor
     const TargetInstrInfo *TII;         ///< Target instruction information
     const TargetRegisterInfo *TRI;      ///< Target processor register info
     MachineFunction &MF;                ///< Machine function
@@ -597,7 +587,9 @@ class TargetRegisterInfo;
     virtual void viewGraph(const Twine &Name, const Twine &Title);
     virtual void viewGraph();
 
-    virtual void dumpNode(const SUnit *SU) const = 0;
+    virtual void dumpNode(const SUnit &SU) const = 0;
+    virtual void dump() const = 0;
+    void dumpNodeName(const SUnit &SU) const;
 
     /// Returns a label for an SUnit node in a visualization of the ScheduleDAG.
     virtual std::string getGraphNodeLabel(const SUnit *SU) const = 0;
@@ -613,6 +605,9 @@ class TargetRegisterInfo;
     /// consistent. Returns the number of scheduled SUnits.
     unsigned VerifyScheduledDAG(bool isBottomUp);
 #endif
+
+  protected:
+    void dumpNodeAll(const SUnit &SU) const;
 
   private:
     /// Returns the MCInstrDesc of this SDNode or NULL.
@@ -696,6 +691,12 @@ class TargetRegisterInfo;
     std::vector<SUnit> &SUnits;
     SUnit *ExitSU;
 
+    // Have any new nodes been added?
+    bool Dirty = false;
+
+    // Outstanding added edges, that have not been applied to the ordering.
+    SmallVector<std::pair<SUnit *, SUnit *>, 16> Updates;
+
     /// Maps topological index to the node number.
     std::vector<int> Index2Node;
     /// Maps the node number to its topological index.
@@ -715,8 +716,17 @@ class TargetRegisterInfo;
     /// Assigns the topological index to the node n.
     void Allocate(int n, int index);
 
+    /// Fix the ordering, by either recomputing from scratch or by applying
+    /// any outstanding updates. Uses a heuristic to estimate what will be
+    /// cheaper.
+    void FixOrder();
+
   public:
     ScheduleDAGTopologicalSort(std::vector<SUnit> &SUnits, SUnit *ExitSU);
+
+    /// Add a SUnit without predecessors to the end of the topological order. It
+    /// also must be the first new node added to the DAG.
+    void AddSUnitWithoutPredecessors(const SUnit *SU);
 
     /// Creates the initial topological ordering from the DAG to be scheduled.
     void InitDAGTopologicalSorting();
@@ -739,10 +749,18 @@ class TargetRegisterInfo;
     /// added from SUnit \p X to SUnit \p Y.
     void AddPred(SUnit *Y, SUnit *X);
 
+    /// Queues an update to the topological ordering to accommodate an edge to
+    /// be added from SUnit \p X to SUnit \p Y.
+    void AddPredQueued(SUnit *Y, SUnit *X);
+
     /// Updates the topological ordering to accommodate an an edge to be
     /// removed from the specified node \p N from the predecessors of the
     /// current node \p M.
     void RemovePred(SUnit *M, SUnit *N);
+
+    /// Mark the ordering as temporarily broken, after a new node has been
+    /// added.
+    void MarkDirty() { Dirty = true; }
 
     typedef std::vector<int>::iterator iterator;
     typedef std::vector<int>::const_iterator const_iterator;

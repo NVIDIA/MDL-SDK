@@ -52,7 +52,7 @@
 
 #include "mdl/compiler/compilercore/compilercore_assert.h"
 
-#include "generator_jit_hlsl_function.h"
+#include "generator_jit_sl_function.h"
 #include "generator_jit_ast_compute.h"
 #include "generator_jit_type_map.h"
 
@@ -60,7 +60,7 @@
 #define DUMP_STMTKINDS
 
 namespace llvm {
-namespace hlsl {
+namespace sl {
 
 // The dominator tree over the limit graph.
 typedef DomTreeBase<Region> LGDominatorTree;
@@ -454,7 +454,7 @@ public:
     Region *createIfRegion(
         RegionBuilder  &builder,
         BasicBlock     *exitBlock,
-        TerminatorInst *terminator);
+        Instruction    *terminator);
 
 private:
     /// Constructor.
@@ -616,13 +616,13 @@ static bool reachable(
     return false;
 }
 
-}  // namespace hlsl
+}  // namespace sl
 
 template <>
-struct GraphTraits<hlsl::Region *> {
-    typedef hlsl::Region                     NodeType;
-    typedef hlsl::Region                     *NodeRef;
-    typedef hlsl::Region::RegionList::iterator ChildIteratorType;
+struct GraphTraits<sl::Region *> {
+    typedef sl::Region                     NodeType;
+    typedef sl::Region                     *NodeRef;
+    typedef sl::Region::RegionList::iterator ChildIteratorType;
 
     static NodeType *getEntryNode(NodeType *N) { return N; }
 
@@ -635,10 +635,10 @@ struct GraphTraits<hlsl::Region *> {
 };
 
 template <>
-struct GraphTraits<Inverse<hlsl::Region *> > {
-    typedef hlsl::Region                     NodeType;
-    typedef hlsl::Region                     *NodeRef;
-    typedef hlsl::Region::RegionList::iterator ChildIteratorType;
+struct GraphTraits<Inverse<sl::Region *> > {
+    typedef sl::Region                     NodeType;
+    typedef sl::Region                     *NodeRef;
+    typedef sl::Region::RegionList::iterator ChildIteratorType;
 
     static NodeType *getEntryNode(NodeType *N) { return N; }
 
@@ -651,16 +651,16 @@ struct GraphTraits<Inverse<hlsl::Region *> > {
 };
 
 template<>
-struct GraphTraits<hlsl::StructuredFunction *> : public GraphTraits<hlsl::Region *> {
-    typedef hlsl::StructuredFunction                       GraphType;
-    typedef hlsl::Region                                   NodeType;
-    typedef hlsl::StructuredFunction::RegionList::iterator ChildIteratorType;
+struct GraphTraits<sl::StructuredFunction *> : public GraphTraits<sl::Region *> {
+    typedef sl::StructuredFunction                       GraphType;
+    typedef sl::Region                                   NodeType;
+    typedef sl::StructuredFunction::RegionList::iterator ChildIteratorType;
 
     // Return the entry node of the graph
     static NodeType *getEntryNode(GraphType *G) { return G->front(); }
 
     // nodes_iterator/begin/end - Allow iteration over all nodes in the graph
-    typedef hlsl::StructuredFunction::RegionList::iterator nodes_iterator;
+    typedef sl::StructuredFunction::RegionList::iterator nodes_iterator;
 
     static nodes_iterator nodes_begin(GraphType *G) {
         return G->begin();
@@ -676,7 +676,7 @@ struct GraphTraits<hlsl::StructuredFunction *> : public GraphTraits<hlsl::Region
     }
 };
 
-namespace hlsl {
+namespace sl {
 
 // -----------------------------------------------------------------------------------------------
 
@@ -818,7 +818,7 @@ RegionSequence *StructuredFunction::createSequenceRegion(
 RegionIfThen *StructuredFunction::createIfThenRegion(
     Region         *head,
     Region         *then,
-    TerminatorInst *terminator,
+    Instruction    *terminator,
     bool           negated)
 {
     RegionIfThen *n = new RegionIfThen(this, ++m_node_id, head, then, terminator, negated);
@@ -832,7 +832,7 @@ RegionIfThenElse *StructuredFunction::createIfThenElseRegion(
     Region         *head,
     Region         *then_node,
     Region         *else_node,
-    TerminatorInst *terminator)
+    Instruction    *terminator)
 {
     RegionIfThenElse *n = new RegionIfThenElse(
         this, ++m_node_id, head, then_node, else_node, terminator);
@@ -948,8 +948,8 @@ static BasicBlock *getLoopUniqueExitTarget(Loop &loop, bool &more_then_one)
     more_then_one = false;
 
     for (BasicBlock *block : loop.blocks()) {
-        TerminatorInst *term = block->getTerminator();
-        for (BasicBlock *succ : term->successors()) {
+        Instruction *term = block->getTerminator();
+        for (BasicBlock *succ : successors(term)) {
             if (loopBBs.find(succ) == loopBBs.end()) {
                 // found an exit target
                 if (target == nullptr) {
@@ -987,7 +987,7 @@ BasicBlock *RegionBuilder::processBB(
         }
     }
 
-    llvm::TerminatorInst *termInst = BB->getTerminator();
+    llvm::Instruction *termInst = BB->getTerminator();
 
     if (llvm::ReturnInst *retInst = llvm::dyn_cast<llvm::ReturnInst>(termInst)) {
         Region *head = m_func.getTopRegion(BB);
@@ -1315,7 +1315,7 @@ bool IfContext::handleProperRegions(
 
                     // let this predecessor jump to the intermediate block instead of
                     // the current exit block
-                    TerminatorInst *termInst = exitPred->getTerminator();
+                    Instruction *termInst = exitPred->getTerminator();
                     for (unsigned i = 0, n = termInst->getNumSuccessors(); i < n; ++i) {
                         if (termInst->getSuccessor(i) == curExitBlock) {
                             termInst->setSuccessor(i, intermediateBlock);
@@ -1326,7 +1326,7 @@ bool IfContext::handleProperRegions(
                     indexPhi->addIncoming(curIndexVal, exitPred);
 
                     // let this predecessor jump to the fused block instead of current exit block
-                    TerminatorInst *termInst = exitPred->getTerminator();
+                    Instruction *termInst = exitPred->getTerminator();
                     for (unsigned i = 0, n = termInst->getNumSuccessors(); i < n; ++i) {
                         if (termInst->getSuccessor(i) == curExitBlock) {
                             termInst->setSuccessor(i, fusedBlock);
@@ -1458,7 +1458,7 @@ bool IfContext::handleProperRegions(
 Region *IfContext::createIfRegion(
     RegionBuilder  &builder,
     BasicBlock     *exitBlock,
-    TerminatorInst *terminator)
+    Instruction    *terminator)
 {
     Region *thenRegion = nullptr;
     if (m_thenBlock != nullptr) {
@@ -1835,14 +1835,18 @@ bool LoopExitEnumerationPass::runOnFunction(Function &function)
 
                 // collect the terminator instructions leading to the exit_block,
                 // as we will change the users list
-                SmallVector<TerminatorInst *, 8> pred_terms;
+                SmallVector<Instruction *, 8> pred_terms;
                 for (auto exit_user : exit_block->users()) {
-                    TerminatorInst *term = cast<TerminatorInst>(exit_user);
+                    Instruction *term = cast<Instruction>(exit_user);
+                    if (!term->isTerminator()) {
+                        MDL_ASSERT(!"Unexpected exit block user");
+                        continue;
+                    }
                     pred_terms.push_back(term);
                 }
 
                 // redirect all jumps to exit_block through our switch block
-                for (TerminatorInst *term : pred_terms) {
+                for (Instruction *term : pred_terms) {
                     BasicBlock *pred_block = term->getParent();
 
                     bool exit_seen = false;
@@ -1960,5 +1964,5 @@ Pass *createUnswitchPass()
     return new UnswitchPass();
 }
 
-}  // namespace hlsl
+}  // namespace sl
 }  // namespace llvm

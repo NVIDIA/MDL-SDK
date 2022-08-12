@@ -2255,10 +2255,10 @@ void Module_serializer::write_name(IType_name const *tname)
         }
 
         write_bool((code & 0x02) != 0);
-        DOUT(("is_array %u\n", unsigned(arr)));
+        DOUT(("is_array %u\n", unsigned((code & 0x02) != 0)));
 
         write_bool((code & 0x01) != 0);
-        DOUT(("is_concreate_array %u\n", unsigned(c_arr)));
+        DOUT(("is_concreate_array %u\n", unsigned((code & 0x01) != 0)));
 
         switch (code) {
         case 0x00:

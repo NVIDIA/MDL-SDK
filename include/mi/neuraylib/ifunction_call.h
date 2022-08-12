@@ -263,7 +263,7 @@ public:
     virtual Sint32 repair( Uint32 flags, IMdl_execution_context* context) = 0;
 };
 
-/*@}*/ // end group mi_neuray_mdl_elements
+/**@}*/ // end group mi_neuray_mdl_elements
 
 } // namespace neuraylib
 

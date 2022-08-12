@@ -40,8 +40,6 @@
 
 #include <base/lib/log/i_log_logger.h>
 
-#include <sstream>
-
 namespace MI {
 
 namespace NEURAY {
@@ -56,9 +54,7 @@ Scope_impl::Scope_impl( DB::Scope* scope, const Class_factory* class_factory)
 
     DB::Scope_id id = scope->get_id();
     Uint32 id_as_uint = static_cast<Uint32>( id);
-    std::ostringstream stream;
-    stream << id_as_uint;
-    m_id = stream.str();
+    m_id = std::to_string( id_as_uint);
 
     // The string cannot be empty at this point. If it still is, then this indicates a misbehaving
     // libstdc++ runtime. This was seen on Linux with devsl builds (non-static libstdc++ runtime)

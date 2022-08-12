@@ -39,7 +39,7 @@ class Type_mapper;
 }
 
 namespace llvm {
-namespace hlsl {
+namespace sl {
 
 class Region;
 class StructuredFunction;
@@ -150,5 +150,5 @@ private:
 /// Creates the "unswitch" pass.
 Pass *createUnswitchPass();
 
-} // hlsl;
+} // sl;
 } // llvm;

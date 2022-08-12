@@ -32,6 +32,7 @@
 #include "example_dxr_options.h"
 #include "mdl_d3d12/camera_controls.h"
 #include "mdl_d3d12/mdl_d3d12.h"
+#include "mdl_d3d12/mdl_sdk.h"
 #include "mdl_d3d12/scene.h"
 #include <gui/gui.h>
 #include <gui/gui_material_properties.h>
@@ -287,6 +288,8 @@ Gui_section_mdl_options::Gui_section_mdl_options(
 
 void Gui_section_mdl_options::update(mi::neuraylib::ITransaction* /*transaction*/)
 {
+    const size_t size_t_zero = 0;
+
     mi::examples::mdl_d3d12::Mdl_sdk::Options& mdl_options =
         m_app->get_mdl_sdk().get_options();
 
@@ -342,6 +345,7 @@ void Gui_section_mdl_options::update(mi::neuraylib::ITransaction* /*transaction*
             mi::examples::io::mkdir(mi::examples::io::get_executable_folder() + "/shader_cache");
         }
     }
+
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -413,7 +417,7 @@ void Gui_section_edit_material::update_material_list()
 void Gui_section_edit_material::unbind_material()
 {
     m_bound_material_index = 0;
-    init_resource_handling(nullptr);
+    init_handlers(nullptr);
     m_internal_section.unbind_material();
 }
 
@@ -444,7 +448,8 @@ bool Gui_section_edit_material::bind_material(Mdl_material* mat)
                     mi::base::Handle<const mi::neuraylib::ITarget_value_layout> layout(
                         mat->get_argument_layout());
 
-                    init_resource_handling(mat);
+                    // for presenting resources and string constants
+                    init_handlers(mat);
 
                     // When using class compilation, the argument block and its
                     // layout is required for mapping the available class parameters
@@ -453,7 +458,7 @@ bool Gui_section_edit_material::bind_material(Mdl_material* mat)
                     m_internal_section.bind_material(
                         t, mat->get_material_instance_db_name().c_str(),
                         compiled_mat.get(), target_code.get(),
-                        layout.get(), (char*)mat->get_argument_data(), this);
+                        layout.get(), (char*)mat->get_argument_data(), this, this);
 
                     m_selected_material_supports_reloading =
                         mat->get_material_desciption().supports_reloading();
@@ -825,7 +830,7 @@ void Gui_section_edit_material::update(mi::neuraylib::ITransaction* transaction)
 
 // ------------------------------------------------------------------------------------------------
 
-void Gui_section_edit_material::init_resource_handling(mdl_d3d12::Mdl_material* material)
+void Gui_section_edit_material::init_handlers(mdl_d3d12::Mdl_material* material)
 {
     m_texture_2ds.clear();
     m_texture_2ds.push_back({ 0, "<invalid>" });
@@ -838,6 +843,29 @@ void Gui_section_edit_material::init_resource_handling(mdl_d3d12::Mdl_material* 
     {
         if (a.dimension == mdl_d3d12::Texture_dimension::Texture_2D)
             m_texture_2ds.push_back({ a.runtime_resource_id, a.resource_name });
+    }
+
+    // create a local copy of the string constants (including the invalid one)
+    m_string_constants.clear();
+
+    // invalid
+    Mdl_string_constant invalid;
+    invalid.runtime_string_id = 0;
+    invalid.value = "<invalid>";
+    m_string_constants.push_back(invalid);
+
+    // valid
+    const auto& string_constants = material->get_string_constants();
+    m_string_constants.insert(
+        m_string_constants.end(), string_constants.begin(), string_constants.end());
+
+    // inverse mapping and max length
+    m_string_constants_map_inv.clear();
+    m_string_constant_max_length = 0;
+    for (const auto& it : m_string_constants)
+    {
+        m_string_constants_map_inv.insert({ it.value, it.runtime_string_id });
+        m_string_constant_max_length = std::max(m_string_constant_max_length, it.value.length());
     }
 }
 
@@ -928,6 +956,41 @@ mi::Uint32 Gui_section_edit_material::get_available_resource_id(
             break;
     }
     return -1;
+}
+
+mi::Size Gui_section_edit_material::get_string_count() const
+{
+    return m_string_constants.size();
+}
+
+// ------------------------------------------------------------------------------------------------
+
+mi::Uint32 Gui_section_edit_material::get_string_id(mi::Size index) const
+{
+    return index >= m_string_constants.size() ? 0 : m_string_constants[index].runtime_string_id;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+const char* Gui_section_edit_material::get_string_name(mi::Size index) const
+{
+    return index >= m_string_constants.size() ? nullptr : m_string_constants[index].value.c_str();
+}
+
+// ------------------------------------------------------------------------------------------------
+
+mi::Uint32 Gui_section_edit_material::get_string_id_by_name(const char* string_name) const
+{
+    const auto& it = m_string_constants_map_inv.find(string_name);
+    return it == m_string_constants_map_inv.end() ? 0u : it->second;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+
+size_t Gui_section_edit_material::get_max_string_name_length() const
+{
+    return m_string_constant_max_length;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -1021,3 +1084,4 @@ void Info_overlay::update(const char* text)
 }
 
 }}}
+

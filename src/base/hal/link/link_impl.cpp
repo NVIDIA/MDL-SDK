@@ -72,7 +72,7 @@ void* Library_impl::get_symbol( const char* symbol_name)
 {
 #ifndef MI_PLATFORM_WINDOWS
     void* symbol = dlsym( m_handle, symbol_name);
-    return dlerror() != 0 ? 0 : symbol;
+    return dlerror() != 0 ? nullptr : symbol;
 #else // MI_PLATFORM_WINDOWS
     return GetProcAddress( (HMODULE)m_handle, symbol_name);
 #endif // MI_PLATFORM_WINDOWS
@@ -83,17 +83,17 @@ std::string Library_impl::get_filename( const char* symbol_name)
 #ifndef MI_PLATFORM_WINDOWS
     void* symbol = dlsym( m_handle, symbol_name);
     if( !symbol)
-        return "";
+        return {};
     Dl_info dl_info;
     if( !dladdr(symbol, &dl_info))
-        return "";
+        return {};
     if( !dl_info.dli_fname)
-        return "";
+        return {};
     return dl_info.dli_fname;
 #else // MI_PLATFORM_WINDOWS
     TCHAR filename[MAX_PATH];
     if( !GetModuleFileName( (HMODULE)m_handle, filename, MAX_PATH))
-        return "";
+        return {};
     return filename;
 #endif // MI_PLATFORM_WINDOWS
 }
@@ -117,7 +117,7 @@ ILibrary* Link_module_impl::load_library( const char* path)
     if( !handle) {
         LOG::mod_log->warning( M_LINK, LOG::Mod_log::C_PLUGIN, 14,
             "Loading %s: %s", path, dlerror());
-        return 0;
+        return nullptr;
     }
 
 #else // MI_PLATFORM_WINDOWS
@@ -141,7 +141,7 @@ ILibrary* Link_module_impl::load_library( const char* path)
 #endif // UNICODE
         if( buffer)
             LocalFree( buffer);
-        return 0;
+        return nullptr;
     }
 
 #endif // MI_PLATFORM_WINDOWS

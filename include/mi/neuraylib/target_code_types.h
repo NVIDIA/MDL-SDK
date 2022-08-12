@@ -1380,7 +1380,7 @@ typedef void (Edf_auxiliary_function_with_derivs)(
     void const                                *exception_state,
     char const                                *arg_block_data);
 
-/*@}*/ // end group mi_neuray_mdl_compiler
+/**@}*/ // end group mi_neuray_mdl_compiler
 
 } // namespace neuraylib
 

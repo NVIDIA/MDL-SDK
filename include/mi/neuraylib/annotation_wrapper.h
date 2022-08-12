@@ -158,7 +158,7 @@ private:
     mi::base::Handle<const mi::neuraylib::IAnnotation_block> m_anno_block;
 };
 
-/*@}*/ // end group mi_neuray_mdl_elements
+/**@}*/ // end group mi_neuray_mdl_elements
 
 inline Annotation_wrapper::Annotation_wrapper(
     const mi::neuraylib::IAnnotation_block* anno_block)
