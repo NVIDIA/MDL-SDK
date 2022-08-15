@@ -72,9 +72,8 @@ Mdl_material_library::Mdl_material_library(
 
 Mdl_material_library::~Mdl_material_library()
 {
+    // Release memory here
     m_target_map.clear();
-    for (auto& entry : m_targets)
-        delete entry.second;
 
     for (auto& resource : m_resources)
         for (auto& entry : resource.second.entries)
@@ -87,22 +86,20 @@ Mdl_material_library::Target_entry* Mdl_material_library::get_target_for_materia
     const std::string& key)
 {
     std::lock_guard<std::mutex> lock(m_targets_mtx);
-    Mdl_material_library::Target_entry* entry;
 
     // reuse the existing target if the material is already added to a link unit
     auto found = m_target_map.find(key);
     if (found == m_target_map.end())
     {
-        entry = new Target_entry(new Mdl_material_target(m_app, m_sdk));
 
         // store a key based on the compiled material hash to identify already handled ones
-        m_target_map.emplace(key, entry);
-        m_targets[entry->m_target->get_id()] = entry->m_target;
+        auto entryPair = m_target_map.emplace(key, new Mdl_material_target(m_app, m_sdk));
+        auto& entry = entryPair.first->second;
+        m_targets[entry.m_target->get_id()] = entry.m_target;
     }
-    else
-        entry = found->second;
 
-    return entry;
+
+    return &m_target_map.at(key);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -142,7 +139,7 @@ bool Mdl_material_library::set_description(
             m_targets.erase(old_target->get_id());
             std::vector<std::string> keys_to_delete;
             for (auto& pair : m_target_map)
-                if (pair.second->m_target == old_target)
+                if (pair.second.m_target == old_target)
                     keys_to_delete.push_back(pair.first);
 
             for (auto& key : keys_to_delete)
@@ -425,21 +422,21 @@ bool Mdl_material_library::reload_module(
         std::lock_guard<std::mutex> lock(m_targets_mtx);
         for (auto& hash : old_hashes)
         {
-            auto entry = m_target_map[hash];
-            if (!entry)
+            auto& entry = m_target_map[hash];
+            if (!entry.m_target)
             {
                 assert(false && "Target code map contains invalid entries");
                 m_target_map.erase(hash);
                 continue;
             }
 
-            Mdl_material_target* target = entry->m_target;
+            Mdl_material_target* target = entry.m_target;
             if (target->get_material_count() == 0)
             {
                 m_targets.erase(target->get_id());
                 std::vector<std::string> keys_to_delete;
                 for (auto& pair : m_target_map)
-                    if (pair.second->m_target == target)
+                    if (pair.second.m_target == target)
                         keys_to_delete.push_back(pair.first);
 
                 for (auto& key : keys_to_delete)
@@ -477,7 +474,7 @@ bool Mdl_material_library::generate_and_compile_targets()
             {
                 target_ids_to_delete.insert(target->get_id());
                 for (const auto& pair : m_target_map)
-                    if (pair.second->m_target->get_id() == target->get_id())
+                    if (pair.second.m_target->get_id() == target->get_id())
                         target_map_entries_to_delete.insert(pair.first);
 
                 continue;

@@ -60,13 +60,27 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
         struct Target_entry
         {
+            // Empty constructor for stl containers
+            Target_entry() {};
+
             // Constructor.
             explicit Target_entry(Mdl_material_target* target);
+
+            // Move constructor for stl containers
+            Target_entry(Target_entry&& other) noexcept
+            {
+                // Lock until the target is ready for move operation
+                std::unique_lock<std::mutex> lock(other.m_mutex);
+
+                // Swap the target pointer
+                m_target = other.m_target;
+                other.m_target = nullptr;
+            }
 
             // Destructor.
             ~Target_entry();
 
-            Mdl_material_target* m_target;
+            Mdl_material_target* m_target = nullptr;
             std::mutex m_mutex;
         };
 
@@ -191,7 +205,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
         // map that stores targets based on the compiled material hash
         std::map<size_t, Mdl_material_target*> m_targets;
-        std::map<std::string, Target_entry*> m_target_map;
+        std::map<std::string, Target_entry> m_target_map;
         std::mutex m_targets_mtx;
 
         // all texture resources used by MDL materials
