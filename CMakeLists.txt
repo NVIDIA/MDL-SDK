@@ -47,6 +47,8 @@ set(MDL_EXAMPLES_FOLDER ${CMAKE_SOURCE_DIR}/examples CACHE PATH "The folder that
 option(MDL_BUILD_SDK_EXAMPLES "Adds MDL SDK examples to the build." ON)
 option(MDL_BUILD_CORE_EXAMPLES "Adds MDL Core examples to the build." ON)
 option(MDL_BUILD_ARNOLD_PLUGIN "Enable the build of the MDL Arnold plugin." OFF)
+option(MDL_BUILD_DDS_PLUGIN "Enable the build of the MDL DDS image plugin." ON)
+option(MDL_BUILD_FREEIMAGE_PLUGIN "Enable the build of the MDL Freeimage image plugin." ON)
 option(MDL_LOG_PLATFORM_INFOS "Prints some infos about the current build system (relevant for error reports)." ON)
 option(MDL_LOG_DEPENDENCIES "Prints the list of dependencies during the generation step." OFF)
 option(MDL_LOG_FILE_DEPENDENCIES "Prints the list of files that is copied after a successful build." OFF)
@@ -144,8 +146,12 @@ add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdlm)
 
 # PLUGINS
 #--------------------------------------------------------------------------------------------------
-add_subdirectory(${MDL_SRC_FOLDER}/shaders/plugin/dds)
-add_subdirectory(${MDL_SRC_FOLDER}/shaders/plugin/freeimage)
+if(MDL_BUILD_DDS_PLUGIN)
+    add_subdirectory(${MDL_SRC_FOLDER}/shaders/plugin/dds)
+endif()
+if(MDL_BUILD_FREEIMAGE_PLUGIN)
+    add_subdirectory(${MDL_SRC_FOLDER}/shaders/plugin/freeimage)
+endif()
 
 # EXAMPLES
 #--------------------------------------------------------------------------------------------------
