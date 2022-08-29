@@ -261,8 +261,8 @@ configure_package_config_file(
 )
 
 write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/mdl-config-version.cmake"
-    VERSION     2021.0.1
-  COMPATIBILITY SameMajorVersion
+    VERSION 2022.0.0
+    COMPATIBILITY SameMajorVersion
 )
 
 # Install
