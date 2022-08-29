@@ -307,9 +307,12 @@ endforeach()
 # -------------------------------------------------------------------------------------------------
 # set options for all other projects that are build in addition to the libs we need
 set(ADDITIONAL_LLVM_TARGETS 
-    obj.llvm-tblgen
     llvm-tblgen 
     )
+
+if(NOT CMAKE_GENERATOR STREQUAL "Ninja" AND NOT XCODE)
+    list(APPEND ADDITIONAL_LLVM_TARGETS obj.llvm-tblgen)
+endif()
 
 foreach(_ADD_LLVM ${ADDITIONAL_LLVM_TARGETS})
     message(STATUS "setting flags for ${_ADD_LLVM}")
@@ -382,9 +385,9 @@ if(WINDOWS)
             )
     endif()
 
-    set(_LLVM_EXCLUDE ${_LLVM_EXCLUDE} 
-        LLVMVisualizers
-        )
+    if (MSVC_IDE)
+        list(APPEND _LLVM_EXCLUDE LLVMVisualizers)
+    endif()
 endif()
 
 
