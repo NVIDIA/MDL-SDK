@@ -260,8 +260,14 @@ configure_package_config_file(
     INSTALL_DESTINATION ${CMAKE_INSTALL_DATADIR}/mdl
 )
 
+file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/include/mi/neuraylib/version.h" neuraylib_product_version_line REGEX "^#define MI_NEURAYLIB_PRODUCT_VERSION_STRING ")
+string(REGEX MATCHALL [[[0-9]+(\.[0-9]+)+]] neuraylib_product_version "${neuraylib_product_version_line}")
+if(NOT neuraylib_product_version)
+    message(FATAL_ERROR "Unable to extract MDL-SDK product version from header.")
+endif()
+
 write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/mdl-config-version.cmake"
-    VERSION 2022.0.0
+    VERSION ${neuraylib_product_version}
     COMPATIBILITY SameMajorVersion
 )
 
