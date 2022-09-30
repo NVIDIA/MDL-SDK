@@ -1543,13 +1543,6 @@ public:
         // the generated "evaluate" and "auxiliary" functions and how the data is passed.
         options.set_option(MDL_JIT_OPTION_LINK_LIBBSDF_DF_HANDLE_SLOT_MODE, df_handle_mode.c_str());
 
-        // Option "jit_scene_data_names": Default is "".
-        // Uncomment the line below to enable calling the scene data runtime functions
-        // for any scene data names or specify a comma-separated list of names for which
-        // you may provide scene data. The example runtime functions always return the
-        // default values, which is the same as not supporting any scene data.
-        //     options.set_option(MDL_JIT_OPTION_SCENE_DATA_NAMES, "*");
-
         // After we set the options, we can create a link unit
         m_link_unit = mi::base::make_handle(m_jit_be->create_link_unit(
             /*ctx=*/nullptr,

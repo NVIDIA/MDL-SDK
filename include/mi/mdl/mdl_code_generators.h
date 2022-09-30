@@ -1224,13 +1224,6 @@ class ICode_generator_jit : public
     #define MDL_JIT_OPTION_USE_RENDERER_ADAPT_NORMAL \
         "jit_use_renderer_adapt_normal"
 
-    /// The name of the option specifying a comma-separated list of names for which scene data
-    /// may be available in the renderer.
-    /// For names not in the list, scene::data_isvalid will always return false and
-    /// the scene::data_lookup_* functions will always return the provided default value.
-    /// Use "*" to specify that scene data for any name may be available.
-    #define MDL_JIT_OPTION_SCENE_DATA_NAMES "jit_scene_data_names"
-
     /// The name of the option specifying a comma-separated list of names of functions which will be
     /// visible in the generated code (empty string means no special restriction).
     /// Can especially be used in combination with \c "jit_llvm_renderer_module" to limit

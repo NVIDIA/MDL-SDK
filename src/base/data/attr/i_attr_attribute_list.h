@@ -101,24 +101,24 @@ class Attribute_list : public Attribute
     /// Networking functions. See description header in attr.h.
     //@{
     /// Unique class ID so that the receiving host knows which class to create.
-    SERIAL::Class_id get_class_id() const;
+    SERIAL::Class_id get_class_id() const override;
     /// Check, if this attribute is of the given type. This is true, if either
     /// the class id of this attribute equals the given class id, or the class
     /// is derived from another class which has the given class id.
     /// \param id the class id to check
     /// \returnt true or false
     virtual bool is_type_of(
-        SERIAL::Class_id id) const;
+        SERIAL::Class_id id) const override;
     /// Serialize the object to the given serializer including all sub elements.
     /// it must return a pointer behind itself (e.g. this + 1) to handle arrays.
     /// \param serializer useful for byte streams
     const SERIAL::Serializable* serialize(
-        SERIAL::Serializer* serializer) const;
+        SERIAL::Serializer* serializer) const override;
     /// Deserialize the object and all sub-objects from the given deserializer.
     /// it must return a pointer behind itself (e.g. this + 1) to handle arrays.
     /// \param deser useful functions for byte streams
     SERIAL::Serializable* deserialize(
-        SERIAL::Deserializer* deser);
+        SERIAL::Deserializer* deser) override;
     /// Factory function used for deserialization.
     static SERIAL::Serializable* factory();
 
@@ -258,7 +258,7 @@ class Attribute_list : public Attribute
     void list_reserve(
         Uint list_capacity );
     /// list size (number of data elements)
-    Uint get_listsize()	const;
+    Uint get_listsize()	const override;
     /// Explicitly shrink capacity to given size
     /// \param listsize new size
     void list_shrink(Uint listsize);
@@ -275,7 +275,7 @@ class Attribute_list : public Attribute
     /// Flush the attribute's value array, return the amount of memory flushed
     /// in bytes
     /// \return amount of memory flushed
-    virtual size_t flush();
+    virtual size_t flush() override;
 
   private:
     Uint m_listsize;				///< the list size

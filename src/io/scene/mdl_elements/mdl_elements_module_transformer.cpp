@@ -1529,9 +1529,16 @@ mi::Sint32 Mdl_module_transformer::inline_imported_modules(
         counter);
     inliner.run();
 
+    // copy the file name from the original module here: this is necessary to support
+    // relative path of resources, which is otherwise not allowed for modules without
+    // a file name (aka string modules)
+    new_module->set_filename(m_module->get_filename());
     m_module = new_module;
 
     analyze_module( context);
+
+    // remove the file name again
+    m_module->set_filename(nullptr);
 
     return context->get_result() == 0 ? 0 : -1;
 }

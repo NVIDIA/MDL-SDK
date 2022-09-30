@@ -1209,8 +1209,6 @@ LLVM_code_generator::LLVM_code_generator(
 , m_ro_segment(NULL)
 , m_next_ro_data_offset(0)
 , m_ro_data_values(jitted_code->get_allocator())
-, m_scene_data_existing_names(get_allocator())
-, m_scene_data_filtered(false)
 , m_optix_cp_from_id(NULL)
 , m_captured_args_mdl_types(get_allocator())
 , m_captured_args_type(NULL)
@@ -1360,41 +1358,6 @@ LLVM_code_generator::LLVM_code_generator(
     if (!target_is_structured_language()) {
         // this option can only be set for GLSL/HLSL
         m_sl_use_resource_data = false;
-    }
-
-    // parse scene data names option if available
-    char const *names = options.get_string_option(MDL_JIT_OPTION_SCENE_DATA_NAMES);
-    if (names != NULL && *names) {
-        if (names[0] == '*' && names[1] == 0) {
-            m_scene_data_filtered = false;
-        } else {
-            // split the list at ',' and put the names into a set
-            char const *start_ptr = names;
-            char const *ptr = start_ptr;
-            while (*ptr) {
-                if (*ptr == ',') {
-                    size_t len = ptr - start_ptr;
-                    if (len > 0) {
-                        char *buf = static_cast<char *>(m_arena.allocate(len + 1));
-                        memcpy(buf, start_ptr, len);
-                        buf[len] = 0;
-                        m_scene_data_existing_names.insert(buf);
-                    }
-                    start_ptr = ptr + 1;
-                }
-                ++ptr;
-            }
-            if (start_ptr != ptr) {
-                size_t len = ptr - start_ptr;
-                if (len > 0) {
-                    char *buf = static_cast<char *>(m_arena.allocate(len + 1));
-                    memcpy(buf, start_ptr, len);
-                    buf[len] = 0;
-                    m_scene_data_existing_names.insert(buf);
-                }
-            }
-            m_scene_data_filtered = true;
-        }
     }
 
     prepare_internal_functions();
@@ -7105,17 +7068,6 @@ Expression_result LLVM_code_generator::translate_call(
         return translate_dag_call_lambda(ctx, call_expr);
 
     case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_ISVALID:
-        if (m_scene_data_filtered) {
-            IValue const *name = call_expr->get_const_argument(0);
-            if (name != NULL) {
-                IValue_string const *name_str = as<IValue_string>(name);
-                // is name known to never be available? -> return false
-                if (m_scene_data_existing_names.count(name_str->get_value()) == 0) {
-                    return Expression_result::value(ctx.get_constant(false));
-                }
-            }
-        }
-
         if (!target_is_structured_language() &&
             m_target_lang != ICode_generator::TL_PTX &&
             !(m_target_lang == ICode_generator::TL_NATIVE && !m_has_res_handler)) {
@@ -7144,17 +7096,6 @@ Expression_result LLVM_code_generator::translate_call(
     case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3:
     case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
     case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
-        if (m_scene_data_filtered) {
-            IValue const *name = call_expr->get_const_argument(0);
-            if (name != NULL) {
-                IValue_string const *name_str = as<IValue_string>(name);
-                // is name known to never be available? -> return default value (second argument)
-                if (m_scene_data_existing_names.count(name_str->get_value()) == 0) {
-                    return call_expr->translate_argument(*this, ctx, 1, return_derivs);
-                }
-            }
-        }
-
         if (!target_is_structured_language() &&
             m_target_lang != ICode_generator::TL_PTX &&
             !(m_target_lang == ICode_generator::TL_NATIVE && !m_has_res_handler)) {

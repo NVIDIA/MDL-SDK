@@ -293,6 +293,9 @@ public:
     /// If true, compile in strict mode.
     bool strict_mode() const { return m_strict_mode; }
 
+    /// If true, features from next MDL version are enabled.
+    bool enable_mdl_next() const { return m_enable_mdl_next; }
+
     /// If true, experimental MDL features are enable.
     bool enable_experimental_features() const { return m_enable_experimental_features; }
 
@@ -581,6 +584,9 @@ protected:
 
     /// If true, compile in strict mode.
     bool m_strict_mode;
+
+    /// If true, compile with features from next MDL version.
+    bool m_enable_mdl_next;
 
     /// If true, compile with experimental MDL features.
     bool m_enable_experimental_features;

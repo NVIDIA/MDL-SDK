@@ -1,5 +1,47 @@
 Change Log
 ==========
+MDL SDK 2022.0.1 (359000.3383): 21 Sep 2022
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2022.0.1 (359000.3383) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+    - The freeimage and dds plugins can now individually be excluded from the build.
+    - Improved Windows building with alternative CMake generators.
+    - Python bindings
+        - Updated the SWIG file in order to support pymdlsdk.
+          `IFunction_definition.get_mdl_version()` in Python.
+        - Handle Mdl_version as output parameter. `(since, removed) = mdl_func.get_mdl_version()`.
+        
+- MDL Compiler and Backends
+    - Added compiler context option "mdl_next": Setting this option will enable preliminary
+      features from the upcoming MDL 1.8 Version, especially:
+        - Full utf8 identifiers in MDL.
+        - Lifted restriction on scene access functions: The name of a scene data can be now any
+          expression of type uniform string.
+          
+- MDL SDK examples
+    - MDL Example df_vulkan
+        - Added dummy implementations for unsupported runtime functions.
+        
+**Fixed Bugs**
+
+- MDL Compiler and Backends
+    - Fixed error message regarding wrong array type issued two times.
+    - Speed up material compilation: Instantiation of a material instance is now faster due to
+      less database queries and lesser reference counted operations.
+    - Fixed module inliner handling of relative resource pathes.
+    - Fixed libbsdf handling of Fresnel factors.
+
+- MDL SDK examples
+    - MDL plugin for Arnold
+        - Fixed edf init call (in rare cases it was accessing undefined data).
+    - MDL Example df_vulkan
+        - Removed alpha channel before exporting images.
+ 
 MDL SDK 2022 (359000.2512): 06 Aug 2022
 -----------------------------------------------
 
@@ -77,7 +119,6 @@ ABI compatible with the MDL SDK 2022.0 (359000.2512) binary release
     - Example DXR
         - Fixed crash when loading a new scene caused by fences being signaled too early
           due to a race condition.
-
 
 MDL SDK 2021.1.4 (349500.10153): 24 May 2022
 -----------------------------------------------

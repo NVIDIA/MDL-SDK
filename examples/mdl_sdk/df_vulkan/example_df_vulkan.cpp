@@ -639,8 +639,8 @@ void Df_vulkan_app::cleanup_resources()
             mi::base::Handle<mi::neuraylib::ICanvas> canvas(
                 m_image_api->create_canvas("Color", m_image_width, m_image_height));
             mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile());
-
             std::memcpy(tile->get_data(), pixels.data(), pixels.size());
+            canvas = m_image_api->convert(canvas.get(), "Rgb_fp");
             m_mdl_impexp_api->export_canvas(output_filenames[i].c_str(), canvas.get());
         }
     }

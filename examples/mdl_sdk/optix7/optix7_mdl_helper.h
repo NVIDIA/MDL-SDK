@@ -339,8 +339,6 @@ Mdl_helper::Mdl_helper(
     }
     if (m_be_cuda_ptx->set_option("inline_aggressively", "on") != 0)
         exit_failure("ERROR: Setting PTX option inline_aggressively failed");
-    if (m_be_cuda_ptx->set_option("scene_data_names", "*") != 0)
-        exit_failure("ERROR: Setting PTX option scene_data_names failed");
 
     m_image_api = m_neuray->get_api_component<mi::neuraylib::IImage_api>();
 }

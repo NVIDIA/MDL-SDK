@@ -1330,13 +1330,12 @@ public:
     /// \param name_resolver  The name resolver to use for inlining calls.
     Optimize_helper(
         IAllocator                *alloc,
-        IMDL                      &mdl,
         DAG_node_factory_impl     &node_factory,
         ICall_name_resolver const &name_resolver)
         : m_alloc(alloc)
         , m_node_factory(node_factory)
         , m_name_resolver(name_resolver)
-        , m_dag_mangler(alloc, &mdl)
+        , m_dag_mangler(alloc)
         , m_dag_builder(alloc, node_factory, m_dag_mangler)
         , m_optimized_nodes(0, Node_map::hasher(), Node_map::key_equal(), alloc)
     {}
@@ -1453,7 +1452,6 @@ void Lambda_function::optimize(
 
     Optimize_helper optimizer(
         get_allocator(),
-        *m_mdl.get(),
         m_node_factory,
         *name_resolver);
 

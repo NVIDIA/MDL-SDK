@@ -3835,12 +3835,6 @@ private:
 
     typedef hash_set<char const *, cstring_hash, cstring_equal_to>::Type String_set;
 
-    /// The set of names for which scene data may be available in the renderer.
-    String_set m_scene_data_existing_names;
-
-    /// If true, all scene data names are filtered and only those inside the set above exists.
-    bool m_scene_data_filtered;
-
     /// The option rt_callable_program_from_id(_64) function once created.
     llvm::Function *m_optix_cp_from_id;
 

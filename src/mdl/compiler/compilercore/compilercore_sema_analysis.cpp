@@ -687,7 +687,7 @@ bool Sema_analysis::has_one_case_reachable_exit(
     if (def_node == NULL) {
         if (IType_enum const *e_type = as<IType_enum>(switch_type)) {
             // Enum switch: check if all cases are handled ...
-            for (int i = 0, n = e_type->get_value_count(); i < n; ++i) {
+            for (int i = 0, n_vals = e_type->get_value_count(); i < n_vals; ++i) {
                 ISymbol const *e_sym;
                 int           e_code;
 
@@ -711,7 +711,7 @@ bool Sema_analysis::has_one_case_reachable_exit(
 
         if (IType_enum const *e_type = as<IType_enum>(switch_type)) {
             // Enum switch: check if all cases are handled ...
-            for (int i = 0, n = e_type->get_value_count(); i < n; ++i) {
+            for (int i = 0, n_vals = e_type->get_value_count(); i < n_vals; ++i) {
                 ISymbol const *e_sym;
                 int           e_code;
 
@@ -1221,15 +1221,15 @@ void Sema_analysis::post_visit(IStatement_switch *stmt)
 
                     // fill up all case statement until j, all are simple labels
                     for (; i < j; ++i) {
-                        IStatement_case const *case_stmt = as<IStatement_case>(stmt->get_case(i));
+                        IStatement_case const *prev_case = as<IStatement_case>(stmt->get_case(i));
 
-                        if (case_stmt == NULL) {
+                        if (prev_case == NULL) {
                             // ignore error
                             continue;
                         }
 
-                        Stmt_info &info = get_stmt_info(case_stmt);
-                        info = n_info;
+                        Stmt_info &prev_info = get_stmt_info(prev_case);
+                        prev_info = n_info;
                     }
                 }
             }
@@ -1588,11 +1588,11 @@ bool Sema_analysis::identical_expressions(
                 IArgument const *l_arg = c_lhs->get_argument(i);
                 IArgument const *r_arg = c_rhs->get_argument(i);
 
-                IArgument::Kind kind = l_arg->get_kind();
-                if (kind != r_arg->get_kind()) {
+                IArgument::Kind arg_kind = l_arg->get_kind();
+                if (arg_kind != r_arg->get_kind()) {
                     return false;
                 }
-                if (kind == IArgument::AK_NAMED) {
+                if (arg_kind == IArgument::AK_NAMED) {
                     IArgument_named const *l_n_arg = cast<IArgument_named>(l_arg);
                     IArgument_named const *r_n_arg = cast<IArgument_named>(r_arg);
 
@@ -2024,10 +2024,10 @@ bool Sema_analysis::identical_anno_blocks(
                 IArgument_named const *n_l_arg = cast<IArgument_named>(l_arg);
                 IArgument_named const *n_r_arg = cast<IArgument_named>(r_arg);
 
-                ISimple_name const *l_name = n_l_arg->get_parameter_name();
-                ISimple_name const *r_name = n_r_arg->get_parameter_name();
+                ISimple_name const *l_arg_name = n_l_arg->get_parameter_name();
+                ISimple_name const *r_arg_name = n_r_arg->get_parameter_name();
 
-                if (l_name->get_symbol() != r_name->get_symbol()) {
+                if (l_arg_name->get_symbol() != r_arg_name->get_symbol()) {
                     return false;
                 }
             }
@@ -2326,7 +2326,12 @@ IExpression *Sema_analysis::post_visit(IExpression_call *expr)
             Definition const *def = impl_cast<Definition>(ref->get_definition());
 
             if (!is_error(def)) {
-                unsigned lit_param_msk = def->get_literal_parameter_mask();
+                // we have literal parameters in MDl < 1.8
+                unsigned lit_param_msk =
+                    m_module.get_mdl_version() < IMDL::MDL_VERSION_1_8 ?
+                    def->get_literal_parameter_mask() :
+                    0;
+
                 if (lit_param_msk != 0) {
                     IType_function const *f_type = cast<IType_function>(def->get_type());
 

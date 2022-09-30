@@ -116,12 +116,6 @@ public:
     ///   derivative parameters for the texture coordinates.
     ///   Possible values:
     ///   \c "on", \c "off". Default: \c "off".
-    /// - \c "scene_data_names": Comma-separated list of names for which scene data may be
-    ///   available in the renderer.
-    ///   For names not in the list, \c scene::data_isvalid will always return \c false and
-    ///   the \c scene::data_lookup_* functions will always return the provided default value.
-    ///   Use \c "*" to specify that scene data for any name may be available.
-    ///   Default: \c ""
     /// - \c "visible_names": Comma-separated list of names functions which will be
     ///   visible in the generated code (empty string means no special restriction).
     ///   Can especially be used in combination with \c "llvm_renderer_module" binary option to

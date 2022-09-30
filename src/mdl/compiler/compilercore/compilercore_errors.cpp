@@ -1834,6 +1834,7 @@ static void print_error_param(
             case IMDL::MDL_VERSION_1_6: s = "1.6"; break;
             case IMDL::MDL_VERSION_1_7: s = "1.7"; break;
             case IMDL::MDL_VERSION_1_8: s = "1.8"; break;
+            case IMDL::MDL_VERSION_1_9: s = "1.9"; break;
             }
             printer->print(s);
         }

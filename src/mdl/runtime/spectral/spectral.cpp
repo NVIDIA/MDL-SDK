@@ -152,15 +152,15 @@ static float get_value_incremental(
 	++p1;
     }
     const unsigned int p0 = p1 > 0 ? p1 - 1 : p1;
-    *search_pos = p0;
+    *search_pos = p1;
     if (p1 >= num_values)
 	p1 = num_values - 1;
     if (p0 == p1)
 	return table_values[p0];
     
-    const float w0 = (lambda - table_lambda[p0]) / (table_lambda[p1] - table_lambda[p0]);
+    const float w1 = (lambda - table_lambda[p0]) / (table_lambda[p1] - table_lambda[p0]);
     return 
-	table_values[p0] * w0 + table_values[p1] * (1.0f - w0);
+	table_values[p1] * w1 + table_values[p0] * (1.0f - w1);
 }
 
 void spectrum_resample_input(

@@ -175,6 +175,16 @@ struct Edf_pdf_data
 // Texture helper functions
 //-----------------------------------------------------------------------------
 
+// corresponds to ::tex::texture_isvalid(uniform texture_2d tex)
+// corresponds to ::tex::texture_isvalid(uniform texture_3d tex)
+// corresponds to ::tex::texture_isvalid(uniform texture_cube tex) // not supported by this example
+// corresponds to ::tex::texture_isvalid(uniform texture_ptex tex) // not supported by this example
+bool tex_texture_isvalid(int tex)
+{
+    // assuming that there is no indexing out of bounds of the texture arrays
+    return tex != 0; // invalid texture
+}
+
 // helper function to realize wrap and crop.
 // Out of bounds case for TEX_WRAP_CLIP must already be handled.
 float apply_wrap_and_crop(float coord, int wrap, vec2 crop, int res)
@@ -214,19 +224,10 @@ vec2 apply_smootherstep_filter(vec2 uv, ivec2 size)
     return ((i + f) - 0.5) / vec2(size);
 }
 
-//-----------------------------------------------------------------------------
-// Texture function implementations
-//-----------------------------------------------------------------------------
 
-// corresponds to ::tex::texture_isvalid(uniform texture_2d tex)
-// corresponds to ::tex::texture_isvalid(uniform texture_3d tex)
-// corresponds to ::tex::texture_isvalid(uniform texture_cube tex) // not supported by this example
-// corresponds to ::tex::texture_isvalid(uniform texture_ptex tex) // not supported by this example
-bool tex_texture_isvalid(int tex)
-{
-    // assuming that there is no indexing out of bounds of the texture arrays
-    return tex != 0; // invalid texture
-}
+//-----------------------------------------------------------------------------
+// Texture function implementations, 2D
+//-----------------------------------------------------------------------------
 
 #if (NUM_MATERIAL_TEXTURES_2D > 0)
 // corresponds to ::tex::width(uniform texture_2d tex, int2 uv_tile, float frame)
@@ -318,6 +319,10 @@ float tex_texel_float_2d(int tex, ivec2 coord, ivec2 uv_tile, float frame)
 }
 #endif // (NUM_MATERIAL_TEXTURES_2D > 0)
 
+
+//-----------------------------------------------------------------------------
+// Texture function implementations, 3D
+//-----------------------------------------------------------------------------
 
 #if (NUM_MATERIAL_TEXTURES_3D > 0)
 // corresponds to ::tex::width(uniform texture_3d tex, float frame)
@@ -418,5 +423,229 @@ float tex_texel_float_3d(int tex, ivec3 coord, float frame)
     return tex_texel_float4_3d(tex, coord, frame).x;
 }
 #endif // (NUM_MATERIAL_TEXTURES_3D > 0)
+
+
+// ------------------------------------------------------------------------------------------------
+// Texture function implementations, Cube (not supported by this example)
+// ------------------------------------------------------------------------------------------------
+
+// corresponds to ::tex::width(uniform texture_cube tex)
+int tex_width_cube(int tex)
+{
+    return 0;
+}
+
+// corresponds to ::tex::height(uniform texture_cube tex)
+int tex_height_cube(int tex)
+{
+    return 0;
+}
+
+// corresponds to ::tex::lookup_float4(uniform texture_cube tex, float3 coord)
+vec4 tex_lookup_float4_cube(int tex, vec3 coord)
+{
+    return vec4(0.0);
+}
+
+vec3 tex_lookup_float3_cube(int tex, vec3 coord)
+{
+    return tex_lookup_float4_cube(tex, coord).xyz;
+}
+
+vec3 tex_lookup_color_cube(int tex, vec3 coord)
+{
+    return tex_lookup_float4_cube(tex, coord).xyz;
+}
+
+vec2 tex_lookup_float2_cube(int tex, vec3 coord)
+{
+    return tex_lookup_float4_cube(tex, coord).xy;
+}
+
+float tex_lookup_float_cube(int tex, vec3 coord)
+{
+    return tex_lookup_float4_cube(tex, coord).x;
+}
+
+// corresponds to ::tex::texel_float4(uniform texture_cube tex, int3 coord)
+vec4 tex_texel_float4_cube(int tex, ivec3 coord)
+{
+    return vec4(0.0);
+}
+
+vec3 tex_texel_float3_cube(int tex, ivec3 coord)
+{
+    return tex_texel_float4_cube(tex, coord).xyz;
+}
+
+vec3 tex_texel_color_cube(int tex, ivec3 coord)
+{
+    return tex_texel_float4_cube(tex, coord).xyz;
+}
+
+vec2 tex_texel_float2_cube(int tex, ivec3 coord)
+{
+    return tex_texel_float4_cube(tex, coord).xy;
+}
+
+float tex_texel_float_cube(int tex, ivec3 coord)
+{
+    return tex_texel_float4_cube(tex, coord).x;
+}
+
+
+//-----------------------------------------------------------------------------
+// Texture function implementations, PTEX (not supported by this example)
+//-----------------------------------------------------------------------------
+
+vec4 tex_lookup_float4_ptex(int tex, int channel)
+{
+    return vec4(0.0);
+}
+
+vec3 tex_lookup_float3_ptex(int tex, int channel)
+{
+    return tex_lookup_float4_ptex(tex, channel).xyz;
+}
+
+vec3 tex_lookup_color_ptex(int tex, int channel)
+{
+    return tex_lookup_float3_ptex(tex, channel);
+}
+
+vec2 tex_lookup_float2_ptex(int tex, int channel)
+{
+    return tex_lookup_float4_ptex(tex, channel).xy;
+}
+
+float tex_lookup_float_ptex(int tex, int channel)
+{
+    return tex_lookup_float4_ptex(tex, channel).x;
+}
+
+
+// ------------------------------------------------------------------------------------------------
+// Light Profiles function implementations (not supported by this example)
+// ------------------------------------------------------------------------------------------------
+
+bool df_light_profile_isvalid(int lp_idx)
+{
+    return false;
+}
+
+float df_light_profile_power(int lp_idx)
+{
+    return 0.0;
+}
+
+float df_light_profile_maximum(int lp_idx)
+{
+    return 0.0;
+}
+
+float df_light_profile_evaluate(int lp_idx, vec2 theta_phi)
+{
+    return 0.0;
+}
+
+vec3 df_light_profile_sample(int lp_idx, vec3 xi)
+{
+    return vec3(0.0);
+}
+
+float df_light_profile_pdf(int lp_idx, vec2 theta_phi)
+{
+    return 0.0;
+}
+
+
+// ------------------------------------------------------------------------------------------------
+// Measured BSDFs function implementations (not supported by this example)
+// ------------------------------------------------------------------------------------------------
+
+bool df_bsdf_measurement_isvalid(int bm_idx)
+{
+    return false;
+}
+
+ivec3 df_bsdf_measurement_resolution(int bm_idx, int part)
+{
+    return ivec3(0);
+}
+
+vec3 df_bsdf_measurement_evaluate(int bm_idx, vec2 theta_phi_in, vec2 theta_phi_out, int part)
+{
+    return vec3(0.0);
+}
+
+vec3 df_bsdf_measurement_sample(int bm_idx, vec2 theta_phi_out, vec3 xi, int part)
+{
+    return vec3(0.0);
+}
+
+float df_bsdf_measurement_pdf(int bm_idx, vec2 theta_phi_in, vec2 theta_phi_out, int part)
+{
+    return 0.0;
+}
+
+vec4 df_bsdf_measurement_albedos(int bm_idx, vec2 theta_phi)
+{
+    return vec4(0.0);
+}
+
+
+// ------------------------------------------------------------------------------------------------
+// Scene Data API function implementations (not supported by this example)
+// ------------------------------------------------------------------------------------------------
+
+bool scene_data_isvalid(State state, int scene_data_id)
+{
+    return false;
+}
+
+vec4 scene_data_lookup_float4(State state, int scene_data_id, vec4 default_value, bool uniform_lookup)
+{
+    return vec4(0.0);
+}
+
+vec3 scene_data_lookup_float3(State state, int scene_data_id, vec3 default_value, bool uniform_lookup)
+{
+    return vec3(0.0);
+}
+
+vec3 scene_data_lookup_color(State state, int scene_data_id, vec3 default_value, bool uniform_lookup)
+{
+    return vec3(0.0);
+}
+
+vec2 scene_data_lookup_float2(State state, int scene_data_id, vec2 default_value, bool uniform_lookup)
+{
+    return vec2(0.0);
+}
+
+float scene_data_lookup_float(State state, int scene_data_id, float default_value, bool uniform_lookup)
+{
+    return 0.0;
+}
+
+ivec4 scene_data_lookup_int4(State state, int scene_data_id, ivec4 default_value, bool uniform_lookup)
+{
+    return ivec4(0);
+}
+
+ivec3 scene_data_lookup_int3(State state, int scene_data_id, ivec3 default_value, bool uniform_lookup)
+{
+    return ivec3(0);
+}
+
+ivec2 scene_data_lookup_int2(State state, int scene_data_id, ivec2 default_value, bool uniform_lookup)
+{
+    return ivec2(0);
+}
+
+int scene_data_lookup_int(State state, int scene_data_id, int default_value, bool uniform_lookup)
+{
+    return 0;
+}
 
 #endif // MDL_RUNTIME_GLSL

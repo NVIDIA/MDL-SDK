@@ -52,6 +52,8 @@
 #include <base/lib/config/config.h>
 #include <base/data/db/i_db_access.h>
 #include <base/data/db/i_db_transaction.h>
+#include <base/data/db/i_db_transaction_wrapper.h>
+#include <base/data/db/i_db_info.h>
 #include <base/data/serial/i_serializer.h>
 #include <base/util/registry/i_config_registry.h>
 #include <base/util/string_utils/i_string_utils.h>
@@ -802,11 +804,95 @@ mi::mdl::IGenerated_code_lambda_function* Mdl_function_call::create_jitted_funct
     return jitted_func;
 }
 
+/// This Transaction caches ids, tags, and info over its life time.
+/// Do NOT use it in general, but it greatly speeds up material creation.
+class Caching_transaction : public DB::Transaction_wrapper {
+public:
+    Caching_transaction(DB::Transaction* transaction) : DB::Transaction_wrapper(transaction) {}
+
+    ~Caching_transaction() {
+        // unpin all cache entries
+        for (auto &entry : m_elements) {
+            entry.second->unpin();
+        }
+    }
+
+    SERIAL::Class_id get_class_id(DB::Tag tag) final
+    {
+        auto it = m_class_ids.find(tag);
+        if (it != m_class_ids.end()) {
+            return it->second;
+        }
+        else {
+            SERIAL::Class_id class_id = m_transaction->get_class_id(tag);
+            m_class_ids[tag] = class_id;
+            return class_id;
+        }
+    }
+
+    DB::Tag name_to_tag(const char* name) final
+    {
+        auto it = m_tags.find(name);
+        if (it != m_tags.end()) {
+            return it->second;
+        }
+        else {
+            DB::Tag tag = m_transaction->name_to_tag(name);
+            if (tag) {
+                m_tags[name] = tag;
+            }
+            return tag;
+        }
+    }
+
+    DB::Info* get_element(DB::Tag tag, bool do_wait) final
+    {
+        auto it = m_elements.find(tag);
+        if (it != m_elements.end()) {
+            it->second->pin();
+            return it->second;
+        }
+        else {
+            DB::Info* element = m_transaction->get_element(tag);
+            // pin it because we will hold it in the cache
+            element->pin();
+            m_elements[tag] = element;
+            return element;
+        }
+    }
+
+private:
+    // allow comparison of raw strings with c++ strings to avoid temp
+    // std::string construction when searching in a map.
+    struct String_less {
+        using is_transparent = void;
+
+        bool operator()(const std::string &lhs, const char *rhs) const {
+            return strcmp(lhs.c_str(), rhs) < 0;
+        }
+
+        bool operator()(const char *lhs, const std::string &rhs) const {
+            return strcmp(lhs, rhs.c_str()) < 0;
+        }
+
+        bool operator()(const std::string &lhs, const std::string &rhs) const {
+            return lhs < rhs;
+        }
+    };
+
+    std::map<DB::Tag, SERIAL::Class_id>         m_class_ids;
+    std::map<std::string, DB::Tag, String_less> m_tags;
+    std::map<DB::Tag, DB::Info*>                m_elements;
+};
+
 Mdl_compiled_material* Mdl_function_call::create_compiled_material(
-    DB::Transaction* transaction,
+    DB::Transaction* transaction_non_cached,
     bool class_compilation,
     Execution_context* context) const
 {
+    Caching_transaction transaction_cached(transaction_non_cached);
+    DB::Transaction* transaction = &transaction_cached;
+
     ASSERT( M_SCENE, m_is_material);
 
     if( !is_valid( transaction, context)) {

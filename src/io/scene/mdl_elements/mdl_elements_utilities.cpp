@@ -7706,6 +7706,7 @@ Execution_context::Execution_context() : m_result(0)
     add_option(Option(MDL_CTX_OPTION_WAVELENGTH_MAX, 780.f, false));
     add_option(Option(MDL_CTX_OPTION_INCLUDE_GEO_NORMAL, true, false));
     add_option(Option(MDL_CTX_OPTION_BUNDLE_RESOURCES, false, false));
+    add_option(Option(MDL_CTX_OPTION_MDL_NEXT, false, false));
     add_option(Option(MDL_CTX_OPTION_EXPERIMENTAL, false, false));
     add_option(Option(MDL_CTX_OPTION_RESOLVE_RESOURCES, true, false));
     add_option(Option(MDL_CTX_OPTION_FOLD_TERNARY_ON_DF, false, false));
@@ -7880,6 +7881,9 @@ mi::mdl::IThread_context* create_thread_context( mi::mdl::IMDL* mdl, Execution_c
         bool resolve_resources = context->get_option<bool>( MDL_CTX_OPTION_RESOLVE_RESOURCES);
         options.set_option( MDL_OPTION_RESOLVE_RESOURCES, resolve_resources ? "true" : "false");
 
+        bool mdl_next = context->get_option<bool>( MDL_CTX_OPTION_MDL_NEXT);
+        options.set_option( MDL_OPTION_MDL_NEXT, mdl_next ? "true" : "false");
+
         bool experimental = context->get_option<bool>( MDL_CTX_OPTION_EXPERIMENTAL);
         options.set_option( MDL_OPTION_EXPERIMENTAL_FEATURES, experimental ? "true" : "false");
 
@@ -8053,8 +8057,9 @@ mi::neuraylib::Mdl_version convert_mdl_version( mi::mdl::IMDL::MDL_version versi
         case mi::mdl::IMDL::MDL_VERSION_1_5: return mi::neuraylib::MDL_VERSION_1_5;
         case mi::mdl::IMDL::MDL_VERSION_1_6: return mi::neuraylib::MDL_VERSION_1_6;
         case mi::mdl::IMDL::MDL_VERSION_1_7: return mi::neuraylib::MDL_VERSION_1_7;
-        // Adapt check in strip_deprecated_suffix() when new versions are added.
-        case mi::mdl::IMDL::MDL_VERSION_1_8: return mi::neuraylib::MDL_VERSION_INVALID;
+        case mi::mdl::IMDL::MDL_VERSION_1_8: return mi::neuraylib::MDL_VERSION_1_8;
+            // Adapt check in strip_deprecated_suffix() when new versions are added.
+        case mi::mdl::IMDL::MDL_VERSION_1_9: return mi::neuraylib::MDL_VERSION_INVALID;
     }
 
     ASSERT( M_SCENE, false);
@@ -8072,6 +8077,7 @@ mi::mdl::IMDL::MDL_version convert_mdl_version( mi::neuraylib::Mdl_version versi
         case mi::neuraylib::MDL_VERSION_1_5:     return mi::mdl::IMDL::MDL_VERSION_1_5;
         case mi::neuraylib::MDL_VERSION_1_6:     return mi::mdl::IMDL::MDL_VERSION_1_6;
         case mi::neuraylib::MDL_VERSION_1_7:     return mi::mdl::IMDL::MDL_VERSION_1_7;
+        case mi::neuraylib::MDL_VERSION_1_8:     return mi::mdl::IMDL::MDL_VERSION_1_8;
         case mi::neuraylib::MDL_VERSION_INVALID: return mi_mdl_IMDL_MDL_VERSION_INVALID;
     }
 
@@ -8091,6 +8097,7 @@ const char* stringify_mdl_version( mi::mdl::IMDL::MDL_version version)
         case mi::mdl::IMDL::MDL_VERSION_1_6: return "1.6";
         case mi::mdl::IMDL::MDL_VERSION_1_7: return "1.7";
         case mi::mdl::IMDL::MDL_VERSION_1_8: return "1.8";
+        case mi::mdl::IMDL::MDL_VERSION_1_9: return "1.9";
     }
 
     ASSERT( M_SCENE, false);
@@ -8281,7 +8288,7 @@ std::string strip_deprecated_suffix( const std::string& name)
     if( suffix.size() == 3
         && suffix[0] == '1'
         && suffix[1] == '.'
-        && (suffix[2] >= '0' && suffix[2] <= '7'))
+        && (suffix[2] >= '0' && suffix[2] <= '8'))
         return name.substr( 0, dollar);
 
     return name;

@@ -181,6 +181,9 @@ public:
     /// The name of the option that switches the strict compilation mode.
     static char const *option_strict;
 
+    /// The name of the option that enables (incomplete) features from the next MDL version.
+    static char const *option_mdl_next;
+
     /// The name of the option that enables undocumented experimental MDL features.
     static char const *option_experimental_features;
 
@@ -528,17 +531,17 @@ public:
 
     /// Check if the compiler supports a requested MDL version.
     ///
-    /// \param major                         major number
-    /// \param minor                         minor number
-    /// \param version                       the accepted MDL version on success
-    /// \param enable_experimental_features  if true, allow experimental MDL features
+    /// \param major            major number
+    /// \param minor            minor number
+    /// \param version          the accepted MDL version on success
+    /// \param enable_mdl_next  if true, allow experimental MDL features
     ///
     /// \return true on success
     bool check_version(
         int major,
         int minor,
         MDL_version &version,
-        bool enable_experimental_features);
+        bool enable_mdl_next);
 
     /// Register a builtin module and take ownership of it.
     ///

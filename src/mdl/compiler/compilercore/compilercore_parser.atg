@@ -110,12 +110,12 @@ COMPILER mdl
     }
 
     Module *m_module;
-    bool m_enable_experimental_features;
+    bool m_enable_mdl_next;
 
-    void set_module(Module *module, bool enable_experimental_features)
+    void set_module(Module *module, bool enable_mdl_next)
     {
         m_module                       = module;
-        m_enable_experimental_features = enable_experimental_features;
+        m_enable_mdl_next              = enable_mdl_next;
         m_name_factory                 = m_module->get_name_factory();
         m_type_factory                 = m_module->get_type_factory();
         m_expression_factory           = m_module->get_expression_factory();
@@ -1403,7 +1403,7 @@ mdl_version
                                                 m_mdl,
                                                 major,
                                                 minor,
-                                                m_enable_experimental_features);
+                                                m_enable_mdl_next);
                                             if (!res) {
                                                 errors->Error(
                                                     t->line, t->col,

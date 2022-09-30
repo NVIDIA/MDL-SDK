@@ -549,13 +549,13 @@ public:
 
     /// Set the language version if possible.
     ///
-    /// \param compiler                      the MDL compiler
-    /// \param major                         desired major version
-    /// \param minor                         desired minor version
-    /// \param enable_experimental_features  if true, allow experimental MDL features
+    /// \param compiler         the MDL compiler
+    /// \param major            desired major version
+    /// \param minor            desired minor version
+    /// \param enable_mdl_next  if true, allow features from next MDL version
     /// 
     /// \return true on success, false on error
-    bool set_version(MDL *compiler, int major, int minor, bool enable_experimental_features);
+    bool set_version(MDL *compiler, int major, int minor, bool enable_mdl_next);
 
     /// Access messages.
     Messages_impl &access_messages_impl();

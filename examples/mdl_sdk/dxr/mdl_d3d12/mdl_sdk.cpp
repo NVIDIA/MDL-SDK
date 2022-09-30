@@ -169,13 +169,6 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
         return;
     }
 
-    // Enable scene data queries from MDL to the renderer (also known as Prim-vars)
-    // By passing the asterisk (*) all names that appear in MDL, will be forwarded to the
-    // renderer. A list of supported names is also possible. Scene data with an unsupported
-    // name will be automatically replaces by the corresponding default value.
-    if (m_hlsl_backend->set_option("scene_data_names", "*") != 0)
-        return;
-
     m_transaction = new Mdl_transaction(this);
     m_library = new Mdl_material_library(m_app, this);
     m_valid = true;

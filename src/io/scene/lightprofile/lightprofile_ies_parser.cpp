@@ -84,7 +84,6 @@ constexpr static Uint MAX_LINE_LENGTH = 4096;   // though standard is 132/256
 //
 // IESNA Standard File Format for Electronic Transfer of Photometric Data
 // by the IESNA Computer Committee
-// [Juri has filed a copy of the official specification by the IESNA]
 //
 class Lightprofile_ies_parser
 {

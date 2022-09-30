@@ -1290,9 +1290,9 @@ void Definition_table::serialize_def(
     // register the definite definition if any
     if (def->m_definite_def != NULL) {
         serializer.write_bool(true);
-        Tag_t def_tag = serializer.register_definition(def->m_definite_def);
-        serializer.write_encoded_tag(def_tag);
-        DOUT(("definite def %u\n", unsigned(def_tag)));
+        Tag_t def_def_tag = serializer.register_definition(def->m_definite_def);
+        serializer.write_encoded_tag(def_def_tag);
+        DOUT(("definite def %u\n", unsigned(def_def_tag)));
     } else {
         serializer.write_bool(false);
     }
@@ -1352,10 +1352,10 @@ void Definition_table::serialize_def(
 
     // serialize namespace
     if (def->m_kind== Definition::DK_NAMESPACE) {
-        ISymbol const *name_space = def->get_namespace();
-        Tag_t         sym_tag     = serializer.get_symbol_tag(name_space);
-        serializer.write_encoded_tag(sym_tag);
-        DOUT(("namespace %u (%s)\n", unsigned(sym_tag), name_space->get_name()));
+        ISymbol const *name_space    = def->get_namespace();
+        Tag_t         name_space_tag = serializer.get_symbol_tag(name_space);
+        serializer.write_encoded_tag(name_space_tag);
+        DOUT(("namespace %u (%s)\n", unsigned(name_space_tag), name_space->get_name()));
     }
 
     DEC_SCOPE();
@@ -1506,10 +1506,10 @@ Definition *Definition_table::deserialize_def(Module_deserializer &deserializer)
 
     // register the definite definition if any
     if (deserializer.read_bool()) {
-        Tag_t def_tag = deserializer.read_encoded_tag();
+        Tag_t def_def_tag = deserializer.read_encoded_tag();
 
-        deserializer.wait_for_definition(def_tag, &new_def->m_definite_def);
-        DOUT(("definite def %u\n", unsigned(def_tag)));
+        deserializer.wait_for_definition(def_def_tag, &new_def->m_definite_def);
+        DOUT(("definite def %u\n", unsigned(def_def_tag)));
     }
 
     // deserialize the value coupled with the definition if any
@@ -1564,9 +1564,9 @@ Definition *Definition_table::deserialize_def(Module_deserializer &deserializer)
 
     // deserialize namespace
     if (new_def->m_kind == Definition::DK_NAMESPACE) {
-        size_t sym_tag = deserializer.read_encoded_tag();
-        ISymbol const *name_space = deserializer.get_symbol(sym_tag);
-        DOUT(("namespace %u (%s)\n", unsigned(sym_tag), name_space->get_name()));
+        size_t name_space_tag = deserializer.read_encoded_tag();
+        ISymbol const *name_space = deserializer.get_symbol(name_space_tag);
+        DOUT(("namespace %u (%s)\n", unsigned(name_space_tag), name_space->get_name()));
         new_def->set_namespace(name_space);
     }
 

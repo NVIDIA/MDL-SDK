@@ -804,6 +804,9 @@ static void replace_since_version(
         case 8:
             flags |= unsigned(IMDL::MDL_VERSION_1_8);
             break;
+        case 9:
+            flags |= unsigned(IMDL::MDL_VERSION_1_9);
+            break;
         default:
             MDL_ASSERT(!"Unsupported version");
             break;
@@ -851,6 +854,9 @@ static void replace_removed_version(
             break;
         case 8:
             flags |= (unsigned(IMDL::MDL_VERSION_1_8) << 8);
+            break;
+        case 9:
+            flags |= (unsigned(IMDL::MDL_VERSION_1_9) << 8);
             break;
         default:
             MDL_ASSERT(!"Unsupported version");
@@ -2541,6 +2547,8 @@ Analysis::Analysis(
 , m_all_warnings_are_off(ctx.all_warnings_are_off())
 , m_strict_mode(
     compiler->get_compiler_bool_option(&ctx, MDL::option_strict, true))
+, m_enable_mdl_next(
+    compiler->get_compiler_bool_option(&ctx, MDL::option_mdl_next, false))
 , m_enable_experimental_features(
     compiler->get_compiler_bool_option(&ctx, MDL::option_experimental_features, false))
 , m_resolve_resources(
@@ -2847,7 +2855,7 @@ void NT_analysis::enter_builtin_annotations()
         def->set_semantic(Definition::DS_EXPERIMENTAL_ANNOTATION);
     }
 
-    // the literal_param() annotation: marks teh first parameter of a function accepting literals
+    // the literal_param() annotation: bitmask of parameters of a function accepting literals
     // only (const_expr)
     {
         ISymbol const *sym_mask = m_st->get_symbol("mask");
@@ -6274,7 +6282,7 @@ void NT_analysis::handle_enable_ifs(IParameter const *param)
                 lit->access_position().get_start_line(),
                 lit->access_position().get_start_column() + 1,  // skip '"'
                 &m_module,
-                m_enable_experimental_features,
+                m_enable_mdl_next || m_enable_experimental_features,
                 msgs);
 
             // visit the condition in special "enable_if" mode
@@ -9659,8 +9667,13 @@ bool NT_analysis::handle_array_constructor(
 
     IType const *ret_type = func_type->get_return_type();
     if (!is_allowed_array_type(ret_type, m_mdl_version)) {
-        // try to create a forbidden array type, ignore further errors
-        report_array_type_error(ret_type, call->access_position());
+        // try to create a forbidden array type, ignore further errors...
+        // But do not report the error a second time
+        if (IExpression_reference const *ref = as<IExpression_reference>(call->get_reference())) {
+            if (!is<IType_error>(ref->get_name()->get_type())) {
+                report_array_type_error(ret_type, call->access_position());
+            }
+        }
         return false;
     }
 
@@ -14099,7 +14112,14 @@ Definition const *NT_analysis::handle_known_annotation(
             int v_major = 0;
             int v_minor = 0;
 
-            Module::get_version(IMDL::MDL_version(IMDL::MDL_LATEST_VERSION + 1), v_major, v_minor);
+            IMDL::MDL_version dest = IMDL::MDL_version(IMDL::MDL_LATEST_VERSION + 1);
+
+            if (!m_enable_experimental_features) {
+                // make inaccessible
+                dest = IMDL::MDL_version(IMDL::MDL_LATEST_VERSION + 2);
+            }
+
+            Module::get_version(dest, v_major, v_minor);
 
             replace_since_version(m_annotated_def, v_major, v_minor);
 

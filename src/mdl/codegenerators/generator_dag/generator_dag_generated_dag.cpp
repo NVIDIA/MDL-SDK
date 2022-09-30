@@ -871,7 +871,7 @@ Generated_code_dag::Generated_code_dag(
 , m_arena(alloc)
 , m_module_name(string(module != NULL ? module->get_name() : "", alloc))
 , m_module_file_name(string(module != NULL ? module->get_filename() : "", alloc))
-, m_mangler(alloc, compiler)
+, m_mangler(alloc)
 , m_printer(m_mangler.get_printer())
 , m_sym_tab(m_arena)
 , m_type_factory(m_arena, compiler, &m_sym_tab)
@@ -3592,7 +3592,7 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
 
     Generated_code_dag const *dag = impl_cast<Generated_code_dag>(code_dag);
 
-    DAG_mangler dag_mangler(get_allocator(), m_mdl.get());
+    DAG_mangler dag_mangler(get_allocator());
     DAG_builder dag_builder(get_allocator(), m_node_factory, dag_mangler);
 
 

@@ -360,7 +360,7 @@ class Attribute : public SERIAL::Serializable
         DB::Tag_set* result) const;
 
     /// Unique class ID so that the receiving host knows which class to create.
-    SERIAL::Class_id get_class_id() const;
+    SERIAL::Class_id get_class_id() const override;
 
     /// Check, if this attribute is of the given type. This is true, if either
     /// the class id of this attribute equals the given class id, or the class
@@ -374,7 +374,7 @@ class Attribute : public SERIAL::Serializable
     /// it must return a pointer behind itself (e.g. this + 1) to handle arrays.
     /// \param serializer useful for byte streams
     const SERIAL::Serializable* serialize(
-        SERIAL::Serializer* serializer) const;
+        SERIAL::Serializer* serializer) const override;
 
     /// Special version of serialize that writes no values.
     const SERIAL::Serializable* serialize_no_values(
@@ -384,10 +384,10 @@ class Attribute : public SERIAL::Serializable
     /// it must return a pointer behind itself (e.g. this + 1) to handle arrays.
     /// \param deser useful functions for byte streams
     SERIAL::Serializable* deserialize(
-        SERIAL::Deserializer* deser);
+        SERIAL::Deserializer* deser) override;
 
     /// Dump attribute to info messages, for debugging only.
-    void dump() const;
+    void dump() const override;
 
     /// Factory function used for deserialization.
     static SERIAL::Serializable* factory();

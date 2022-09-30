@@ -872,6 +872,9 @@ WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::neuraylib::ITransaction, edit)
 // from now on we handle mi::Sint32* as out parameter (this could be changed or later)
 %apply mi::Sint32* OUTPUT{ int* };
 
+// Handle Mdl_version as out parameter in order to support IFunction_definition->get_mdl_version(Mdl_version&, Mdl_version&) in Python
+%apply int* OUTPUT { mi::neuraylib::Mdl_version&, mi::neuraylib::Mdl_version& };
+
 // Note, the order of the includes is important here !
 #ifdef IRAY_SDK
     %include "mi/neuraylib.h"

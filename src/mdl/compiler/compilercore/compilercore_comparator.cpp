@@ -486,7 +486,7 @@ public:
         associate_file_name(m_fnameB);
 
         if (cb != NULL) {
-            m_os = Allocator_builder(alloc).create<String_output_stream>(alloc);
+            m_os = Allocator_builder(alloc).create<String_output_stream<> >(alloc);
             m_printer = compiler->create_printer(m_os.get());
         }
     }
@@ -508,7 +508,7 @@ private:
     IMDL_comparator_event *m_cb;
 
     /// If non-NULL, a string output stream.
-    mi::base::Handle<String_output_stream> m_os;
+    mi::base::Handle<String_output_stream<> > m_os;
 
     /// If non-NULL, a printer.
     mi::base::Handle<IPrinter> m_printer;

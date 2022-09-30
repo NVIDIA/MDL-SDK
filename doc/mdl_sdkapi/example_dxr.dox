@@ -44,6 +44,7 @@ directly inside shaders.
 
   - Integration of MDL in a real-time renderer
   - Using the glTF metallic-roughness support material, as well as other MDL materials and MDLE
+  - Importing the NV_materials_mdl glTF vendor extension (BETA)
 
 \section example_dxr_descr Detailed Description
 
@@ -94,9 +95,31 @@ directly inside shaders.
 
     <dt><b>Specifying MDL Materials in glTF scenes</b></dt>
     <dd><br>
-        At this point, the glTF scene format contains no explicit support for MDL.
-        However, it provides a set of parameters that are intended to be used in physically-based rendering (PBR)
-        and is therefore compatible with MDL. Here is an example for an glTF material node:
+        The example supports importing the NV_materials_mdl glTF vendor extension which adds support for MDL to
+        the glTF scene format. The extension allows the definition of function call graphs in the glTF file, which
+        can be referenced by the glTF material nodes. Please refer to <tt>mdl_d3d12/mdl_material_description.cpp</tt>
+        and <tt>mdl_d3d12/gltf_nv_materials_mdl.h</tt> for details on how to integrate the extension.
+
+        \note The NV_materials_mdl glTF vendor extension and the implementation in this example are still in BETA
+        and might be subject to change.
+
+        Here is an example of a glTF material node with the MDL extension that references a MDL material function
+        call defined in the glTF file:
+\code{.unparsed}
+
+{
+    "name": "ShaderBall",
+    "extensions": {
+        "NV_materials_mdl": {
+            "functionCall": 0
+        }
+    }
+}
+
+\endcode
+        Otherwise, glTF also provides a set of parameters that are intended to be used in physically-based rendering (PBR)
+        and is therefore compatible with MDL. This PBR material also acts as a fallback material for the case that
+        the NV_materials_mdl extension is not used. Here is an example for an glTF material node with the PBR model:
 \code{.unparsed}
 
 {
@@ -132,10 +155,7 @@ directly inside shaders.
         For each scene material that uses the glTF_support material the same HLSL code is executed,
         but the individual parameter sets, the \c argument \c blocks, are bound as buffers to the graphics pipeline.
 
-        The possibilities of this standard material are limited.
-        Glass for instance can not be described properly without an index of refraction (IOR).
-        To overcome this limitation without introducing an MDL extension to glTF,
-        an arbitrary MDL material can be assigned by setting the \c name property of the glTF material node
+        Lastly, an arbitrary MDL material can be assigned by setting the \c name property of the glTF material node
         to a fully qualified absolute MDL material identifier like this:
 \code{.unparsed}
 

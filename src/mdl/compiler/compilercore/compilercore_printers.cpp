@@ -53,8 +53,9 @@
 #include <cmath>
 
 #include "compilercore_cc_conf.h"
-#include "compilercore_streams.h"
+#include "compilercore_mangle.h"
 #include "compilercore_printers.h"
+#include "compilercore_streams.h"
 #include "compilercore_tools.h"
 #include "compilercore_wchar_support.h"
 
@@ -302,19 +303,175 @@ private:
     Entry *m_last;
 };
 
+// Print a type.
+template<typename Stream, typename Redirect, bool allow_extra_modifiers>
+void Type_printer<Stream, Redirect, allow_extra_modifiers>::print_type(
+    IType const   *type,
+    ISymbol const *name)
+{
+restart:
+    char const *tn = NULL;
 
+    IType::Kind tk = type->get_kind();
 
+    switch (tk) {
+    case IType::TK_ERROR:
+        this->push_color(ISyntax_coloring::C_ERROR);
+        this->write("<ERROR>");
+        this->pop_color();
+        break;
+    case IType::TK_BOOL:             tn = "bool"; break;
+    case IType::TK_INT:              tn = "int"; break;
+    case IType::TK_FLOAT:            tn = "float"; break;
+    case IType::TK_DOUBLE:           tn = "double"; break;
+    case IType::TK_STRING:           tn = "string"; break;
+    case IType::TK_COLOR:            tn = "color"; break;
+    case IType::TK_LIGHT_PROFILE:    tn = "light_profile"; break;
+    case IType::TK_BSDF_MEASUREMENT: tn = "bsdf_measurement"; break;
+    case IType::TK_AUTO:             tn = "auto"; break;
+    case IType::TK_ENUM:             tn = cast<IType_enum>(type)->get_symbol()->get_name(); break;
+    case IType::TK_ALIAS:
+        {
+            IType_alias const *a_type = cast<IType_alias>(type);
+            ISymbol const *sym = a_type->get_symbol();
+            if (sym == NULL) {
+                // this alias type has no name, deduce it
+                IType::Modifiers mod = a_type->get_type_modifiers();
+                if (allow_extra_modifiers && (mod & IType::MK_CONST)) {
+                    if (m_show_extra_modifiers) {
+                        this->push_color(ISyntax_coloring::C_COMMENT);
+                        this->write("/* const */");
+                        this->pop_color();
+                        this->write(' ');
+                    }
+                } else if (mod & IType::MK_VARYING) {
+                    this->write("varying ");
+                } else if (mod & IType::MK_UNIFORM) {
+                    this->write("uniform ");
+                }
+                type = a_type->get_aliased_type();
+                goto restart;
+            }
+            tn = sym->get_name();
+            break;
+        }
+    case IType::TK_BSDF:      tn = "bsdf";      break;
+    case IType::TK_HAIR_BSDF: tn = "hair_bsdf"; break;
+    case IType::TK_EDF:       tn = "edf";       break;
+    case IType::TK_VDF:       tn = "vdf";       break;
+    case IType::TK_STRUCT:    tn = cast<IType_struct>(type)->get_symbol()->get_name(); break;
+
+    case IType::TK_VECTOR:
+        {
+            IType_vector const *v_type = cast<IType_vector>(type);
+            IType const *e_type = v_type->get_element_type();
+
+            this->redirect_print_type(e_type);
+            this->write("01234"[v_type->get_size()]);
+            break;
+        }
+    case IType::TK_MATRIX:
+        {
+            IType_matrix const *m_type = cast<IType_matrix>(type);
+            IType_vector const *e_type = m_type->get_element_type();
+            IType_atomic const *a_type = e_type->get_element_type();
+
+            this->redirect_print_type(a_type);
+            this->write("01234"[m_type->get_columns()]);
+            this->write('x');
+            this->write("01234"[e_type->get_size()]);
+            break;
+        }
+    case IType::TK_ARRAY:
+        {
+            IType_array const *a_type = cast<IType_array>(type);
+            IType const *e_type = a_type->get_element_type();
+
+            this->redirect_print_type(e_type);
+            this->write('[');
+            if (a_type->is_immediate_sized()) {
+                this->push_color(ISyntax_coloring::C_LITERAL);
+                this->write(a_type->get_size());
+                this->pop_color();
+            } else {
+                this->write(a_type->get_deferred_size()->get_size_symbol()->get_name());
+            }
+            this->write(']');
+            break;
+        }
+    case IType::TK_FUNCTION:
+        {
+            // should not happen
+            IType_function const *f_type   = cast<IType_function>(type);
+            IType const          *ret_type = f_type->get_return_type();
+
+            if (ret_type != NULL) {
+                this->redirect_print_type(ret_type);
+            } else {
+                this->write("void");
+            }
+
+            this->write(' ');
+            if (name != NULL) {
+                this->write(name->get_name());
+            } else {
+                this->write("(*)");
+            }
+            this->write('(');
+
+            for (size_t i = 0, n = f_type->get_parameter_count(); i < n; ++i) {
+                if (i > 0) {
+                    this->write(", ");
+                }
+
+                IType const *p_type;
+                ISymbol const *sym;
+                f_type->get_parameter(i, p_type, sym);
+                this->redirect_print_type(p_type);
+                this->write(' ');
+                this->write(sym->get_name());
+            }
+            this->write(')');
+            break;
+        }
+    case IType::TK_TEXTURE:
+        {
+            IType_texture const *t_type = cast<IType_texture>(type);
+
+            char const *s = "";
+            switch (t_type->get_shape()) {
+            case IType_texture::TS_2D:        s ="texture_2d";         break;
+            case IType_texture::TS_3D:        s = "texture_3d";        break;
+            case IType_texture::TS_CUBE:      s = "texture_cube";      break;
+            case IType_texture::TS_PTEX:      s = "texture_ptex";      break;
+            case IType_texture::TS_BSDF_DATA: s = "texture_bsdf_data"; break;
+            }
+            this->write(s);
+            break;
+        }
+    }
+    if (tn != NULL) {
+        this->write(tn);
+    }
+}
+
+// instantiate for Printer
+template class Type_printer<IOutput_stream, Printer, true>;
+
+// instantiate for mangler
+template class Type_printer<String_output_stream<Static_base>, void, false>;
+
+// Constructor.
 Printer::Printer(IAllocator *alloc, IOutput_stream *ostr)
 : Base(alloc)
+, m_type_printer(ostr, this, /*show_extra_modifiers=*/false)
 , m_version(IMDL::MDL_LATEST_VERSION)
 , m_indent(0)
 , m_color_output(false)
 , m_show_positions(false)
-, m_show_extra_modifiers(false)
 , m_show_mdl_versions(false)
 , m_show_res_table(false)
 , m_show_func_hashes(false)
-, m_ostr(ostr, mi::base::DUP_INTERFACE)
 , m_c_ostr()
 , m_color_stack(Syntax_elements_stack::container_type(alloc))
 {
@@ -431,7 +588,7 @@ void Printer::printf(char const *format, ...)
     vsnprintf(buffer, sizeof(buffer), format, ap);
     buffer[sizeof(buffer) - 1] = '\0';
     va_end(ap);
-    m_ostr->write(buffer);
+    m_type_printer.write(buffer);
 }
 
 // Prints a newline and do indentation.
@@ -446,11 +603,8 @@ void Printer::color(ISyntax_coloring::Syntax_elements code)
 {
     if (m_color_output) {
         if (code == C_DEFAULT) {
-            if (m_color_stack.empty()) {
-                m_c_ostr->reset_color();
-                return;
-            }
-            code = m_color_stack.top();
+            m_c_ostr->reset_color();
+            return;
         }
         Color_entry const &c = m_color_table[code];
         m_c_ostr->set_color(c.fg_color, c.fg_bold, /*background=*/false);
@@ -472,7 +626,11 @@ void Printer::pop_color()
 {
     if (m_color_output) {
         m_color_stack.pop();
-        color(C_DEFAULT);
+        ISyntax_coloring::Syntax_elements code = C_DEFAULT;
+        if (!m_color_stack.empty()) {
+            code = m_color_stack.top();
+        }
+        color(code);
     }
 }
 
@@ -517,7 +675,7 @@ void Printer::indent(int depth)
 void Printer::print(char const *string)
 {
     if (string[0] != '\0') {
-        m_ostr->write(string);
+        m_type_printer.write(string);
     }
 }
 
@@ -577,13 +735,13 @@ void Printer::print_utf8(char const *utf8_string, bool escapes)
 // Print character.
 void Printer::print(char c)
 {
-    m_ostr->write_char(c);
+    m_type_printer.write(c);
 }
 
 // Print boolean.
 void Printer::print(bool b)
 {
-    m_ostr->write(b ? "true" : "false");
+    m_type_printer.write(b ? "true" : "false");
 }
 
 // Print long.
@@ -624,21 +782,26 @@ void Printer::print(ISimple_name const *name)
 // Print qualified name.
 void Printer::print(IQualified_name const *name)
 {
+    size_t n = name->get_component_count();
+
+    if (n == 0) {
+        push_color(C_ERROR);
+        print("<ERROR>");
+        pop_color();
+        return;
+    }
+
     if (name->is_absolute()) {
         print("::");
     }
-    for (size_t i = 0, n = name->get_component_count(); i < n; ++i) {
-        if (i > 0) {
-            print("::");
-        }
-        if (i == n - 1) {
-            color(C_DEFAULT);
-        } else {
-            color(C_LITERAL);
-        }
+
+    for (size_t i = 0; i < n - 1; ++i) {
+        push_color(C_LITERAL);
         print(name->get_component(i));
-        color(C_DEFAULT);
+        pop_color();
+        print("::");
     }
+    print(name->get_component(n - 1));
 }
 
 // Print type name.
@@ -648,20 +811,20 @@ void Printer::print(IType_name const *name)
     IQualified_name const *qualified_name = name->get_qualified_name();
     print(qualified_name);
     if (name->is_array()) {
-        print("[");
+        print('[');
         if (name->is_concrete_array()) {
             // the expression might be missing here, for incomplete arrays
             if (IExpression const *expr = name->get_array_size()) {
                 print(expr);
             }
         } else {
-            print("<");
+            print('<');
             push_color(C_ENTITY);
             print(name->get_size_name());
             pop_color();
-            print(">");
+            print('>');
         }
-        print("]");
+        print(']');
     }
 }
 
@@ -676,157 +839,7 @@ void Printer::print(IType const *type)
 // Print a type with current color.
 void Printer::print_type(IType const *type, ISymbol const *name)
 {
-restart:
-    char const *tn = NULL;
-    ISymbol const *sym = NULL;
-
-    IType::Kind tk = type->get_kind();
-
-    switch (tk) {
-    case IType::TK_ERROR:
-        color(C_ERROR);
-        print("<ERROR>");
-        color(C_DEFAULT);
-        break;
-    case IType::TK_BOOL:             tn = "bool"; break;
-    case IType::TK_INT:              tn = "int"; break;
-    case IType::TK_FLOAT:            tn = "float"; break;
-    case IType::TK_DOUBLE:           tn = "double"; break;
-    case IType::TK_STRING:           tn = "string"; break;
-    case IType::TK_COLOR:            tn = "color"; break;
-    case IType::TK_LIGHT_PROFILE:    tn = "light_profile"; break;
-    case IType::TK_BSDF_MEASUREMENT: tn = "bsdf_measurement"; break;
-    case IType::TK_AUTO:             tn = "auto"; break;
-    case IType::TK_ENUM:             sym = cast<IType_enum>(type)->get_symbol(); break;
-    case IType::TK_ALIAS:
-        {
-            IType_alias const *a_type = cast<IType_alias>(type);
-            sym = a_type->get_symbol();
-            if (sym == NULL) {
-                // this alias type has no name, deduce it
-                IType::Modifiers mod = a_type->get_type_modifiers();
-                if (mod & IType::MK_CONST) {
-                    if (m_show_extra_modifiers) {
-                        print("/* const */ ");
-                    }
-                } else if (mod & IType::MK_VARYING) {
-                    print("varying ");
-                } else if (mod & IType::MK_UNIFORM) {
-                    print("uniform ");
-                }
-                type = a_type->get_aliased_type();
-                goto restart;
-            }
-            break;
-        }
-    case IType::TK_BSDF:      tn = "bsdf"; break;
-    case IType::TK_HAIR_BSDF: tn = "hair_bsdf"; break;
-    case IType::TK_EDF:       tn = "edf"; break;
-    case IType::TK_VDF:       tn = "vdf"; break;
-    case IType::TK_STRUCT:    sym = cast<IType_struct>(type)->get_symbol(); break;
-
-    case IType::TK_VECTOR:
-        {
-            IType_vector const *v_type = cast<IType_vector>(type);
-            IType const        *e_type = v_type->get_element_type();
-
-            print_type(e_type);
-            print("01234"[v_type->get_size()]);
-            break;
-        }
-    case IType::TK_MATRIX:
-        {
-            IType_matrix const *m_type = cast<IType_matrix>(type);
-            IType_vector const *e_type = m_type->get_element_type();
-            IType_atomic const *a_type = e_type->get_element_type();
-
-            print_type(a_type);
-            print("01234"[m_type->get_columns()]);
-            print('x');
-            print("01234"[e_type->get_size()]);
-            break;
-        }
-    case IType::TK_ARRAY:
-        {
-            IType_array const *a_type = cast<IType_array>(type);
-            IType const       *e_type = a_type->get_element_type();
-
-            print_type(e_type);
-            print('[');
-            if (a_type->is_immediate_sized()) {
-                color(C_LITERAL);
-                print(long(a_type->get_size()));
-                color(C_DEFAULT);
-            } else {
-                print(a_type->get_deferred_size()->get_size_symbol());
-            }
-            print(']');
-            break;
-        }
-    case IType::TK_FUNCTION:
-        {
-            // should not happen
-            IType_function const *f_type   = cast<IType_function>(type);
-            IType const          *ret_type = f_type->get_return_type();
-
-            if (ret_type != NULL) {
-                print_type(ret_type);
-            } else {
-                print("void");
-            }
-
-            print(' ');
-            if (name != NULL) {
-                print(name);
-            } else {
-                print("(*)");
-            }
-            print('(');
-
-            for (size_t i = 0, n = f_type->get_parameter_count(); i < n; ++i) {
-                if (i > 0) {
-                    print(", ");
-                }
-
-                IType const   *p_type;
-                ISymbol const *sym;
-                f_type->get_parameter(i, p_type, sym);
-                print(p_type);
-                print(' ');
-                print(sym);
-            }
-            print(')');
-            break;
-        }
-    case IType::TK_TEXTURE:
-        {
-            IType_texture const *t_type = cast<IType_texture>(type);
-
-            switch (t_type->get_shape()) {
-            case IType_texture::TS_2D:
-                print("texture_2d");
-                break;
-            case IType_texture::TS_3D:
-                print("texture_3d");
-                break;
-            case IType_texture::TS_CUBE:
-                print("texture_cube");
-                break;
-            case IType_texture::TS_PTEX:
-                print("texture_ptex");
-                break;
-            case IType_texture::TS_BSDF_DATA:
-                print("texture_bsdf_data");
-                break;
-            }
-            break;
-        }
-    }
-    if (tn != NULL) {
-        print(tn);
-    } else if (sym != NULL) {
-        print(sym);
-    }
+    m_type_printer.print_type(type, name);
 }
 
 // Print a type prefix (i.e. only the package name).
@@ -946,9 +959,9 @@ void Printer::print(IValue const *value)
     IValue::Kind kind = value->get_kind();
     switch (kind) {
     case IValue::VK_BAD:
-        color(C_ERROR);
+        push_color(C_ERROR);
         print("<BAD>");
-        color(C_DEFAULT);
+        pop_color();
         break;
     case IValue::VK_BOOL:
         {
@@ -1215,9 +1228,9 @@ void Printer::print(IExpression const *expr, int priority)
 {
     switch (expr->get_kind()) {
     case IExpression::EK_INVALID:
-        color(C_ERROR);
+        push_color(C_ERROR);
         print("<ERROR>");
-        color(C_DEFAULT);
+        pop_color();
         break;
     case IExpression::EK_LITERAL:
         {
@@ -1491,7 +1504,7 @@ void Printer::print(IExpression const *expr, int priority)
             for (int i = 0; i < count; ++i) {
                 print(c->get_argument(i), arg_priority);
                 if (i < count - 1) {
-                    print(",");
+                    print(',');
                     if (vertical) {
                         nl();
                     } else {
@@ -1881,9 +1894,9 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
     }
     switch (decl->get_kind()) {
     case IDeclaration::DK_INVALID:
-        color(C_ERROR);
+        push_color(C_ERROR);
         print("<ERROR>");
-        color(C_DEFAULT);
+        pop_color();
         break;
     case IDeclaration::DK_IMPORT:
         {
@@ -1901,7 +1914,7 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
             int count = d->get_name_count();
             for (int i = 0; i < count; i++) {
                 if (i > 0) {
-                    print(",");
+                    print(',');
                 }
                 print(' ');
                 print(d->get_name(i));
@@ -1976,7 +1989,7 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                         for (int arg_idx = 0; arg_idx < arg_count; ++arg_idx) {
                             print(call->get_argument(arg_idx));
                             if (arg_idx < arg_count - 1) {
-                                print(",");
+                                print(',');
                                 if (vertical) {
                                     nl();
                                 } else {
@@ -2062,7 +2075,7 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
             ++m_indent;
             for (size_t i = 0, n = d->get_value_count(); i < n; ++i) {
                 if (i > 0) {
-                    print(",");
+                    print(',');
                 }
 
                 nl();
@@ -2120,7 +2133,7 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                             for (int arg_idx = 0; arg_idx < arg_count; arg_idx++) {
                                 print(call->get_argument(arg_idx));
                                 if (arg_idx < arg_count - 1) {
-                                    print(",");
+                                    print(',');
                                     if (vertical) {
                                         nl();
                                     } else {
@@ -2174,7 +2187,7 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                     IParameter const *parameter = d->get_parameter(i);
                     print(parameter);
                     if (i < count - 1) {
-                        print(",");
+                        print(',');
                         if (vertical) {
                             nl();
                         } else {
@@ -2303,20 +2316,19 @@ void Printer::print(IAnnotation_enable_if const *anno)
     print("(\"");
 
     // print the expression into a captured color stream
-    mi::base::Handle<IOutput_stream>         safe(m_ostr);
     mi::base::Handle<IOutput_stream_colored> safe_c(m_c_ostr);
 
     Allocator_builder builder(get_allocator());
     m_c_ostr = mi::base::make_handle(builder.create<Captured_color_stream>(get_allocator()));
-    m_ostr   = m_c_ostr;
+    m_type_printer.m_stream = m_c_ostr.get();
 
     print(expr);
 
-    m_ostr.swap(safe);
+    m_type_printer.m_stream = m_type_printer.m_holder.get();
     m_c_ostr.swap(safe_c);
 
-    Captured_color_stream const *s = static_cast<Captured_color_stream *>(safe.get());
-    s->replay(m_ostr.get());
+    Captured_color_stream const *s = static_cast<Captured_color_stream *>(safe_c.get());
+    s->replay(m_type_printer.m_holder.get());
 
     print("\")");
 }
@@ -2329,7 +2341,7 @@ void Printer::print(IAnnotation_block const *blk)
     ++m_indent;
     for (size_t i = 0, n = blk->get_annotation_count(); i < n; ++i) {
         if (i > 0) {
-            print(",");
+            print(',');
         }
         nl();
 
@@ -2381,9 +2393,9 @@ void Printer::print(IModule const *module)
     module->get_version(major, minor);
     keyword("mdl");
     print(' ');
-    color(C_LITERAL);
+    push_color(C_LITERAL);
     printf("%d.%d", major, minor);
-    color(C_DEFAULT);
+    pop_color();
     print(';');
 
     IDeclaration::Kind last_kind = IDeclaration::Kind(-1);
@@ -2548,7 +2560,7 @@ void Printer::print_message(IMessage const *message, IMessage::Severity sev)
     if (line > 0) {
         print('(');
         print(long(line));
-        print(",");
+        print(',');
         print(long(column));
         print(')');
         has_prefix = true;
@@ -2557,22 +2569,23 @@ void Printer::print_message(IMessage const *message, IMessage::Severity sev)
         print(": ");
     }
 
-    IOutput_stream_colored::Color c = IOutput_stream_colored::DEFAULT;
-    switch (sev) {
-    case IMessage::MS_ERROR:
-        c = IOutput_stream_colored::RED;
-        break;
-    case IMessage::MS_WARNING:
-        c = IOutput_stream_colored::YELLOW;
-        break;
-    case IMessage::MS_INFO:
-        c = IOutput_stream_colored::DEFAULT;
-        break;
-    }
-
     if (m_color_output) {
+        IOutput_stream_colored::Color c = IOutput_stream_colored::DEFAULT;
+
+        switch (sev) {
+        case IMessage::MS_ERROR:
+            c = IOutput_stream_colored::RED;
+            break;
+        case IMessage::MS_WARNING:
+            c = IOutput_stream_colored::YELLOW;
+            break;
+        case IMessage::MS_INFO:
+            c = IOutput_stream_colored::DEFAULT;
+            break;
+        }
         m_c_ostr->set_color(c);
     }
+
     switch (message->get_severity()) {
     case IMessage::MS_ERROR:
         printf("Error %c%03i: ", message->get_class(), message->get_code());
@@ -2716,6 +2729,9 @@ void Printer::print_mdl_versions(IDefinition const *idef, bool insert)
             case IMDL::MDL_VERSION_1_8:
                 print(" Since MDL 1.8");
                 break;
+            case IMDL::MDL_VERSION_1_9:
+                print(" Since MDL 1.9");
+                break;
             }
             switch (rem) {
             case IMDL::MDL_VERSION_1_0:
@@ -2744,6 +2760,9 @@ void Printer::print_mdl_versions(IDefinition const *idef, bool insert)
             case IMDL::MDL_VERSION_1_8:
                 print(" Removed in MDL 1.8");
                 break;
+            case IMDL::MDL_VERSION_1_9:
+                print(" Removed in MDL 1.9");
+                break;
             }
             print(insert ? " */" : "\n");
         }
@@ -2753,7 +2772,7 @@ void Printer::print_mdl_versions(IDefinition const *idef, bool insert)
 // Flush output.
 void Printer::flush()
 {
-    m_ostr->flush();
+    m_type_printer.flush();
 }
 
 // Enable color output.
@@ -2761,7 +2780,8 @@ void Printer::enable_color(bool enable)
 {
     if (enable) {
         // check if the given output stream supports color
-        if (IOutput_stream_colored *cstr = m_ostr->get_interface<IOutput_stream_colored>()) {
+        if (IOutput_stream_colored *cstr =
+            m_type_printer.m_stream->get_interface<IOutput_stream_colored>()) {
             // yes
             m_c_ostr = cstr;
         } else {
@@ -2781,7 +2801,7 @@ void Printer::show_positions(bool enable)
 // Enable/disable all type modifiers.
 void Printer::show_extra_modifiers(bool enable)
 {
-    m_show_extra_modifiers = enable;
+    m_type_printer.show_extra_modifiers(enable);
 }
 
 // Enable/disable MDL language levels.
@@ -3015,21 +3035,20 @@ void Sema_printer::print(IAnnotation_enable_if const *anno)
     Printer::print("(\"");
 
     // print the expression into a captured color stream
-    mi::base::Handle<IOutput_stream>         safe(m_ostr);
     mi::base::Handle<IOutput_stream_colored> safe_c(m_c_ostr);
 
     Allocator_builder builder(get_allocator());
     m_c_ostr = mi::base::make_handle(builder.create<Captured_color_stream>(get_allocator()));
-    m_ostr   = m_c_ostr;
+    m_type_printer.m_stream = m_c_ostr.get();
 
     IExpression const *expr = anno->get_expression();
     Printer::print(expr);
 
-    m_ostr.swap(safe);
+    m_type_printer.m_stream = m_type_printer.m_holder.get();
     m_c_ostr.swap(safe_c);
 
-    Captured_color_stream const *s = static_cast<Captured_color_stream *>(safe.get());
-    s->replay(m_ostr.get());
+    Captured_color_stream const *s = static_cast<Captured_color_stream *>(safe_c.get());
+    s->replay(m_type_printer.m_stream);
 
     Printer::print("\")");
 }

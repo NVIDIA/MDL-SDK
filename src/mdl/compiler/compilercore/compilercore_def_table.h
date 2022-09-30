@@ -76,6 +76,8 @@ enum Version_flags {
     REMOVED_1_7 = (IMDL::MDL_VERSION_1_7 << 8),  ///< Removed since MDL 1.7.
     SINCE_1_8 = IMDL::MDL_VERSION_1_8,           ///< Exists since MDL 1.8.
     REMOVED_1_8 = (IMDL::MDL_VERSION_1_8 << 8),  ///< Removed since MDL 1.8.
+    SINCE_1_9 = IMDL::MDL_VERSION_1_9,           ///< Exists since MDL 1.9.
+    REMOVED_1_9 = (IMDL::MDL_VERSION_1_9 << 8),  ///< Removed since MDL 1.9.
 };
 
 /// Implementation of a definition.

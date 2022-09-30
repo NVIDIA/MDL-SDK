@@ -72,12 +72,10 @@ public:
     /// Constructor.
     ///
     /// \param alloc     the allocator
-    /// \param compiler  the MDL compiler
     Signature_matcher(
         IAllocator   *alloc,
-        IMDL         *compiler,
         string const &signature)
-    : m_dag_mangler(alloc, compiler)
+    : m_dag_mangler(alloc)
     , m_signature(signature)
     {
     }
@@ -296,6 +294,7 @@ void Module::get_version(IMDL::MDL_version version, int &major, int &minor)
     case IMDL::MDL_VERSION_1_6:     major = 1; minor = 6; return;
     case IMDL::MDL_VERSION_1_7:     major = 1; minor = 7; return;
     case IMDL::MDL_VERSION_1_8:     major = 1; minor = 8; return;
+    case IMDL::MDL_VERSION_1_9:     major = 1; minor = 9; return;
     }
     MDL_ASSERT(!"MDL version not known");
     major = 0;
@@ -309,9 +308,9 @@ void Module::get_version(int &major, int &minor) const
 }
 
 // Set the language version.
-bool Module::set_version(MDL *compiler, int major, int minor, bool enable_experimental_features)
+bool Module::set_version(MDL *compiler, int major, int minor, bool enable_mdl_next)
 {
-    return compiler->check_version(major, minor, m_mdl_version, enable_experimental_features);
+    return compiler->check_version(major, minor, m_mdl_version, enable_mdl_next);
 }
 
 // Analyze the module.
@@ -1359,7 +1358,7 @@ char const *Module::mangle_dag_name(
             impl_cast<Definition>(def)->get_owner_module_id() == get_unique_id() &&
             "definition not owned by this module");
 
-        DAG_mangler mangler(get_allocator(), m_compiler);
+        DAG_mangler mangler(get_allocator());
 
         string mangled_name(mangler.mangle(def, is_builtins() ? NULL : get_name()));
         return ctx->set_string_buffer(Thread_context::SBI_DAG_MANGLE_BUFFER, mangled_name.c_str());
@@ -2811,7 +2810,7 @@ IDefinition const *Module::find_signature(
     string mod_signature = name;
     mod_signature += p;
 
-    Signature_matcher matcher(get_allocator(), m_compiler, mod_signature);
+    Signature_matcher matcher(get_allocator(), mod_signature);
 
     ISymbol const *sym = NULL, *second_sym = NULL;
 

@@ -31,11 +31,12 @@
 
 #include <mi/base/handle.h>
 #include <mi/mdl/mdl_mdl.h>
-#include <mi/mdl/mdl_printers.h>
 #include <mi/mdl/mdl_types.h>
 
 #include "compilercore_cc_conf.h"
 #include "compilercore_allocator.h"
+#include "compilercore_printers.h"
+#include "compilercore_symbols.h"
 
 namespace mi {
 namespace mdl {
@@ -171,11 +172,16 @@ private:
     bool m_ignore_uniform_varying;
 };
 
+/// Base class for using the String_output as a static member.
+class Static_base {
+public:
+    Static_base(IAllocator *) {}
+};
 
 /// String output stream.
-class String_output_stream : public Allocator_interface_implement<IOutput_stream>
+template<typename Base = Allocator_interface_implement<IOutput_stream> >
+class String_output_stream : public Base
 {
-    typedef Allocator_interface_implement<IOutput_stream> Base;
 public:
     /// Constructor.
     String_output_stream(IAllocator *alloc)
@@ -186,13 +192,13 @@ public:
     }
 
     /// Write a char to the stream.
-    void write_char(char c) MDL_FINAL { m_string += c; }
+    void write_char(char c) { m_string += c; }
 
     /// Write a string to the stream.
-    void write(char const *string) MDL_FINAL { m_string += string; }
+    void write(char const *string) { m_string += string; }
 
     /// Flush stream.
-    void flush() MDL_FINAL { }
+    void flush() { }
 
     /// Remove the last character from output stream if possible.
     ///
@@ -200,7 +206,7 @@ public:
     ///
     /// \return true if c was the last character in the stream and it was successfully removed,
     /// false otherwise
-    bool unput(char c) MDL_FINAL {
+    bool unput(char c) {
         size_t l = m_string.size();
         if (l > 0 && m_string[l - 1] == c) {
             m_string.erase(m_string.begin() + l - 1);
@@ -214,11 +220,6 @@ public:
 
     /// Clear string.
     void clear() { m_string.clear(); }
-
-private:
-    // Destructor.
-    ~String_output_stream() MDL_FINAL {}
-
 private:
     string m_string;
 };
@@ -230,37 +231,36 @@ public:
     /// Constructor.
     ///
     /// \param alloc  the allocator
-    /// \param mdl    the MDL compiler interface
-    Name_printer(IAllocator *alloc, IMDL *mdl)
-    : m_printer_sos(Allocator_builder(alloc).create<String_output_stream>(alloc))
-    , m_printer(mdl->create_printer(m_printer_sos.get()))
+    Name_printer(IAllocator *alloc)
+    : m_printer_sos(alloc)
+    , m_printer(&m_printer_sos, /*redirect=*/NULL, /*show_extra_modifiers=*/false)
     {
     }
 
     /// Print a type.
-    void print(IType const *type) { m_printer->print(type); }
+    void print(IType const *type) { m_printer.print_type(type); }
 
     /// Print a string.
-    void print(char const *s) { m_printer->print(s); }
+    void print(char const *s) { m_printer.write(s); }
 
     /// Print a character.
-    void print(char c) { m_printer->print(c); }
+    void print(char c) { m_printer.write(c); }
 
     /// Print a size_t.
-    void print(size_t s) { m_printer->print(long(s)); }
+    void print(size_t s) { m_printer.write(s); }
 
     /// Print a symbol.
-    void print(ISymbol const *sym) { m_printer->print(sym); }
+    void print(ISymbol const *sym) { m_printer.write(sym->get_name()); }
 
     /// Get the current printed line and clear the buffer.
-    string get_line() { string s(m_printer_sos->get_buffer()); m_printer_sos->clear(); return s; }
+    string get_line() { string s(m_printer_sos.get_buffer()); m_printer_sos.clear(); return s; }
 
 private:
     /// The string output stream the printer prints to.
-    mi::base::Handle<String_output_stream> m_printer_sos;
+    String_output_stream<Static_base> m_printer_sos;
 
-    /// A printer printing to m_printer_sos.
-    mi::base::Handle<IPrinter> m_printer;
+    /// A type printer printing to m_printer_sos.
+    Type_printer<String_output_stream<Static_base>, void, false> m_printer;
 };
 
 /// Helper class for mangling names using the DAG style.
@@ -269,9 +269,8 @@ public:
     /// Constructor.
     ///
     /// \param alloc     the allocator
-    /// \param compiler  the MDL compiler interface
-    DAG_mangler(IAllocator *alloc, IMDL *compiler)
-    : m_printer(alloc, compiler)
+    DAG_mangler(IAllocator *alloc)
+    : m_printer(alloc)
     , m_alloc(alloc)
     {
     }

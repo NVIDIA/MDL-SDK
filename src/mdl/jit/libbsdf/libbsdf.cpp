@@ -480,40 +480,39 @@ BSDF_API void diffuse_transmission_bsdf_auxiliary(
 // no Fresnel effect
 class Fresnel_function_none {
 public:
-    Fresnel_function_none(){}
-    float3 eval(float &f, const float2 &ior, const float kh) const {
-        f = 1.0f;
-        return make<float3>(1.0f);
+    Fresnel_function_none() {}
+    float4 eval(const float2 &ior, const float kh) const {
+        return make<float4>(1.0f);
     }
 };
 
 // dielectric Fresnel
 class Fresnel_function_default {
 public:
-    Fresnel_function_default(){}
-    float3 eval(float &f, const float2 &ior, const float kh) const {
-        f = ior_fresnel(ior.y / ior.x, kh);
-        return make<float3>(f);
+    Fresnel_function_default() {}
+    float4 eval(const float2 &ior, const float kh) const {
+        float f = ior_fresnel(ior.y / ior.x, kh);
+        return make<float4>(f);
     }
 };
 
 // thin-film-coated dielectric Fresnel
-class Fresnel_function_coated{
+class Fresnel_function_coated {
 public:
     Fresnel_function_coated(const float coat_thickness, const float3 &coat_ior) :
         m_coat_thickness(coat_thickness),
         m_coat_ior(math::average(coat_ior)) { // using scalar IOR for simplicity
     }
 
-    float3 eval(float &f, const float2 &ior, const float kh) const {
+    float4 eval(const float2 &ior, const float kh) const {
         if (m_coat_thickness <= 0.0f || m_coat_ior == 1.0f) {
-            f = ior_fresnel(ior.y / ior.x, kh);
-            return make<float3>(f);
+            float f = ior_fresnel(ior.y / ior.x, kh);
+            return make<float4>(f);
         } else {
             const float3 val = thin_film_factor(
                 m_coat_thickness, m_coat_ior, ior.y, ior.x, kh);
-            f = math::average(val);
-            return val;
+            float f = math::average(val);
+            return make<float4>(val.x, val.y, val.z, f);
         }
     }
 private:
@@ -553,7 +552,11 @@ BSDF_INLINE void specular_sample(
             f_refl = 0.0f;
             break;
         case scatter_reflect_transmit:
-            f_refl_c = fresnel_function.eval(f_refl, ior, nk1);
+            {
+                float4 res = fresnel_function.eval(ior, nk1);
+                f_refl_c = make<float3>(res.x, res.y, res.z);
+                f_refl   = res.w;
+            }
             break;
     }
     
@@ -786,7 +789,11 @@ BSDF_INLINE void microfacet_sample(
             f_refl = 0.0f;
             break;
         case scatter_reflect_transmit:
-            f_refl_c = fresnel_function.eval(f_refl, ior, kh);
+            {
+                float4 res = fresnel_function.eval(ior, kh);
+                f_refl_c   = make<float3>(res.x, res.y, res.z);
+                f_refl     = res.w;
+            }
             break;
     }
 
@@ -917,7 +924,11 @@ BSDF_INLINE float3 microfacet_evaluate(
             f_refl = 0.0f;
             break;
         case scatter_reflect_transmit:
-            f_refl_c = fresnel_function.eval(f_refl, ior, k1h);
+            {
+                float4 res = fresnel_function.eval(ior, k1h);
+                f_refl_c   = make<float3>(res.x, res.y, res.z);
+                f_refl     = res.w;
+            }
             break;
     }
 

@@ -124,8 +124,9 @@ public:
         MDL_VERSION_1_5,                        ///< compile MDL 1.5
         MDL_VERSION_1_6,                        ///< compile MDL 1.6
         MDL_VERSION_1_7,                        ///< compile MDL 1.7
-        MDL_VERSION_1_8,                        ///< compile MDL 1.8
-        MDL_LATEST_VERSION = MDL_VERSION_1_7,   ///< always the latest supported version
+        MDL_VERSION_1_8,                        ///< compile MDL 1.8 (partly implemented)
+        MDL_VERSION_1_9,                        ///< compile MDL 1.9 (unsupported yet)
+        MDL_LATEST_VERSION = MDL_VERSION_1_7,   ///< always the latest fully supported version
         MDL_DEFAULT_VERSION = MDL_VERSION_1_0,  ///< The default compiler version.
     };
 
@@ -144,6 +145,9 @@ public:
 
     /// The name of the option that switches the strict compilation mode.
     #define MDL_OPTION_STRICT "strict"
+
+    /// The name of the option that enables (incomplete) features from the next MDL version.
+    #define MDL_OPTION_MDL_NEXT "mdl_next"
 
     /// The name of the option that enables undocumented experimental MDL features.
     #define MDL_OPTION_EXPERIMENTAL_FEATURES "experimental"

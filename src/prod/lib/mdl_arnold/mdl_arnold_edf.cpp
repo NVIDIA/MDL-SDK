@@ -55,7 +55,7 @@ AtClosure MdlEDFCreate(
 
     // here, potentially redundant texture accesses in sample/eval are pre-fetched (text_results).
     // even if sample is not called here, it is required since `eval` expects the data to be there.
-    shader_data->target_code->execute_bsdf_init(
+    shader_data->target_code->execute_edf_init(
         edf_function_index + 0,  // edf_function_index corresponds to 'init'
             reinterpret_cast<mi::neuraylib::Shading_state_material&>(ext_state.state),
             /*texture_handler*/ nullptr,    // allows to provide a custom texturing runtime

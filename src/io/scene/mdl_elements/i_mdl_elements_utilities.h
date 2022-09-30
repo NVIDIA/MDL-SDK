@@ -617,6 +617,7 @@ private:
 #define MDL_CTX_OPTION_WAVELENGTH_MAX                     "wavelength_max"
 #define MDL_CTX_OPTION_INCLUDE_GEO_NORMAL                 "include_geometry_normal"
 #define MDL_CTX_OPTION_BUNDLE_RESOURCES                   "bundle_resources"
+#define MDL_CTX_OPTION_MDL_NEXT                           "mdl_next"
 #define MDL_CTX_OPTION_EXPERIMENTAL                       "experimental"
 #define MDL_CTX_OPTION_RESOLVE_RESOURCES                  "resolve_resources"
 #define MDL_CTX_OPTION_FOLD_TERNARY_ON_DF                 "fold_ternary_on_df"

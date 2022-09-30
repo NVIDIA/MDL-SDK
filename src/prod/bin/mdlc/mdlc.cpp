@@ -203,6 +203,9 @@ void Mdlc::usage()
         "\tShow source code position in target output.\n"
         "  --show-resource-table\n"
         "\tShow resource tables in target output.\n"
+        "  --mdl-next\n"
+        "  -N\n"
+        "\tEnable features form next MDL version (might be incomplete).\n"
         "  --inline\n"
         "  -i\n"
         "\tInlines the given module (if target is set to MDL).\n"
@@ -233,15 +236,16 @@ int Mdlc::run(int argc, char *argv[])
         /*12*/ { "internal-space",         mi::getopt::REQUIRED_ARGUMENT, NULL, 0 },
         /*13*/ { "show-positions",         mi::getopt::NO_ARGUMENT,       NULL, 0 },
         /*14*/ { "show-resource-table",    mi::getopt::NO_ARGUMENT,       NULL, 0 },
+        /*15*/ { "mdl-next",               mi::getopt::NO_ARGUMENT,       NULL, 'N' },
         /*16*/ { "inline",                 mi::getopt::NO_ARGUMENT,       NULL, 'i' },
         /*17*/ { "plugin",                 mi::getopt::REQUIRED_ARGUMENT, NULL, 'l' },
-        /*18*/ { "help",                   mi::getopt::NO_ARGUMENT,       NULL, '?' },
-       
-        /*19*/ { NULL,                     0,                             NULL, 0 }
+        /*19*/ { "help",                   mi::getopt::NO_ARGUMENT,       NULL, '?' },
+        /*20*/ { NULL,                     0,                             NULL, 0 }
     };
 
     bool opt_error = false;
     bool show_version = false;
+    bool mdl_next = false;
     int  c, longidx;
     std::string warn_options;
 
@@ -256,7 +260,7 @@ int Mdlc::run(int argc, char *argv[])
     std::vector<std::string> plugin_filenames;
 
     while (
-        (c = mi::getopt::getopt_long(argc, argv, "O:W:Vvip:Ct:d:B:l:?", long_options, &longidx)) != -1
+        (c = mi::getopt::getopt_long(argc, argv, "O:W:Vvip:Ct:d:B:l:N?", long_options, &longidx)) != -1
     ) {
         switch (c) {
         case 'O':
@@ -367,15 +371,18 @@ int Mdlc::run(int argc, char *argv[])
         case 'B':
             m_backend_options.push_back(mi::getopt::optarg);
             break;
-        case '?':
-            usage();
-            return EXIT_SUCCESS;
+        case 'N':
+            mdl_next = true;
+            break;
         case 'i':
             m_inline = true;
             break;
         case 'l':
             plugin_filenames.push_back(mi::getopt::optarg);
             break;
+        case '?':
+            usage();
+            return EXIT_SUCCESS;
         case '\0':
             switch (longidx) {
             case 2:
@@ -429,6 +436,9 @@ int Mdlc::run(int argc, char *argv[])
     if (opt_error) {
         return EXIT_FAILURE;
     }
+
+    comp_options.set_option(
+        MDL_OPTION_MDL_NEXT, mdl_next ? "true" : "false");
 
     if (!warn_options.empty()) {
         std::string s(warn_options);

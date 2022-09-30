@@ -151,11 +151,6 @@ static void fill_default_cg_options(
         "true",
         "Enable code generation for PDF functions");
     options.add_option(
-        MDL_JIT_OPTION_SCENE_DATA_NAMES,
-        "",
-        "Comma-separated list of names for which scene data may be available in the renderer "
-        "(use \"*\" to enforce that the renderer runtime is asked for all scene data names)");
-    options.add_option(
         MDL_JIT_OPTION_VISIBLE_FUNCTIONS,
         "",
         "Comma-separated list of names of functions which will be visible in the generated code "
@@ -1081,7 +1076,6 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
         hasher.update(options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE));
         hasher.update(options.get_string_option(MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE));
         hasher.update(options.get_bool_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS));
-        hasher.update(options.get_string_option(MDL_JIT_OPTION_SCENE_DATA_NAMES));
 
         hasher.final(cache_key);
 
@@ -1874,7 +1868,6 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
         hasher.update(options.get_bool_option(MDL_JIT_OPTION_LINK_LIBDEVICE));
         hasher.update(options.get_string_option(MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE));
         hasher.update(options.get_bool_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS));
-        hasher.update(options.get_string_option(MDL_JIT_OPTION_SCENE_DATA_NAMES));
 
         if (code_kind == IGenerated_code_executable::CK_GLSL ||
             code_kind == IGenerated_code_executable::CK_HLSL)

@@ -3479,7 +3479,7 @@ DAG_call const *DAG_node_factory_impl::value_to_constructor(
     int n_fields = type->get_field_count();
     Small_VLA<DAG_call::Call_argument, 8> args(get_allocator(), n_fields);
 
-    Name_printer printer(get_allocator(), m_mdl.get());
+    Name_printer printer(get_allocator());
 
     printer.print(type->get_symbol()->get_name());
     printer.print('(');

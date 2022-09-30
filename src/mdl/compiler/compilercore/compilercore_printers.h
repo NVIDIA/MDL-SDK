@@ -29,6 +29,8 @@
 #ifndef MDL_COMPILERCORE_PRINTERS_H
 #define MDL_COMPILERCORE_PRINTERS_H 1
 
+#include <type_traits>
+
 #include <mi/base/handle.h>
 #include <mi/base/iallocator.h>
 #include <mi/base/iinterface.h>
@@ -127,9 +129,8 @@ private:
 ///
 /// Mixin class for ISyntax_coloring implementation.
 ///
-template <typename Interface>
-class Syntax_coloring : public Allocator_interface_implement<Interface> {
-    typedef Allocator_interface_implement<Interface> Base;
+template <typename Base>
+class Syntax_coloring : public Base {
 public:
     /// Set the color for a particular syntax element.
     /// \param  element             The syntax element for which to set the color.
@@ -166,15 +167,179 @@ protected:
     Color_table m_color_table;
 };
 
+/// Handling for Streams.
+template<typename Stream>
+struct Stream_store {
+    typedef Stream &Stream_holder;
+    typedef Stream *Stream_ptr;
+
+    Stream_store(Stream *stream)
+    : m_holder(*stream)
+    , m_stream(stream)
+    {}
+
+    Stream_holder m_holder;
+    Stream_ptr    m_stream;
+};
+
+template<>
+class Stream_store<IOutput_stream> {
+protected:
+    typedef mi::base::Handle<IOutput_stream> Stream_holder;
+    typedef IOutput_stream                   *Stream_ptr;
+
+    Stream_store(IOutput_stream *stream)
+    : m_holder(stream, mi::base::DUP_INTERFACE)
+    , m_stream(stream)
+    {}
+
+    Stream_holder m_holder;
+    Stream_ptr    m_stream;
+};
+
+/// A Stream_printer supports basic print operations on a stream.
+template <typename Stream>
+class Stream_printer : public Stream_store<Stream> {
+    friend class Printer;
+    friend class Sema_printer;
+    typedef Stream_store<Stream> Base;
+public:
+    /// Constructor.
+    Stream_printer(Stream *stream)
+    : Base(stream)
+    {}
+
+    /// Write a char.
+    void write(char c) { Base::m_stream->write_char(c); }
+
+    /// Write an string.
+    void write(char const *s) { Base::m_stream->write(s); }
+
+    /// Write an unsigned number.
+    void write(size_t v) {
+        char buf[64];
+        size_t i = 63;
+
+        buf[i--] = '\0';
+        do {
+            size_t d = v % 10;
+            buf[i--] = '0' + d;
+            v /= 10;
+        } while (v > 0);
+        write(&buf[i + 1]);
+    }
+
+    /// Write a long.
+    void write(long l) {
+        if (l < 0) {
+            write('-');
+            l -= l;
+        }
+        write(size_t(l));
+    }
+
+    /// Write an integer.
+    void write(int l) {
+        if (l < 0) {
+            write('-');
+            l -= l;
+        }
+        write(size_t(l));
+    }
+
+    // Flush output.
+    void flush() { Base::m_stream->flush(); }
+};
+
+/// A Type_printer supports printing a types to a stream.
+///
+/// \tparam Stream    the stream
+/// \tparam Redirect  either void or a class supporting push/pop_color() and print_type()
+template <typename Stream, typename Redirect, bool allow_extra_modifiers>
+class Type_printer : public Stream_printer<Stream> {
+    typedef Stream_printer<Stream> Base;
+
+public:
+    /// Constructor.
+    ///
+    /// \param stream                the output stream
+    /// \param redirect              the redirect object if any
+    /// \param show_extra_modifiers  show extra modifiers if enabled
+    Type_printer(
+        Stream   *stream,
+        Redirect *redirect,
+        bool     show_extra_modifiers)
+    : Base(stream)
+    , m_redirect(redirect)
+    , m_show_extra_modifiers(show_extra_modifiers)
+    {}
+
+    /// Print a type.
+    ///
+    /// \param type  the type to print
+    /// \param name  if type is a function type, print name instead of * if != NULL
+    void print_type(IType const *type, ISymbol const *name = NULL);
+
+    template<typename T, class = typename std::enable_if_t<!std::is_void<T>::value> >
+    void redirect_print_type(T *redirect, IType const *type, ISymbol const *name)
+    {
+        redirect->print_type(type, name);
+    }
+
+    template<typename T, class = typename std::enable_if_t<std::is_void<T>::value> >
+    void redirect_print_type(T *redirect, IType const *type, ISymbol const *name, int x = 0)
+    {
+        this->print_type(type, name);
+    }
+
+    void redirect_print_type(IType const *type, ISymbol const *name = NULL) {
+        this->redirect_print_type(m_redirect, type, name);
+    }
+
+    /// Set the given color and push it on the color stack.
+    template<typename T, class = typename std::enable_if_t<!std::is_void<T>::value> >
+    void push_color(T *redirect, ISyntax_coloring::Syntax_elements code)
+    {
+        redirect->push_color(code);
+    }
+
+    template<typename T, class = typename std::enable_if_t<std::is_void<T>::value> >
+    void push_color(T *redirect, ISyntax_coloring::Syntax_elements code, int x = 0) {}
+
+    void push_color(ISyntax_coloring::Syntax_elements code)
+    {
+        this->push_color(m_redirect, code);
+    }
+
+    /// Remove one entry from the color stack.
+    template<typename T, class = typename std::enable_if_t<!std::is_void<T>::value> >
+    void pop_color(T *redirect) { redirect->pop_color(); }
+
+    template<typename T, class = typename std::enable_if_t<std::is_void<T>::value> >
+    void pop_color(T *redirect, int y = 0) {}
+
+    void pop_color() { this->pop_color(m_redirect); }
+
+    /// Enable/disable all type modifiers.
+    void show_extra_modifiers(bool enable)
+    {
+        m_show_extra_modifiers = enable;
+    }
+
+private:
+    Redirect *m_redirect;
+    bool m_show_extra_modifiers;
+};
+
 ///
 /// Implementation of the Pretty-printer for MDL ASTs.
 ///
 /// \note: This printer prints AST information only and does NOT use semantic
 /// informations. Use it primary for debugging.
 ///
-class Printer : public Syntax_coloring<IPrinter>
+class Printer : public Syntax_coloring<Allocator_interface_implement<IPrinter> >
 {
-    typedef Syntax_coloring<IPrinter> Base;
+    typedef Syntax_coloring<Allocator_interface_implement<IPrinter> > Base;
 public:
 
     /// Indent output.
@@ -448,6 +613,9 @@ private:
     Printer &operator=(Printer const &) MDL_DELETED_FUNCTION;
 
 protected:
+    /// The type printer.
+    Type_printer<IOutput_stream, Printer, true> m_type_printer;
+
     /// The version for printing.
     unsigned m_version;
 
@@ -463,9 +631,6 @@ protected:
     /// if set, positions are shown.
     bool m_show_positions;
 
-    /// if set, print all modifiers, not only MDL uniform and varying
-    bool m_show_extra_modifiers;
-
     /// if set, print all MDL language levels
     bool m_show_mdl_versions;
 
@@ -474,9 +639,6 @@ protected:
 
     /// If set, prints the function hash table as comment.
     bool m_show_func_hashes;
-
-    /// The output stream to write to.
-    mi::base::Handle<IOutput_stream> m_ostr;
 
     /// The colored output stream to write to.
     mi::base::Handle<IOutput_stream_colored> m_c_ostr;
@@ -493,9 +655,9 @@ protected:
 ///
 /// Implementation of the MDL module export.
 ///
-class MDL_exporter : public Syntax_coloring<IMDL_exporter>
+class MDL_exporter : public Syntax_coloring<Allocator_interface_implement<IMDL_exporter> >
 {
-    typedef Syntax_coloring<IMDL_exporter> Base;
+    typedef Syntax_coloring<Allocator_interface_implement<IMDL_exporter> > Base;
 public:
     /// Export a module in MDL syntax to an output stream.
     ///
@@ -524,9 +686,9 @@ public:
 
 private:
     // Copy constructor not implemented.
-    MDL_exporter(MDL_exporter const &);
+    MDL_exporter(MDL_exporter const &) MDL_DELETED_FUNCTION;
     // Assignment operator not implemented.
-    MDL_exporter &operator=(MDL_exporter const &);
+    MDL_exporter &operator=(MDL_exporter const &) MDL_DELETED_FUNCTION;
 
 private:
     /// The builder.

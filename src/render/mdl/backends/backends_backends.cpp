@@ -3365,11 +3365,6 @@ mi::Sint32 Mdl_llvm_backend::set_option(
         return 0;
     }
 
-    if (strcmp(name, "scene_data_names") == 0) {
-        jit_options.set_option(MDL_JIT_OPTION_SCENE_DATA_NAMES, value);
-        return 0;
-    }
-
     if (strcmp(name, "visible_functions") == 0) {
         jit_options.set_option(MDL_JIT_OPTION_VISIBLE_FUNCTIONS, value);
         return 0;

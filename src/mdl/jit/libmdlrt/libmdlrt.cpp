@@ -253,16 +253,16 @@ static float get_value_incremental(
         ++p1;
     }
     const unsigned int p0 = p1 > 0 ? p1 - 1 : p1;
-    search_pos = p0;
+    search_pos = p1;
     if (p1 >= num_values)
         p1 = num_values - 1;
 
     if (p0 == p1)
         return amplitudes[p0];
 
-    const float w0 = (lambda - wavelength[p0]) / (wavelength[p1] - wavelength[p0]);
+    const float w1 = (lambda - wavelength[p0]) / (wavelength[p1] - wavelength[p0]);
     return
-        amplitudes[p0] * w0 + amplitudes[p1] * (1.0f - w0);
+        amplitudes[p1] * w1 + amplitudes[p0] * (1.0f - w1);
 }
 
 static void spectrum_to_XYZ(

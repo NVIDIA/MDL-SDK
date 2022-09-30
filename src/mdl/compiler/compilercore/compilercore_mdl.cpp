@@ -78,6 +78,7 @@ char const *MDL::option_dump_call_graph               = MDL_OPTION_DUMP_CALL_GRA
 char const *MDL::option_warn                          = MDL_OPTION_WARN;
 char const *MDL::option_opt_level                     = MDL_OPTION_OPT_LEVEL;
 char const *MDL::option_strict                        = MDL_OPTION_STRICT;
+char const *MDL::option_mdl_next                      = MDL_OPTION_MDL_NEXT;
 char const *MDL::option_experimental_features         = MDL_OPTION_EXPERIMENTAL_FEATURES;
 char const *MDL::option_resolve_resources             = MDL_OPTION_RESOLVE_RESOURCES;
 char const *MDL::option_limits_float_min              = MDL_OPTION_LIMITS_FLOAT_MIN;
@@ -1049,6 +1050,8 @@ void MDL::create_options()
         "optimization level [0-2]: 0 disables all optimizations, 2 maximum optimization");
     m_options.add_option(option_strict, "true",
         "Enables strict MDL compliance");
+    m_options.add_option(option_mdl_next, "false",
+        "Enables (incomplete) features from the next MDL version");
     m_options.add_option(option_experimental_features, "false",
         "Enables undocumented experimental MDL features");
     m_options.add_option(option_resolve_resources, "true",
@@ -1116,7 +1119,12 @@ Module *MDL::load_module(
 
     parser.set_imdl(get_allocator(), this);
 
-    parser.set_module(mod, get_compiler_bool_option(ctx, option_experimental_features, false));
+    // experimental feature require next MDL version either
+    bool enable_mdl_next =
+        get_compiler_bool_option(ctx, option_mdl_next, false) ||
+        get_compiler_bool_option(ctx, option_experimental_features, false);
+
+    parser.set_module(mod, enable_mdl_next);
     parser.Parse();
 
     mi::base::Handle<IArchive_input_stream> iarchvice_s(s->get_interface<IArchive_input_stream>());
@@ -1840,18 +1848,22 @@ Thread_context *MDL::create_thread_context(
     char const                 *front_path,
     mi::base::IInterface const *user_data)
 {
-    Thread_context *ctx = m_builder.create<Thread_context>(get_allocator(), &m_options);
+    Thread_context *ctx      = m_builder.create<Thread_context>(get_allocator(), &m_options);
+    Options_impl   &ctx_opts = ctx->access_options();
 
     ctx->set_front_path(front_path);
-    ctx->access_options().set_interface_option(MDL::option_user_data, user_data);
+    ctx_opts.set_interface_option(MDL::option_user_data, user_data);
 
-    ctx->access_options().set_option(
+    ctx_opts.set_option(
         MDL::option_strict,
         ana.strict_mode() ? "true" : "false");
-    ctx->access_options().set_option(
+    ctx_opts.set_option(
+        MDL::option_mdl_next,
+        ana.enable_mdl_next() ? "true" : "false");
+    ctx_opts.set_option(
         MDL::option_experimental_features,
         ana.enable_experimental_features() ? "true" : "false");
-    ctx->access_options().set_option(
+    ctx_opts.set_option(
         MDL::option_resolve_resources,
         ana.resolve_resources() ? "true" : "false");
     return ctx;
@@ -2258,7 +2270,7 @@ bool MDL::remove_foreign_module_translator(
 }
 
 // Check if the compiler supports a requested MDL version.
-bool MDL::check_version(int major, int minor, MDL_version &version, bool enable_experimental_features)
+bool MDL::check_version(int major, int minor, MDL_version &version, bool enable_mdl_next)
 {
     version = MDL_DEFAULT_VERSION;
 
@@ -2289,11 +2301,15 @@ bool MDL::check_version(int major, int minor, MDL_version &version, bool enable_
             version = MDL_VERSION_1_7;
             return true;
         case 8:
-            if (!enable_experimental_features) {
+            if (!enable_mdl_next) {
                 return false;
             }
+            // partly supported
             version = MDL_VERSION_1_8;
             return true;
+        case 9:
+            // unsupported yet
+            return false;
         }
     }
     return false;

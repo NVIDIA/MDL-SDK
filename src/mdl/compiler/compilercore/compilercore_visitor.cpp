@@ -357,9 +357,9 @@ void Module_visitor::do_qualified_name(IQualified_name const *name) {
 
     if (pre_visit(d)) {
         for (size_t i = 0, n = d->get_component_count(); i < n; ++i) {
-            ISimple_name const *name = d->get_component(i);
+            ISimple_name const *c_name = d->get_component(i);
 
-            do_simple_name(name);
+            do_simple_name(c_name);
         }
     }
     post_visit(d);
@@ -1021,8 +1021,8 @@ void Module_visitor::do_declaration_annotation(
             IParameter const *p = d->get_parameter(i);
             do_parameter(p);
         }
-        if (IAnnotation_block const *anno = d->get_annotations()) {
-            do_annotations(anno);
+        if (IAnnotation_block const *p_anno = d->get_annotations()) {
+            do_annotations(p_anno);
         }
     }
     post_visit(d);
