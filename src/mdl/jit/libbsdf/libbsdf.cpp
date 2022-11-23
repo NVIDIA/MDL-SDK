@@ -918,10 +918,14 @@ BSDF_INLINE float3 microfacet_evaluate(
                 if (!is_tir(ior, k1h)) {
                     absorb(data);
                     return make<float3>(0.0f);
+                } else {
+                    f_refl_c = make<float3>(1.0f);
+                    f_refl = 1.0f;
                 }
+            } else {
+                f_refl_c = make<float3>(0.0f);
+                f_refl = 0.0f;
             }
-            f_refl_c = make<float3>(0.0f);
-            f_refl = 0.0f;
             break;
         case scatter_reflect_transmit:
             {
