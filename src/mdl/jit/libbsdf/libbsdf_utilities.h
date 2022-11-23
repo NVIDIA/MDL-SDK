@@ -474,7 +474,7 @@ BSDF_INLINE float complex_ior_fresnel(
     const float t4 = t2 * sintheta2;
     const float rp = rs * (t3 - t4) / (t3 + t4);
 
-    return 0.5f * (rp + rs);
+    return math::saturate(0.5f * (rp + rs));
 }
 
 BSDF_INLINE float3 complex_ior_fresnel(
