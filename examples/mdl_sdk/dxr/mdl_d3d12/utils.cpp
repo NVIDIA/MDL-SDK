@@ -57,6 +57,7 @@ static std::atomic<size_t> s_log_file_active_counter = 0;
 static std::mutex s_log_file_mtx;
 static std::ofstream s_log_file;
 
+static Log_level s_log_level = Log_level::Info;
 
 template<class T>
 using ComPtr = Microsoft::WRL::ComPtr<T>;
@@ -377,8 +378,18 @@ std::string print_nested_exception(const std::exception& e)
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 
+void set_log_level(Log_level level)
+{
+    s_log_level = level;
+}
+
+// ------------------------------------------------------------------------------------------------
+
 void log_verbose(const std::string& message, const std::string& file, int line)
 {
+    if (static_cast<char>(s_log_level) < static_cast<char>(Log_level::Verbose))
+        return;
+
     print("[MDL_D3D12] [VERBOSE] ", message, file, line);
 }
 
@@ -386,6 +397,9 @@ void log_verbose(const std::string& message, const std::string& file, int line)
 
 void log_info(const std::string& message, const std::string& file, int line)
 {
+    if(static_cast<char>(s_log_level) < static_cast<char>(Log_level::Info))
+        return;
+
     print("[MDL_D3D12] [INFO]    ", message, file, line);
 }
 
@@ -393,6 +407,9 @@ void log_info(const std::string& message, const std::string& file, int line)
 
 void log_warning(const std::string& message, const std::string& file, int line)
 {
+    if (static_cast<char>(s_log_level) < static_cast<char>(Log_level::Warning))
+        return;
+
     print("[MDL_D3D12] [WARNING] ", message, file, line);
 }
 
@@ -400,6 +417,9 @@ void log_warning(const std::string& message, const std::string& file, int line)
 
 void log_error(const std::string& message, const std::string& file, int line)
 {
+    if (static_cast<char>(s_log_level) < static_cast<char>(Log_level::Error))
+        return;
+
     print("[MDL_D3D12] [ERROR]   ", message, file, line);
 }
 
@@ -629,7 +649,7 @@ void Diagnostics::list_loaded_libraries()
     for(auto& e : module_list)
         msg += mi::examples::strings::format("\n    %s", e.c_str());
 
-    log_info(msg);
+    log_verbose(msg);
 }
 
 }}} // mi::examples::mdl_d3d12

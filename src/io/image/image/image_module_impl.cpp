@@ -984,6 +984,10 @@ bool Image_module_impl::export_canvas(
         return false;
     }
 
+    LOG::mod_log->info( M_IMAGE, LOG::Mod_log::C_IO,
+        "Saving image \"%s\", pixel type \"%s\", %ux%ux%u pixels, 1 miplevel.",
+        output_filename, export_pixel_type, image_width, image_height, nr_of_layers);
+
     for( mi::Uint32 z = 0; z < nr_of_layers; ++z) {
         mi::base::Handle<const mi::neuraylib::ITile> tile( canvas->get_tile( z));
         if( !image_file->write( tile.get(), z, 0)) {
@@ -993,10 +997,6 @@ bool Image_module_impl::export_canvas(
             return false;
         }
     }
-
-    LOG::mod_log->info( M_IMAGE, LOG::Mod_log::C_IO,
-        "Saving image \"%s\", pixel type \"%s\", %ux%ux%u pixels, 1 miplevel.",
-        output_filename, export_pixel_type, image_width, image_height, nr_of_layers);
 
     return true;
 }
@@ -1070,6 +1070,11 @@ bool Image_module_impl::export_mipmap(
         }
     }
 
+    LOG::mod_log->info( M_IMAGE, LOG::Mod_log::C_IO,
+        "Saving image \"%s\", pixel type \"%s\", %ux%ux%u pixels, %u miplevel%s.",
+        output_filename, export_pixel_type, image_width, image_height, nr_of_layers,
+        nr_of_levels, nr_of_levels == 1 ? "" : "s");
+
     for( mi::Uint32 l = 0; l < nr_of_levels; ++l) {
         mi::base::Handle<const mi::neuraylib::ICanvas> canvas_l( mipmap->get_level( l));
         ASSERT( M_IMAGE, canvas_l);
@@ -1108,11 +1113,6 @@ bool Image_module_impl::export_mipmap(
             }
         }
     }
-
-    LOG::mod_log->info( M_IMAGE, LOG::Mod_log::C_IO,
-        "Saving image \"%s\", pixel type \"%s\", %ux%ux%u pixels, %u miplevel%s.",
-        output_filename, export_pixel_type, image_width, image_height, nr_of_layers,
-        nr_of_levels, nr_of_levels == 1 ? "" : "s");
 
     return true;
 }

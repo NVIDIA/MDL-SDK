@@ -76,9 +76,6 @@ mi::neuraylib::INeuray* load_mdl_sdk(const Mdl_browser_command_line_options& opt
     auto logger = mi::base::make_handle(new Mdl_browser_logger(false));
     mdl_configuration->set_logger(logger.get());
 
-    // Disable encoded names for now
-    mdl_configuration->set_encoded_names_enabled(false);
-
     // clear all search paths and add specified default ones
     mdl_configuration->clear_mdl_paths();
     mdl_configuration->clear_resource_paths();

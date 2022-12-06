@@ -13,4 +13,13 @@
 #   @CMAKE_BINARY_DIR@/mdl_python_examples.code-workspace
 
 . @CMAKE_CURRENT_BINARY_DIR@/../env/@_CONFIG@/setup_env.sh
+
+echo "Python:     " ${PYTHON_BINARY}
+PYTHON_VERSION=$(${PYTHON_BINARY} --version)
+echo "Version:    " ${PYTHON_VERSION}
+# echo "PYTHONPATH: " ${PYTHONPATH}
+# echo "@ENV_LIB_PATH@: " ${@ENV_LIB_PATH@}
+echo
+echo
+
 ${PYTHON_BINARY} @CMAKE_CURRENT_SOURCE_DIR@/@CREATE_FROM_PYTHON_PRESET_MAIN@ "$@"

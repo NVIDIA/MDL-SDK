@@ -98,9 +98,6 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
     mi::base::Handle<mi::base::ILogger> logger(new Mdl_disabled_logger());
     m_config->set_logger(logger.get());
 
-    // Disable encoded names for now
-    m_config->set_encoded_names_enabled(false);
-
     // search path setup is done during scene loading as the scene folder is added too
     // reconfigure_search_paths();
 
@@ -309,7 +306,7 @@ mi::neuraylib::IMdl_execution_context* Mdl_sdk::create_context()
     mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
         m_mdl_factory->create_execution_context());
 
-    context->set_option("experimental", true);
+    context->set_option("mdl_next", m_app->get_options()->mdl_next);
     context->set_option("fold_ternary_on_df", false);
     context->set_option("internal_space", "coordinate_world");
 

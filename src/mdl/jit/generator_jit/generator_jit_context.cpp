@@ -388,8 +388,9 @@ llvm::Value *Function_context::get_state_parameter(llvm::Value *exec_ctx)
         ++arg_it;
     }
     if (m_flags & LLVM_context_data::FL_HAS_EXEC_CTX) {
-        if (exec_ctx == NULL)
+        if (exec_ctx == NULL) {
             exec_ctx = arg_it;
+        }
         return m_ir_builder.CreateLoad(create_simple_gep_in_bounds(exec_ctx, 0u));
     }
     return arg_it;
@@ -405,8 +406,9 @@ llvm::Value *Function_context::get_resource_data_parameter(llvm::Value *exec_ctx
         ++arg_it;
     }
     if (m_flags & LLVM_context_data::FL_HAS_EXEC_CTX) {
-        if (exec_ctx == NULL)
+        if (exec_ctx == NULL) {
             exec_ctx = arg_it;
+        }
         return m_ir_builder.CreateLoad(create_simple_gep_in_bounds(exec_ctx, 1u));
     }
     if (m_flags & LLVM_context_data::FL_HAS_STATE) {
@@ -425,8 +427,9 @@ llvm::Value *Function_context::get_exc_state_parameter(llvm::Value *exec_ctx)
         ++arg_it;
     }
     if (m_flags & LLVM_context_data::FL_HAS_EXEC_CTX) {
-        if (exec_ctx == NULL)
+        if (exec_ctx == NULL) {
             exec_ctx = arg_it;
+        }
         return m_ir_builder.CreateLoad(create_simple_gep_in_bounds(exec_ctx, 2u));
     }
     if (m_flags & LLVM_context_data::FL_HAS_STATE) {
@@ -448,8 +451,9 @@ llvm::Value *Function_context::get_cap_args_parameter(llvm::Value *exec_ctx)
         ++arg_it;
     }
     if (m_flags & LLVM_context_data::FL_HAS_EXEC_CTX) {
-        if (exec_ctx == NULL)
+        if (exec_ctx == NULL) {
             exec_ctx = arg_it;
+        }
         return m_ir_builder.CreateLoad(create_simple_gep_in_bounds(exec_ctx, 3u));
     }
     if (m_flags & LLVM_context_data::FL_HAS_STATE) {
@@ -469,8 +473,9 @@ llvm::Value *Function_context::get_cap_args_parameter(llvm::Value *exec_ctx)
 // Get the lambda_results parameter of the current function.
 llvm::Value *Function_context::get_lambda_results_parameter(llvm::Value *exec_ctx)
 {
-    if (m_lambda_results_override)
+    if (m_lambda_results_override) {
         return m_lambda_results_override;
+    }
 
     MDL_ASSERT(m_flags & (LLVM_context_data::FL_HAS_LMBD_RES | LLVM_context_data::FL_HAS_EXEC_CTX));
 
@@ -479,8 +484,9 @@ llvm::Value *Function_context::get_lambda_results_parameter(llvm::Value *exec_ct
         ++arg_it;
     }
     if (m_flags & LLVM_context_data::FL_HAS_EXEC_CTX) {
-        if (exec_ctx == NULL)
+        if (exec_ctx == NULL) {
             exec_ctx = arg_it;
+        }
         return m_ir_builder.CreateLoad(create_simple_gep_in_bounds(exec_ctx, 4u));
     }
     if (m_flags & LLVM_context_data::FL_HAS_STATE) {
@@ -671,11 +677,12 @@ LLVM_context_data *Function_context::get_context_data(
     IType const *var_type = def->get_type();
 
     llvm::Type *var_tp;
-    if (m_code_gen.is_deriv_var(def))
+    if (m_code_gen.is_deriv_var(def)) {
         var_tp = m_code_gen.m_type_mapper.lookup_deriv_type(
             var_type, instantiate_type_size(var_type));
-    else
+    } else {
         var_tp = m_code_gen.lookup_type(var_type, instantiate_type_size(var_type));
+    }
     LLVM_context_data *ctx = m_arena_builder.create<LLVM_context_data>(
         this, var_tp, def->get_symbol()->get_name());
 
@@ -1016,7 +1023,6 @@ llvm::Value *Function_context::get_constant(mi::mdl::IValue const *v)
                     }
                     return llvm::ConstantArray::get(
                         a_tp, llvm::ArrayRef<llvm::Constant *>(vectors, n_cols));
-
                 } else {
                     // encode a matrix/vector into an array of scalars (scalar mode)
                     return llvm::ConstantArray::get(
@@ -1828,10 +1834,11 @@ void Function_context::create_oob_exception_call(
     mi::mdl::IModule const *mod = loc.get_module();
 
     llvm::Value *f;
-    if (mod == NULL)
+    if (mod == NULL) {
         f = llvm::Constant::getNullValue(m_type_mapper.get_cstring_type());
-    else
+    } else {
         f = get_module_name(mod);
+    }
 
     llvm::Value *l = get_constant(int(loc.get_line()));
 
@@ -1848,8 +1855,9 @@ void Function_context::create_bounds_check_with_exception(
 {
     llvm::Value *uindex   = index;
     llvm::Type  *bound_tp = bound->getType();
-    if (index->getType() != bound_tp)
+    if (index->getType() != bound_tp) {
         uindex = m_ir_builder.CreateSExt(index, bound_tp);
+    }
 
     if (llvm::isa<llvm::ConstantInt>(uindex) && llvm::isa<llvm::ConstantInt>(bound)) {
         // both are constant, decide here
@@ -1894,8 +1902,9 @@ llvm::Value *Function_context::create_select_if_in_bounds(
     // convert int index to size_t
     llvm::Value *uindex   = index;
     llvm::Type  *bound_tp = bound->getType();
-    if (index->getType() != bound_tp)
+    if (index->getType() != bound_tp) {
         uindex = m_ir_builder.CreateSExt(index, bound_tp);
+    }
 
     llvm::Value *cmp = m_ir_builder.CreateICmpULT(uindex, bound);
     return m_ir_builder.CreateSelect(cmp, val, out_of_bounds_val);
@@ -1908,10 +1917,11 @@ void Function_context::create_div_exception_call(
     IModule const *mod = loc.get_module();
 
     llvm::Value *f;
-    if (mod == NULL)
+    if (mod == NULL) {
         f = llvm::Constant::getNullValue(m_type_mapper.get_cstring_type());
-    else
+    } else {
         f = get_module_name(mod);
+    }
 
     llvm::Value *l = get_constant(int(loc.get_line()));
 
@@ -1962,8 +1972,9 @@ void Function_context::create_bounds_check_cmp(
     // convert int index to size_t
     llvm::Value *uindex   = index;
     llvm::Type  *bound_tp = bound->getType();
-    if (index->getType() != bound_tp)
+    if (index->getType() != bound_tp) {
         uindex = m_ir_builder.CreateSExt(index, bound_tp);
+    }
 
     llvm::Value *cmp = m_ir_builder.CreateICmpULT(uindex, bound);
 
@@ -2016,10 +2027,11 @@ void Function_context::push_block_scope(mi::mdl::Position const *pos)
     if (m_di_builder != NULL) {
         llvm::DIScope *parentScope;
 
-        if (!m_dilb_stack.empty())
+        if (!m_dilb_stack.empty()) {
             parentScope = m_dilb_stack.top();
-        else
+        } else {
             parentScope = m_di_function;
+        }
 
         unsigned start_line   = 0;
         unsigned start_column = 0;
@@ -2073,18 +2085,21 @@ void Function_context::set_curr_pos(mi::mdl::Position const &pos)
 
 // Add debug info for a variable declaration.
 void Function_context::add_debug_info(mi::mdl::IDefinition const *var_def) {
-    if (m_di_builder == NULL)
+    if (m_di_builder == NULL) {
         return;
+    }
 
     LLVM_context_data *ctx_data = get_context_data(var_def);
     llvm::Value       *var_adr  = ctx_data->get_var_address();
 
-    if (var_adr == NULL)
+    if (var_adr == NULL) {
         return;
+    }
 
     mi::mdl::Position const *pos = var_def->get_position();
-    if (pos == NULL)
+    if (pos == NULL) {
         return;
+    }
 
     set_curr_pos(*pos);
 
@@ -2112,7 +2127,7 @@ void Function_context::add_debug_info(mi::mdl::IDefinition const *var_def) {
         scope->getContext(), start_line, start_column, scope);
 
     llvm::DILocalVariable *var;
-    if (is_parameter)
+    if (is_parameter) {
         var = m_di_builder->createParameterVariable(
             scope,
             var_def->get_symbol()->get_name(),
@@ -2121,7 +2136,7 @@ void Function_context::add_debug_info(mi::mdl::IDefinition const *var_def) {
             start_line,
             diType,
             true);  // preserve even in optimized builds
-    else
+    } else {
         var = m_di_builder->createAutoVariable(
             scope,
             var_def->get_symbol()->get_name(),
@@ -2129,6 +2144,7 @@ void Function_context::add_debug_info(mi::mdl::IDefinition const *var_def) {
             start_line,
             diType,
             true);  // preserve even in optimized builds
+    }
     MDL_ASSERT(var);
 
     m_di_builder->insertDeclare(
@@ -2156,18 +2172,21 @@ mi::mdl::IDefinition const *Function_context::find_parameter_for_size(
         mi::mdl::IDefinition const *p_def  = m_accesible_parameters[i];
         mi::mdl::IType_array const *a_type = as<mi::mdl::IType_array>(p_def->get_type());
 
-        if (a_type == NULL)
+        if (a_type == NULL) {
             continue;
-        if (a_type->is_immediate_sized())
+        }
+        if (a_type->is_immediate_sized()) {
             continue;
+        }
         mi::mdl::IType_array_size const *size = a_type->get_deferred_size();
 
         // Beware: we extracted the type from an definition that might originate from
         // another module, hence we cannot compare the symbols directly
         mi::mdl::ISymbol const *size_sym = size->get_size_symbol();
 
-        if (strcmp(size_sym->get_name(), sym->get_name()) == 0)
+        if (strcmp(size_sym->get_name(), sym->get_name()) == 0) {
             return p_def;
+        }
     }
     return NULL;
 }
@@ -2307,8 +2326,9 @@ llvm::Value *Function_context::get_dual_comp(llvm::Value *dual, unsigned int com
 // Get the value of the dual value.
 llvm::Value *Function_context::get_dual_val(llvm::Value *dual)
 {
-    if (m_type_mapper.is_deriv_type(dual->getType()))
+    if (m_type_mapper.is_deriv_type(dual->getType())) {
         return m_ir_builder.CreateExtractValue(dual, { 0 }, "val");
+    }
     return dual;
 }
 
@@ -2321,16 +2341,18 @@ llvm::Value *Function_context::get_dual_val_ptr(llvm::Value *dual_ptr)
 // Get the dx component of the dual value.
 llvm::Value *Function_context::get_dual_dx(llvm::Value *dual)
 {
-    if (m_type_mapper.is_deriv_type(dual->getType()))
+    if (m_type_mapper.is_deriv_type(dual->getType())) {
         return m_ir_builder.CreateExtractValue(dual, { 1 }, "dx");
+    }
     return llvm::Constant::getNullValue(dual->getType());
 }
 
 // Get the dy component of the dual value.
 llvm::Value *Function_context::get_dual_dy(llvm::Value *dual)
 {
-    if (m_type_mapper.is_deriv_type(dual->getType()))
+    if (m_type_mapper.is_deriv_type(dual->getType())) {
         return m_ir_builder.CreateExtractValue(dual, { 2 }, "dy");
+    }
     return llvm::Constant::getNullValue(dual->getType());
 }
 
@@ -2353,10 +2375,12 @@ llvm::PointerType *Function_context::get_ptr(llvm::Type *type)
 // Get the number of elements of a struct, array or vector type.
 static unsigned get_type_num_elements(llvm::Type const *type)
 {
-    if (llvm::ArrayType const *at = llvm::dyn_cast<llvm::ArrayType>(type))
+    if (llvm::ArrayType const *at = llvm::dyn_cast<llvm::ArrayType>(type)) {
         return unsigned(at->getNumElements());
-    if (llvm::FixedVectorType const *vt = llvm::dyn_cast<llvm::FixedVectorType>(type))
+    }
+    if (llvm::FixedVectorType const *vt = llvm::dyn_cast<llvm::FixedVectorType>(type)) {
         return unsigned(vt->getNumElements());
+    }
     MDL_ASSERT(llvm::isa<llvm::StructType>(type));
     return type->getStructNumElements();
 }
@@ -2366,10 +2390,12 @@ static unsigned get_type_num_elements(llvm::Type const *type)
 // Get the type of the first element a struct, array or vector type.
 static llvm::Type *get_type_first_type(llvm::Type const *type)
 {
-    if (llvm::ArrayType const *at = llvm::dyn_cast<llvm::ArrayType>(type))
+    if (llvm::ArrayType const *at = llvm::dyn_cast<llvm::ArrayType>(type)) {
         return at->getElementType();
-    if (llvm::VectorType const *vt = llvm::dyn_cast<llvm::VectorType>(type))
+    }
+    if (llvm::VectorType const *vt = llvm::dyn_cast<llvm::VectorType>(type)) {
         return vt->getElementType();
+    }
     MDL_ASSERT(llvm::isa<llvm::StructType>(type));
     return type->getStructElementType(0);
 }
@@ -2492,8 +2518,7 @@ llvm::Value *Function_context::load_and_convert(llvm::Type *dst_type, llvm::Valu
         } else if (llvm::isa<llvm::VectorType>(src_type) && dst_type->isAggregateType()) {
             // special case: float3x3 vector to float3x3 struct (same for double)
             llvm::FixedVectorType *src_vtype = llvm::cast<llvm::FixedVectorType>(src_type);
-            if (src_vtype->getNumElements() == 9 && dst_type->isStructTy())
-            {
+            if (src_vtype->getNumElements() == 9 && dst_type->isStructTy()) {
                 MDL_ASSERT(
                     get_type_num_elements(dst_type) == 3 &&
                     get_type_num_elements(get_type_first_type(dst_type)) == 3 &&
@@ -2529,13 +2554,12 @@ llvm::Value *Function_context::load_and_convert(llvm::Type *dst_type, llvm::Valu
                 return res;
             }
         } else if (llvm::isa<llvm::IntegerType>(src_type) &&
-                dst_type == llvm::IntegerType::get(m_llvm_context, 1)) {
+            dst_type == llvm::IntegerType::get(m_llvm_context, 1)) {
             // convert from integer to 1-bit bool
             llvm::Value *val = m_ir_builder.CreateLoad(ptr);
             return m_ir_builder.CreateICmpNE(val, llvm::ConstantInt::getNullValue(src_type));
-        }
-        else if (src_type == m_type_mapper.get_float2_type() &&
-                 dst_type == llvm::IntegerType::get(m_llvm_context, 64))
+        } else if (src_type == m_type_mapper.get_float2_type() &&
+            dst_type == llvm::IntegerType::get(m_llvm_context, 64))
         {
             // convert from float2 to integer 64
             // (generated by Clang for float2 returns, assumes win32-x64 calling convention)
@@ -2713,8 +2737,9 @@ int Function_context::instantiate_type_size(
     IType_array const *a_type = as<IType_array>(type);
     if (a_type != NULL && !a_type->is_immediate_sized()) {
         Array_size_map::const_iterator it(m_array_size_map.find(a_type->get_deferred_size()));
-        if (it != m_array_size_map.end())
+        if (it != m_array_size_map.end()) {
             return it->second;
+        }
     }
     return -1;
 }
@@ -3430,68 +3455,84 @@ llvm::FunctionCallee Function_context::get_tex_lookup_func(
 int Function_context::get_dbg_curr_line()
 {
     int curr_line = 0;
-    if (m_curr_pos != NULL)
+    if (m_curr_pos != NULL) {
         curr_line = m_curr_pos->get_start_line();
+    }
     return curr_line;
 }
 
 // Get the current file name (computed from current position debug info)
 char const *Function_context::get_dbg_curr_filename()
 {
-    if (m_code_gen.module_stack_empty())
+    if (m_code_gen.module_stack_empty()) {
         return "<unknown>";
+    }
 
     mi::mdl::IModule const *mod = m_code_gen.tos_module();
     char const *fname = mod->get_filename();
-    if (fname != NULL && fname[0] == '\0')
+    if (fname != NULL && fname[0] == '\0') {
         fname = NULL;
+    }
 
     if (fname == NULL /* && is_compilerowned */) {
         // built-in modules and string modules have no file name, which is bad
         // especially for base, try to fix that.
         char const *mod_name = mod->get_name();
 
-        if (mod_name[0] == ':' && mod_name[1] == ':')
+        if (mod_name[0] == ':' && mod_name[1] == ':') {
             mod_name += 2;
+        }
 
         switch (mod_name[0]) {
         case 'a':
-            if (strcmp("anno", mod_name) == 0)
+            if (strcmp("anno", mod_name) == 0) {
                 fname = "anno.mdl";
+            }
             break;
         case 'b':
-            if (strcmp("base", mod_name) == 0)
+            if (strcmp("base", mod_name) == 0) {
                 fname = "base.mdl";
+            }
             break;
         case 'd':
-            if (strcmp("df", mod_name) == 0)
+            if (strcmp("df", mod_name) == 0) {
                 fname = "df.mdl";
-            else if (strcmp("debug", mod_name) == 0)
+            } else if (strcmp("debug", mod_name) == 0) {
                 fname = "debug.mdl";
+            }
             break;
         case 'l':
-            if (strcmp("limits", mod_name) == 0)
+            if (strcmp("limits", mod_name) == 0) {
                 fname = "limits.mdl";
+            }
             break;
         case 'm':
-            if (strcmp("math", mod_name) == 0)
+            if (strcmp("math", mod_name) == 0) {
                 fname = "math.mdl";
+            }
             break;
         case 'n':
-            if (strcmp("noise", mod_name) == 0)
-                fname = "noise.mdl";
-            else if (strcmp("nvidia::df", mod_name) == 0)
+            if (strcmp("nvidia::OSL", mod_name) == 0) {
+                fname = "nvidia/OSL.mdl";
+            } else if (strcmp("nvidia::baking", mod_name) == 0) {
+                fname = "nvidia/baking.mdl";
+            } else if (strcmp("nvidia::df", mod_name) == 0) {
                 fname = "nvidia/df.mdl";
+            }
             break;
         case 's':
-            if (strcmp("state", mod_name) == 0)
+            if (strcmp("scene", mod_name) == 0) {
+                fname = "scene.mdl";
+            } else if (strcmp("state", mod_name) == 0) {
                 fname = "state.mdl";
-            else if (strcmp("std", mod_name) == 0)
+            } else if (strcmp("std", mod_name) == 0) {
                 fname = "std.mdl";
+            }
             break;
         case 't':
-            if (strcmp("tex", mod_name) == 0)
+            if (strcmp("tex", mod_name) == 0) {
                 fname = "tex.mdl";
+            }
             break;
         }
     }

@@ -5488,10 +5488,19 @@ public:
     }
 
     float estimate(const float cosine) const {
+        if (m_coating_thickness <= 0.0f || math::average(m_coating_ior) == 1.0f) {
+            // ignore thin_film
+            return ior_fresnel(m_ior.y / m_ior.x, cosine);
+        }
         return math::luminance(eval(cosine));
     }
 
     float3 eval(const float cosine) const {
+        if (m_coating_thickness <= 0.0f || math::average(m_coating_ior) == 1.0f) {
+            // ignore thin_film
+            const float f = ior_fresnel(m_ior.y / m_ior.x, cosine);
+            return make_float3(f, f, f);
+        }
         return thin_film_factor(m_coating_thickness, m_coating_ior, make<float3>(m_ior.y), make<float3>(0.0f), make<float3>(m_ior.x), cosine);
      }
 

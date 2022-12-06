@@ -1053,7 +1053,6 @@ void Mdl_module::init_module( DB::Transaction* transaction, Execution_context* c
         m_code_dag.get(),
         /*immutable*/ true,
         /*create_direct_calls*/ false,
-        m_file_name.c_str(),
         m_mdl_name.c_str(),
         /*prototype_tag*/ DB::Tag(),
         resolve_resources,
@@ -1128,23 +1127,23 @@ void Mdl_module::init_module( DB::Transaction* transaction, Execution_context* c
             m_code_dag->get_annotation_semantics(i));
 
         // get version information
-        mi::mdl::IMDL::MDL_version since_version;
-        mi::mdl::IMDL::MDL_version removed_version;
+        mi::neuraylib::Mdl_version since_version;
+        mi::neuraylib::Mdl_version removed_version;
         const mi::mdl::Module* module_impl = mi::mdl::impl_cast<mi::mdl::Module>( m_module.get());
         if( !module_impl->is_stdlib() && !module_impl->is_builtins()) {
-            since_version   = module_impl->get_mdl_version();
-            removed_version = mi_mdl_IMDL_MDL_VERSION_INVALID;
+            since_version   = convert_mdl_version( module_impl->get_mdl_version());
+            removed_version = mi::neuraylib::MDL_VERSION_INVALID;
         } else {
             const mi::mdl::Definition* def = mi::mdl::impl_cast<mi::mdl::Definition>( module_impl->find_signature(
                 core_name, /*only_exported*/ !m_module->is_builtins(), /*find_function*/ false));
             if( !def) {
                 // ::math::const_expr() and ::...::native() have no definition
-                since_version   = module_impl->get_mdl_version();
-                removed_version = mi_mdl_IMDL_MDL_VERSION_INVALID;
+                since_version   = convert_mdl_version( module_impl->get_mdl_version());
+                removed_version = mi::neuraylib::MDL_VERSION_INVALID;
             } else {
                 unsigned flags = def->get_version_flags();
-                since_version   = static_cast<mi::mdl::IMDL::MDL_version>( mi::mdl::mdl_since_version( flags));
-                removed_version = static_cast<mi::mdl::IMDL::MDL_version>( mi::mdl::mdl_removed_version( flags));
+                since_version   = convert_mdl_version_uint32( mi::mdl::mdl_since_version( flags));
+                removed_version = convert_mdl_version_uint32( mi::mdl::mdl_removed_version( flags));
             }
         }
 

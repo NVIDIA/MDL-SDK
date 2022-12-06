@@ -71,6 +71,8 @@ Resource_callback::Resource_callback(
     m_module_name( module_name),
     m_context( context),
     m_bundle_resources( context->get_option<bool>( MDL_CTX_OPTION_BUNDLE_RESOURCES)),
+    m_add_module_prefix(
+        context->get_option<bool>( MDL_CTX_OPTION_EXPORT_RESOURCES_WITH_MODULE_PREFIX)),
     m_keep_original_file_paths(
         context->get_option<bool>( MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS)),
     m_result( result, mi::base::DUP_INTERFACE),
@@ -87,7 +89,9 @@ Resource_callback::Resource_callback(
         m_module_filename_c_str = m_module_filename.c_str();
         mi::Size length = m_module_filename.length();
         ASSERT( M_NEURAY_API, length >= 4 && m_module_filename.substr( length-4) == ".mdl");
-        m_path_prefix = m_module_filename.substr( 0, length-4);
+        m_path_prefix = m_add_module_prefix
+            ? m_module_filename.substr( 0, length-4) + '_'
+            : get_directory( m_module_filename) + HAL::Ospath::sep();
     }
 }
 
@@ -746,10 +750,11 @@ std::string Resource_callback::get_new_resource_filename(
 
     std::string s, old_extension;
 
+    std::string old_root;
     if( old_filename) {
-        std::string old_root;
         HAL::Ospath::splitext( strip_directories( old_filename), old_root, old_extension);
-        s = m_path_prefix + "_" + old_root;
+        s = m_path_prefix;
+        s += old_root;
         s += use_new_extension ? std::string( new_extension) : old_extension;
         if( !DISK::is_file( s.c_str()))
             return s;
@@ -757,7 +762,8 @@ std::string Resource_callback::get_new_resource_filename(
 
     do {
         std::ostringstream ss;
-        ss << m_path_prefix << "_resource_" << m_counter++;
+        ss << m_path_prefix;
+        ss << (old_filename ? old_root.c_str() : "resource") << "_" << m_counter++;
         ss << (use_new_extension ? std::string( new_extension) : old_extension);
         s = ss.str();
     }  while( DISK::is_file( s.c_str()));
@@ -781,16 +787,18 @@ std::string Resource_callback::get_new_resource_filename_marker(
 
     std::string s, old_extension;
 
+    std::string old_root;
     if( old_filename) {
-        std::string old_root;
         HAL::Ospath::splitext( strip_directories( old_filename), old_root, old_extension);
-        s = m_path_prefix + "_" + old_root;
+        s = m_path_prefix;
+        s += old_root;
         s += use_new_extension ? std::string( new_extension) : old_extension;
         return s;
     }
 
     std::ostringstream ss;
-    ss << m_path_prefix << "_resource_" << m_counter++;
+    ss << m_path_prefix;
+    ss << (old_filename ? old_root.c_str() : "resource") << "_" << m_counter++;
     s = ss.str();
 
     if( add_sequence_marker) {
@@ -838,6 +846,12 @@ std::string Resource_callback::strip_directories( const std::string& filename)
 {
     mi::Size separator = filename.find_last_of( "/\\:");
     return separator != std::string::npos ? filename.substr( separator+1) : filename;
+}
+
+std::string Resource_callback::get_directory( const std::string& filename)
+{
+    mi::Size separator = filename.find_last_of( "/\\:");
+    return separator != std::string::npos ? filename.substr( 0, separator) : std::string();
 }
 
 std::string Resource_callback::construct_mdl_file_path(

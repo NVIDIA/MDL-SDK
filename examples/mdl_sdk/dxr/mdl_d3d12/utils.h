@@ -54,6 +54,17 @@ namespace mi { namespace examples { namespace mdl_d3d12
     const float SQRT_2 = 1.41421356237f;
     const float SQRT_3 = 1.73205080757f;
 
+    enum class Log_level : char
+    {
+        None = 0,
+        Error,
+        Warning,
+        Info,
+        Verbose
+    };
+
+    void set_log_level(Log_level level);
+
     void log_verbose(
         const std::string& message,
         const std::string& file = "",

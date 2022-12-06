@@ -131,14 +131,13 @@ mi::Uint32 Mdl_material_target::Resource_callback::get_resource_index(
             break;
         }
 
-        // currently not supported by this example
-        // case mi::neuraylib::IValue::VK_LIGHT_PROFILE:
-        //     kind = Mdl_resource_kind::Light_profile;
-        //     break;
-        //
-        // case mi::neuraylib::IValue::VK_BSDF_MEASUREMENT:
-        //     kind = Mdl_resource_kind::Bsdf_measurement;
-        //     break;
+        case mi::neuraylib::IValue::VK_LIGHT_PROFILE:
+            kind = Mdl_resource_kind::Light_profile;
+            break;
+        
+        case mi::neuraylib::IValue::VK_BSDF_MEASUREMENT:
+            kind = Mdl_resource_kind::Bsdf_measurement;
+            break;
 
         default:
             log_error("Invalid resource kind for: " + std::string(name), SRC);
@@ -174,7 +173,7 @@ mi::Uint32 Mdl_material_target::Resource_callback::get_string_index(
 
     // invalid (or empty) string
     const char* name = s->get_value();
-    if (!name)
+    if (!name || name[0] == '\0')
     {
         return 0;
     }
@@ -191,12 +190,16 @@ mi::Uint32 Mdl_material_target::Resource_callback::get_string_index(
 
 namespace
 {
-    std::atomic<size_t> sa_target_code_id(0);
+    std::atomic<size_t> sa_target_code_id(1);
 }
-Mdl_material_target::Mdl_material_target(Base_application* app, Mdl_sdk* sdk)
+Mdl_material_target::Mdl_material_target(
+    Base_application* app,
+    Mdl_sdk* sdk,
+    const std::string& compiled_material_hash)
     : m_app(app)
     , m_sdk(sdk)
     , m_id(sa_target_code_id.fetch_add(1))
+    , m_compiled_material_hash(compiled_material_hash)
     , m_target_code(nullptr)
     , m_generation_required(true)
     , m_hlsl_source_code("")
@@ -357,23 +360,6 @@ void Mdl_material_target::register_material(Mdl_material* material)
     m_generation_required = true;
     m_compilation_required = true;
 
-    // already registered with this target code
-    if (current_target == this)
-        return;
-
-    // unregister from current target
-    else if (current_target != nullptr)
-    {
-        std::unique_lock<std::mutex> lock(current_target->m_materials_mtx);
-        auto found = current_target->m_materials.find(material->get_id());
-        if (found != current_target->m_materials.end())
-        {
-            current_target->m_materials.erase(found);
-            current_target->m_generation_required = true;
-            current_target->m_compilation_required = true;
-        }
-    }
-
     // register with this target code
     std::unique_lock<std::mutex> lock(m_materials_mtx);
     m_materials[material->get_id()] = material;
@@ -393,6 +379,7 @@ bool Mdl_material_target::unregister_material(Mdl_material* material)
     auto found = m_materials.find(material->get_id());
     if (found != m_materials.end())
     {
+        material->reset_target_interface();
         m_materials.erase(found);
         m_generation_required = true;
         m_compilation_required = true;
@@ -619,6 +606,24 @@ bool Mdl_material_target::generate()
         m_target_resources[Mdl_resource_kind::Texture].emplace_back(assignment);
     }
 
+    // add all light profiles known to the link unit
+    for (size_t i = 1, n = m_target_code->get_body_light_profile_count(); i < n; ++i)
+    {
+        Mdl_resource_assignment assignment(Mdl_resource_kind::Light_profile);
+        assignment.resource_name = m_target_code->get_light_profile(i);
+        assignment.runtime_resource_id = i;
+        m_target_resources[Mdl_resource_kind::Light_profile].emplace_back(assignment);
+    }
+
+    // add all bsdf measurements known to the link unit
+    for (size_t i = 1, n = m_target_code->get_body_bsdf_measurement_count(); i < n; ++i)
+    {
+        Mdl_resource_assignment assignment(Mdl_resource_kind::Bsdf_measurement);
+        assignment.resource_name = m_target_code->get_bsdf_measurement(i);
+        assignment.runtime_resource_id = i;
+        m_target_resources[Mdl_resource_kind::Bsdf_measurement].emplace_back(assignment);
+    }
+
     // add all string constants known to the link unit
     m_target_string_constants.clear();
     for (size_t i = 1, n = m_target_code->get_string_constant_count(); i < n; ++i)
@@ -785,16 +790,23 @@ bool Mdl_material_target::generate()
     // per material data
     m_hlsl_source_code += "#define MDL_MATERIAL_REGISTER_SPACE space3\n"; // there are more
     m_hlsl_source_code += "#define MDL_MATERIAL_ARGUMENT_BLOCK_SLOT t1\n";
-    m_hlsl_source_code += "#define MDL_MATERIAL_RESOURCE_INFO_SLOT t2\n";
+    m_hlsl_source_code += "#define MDL_MATERIAL_TEXTURE_INFO_SLOT t2\n";
+    m_hlsl_source_code += "#define MDL_MATERIAL_LIGHT_PROFILE_INFO_SLOT t3\n";
+    m_hlsl_source_code += "#define MDL_MATERIAL_MBSDF_INFO_SLOT t4\n";
     m_hlsl_source_code += "\n";
     m_hlsl_source_code += "#define MDL_MATERIAL_TEXTURE_2D_REGISTER_SPACE space4\n";
     m_hlsl_source_code += "#define MDL_MATERIAL_TEXTURE_3D_REGISTER_SPACE space5\n";
     m_hlsl_source_code += "#define MDL_MATERIAL_TEXTURE_SLOT_BEGIN t0\n";
     m_hlsl_source_code += "\n";
+    m_hlsl_source_code += "#define MDL_MATERIAL_BUFFER_REGISTER_SPACE space6\n";
+    m_hlsl_source_code += "#define MDL_MATERIAL_BUFFER_SLOT_BEGIN t0\n";
+    m_hlsl_source_code += "\n";
 
     // global data
     m_hlsl_source_code += "#define MDL_TEXTURE_SAMPLER_SLOT s0\n";
-    m_hlsl_source_code += "#define MDL_LATLONGMAP_SAMPLER_SLOT s1\n";
+    m_hlsl_source_code += "#define MDL_LIGHT_PROFILE_SAMPLER_SLOT s1\n";
+    m_hlsl_source_code += "#define MDL_MBSDF_SAMPLER_SLOT s2\n";
+    m_hlsl_source_code += "#define MDL_LATLONGMAP_SAMPLER_SLOT s3\n";
     m_hlsl_source_code += "#define MDL_NUM_TEXTURE_RESULTS " +
         std::to_string(m_app->get_options()->texture_results_cache_size) + "\n";
 

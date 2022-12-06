@@ -41,6 +41,9 @@
 #include "mdl_elements_expression.h"
 
 #include <sstream>
+
+#include <boost/core/ignore_unused.hpp>
+
 #include <mi/base/handle.h>
 #include <mi/mdl/mdl_mdl.h>
 #include <mi/mdl/mdl_symbols.h>
@@ -432,6 +435,8 @@ mi::Sint32 Mdl_function_call::set_argument(
 
     mi::base::Handle<IExpression> argument_copy(
         m_ef->clone( argument, transaction, /*copy_immutable_calls=*/ true));
+    if( !argument_copy)
+        return -6;
 
     if( needs_cast) {
         mi::Sint32 errors = 0;
@@ -483,7 +488,7 @@ mi::Sint32 Mdl_function_call::reset_argument(
 
         // clone the default (also resolves parameter references)
         std::vector<mi::base::Handle<const IExpression> > call_context;
-        for( mi::Size i = 0; i+1 < index; ++i)
+        for( mi::Size i = 0; i < index; ++i)
             call_context.push_back( make_handle( m_arguments->get_expression( i)));
         argument = deep_copy( m_ef.get(), transaction, argument.get(), call_context);
         ASSERT( M_SCENE, argument);
@@ -772,13 +777,10 @@ mi::mdl::IGenerated_code_lambda_function* Mdl_function_call::create_jitted_funct
             name.c_str(), mi::mdl::IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS, args, 1, f_type);
     }
 
-    if( !environment_context )
-    {
-#ifdef ENABLE_ASSERT
-        size_t idx =
-#endif
-            lambda_func->store_root_expr( call);
-        ASSERT( M_SCENE, idx == 0 );
+    if( !environment_context) {
+        size_t idx = lambda_func->store_root_expr( call);
+        ASSERT( M_SCENE, idx == 0);
+        boost::ignore_unused( idx);
     } else {
         lambda_func->set_body( call);
     }
@@ -804,80 +806,74 @@ mi::mdl::IGenerated_code_lambda_function* Mdl_function_call::create_jitted_funct
     return jitted_func;
 }
 
-/// This Transaction caches ids, tags, and info over its life time.
-/// Do NOT use it in general, but it greatly speeds up material creation.
-class Caching_transaction : public DB::Transaction_wrapper {
+/// This transaction wrapper caches results of various methods on DB::Transaction.
+///
+/// The cache assumes that the transaction's view on the database does *not* change during the
+/// caches lifetime. Do *not* use the cache if this not guaranteed.
+///
+/// Cached methods: get_class_id(), name_to_tag(), get_element().
+class Caching_transaction : public DB::Transaction_wrapper
+{
 public:
-    Caching_transaction(DB::Transaction* transaction) : DB::Transaction_wrapper(transaction) {}
+    Caching_transaction( DB::Transaction* transaction)
+      : DB::Transaction_wrapper( transaction) { }
 
-    ~Caching_transaction() {
-        // unpin all cache entries
-        for (auto &entry : m_elements) {
+    ~Caching_transaction()
+    {
+        for( auto &entry : m_elements)
             entry.second->unpin();
-        }
     }
 
-    SERIAL::Class_id get_class_id(DB::Tag tag) final
+    SERIAL::Class_id get_class_id( DB::Tag tag) final
     {
-        auto it = m_class_ids.find(tag);
-        if (it != m_class_ids.end()) {
+        auto it = m_class_ids.find( tag);
+        if( it != m_class_ids.end())
             return it->second;
-        }
-        else {
-            SERIAL::Class_id class_id = m_transaction->get_class_id(tag);
-            m_class_ids[tag] = class_id;
-            return class_id;
-        }
+
+        SERIAL::Class_id class_id = m_transaction->get_class_id( tag);
+        m_class_ids[tag] = class_id;
+        return class_id;
     }
 
-    DB::Tag name_to_tag(const char* name) final
+    // Invalid tags are not cached. Unclear if relevant.
+    DB::Tag name_to_tag( const char* name) final
     {
-        auto it = m_tags.find(name);
-        if (it != m_tags.end()) {
+        auto it = m_tags.find( name);
+        if( it != m_tags.end())
             return it->second;
-        }
-        else {
-            DB::Tag tag = m_transaction->name_to_tag(name);
-            if (tag) {
-                m_tags[name] = tag;
-            }
-            return tag;
-        }
+
+        DB::Tag tag = m_transaction->name_to_tag( name);
+        if( tag)
+            m_tags[name] = tag;
+        return tag;
     }
 
-    DB::Info* get_element(DB::Tag tag, bool do_wait) final
+    DB::Info* get_element( DB::Tag tag, bool do_wait) final
     {
-        auto it = m_elements.find(tag);
-        if (it != m_elements.end()) {
+        auto it = m_elements.find( tag);
+        if( it != m_elements.end()) {
             it->second->pin();
             return it->second;
         }
-        else {
-            DB::Info* element = m_transaction->get_element(tag);
-            // pin it because we will hold it in the cache
-            element->pin();
-            m_elements[tag] = element;
-            return element;
-        }
+
+        DB::Info* element = m_transaction->get_element( tag, do_wait);
+        element->pin();
+        m_elements[tag] = element;
+        return element;
     }
 
 private:
-    // allow comparison of raw strings with c++ strings to avoid temp
-    // std::string construction when searching in a map.
-    struct String_less {
+    // Allow comparisons of C-style string with std::strings to avoid temporaries when searching in
+    // a map.
+    struct String_less
+    {
         using is_transparent = void;
-
-        bool operator()(const std::string &lhs, const char *rhs) const {
-            return strcmp(lhs.c_str(), rhs) < 0;
-        }
-
-        bool operator()(const char *lhs, const std::string &rhs) const {
-            return strcmp(lhs, rhs.c_str()) < 0;
-        }
-
-        bool operator()(const std::string &lhs, const std::string &rhs) const {
-            return lhs < rhs;
-        }
+        bool operator()( const std::string& lhs, const char* rhs) const
+        { return strcmp( lhs.c_str(), rhs) < 0; }
+        bool operator()( const char* lhs, const std::string& rhs) const
+        { return strcmp( lhs, rhs.c_str()) < 0; }
+        bool operator()( const std::string& lhs, const std::string& rhs) const
+        { return lhs < rhs; }
     };
 
     std::map<DB::Tag, SERIAL::Class_id>         m_class_ids;

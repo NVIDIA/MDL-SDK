@@ -31,7 +31,7 @@
 #
 # The script manipulates the layout direction of the class diagrams. Most
 # class diagrams look better in top-down direction, but a few need to be in
-# left-right direction. Other diagrams are untouched.
+# left-right direction. Interface IDs are removed everywhere.
 #*****************************************************************************
 
 # The home of GraphViz dot can be passed into this script as environment variable.
@@ -62,7 +62,7 @@ case $PLATFORM in
 esac
 
 # Remove all explicit line breaks and IIDs.
-sed $sed_i 's/\\l//g;s/0x........, 0x...., 0x...., 0x.., 0x.., 0x.., 0x.., 0x.., 0x.., 0x.., 0x../\.\.\./g' $FILENAME
+sed $sed_i -E 's/\\l//g;s/0x[0-9a-f]{1,8}(, 0x[0-9a-f]{1,4}){2}(, 0x[0-9a-f]{1,2}){8}/\.\.\./g' $FILENAME
 rm $FILENAME.bak
 
 # Use alternate direction for some inheritance diagrams.

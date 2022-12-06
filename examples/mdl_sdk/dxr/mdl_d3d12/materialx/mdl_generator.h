@@ -66,7 +66,7 @@ namespace mi {namespace examples { namespace mdl_d3d12 { namespace materialx
         void add_library(const std::string& mtlx_library);
 
         /// set the main mtlx file of the material to generate code from.
-        bool set_source(const std::string& mtlx_material);
+        bool set_source(const std::string& mtlx_material, const std::string& material_name);
 
         /// generate mdl code
         /// TODO: - handle multiple materials and functions
@@ -77,6 +77,7 @@ namespace mi {namespace examples { namespace mdl_d3d12 { namespace materialx
         std::vector<std::string> m_mtlx_search_paths;
         std::vector<std::string> m_mtlx_relative_library_paths;
         std::string m_mtlx_source;
+        std::string m_mtlx_material_name;
     };
 
 }}}}

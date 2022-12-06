@@ -35,6 +35,7 @@
 #include <cstdio>               // for fflush/stderr
 #include <cstring>              // for strerror.h
 #include <cstdlib>
+using namespace std::string_literals;
 
 #ifndef WIN_NT
 #include <unistd.h>
@@ -188,14 +189,14 @@ std::string get_tmpdir()
     env = get_env("TEMP");
     if (!env.empty())
         return env;
-    return std::string("/tmp");
+    return "/tmp"s;
 #else
     const DWORD bufsize = MAX_PATH+1;
     char buf[bufsize];
     const DWORD len = ::GetTempPath(bufsize, buf);
 
     if (len == 0 || len > bufsize)
-        return std::string(".");
+        return "."s;
 
     // remove trailing '\' since _stat() gets confused
     const std::string dir(buf, (buf[len-1] == '\\' || buf[len-1] == '/')? len-1 : len);
@@ -213,7 +214,7 @@ std::string get_userdata_dir()
 {
 #ifndef WIN_NT
     std::string env = get_env("HOME");
-    return !env.empty() ? env : std::string(".");
+    return !env.empty() ? env : "."s;
 #else
     char sz_path[MAX_PATH];
     HRESULT hresult = ::SHGetFolderPath(NULL,
@@ -230,7 +231,7 @@ std::string get_userdata_dir()
         return std::string(sz_path);
     }
     else
-        return std::string(".");
+        return "."s;
 #endif
 }
 

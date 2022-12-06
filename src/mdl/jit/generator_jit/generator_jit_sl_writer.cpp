@@ -1784,12 +1784,16 @@ typename SLWriterPass<BasePass>::Value *SLWriterPass<BasePass>::translate_consta
     case llvm::Type::FloatTyID:
         return Base::m_value_factory.get_float(apfloat.convertToFloat());
     case llvm::Type::DoubleTyID:
-        return Base::m_value_factory.get_double(apfloat.convertToDouble());
+        if (Base::has_double_type()) {
+            return Base::m_value_factory.get_double(apfloat.convertToDouble());
+        } else {
+            return Base::m_value_factory.get_float(float(apfloat.convertToDouble()));
+        }
     case llvm::Type::X86_FP80TyID:
     case llvm::Type::FP128TyID:
     case llvm::Type::PPC_FP128TyID:
         MDL_ASSERT(!"unexpected float literal type");
-        return Base::m_value_factory.get_double(apfloat.convertToDouble());
+        // fallthrough
     default:
         break;
     }
@@ -1854,18 +1858,24 @@ typename SLWriterPass<BasePass>::Value *SLWriterPass<BasePass>::translate_consta
         }
         break;
 
-    case llvm::Type::X86_FP80TyID:
-    case llvm::Type::FP128TyID:
-    case llvm::Type::PPC_FP128TyID:
-        MDL_ASSERT(!"unexpected float literal type");
-        // fallthrough
     case llvm::Type::DoubleTyID:
-        sl_type = Base::m_tc.get_vector(Base::m_tc.double_type, num_elems);
-        for (size_t i = 0; i < num_elems; ++i) {
-            values[i] = Base::m_value_factory.get_double(cv->getElementAsDouble(i));
+        if (Base::has_double_type()) {
+            sl_type = Base::m_tc.get_vector(Base::m_tc.double_type, num_elems);
+            for (size_t i = 0; i < num_elems; ++i) {
+                values[i] = Base::m_value_factory.get_double(cv->getElementAsDouble(i));
+            }
+        } else {
+            sl_type = Base::m_tc.get_vector(Base::m_tc.float_type, num_elems);
+            for (size_t i = 0; i < num_elems; ++i) {
+                values[i] = Base::m_value_factory.get_float(float(cv->getElementAsDouble(i)));
+            }
         }
         break;
 
+    case llvm::Type::X86_FP80TyID:
+    case llvm::Type::FP128TyID:
+    case llvm::Type::PPC_FP128TyID:
+        // fallthrough
     default:
         MDL_ASSERT(!"invalid vector literal type");
         return Base::m_value_factory.get_bad();
@@ -1931,18 +1941,24 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_constan
         }
         break;
 
-    case llvm::Type::X86_FP80TyID:
-    case llvm::Type::FP128TyID:
-    case llvm::Type::PPC_FP128TyID:
-        MDL_ASSERT(!"unexpected float literal type");
-        // fallthrough
     case llvm::Type::DoubleTyID:
-        sl_type = cast<Type_array>(Base::m_tc.get_array(Base::m_tc.double_type, num_elems));
-        for (size_t i = 0; i < num_elems; ++i) {
-            values[i] = Base::m_value_factory.get_double(cv->getElementAsDouble(i));
+        if (Base::has_double_type()) {
+            sl_type = cast<Type_array>(Base::m_tc.get_array(Base::m_tc.double_type, num_elems));
+            for (size_t i = 0; i < num_elems; ++i) {
+                values[i] = Base::m_value_factory.get_double(cv->getElementAsDouble(i));
+            }
+        } else {
+            sl_type = cast<Type_array>(Base::m_tc.get_array(Base::m_tc.float_type, num_elems));
+            for (size_t i = 0; i < num_elems; ++i) {
+                values[i] = Base::m_value_factory.get_float(float(cv->getElementAsDouble(i)));
+            }
         }
         break;
 
+    case llvm::Type::X86_FP80TyID:
+    case llvm::Type::FP128TyID:
+    case llvm::Type::PPC_FP128TyID:
+        // fallthrough
     default:
         MDL_ASSERT(!"invalid vector literal type");
         return Base::m_expr_factory.create_invalid(Base::zero_loc);

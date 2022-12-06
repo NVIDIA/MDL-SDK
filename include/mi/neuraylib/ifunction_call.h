@@ -129,7 +129,8 @@ public:
     ///
     /// \param arguments    The arguments. Note that the expressions are copied. This copy operation
     ///                     is a shallow copy, e.g., DB elements referenced in call expressions are
-    ///                     \em not copied.
+    ///                     \em not copied. The exception are (immutable) defaults, for which a
+    ///                     deep copy is performed.
     /// \return
     ///                     -  0: Success.
     ///                     - -1: Invalid parameters (\c NULL pointer).
@@ -155,7 +156,8 @@ public:
     /// \param index        The index of the argument.
     /// \param argument     The argument. Note that the expression is copied. This copy operation
     ///                     is a shallow copy, e.g., DB elements referenced in call expressions are
-    ///                     \em not copied.
+    ///                     \em not copied. The exception are (immutable) defaults, for which a
+    ///                     deep copy is performed.
     /// \return
     ///                     -  0: Success.
     ///                     - -1: Invalid parameters (\c NULL pointer).
@@ -178,7 +180,8 @@ public:
     /// \param name         The name of the parameter.
     /// \param argument     The argument. Note that the expression is copied. This copy operation
     ///                     is a shallow copy, e.g., DB elements referenced in call expressions are
-    ///                     \em not copied.
+    ///                     \em not copied. The exception are (immutable) defaults, for which a
+    ///                     deep copy is performed.
     /// \return
     ///                     -  0: Success.
     ///                     - -1: Invalid parameters (\c NULL pointer).

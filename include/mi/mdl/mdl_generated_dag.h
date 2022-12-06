@@ -526,6 +526,7 @@ public:
             MS_VOLUME_VDF_SCATTERING,           ///< .volume.scattering
             MS_VOLUME_ABSORPTION_COEFFICIENT,   ///< .volume.absorption_coefficient
             MS_VOLUME_SCATTERING_COEFFICIENT,   ///< .volume.scattering_coefficient
+            MS_VOLUME_EMISSION_INTENSITY,       ///< .volume.emission_intensity
 
             MS_GEOMETRY_DISPLACEMENT,           ///< .geometry.displacement
             MS_GEOMETRY_CUTOUT_OPACITY,         ///< .geometry.cutout_opacity

@@ -71,8 +71,8 @@ Mdl_function_definition::Mdl_function_definition()
     m_is_exported( false),
     m_is_uniform( false),
     m_is_material( false),
-    m_since_version( mi_mdl_IMDL_MDL_VERSION_INVALID),
-    m_removed_version( mi_mdl_IMDL_MDL_VERSION_INVALID),
+    m_since_version( mi::neuraylib::MDL_VERSION_INVALID),
+    m_removed_version( mi::neuraylib::MDL_VERSION_INVALID),
     m_function_hash()
 {
 }
@@ -135,7 +135,6 @@ Mdl_function_definition::Mdl_function_definition(
         mdl_code_dag,
         /*immutable*/ true,
         /*create_direct_calls*/ false,
-        module_filename,
         m_module_mdl_name.c_str(),
         m_prototype_tag,
         resolve_resources,
@@ -272,8 +271,8 @@ DB::Tag Mdl_function_definition::get_prototype() const
 void Mdl_function_definition::get_mdl_version(
     mi::neuraylib::Mdl_version& since, mi::neuraylib::Mdl_version& removed) const
 {
-    since   = MDL::convert_mdl_version( m_since_version);
-    removed = MDL::convert_mdl_version( m_removed_version);
+    since   = m_since_version;
+    removed = m_removed_version;
 }
 
 mi::neuraylib::IFunction_definition::Semantics Mdl_function_definition::get_semantic() const
@@ -385,7 +384,6 @@ const IExpression* Mdl_function_definition::get_body( DB::Transaction* transacti
         mdl_code_dag.get(),
         /*immutable*/ true,
         /*create_direct_calls*/ true,
-        /*module_filename*/ nullptr,
         /*module_mdl_name*/ nullptr,
         m_prototype_tag,
         /*resolve_resources*/ false,
@@ -445,7 +443,6 @@ const IExpression* Mdl_function_definition::get_temporary(
         mdl_code_dag.get(),
         /*immutable*/ true,
         /*create_direct_calls*/ true,
-        /*module_filename*/ nullptr,
         /*module_mdl_name*/ nullptr,
         m_prototype_tag,
         /*resolve_resources*/ false,
@@ -1239,22 +1236,22 @@ void Mdl_function_definition::compute_mdl_version( const mi::mdl::IModule* mdl_m
     const mi::mdl::Module* impl = mi::mdl::impl_cast<mi::mdl::Module>( mdl_module);
 
     if( m_is_material || (!mdl_module->is_stdlib() && !mdl_module->is_builtins())) {
-        m_since_version   = impl->get_mdl_version();
-        m_removed_version = mi_mdl_IMDL_MDL_VERSION_INVALID;
+        m_since_version   = convert_mdl_version( impl->get_mdl_version());
+        m_removed_version = mi::neuraylib::MDL_VERSION_INVALID;
         return;
     }
 
     if( m_semantic == mi::neuraylib::IFunction_definition::DS_CAST) {
-        m_since_version   = mi::mdl::IMDL::MDL_VERSION_1_5;
-        m_removed_version = mi_mdl_IMDL_MDL_VERSION_INVALID;
+        m_since_version   = mi::neuraylib::MDL_VERSION_1_5;
+        m_removed_version = mi::neuraylib::MDL_VERSION_INVALID;
         return;
     }
 
     if( mi::mdl::semantic_is_operator( m_mdl_semantic)
         || (   m_semantic >= mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_FIRST
             && m_semantic <= mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_LAST)) {
-        m_since_version   = mi::mdl::IMDL::MDL_VERSION_1_0;
-        m_removed_version = mi_mdl_IMDL_MDL_VERSION_INVALID;
+        m_since_version   = mi::neuraylib::MDL_VERSION_1_0;
+        m_removed_version = mi::neuraylib::MDL_VERSION_INVALID;
         return;
     }
 
@@ -1262,21 +1259,14 @@ void Mdl_function_definition::compute_mdl_version( const mi::mdl::IModule* mdl_m
         m_mdl_name.c_str(), /*only_exported*/ !mdl_module->is_builtins()));
     if( !def) {
         ASSERT( M_SCENE, !"definition not found");
-        m_since_version   = impl->get_mdl_version();
-        m_removed_version = mi_mdl_IMDL_MDL_VERSION_INVALID;
+        m_since_version   = convert_mdl_version( impl->get_mdl_version());
+        m_removed_version = mi::neuraylib::MDL_VERSION_INVALID;
         return;
     }
 
     unsigned flags = def->get_version_flags();
-    m_since_version   = static_cast<mi::mdl::IMDL::MDL_version>( mi::mdl::mdl_since_version( flags));
-    m_removed_version = static_cast<mi::mdl::IMDL::MDL_version>( mi::mdl::mdl_removed_version( flags));
-}
-
-void Mdl_function_definition::get_mdl_version(
-    mi::mdl::IMDL::MDL_version& since, mi::mdl::IMDL::MDL_version& removed) const
-{
-    since   = m_since_version;
-    removed = m_removed_version;
+    m_since_version   = convert_mdl_version_uint32( mi::mdl::mdl_since_version( flags));
+    m_removed_version = convert_mdl_version_uint32( mi::mdl::mdl_removed_version( flags));
 }
 
 const SERIAL::Serializable* Mdl_function_definition::serialize(

@@ -339,8 +339,6 @@ public:
     ///                               signature for materials, otherwise DB accesses are used.
     /// \param immutable_callees      \c true for defaults, \c false for arguments
     /// \param create_direct_calls    \c true creates EK_DIRECT_CALLs, \c false creates EK_CALLs
-    /// \param module_filename        The filename of the module (used for string-based resources
-    ///                               with relative filenames).
     /// \param module_mdl_name        The MDL module name.
     /// \param prototype_tag          The prototype_tag if relevant.
     /// \param resolve_resources      \c true, if resources are supposed to be loaded into the DB
@@ -353,7 +351,6 @@ public:
         const mi::mdl::IGenerated_code_dag* code_dag,
         bool immutable_callees,
         bool create_direct_calls,
-        const char* module_filename,
         const char* module_mdl_name,
         DB::Tag prototype_tag,
         bool resolve_resources,
@@ -427,7 +424,6 @@ private:
     bool m_immutable_callees;
     bool m_create_direct_calls;
 
-    const char* m_module_filename;
     const char* m_module_mdl_name;
     DB::Tag     m_prototype_tag; ///< The prototype of the mat. def. converted if relevant
     bool        m_resolve_resources;
@@ -607,46 +603,46 @@ mi::Uint32 get_hash(
 mi::neuraylib::IReader* create_reader( const std::string& data);
 
 /// Returns the minimal required MDL version for a function definition.
-mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
+mi::neuraylib::Mdl_version get_min_required_mdl_version(
     DB::Transaction* transaction, const Mdl_function_definition* definition);
 
 /// Returns the minimal required MDL version for a given value.
 ///
 /// Returns mi::mdl::IMDL::MDL_VERSION_1_0 for \c NULL arguments.
-mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
+mi::neuraylib::Mdl_version get_min_required_mdl_version(
     DB::Transaction* transaction, const IValue* value);
 
 /// Returns the minimal required MDL version for a given expression.
 ///
 /// Returns mi::mdl::IMDL::MDL_VERSION_1_0 for \c NULL arguments.
-mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
+mi::neuraylib::Mdl_version get_min_required_mdl_version(
     DB::Transaction* transaction, const IExpression* expr);
 
 /// Returns the minimal required MDL version for a given expression list.
 ///
 /// Returns mi::mdl::IMDL::MDL_VERSION_1_0 for \c NULL arguments.
-mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
+mi::neuraylib::Mdl_version get_min_required_mdl_version(
     DB::Transaction* transaction, const IExpression_list* expr_list);
 
 /// Returns the minimal required MDL version for a given annotation.
-mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
+mi::neuraylib::Mdl_version get_min_required_mdl_version(
     DB::Transaction* transaction, const IAnnotation* annotation);
 
 /// Returns the minimal required MDL version for a given annotation block.
 ///
 /// Returns mi::mdl::IMDL::MDL_VERSION_1_0 for \c NULL arguments.
-mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
+mi::neuraylib::Mdl_version get_min_required_mdl_version(
     DB::Transaction* transaction, const IAnnotation_block* block);
 
 /// Returns the minimal required MDL version for a given annotation list.
 ///
 /// Returns mi::mdl::IMDL::MDL_VERSION_1_0 for \c NULL arguments.
-mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
+mi::neuraylib::Mdl_version get_min_required_mdl_version(
     DB::Transaction* transaction, const IAnnotation_list* list);
 
 /// Returns the minimal required MDL version for a given argument pack.
 template <typename T1, typename ...T2>
-mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
+mi::neuraylib::Mdl_version get_min_required_mdl_version(
     DB::Transaction* transaction, T1 arg, T2... args)
 {
     return std::max( get_min_required_mdl_version( transaction, arg),

@@ -113,7 +113,7 @@ public:
     ///   <td>&lt;UDIM&gt;</td>
     ///   <td>DDDD</td>
     ///   <td>1001</td>
-    ///   <td>UDIM, expands to the four digit number 1000+(u+1+v∗10)</td>
+    ///   <td>UDIM, expands to the four digit number 1000+(u+1+v*10)</td>
     /// </tr>
     /// <tr>
     ///   <td>&lt;UVTILE0&gt;</td>

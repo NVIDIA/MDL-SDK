@@ -1489,8 +1489,8 @@ string DAG_mangler::mangle(
         case IMDL::MDL_VERSION_1_8:
             m_printer.print("$1.7");
             break;
-        case IMDL::MDL_VERSION_1_9:
-            m_printer.print("$1.8");
+        case IMDL::MDL_VERSION_EXP:
+            m_printer.print("$99.99");
             break;
         }
     }

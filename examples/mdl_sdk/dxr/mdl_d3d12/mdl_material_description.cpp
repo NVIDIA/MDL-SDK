@@ -200,7 +200,13 @@ bool Mdl_material_description::load_material_definition(
 
     if (m_is_loaded)
     {
-        m_material_definition_db_name = m_module_db_names[0] + "::" + m_material_name;
+        // get the loaded module
+        mi::base::Handle<const mi::neuraylib::IModule> module(
+            sdk.get_transaction().access<mi::neuraylib::IModule>(m_module_db_names[0].c_str()));
+
+        // compute definition name including the parameter list
+        m_material_definition_db_name = mi::examples::mdl::add_missing_material_signature(
+            module.get(), m_module_db_names[0] + "::" + m_material_name);
 
         // reflect changed imports
         sdk.get_library()->update_module_dependencies(m_module_db_names[0]);
@@ -1082,23 +1088,23 @@ std::string Mdl_material_description::build_material_graph_NV_materials_mdl(
         // doesn't work for them without the template parameter list
         if (function_definition_name == "::T[]")
         {
-            function_definition_name += "(...)";
+            function_definition_name = "::T[](...)";
         }
         else if (function_definition_name == "::operator[]")
         {
-            function_definition_name += "(<0>[],int)";
+            function_definition_name = "::operator[](%3C0%3E[],int)";
         }
         else if (function_definition_name == "::operator_len")
         {
-            function_definition_name += "(<0>[])";
+            function_definition_name = "::operator_len(%3C0%3E[])";
         }
         else if (function_definition_name == "::operator?")
         {
-            function_definition_name += "(bool,<0>,<0>)";
+            function_definition_name = "::operator%3F(bool,%3C0%3E,%3C0%3E)";
         }
         else if (function_definition_name == "::operator_cast")
         {
-            function_definition_name += "(<0>)";
+            function_definition_name = "::operator_cast(%3C0%3E)";
 
             // the cast operator takes a second special expression which is used to
             // determine the return type of the call
@@ -1112,7 +1118,19 @@ std::string Mdl_material_description::build_material_graph_NV_materials_mdl(
                 ef->create_constant(value.get()));
             arguments->add_expression("cast_return", cast_return_expr.get());
         }
-        
+        else
+        {
+            // handles non-template cases that require encoding, like the shift operators
+            mi::base::Handle<const mi::IString> encoded_function_definition_name(
+                sdk.get_factory().encode_function_definition_name(function_definition_name.c_str(), nullptr));
+            function_definition_name = encoded_function_definition_name->get_c_str();
+            // drop the `()` at the end which are added by `encode_function_definition_name`
+            // since we want to do overload resolution in the next step
+            // note: the actual parameter list is always empty because we did not pass any parameters
+            // `encode_function_definition_name` works on strings only and does not check if such a function exits.
+            function_definition_name = function_definition_name.substr(0, function_definition_name.size() - 2);
+        }
+
         mi::base::Handle<const mi::IString> definition_db_name(
             sdk.get_factory().get_db_definition_name(function_definition_name.c_str()));
 
@@ -1307,8 +1325,14 @@ bool Mdl_material_description::load_material_definition_mdle(
     if (!load_mdl_module(sdk, scene_directory, context))
         return false;
 
+    // get the loaded module
+    mi::base::Handle<const mi::neuraylib::IModule> module(
+        sdk.get_transaction().access<mi::neuraylib::IModule>(m_module_db_names[0].c_str()));
+
     // check if the mdle contains a material
-    std::string material_db_name = m_module_db_names[0] + "::" + m_material_name;
+    std::string material_db_name = mi::examples::mdl::add_missing_material_signature(
+        module.get(), m_module_db_names[0] + "::" + m_material_name);
+
     mi::base::Handle<const mi::neuraylib::IFunction_definition> material_definition(
         sdk.get_transaction().access<const mi::neuraylib::IFunction_definition>(
             material_db_name.c_str()));
@@ -1353,8 +1377,13 @@ bool Mdl_material_description::load_material_definition_mdl(
     if (!load_mdl_module(sdk, scene_directory, context))
         return false;
 
+    // get the loaded module
+    mi::base::Handle<const mi::neuraylib::IModule> module(
+        sdk.get_transaction().access<mi::neuraylib::IModule>(m_module_db_names[0].c_str()));
+
     // database name of the material
-    std::string material_definition_db_name = m_module_db_names[0] + "::" + m_material_name;
+    std::string material_definition_db_name = mi::examples::mdl::add_missing_material_signature(
+        module.get(), m_module_db_names[0] + "::" + m_material_name);
 
     // check if the module contains the requested material
     mi::base::Handle<const mi::neuraylib::IFunction_definition> definition(
@@ -1573,25 +1602,42 @@ void Mdl_material_description::parameterize_gltf_support_material(
         auto add_texture_resource = [&](
             mi::neuraylib::IExpression_list* expr_list,
             const std::string& expression_name,
-            const std::string& releative_texture_path, float gamma)
+            const mdl_d3d12::IScene_loader::Material::Texture_info& texture_info,
+            float gamma)
         {
-            if (releative_texture_path.empty()) return;
-
             std::string gamma_str = std::to_string(int(gamma * 100));
-            std::string image_name = "mdl::" + releative_texture_path + "_image";
-            std::string texture_name = "mdl::" + releative_texture_path + "_texture2d_" + gamma_str;
-
-            // if the image is not loaded yet, do so
-            mi::base::Handle<const mi::neuraylib::IImage> image(
-                t->access<mi::neuraylib::IImage>(image_name.c_str()));
-            if (!image)
+            std::string image_name;
+            std::string texture_name;
+            if (!texture_info.resource_db_name.empty())
             {
-                mi::base::Handle<mi::neuraylib::IImage> new_image(
-                    t->create<mi::neuraylib::IImage>("Image"));
-                std::string file_path = scene_directory + "/" + releative_texture_path;
-                new_image->reset_file(file_path.c_str());
-                t->store(new_image.get(), image_name.c_str());
+                image_name = texture_info.resource_db_name;
+                texture_name = texture_info.resource_db_name + "_texture2d_" + gamma_str;
+                mi::base::Handle<const mi::neuraylib::IImage> image(
+                    t->access<mi::neuraylib::IImage>(image_name.c_str()));
+                if (!image)
+                {
+                    log_warning("Resource expected to loaded to neuray db already: " +
+                        texture_info.resource_db_name, SRC);
+                    return;
+                }
             }
+            else if (!texture_info.resource_uri.empty())
+            {
+                image_name = "mdl::" + texture_info.resource_uri + "_image";
+                texture_name = "mdl::" + texture_info.resource_uri + "_texture2d_" + gamma_str;
+                mi::base::Handle<const mi::neuraylib::IImage> image(
+                    t->access<mi::neuraylib::IImage>(image_name.c_str()));
+                if (!image)
+                {
+                    mi::base::Handle<mi::neuraylib::IImage> new_image(
+                        t->create<mi::neuraylib::IImage>("Image"));
+                    std::string file_path = scene_directory + "/" + texture_info.resource_uri;
+                    new_image->reset_file(file_path.c_str());
+                    t->store(new_image.get(), image_name.c_str());
+                }
+            }
+            else
+                return;
 
             // if the texture does not exist yet, create it
             mi::base::Handle<const mi::neuraylib::ITexture> texture(
@@ -1747,13 +1793,14 @@ void Mdl_material_description::parameterize_gltf_support_material(
             float normal_factor = 1.0f,
             int tex_tangent_index = 0)
         {
-            if (texture_info.resource_identifier.empty()) return;
+            if (texture_info.resource_uri.empty() && texture_info.resource_db_name.empty())
+                return;
 
             mi::base::Handle<mi::neuraylib::IExpression_list> call_parameter_list(
                 ef->create_expression_list());
 
             add_texture_resource(
-                call_parameter_list.get(), "texture", texture_info.resource_identifier, gamma);
+                call_parameter_list.get(), "texture", texture_info, gamma);
             add_int(call_parameter_list.get(), "tex_coord_index", texture_info.texCoord);
             add_float2(
                 call_parameter_list.get(), "offset", texture_info.offset.x, texture_info.offset.y);
@@ -1971,10 +2018,15 @@ bool Mdl_material_description::load_material_definition_loader(
 
     // compute a full qualified module name
     std::string module_name = gltf_name;
-    std::replace(module_name.begin(), module_name.end(), '\\', '_');
-    std::replace(module_name.begin(), module_name.end(), '/', '_');
-    std::replace(module_name.begin(), module_name.end(), ':', '_');
-    std::replace(module_name.begin(), module_name.end(), '.', '_');
+    module_name = mi::examples::strings::replace(module_name, "\\", "::");
+    module_name = mi::examples::strings::replace(module_name, "/", "::");
+    module_name = mi::examples::strings::replace(module_name, ":", "%3A");
+    module_name = mi::examples::strings::replace(module_name, ".", "%2E");
+    module_name = mi::examples::strings::replace(module_name, "=", "%3D");
+    mi::base::Handle<const mi::IString> encoded_module_name(
+        sdk.get_factory().encode_module_name(module_name.c_str()));
+    module_name = encoded_module_name->get_c_str();
+
     if (module_name.length() < 2 || module_name[0] != ':' || module_name[1] == ':')
         module_name = "::" + module_name;
     m_qualified_module_name = module_name;

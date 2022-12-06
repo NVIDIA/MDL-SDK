@@ -62,6 +62,7 @@ enum Material_slot {
     SLOT_VOLUME_SCATTERING,               ///< Slot volume.scattering
     SLOT_VOLUME_ABSORPTION_COEFFICIENT,   ///< Slot volume.absorption_coefficient
     SLOT_VOLUME_SCATTERING_COEFFICIENT,   ///< Slot volume.scattering_coefficient
+    SLOT_VOLUME_EMISSION_INTENSITY,       ///< Slot volume.emission_intensity
     SLOT_GEOMETRY_DISPLACEMENT,           ///< Slot geometry.displacement
     SLOT_GEOMETRY_CUTOUT_OPACITY,         ///< Slot geometry.cutout_opacity
     SLOT_GEOMETRY_NORMAL,                 ///< Slot geometry.normal

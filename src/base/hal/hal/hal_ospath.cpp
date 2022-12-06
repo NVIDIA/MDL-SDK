@@ -35,6 +35,7 @@
 
 #include <base/lib/log/i_log_assert.h>
 #include <base/util/string_utils/i_string_utils.h>
+using namespace std::string_literals;
 
 #include <sstream>
 #include <algorithm>
@@ -60,7 +61,7 @@ std::string replace_all(
     const std::string& rstr)            // replace string
 {
     if (str.empty())
-        return std::string("");
+        return ""s;
 
     std::string fs(str);
     size_t pos = 0;
@@ -82,9 +83,9 @@ std::string replace_all(
 std::string Ospath::sep()
 {
 #ifdef WIN_NT
-        return std::string("\\");
+        return "\\"s;
 #else
-        return std::string("/");
+        return "/"s;
 #endif
 }
 
@@ -209,7 +210,7 @@ std::string Ospath::normpath_only(
     const std::string& path)
 {
     std::string npath = convert_to_forward_slashes(path);
-    npath = replace_all(npath, std::string("//"), std::string("/"));
+    npath = replace_all(npath, "//"s, "/"s);
 
 #if WIN_NT
     // Check for UNC and put back the '\\' which have been removed.
@@ -300,7 +301,7 @@ void Ospath::split(
 
     std::string::size_type i = filepath.find_last_of('/');
     if (i == std::string::npos) {
-        head_ref = std::string("");
+        head_ref = ""s;
         tail_ref = path;
         return;
     }
@@ -357,8 +358,8 @@ void Ospath::splitdrive(
     std::string& drive,                 // Out drive part
     std::string& tail)                  // Out tail part
 {
-    drive = std::string("");
-    tail = std::string("");
+    drive = ""s;
+    tail = ""s;
     if (path.empty())
         return;
 
@@ -381,8 +382,8 @@ void Ospath::splitext(
     std::string& root,                  // Out root part
     std::string& ext)                   // Out extension part
 {
-    root = std::string("");
-    ext = std::string("");
+    root = ""s;
+    ext = ""s;
     if (path.empty())
         return;
 
@@ -411,7 +412,7 @@ std::string Ospath::get_ext(
 std::string Ospath::convert_to_forward_slashes(
     const std::string& path)            // Convert this path
 {
-    return replace_all(path, std::string("\\"), std::string("/"));
+    return replace_all(path, "\\"s, "/"s);
 }
 
 
@@ -419,7 +420,7 @@ std::string Ospath::convert_to_forward_slashes(
 std::string Ospath::convert_to_backward_slashes(
     const std::string& path)            // Convert this path
 {
-    return replace_all(path, std::string("/"), std::string("\\"));
+    return replace_all(path, "/"s, "\\"s);
 }
 
 

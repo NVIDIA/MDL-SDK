@@ -188,8 +188,9 @@ bool Example_dxr::load()
 
     // register code generators
     #ifdef MDL_ENABLE_MATERIALX
-        get_mdl_sdk().get_library()->register_mdl_material_description_loader(
-            new mi::examples::mdl_d3d12::materialx::Mdl_material_description_loader_mtlx(*options));
+    get_mdl_sdk().get_library()->register_mdl_material_description_loader(
+        std::make_unique<mi::examples::mdl_d3d12::materialx::Mdl_material_description_loader_mtlx>(
+            *options));
     #endif
 
     // basic resource handling one large descriptor heap (array of different resource views)
@@ -357,8 +358,8 @@ bool Example_dxr::load()
             this, gui, &m_scene_constants->data()));
 
         // other UI elements for this window
-        m_main_window_performance_overlay = new Gui_performance_overlay(gui);
-        m_info_overlay = new Info_overlay(gui);
+        m_main_window_performance_overlay = std::make_unique<Gui_performance_overlay>(gui);
+        m_info_overlay = std::make_unique<Info_overlay>(gui);
 
         // add top menu items
         gui->add(mi::examples::gui::Menu_item("File",
@@ -895,6 +896,10 @@ bool Example_dxr::update_rendering_pipeline()
         // for each material
         if (!mat_library.visit_target_codes([&](Mdl_material_target* target)
         {
+            // skip unused targets, which are waiting for clean-up
+            if (target->get_material_count() == 0)
+                return true;
+
             std::string target_code_id = "_" + target->get_shader_name_suffix();
             std::string radiance_closest_hit = "MdlRadianceClosestHitProgram" + target_code_id;
             std::string radiance_any_hit = "MdlRadianceAnyHitProgram" + target_code_id;
@@ -974,6 +979,11 @@ bool Example_dxr::update_rendering_pipeline()
         // associate the signatures with the hit groups
         if (!mat_library.visit_materials([&](Mdl_material* mat)
         {
+            if (mat->get_target_code_id() == static_cast<size_t>(-1))
+            {
+                return true;
+            }
+
             std::string target_code_id = "_" + mat->get_target_code()->get_shader_name_suffix();
 
             // Local root signatures for individual programs
@@ -1055,6 +1065,10 @@ bool Example_dxr::update_rendering_pipeline()
 
         mat_library.visit_target_codes([&](Mdl_material_target* target)
         {
+            // skip unused targets, which are waiting for clean-up
+            if (target->get_material_count() == 0)
+                return true;
+
             size_t tc_id = target->get_id();
             std::string target_code_id = "_" + target->get_shader_name_suffix();
 
@@ -1188,7 +1202,8 @@ bool Example_dxr::update_rendering_pipeline()
 
 bool Example_dxr::unload()
 {
-    if (m_main_window_performance_overlay) delete m_main_window_performance_overlay;
+    m_main_window_performance_overlay.reset();
+    m_info_overlay.reset();
     delete m_camera_controls;
     delete m_scene;
     delete m_environment;
@@ -1601,6 +1616,13 @@ void Example_dxr::key_up(uint8_t key)
 // entry point of the application
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int nCmdShow)
 {
+    // enable memory leak detection (only in debug)
+    int  tmpDbgFlag = _CrtSetDbgFlag(_CRTDBG_REPORT_FLAG);
+    tmpDbgFlag |= _CRTDBG_DELAY_FREE_MEM_DF;
+    tmpDbgFlag |= _CRTDBG_LEAK_CHECK_DF;
+    _CrtSetDbgFlag(tmpDbgFlag);
+    //_CrtSetBreakAlloc(/*number in the debug output shown in '{}'*/);
+
     // parse command line arguments
     int argc = 0;
     LPWSTR* argv = nullptr;

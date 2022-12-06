@@ -112,6 +112,8 @@ namespace mi { namespace examples { namespace dxr
 
         << "--mdl_path <path>         MDL search path, can occur multiple times.\n"
 
+        << "--mdl_next                Enable features from upcoming MDL version.\n"
+
         << "--max_path_length <num>   Maximum path length (up to one total internal reflection),\n"
         << "                          clamped to 2..100, default " << defaults.ray_depth << "\n"
 
@@ -151,6 +153,10 @@ namespace mi { namespace examples { namespace dxr
            "                          the log file. (default: <outputfile-basename>.log)\n"
 
         << "--enable_shader_cache     Enable shader caching to improve (second) loading times.\n"
+
+        << "--error                   Set log level to 'error' (default is 'info').\n"
+        << "--warning                 Set log level to 'warning' (default is 'info').\n"
+        << "--verbose                 Set log level to 'verbose' (default is 'info').\n"
 
         #if MDL_ENABLE_MATERIALX
         << "--mtlx_path <path>        Specify an additional absolute search path location\n"
@@ -356,6 +362,10 @@ namespace mi { namespace examples { namespace dxr
                     }
                     options.mdl_paths.push_back(mi::examples::io::normalize(mdl_path));
                 }
+                else if (wcscmp(opt, L"--mdl_next") == 0)
+                {
+                    options.mdl_next = true;
+                }
                 else if (wcscmp(opt, L"--z_axis_up") == 0)
                 {
                     options.handle_z_axis_up = true;
@@ -368,6 +378,18 @@ namespace mi { namespace examples { namespace dxr
                 {
                     options.enable_shader_cache = true;
                     mi::examples::io::mkdir(mi::examples::io::get_executable_folder() + "/shader_cache");
+                }
+                else if (wcscmp(opt, L"--error") == 0)
+                {
+                    set_log_level(Log_level::Error);
+                }
+                else if (wcscmp(opt, L"--warning") == 0)
+                {
+                    set_log_level(Log_level::Warning);
+                }
+                else if (wcscmp(opt, L"--verbose") == 0)
+                {
+                    set_log_level(Log_level::Verbose);
                 }
                 #if MDL_ENABLE_MATERIALX
                     else if (wcscmp(opt, L"--mtlx_path") == 0 && i < argc - 1)

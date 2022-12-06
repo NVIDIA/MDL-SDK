@@ -294,7 +294,7 @@ void Module::get_version(IMDL::MDL_version version, int &major, int &minor)
     case IMDL::MDL_VERSION_1_6:     major = 1; minor = 6; return;
     case IMDL::MDL_VERSION_1_7:     major = 1; minor = 7; return;
     case IMDL::MDL_VERSION_1_8:     major = 1; minor = 8; return;
-    case IMDL::MDL_VERSION_1_9:     major = 1; minor = 9; return;
+    case IMDL::MDL_VERSION_EXP:     major = 99; minor = 99; return;
     }
     MDL_ASSERT(!"MDL version not known");
     major = 0;
@@ -308,9 +308,15 @@ void Module::get_version(int &major, int &minor) const
 }
 
 // Set the language version.
-bool Module::set_version(MDL *compiler, int major, int minor, bool enable_mdl_next)
+bool Module::set_version(
+    MDL  *compiler,
+    int  major,
+    int  minor,
+    bool enable_mdl_next,
+    bool enable_experimental)
 {
-    return compiler->check_version(major, minor, m_mdl_version, enable_mdl_next);
+    return compiler->check_version(
+        major, minor, m_mdl_version, enable_mdl_next, enable_experimental);
 }
 
 // Analyze the module.
@@ -910,12 +916,12 @@ static bool parse_parameter_signature(
 {
 #define SKIP_SPACE while (isspace(start[0])) ++start
 
-    IAllocator             *alloc   = owner->get_allocator();
-    Symbol_table const     &st      = owner->get_symbol_table();
-    Definition_table const &def_tab = owner->get_definition_table();
-    Type_factory const     &tf      = *owner->get_type_factory();
-    char const             *absname = owner->get_name();
-    size_t                 l        = strlen(absname);
+    IAllocator             *alloc      = owner->get_allocator();
+    Symbol_table const     &st         = owner->get_symbol_table();
+    Definition_table const &def_tab    = owner->get_definition_table();
+    Type_factory const     &tf         = *owner->get_type_factory();
+    char const             *owner_name = owner->get_name();
+    size_t                 l           = strlen(owner_name);
 
     for (size_t i = 0; i < num_param_type_names; ++i) {
         char const *start = &param_type_names[i][0];
@@ -937,7 +943,7 @@ static bool parse_parameter_signature(
 
         // short-cut: if we see here the "module name", skip it:
         // this is because user defined types uses always the full name in DAG signatures ...
-        if (strncmp(absname, start, l) == 0 && start[l] == ':' && start[l + 1] == ':') {
+        if (strncmp(owner_name, start, l) == 0 && start[l] == ':' && start[l + 1] == ':') {
             start += l + 2;
         }
 
@@ -2592,9 +2598,9 @@ Definition const *Module::lookup_original_definition(Definition const *imported)
         if (imported->get_semantics() == operator_to_semantic(IExpression_binary::OK_ASSIGN)) {
             if (IType_function const *op_tp = as<IType_function>(imported->get_type())) {
                 IType const *ret_tp = op_tp->get_return_type();
-                IType::Kind kind = ret_tp->get_kind();
+                IType::Kind ret_kind = ret_tp->get_kind();
 
-                look_inside = kind == IType::TK_STRUCT || kind == IType::TK_ENUM;
+                look_inside = ret_kind == IType::TK_STRUCT || ret_kind == IType::TK_ENUM;
             }
         }
     }
@@ -2626,9 +2632,9 @@ void Module::insert_constant_declaration(IDeclaration_constant *decl)
     Declaration_vector::iterator it(m_declarations.begin()), end(m_declarations.end());
 
     for (; it != end; ++it) {
-        IDeclaration const *decl = *it;
+        IDeclaration const *global_decl = *it;
 
-        switch (decl->get_kind()) {
+        switch (global_decl->get_kind()) {
         case IDeclaration::DK_IMPORT:
         case IDeclaration::DK_CONSTANT:
             // skip
@@ -3758,8 +3764,8 @@ Module const *Module::deserialize(Module_deserializer &deserializer)
             IDefinition const *def = deserializer.get_definition(t);
 
             Function_hash hash;
-            for (size_t i = 0, n = dimension_of(hash.hash); i < n; ++i) {
-                hash.hash[i] = deserializer.read_byte();
+            for (size_t j = 0, n = dimension_of(hash.hash); j < n; ++j) {
+                hash.hash[j] = deserializer.read_byte();
             }
             mod->m_func_hashes[def] = hash;
         }

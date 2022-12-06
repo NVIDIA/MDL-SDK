@@ -33,7 +33,7 @@ BEGIN
         BEGIN
             VALUE "CompanyName",     VER_COMPANYNAME_STR
             VALUE "LegalCopyright",  VER_LEGALCOPYRIGHT_STR
-            VALUE "Copyright",  VER_LEGALCOPYRIGHT_STR
+            VALUE "Copyright",       VER_LEGALCOPYRIGHT_STR
             VALUE "ProductName",     VER_PRODUCTNAME_STR
 #ifdef VER_BRIDGE_VERSION_STR
             VALUE "ProductVersion",  VER_PRODUCTVERSION_STR " (Bridge:" VER_BRIDGE_VERSION_STR ")"

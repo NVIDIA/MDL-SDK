@@ -13,10 +13,14 @@
 
 namespace mi {
 
+/// Storage format for grid space volume bounding boxes.
 typedef math::Bbox_struct<Sint32,3> Voxel_block_struct;
+/// Integer bounding box for voxel grids.
 typedef math::Bbox<Sint32,3> Voxel_block;
 
 namespace neuraylib {
+
+class IReader;
 
 /** \addtogroup mi_neuray_leaf_nodes
 @{
@@ -142,6 +146,23 @@ public:
     ///
     /// \see #get_data_bounds()
     virtual Float32_4_4_struct get_transform() const = 0;
+    
+    
+    /// Sets the volume data to the data provided by a reader.
+    ///
+    /// \param reader         The reader that provides the data for the volume. The reader needs to
+    ///                       support absolute access.
+    /// \param format         The file format of the volume data.
+    /// \param selector       The selector. If none is provided a default is selected
+    ///                       automatically.
+    /// \return
+    ///                       -  0: Success.
+    ///                       - -1: Invalid parameters (\c NULL pointer).
+    ///                       - -3: Failure to open the file.
+    ///                       - -4: \p format is not supported.
+    ///                       - -5: The reader does not support absolute access.
+    virtual Sint32 reset_reader(
+        IReader* reader, const char* format, const char* selector = 0) = 0;
 
 };
 

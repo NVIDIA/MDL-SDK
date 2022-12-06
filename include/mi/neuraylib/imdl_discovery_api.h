@@ -224,8 +224,8 @@ public:
 ///
 /// The discovery API offers functionality to find MDL content in the registered MDL search paths.
 /// These search paths have to be declared with the function
-/// call \if IRAY_API #mi::neuraylib::IRendering_configuration::add_mdl_path() \else
-/// #mi::neuraylib::IMdl_compiler::add_module_path() \endif in advance. The ordering of the search
+/// call \if IRAY_API #mi::neuraylib::IRendering_configuration::add_mdl_path() or \endif
+/// #mi::neuraylib::IMdl_configuration::add_mdl_path() in advance. The ordering of the search
 /// paths results from the ordering of the registration and is taken into account during the
 /// discovery process.
 /// 

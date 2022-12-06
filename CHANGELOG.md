@@ -1,6 +1,93 @@
 Change Log
 ==========
-MDL SDK 2022.0.1 (359000.3383): 21 Sep 2022
+MDL SDK 2022.1 (363600.1420): 05 Dec 2022
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2022.1 (363600.1420) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+    - This release contains a preview of a new image plugin based on OpenImageIO.
+      It is intended to replace the FreeImage plugin in the future. As of now,
+      the new image plugin is disabled by default and not yet supported.
+    - Improved Windows implementations of `mi::base::Lock` and `MI::THREAD::Lock` to use
+      `SRWLOCK instead` of `CRITICAL_SECTION` primitives.      
+    - In order to start the examples, it is no longer necessary to explicitly set the
+      `LD_LIBRARY_PATH` (on Linux) or `DYLD_LIBRARY_PATH` (on MacOS X).
+    - Allowed varying values on parameters of `base::rotation_translation_scale()`.
+    - Added the context option `"export_resources_with_module_prefix"` (defaults to true).
+      If set to false, the module prefix is avoided if resources are exported as part of an
+      exported MDL module.
+      While the correct behavior is debatable, it restores the historical behavior of FreeImage.
+    - Embeded RPATH into the examples and libmdl_sdk.so itself. It is no longer necessary to
+      explicitly set the `LD_LIBRARY_PATH` for the library and image plugins.
+    - Python Bindings
+        - Added high-level Python binding module pymdl.py.
+        - Generated .sh and .bat scripts to run Python examples without manually setting
+          PATH and PYTHONPATH.
+          
+- MDL Compiler and Backends
+    - Added support for Unicode identifiers to the MDL compiler (for MDL version >= 1.8).
+    - Added implementations for `state::geometry_tangent_u()` and
+      `state_geometry_tangent_v()` functions in JIT generated code.
+      Before they were returning `0`.
+    
+- MDL SDK examples
+    - Example Code Generation
+        - Added command line option `--warn-spectrum-conv`. It warns if a spectrum constructor
+          is converted into RGB.
+    - Example DXR
+        - Switched MaterialX SDK to 1.38.5.
+        - Added support for textures embedded in gltf and glb files.
+        - Added support for a material selector to choose one of multiple materials
+          defined in an .mtlx file.
+        - Enabled the encoded names option.
+        - Added support for BSDF measurement resources.
+        - Added support for light profile resources.
+    - MDL Browser
+        - Enabled the encoded names option.
+    - Example Python Bindings
+        - Added an example to illustrate the use of pymdl.py for inspection.
+        
+**Fixed Bugs**
+
+- General
+    - Fixed conversion of spectral to color for the case that the minimum wavelength
+      is greater than 380 nanometers.
+    - Fixed artifacts in `base::perlin_noise_bump_texture()`, `base::worley_noise_bump_texture()`
+      and `base::flow_noise_bump_texture()` when using small cell sizes.
+    - Fixed `IFunction_call::reset_argument()` for cases where a default parameter referenced
+      the directly preceding parameter.
+    - Fixed `IFunction_call::set_argument()` to reject expressions that contain (forbidden)
+      nested parameter references. Similarly for `IFunction_definion::create_call()`.
+    - Changed the compression level for export of PNG files back to 5
+      for better speed/space tradeoff.
+    - Fixed `IType_factory::is_compatible()}` for enums (the sets of enumeration values need
+      to be equal, not just one a subset of the other).
+    - MDL plugin for Arnold
+        - Added checks on shutdown to prevent crashes when the plugin is not initialized properly.
+        
+- MDL Compiler and Backends
+    - Fixed crash inside the MDL core compiler when an enum value is used as the right hand side
+      of a select expression.
+    - Fixed crash in the MDL core compiler when the qualified name of an import declaration
+      is ill formed.
+    - Changed the behavior of state functions when used with an invalid texture space.
+      Now they return always zero.      
+        
+- MDL SDK examples
+    - Example DXR
+        - Fixed two memory leaks and added diagnostics to check for leaks in the future.
+        - Fixed a rare crash due the usage of a command list from different threads.
+        - Fixed handling of MaterialX absolute paths containing a ':' character.
+
+    - Example Python Bindings
+        - Fixed the debug build of the MDL Python Bindings in VS when linking against a
+          release built of the Python interpreter.
+        
+MDL SDK 2022.0.1 (359000.3383): 21 Sept 2022
 -----------------------------------------------
 
 ABI compatible with the MDL SDK 2022.0.1 (359000.3383) binary release
@@ -119,6 +206,7 @@ ABI compatible with the MDL SDK 2022.0 (359000.2512) binary release
     - Example DXR
         - Fixed crash when loading a new scene caused by fences being signaled too early
           due to a race condition.
+
 
 MDL SDK 2021.1.4 (349500.10153): 24 May 2022
 -----------------------------------------------

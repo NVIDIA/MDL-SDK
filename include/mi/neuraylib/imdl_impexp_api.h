@@ -159,6 +159,8 @@ public:
     /// - \c "bundle_resources" of type bool: If \c true, referenced resources are exported
     ///   into the same directory as the module, even if they can be found via the module search
     ///   path. Default: \c false.
+    /// - \c bool "export_resources_with_module_prefix": If \c true, the name of the exported
+    ///   resources start with the module name as prefix. Default: \c true.
     ///
     /// \param transaction       The transaction to be used.
     /// \param module_name       The DB name of the MDL module to export.
@@ -355,7 +357,7 @@ public:
     /// \param return_type       The arguments of the corresponding function call or material
     ///                          instance. Required for the cast operator, ignored (can be
     ///                          \c NULL) in all other cases.
-    /// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
+    /// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
     ///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
     ///                          implementing the identity transformation).
     /// \param context           The execution context can be used to pass options and to retrieve
@@ -375,7 +377,7 @@ public:
     ///
     /// \param transaction       The transaction to be used.
     /// \param function_name     The serialized name of a function or material definition.
-    /// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
+    /// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
     ///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
     ///                          implementing the identity transformation).
     /// \param context           The execution context can be used to pass options and to retrieve
@@ -403,7 +405,7 @@ public:
     ///                                             definition without the module name and \c "::"
     ///                                             (as returned by
     ///         #mi::neuraylib::ISerialized_function_name::get_function_name_without_module_name()).
-    /// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
+    /// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
     ///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
     ///                          implementing the identity transformation).
     /// \param context           The execution context can be used to pass options and to retrieve
@@ -427,7 +429,7 @@ public:
     /// \see \ref mi_mdl_serialized_names
     ///
     /// \param module_name       The serialized name of a module.
-    /// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
+    /// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
     ///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
     ///                          implementing the identity transformation).
     /// \param context           The execution context can be used to pass options and to retrieve

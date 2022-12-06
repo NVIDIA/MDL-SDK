@@ -427,7 +427,9 @@ void compute_tangent_frame(
 // ------------------------------------------------------------------------------------------------
 
 IScene_loader::Material::Texture_info get_texture(
-    const fx::gltf::Document& doc, const fx::gltf::Material::Texture& tex)
+    const fx::gltf::Document& doc,
+    const fx::gltf::Material::Texture& tex,
+    const IScene_loader::Scene& scene)
 {
     IScene_loader::Material::Texture_info info;
 
@@ -441,7 +443,9 @@ IScene_loader::Material::Texture_info get_texture(
     // use the KHR_texture_transform texCoord to override if set
     // the spec mentions this is a note to allow baking of texture transforms as fall back
     info.texCoord = tex.transform.texCoord != -1 ? tex.transform.texCoord : tex.texCoord;
-    info.resource_identifier = doc.images[src_index].uri;
+    info.resource_uri = doc.images[src_index].uri;
+    info.resource_db_name = scene.resources[src_index].resource_db_name;
+
     info.offset = { tex.transform.offset[0], tex.transform.offset[1] };
     info.rotation = tex.transform.rotation;
     info.scale = { tex.transform.scale[0], tex.transform.scale[1] };
@@ -470,6 +474,52 @@ IScene_loader::Material::Texture_info get_texture(
 
     return info;
 }
+
+// ------------------------------------------------------------------------------------------------
+
+/// An implementation of IBuffer that takes its content from a reader.
+class Mi_buffer_view : public mi::base::Interface_implement<mi::neuraylib::IBuffer>
+{
+public:
+    Mi_buffer_view(const fx::gltf::Document& doc, const fx::gltf::Image& image)
+    {
+        if (image.IsEmbeddedResource())
+        {
+            // base64 encoded data
+            image.MaterializeData(m_embedded_data);
+        }
+        else
+        {
+            // data in a binary file
+            const auto& bv = doc.bufferViews[image.bufferView];
+            const auto& buf = doc.buffers[bv.buffer];
+            m_data = buf.data.data() + bv.byteOffset;
+            m_byte_length = bv.byteLength;
+        }
+    }
+
+    const mi::Uint8* get_data() const
+    {
+        if (m_data && m_byte_length > 0)
+            return reinterpret_cast<const mi::Uint8*>(&m_data[0]);
+        else
+            return reinterpret_cast<const mi::Uint8*>(&m_embedded_data[0]);
+    }
+
+    mi::Size get_data_size() const
+    {
+        if (m_data && m_byte_length > 0)
+            return m_byte_length;
+        else
+            return m_embedded_data.size();
+    }
+
+private:
+    std::vector<uint8_t> m_embedded_data = std::vector<uint8_t>(0);
+    const uint8_t* m_data = nullptr;
+    size_t m_byte_length = 0;
+};
+
 
 // ------------------------------------------------------------------------------------------------
 
@@ -600,14 +650,15 @@ std::vector<Scene_data::Value> read_scene_data(const nlohmann::json& json)
 void add_transmission(
     const fx::gltf::Document& doc,
     IScene_loader::Material::Model_data_materials_transmission& material_transmission,
-    const fx::gltf::Material::KHR_MaterialsTransmission& gltf_transmission)
+    const fx::gltf::Material::KHR_MaterialsTransmission& gltf_transmission,
+    const IScene_loader::Scene& scene)
 {
     if (gltf_transmission.empty())
         return;
 
     material_transmission.transmission_factor = gltf_transmission.transmissionFactor;
     material_transmission.transmission_texture =
-        get_texture(doc, gltf_transmission.transmissionTexture);
+        get_texture(doc, gltf_transmission.transmissionTexture, scene);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -615,19 +666,20 @@ void add_transmission(
 void add_clear_coat(
     const fx::gltf::Document& doc,
     IScene_loader::Material::Model_data_materials_clearcoat& material_clearcoat,
-    const fx::gltf::Material::KHR_MaterialsClearcoat& gltf_clearcoat)
+    const fx::gltf::Material::KHR_MaterialsClearcoat& gltf_clearcoat,
+    const IScene_loader::Scene& scene)
 {
     if (gltf_clearcoat.empty())
         return;
 
     material_clearcoat.clearcoat_factor = gltf_clearcoat.clearcoatFactor;
     material_clearcoat.clearcoat_texture =
-        get_texture(doc, gltf_clearcoat.clearcoatTexture);
+        get_texture(doc, gltf_clearcoat.clearcoatTexture, scene);
     material_clearcoat.clearcoat_roughness_factor = gltf_clearcoat.clearcoatRoughnessFactor;
     material_clearcoat.clearcoat_roughness_texture =
-        get_texture(doc, gltf_clearcoat.clearcoatRoughnessTexture);
+        get_texture(doc, gltf_clearcoat.clearcoatRoughnessTexture, scene);
     material_clearcoat.clearcoat_normal_texture =
-        get_texture(doc, gltf_clearcoat.clearcoatNormalTexture);
+        get_texture(doc, gltf_clearcoat.clearcoatNormalTexture, scene);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -635,18 +687,20 @@ void add_clear_coat(
 void add_specular(
     const fx::gltf::Document& doc,
     IScene_loader::Material::Model_data_materials_specular& material_specular,
-    const fx::gltf::Material::KHR_MaterialsSpecular& gltf_specular)
+    const fx::gltf::Material::KHR_MaterialsSpecular& gltf_specular,
+    const IScene_loader::Scene& scene)
 {
     if (gltf_specular.empty())
         return;
 
     material_specular.specular_factor = gltf_specular.specularFactor;
-    material_specular.specular_texture = get_texture(doc, gltf_specular.specularTexture);
+    material_specular.specular_texture = get_texture(doc, gltf_specular.specularTexture, scene);
     material_specular.specular_color_factor = {
         gltf_specular.specularColorFactor[0],
         gltf_specular.specularColorFactor[1],
         gltf_specular.specularColorFactor[2] };
-    material_specular.specular_color_texture = get_texture(doc, gltf_specular.specularColorTexture);
+    material_specular.specular_color_texture =
+        get_texture(doc, gltf_specular.specularColorTexture, scene);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -654,7 +708,8 @@ void add_specular(
 void add_sheen(
     const fx::gltf::Document& doc,
     IScene_loader::Material::Model_data_materials_sheen& material_sheen,
-    const fx::gltf::Material::KHR_MaterialsSheen& gltf_sheen)
+    const fx::gltf::Material::KHR_MaterialsSheen& gltf_sheen,
+    const IScene_loader::Scene& scene)
 {
     if (gltf_sheen.empty())
         return;
@@ -663,9 +718,10 @@ void add_sheen(
         gltf_sheen.sheenColorFactor[0],
         gltf_sheen.sheenColorFactor[1],
         gltf_sheen.sheenColorFactor[2] };
-    material_sheen.sheen_color_texture = get_texture(doc, gltf_sheen.sheenColorTexture);
+    material_sheen.sheen_color_texture = get_texture(doc, gltf_sheen.sheenColorTexture, scene);
     material_sheen.sheen_roughness_factor = gltf_sheen.sheenRoughnessFactor;
-    material_sheen.sheen_roughness_texture = get_texture(doc, gltf_sheen.sheenRoughnessTexture);
+    material_sheen.sheen_roughness_texture =
+        get_texture(doc, gltf_sheen.sheenRoughnessTexture, scene);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -969,7 +1025,10 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
     if (fx::gltf::read_extension(doc, m_scene->ext_NV_materials_mdl))
     {
         log_info("found `NV_material_mdl` extension in document.");
+    }
 
+    // load the resources to db
+    {
         // get the directory of the glTF file
         std::string scene_directory = file_name;
         std::replace(scene_directory.begin(), scene_directory.end(), '\\', '/');
@@ -982,7 +1041,7 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
             std::string& resource_db_name = m_scene->resources.back().resource_db_name;
 
             // image referenced by URI
-            if (!gltf_image.uri.empty())
+            if (!gltf_image.IsEmbeddedResource() && !gltf_image.uri.empty())
             {
                 // TODO absolute path computation?
                 std::string file_path = scene_directory + "/" + gltf_image.uri;
@@ -996,6 +1055,37 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
                     mi::base::Handle<mi::neuraylib::IImage> new_image(
                         sdk.get_transaction().create<mi::neuraylib::IImage>("Image"));
                     new_image->reset_file(file_path.c_str());
+                    sdk.get_transaction().store(new_image.get(), resource_db_name.c_str());
+                }
+            }
+            // we have an embedded image
+            else
+            {
+                // compute a db name
+                std::string file_path =
+                    file_name + "@" + std::to_string(m_scene->resources.size() -1);
+                resource_db_name = "mdldxr::" + file_path + "_image";
+
+                // if the image is not loaded yet, do so
+                mi::base::Handle<const mi::neuraylib::IImage> image(
+                    sdk.get_transaction().access<mi::neuraylib::IImage>(resource_db_name.c_str()));
+                if (!image)
+                {
+                    mi::base::Handle<mi::neuraylib::IImage> new_image(
+                        sdk.get_transaction().create<mi::neuraylib::IImage>("Image"));
+
+                    // load the image from the binary buffer or base64 encoding
+                    std::string format = gltf_image.mimeType;
+                    size_t last_slash = format.find_last_of('/');
+                    if (last_slash != std::string::npos)
+                    {
+                        format = format.substr(last_slash + 1);
+                    }
+                    mi::base::Handle<Mi_buffer_view> buffer(new Mi_buffer_view(doc, gltf_image));
+                    mi::base::Handle<mi::neuraylib::IReader> reader(
+                        sdk.get_impexp_api().create_reader(buffer.get()));
+                    new_image->reset_reader(reader.get(), format.c_str());
+
                     sdk.get_transaction().store(new_image.get(), resource_db_name.c_str());
                 }
             }
@@ -1013,7 +1103,7 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
             mat.pbr_model = Material::Pbr_model::Khr_specular_glossiness;
 
             mat.khr_specular_glossiness.diffuse_texture =
-                get_texture(doc, m.pbrSpecularGlossiness.diffuseTexture);
+                get_texture(doc, m.pbrSpecularGlossiness.diffuseTexture, *m_scene);
             mat.khr_specular_glossiness.diffuse_factor = {
                 m.pbrSpecularGlossiness.diffuseFactor[0],
                 m.pbrSpecularGlossiness.diffuseFactor[1],
@@ -1021,7 +1111,7 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
                 m.pbrSpecularGlossiness.diffuseFactor[3] };
 
             mat.khr_specular_glossiness.specular_glossiness_texture =
-                get_texture(doc, m.pbrSpecularGlossiness.specularGlossinessTexture);
+                get_texture(doc, m.pbrSpecularGlossiness.specularGlossinessTexture, *m_scene);
             mat.khr_specular_glossiness.specular_factor = {
                 m.pbrSpecularGlossiness.specularFactor[0],
                 m.pbrSpecularGlossiness.specularFactor[1],
@@ -1042,7 +1132,7 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
             mat.pbr_model = Material::Pbr_model::Metallic_roughness;
 
             mat.metallic_roughness.base_color_texture =
-                get_texture(doc, m.pbrMetallicRoughness.baseColorTexture);
+                get_texture(doc, m.pbrMetallicRoughness.baseColorTexture, *m_scene);
             mat.metallic_roughness.base_color_factor = {
                 m.pbrMetallicRoughness.baseColorFactor[0],
                 m.pbrMetallicRoughness.baseColorFactor[1],
@@ -1050,14 +1140,15 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
                 m.pbrMetallicRoughness.baseColorFactor[3] };
 
             mat.metallic_roughness.metallic_roughness_texture =
-                get_texture(doc, m.pbrMetallicRoughness.metallicRoughnessTexture);
+                get_texture(doc, m.pbrMetallicRoughness.metallicRoughnessTexture, *m_scene);
             mat.metallic_roughness.metallic_factor = m.pbrMetallicRoughness.metallicFactor;
             mat.metallic_roughness.roughness_factor = m.pbrMetallicRoughness.roughnessFactor;
 
-            add_transmission(doc, mat.metallic_roughness.transmission, m.materialsTransmission);
-            add_clear_coat(doc, mat.metallic_roughness.clearcoat, m.materialsClearcoat);
-            add_sheen(doc, mat.metallic_roughness.sheen, m.materialsSheen);
-            add_specular(doc, mat.metallic_roughness.specular, m.materialsSpecular);
+            add_transmission(
+                doc, mat.metallic_roughness.transmission, m.materialsTransmission, *m_scene);
+            add_clear_coat(doc, mat.metallic_roughness.clearcoat, m.materialsClearcoat, *m_scene);
+            add_sheen(doc, mat.metallic_roughness.sheen, m.materialsSheen, *m_scene);
+            add_specular(doc, mat.metallic_roughness.specular, m.materialsSpecular, *m_scene);
             mat.metallic_roughness.ior.ior = m.materialsIOR.ior;
             add_volume(doc, mat.metallic_roughness.volume, m.materialsVolume);
             mat.emissive_strength.emissive_strength = m.materialEmissiveStrength.emissiveStrength;
@@ -1069,13 +1160,13 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
             log_info("found `NV_material_mdl` extension on material: " + m.name);
         }
 
-        mat.normal_texture = get_texture(doc, m.normalTexture);
+        mat.normal_texture = get_texture(doc, m.normalTexture, *m_scene);
         mat.normal_scale_factor = m.normalTexture.scale;
 
-        mat.occlusion_texture = get_texture(doc, m.occlusionTexture);
+        mat.occlusion_texture = get_texture(doc, m.occlusionTexture, *m_scene);
         mat.occlusion_strength = m.occlusionTexture.strength;
 
-        mat.emissive_texture = get_texture(doc, m.emissiveTexture);
+        mat.emissive_texture = get_texture(doc, m.emissiveTexture, *m_scene);
         mat.emissive_factor = {
             m.emissiveFactor[0],
             m.emissiveFactor[1],

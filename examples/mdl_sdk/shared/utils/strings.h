@@ -41,6 +41,7 @@
 #include <algorithm>
 #include <string>
 #include <sstream>
+#include <map>
 
 #include <mi/base/enums.h>
 #include <mi/neuraylib/imdl_execution_context.h>
@@ -328,6 +329,46 @@ namespace mi { namespace examples { namespace strings
         std::string output(input);
         std::replace(output.begin(), output.end(), old, with);
         return output;
+    }
+
+    // --------------------------------------------------------------------------------------------
+
+    // get the query substring of an url if present otherwise returns an empty string.
+    // also, drops the hash segment in case it is present.
+    inline std::string get_url_query(const std::string& url)
+    {
+        std::string query = url;
+        size_t pos = query.find_first_of('?');
+        if (pos == std::string::npos)
+            return "";
+        else
+            query = query.substr(pos + 1);
+
+        // drop the hash if present at at the end of the query
+        pos = query.find_first_of('#');
+        if (pos != std::string::npos)
+            query = query.substr(0, pos);
+        return query;
+    }
+
+    // parses a query of an url and returns a map of key value pairs
+    inline std::map<std::string, std::string> parse_url_query(const std::string& query)
+    {
+        std::map<std::string, std::string> result;
+        std::vector<std::string> chunks = split(query, '&');
+        for (auto& c : chunks)
+        {
+            size_t eqPos = c.find_first_of('=');
+            if (eqPos == std::string::npos)
+            {
+                result.insert({ c, "" });
+            }
+            else
+            {
+                result.insert({ c.substr(0, eqPos), c.substr(eqPos + 1) });
+            }
+        }
+        return result;
     }
 
     // --------------------------------------------------------------------------------------------

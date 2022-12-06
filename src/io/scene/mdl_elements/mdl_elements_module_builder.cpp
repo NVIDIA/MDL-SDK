@@ -412,7 +412,7 @@ mi::Sint32 Mdl_module_builder::add_function(
         return -1;
 
     // upgrade MDL version if necessary (and possible)
-    mi::mdl::IMDL::MDL_version version = get_min_required_mdl_version(
+    mi::neuraylib::Mdl_version version = get_min_required_mdl_version(
         m_transaction,
         body,
         defaults,
@@ -791,7 +791,7 @@ mi::Sint32 Mdl_module_builder::add_annotation(
         return -1;
 
     // upgrade MDL version if necessary (and possible)
-    mi::mdl::IMDL::MDL_version version = get_min_required_mdl_version(
+    mi::neuraylib::Mdl_version version = get_min_required_mdl_version(
         m_transaction,
         defaults,
         parameter_annotations,
@@ -948,7 +948,7 @@ mi::Sint32 Mdl_module_builder::add_enum_type(
         return -1;
 
     // upgrade MDL version if necessary (and possible)
-    mi::mdl::IMDL::MDL_version version = get_min_required_mdl_version(
+    mi::neuraylib::Mdl_version version = get_min_required_mdl_version(
         m_transaction,
         enumerators,
         enumerator_annotations,
@@ -1085,7 +1085,7 @@ mi::Sint32 Mdl_module_builder::add_struct_type(
         return -1;
 
     // upgrade MDL version if necessary (and possible)
-    mi::mdl::IMDL::MDL_version version = get_min_required_mdl_version(
+    mi::neuraylib::Mdl_version version = get_min_required_mdl_version(
         m_transaction,
         field_defaults,
         field_annotations,
@@ -1234,7 +1234,7 @@ mi::Sint32 Mdl_module_builder::add_constant(
         return -1;
 
     // upgrade MDL version if necessary (and possible)
-    mi::mdl::IMDL::MDL_version version = get_min_required_mdl_version(
+    mi::neuraylib::Mdl_version version = get_min_required_mdl_version(
         m_transaction,
         expr,
         annotations);
@@ -1650,7 +1650,7 @@ mi::Sint32 Mdl_module_builder::add_prototype_based(
         return -1;
 
     // upgrade MDL version if necessary (and possible)
-    mi::mdl::IMDL::MDL_version version = get_min_required_mdl_version(
+    mi::neuraylib::Mdl_version version = get_min_required_mdl_version(
         m_transaction,
         prototype,
         defaults,
@@ -1658,8 +1658,8 @@ mi::Sint32 Mdl_module_builder::add_prototype_based(
         annotations,
         return_annotations);
     bool is_material_variant = is_variant && prototype->is_material();
-    if( is_material_variant && (version < mi::mdl::IMDL::MDL_VERSION_1_4))
-        version = mi::mdl::IMDL::MDL_VERSION_1_4;
+    if( is_material_variant && (version < mi::neuraylib::MDL_VERSION_1_4))
+        version = mi::neuraylib::MDL_VERSION_1_4;
     upgrade_mdl_version( version, context);
     if( context->get_error_messages_count() > 0)
         return -1;
@@ -2042,8 +2042,9 @@ mi::Sint32 Mdl_module_builder::deprecated_add_call_based(
 }
 
 void Mdl_module_builder::upgrade_mdl_version(
-    mi::mdl::IMDL::MDL_version new_version, Execution_context* context)
+    mi::neuraylib::Mdl_version version, Execution_context* context)
 {
+    mi::mdl::IMDL::MDL_version new_version = convert_mdl_version( version);
     mi::mdl::IMDL::MDL_version current_version
         = static_cast<mi::mdl::Module*>( m_module.get())->get_version();
 

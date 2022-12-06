@@ -42,6 +42,42 @@
 namespace mi {
 namespace mdl {
 
+/// Helper struct to support mapping of IGenerated_code_dag::IMaterial_instance::Slot values
+/// to selector pattern.
+struct Locator {
+    char const *first_name;
+    char const *second_name;
+    char const *third_name;
+};
+
+/// The mapping table, keep in sync with IGenerated_code_dag::IMaterial_instance::Slot.
+static Locator const locators[] = {
+    { "thin_walled", NULL,                     NULL },
+
+    { "surface",     "scattering",             NULL },
+    { "surface",     "emission",               "emission" },
+    { "surface",     "emission",               "intensity" },
+    { "surface",     "emission",               "mode" },
+
+    { "backface",    "scattering",             NULL },
+    { "backface",    "emission",               "emission" },
+    { "backface",    "emission",               "intensity" },
+    { "backface",    "emission",               "mode" },
+
+    { "ior",         NULL,                     NULL },
+
+    { "volume",      "scattering",             NULL },
+    { "volume",      "absorption_coefficient", NULL },
+    { "volume",      "scattering_coefficient", NULL },
+    { "volume",      "emission_intensity",     NULL },
+
+    { "geometry",    "displacement",           NULL },
+    { "geometry",    "cutout_opacity",         NULL },
+    { "geometry",    "normal",                 NULL },
+
+    { "hair",        NULL,                     NULL }
+};
+
 // Constructor.
 DAG_ir_walker::DAG_ir_walker(
     IAllocator *alloc)
@@ -124,30 +160,6 @@ void DAG_ir_walker::walk_instance_slot(
     Generated_code_dag::Material_instance::Slot slot,
     IDAG_ir_visitor                             *visitor)
 {
-    struct Locator {
-        char const *first_name;
-        char const *second_name;
-        char const *third_name;
-    };
-
-    static Locator const locators[] = {
-        { "thin_walled", NULL,                     NULL },
-        { "surface",     "scattering",             NULL },
-        { "surface",     "emission",               "emission" },
-        { "surface",     "emission",               "intensity" },
-        { "backface",    "scattering",             NULL },
-        { "backface",    "emission",               "emission" },
-        { "backface",    "emission",               "intensity" },
-        { "ior",         NULL,                     NULL },
-        { "volume",      "scattering",             NULL },
-        { "volume",      "absorption_coefficient", NULL },
-        { "volume",      "scattering_coefficient", NULL },
-        { "geometry",    "displacement",           NULL },
-        { "geometry",    "cutout_opacity",         NULL },
-        { "geometry",    "normal",                 NULL },
-        { "hair",        NULL,                     NULL }
-    };
-
     DAG_node     *node = NULL;
     IValue const *v    = NULL;
 
@@ -389,32 +401,6 @@ void Dag_hasher::hash_instance_slot(
     Generated_code_dag::Material_instance       *instance,
     Generated_code_dag::Material_instance::Slot slot)
 {
-    struct Locator {
-        char const *first_name;
-        char const *second_name;
-        char const *third_name;
-    };
-
-    static Locator const locators[] = {
-        { "thin_walled", NULL,                     NULL },
-        { "surface",     "scattering",             NULL },
-        { "surface",     "emission",               "emission" },
-        { "surface",     "emission",               "intensity" },
-        { "surface",     "emission",               "mode" },
-        { "backface",    "scattering",             NULL },
-        { "backface",    "emission",               "emission" },
-        { "backface",    "emission",               "intensity" },
-        { "backface",    "emission",               "mode" },
-        { "ior",         NULL,                     NULL },
-        { "volume",      "scattering",             NULL },
-        { "volume",      "absorption_coefficient", NULL },
-        { "volume",      "scattering_coefficient", NULL },
-        { "geometry",    "displacement",           NULL },
-        { "geometry",    "cutout_opacity",         NULL },
-        { "geometry",    "normal",                 NULL },
-        { "hair",        NULL,                     NULL }
-    };
-
     DAG_node const *node = NULL;
     IValue const   *v    = NULL;
 

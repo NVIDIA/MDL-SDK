@@ -2024,10 +2024,19 @@ void GLSLWriterBasePass::finalize(
 
     // generate the version fragment
     {
-        printer->print_comment("GLSL version and extensions");
+        // ES even does not allow comments before version
+        if (m_glslang_profile != glsl::GLSL_PROFILE_ES) {
+            printer->print_comment("GLSL version and extensions");
+        }
         printer->print_version(m_ctx);
         printer->print_extensions(m_ctx);
         printer->nl();
+
+        if (m_glslang_profile == glsl::GLSL_PROFILE_ES) {
+            // set the precision for the used types, is might be not defined by default
+            printer->print("precision highp float;"); printer->nl();
+            printer->print("precision highp int;"); printer->nl();
+        }
     }
 
     // generate the defines fragment

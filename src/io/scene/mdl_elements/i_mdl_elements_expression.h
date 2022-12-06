@@ -248,9 +248,6 @@ public:
 
     virtual const IAnnotation* create_annotation( const IExpression_list* arguments) const = 0;
 
-    virtual void get_mdl_version(
-        mi::mdl::IMDL::MDL_version& since, mi::mdl::IMDL::MDL_version& removed) const = 0;
-
     virtual mi::Size get_memory_consumption() const = 0;
 
     virtual std::string get_mdl_name_without_parameter_types() const = 0;
@@ -366,8 +363,8 @@ public:
         const std::vector<std::string>& parameter_type_names,
         mi::neuraylib::IAnnotation_definition::Semantics sema,
         bool is_exported,
-        mi::mdl::IMDL::MDL_version since_version,
-        mi::mdl::IMDL::MDL_version removed_version,
+        mi::neuraylib::Mdl_version since_version,
+        mi::neuraylib::Mdl_version removed_version,
         const IType_list* parameter_types,
         const IExpression_list* parameter_defaults,
         const IAnnotation_block* annotations) const = 0;

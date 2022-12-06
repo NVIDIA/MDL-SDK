@@ -38,11 +38,11 @@ namespace mdl {
 
 This example shows how to enable and use automatic derivatives for texture filtering.
 
-\section example_execution_ptx_new New Topics
+\section example_derivatives_new New Topics
 
   - Automatic derivatives
 
-\section example_df_cuda_descr Detailed Description
+\section example_derivates_descr Detailed Description
 
 <dl>
 <dt><b>Automatic derivatives</b></dt>

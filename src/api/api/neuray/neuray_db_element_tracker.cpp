@@ -40,6 +40,7 @@
 #include <sstream>
 #include <mi/base/handle.h>
 #include <base/lib/log/i_log_assert.h>
+using namespace std::string_literals;
 
 
 namespace MI {

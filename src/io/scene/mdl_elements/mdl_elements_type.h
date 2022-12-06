@@ -37,9 +37,11 @@
 #include <mi/base/lock.h>
 
 #include <map>
+#include <shared_mutex>
 #include <vector>
 
 #include <base/lib/log/i_log_assert.h>
+#include <base/lib/robin_hood/robin_hood.h>
 
 // see documentation of mi::base::Interface_merger
 #include <mi/base/config.h>
@@ -78,7 +80,7 @@ public:
 
 private:
 
-    typedef std::map<std::string, mi::Size> Name_index_map;
+    using Name_index_map = std::map<std::string, mi::Size>;
     Name_index_map m_name_index;
 
     using Index_name_vector = std::vector<std::string>;
@@ -198,11 +200,19 @@ public:
 
     std::string get_serialization_type_name( const IType* type) override;
 
-    mi::Uint32 destroy_enum_type( const IType_enum* e_type);
-
-    mi::Uint32 destroy_struct_type( const IType_struct* s_type);
-
     const IType* create_type( const char* serialization_type_name) const  override;
+
+    /// Acquires the mutex.
+    void lock() const { m_mutex.lock(); }
+
+    /// Releases the mutex.
+    void unlock() const { m_mutex.unlock(); }
+
+    /// Caller needs to hold the mutex.
+    void unregister_enum_type( const IType_enum* type);
+
+    /// Caller needs to hold the mutex.
+    void unregister_struct_type( const IType_struct* type);
 
 private:
 
@@ -219,27 +229,60 @@ private:
     static void dump_static( const IType_list* list, mi::Size depth, std::ostringstream& s);
 
 
-    typedef std::map<std::string, const IType_enum *> Weak_enum_symbol_map;
+    /// Performs the checks for create_enum() that need to happen under the lock.
+    const IType_enum* lookup_enum(
+        const char* symbol,
+        IType_enum::Predefined_id id,
+        const IType_enum::Values& values,
+        mi::Sint32* errors);
 
-    typedef std::map<IType_enum::Predefined_id, const IType_enum *> Weak_enum_id_map;
+    /// Performs the checks for create_struct() that need to happen under the lock.
+    const IType_struct* lookup_struct(
+        const char* symbol,
+        IType_struct::Predefined_id id,
+        const IType_struct::Fields& fields,
+        mi::Sint32* errors);
 
-    typedef std::map<std::string, const IType_struct *> Weak_struct_symbol_map;
 
-    typedef std::map<IType_struct::Predefined_id, const IType_struct *> Weak_struct_id_map;
+    /// Checks whether \p type and (\p id, \p values) are equivalent types (ignoring annotations).
+    static bool equivalent_enum_types(
+        const IType_enum* type,
+        IType_enum::Predefined_id id,
+        const IType_enum::Values& values);
 
-    /// Lock for the four weak map members below.
-    mutable mi::base::Lock m_weak_map_lock;
+    /// Checks whether \p type and (\p id, \p fields) are equivalent types (ignoring annotations).
+    static bool equivalent_struct_types(
+        const IType_struct* type,
+        IType_struct::Predefined_id id,
+        const IType_struct::Fields& fields);
 
-    /// All registered enum types by symbol. Needs #m_lock.
+
+    using Weak_enum_symbol_map
+        = robin_hood::unordered_map<std::string, const IType_enum*>;
+
+    using Weak_enum_id_map
+        = robin_hood::unordered_map<IType_enum::Predefined_id, const IType_enum*>;
+
+    using Weak_struct_symbol_map
+        = robin_hood::unordered_map<std::string, const IType_struct*>;
+
+    using Weak_struct_id_map
+        = robin_hood::unordered_map<IType_struct::Predefined_id, const IType_struct*>;
+
+
+    /// Mutex for the four weak map members below.
+    mutable std::shared_mutex m_mutex;
+
+    /// All registered enum types by symbol. Needs #m_mutex.
     Weak_enum_symbol_map m_enum_symbols;
 
-    /// All registered enum types by ID. Needs #m_lock.
+    /// All registered enum types by ID. Needs #m_mutex.
     Weak_enum_id_map m_enum_ids;
 
-    /// All registered struct types by symbol. Needs #m_lock.
+    /// All registered struct types by symbol. Needs #m_mutex.
     Weak_struct_symbol_map m_struct_symbols;
 
-    /// All registered struct types by ID. Needs #m_lock.
+    /// All registered struct types by ID. Needs #m_mutex.
     Weak_struct_id_map m_struct_ids;
 };
 

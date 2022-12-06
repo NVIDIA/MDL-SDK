@@ -123,7 +123,8 @@ public:
             impl_cast<mi::mdl::MDL>( m_mdl),
             m_to_major,
             m_to_minor,
-            /*enable_experimental_features*/ false);
+            /*enable_mdl_next=*/true,
+            /*enable_experimental=*/false);
 
         visit( m_module);
 

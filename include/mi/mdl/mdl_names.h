@@ -188,6 +188,9 @@ public:
 class IName_factory : public Interface_owned
 {
 public:
+    /// Return the error symbol.
+    virtual ISymbol const *get_error_symbol() const = 0;
+
     /// Create a new Symbol and enters it into the symbol table.
     virtual ISymbol const *create_symbol(char const *name) = 0;
 

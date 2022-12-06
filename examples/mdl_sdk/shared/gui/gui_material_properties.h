@@ -208,8 +208,8 @@ private:
         IParameter_node* call);
 
     std::stack<IParameter_node*> m_call_history;
-    IParameter_node* m_material_parameters;
-    IParameter_context* m_material_parameters_context;
+    std::unique_ptr<IParameter_node> m_material_parameters;
+    std::unique_ptr<IParameter_context> m_material_parameters_context;
     mi::base::Handle<mi::neuraylib::IMdl_evaluator_api> m_evaluator;
     mi::base::Handle<mi::neuraylib::IMdl_factory> m_factory;
     Section_material_update_state m_update_state;

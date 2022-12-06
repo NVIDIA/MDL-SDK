@@ -115,7 +115,7 @@ This example loads an MDL module and inspects it contents.
     </dd>
 </dl>
 
-\section example_modules Example Source
+\section example_modules_source Example Source
 
 <b>Source Code Location:</b>
   <tt>examples/mdl_sdk/modules/example_modules.cpp</tt>

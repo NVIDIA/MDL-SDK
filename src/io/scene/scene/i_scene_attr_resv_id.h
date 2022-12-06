@@ -73,6 +73,7 @@ enum Attr_resv_id {
     MATTE_CONNECT_FROM_CAM,     ///< connect matte from camera or use real incoming ray
     BACKPLATE_MESH,             ///< is the object a 3D-environment/backplate mesh
     NOT_PICKABLE,               ///< "invisible" to pick rays
+    SELECTED,                   ///< include in rendering of selection subsets
     N_FLAGS,			///< number of reserved flags, <= 31
     N_MAXFLAGS		= 32,	///< can't have more than 32 reserved flags
 
@@ -107,6 +108,8 @@ enum Attr_resv_id {
     MATTE_SHADOW_INTENSITY,     ///< Scalar     matte_shadow_intensity for fake shadows
     VOLUME_PRIORITY,            ///< Sint8      volume stack priority    
     BACKPLATE_MESH_FUNCTION,    ///< Tag        backplate mesh function
+    GHOSTLIGHT_FACTOR,          ///< Scalar     factor to lower light visibility in glossy reflections
+
                                 //------------------ object, no inheritance ---
     OBJ_NORMAL,			///< Vector3    vertex normal
     OBJ_MOTION,			///< Vector3[]  vertex motion path

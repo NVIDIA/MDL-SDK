@@ -27,7 +27,7 @@
 #*****************************************************************************
 
 # name of the target and the resulting library
-set(PROJECT_NAME prod-lib-mdl_python)
+set(PROJECT_NAME bindings-mdl_python)
 
 # Files to generate
 set(_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
@@ -102,6 +102,13 @@ if(UNIX AND NOT APPLE)
     )
 endif()
 
+# copy content
+# the high level hand-written binding
+target_add_content(TARGET ${PROJECT_NAME}
+    FILES
+        "pymdl.py"
+    )
+source_group("" FILES "pymdl.py")
 
 # -------------------------------------------------------------------------------------------------
 # Code Generation Step

@@ -42,6 +42,7 @@ namespace mi {namespace examples { namespace mdl_d3d12 { namespace materialx
     {
     public:
         explicit Mdl_material_description_loader_mtlx(const Base_options& options);
+        ~Mdl_material_description_loader_mtlx() = default;
 
         bool match_gltf_name(const std::string& gltf_name) const final;
 

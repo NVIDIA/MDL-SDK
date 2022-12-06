@@ -88,6 +88,8 @@
 #include <io/scene/lightprofile/i_lightprofile.h>
 #include <io/scene/texture/i_texture.h>
 
+using namespace std::string_literals;
+
 
 // Disable false positives (claiming expressions involving "class_id" always being true or false)
 //-V:class_id:547 PVS
@@ -106,7 +108,9 @@ using mi::mdl::cast;
 mi::neuraylib::IFunction_definition::Semantics mdl_semantics_to_ext_semantics(
     mi::mdl::IDefinition::Semantics semantic)
 {
+    // Do not forget to update the Python binding in prod/bindings/mdl_python/mdl_python_swig.i.
     if( mi::mdl::semantic_is_operator( semantic)) {
+
         mi::mdl::IExpression::Operator op = mi::mdl::semantic_to_operator( semantic);
         switch( op) {
 
@@ -419,60 +423,66 @@ mi::neuraylib::IFunction_definition::Semantics mdl_semantics_to_ext_semantics(
 mi::neuraylib::IAnnotation_definition::Semantics mdl_semantics_to_ext_annotation_semantics(
     mi::mdl::IDefinition::Semantics semantic)
 {
-    if (!mi::mdl::semantic_is_annotation(semantic) &&
-        semantic != mi::mdl::IDefinition::DS_UNKNOWN) {
-
-        ASSERT(M_SCENE, false);
+    if( !mi::mdl::semantic_is_annotation( semantic)) {
+        ASSERT( M_SCENE, semantic == mi::mdl::IDefinition::DS_UNKNOWN);
         return mi::neuraylib::IAnnotation_definition::AS_UNKNOWN;
     }
 
-    switch (semantic) {
+    // TODO Baking semantics are currently not exposed.
+    if( mi::mdl::semantic_is_baking_annotation( semantic))
+        return mi::neuraylib::IAnnotation_definition::AS_UNKNOWN;
+
+    switch( semantic) {
 
 #define CASE_AS(e) \
         case mi::mdl::IDefinition::DS_##e: \
             return mi::neuraylib::IAnnotation_definition::AS_##e;
 
-        CASE_AS(INTRINSIC_ANNOTATION);
-        CASE_AS(THROWS_ANNOTATION);
-        CASE_AS(SINCE_ANNOTATION);
-        CASE_AS(REMOVED_ANNOTATION);
-        CASE_AS(CONST_EXPR_ANNOTATION);
-        CASE_AS(DERIVABLE_ANNOTATION);
-        CASE_AS(NATIVE_ANNOTATION);
-        CASE_AS(UNUSED_ANNOTATION);
-        CASE_AS(NOINLINE_ANNOTATION);
-        CASE_AS(SOFT_RANGE_ANNOTATION);
-        CASE_AS(HARD_RANGE_ANNOTATION);
-        CASE_AS(HIDDEN_ANNOTATION);
-        CASE_AS(DEPRECATED_ANNOTATION);
-        CASE_AS(VERSION_NUMBER_ANNOTATION);
-        CASE_AS(VERSION_ANNOTATION);
-        CASE_AS(DEPENDENCY_ANNOTATION);
-        CASE_AS(UI_ORDER_ANNOTATION);
-        CASE_AS(USAGE_ANNOTATION);
-        CASE_AS(ENABLE_IF_ANNOTATION);
-        CASE_AS(THUMBNAIL_ANNOTATION);
-        CASE_AS(DISPLAY_NAME_ANNOTATION);
-        CASE_AS(IN_GROUP_ANNOTATION);
-        CASE_AS(DESCRIPTION_ANNOTATION);
-        CASE_AS(AUTHOR_ANNOTATION);
-        CASE_AS(CONTRIBUTOR_ANNOTATION);
-        CASE_AS(COPYRIGHT_NOTICE_ANNOTATION);
-        CASE_AS(CREATED_ANNOTATION);
-        CASE_AS(MODIFIED_ANNOTATION);
-        CASE_AS(KEYWORDS_ANNOTATION);
-        CASE_AS(ORIGIN_ANNOTATION);
+        CASE_AS( INTRINSIC_ANNOTATION);
+        CASE_AS( THROWS_ANNOTATION);
+        CASE_AS( SINCE_ANNOTATION);
+        CASE_AS( REMOVED_ANNOTATION);
+        CASE_AS( CONST_EXPR_ANNOTATION);
+        CASE_AS( DERIVABLE_ANNOTATION);
+        CASE_AS( NATIVE_ANNOTATION);
+        CASE_AS( UNUSED_ANNOTATION);
+        CASE_AS( NOINLINE_ANNOTATION);
+        CASE_AS( SOFT_RANGE_ANNOTATION);
+        CASE_AS( HARD_RANGE_ANNOTATION);
+        CASE_AS( HIDDEN_ANNOTATION);
+        CASE_AS( DEPRECATED_ANNOTATION);
+        CASE_AS( VERSION_NUMBER_ANNOTATION);
+        CASE_AS( VERSION_ANNOTATION);
+        CASE_AS( DEPENDENCY_ANNOTATION);
+        CASE_AS( UI_ORDER_ANNOTATION);
+        CASE_AS( USAGE_ANNOTATION);
+        CASE_AS( ENABLE_IF_ANNOTATION);
+        CASE_AS( THUMBNAIL_ANNOTATION);
+        CASE_AS( DISPLAY_NAME_ANNOTATION);
+        CASE_AS( IN_GROUP_ANNOTATION);
+        CASE_AS( DESCRIPTION_ANNOTATION);
+        CASE_AS( AUTHOR_ANNOTATION);
+        CASE_AS( CONTRIBUTOR_ANNOTATION);
+        CASE_AS( COPYRIGHT_NOTICE_ANNOTATION);
+        CASE_AS( CREATED_ANNOTATION);
+        CASE_AS( MODIFIED_ANNOTATION);
+        CASE_AS( KEYWORDS_ANNOTATION);
+        CASE_AS( ORIGIN_ANNOTATION);
 
 #undef CASE_AS
-    default:
-        break;
+
+        default:
+            break;
     }
+
+    ASSERT( M_SCENE, false);
     return mi::neuraylib::IAnnotation_definition::AS_UNKNOWN;
 }
 
 mi::mdl::IDefinition::Semantics ext_semantics_to_mdl_semantics(
     mi::neuraylib::IFunction_definition::Semantics semantic)
 {
+    // Do not forget to update the Python binding in prod/bindings/mdl_python/mdl_python_swig.i.
     switch( semantic) {
 
 #define CASE_DS(e) \
@@ -2192,6 +2202,7 @@ const IDeserialized_function_name* deserialize_function_name(
         DB::Access<Mdl_module> module( module_tag, transaction);
 
         std::vector<const char*> type_names_cstr;
+        type_names_cstr.reserve(type_names.size());
         for( const auto& type_name: type_names)
             type_names_cstr.push_back( type_name.c_str());
         std::vector<std::string> result( module->get_function_overloads_by_signature(
@@ -2379,16 +2390,16 @@ Mdl_compiled_material* get_default_compiled_material( DB::Transaction* transacti
     DB::Tag tag = transaction->name_to_tag( name.c_str());
     DB::Access<Mdl_function_definition> md( tag, transaction);
 
-    Mdl_function_call* mi = md->create_function_call( transaction, /*arguments*/ nullptr);
-    if (!mi) {
-        LOG::mod_log->fatal(M_SCENE, LOG::Mod_log::C_DATABASE,
-            "Default/fallback material could not be created, something is seriously wrong ... exiting.");
-    }
+    Mdl_function_call* fc = md->create_function_call( transaction, /*arguments*/ nullptr);
+    // TODO Move to the calling code and adjust the interface documentation.
+    if( !fc)
+        LOG::mod_log->fatal( M_SCENE, LOG::Mod_log::C_DATABASE,
+            "Failed to compile default material.");
 
     Execution_context context;
-    Mdl_compiled_material* cm = mi->create_compiled_material(
+    Mdl_compiled_material* cm = fc->create_compiled_material(
         transaction, /*class_compilation*/ false, &context);
-    delete mi;
+    delete fc;
     return cm;
 }
 
@@ -3352,7 +3363,6 @@ const IType_enum* create_enum(
         /*code_dag*/ nullptr,
         /*immutable*/ true,
         /*create_direct_calls*/ false,
-        /*module_filename*/ nullptr,
         /*module_mdl_name*/ nullptr,
         /*prototype_tag*/ DB::Tag(),
         /*resolve_resources*/ false,
@@ -3411,7 +3421,6 @@ const IType_struct* create_struct(
         /*code_dag*/ nullptr,
         /*immutable*/ true,
         /*create_direct_calls*/ false,
-        /*module_filename*/ nullptr,
         /*module_mdl_name*/ nullptr,
         /*prototype_tag*/ DB::Tag(),
         /*resolve_resources*/ false,
@@ -3820,7 +3829,6 @@ Mdl_dag_converter::Mdl_dag_converter(
     const mi::mdl::IGenerated_code_dag* code_dag,
     bool immutable_callees,
     bool create_direct_calls,
-    const char* module_filename,
     const char* module_mdl_name,
     DB::Tag prototype_tag,
     bool resolve_resources,
@@ -3833,7 +3841,6 @@ Mdl_dag_converter::Mdl_dag_converter(
     , m_code_dag(code_dag)
     , m_immutable_callees(immutable_callees)
     , m_create_direct_calls(create_direct_calls)
-    , m_module_filename(module_filename)
     , m_module_mdl_name(module_mdl_name)
     , m_prototype_tag(prototype_tag)
     , m_resolve_resources(resolve_resources)
@@ -3895,7 +3902,7 @@ IExpression* Mdl_dag_converter::mdl_call_to_int_expr_direct(
 {
     const mi::mdl::IType* return_type = call->get_type();
     mi::base::Handle<const IType> return_type_int(
-        mdl_type_to_int_type(m_tf.get(), return_type));
+        mdl_type_to_int_type( m_tf.get(), return_type));
 
     mi::mdl::IDefinition::Semantics sema = call->get_semantic();
     bool is_array_constructor = sema == mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR;
@@ -3908,34 +3915,28 @@ IExpression* Mdl_dag_converter::mdl_call_to_int_expr_direct(
 
     // get tag and class ID of call
     std::string definition_name;
-    if (is_array_constructor) {
+    if( is_array_constructor) {
         definition_name = get_array_constructor_db_name();
         use_parameter_type = false;
-    }
-    else if (is_array_length) {
+    } else if( is_array_length) {
         definition_name = get_array_length_operator_db_name();
         use_parameter_type = false;
-    }
-    else if (is_cast_operator) {
+    } else if( is_cast_operator) {
         definition_name = get_cast_operator_db_name();
         use_parameter_type = false;
-    }
-    else if (is_ternary_operator) {
+    } else if( is_ternary_operator) {
         definition_name = get_ternary_operator_db_name();
         use_parameter_type = false;
-    }
-    else if (is_array_index_operator) {
+    } else if( is_array_index_operator) {
         definition_name = get_index_operator_db_name();
         use_parameter_type = false;
-    }
-    else {
-        std::string mdl_name = encode_name_add_missing_signature(m_transaction, m_code_dag, call->get_name());
-        definition_name = get_db_name(mdl_name);
+    } else {
+        std::string mdl_name = encode_name_add_missing_signature( m_transaction, m_code_dag, call->get_name());
+        definition_name = get_db_name( mdl_name);
     }
 
     DB::Tag definition_tag = m_transaction->name_to_tag( definition_name.c_str());
-
-    ASSERT(M_SCENE, definition_tag.is_valid());
+    ASSERT( M_SCENE, definition_tag);
 
     SERIAL::Class_id class_id = m_transaction->get_class_id(definition_tag);
     if( class_id != ID_MDL_FUNCTION_DEFINITION) {
@@ -5308,6 +5309,8 @@ IExpression* deep_copy(
                 mi::base::Handle<const IExpression> argument( arguments->get_expression( i));
                 mi::base::Handle<IExpression> copy_argument(
                     deep_copy( ef, transaction, argument.get(), context));
+                if( !copy_argument)
+                    return nullptr;
                 const char* name = arguments->get_name( i);
                 copy_arguments->add_expression( name, copy_argument.get());
             }
@@ -5331,7 +5334,8 @@ IExpression* deep_copy(
             mi::base::Handle<const IExpression_parameter> expr_parameter(
                 expr->get_interface<IExpression_parameter>());
             mi::Size index = expr_parameter->get_index();
-            ASSERT( M_SCENE, index < context.size());
+            if( index >= context.size())
+                return nullptr;
             return deep_copy( ef, transaction, context[index].get(), context);
         }
         case IExpression::EK_DIRECT_CALL: {
@@ -5351,6 +5355,8 @@ IExpression* deep_copy(
                 mi::base::Handle<IExpression> copy_argument(
                     deep_copy( ef, transaction, argument.get(), context));
                 const char* name = arguments->get_name( i);
+                if( !copy_argument)
+                    return nullptr;
                 copy_arguments->add_expression( name, copy_argument.get());
             }
 
@@ -5449,18 +5455,18 @@ mi::neuraylib::IReader* create_reader( const std::string& data)
     return new DISK::Memory_reader_impl( buffer.get());
 }
 
-mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
+mi::neuraylib::Mdl_version get_min_required_mdl_version(
     DB::Transaction* transaction, const Mdl_function_definition* definition)
 {
-    mi::mdl::IMDL::MDL_version since, removed;
+    mi::neuraylib::Mdl_version since, removed;
     definition->get_mdl_version( since, removed);
     return since;
 }
 
-mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
+mi::neuraylib::Mdl_version get_min_required_mdl_version(
     DB::Transaction* transaction, const IValue* value)
 {
-    mi::mdl::IMDL::MDL_version version = mi::mdl::IMDL::MDL_VERSION_1_0;
+    mi::neuraylib::Mdl_version version = mi::neuraylib::MDL_VERSION_1_0;
     if( !value)
         return version;
 
@@ -5474,7 +5480,7 @@ mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
                 DB::Access<TEXTURE::Texture> db_texture( tag, transaction);
                 std::string selector = db_texture->get_selector( transaction);
                 if( !selector.empty())
-                    version = mi::mdl::IMDL::MDL_VERSION_1_7;
+                    version = mi::neuraylib::MDL_VERSION_1_7;
             }
             break;
         }
@@ -5487,10 +5493,10 @@ mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
     return version;
 }
 
-mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
+mi::neuraylib::Mdl_version get_min_required_mdl_version(
     DB::Transaction* transaction, const IExpression* expr)
 {
-    mi::mdl::IMDL::MDL_version version = mi::mdl::IMDL::MDL_VERSION_1_0;
+    mi::neuraylib::Mdl_version version = mi::neuraylib::MDL_VERSION_1_0;
     if( !expr)
         return version;
 
@@ -5515,24 +5521,24 @@ mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
                 expr->get_interface<IExpression_call>());
             DB::Tag call_tag = call->get_call();
             if( !call_tag)
-                return mi_mdl_IMDL_MDL_VERSION_INVALID;
+                return mi::neuraylib::MDL_VERSION_INVALID;
 
             SERIAL::Class_id class_id = transaction->get_class_id( call_tag);
             if( class_id != ID_MDL_FUNCTION_CALL) {
                 ASSERT( M_SCENE, !"call to unknown entity class");
-                return mi_mdl_IMDL_MDL_VERSION_INVALID;
+                return mi::neuraylib::MDL_VERSION_INVALID;
             }
 
             DB::Access<Mdl_function_call> fcall( call_tag, transaction);
             DB::Tag def_tag = fcall->get_function_definition( transaction);
             if( !def_tag)
-                return mi_mdl_IMDL_MDL_VERSION_INVALID;
+                return mi::neuraylib::MDL_VERSION_INVALID;
 
             DB::Access<Mdl_function_definition> fdef( def_tag, transaction);
             version = get_min_required_mdl_version( transaction, fdef.get_ptr());
             mi::base::Handle<const IExpression_list> args( fcall->get_arguments());
 
-            mi::mdl::IMDL::MDL_version v = get_min_required_mdl_version( transaction, args.get());
+            mi::neuraylib::Mdl_version v = get_min_required_mdl_version( transaction, args.get());
             if( v > version)
                 version = v;
             break;
@@ -5544,19 +5550,19 @@ mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
                expr->get_interface<IExpression_direct_call>());
            DB::Tag def_tag = call->get_definition( transaction);
            if( !def_tag)
-               return mi_mdl_IMDL_MDL_VERSION_INVALID;
+               return mi::neuraylib::MDL_VERSION_INVALID;
 
            SERIAL::Class_id class_id = transaction->get_class_id( def_tag);
            if( class_id != ID_MDL_FUNCTION_DEFINITION) {
                ASSERT( M_SCENE, !"call to unknown entity class");
-               return mi_mdl_IMDL_MDL_VERSION_INVALID;
+               return mi::neuraylib::MDL_VERSION_INVALID;
            }
 
            DB::Access<Mdl_function_definition> fdef( def_tag, transaction);
            version = get_min_required_mdl_version( transaction, fdef.get_ptr());
 
            mi::base::Handle<const IExpression_list> args( call->get_arguments());
-           mi::mdl::IMDL::MDL_version v = get_min_required_mdl_version( transaction, args.get());
+           mi::neuraylib::Mdl_version v = get_min_required_mdl_version( transaction, args.get());
            if( v > version)
                version = v;
            break;
@@ -5565,23 +5571,23 @@ mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
         case IExpression::EK_TEMPORARY:
         case IExpression::EK_FORCE_32_BIT:
             ASSERT( M_SCENE, !"Unsupported expression kind");
-            return mi_mdl_IMDL_MDL_VERSION_INVALID;
+            return mi::neuraylib::MDL_VERSION_INVALID;
             break;
     }
 
     return version;
 }
 
-mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
+mi::neuraylib::Mdl_version get_min_required_mdl_version(
     DB::Transaction* transaction, const IExpression_list* expr_list)
 {
-    mi::mdl::IMDL::MDL_version version = mi::mdl::IMDL::MDL_VERSION_1_0;
+    mi::neuraylib::Mdl_version version = mi::neuraylib::MDL_VERSION_1_0;
     if( !expr_list)
         return version;
 
     for( mi::Size i = 0, n = expr_list->get_size(); i < n; ++i) {
         mi::base::Handle<const IExpression> expr( expr_list->get_expression( i));
-        mi::mdl::IMDL::MDL_version v = get_min_required_mdl_version( transaction, expr.get());
+        mi::neuraylib::Mdl_version v = get_min_required_mdl_version( transaction, expr.get());
         if( v > version)
             version = v;
     }
@@ -5589,31 +5595,31 @@ mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
     return version;
 }
 
-mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
+mi::neuraylib::Mdl_version get_min_required_mdl_version(
     DB::Transaction* transaction, const IAnnotation* annotation)
 {
     mi::base::Handle<const IAnnotation_definition> definition(
         annotation->get_definition( transaction));
-    mi::mdl::IMDL::MDL_version def_since, def_removed;
+    mi::neuraylib::Mdl_version def_since, def_removed;
     definition->get_mdl_version( def_since, def_removed);
 
     mi::base::Handle<const IExpression_list> args( annotation->get_arguments());
-    mi::mdl::IMDL::MDL_version args_since = get_min_required_mdl_version( transaction, args.get());
+    mi::neuraylib::Mdl_version args_since = get_min_required_mdl_version( transaction, args.get());
 
     return std::max( def_since, args_since);
 }
 
-mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
+mi::neuraylib::Mdl_version get_min_required_mdl_version(
     DB::Transaction* transaction, const IAnnotation_block* block)
 {
-    mi::mdl::IMDL::MDL_version version = mi::mdl::IMDL::MDL_VERSION_1_0;
+    mi::neuraylib::Mdl_version version = mi::neuraylib::MDL_VERSION_1_0;
     if( !block)
         return version;
 
 
     for( mi::Size i = 0, n = block->get_size(); i < n; ++i) {
         mi::base::Handle<const IAnnotation> annotation( block->get_annotation( i));
-        mi::mdl::IMDL::MDL_version v = get_min_required_mdl_version( transaction, annotation.get());
+        mi::neuraylib::Mdl_version v = get_min_required_mdl_version( transaction, annotation.get());
         if( v > version)
             version = v;
     }
@@ -5621,17 +5627,17 @@ mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
     return version;
 }
 
-mi::mdl::IMDL::MDL_version get_min_required_mdl_version(
+mi::neuraylib::Mdl_version get_min_required_mdl_version(
     DB::Transaction* transaction, const IAnnotation_list* list)
 {
-    mi::mdl::IMDL::MDL_version version = mi::mdl::IMDL::MDL_VERSION_1_0;
+    mi::neuraylib::Mdl_version version = mi::neuraylib::MDL_VERSION_1_0;
     if( !list)
         return version;
 
 
     for( mi::Size i = 0, n = list->get_size(); i < n; ++i) {
         mi::base::Handle<const IAnnotation_block> block( list->get_annotation_block( i));
-        mi::mdl::IMDL::MDL_version v = get_min_required_mdl_version( transaction, block.get());
+        mi::neuraylib::Mdl_version v = get_min_required_mdl_version( transaction, block.get());
         if( v > version)
             version = v;
     }
@@ -7694,11 +7700,11 @@ bool validate_internal_space(const boost::any& value)
 
 Execution_context::Execution_context() : m_result(0)
 {
-    add_option(Option(MDL_CTX_OPTION_WARNING, std::string(""), false,
+    add_option(Option(MDL_CTX_OPTION_WARNING, ""s, false,
         validate_warning));
     add_option(Option(MDL_CTX_OPTION_OPTIMIZATION_LEVEL, static_cast<mi::Sint32>( 2), false,
         validate_optimization_level));
-    add_option(Option(MDL_CTX_OPTION_INTERNAL_SPACE, std::string("coordinate_world"), false,
+    add_option(Option(MDL_CTX_OPTION_INTERNAL_SPACE, "coordinate_world"s, false,
         validate_internal_space));
     add_option(Option(MDL_CTX_OPTION_FOLD_METERS_PER_SCENE_UNIT, true, false));
     add_option(Option(MDL_CTX_OPTION_METERS_PER_SCENE_UNIT, 1.0f, false));
@@ -7706,6 +7712,7 @@ Execution_context::Execution_context() : m_result(0)
     add_option(Option(MDL_CTX_OPTION_WAVELENGTH_MAX, 780.f, false));
     add_option(Option(MDL_CTX_OPTION_INCLUDE_GEO_NORMAL, true, false));
     add_option(Option(MDL_CTX_OPTION_BUNDLE_RESOURCES, false, false));
+    add_option(Option(MDL_CTX_OPTION_EXPORT_RESOURCES_WITH_MODULE_PREFIX, true, false));
     add_option(Option(MDL_CTX_OPTION_MDL_NEXT, false, false));
     add_option(Option(MDL_CTX_OPTION_EXPERIMENTAL, false, false));
     add_option(Option(MDL_CTX_OPTION_RESOLVE_RESOURCES, true, false));
@@ -7938,6 +7945,13 @@ Execution_context* create_execution_context( mi::mdl::IThread_context* ctx)
             context->set_option( MDL_CTX_OPTION_RESOLVE_RESOURCES, flag);
         }
 
+        index = options.get_option_index( MDL_OPTION_MDL_NEXT);
+        value = options.get_option_value( index);
+        if( value) {
+            bool flag = strcmp( value, "true") == 0;
+            context->set_option( MDL_CTX_OPTION_MDL_NEXT, flag);
+        }
+
         index = options.get_option_index( MDL_OPTION_EXPERIMENTAL_FEATURES);
         value = options.get_option_value( index);
         if( value) {
@@ -8045,9 +8059,6 @@ Uint64 generate_unique_id()
 
 mi::neuraylib::Mdl_version convert_mdl_version( mi::mdl::IMDL::MDL_version version)
 {
-    if( version == mi_mdl_IMDL_MDL_VERSION_INVALID)
-        return mi::neuraylib::MDL_VERSION_INVALID;
-
     switch( version) {
         case mi::mdl::IMDL::MDL_VERSION_1_0: return mi::neuraylib::MDL_VERSION_1_0;
         case mi::mdl::IMDL::MDL_VERSION_1_1: return mi::neuraylib::MDL_VERSION_1_1;
@@ -8058,12 +8069,20 @@ mi::neuraylib::Mdl_version convert_mdl_version( mi::mdl::IMDL::MDL_version versi
         case mi::mdl::IMDL::MDL_VERSION_1_6: return mi::neuraylib::MDL_VERSION_1_6;
         case mi::mdl::IMDL::MDL_VERSION_1_7: return mi::neuraylib::MDL_VERSION_1_7;
         case mi::mdl::IMDL::MDL_VERSION_1_8: return mi::neuraylib::MDL_VERSION_1_8;
+        case mi::mdl::IMDL::MDL_VERSION_EXP: return mi::neuraylib::MDL_VERSION_EXP;
             // Adapt check in strip_deprecated_suffix() when new versions are added.
-        case mi::mdl::IMDL::MDL_VERSION_1_9: return mi::neuraylib::MDL_VERSION_INVALID;
     }
 
     ASSERT( M_SCENE, false);
     return mi::neuraylib::MDL_VERSION_INVALID;
+}
+
+mi::neuraylib::Mdl_version convert_mdl_version_uint32( mi::Uint32 version)
+{
+    if( version == mi_mdl_IMDL_MDL_VERSION_INVALID)
+        return mi::neuraylib::MDL_VERSION_INVALID;
+
+    return convert_mdl_version( static_cast<mi::mdl::IMDL::MDL_version>( version));
 }
 
 mi::mdl::IMDL::MDL_version convert_mdl_version( mi::neuraylib::Mdl_version version)
@@ -8078,7 +8097,9 @@ mi::mdl::IMDL::MDL_version convert_mdl_version( mi::neuraylib::Mdl_version versi
         case mi::neuraylib::MDL_VERSION_1_6:     return mi::mdl::IMDL::MDL_VERSION_1_6;
         case mi::neuraylib::MDL_VERSION_1_7:     return mi::mdl::IMDL::MDL_VERSION_1_7;
         case mi::neuraylib::MDL_VERSION_1_8:     return mi::mdl::IMDL::MDL_VERSION_1_8;
-        case mi::neuraylib::MDL_VERSION_INVALID: return mi_mdl_IMDL_MDL_VERSION_INVALID;
+        case mi::neuraylib::MDL_VERSION_EXP:     return mi::mdl::IMDL::MDL_VERSION_EXP;
+        case mi::neuraylib::MDL_VERSION_INVALID: ASSERT( M_SCENE, false);
+                                                 return mi_mdl_IMDL_MDL_VERSION_INVALID;
     }
 
     ASSERT( M_SCENE, false);
@@ -8097,7 +8118,7 @@ const char* stringify_mdl_version( mi::mdl::IMDL::MDL_version version)
         case mi::mdl::IMDL::MDL_VERSION_1_6: return "1.6";
         case mi::mdl::IMDL::MDL_VERSION_1_7: return "1.7";
         case mi::mdl::IMDL::MDL_VERSION_1_8: return "1.8";
-        case mi::mdl::IMDL::MDL_VERSION_1_9: return "1.9";
+        case mi::mdl::IMDL::MDL_VERSION_EXP: return "99.99";
     }
 
     ASSERT( M_SCENE, false);
@@ -8717,7 +8738,7 @@ std::string get_file_path(
                 break;
 
             case mi::neuraylib::IMdl_impexp_api::SEARCH_OPTION_FORCE_32_BIT:
-                return nullptr;
+                return std::string();
         }
     }
 

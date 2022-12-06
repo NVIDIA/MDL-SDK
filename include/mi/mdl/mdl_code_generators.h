@@ -1272,6 +1272,9 @@ class ICode_generator_jit : public
     /// The name of the option to set a user-specified LLVM renderer module.
     #define MDL_JIT_BINOPTION_LLVM_RENDERER_MODULE "jit_llvm_renderer_module"
 
+    /// The name of the option to enable a warning if a spectrum color is converted into an RGB.
+    #define MDL_JIT_WARN_SPECTRUM_CONVERSION "jit_warn_spectrum_conversion"
+
 public:
     /// Creates a new thread context.
     virtual ICode_generator_thread_context *create_thread_context() = 0;
@@ -1669,6 +1672,11 @@ These options are specific to the MDL JIT code generator:
   Default: \c "false"
 
 \section mdl_cg_jit_options Specific MDL JIT code generator options
+
+\anchor mdl_jit_warn_spectrum_conversion
+- <b>jit_warn_spectrum_conversion</b>: If set to \c "true", warn in a jit unsupported spectrum
+  value is converted into an RGB value.
+  Default: \c "false"
 
 \anchor mdl_option_jit_disable_exceptions
 - <b>jit_disable_exceptions</b>: If set to \c "true", support for exceptions through special runtime

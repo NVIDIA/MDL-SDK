@@ -68,19 +68,22 @@ function current_page_callback() {
     update_page_title($(selector));
     resize();
     scroll_to_target(target_name);
-    if (typeof MathJax !== 'undefined')
-        MathJax.Hub.Queue(["Typeset", MathJax.Hub, "page_content"]);
+    //if (typeof MathJax !== 'undefined')
+    //    MathJax.Hub.Queue(["Typeset", MathJax.Hub, "page_content"]);
+    MathJax.typeset();
 }
 
 
 function load_page_content(basename, new_page, callback) {
     if (new_page || (basename != loaded_basename)) {
-	var page_selector = 'pages/' + basename + '.html' + ' #page>';
-	$("#page_content").load(page_selector, callback);
-	loaded_basename = basename;
+	    var page_selector = 'pages/' + basename + '.html' + ' #page>';
+	    $("#page_content").load(page_selector, callback);
+	    loaded_basename = basename;
     }
-    else
-	callback();
+    else {
+	    callback();
+    }
+    MathJax.typeset();
 }
 
 
@@ -90,39 +93,38 @@ function load_page(basename, target, callback, push_state) {
     var state, state_target;
 
     if (init_complete) {
-	var parts = window.location.hash.toString().split('#');
-	state = {"basename" : parts[1], "target" : '#' + parts[2]};
-	state_target = '#' + basename + target;
-	if (push)
-	    history.pushState(state, "", state_target);
-	else
-	    history.replaceState(state, "", state_target);
+	    var parts = window.location.hash.toString().split('#');
+	    state = {"basename" : parts[1], "target" : '#' + parts[2]};
+	    state_target = '#' + basename + target;
+	    if (push)
+	        history.pushState(state, "", state_target);
+	    else
+	        history.replaceState(state, "", state_target);
 
-	load_page_content(
-	    basename, basename != loaded_basename,
-	    function() { 
-		target_name = target; 
-		initialize = false;
-		callback(); } );
+	    load_page_content(
+	        basename, basename != loaded_basename,
+	        function() { 
+		        target_name = target; 
+		        initialize = false;
+		        callback(); } );
 
     } else {
-	basename = first_basename();
-	state = {"basename" : basename, "target" : "#"};
-	state_target = "#" + basename + "#";
+	    basename = first_basename();
+	    state = {"basename" : basename, "target" : "#"};
+	    state_target = "#" + basename + "#";
 
-	init_complete = true;
+	    init_complete = true;
 
-	load_page_content(
-	    basename, basename != loaded_basename,
-	    function() { 
-		target_name = target; 
-		initialize = true;
-		callback(); } );
+	    load_page_content(
+	        basename, basename != loaded_basename,
+	        function() { 
+		        target_name = target; 
+		        initialize = true;
+		        callback(); } );
 
-	history.replaceState(state, "", state_target);
+	    history.replaceState(state, "", state_target);
     }
     loaded_basename = basename;
-
 }
 
 $(window).on("load", function() {
@@ -135,7 +137,6 @@ $(window).on("load", function() {
 
 	load_page(basename, target, new_page_callback);
 	loaded_basename = basename;
-
 	return false;
     });
 });

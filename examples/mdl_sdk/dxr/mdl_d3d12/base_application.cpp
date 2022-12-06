@@ -182,7 +182,7 @@ int Base_application::run(Base_options* options, HINSTANCE hInstance, int nCmdSh
     if (load())
     {
         // show the window and run the message loop
-        int return_code = m_window->show(nCmdShow);
+        return_code = m_window->show(nCmdShow);
         if (return_code != 0)
             log_warning("Applications main loop stopped with issues.", SRC);
 

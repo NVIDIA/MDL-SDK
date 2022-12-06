@@ -96,6 +96,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
             , window_width(1280)
             , window_height(720)
             , mdl_paths()
+            , mdl_next(false)
             , use_class_compilation(true)
             , force_single_threading(false)
             , no_gui(false)
@@ -119,6 +120,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         size_t window_width;
         size_t window_height;
         std::vector<std::string> mdl_paths;
+        bool mdl_next;
         bool use_class_compilation;
         bool force_single_threading;
         bool no_gui;

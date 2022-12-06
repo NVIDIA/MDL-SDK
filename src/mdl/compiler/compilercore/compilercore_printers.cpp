@@ -756,10 +756,36 @@ void Printer::print(double d)
     printf("%.16g", d);
 }
 
+// Anonymous
+namespace {
+    bool is_non_ascii(unsigned char c) {
+        return ((c & 0x80) != 0);
+    }
+
+    bool contains_non_ascii(char const* name)
+    {
+        char const* p = name;
+        while (*p) {
+            unsigned char c = *p;
+            if (is_non_ascii(c))
+                return true;
+            p++;
+        }
+        return false;
+    }
+} // Anonymous
+
+
 // Print a symbol.
 void Printer::print(ISymbol const *sym)
 {
-    print(sym->get_name());
+    char const *name = sym->get_name();
+    bool is_unicode = contains_non_ascii(name);
+    if (is_unicode)
+        print('\'');
+    print(name);
+    if (is_unicode)
+        print('\'');
 }
 
 // Print simple name.
@@ -2729,8 +2755,8 @@ void Printer::print_mdl_versions(IDefinition const *idef, bool insert)
             case IMDL::MDL_VERSION_1_8:
                 print(" Since MDL 1.8");
                 break;
-            case IMDL::MDL_VERSION_1_9:
-                print(" Since MDL 1.9");
+            case IMDL::MDL_VERSION_EXP:
+                print(" Since MDL experimental");
                 break;
             }
             switch (rem) {
@@ -2760,8 +2786,8 @@ void Printer::print_mdl_versions(IDefinition const *idef, bool insert)
             case IMDL::MDL_VERSION_1_8:
                 print(" Removed in MDL 1.8");
                 break;
-            case IMDL::MDL_VERSION_1_9:
-                print(" Removed in MDL 1.9");
+            case IMDL::MDL_VERSION_EXP:
+                print(" Removed in MDL experimental");
                 break;
             }
             print(insert ? " */" : "\n");
@@ -2842,10 +2868,11 @@ void Printer::print_namespace(IQualified_name const *name)
 
         if (!valid_id) {
             print('"');
-        }
-        print(sym);
-        if (!valid_id) {
+            print(sym->get_name());
             print('"');
+        }
+        else {
+            print(sym);
         }
         pop_color();
     }
@@ -3202,7 +3229,13 @@ void Sema_printer::print_import_scope_name(IDefinition const *idef)
         } else {
             Base::print("::");
         }
-        Base::print(sym->get_name());
+        char const* name = sym->get_name();
+        bool unicode = contains_non_ascii(name);
+        if (unicode)
+            Base::print('\'');
+        Base::print(name);
+        if (unicode)
+            Base::print('\'');
 
         m_sym_stack.pop();
     }

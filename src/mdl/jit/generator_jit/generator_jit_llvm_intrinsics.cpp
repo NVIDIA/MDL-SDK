@@ -3309,28 +3309,41 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
     case RT_MDL_SMOOTHSTEP:
     case RT_MDL_SMOOTHSTEPF:
         // smoothstep(a, b, l) ==>
-        //   x = clamp(l, a, b)
-        //   x = (x-a)/(b-a)
-        //   return x*x * (3.0 - (x+x))
+        //   if (l < a) return 0.0;
+        //   if (l >= b) return 1.0;
+        //   x = (l - a) / (b - a);
+        //   return x * x * (3.0 - (x + x));
         {
             bool           is_float = code == RT_MDL_SMOOTHSTEPF;
             llvm::Value    *a       = arg_it++;
             llvm::Value    *b       = arg_it++;
             llvm::Value    *l       = arg_it;
-            llvm::Value    *three;
-            llvm::Function *clamp_func;
 
-            if (is_float) {
-                three = ctx.get_constant(3.0f);
-                clamp_func = get_runtime_func(RT_MDL_CLAMPF);
-            } else {
-                three = ctx.get_constant(3.0);
-                clamp_func = get_runtime_func(RT_MDL_CLAMP);
-            }
-            llvm::Value *x   = ctx->CreateCall(clamp_func, { l, a, b });
+            llvm::BasicBlock *bb_zero = ctx.create_bb("bb_zero");
+            llvm::BasicBlock *bb_one  = ctx.create_bb("bb_one");
+            llvm::BasicBlock *bb_cont = ctx.create_bb("bb_cont");
+            llvm::BasicBlock *bb_end  = ctx.create_bb("bb_end");
+
+            llvm::Value *cond_lt = ctx->CreateFCmpOLT(l, a);
+            ctx->CreateCondBr(cond_lt, bb_zero, bb_cont);
+
+            ctx->SetInsertPoint(bb_zero);
+            ctx.create_return(is_float ? ctx.get_constant(0.0f) : ctx.get_constant(0.0));
+
+            ctx->SetInsertPoint(bb_cont);
+            llvm::Value *cond_ge = ctx->CreateFCmpOGE(l, b);
+            ctx->CreateCondBr(cond_ge, bb_one, bb_end);
+
+            ctx->SetInsertPoint(bb_one);
+            ctx.create_return(is_float ? ctx.get_constant(1.0f) : ctx.get_constant(1.0));
+
+            ctx->SetInsertPoint(bb_end);
+
+            llvm::Value *three = is_float ? ctx.get_constant(3.0f) : ctx.get_constant(3.0);
+
             llvm::Value *b_a = ctx->CreateFSub(b, a);
-            llvm::Value *x_a = ctx->CreateFSub(x, a);
-            x = ctx->CreateFDiv(x_a, b_a);
+            llvm::Value *l_a = ctx->CreateFSub(l, a);
+            llvm::Value *x   = ctx->CreateFDiv(l_a, b_a);
 
             llvm::Value *t = ctx->CreateFAdd(x, x);
             t = ctx->CreateFSub(three, t);
@@ -4515,10 +4528,11 @@ llvm::Value *LLVM_code_generator::translate_call_intrinsic_function(
     Function_context          &ctx,
     mi::mdl::ICall_expr const *call_expr)
 {
-    mi::mdl::IDefinition const *callee_def = call_expr->get_callee_definition(*this);
+    mi::mdl::IDefinition const      *callee_def = call_expr->get_callee_definition(*this);
+    mi::mdl::IDefinition::Semantics sema        = callee_def->get_semantics();
 
     State_usage usage;
-    switch (callee_def->get_semantics()) {
+    switch (sema) {
     case IDefinition::DS_INTRINSIC_STATE_POSITION:
         usage = IGenerated_code_executable::SU_POSITION;
         break;
@@ -4648,7 +4662,6 @@ llvm::Value *LLVM_code_generator::translate_call_intrinsic_function(
     }
 
     int clip_pos = -1, clip_bound = -1;
-    mi::mdl::IDefinition::Semantics sema = callee_def->get_semantics();
     int n_args = call_expr->get_argument_count();
 
     mi::mdl::IType_function const *func_tp =
@@ -4704,7 +4717,7 @@ llvm::Value *LLVM_code_generator::translate_call_intrinsic_function(
 
         int upper_bound = is_index_argument(sema, i);
         if (upper_bound >= 0) {
-            if (m_bounds_check_exception_disabled) {
+            if (m_bounds_check_exception_disabled || m_state_functions_no_bounds_exception) {
                 // ensure that the state is not accessed wrong
                 clip_pos   = i;
                 clip_bound = upper_bound;

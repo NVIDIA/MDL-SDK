@@ -110,6 +110,8 @@ public:
 ///   and inter procedural optimizations are enabled). Default: 2.
 /// - \c std::string "internal_space": Set the internal space of the backend. Possible values:
 ///   \c "coordinate_world", \c "coordinate_object". Default: \c "coordinate_world".
+/// - \c bool "mdl_next": If \c true, enables (possible incomplete) features from upcoming
+///   MDL version. Default: \c false.
 /// - \c bool "experimental": If \c true, enables undocumented experimental MDL features. Default:
 ///   \c false.
 ///
@@ -117,6 +119,8 @@ public:
 /// - \c bool "bundle_resources": If \c true, referenced resources are exported into the same
 ///   directory as the module, even if they can be found via the module search path. Default:
 ///   \c false.
+/// - \c bool "export_resources_with_module_prefix": If \c true, the name of the exported resources
+///   start with the module name as prefix. Default: \c true.
 ///
 /// Options for material compilation
 /// - \c bool "fold_meters_per_scene_unit": If \c true, occurrences of the functions

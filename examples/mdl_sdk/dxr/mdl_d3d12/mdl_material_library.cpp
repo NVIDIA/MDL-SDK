@@ -34,37 +34,23 @@
 #include "mdl_material_target.h"
 #include "mdl_sdk.h"
 #include "texture.h"
+#include "light_profile.h"
+#include "bsdf_measurement.h"
 
 #include "example_shared.h"
 
-namespace mi { namespace examples { namespace mdl_d3d12
-{
-
-Mdl_material_library::Target_entry::Target_entry(Mdl_material_target* target)
-    : m_target(target)
-    , m_mutex()
-{
-}
-
-// ------------------------------------------------------------------------------------------------
-
-Mdl_material_library::Target_entry::~Target_entry()
-{
-    delete m_target;
-}
-
-// ------------------------------------------------------------------------------------------------
-// ------------------------------------------------------------------------------------------------
+namespace mi { namespace examples { namespace mdl_d3d12 {
 
 Mdl_material_library::Mdl_material_library(
     Base_application* app, Mdl_sdk* sdk)
     : m_app(app)
     , m_sdk(sdk)
     , m_targets()
-    , m_target_map()
     , m_targets_mtx()
-    , m_resources()
-    , m_resources_mtx()
+    , m_textures()
+    , m_textures_mtx()
+    , m_mbsdfs()
+    , m_mbsdfs_mtx()
 {
 }
 
@@ -72,37 +58,79 @@ Mdl_material_library::Mdl_material_library(
 
 Mdl_material_library::~Mdl_material_library()
 {
-    m_target_map.clear();
-    for (auto& entry : m_targets)
-        delete entry.second;
+    m_targets.clear();
 
-    for (auto& resource : m_resources)
+    for (auto& resource : m_textures)
         for (auto& entry : resource.second.entries)
             delete entry.resource;
+
+    for (auto& light_profile : m_light_profiles)
+        delete light_profile.second;
+
+    for (auto& mbsdf : m_mbsdfs)
+        delete mbsdf.second;
+
+    m_loaders.clear();
 }
 
 // ------------------------------------------------------------------------------------------------
 
-Mdl_material_library::Target_entry* Mdl_material_library::get_target_for_material_creation(
+Mdl_material_target* Mdl_material_library::get_target_for_material_creation(
     const std::string& key)
 {
     std::lock_guard<std::mutex> lock(m_targets_mtx);
-    Mdl_material_library::Target_entry* entry;
 
     // reuse the existing target if the material is already added to a link unit
-    auto found = m_target_map.find(key);
-    if (found == m_target_map.end())
+    auto mapIt = m_targets.find(key);
+    if (mapIt == m_targets.end())
     {
-        entry = new Target_entry(new Mdl_material_target(m_app, m_sdk));
-
         // store a key based on the compiled material hash to identify already handled ones
-        m_target_map.emplace(key, entry);
-        m_targets[entry->m_target->get_id()] = entry->m_target;
+        mapIt = m_targets.insert(
+            { key, std::make_unique<Mdl_material_target>(m_app, m_sdk, key) }).first;
     }
-    else
-        entry = found->second;
+    return mapIt->second.get();
+}
 
-    return entry;
+// ------------------------------------------------------------------------------------------------
+
+void Mdl_material_library::register_material(Mdl_material* material)
+{
+    // check if the compiled material is already present and reuse it in that case
+    // otherwise create a new target
+    auto new_target = get_target_for_material_creation(material->get_material_compiled_hash());
+    auto old_target = material->get_target_code();
+
+    // nothing changed
+    if (old_target == new_target)
+        return;
+
+    // an old target is set that needs to be unregistered
+    if (old_target)
+        unregister_material(material);
+
+    assert(material->get_target_code_id() == static_cast<size_t>(-1));
+    new_target->register_material(material);
+}
+
+// ------------------------------------------------------------------------------------------------
+
+void Mdl_material_library::unregister_material(Mdl_material* material)
+{
+    Mdl_material_target* target = material->get_target_code();
+    if (!target)
+        return;
+
+    target->unregister_material(material);
+
+    // since we can have more than one material registered with this target code,
+    // we delete the target code itself only if the last material was unregistered.
+    std::lock_guard<std::mutex> lock(m_targets_mtx);
+    if (target->get_material_count() == 0)
+    {
+        const std::string& hash = target->get_compiled_material_hash();
+        assert(m_targets.find(hash) != m_targets.end() && "untracked target found");
+        m_targets.erase(hash);
+    }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -111,6 +139,13 @@ Mdl_material* Mdl_material_library::create_material()
 {
     Mdl_material* mat = new Mdl_material(m_app);
     return mat;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+void Mdl_material_library::destroy_material(Mdl_material* material)
+{
+    unregister_material(material);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -126,31 +161,9 @@ bool Mdl_material_library::set_description(
         return false;
     }
 
-    // check if the compiled material is already present and reuse it in that case
-    // otherwise create a new target
-    auto target_entry =
-        get_target_for_material_creation(material->get_material_compiled_hash());
-
     // assign the material to the target
-    auto old_target = material->get_target_code();
-    target_entry->m_target->register_material(material);
-    if (old_target && old_target->get_material_count() == 0)
-    {
-        std::lock_guard<std::mutex> lock(m_targets_mtx);
-        if (old_target->get_material_count() == 0)
-        {
-            m_targets.erase(old_target->get_id());
-            std::vector<std::string> keys_to_delete;
-            for (auto& pair : m_target_map)
-                if (pair.second->m_target == old_target)
-                    keys_to_delete.push_back(pair.first);
-
-            for (auto& key : keys_to_delete)
-                m_target_map.erase(key);
-
-            delete old_target;
-        }
-    }
+    // this unregisters the material from the old target as well
+    register_material(material);
     return true;
 }
 
@@ -213,17 +226,7 @@ bool Mdl_material_library::recompile_material(Mdl_material* material, bool& targ
 
     // check if the compiled material is already present and reuse it in that case
     // otherwise create a new target
-    auto entry = get_target_for_material_creation(material->get_material_compiled_hash());
-    entry->m_target->register_material(material); // no lock, single threaded here
-
-    // free the old target if not used anymore
-    if (old_target->get_material_count() == 0)
-    {
-        std::lock_guard<std::mutex> lock(m_targets_mtx);
-        m_targets.erase(old_target->get_id());
-        m_target_map.erase(current_hash);
-        delete old_target;
-    }
+    register_material(material);
 
     return true;
 }
@@ -420,38 +423,7 @@ bool Mdl_material_library::reload_module(
     {
         // check if the compiled material is already present and reuse it in that case
         // otherwise create a new target
-        auto target_entry = get_target_for_material_creation(mat->get_material_compiled_hash());
-        target_entry->m_target->register_material(mat); // no lock, single threaded here
-    }
-
-    // purge unused targets
-    {
-        std::lock_guard<std::mutex> lock(m_targets_mtx);
-        for (auto& hash : old_hashes)
-        {
-            auto entry = m_target_map[hash];
-            if (!entry)
-            {
-                assert(false && "Target code map contains invalid entries");
-                m_target_map.erase(hash);
-                continue;
-            }
-
-            Mdl_material_target* target = entry->m_target;
-            if (target->get_material_count() == 0)
-            {
-                m_targets.erase(target->get_id());
-                std::vector<std::string> keys_to_delete;
-                for (auto& pair : m_target_map)
-                    if (pair.second->m_target == target)
-                        keys_to_delete.push_back(pair.first);
-
-                for (auto& key : keys_to_delete)
-                    m_target_map.erase(key);
-
-                delete target;
-            }
-        }
+        register_material(mat); // no lock, single threaded here
     }
     return true;
 }
@@ -469,24 +441,21 @@ bool Mdl_material_library::generate_and_compile_targets()
         Timing t("generating target code");
         std::lock_guard<std::mutex> lock(m_targets_mtx);
 
-        std::set<size_t> target_ids_to_delete;
-        std::set<std::string> target_map_entries_to_delete;
-
-        for (auto it = m_targets.begin(); it != m_targets.end(); it++)
+        // since targets could contain multiple materials we need to find the set of unique ones
+        std::unordered_set<Mdl_material_target*> unique_targets;
+        for (const auto& it : m_targets)
         {
-            Mdl_material_target* target = it->second;
-
-            // mark targets without registered materials for deletion
-            if (target->get_material_count() == 0)
+            // don't expect targets here that have no material registered
+            if (it.second->get_material_count() == 0)
             {
-                target_ids_to_delete.insert(target->get_id());
-                for (const auto& pair : m_target_map)
-                    if (pair.second->m_target->get_id() == target->get_id())
-                        target_map_entries_to_delete.insert(pair.first);
-
+                assert(false && "unused target found");
                 continue;
             }
+            unique_targets.insert(it.second.get());
+        }
 
+        for (auto target : unique_targets)
+        {
             // skip targets without changes
             if (!target->is_generation_required())
                 continue;
@@ -511,15 +480,6 @@ bool Mdl_material_library::generate_and_compile_targets()
         for (auto &t : tasks)
             t.join();
 
-        // free the old target if not used anymore
-        for (const auto& hash : target_map_entries_to_delete)
-            m_target_map.erase(hash);
-        for (const auto& id : target_ids_to_delete)
-        {
-            delete m_targets[id];
-            m_targets.erase(id);
-        }
-
         if (!success.load())
             return false;
     }
@@ -529,6 +489,12 @@ bool Mdl_material_library::generate_and_compile_targets()
         Timing t("compiling target code");
         visit_target_codes([&](Mdl_material_target* target)
         {
+            if (target->get_material_count() == 0)
+            {
+                assert(false && "scheduled target without materials for compilation");
+                return true;
+            }
+
             if (!target->is_compilation_required())
                 return true; // skip target and continue visits
 
@@ -562,9 +528,16 @@ bool Mdl_material_library::generate_and_compile_targets()
 bool Mdl_material_library::visit_target_codes(std::function<bool(Mdl_material_target*)> action)
 {
     std::lock_guard<std::mutex> lock(m_targets_mtx);
-    for (auto it = m_targets.begin(); it != m_targets.end(); it++)
-        if (!action(it->second))
-            return false;
+    std::unordered_set<Mdl_material_target*> unique_targets;
+    for (const auto& it : m_targets)
+    {
+        // make sure to visit the target only once in case it contains multiple materials
+        if (unique_targets.insert(it.second.get()).second)
+        {
+            if (!action(it.second.get()))
+                return false;
+        }
+    }
     return true;
 }
 
@@ -580,9 +553,9 @@ bool Mdl_material_library::visit_materials(std::function<bool(Mdl_material*)> ac
 // ------------------------------------------------------------------------------------------------
 
 void Mdl_material_library::register_mdl_material_description_loader(
-    const IMdl_material_description_loader* loader)
+    std::unique_ptr<IMdl_material_description_loader> loader)
 {
-    m_loaders.push_back(loader);
+    m_loaders.push_back(std::move(loader));
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -591,7 +564,7 @@ bool Mdl_material_library::visit_material_description_loaders(
     std::function<bool(const IMdl_material_description_loader*)> action)
 {
     for (const auto& it : m_loaders)
-        if (!action(it))
+        if (!action(it.get()))
             return false;
     return true;
 }
@@ -656,16 +629,16 @@ void Mdl_material_library::update_module_dependencies(const std::string& module_
 
 // ------------------------------------------------------------------------------------------------
 
-Mdl_resource_set* Mdl_material_library::access_texture_resource(
+Mdl_texture_set* Mdl_material_library::access_texture_resource(
     std::string db_name,
     Texture_dimension dimension,
     D3DCommandList* command_list)
 {
     // check if the texture already exists
     {
-        std::lock_guard<std::mutex> lock(m_resources_mtx);
-        auto found = m_resources.find(db_name);
-        if (found != m_resources.end())
+        std::lock_guard<std::mutex> lock(m_textures_mtx);
+        auto found = m_textures.find(db_name);
+        if (found != m_textures.end())
             return &found->second;
     }
 
@@ -691,19 +664,19 @@ Mdl_resource_set* Mdl_material_library::access_texture_resource(
 
     // create empty textures for all tiles
     {
-        std::lock_guard<std::mutex> lock(m_resources_mtx);
-        auto found = m_resources.find(db_name);
-        if (found != m_resources.end())
+        std::lock_guard<std::mutex> lock(m_textures_mtx);
+        auto found = m_textures.find(db_name);
+        if (found != m_textures.end())
             return &found->second; // return the other
 
         // add the created texture to the library
-        m_resources[db_name] = Mdl_resource_set();
-        Mdl_resource_set& set = m_resources[db_name];
+        m_textures[db_name] = Mdl_texture_set();
+        Mdl_texture_set& set = m_textures[db_name];
         bool has_tiles_or_frames = image->is_uvtile() || image->is_animated();
 
         // create the resources
-        set.entries = std::vector<Mdl_resource_set::Entry>(
-            num_tiles, Mdl_resource_set::Entry());
+        set.entries = std::vector<Mdl_texture_set::Entry>(
+            num_tiles, Mdl_texture_set::Entry());
 
         mi::Size global_tile_id = 0;
         for (mi::Size f = 0; f < num_frames; ++f)
@@ -776,7 +749,7 @@ Mdl_resource_set* Mdl_material_library::access_texture_resource(
 
     // load the actual texture data and copy it to GPU
     bool success = true;
-    Mdl_resource_set& set = m_resources[db_name];
+    Mdl_texture_set& set = m_textures[db_name];
     uint8_t* buffer = nullptr;
     size_t buffer_size = 0;
     mi::Size global_tile_id = 0;
@@ -865,11 +838,11 @@ Mdl_resource_set* Mdl_material_library::access_texture_resource(
             // free data
             if (!success)
             {
-                std::lock_guard<std::mutex> lock(m_resources_mtx);
+                std::lock_guard<std::mutex> lock(m_textures_mtx);
                 for (auto& entry : set.entries)
                     delete entry.resource;
 
-                m_resources.erase(db_name);
+                m_textures.erase(db_name);
                 delete[] buffer;
                 return nullptr;
             }
@@ -878,7 +851,61 @@ Mdl_resource_set* Mdl_material_library::access_texture_resource(
     }
 
     delete[] buffer;
-    return &m_resources[db_name];
+    return &m_textures[db_name];
+}
+
+Light_profile* Mdl_material_library::access_light_profile_resource(
+    std::string db_name,
+    D3DCommandList* command_list)
+{
+    {
+        std::lock_guard<std::mutex> lock(m_light_profiles_mtx);
+
+        // check if the light profile already exists
+        auto found = m_light_profiles.find(db_name);
+        if (found != m_light_profiles.end())
+            return found->second;
+
+        // if not, create the resource
+        mi::base::Handle<const mi::neuraylib::ILightprofile> light_profile(
+            m_sdk->get_transaction().access<mi::neuraylib::ILightprofile>(db_name.c_str()));
+
+        // add the created light profile to the library
+        m_light_profiles[db_name] = new Light_profile(m_app, light_profile.get(), db_name);
+
+        // release the lock so other threads can reference the mbsdf even when the
+        // actual data is not loaded yet. So when loading in parallel, wait if the data
+        // is required on the GPU
+    }
+
+    return m_light_profiles[db_name];
+}
+
+Bsdf_measurement* Mdl_material_library::access_bsdf_measurement_resource(
+    std::string db_name,
+    D3DCommandList* command_list)
+{
+    {
+        std::lock_guard<std::mutex> lock(m_mbsdfs_mtx);
+
+        // check if the bsdf measurement already exists
+        auto found = m_mbsdfs.find(db_name);
+        if (found != m_mbsdfs.end())
+            return found->second;
+
+        // if not, create the resource
+        mi::base::Handle<const mi::neuraylib::IBsdf_measurement> bsdf_measurement(
+            m_sdk->get_transaction().access<mi::neuraylib::IBsdf_measurement>(db_name.c_str()));
+
+        // add the created mbsdf to the library
+        m_mbsdfs[db_name] = new Bsdf_measurement(m_app, bsdf_measurement.get(), db_name);
+
+        // release the lock so other threads can reference the mbsdf even when the
+        // actual data is not loaded yet. So when loading in parallel, wait if the data
+        // is required on the GPU
+    }
+
+    return m_mbsdfs[db_name];
 }
 
 }}} // mi::examples::mdl_d3d12

@@ -62,6 +62,10 @@ COMPILER mdl
 
     IAnnotation_factory *m_annotation_factory;
 
+    bool m_last_identifier_unicode;
+    bool m_unicode_identifiers_supported;
+    bool m_unicode_error_emitted;
+
     // Create a error name.
     ISimple_name *error_name()
     {
@@ -111,11 +115,13 @@ COMPILER mdl
 
     Module *m_module;
     bool m_enable_mdl_next;
+    bool m_enable_experimental;
 
-    void set_module(Module *module, bool enable_mdl_next)
+    void set_module(Module *module, bool enable_mdl_next, bool enable_experimental)
     {
         m_module                       = module;
         m_enable_mdl_next              = enable_mdl_next;
+        m_enable_experimental          = enable_experimental;
         m_name_factory                 = m_module->get_name_factory();
         m_type_factory                 = m_module->get_type_factory();
         m_expression_factory           = m_module->get_expression_factory();
@@ -123,6 +129,10 @@ COMPILER mdl
         m_statement_factory            = m_module->get_statement_factory();
         m_declaration_factory          = m_module->get_declaration_factory();
         m_annotation_factory           = m_module->get_annotation_factory();
+
+        m_last_identifier_unicode       = false;
+        m_unicode_identifiers_supported = false;
+        m_unicode_error_emitted         = false;
     }
 
     Module *get_module()
@@ -443,7 +453,7 @@ COMPILER mdl
         return false;
     }
 
-    // Check if we see '::' and IDENT
+    // Check if we see '::' and IDENT/UNICODE_IDENT
     bool is_scope_name()
     {
         scanner->ResetPeek();
@@ -451,7 +461,7 @@ COMPILER mdl
         if (x->kind != TOK_SCOPE)
             return false;
         x = scanner->Peek();
-        return x->kind == TOK_IDENT;
+        return x->kind == TOK_IDENT || (x->kind == TOK_UNICODE_IDENT && unicode_identifier_support());
     }
 
     // Check if we see '::' and '..'.
@@ -465,18 +475,46 @@ COMPILER mdl
         return x->kind == TOK_DOTDOT;
     }
 
-    // Create a simple name from a token.
+    bool unicode_identifier_support()
+    {
+        return m_unicode_identifiers_supported;
+    }
+
+    void unicode_identifiers_not_supported_error(Token const *t) {
+        if (!m_unicode_error_emitted) {
+            m_unicode_error_emitted = true;
+            errors->Error(t->line, t->col,
+                          UNICODE_IDENTIFIERS_NOT_SUPPORTED,
+                          Error_params(m_alloc));
+        }
+    }
+
     ISimple_name const *to_simple(Token const *t)
     {
         string tmp(m_alloc);
-        wchar_t const *s = errDist > 0 ? t->val : L"<ERROR>";
-        ISymbol const *symbol = m_name_factory->create_symbol(wchar_to_utf8(tmp, s));
+        ISymbol const *symbol = errDist > 0 ?
+            m_name_factory->create_symbol(wchar_to_utf8(tmp, t->val)) :
+            m_name_factory->get_error_symbol();
         return m_name_factory->create_simple_name(
                     symbol,
                     t->line,
                     t->col,
                     t->line,
                     t->col + wcslen(t->val) - 1);
+    }
+
+    ISimple_name const *to_simple(ISimple_name const *name)
+    {
+        if (name == NULL) {
+            ISymbol const *symbol = m_name_factory->get_error_symbol();
+            return m_name_factory->create_simple_name(
+                    symbol,
+                    t->line,
+                    t->col,
+                    t->line,
+                    t->col);
+        }
+        return name;
     }
 
     // Create a simple name from a utf8 string and a position.
@@ -491,7 +529,7 @@ COMPILER mdl
     IQualified_name *to_qualified(ISimple_name const *simple_name)
     {
         IQualified_name *qualified_name = m_name_factory->create_qualified_name();
-        qualified_name->add_component(simple_name);
+        qualified_name->add_component(to_simple(simple_name));
         return qualified_name;
     }
 
@@ -520,7 +558,36 @@ COMPILER mdl
             qualified_name = m_name_factory->create_qualified_name();
             type_name = m_name_factory->create_type_name(qualified_name, tok->line, tok->col);
         }
-        ISimple_name const *simple_name = to_simple(tok);
+        qualified_name->add_component(to_simple(tok));
+        Position &tpos = type_name->access_position();
+        Position const &qpos = qualified_name->access_position();
+        tpos.set_end_line(qpos.get_end_line());
+        tpos.set_end_column(qpos.get_end_column());
+        return type_name;
+    }
+
+    // Create a type name from a type name prefix and a token.
+    IType_name *to_unicode_type(IType_name *prefix, Token *tok)
+    {
+        IType_name *type_name = prefix;
+        IQualified_name *qualified_name;
+
+        if (type_name) {
+            qualified_name = type_name->get_qualified_name();
+        } else {
+            qualified_name = m_name_factory->create_qualified_name();
+            type_name = m_name_factory->create_type_name(qualified_name, tok->line, tok->col);
+        }
+        string tmp(m_alloc);
+        int sl = tok->line;
+        int sc = tok->col;
+        int el = tok->col;
+        int ec = tok->col + wcslen(tok->val) - 1;
+
+        wchar_to_utf8(tmp, tok->val);
+        tmp = tmp.substr(1, tmp.size() - 2);
+
+        ISimple_name const *simple_name = to_simple(tmp.c_str(), sl, sc, el, ec);
         qualified_name->add_component(simple_name);
         Position &tpos = type_name->access_position();
         Position const &qpos = qualified_name->access_position();
@@ -1080,6 +1147,8 @@ CHARACTERS
 
     LETTER = 'A'..'Z' + 'a'..'z' .
 
+    UNICODE_LETTER = ANY - '\'' - '\n' - '\r' .
+
     DIGIT = '0'..'9' .
 
     NONZERODIGIT = '1'..'9' .
@@ -1097,6 +1166,8 @@ CHARACTERS
 TOKENS
 
     IDENT = LETTER { LETTER | DIGIT | '_' } .
+
+    UNICODE_IDENT = '\'' { UNICODE_LETTER } '\'' .
 
     INTEGER_LITERAL
         = (NONZERODIGIT { DIGIT })
@@ -1403,7 +1474,8 @@ mdl_version
                                                 m_mdl,
                                                 major,
                                                 minor,
-                                                m_enable_mdl_next);
+                                                m_enable_mdl_next,
+                                                m_enable_experimental);
                                             if (!res) {
                                                 errors->Error(
                                                     t->line, t->col,
@@ -1413,13 +1485,38 @@ mdl_version
                                                         .add(minor));
                                             } else {
                                                 scanner->set_mdl_version(major, minor);
+                                                m_unicode_identifiers_supported =
+                                                    m_module->get_mdl_version() >= mi::mdl::IMDL::MDL_version::MDL_VERSION_1_8;
                                             }
                                         }
                                     .)
     SYNC ';' .
 
 simple_name<ISimple_name const *&value>
-    = IDENT                         (. value = to_simple(t); .)
+    = IDENT                         
+      (. value = to_simple(t); 
+         m_last_identifier_unicode = false;
+      .)
+    .
+
+simple_unicode_name<ISimple_name const *&value>
+    = UNICODE_IDENT
+    (. string tmp(m_alloc);
+       int sl = t->line;
+       int sc = t->col;
+       int el = t->col;
+       int ec = t->col + wcslen(t->val) - 1;
+
+       wchar_to_utf8(tmp, t->val);
+       // Strip off leading and trailing single quotes.
+       tmp = tmp.substr(1, tmp.size() - 2);
+       value = to_simple(tmp.c_str(), sl, sc, el, ec);
+       m_last_identifier_unicode = true;
+       if (!unicode_identifier_support()) {
+         value = error_name();
+         unicode_identifiers_not_supported_error(t);
+       }
+    .)
     .
 
 utf8_name<ISimple_name const *&value>
@@ -1449,10 +1546,10 @@ qualified_utf8_name<IQualified_name *&value>
     (
         "::"                            (. value->set_absolute(); .)
         [
-            utf8_name<simp_name>        (. value->add_component(simp_name); .)
+            utf8_name<simp_name>        (. value->add_component(to_simple(simp_name)); .)
             {
                 "::"
-                utf8_name<simp_name>    (. value->add_component(simp_name); .)
+                utf8_name<simp_name>    (. value->add_component(to_simple(simp_name)); .)
             }
         ]
     |
@@ -1465,11 +1562,11 @@ qualified_utf8_name<IQualified_name *&value>
                 ".."                    (. value->add_component(to_simple(t)); .)
             }
         |
-            utf8_name<simp_name>        (. value->add_component(simp_name); .)
+            utf8_name<simp_name>        (. value->add_component(to_simple(simp_name)); .)
         )
         {
             "::"
-            utf8_name<simp_name>        (. value->add_component(simp_name); .)
+            utf8_name<simp_name>        (. value->add_component(to_simple(simp_name)); .)
         }
     )
     .
@@ -1495,20 +1592,32 @@ qualified_import<IQualified_name *&value>
             |
             "::"                        (. value->set_absolute(); .)
         ]
-        simple_name<simp_name>
+        ( simple_name<simp_name> | simple_unicode_name<simp_name> )
                                         (.
-                                            value->add_component(simp_name);
+                                            value->add_component(to_simple(simp_name));
                                         .)
         { IF(is_scope_name())
             "::"
-            simple_name<simp_name>
+        ( simple_name<simp_name> | simple_unicode_name<simp_name> )
                                         (.
-                                            value->add_component(simp_name);
+                                            value->add_component(to_simple(simp_name));
                                         .)
         }
         [
-            "::" '*'                    (. value->add_component(to_simple(t)); .)
+            "::" '*'                    (. 
+                                           m_last_identifier_unicode = false;
+                                           value->add_component(to_simple(t));
+                                        .)
         ]
+        (.
+           if (m_last_identifier_unicode) {
+              m_last_identifier_unicode = false;
+              errors->Error(
+                  t->line, t->col,
+                  TRAILING_UNICODE_IDENTIFIER,
+                  Error_params(m_alloc));
+           }
+        .)
     .
 
 qualified_name<IQualified_name *&value>
@@ -1521,17 +1630,26 @@ qualified_name<IQualified_name *&value>
             "::"
                                         (. value->set_absolute(); .)
         ]
-        simple_name<simp_name>
+        ( simple_name<simp_name> | simple_unicode_name<simp_name> )
                                         (.
-                                            value->add_component(simp_name);
+                                            value->add_component(to_simple(simp_name));
                                         .)
         {
             "::"
-            simple_name<simp_name>
+            ( simple_name<simp_name> | simple_unicode_name<simp_name> )
                                         (.
-                                            value->add_component(simp_name);
+                                            value->add_component(to_simple(simp_name));
                                         .)
         }
+        (.
+          if (m_last_identifier_unicode) {
+              errors->Error(
+                  t->line, t->col,
+                  TRAILING_UNICODE_IDENTIFIER,
+                  Error_params(m_alloc));
+          }
+        .)
+
     .
 
 qualified_import_prefix<IQualified_name *&value>
@@ -1553,15 +1671,15 @@ qualified_import_prefix<IQualified_name *&value>
             |
             "::"                        (. value->set_absolute(); .)
         ]
-        simple_name<simp_name>
+        ( simple_name<simp_name> | simple_unicode_name<simp_name> )
                                         (.
-                                            value->add_component(simp_name);
+                                            value->add_component(to_simple(simp_name));
                                         .)
         {
             "::"
-            simple_name<simp_name>
+            ( simple_name<simp_name> | simple_unicode_name<simp_name> )
                                         (.
-                                            value->add_component(simp_name);
+                                            value->add_component(to_simple(simp_name));
                                         .)
         }
     .
@@ -1583,7 +1701,10 @@ frequency_qualifier<Qualifier &qualifier,int &sl,int &sc>
 
 relative_type<IType_name *prefix,IType_name *&name>
     =
-    (. Checker_type checker(*this, name); .)
+    (. 
+       Checker_type checker(*this, name); 
+       m_last_identifier_unicode = false;
+    .)
 
     ( "bool"                                (. name = to_type(prefix, t); .)
     | "bool2"                               (. name = to_type(prefix, t); .)
@@ -1656,6 +1777,21 @@ relative_type<IType_name *prefix,IType_name *&name>
                                                                                     /// @break
     | IDENT                                 (. name = to_type(prefix, t); .)
         [
+            "::"                            (. IType_name *name_cont = ERR_TYPE;  
+                                               m_last_identifier_unicode = false;
+                                            .)
+            relative_type<name,name_cont>
+        ]
+    | UNICODE_IDENT 
+                                            (. 
+                                               name = to_unicode_type(prefix, t); 
+                                               m_last_identifier_unicode = true; 
+                                               if (!unicode_identifier_support()) {
+                                                  unicode_identifiers_not_supported_error(t);
+                                                  name = check_type(ERR_TYPE);
+                                               }
+                                            .)
+        [
             "::"                            (. IType_name *name_cont = ERR_TYPE; .)
             relative_type<name,name_cont>
         ]
@@ -1676,6 +1812,12 @@ simple_type<IType_name *prefix,IType_name *&name>
                                             (.
                                                 if (is_absolute) {
                                                     name->set_absolute();
+                                                }
+                                                if (m_last_identifier_unicode) {
+                                                    errors->Error(
+                                                        t->line, t->col,
+                                                        TRAILING_UNICODE_IDENTIFIER,
+                                                        Error_params(m_alloc));
                                                 }
                                             .)
     .

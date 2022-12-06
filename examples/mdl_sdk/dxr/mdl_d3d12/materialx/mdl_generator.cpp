@@ -69,7 +69,7 @@ void Mdl_generator::add_library(const std::string& mtlx_library)
 
 // ------------------------------------------------------------------------------------------------
 
-bool Mdl_generator::set_source(const std::string& mtlx_material)
+bool Mdl_generator::set_source(const std::string& mtlx_material, const std::string& material_name)
 {
     if (!mi::examples::io::file_exists(mtlx_material))
     {
@@ -78,6 +78,7 @@ bool Mdl_generator::set_source(const std::string& mtlx_material)
     }
 
     m_mtlx_source = mtlx_material;
+    m_mtlx_material_name = material_name;
     std::replace(m_mtlx_source.begin(), m_mtlx_source.end(), '/', '\\');
     return true;
 }
@@ -245,7 +246,7 @@ bool Mdl_generator::generate(Mdl_generator_result& inout_result) const
         {
             mx::DocumentPtr document;
             mx::TypedElementPtr element;
-            mx::NodePtr material_node;
+            std::string name;
         };
         std::vector<Mtlx_material> materials_to_genereate;
 
@@ -260,11 +261,31 @@ bool Mdl_generator::generate(Mdl_generator_result& inout_result) const
                 continue;
             }
 
+            // if a specific material was selected we check for it
+            // otherwise we use the first one
+            std::string name = materialNodes[i] ? materialNodes[i]->getName() : renderablePath;
+            std::replace(name.begin(), name.end(), '/', '_');
+            if (!m_mtlx_material_name.empty() && name != m_mtlx_material_name)
+                continue;
+
             materials_to_genereate.push_back(Mtlx_material{});
             Mtlx_material& mat = materials_to_genereate.back();
             mat.document = material_document;
             mat.element = typedElem;
-            mat.material_node = materialNodes[i];
+            mat.name = name;
+            break;
+        }
+
+        if (materials_to_genereate.size() == 0)
+        {
+            if (!m_mtlx_material_name.empty())
+                log_error("[MTLX] Code generation failure: no material named '" +
+                    m_mtlx_material_name + "' found in '" + m_mtlx_source + "'");
+            else
+                log_error("[MTLX] Code generation failure: no material found in '"
+                    + m_mtlx_source + "'");
+
+            return false;
         }
 
         for (Mtlx_material& mat : materials_to_genereate)
@@ -276,7 +297,7 @@ bool Mdl_generator::generate(Mdl_generator_result& inout_result) const
             try
             {
                 shader =
-                    generator_context.getShaderGenerator().generate("Shader", mat.element, generator_context);
+                    generator_context.getShaderGenerator().generate(mat.name, mat.element, generator_context);
             }
             catch (mx::Exception& e)
             {

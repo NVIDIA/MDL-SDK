@@ -1225,6 +1225,7 @@ void Lambda_function::map_tex_resource(
     Resource_tag_tuple key(kind, res_url, res_sel, res_tag);
 
     m_resource_attr_map[key] = e;
+    m_hash_is_valid = false;
 }
 
 // Register a light profile resource mapping.
@@ -1260,6 +1261,7 @@ void Lambda_function::map_lp_resource(
     Resource_tag_tuple key(kind, res_url, /*selector=*/NULL, res_tag);
 
     m_resource_attr_map[key] = e;
+    m_hash_is_valid = false;
 }
 
 // Register a bsdf measurement resource mapping.
@@ -1291,6 +1293,7 @@ void Lambda_function::map_bm_resource(
     Resource_tag_tuple key(kind, res_url, /*selector=*/NULL, res_tag);
 
     m_resource_attr_map[key] = e;
+    m_hash_is_valid = false;
 }
 
 // Analyze a lambda function.
@@ -1769,8 +1772,13 @@ public:
             }
             break;
 
+        case IDefinition::DS_INTRINSIC_STATE_TANGENT_SPACE:
+            m_result.uses_state_normal = 1;
+            [[fallthrough]];
         case IDefinition::DS_INTRINSIC_STATE_TEXTURE_TANGENT_U:
         case IDefinition::DS_INTRINSIC_STATE_TEXTURE_TANGENT_V:
+        case IDefinition::DS_INTRINSIC_STATE_GEOMETRY_TANGENT_U:
+        case IDefinition::DS_INTRINSIC_STATE_GEOMETRY_TANGENT_V:
             MDL_ASSERT(call->get_argument_count() == 1);
             analyze_space(call->get_argument(0)->get_argument_expr(), m_result.tangent_spaces);
             break;
@@ -1960,8 +1968,13 @@ public:
             }
             break;
 
+        case IDefinition::DS_INTRINSIC_STATE_TANGENT_SPACE:
+            m_result.uses_state_normal = 1;
+            [[fallthrough]];
         case IDefinition::DS_INTRINSIC_STATE_TEXTURE_TANGENT_U:
         case IDefinition::DS_INTRINSIC_STATE_TEXTURE_TANGENT_V:
+        case IDefinition::DS_INTRINSIC_STATE_GEOMETRY_TANGENT_U:
+        case IDefinition::DS_INTRINSIC_STATE_GEOMETRY_TANGENT_V:
             MDL_ASSERT(call->get_argument_count() == 1);
             analyze_space(call->get_argument(0), m_result.tangent_spaces);
             break;

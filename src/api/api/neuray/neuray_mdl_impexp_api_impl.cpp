@@ -430,43 +430,43 @@ mi::Sint32 Mdl_impexp_api_impl::export_module_common(
     const char* filename,
     MDL::Execution_context* context)
 {
-    ASSERT(M_NEURAY_API, module);
-    ASSERT(M_NEURAY_API, writer);
-    ASSERT(M_NEURAY_API, context);
+    ASSERT( M_NEURAY_API, module);
+    ASSERT( M_NEURAY_API, writer);
+    ASSERT( M_NEURAY_API, context);
 
     // check that the bundle_resources option is not used with string-based exports
-    if (!filename && context->get_option<bool>(MDL_CTX_OPTION_BUNDLE_RESOURCES))
+    if( !filename && context->get_option<bool>( MDL_CTX_OPTION_BUNDLE_RESOURCES))
         return -6006;
 
     // check that the MDL module is not a builtin module, their sources are not exported
     const char* old_mdl_module_name = module->get_name();
-    if (MDL::is_builtin_module(old_mdl_module_name))
+    if( MDL::is_builtin_module( old_mdl_module_name))
         return -6004;
 
     // check that the module name of the URI is a valid MDL identifier (package names are not
     // checked since we do not know where the search path ends)
-    if (filename) {
+    if( filename) {
         std::string path, basename, new_mdl_module_name, ext;
-        HAL::Ospath::split(filename, path, basename);
-        HAL::Ospath::splitext(basename, new_mdl_module_name, ext);
+        HAL::Ospath::split( filename, path, basename);
+        HAL::Ospath::splitext( basename, new_mdl_module_name, ext);
         new_mdl_module_name = "::" + new_mdl_module_name;
-        if (!MDL::is_valid_module_name(new_mdl_module_name))
+        if( !MDL::is_valid_module_name( new_mdl_module_name))
             return -6005;
     }
 
     // create MDL exporter
-    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module(false);
-    mi::base::Handle<mi::mdl::IMDL> mdl(mdlc_module->get_mdl());
-    mi::base::Handle<mi::mdl::IMDL_exporter> mdl_exporter(mdl->create_exporter());
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
+    mi::base::Handle<mi::mdl::IMDL> mdl( mdlc_module->get_mdl());
+    mi::base::Handle<mi::mdl::IMDL_exporter> mdl_exporter( mdl->create_exporter());
 
     // create the resource callback
     Transaction_impl* transaction_impl
-        = static_cast<Transaction_impl*>(transaction);
+        = static_cast<Transaction_impl*>( transaction);
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     std::string uri
-        = filename ? Impexp_utilities::convert_filename_to_uri(filename) : "";
+        = filename ? Impexp_utilities::convert_filename_to_uri( filename) : "";
     mi::base::Handle<mi::neuraylib::IExport_result_ext> export_result_ext(
-        transaction->create<mi::neuraylib::IExport_result_ext>("Export_result_ext"));
+        transaction->create<mi::neuraylib::IExport_result_ext>( "Export_result_ext"));
     Resource_callback resource_callback(
         db_transaction,
         module,

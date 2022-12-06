@@ -233,8 +233,8 @@ bool Annotation_definition::is_exported() const
 void Annotation_definition::get_mdl_version(
     mi::neuraylib::Mdl_version& since, mi::neuraylib::Mdl_version& removed) const
 {
-    since   = MDL::convert_mdl_version( m_since_version);
-    removed = MDL::convert_mdl_version( m_removed_version);
+    since   = m_since_version;
+    removed = m_removed_version;
 }
 
 mi::Size Annotation_definition::get_parameter_count() const
@@ -320,13 +320,6 @@ const IAnnotation* Annotation_definition::create_annotation(const IExpression_li
         complete_arguments->add_expression(name, cloned_arg.get());
     }
     return new Annotation(m_name.c_str(), complete_arguments.get());
-}
-
-void Annotation_definition::get_mdl_version(
-    mi::mdl::IMDL::MDL_version& since, mi::mdl::IMDL::MDL_version& removed) const
-{
-    since   = m_since_version;
-    removed = m_removed_version;
 }
 
 mi::Size Annotation_definition::get_memory_consumption() const
@@ -586,8 +579,8 @@ IAnnotation_definition* Expression_factory::create_annotation_definition(
     const std::vector<std::string>& parameter_type_names,
     mi::neuraylib::IAnnotation_definition::Semantics sema,
     bool is_exported,
-    mi::mdl::IMDL::MDL_version since_version,
-    mi::mdl::IMDL::MDL_version removed_version,
+    mi::neuraylib::Mdl_version since_version,
+    mi::neuraylib::Mdl_version removed_version,
     const IType_list* parameter_types,
     const IExpression_list* parameter_defaults,
     const IAnnotation_block* annotations) const
@@ -1069,7 +1062,7 @@ void Expression_factory::serialize_annotation_definition(
     SERIAL::write_enum(serializer, anno_def->get_semantic());
     SERIAL::write(serializer, anno_def->is_exported());
 
-    mi::mdl::IMDL::MDL_version since_version, removed_version;
+    mi::neuraylib::Mdl_version since_version, removed_version;
     anno_def->get_mdl_version( since_version, removed_version);
     write_enum( serializer, since_version);
     write_enum( serializer, removed_version);
@@ -1088,39 +1081,37 @@ IAnnotation_definition* Expression_factory::deserialize_annotation_definition(
     SERIAL::Deserializer* deserializer) const
 {
     std::string name;
-    SERIAL::read(deserializer, &name);
+    SERIAL::read( deserializer, &name);
 
     std::string mdl_module_name;
-    SERIAL::read(deserializer, &mdl_module_name);
+    SERIAL::read( deserializer, &mdl_module_name);
 
     std::string mdl_simple_name;
-    SERIAL::read(deserializer, &mdl_simple_name);
+    SERIAL::read( deserializer, &mdl_simple_name);
 
     size_t n;
-    deserializer->read_size_t(&n);
+    deserializer->read_size_t( &n);
     std::vector<std::string> mdl_parameter_type_names;
-    for(size_t i = 0; i < n; ++i) {
+    for( size_t i = 0; i < n; ++i) {
         std::string s;
-        SERIAL::read(deserializer, &s);
-        mdl_parameter_type_names.push_back(s);
+        SERIAL::read( deserializer, &s);
+        mdl_parameter_type_names.push_back( s);
     }
 
     mi::neuraylib::IAnnotation_definition::Semantics semantic;
-    SERIAL::read_enum(deserializer, &semantic);
+    SERIAL::read_enum( deserializer, &semantic);
 
     bool is_exported = false;
-    SERIAL::read(deserializer, &is_exported);
+    SERIAL::read( deserializer, &is_exported);
 
-    mi::mdl::IMDL::MDL_version since_version, removed_version;
+    mi::neuraylib::Mdl_version since_version, removed_version;
     read_enum( deserializer, &since_version);
     read_enum( deserializer, &removed_version);
 
-    mi::base::Handle<IType_factory> tf(m_value_factory->get_type_factory());
-    mi::base::Handle<IType_list> parameter_types(tf->deserialize_list(deserializer));
-
-    mi::base::Handle<IExpression_list> defaults(deserialize_list(deserializer));
-
-    mi::base::Handle<IAnnotation_block> annotations(deserialize_annotation_block(deserializer));
+    mi::base::Handle<IType_factory> tf( m_value_factory->get_type_factory());
+    mi::base::Handle<IType_list> parameter_types( tf->deserialize_list( deserializer));
+    mi::base::Handle<IExpression_list> defaults( deserialize_list( deserializer));
+    mi::base::Handle<IAnnotation_block> annotations( deserialize_annotation_block( deserializer));
 
     return create_annotation_definition(
         name.c_str(),

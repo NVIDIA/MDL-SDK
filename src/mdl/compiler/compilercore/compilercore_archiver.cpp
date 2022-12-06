@@ -2345,8 +2345,6 @@ void Manifest_builder::add_pair(u32string const &key, u32string const &value)
             ver = IMDL::MDL_VERSION_1_7;
         } else if (v == "1.8") {
             ver = IMDL::MDL_VERSION_1_8;
-        } else if (v == "1.9") {
-            ver = IMDL::MDL_VERSION_1_9;
         } else {
             error(EC_UNSUPPORTED_MDL_VERSION);
         }

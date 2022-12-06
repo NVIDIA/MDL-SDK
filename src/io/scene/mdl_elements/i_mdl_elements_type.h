@@ -148,7 +148,7 @@ class IType_enum : public
 {
 public:
     /// Datastructure used by #IType_factory to register enum types.
-    typedef std::vector<std::pair<std::string, mi::Sint32> > Values;
+    using Values = std::vector<std::pair<std::string, mi::Sint32> >;
     /// Datastructure used by #IType_factory to register enum types.
     using Value_annotations = std::vector<mi::base::Handle<const IAnnotation_block> >;
 
@@ -300,8 +300,7 @@ class IType_struct : public
 {
 public:
     /// Datastructure used by #IType_factory to register struct types.
-    typedef std::vector<
-        std::pair<mi::base::Handle<const IType>, std::string> > Fields;
+    using Fields = std::vector<std::pair<mi::base::Handle<const IType>, std::string> >;
     /// Datastructure used by #IType_factory to register struct types.
     using Field_annotations = std::vector<mi::base::Handle<const IAnnotation_block> >;
 

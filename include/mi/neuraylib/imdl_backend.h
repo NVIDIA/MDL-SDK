@@ -806,7 +806,8 @@ public:
         SL_HLSL,
         SL_GLSL,
         SL_OLD_GLSL, // \if MDL_SOURCE_RELEASE Reserved\else old GLSL\endif.
-        SL_NUM_LANGUAGES
+        SL_NUM_LANGUAGES,
+        SL_FORCE_32_BIT = 0xFFFFFFFFu //   Undocumented, for alignment only
     };
 
     /// Possible kinds of distribution functions.
@@ -816,7 +817,8 @@ public:
         DK_BSDF,
         DK_HAIR_BSDF,
         DK_EDF,
-        DK_INVALID
+        DK_INVALID,
+        DK_FORCE_32_BIT = 0xFFFFFFFFu //   Undocumented, for alignment only
     };
 
     /// Possible kinds of callable functions.
@@ -830,7 +832,8 @@ public:
         FK_DF_SAMPLE,
         FK_DF_EVALUATE,
         FK_DF_PDF,
-        FK_DF_AUXILIARY
+        FK_DF_AUXILIARY,
+        FK_FORCE_32_BIT = 0xFFFFFFFFu //   Undocumented, for alignment only
     };
 
     /// Possible texture gamma modes.
@@ -838,7 +841,8 @@ public:
         GM_GAMMA_DEFAULT,
         GM_GAMMA_LINEAR,
         GM_GAMMA_SRGB,
-        GM_GAMMA_UNKNOWN
+        GM_GAMMA_UNKNOWN,
+        GM_FORCE_32_BIT = 0xFFFFFFFFu //   Undocumented, for alignment only
     };
 
     /// Returns the kind of backend this information belongs to.
@@ -1739,6 +1743,11 @@ struct Target_function_description
 };
 
 mi_static_assert( sizeof( ITarget_code::State_usage_property) == sizeof( mi::Uint32));
+mi_static_assert( sizeof( ITarget_code::Texture_shape) == sizeof( mi::Uint32));
+mi_static_assert( sizeof( ITarget_code::Prototype_language) == sizeof( mi::Uint32));
+mi_static_assert( sizeof( ITarget_code::Distribution_kind) == sizeof( mi::Uint32));
+mi_static_assert( sizeof( ITarget_code::Function_kind) == sizeof( mi::Uint32));
+mi_static_assert( sizeof( ITarget_code::Gamma_mode) == sizeof( mi::Uint32));
 
 } // namespace neuraylib
 

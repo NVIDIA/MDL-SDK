@@ -307,6 +307,6 @@ In this example, the names of the methods in the PTX file referenced by \c mdl_t
 are identical to the names of the needed OptiX variables, but this is not required.
 
 The prototypes of the functions are identical to the \c "direct_call" mode except that
-<tt>extern "C" \_\_device\_\_</tt> is replaced by \c RT_CALLABLE_PROGRAM.
+<tt>extern "C" __device__</tt> is replaced by \c RT_CALLABLE_PROGRAM.
 
 */

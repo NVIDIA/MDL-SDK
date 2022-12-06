@@ -531,17 +531,19 @@ public:
 
     /// Check if the compiler supports a requested MDL version.
     ///
-    /// \param major            major number
-    /// \param minor            minor number
-    /// \param version          the accepted MDL version on success
-    /// \param enable_mdl_next  if true, allow experimental MDL features
+    /// \param major                major number
+    /// \param minor                minor number
+    /// \param version              the accepted MDL version on success
+    /// \param enable_mdl_next      if true, allow features from upcoming MDL version
+    /// \param enable_experimental  if true, allow experimental MDL features
     ///
     /// \return true on success
     bool check_version(
-        int major,
-        int minor,
+        int         major,
+        int         minor,
         MDL_version &version,
-        bool enable_mdl_next);
+        bool        enable_mdl_next,
+        bool        enable_experimental);
 
     /// Register a builtin module and take ownership of it.
     ///
@@ -749,12 +751,13 @@ public:
 
     /// Parse a string to an MDL expression.
     ///
-    /// \param expr_str                      the expression string to parse
-    /// \param start_line                    the starting line of the string
-    /// \param start_col                     the starting column of the string
-    /// \param module                        the module receiving any error messages
-    /// \param enable_experimental_features  if true, allow experimental MDL features
-    /// \param msgs                          a message list
+    /// \param expr_str             the expression string to parse
+    /// \param start_line           the starting line of the string
+    /// \param start_col            the starting column of the string
+    /// \param module               the module receiving any error messages
+    /// \param enable_msl_next      if true, allow features from upcoming MDL version
+    /// \param enable_experimental  if true, allow experimental MDL features
+    /// \param msgs                 a message list
     ///
     /// \return the parsed expression.
     ///         Error messages will be added to the messages passed.
@@ -763,7 +766,8 @@ public:
         int           start_line,
         int           start_col,
         Module        *module,
-        bool          enable_experimental_features,
+        bool          enable_mdl_next,
+        bool          enable_experimental,
         Messages_impl &msgs);
 
     /// Creates a new thread context from current analysis settings.

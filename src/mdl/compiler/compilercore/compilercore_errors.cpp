@@ -618,6 +618,12 @@ char const *get_error_template(
             return "inconsistent deduction for 'auto': '$0' and then '$1'";
         case INCONSISTANT_AUTO_RETURN_DEDUCTION:
             return "inconsistent deduction for auto return type: '$0' and then '$1'";
+        case TRAILING_UNICODE_IDENTIFIER:
+            return "unicode identifiers only allowed in package and module names";
+        case UNICODE_IDENTIFIERS_NOT_SUPPORTED:
+            return "unicode identifiers not supported in this MDL version";
+        case SELECT_FROM_NON_STRUCT:
+            return "request for member '$0' in something not a structure or vector";
 
         // ------------------------------------------------------------- //
         case EXTERNAL_APPLICATION_ERROR:
@@ -793,6 +799,8 @@ char const *get_error_template(
             return "user-specified state module is incomplete";
         case GLSL_SSBO_UNAVAILABLE:
             return "Shader shared buffer objects are not available in the current GLSL context";
+        case SPECTRUM_CONVERTED_TO_RGB:
+            return "a color spectrum is converted to RGB";
 
         // ------------------------------------------------------------- //
         case INTERNAL_JIT_BACKEND_ERROR:
@@ -1834,7 +1842,7 @@ static void print_error_param(
             case IMDL::MDL_VERSION_1_6: s = "1.6"; break;
             case IMDL::MDL_VERSION_1_7: s = "1.7"; break;
             case IMDL::MDL_VERSION_1_8: s = "1.8"; break;
-            case IMDL::MDL_VERSION_1_9: s = "1.9"; break;
+            case IMDL::MDL_VERSION_EXP: s = "99.99"; break;
             }
             printer->print(s);
         }

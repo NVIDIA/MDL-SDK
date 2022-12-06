@@ -44,7 +44,10 @@ class Name_factory : public IName_factory
 {
     friend class Module;
 public:
-    /// Create a new Symbol.
+    /// Return the error symbol.
+    ISymbol const *get_error_symbol() const MDL_FINAL;
+
+    /// Create a new symbol.
     ISymbol const *create_symbol(char const *name) MDL_FINAL;
 
     /// Creates a simple name.

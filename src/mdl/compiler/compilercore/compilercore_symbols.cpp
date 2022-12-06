@@ -211,7 +211,7 @@ ISymbol const *Symbol_table::find_equal_symbol(ISymbol const *other) const
 ISymbol const *Symbol_table::get_operator_symbol(IExpression::Operator op) const
 {
     switch (op) {
-        // handlke all operators
+        // handle all operators
 #define OPERATOR_SYM(sym_name, id, name) case IExpression::id: return &sym_name;
 #include "compilercore_predefined_symbols.h"
     }

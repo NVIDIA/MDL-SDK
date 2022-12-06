@@ -237,15 +237,17 @@ int Mdlc::run(int argc, char *argv[])
         /*13*/ { "show-positions",         mi::getopt::NO_ARGUMENT,       NULL, 0 },
         /*14*/ { "show-resource-table",    mi::getopt::NO_ARGUMENT,       NULL, 0 },
         /*15*/ { "mdl-next",               mi::getopt::NO_ARGUMENT,       NULL, 'N' },
-        /*16*/ { "inline",                 mi::getopt::NO_ARGUMENT,       NULL, 'i' },
-        /*17*/ { "plugin",                 mi::getopt::REQUIRED_ARGUMENT, NULL, 'l' },
-        /*19*/ { "help",                   mi::getopt::NO_ARGUMENT,       NULL, '?' },
-        /*20*/ { NULL,                     0,                             NULL, 0 }
+        /*16*/ { "experimental-features",  mi::getopt::NO_ARGUMENT,       NULL, 'e' },
+        /*17*/ { "inline",                 mi::getopt::NO_ARGUMENT,       NULL, 'i' },
+        /*18*/ { "plugin",                 mi::getopt::REQUIRED_ARGUMENT, NULL, 'l' },
+        /*20*/ { "help",                   mi::getopt::NO_ARGUMENT,       NULL, '?' },
+        /*21*/ { NULL,                     0,                             NULL, 0 }
     };
 
     bool opt_error = false;
     bool show_version = false;
     bool mdl_next = false;
+    bool experimental_features = false;
     int  c, longidx;
     std::string warn_options;
 
@@ -260,7 +262,7 @@ int Mdlc::run(int argc, char *argv[])
     std::vector<std::string> plugin_filenames;
 
     while (
-        (c = mi::getopt::getopt_long(argc, argv, "O:W:Vvip:Ct:d:B:l:N?", long_options, &longidx)) != -1
+        (c = mi::getopt::getopt_long(argc, argv, "O:W:Vvip:Ct:d:B:l:Ne?", long_options, &longidx)) != -1
     ) {
         switch (c) {
         case 'O':
@@ -374,6 +376,9 @@ int Mdlc::run(int argc, char *argv[])
         case 'N':
             mdl_next = true;
             break;
+        case 'e':
+            experimental_features = true;
+            break;
         case 'i':
             m_inline = true;
             break;
@@ -417,7 +422,7 @@ int Mdlc::run(int argc, char *argv[])
             case 14:
                 m_show_resource_table = true;
                 break;
-            case 17:
+            case 18:
                 plugin_filenames.push_back(mi::getopt::optarg);
                 break;
             default:
@@ -439,6 +444,8 @@ int Mdlc::run(int argc, char *argv[])
 
     comp_options.set_option(
         MDL_OPTION_MDL_NEXT, mdl_next ? "true" : "false");
+    comp_options.set_option(
+        MDL_OPTION_EXPERIMENTAL_FEATURES, experimental_features ? "true" : "false");
 
     if (!warn_options.empty()) {
         std::string s(warn_options);

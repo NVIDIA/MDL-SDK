@@ -1357,12 +1357,13 @@ bool trace_shadow(Render_context& rc, Render_context::Ray& shadow_ray, unsigned 
         float cutout_opacity = rc.cutout.constant_opacity;
         if (!rc.cutout.is_constant)
         {
-            rc.target_code->execute(
+            mi::Sint32 ret_code = rc.target_code->execute(
                 rc.cutout_opacity_function_index,
                 shading_state,
                 rc.tex_handler,
                 /*arg_block_data=*/ nullptr,
                 &cutout_opacity);
+            assert(ret_code == 0 && "execute opacity function failed");
         }
 
         // it's the surface cutted out?.
@@ -1439,16 +1440,20 @@ bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
         mi::neuraylib::tct_float3 &geom_normal =
             rc.use_derivatives ? rc.shading_state_derivs.geom_normal : rc.shading_state.geom_normal;
 
+        // return code to check if the code execution succeeded
+        mi::Sint32 ret_code;
+
         // evaluate material cutout opacity
         float cutout_opacity = rc.cutout.constant_opacity;
         if (!rc.cutout.is_constant)
         {
-            rc.target_code->execute(
+            ret_code = rc.target_code->execute(
                 rc.cutout_opacity_function_index,
                 *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
                 static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
                 /*arg_block_data=*/ nullptr,
                 &cutout_opacity);
+            assert(ret_code == 0 && "execute opacity function failed");
         }
 
         // it's the surface cutted out?. Then skip the surface and send a ray through
@@ -1467,12 +1472,14 @@ bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
             bool is_thin_walled = rc.thin_walled.is_thin_walled;
             if (!rc.thin_walled.is_constant)
             {
-                rc.target_code->execute(
+                ret_code = rc.target_code->execute(
                     rc.thin_walled_function_index,
                     *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
                     static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
                     /*arg_block_data=*/ nullptr,
                     &is_thin_walled);
+                assert(ret_code == 0 && "execute thin_walled function failed");
+
             }
 
             // evaluate material surface emission contribution
@@ -1485,35 +1492,40 @@ bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                     rc.backface_edf_function_index : rc.surface_edf_function_index;
 
                 // shader initialization for the current hit point
-                rc.target_code->execute_bsdf_init(
+                ret_code = rc.target_code->execute_edf_init(
                     edf_function_index,
                     *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
                     static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
                     nullptr);
+                assert(ret_code == 0 && "execute_edf_init failed");
+
 
                 mi::neuraylib::Edf_evaluate_data<mi::neuraylib::DF_HSM_NONE> eval_data;
                 eval_data.k1 = -ray.dir;
 
                 // evaluate material surface edf
-                rc.target_code->execute_edf_evaluate(
+                ret_code = rc.target_code->execute_edf_evaluate(
                     edf_function_index + 2, // edf_function_index corresponds to 'init'
                                                        // edf_function_index+2 to 'evaluate'
                     &eval_data,
                     *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
                     static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
                     /*arg_block_data=*/ nullptr);
+                assert(ret_code == 0 && "execute_edf_evaluate failed");
+
 
                 // emission contribution is only valid for positive pdf
                 if (eval_data.pdf > 1.e-6f)
                 {
                     mi::Float32_3 intensity(1.f);
-                    rc.target_code->execute(
-                        (is_thin_walled && ray.is_inside) ? 
+                    ret_code = rc.target_code->execute(
+                        (is_thin_walled && ray.is_inside) ?
                             rc.backface_emission_intensity_function_index : rc.surface_emission_intensity_function_index,
                         *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
                         static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
                         /*arg_block_data=*/ nullptr,
                         &intensity);
+                    assert(ret_code == 0 && "execute emission intensity function failed");
 
                     vp_sample[VPCH_ILLUM] += static_cast<mi::Float32_3>(eval_data.edf)*intensity*ray.weight;
                 }
@@ -1527,11 +1539,12 @@ bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                 (is_thin_walled && ray.is_inside) ? rc.backface_bsdf_function_index : rc.surface_bsdf_function_index;
 
             // shader initialization for the current hit point
-            rc.target_code->execute_bsdf_init(
+            ret_code = rc.target_code->execute_bsdf_init(
                 surface_bsdf_function_index,
                 *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
                 static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
                 nullptr);
+            assert(ret_code == 0 && "execute_bsdf_init failed");
 
             // get auxiliarity data
             if (rc.render_auxiliary && ray.level == 1)
@@ -1549,13 +1562,14 @@ bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                 }
                 aux_data.k1 = -ray.dir;
 
-                rc.target_code->execute_bsdf_auxiliary(
+                ret_code = rc.target_code->execute_bsdf_auxiliary(
                     surface_bsdf_function_index + 4,    // bsdf_function_index corresponds to 'init'
                                                         // bsdf_function_index+4 to 'auxiliary'
                     &aux_data,
                     *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
                     static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
                     nullptr);
+                assert(ret_code == 0 && "execute_bsdf_auxiliary failed");
 
                 vp_sample[VPCH_ALBEDO] = aux_data.albedo;
                 vp_sample[VPCH_NORMAL] = aux_data.normal;
@@ -1602,14 +1616,15 @@ bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                     eval_data.bsdf_glossy = mi::Float32_3(0.f);
 
                     // evaluate material surface bsdf
-                    rc.target_code->execute_bsdf_evaluate(
+                    ret_code = rc.target_code->execute_bsdf_evaluate(
                         surface_bsdf_function_index + 2,    // bsdf_function_index corresponds to 'init'
                                                             // bsdf_function_index+2 to 'evaluate'
                         &eval_data,
                         *static_cast<mi::neuraylib::Shading_state_material*>(shading_state),
                         static_cast<mi::neuraylib::Texture_handler_base*>(tex_handler),
                         /*arg_block_data=*/ nullptr);
-                    
+                    assert(ret_code == 0 && "execute_bsdf_evaluate failed");
+
                     if (eval_data.pdf > 1.e-6f)
                     {
                         const float mis_weight = (light_pdf == Constants.DIRAC)
@@ -1639,13 +1654,14 @@ bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                 sample_data.xi.z = rnd(seed);
                 sample_data.xi.w = rnd(seed);
 
-                rc.target_code->execute_bsdf_sample(
+                ret_code = rc.target_code->execute_bsdf_sample(
                     surface_bsdf_function_index + 1,         // bsdf_function_index corresponds to 'init'
                                                              // bsdf_function_index+1 to 'sample'
                     &sample_data,   // input/output
                     *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
                     static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
                     /*arg_block_data=*/ nullptr);
+                assert(ret_code == 0 && "execute_bsdf_sample failed");
 
                 if (sample_data.event_type != mi::neuraylib::BSDF_EVENT_ABSORB)
                 {

@@ -39,6 +39,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
     class Base_application;
     class Mdl_transaction;
     class Mdl_material_library;
+    class Light_profile;
+    class Bsdf_measurement;
     enum class Texture_dimension;
 
     // --------------------------------------------------------------------------------------------
@@ -46,15 +48,15 @@ namespace mi { namespace examples { namespace mdl_d3d12
     enum class Mdl_resource_kind
     {
         Texture, // includes 2D and 3D textures
-        // Light_profile,
-        // Bsdf_measurement,
+        Light_profile,
+        Bsdf_measurement,
         _Count
     };
 
     // --------------------------------------------------------------------------------------------
 
-    /// Set of GPU resources that belong to one MDL resource
-    struct Mdl_resource_set
+    /// Set of GPU texture resources that belong to one MDL texture resource
+    struct Mdl_texture_set
     {
         struct Entry
         {
@@ -71,7 +73,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
             int32_t uvtile_v;   // v-coordinate of the lower left corner of the tile
         };
 
-        explicit Mdl_resource_set()
+        explicit Mdl_texture_set()
             : entries()
             , frame_first(0)
             , frame_last(0)
@@ -125,7 +127,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
             : kind(kind)
             , resource_name("")
             , runtime_resource_id(0)
-            , data(nullptr)
+            , texture_data(nullptr)
         {
         }
 
@@ -142,15 +144,22 @@ namespace mi { namespace examples { namespace mdl_d3d12
         // Is passed to the HLSL mdl renderer runtime.
         uint32_t runtime_resource_id;
 
-        // textures and buffers
-        Mdl_resource_set* data;
+        // resource data (textures, buffers, etc.)
+        union
+        {
+            Mdl_texture_set* texture_data;
+            Light_profile* light_profile_data;
+            Bsdf_measurement* mbsdf_data;
+        };
+
+        bool has_data() const { return !!texture_data; }
     };
 
     // --------------------------------------------------------------------------------------------
 
-    /// Information passed to GPU for mapping id requested in the runtime functions to buffer
+    /// Information passed to GPU for mapping id requested in the runtime functions to texture
     /// views of the corresponding type.
-    struct Mdl_resource_info
+    struct Mdl_texture_info
     {
         // index into the tex2d, tex3d, ... buffers, depending on the type requested
         uint32_t gpu_resource_array_start;
@@ -169,6 +178,64 @@ namespace mi { namespace examples { namespace mdl_d3d12
         // (u + v * width + f * width * height)
         uint32_t gpu_resource_uvtile_width;
         uint32_t gpu_resource_uvtile_height;
+    };
+
+    // --------------------------------------------------------------------------------------------
+
+    /// Information passed to the GPU for each BSDF measurement resource.
+    struct Mdl_light_profile_info
+    {
+        // angular resolution of the grid and its inverse
+        mi::Uint32_2_struct angular_resolution;
+        mi::Float32_2_struct inv_angular_resolution;
+
+        // starting angles of the grid
+        mi::Float32_2_struct theta_phi_start;
+
+        // angular step size and its inverse
+        mi::Float32_2_struct theta_phi_delta;
+        mi::Float32_2_struct theta_phi_inv_delta;
+
+        // factor to rescale the normalized data
+        // also represents the maximum candela value of the data
+        float candela_multiplier;
+
+        // power (radiant flux)
+        float total_power;
+
+        // index into the textures_2d array
+        // -  texture contains normalized data sampled on grid
+        uint32_t eval_data_index;
+
+        // index into the buffers
+        // - CDFs for sampling a light profile
+        uint32_t sample_data_index;
+    };
+
+    /// Information passed to the GPU for each BSDF measurement resource.
+    struct Mdl_mbsdf_info
+    {
+        // 32-bit booleans to specifiy if reflection and/or transmission data is present
+        uint32_t has_data[2];
+
+        // indicies for the evualuation, sample and albedo data (for both parts)
+        // - evaluation data texture consists of the bsdf measurement samples
+        // - sample data buffer holds the CDFs for sampling
+        // - albedo data buffer holds max albedos for each theta (isotropic)
+        uint32_t eval_data_index[2];
+        uint32_t sample_data_index[2];
+        uint32_t albedo_data_index[2];
+
+        // the maximum albedo values for both parts, used for limiting the multiplier
+        float max_albedo[2];
+
+        // vertical and horizontal angular resolutions for both parts, needed for texel access
+        uint32_t angular_resolution_theta[2];
+        uint32_t angular_resolution_phi[2];
+
+        // number of channels per measurement sample in each part
+        // 1 for intensity data, 3 for RGB color data
+        uint32_t num_channels[2];
     };
 
     // --------------------------------------------------------------------------------------------

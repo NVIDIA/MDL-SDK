@@ -34,9 +34,10 @@
 // - We do not use 'we' to talk about ourselves.
 
 
-/*! \anchor mdl_core_main
-
+/*! 
 \mainpage \MDLCoreApiName Programmer's Manual
+
+\anchor mdl_core_main
 
 This reference documentation is structured into introductory material, tutorials
 and examples, and reference manuals.

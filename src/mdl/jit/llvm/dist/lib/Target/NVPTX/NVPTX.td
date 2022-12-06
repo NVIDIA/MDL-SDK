@@ -59,6 +59,12 @@ def SM80 : SubtargetFeature<"sm_80", "SmVersion", "80",
                              "Target SM 8.0">;
 def SM86 : SubtargetFeature<"sm_86", "SmVersion", "86",
                              "Target SM 8.6">;
+def SM87 : SubtargetFeature<"sm_87", "SmVersion", "87",
+                             "Target SM 8.7">;
+def SM89 : SubtargetFeature<"sm_89", "SmVersion", "89",
+                             "Target SM 8.9">;
+def SM90 : SubtargetFeature<"sm_90", "SmVersion", "90",
+                             "Target SM 9.0">;
 
 // PTX Versions
 def PTX32 : SubtargetFeature<"ptx32", "PTXVersion", "32",
@@ -87,6 +93,10 @@ def PTX70 : SubtargetFeature<"ptx70", "PTXVersion", "70",
                              "Use PTX version 7.0">;
 def PTX71 : SubtargetFeature<"ptx71", "PTXVersion", "71",
                              "Use PTX version 7.1">;
+def PTX74 : SubtargetFeature<"ptx74", "PTXVersion", "74",
+                             "Use PTX version 7.4">;
+def PTX78 : SubtargetFeature<"ptx78", "PTXVersion", "78",
+                             "Use PTX version 7.8">;
 
 //===----------------------------------------------------------------------===//
 // NVPTX supported processors.
@@ -112,6 +122,9 @@ def : Proc<"sm_72", [SM72, PTX61]>;
 def : Proc<"sm_75", [SM75, PTX63]>;
 def : Proc<"sm_80", [SM80, PTX70]>;
 def : Proc<"sm_86", [SM86, PTX71]>;
+def : Proc<"sm_87", [SM87, PTX74]>;
+def : Proc<"sm_89", [SM89, PTX78]>;
+def : Proc<"sm_90", [SM90, PTX78]>;
 
 def NVPTXInstrInfo : InstrInfo {
 }

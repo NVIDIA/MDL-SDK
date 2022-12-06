@@ -72,6 +72,12 @@ public:
             const char* filename,
             const char* selector);
 
+    mi::Sint32 reset_reader(
+        DB::Transaction* transaction,
+        mi::neuraylib::IReader* reader,
+        const char* format,
+        const char* selector);
+
     mi::Sint32 reset_mdl_file_path(
             DB::Transaction* transaction,
             const std::string& filename,
@@ -132,7 +138,7 @@ private:
     mi::neuraylib::Tag m_data_t;
 
 
-    mi::Sint32 load_data(DB::Transaction*);
+    mi::Sint32 load_data(DB::Transaction*, mi::neuraylib::IReader* reader = nullptr, const char* format = nullptr);
 };
 
 /// Loads a default volume texture and stores it in the DB.

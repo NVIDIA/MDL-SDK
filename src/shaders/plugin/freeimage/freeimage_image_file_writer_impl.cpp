@@ -110,9 +110,9 @@ Image_file_writer_impl::~Image_file_writer_impl()
             if( m_quality > 50)
                 flags |= EXR_FLOAT;
         }
-        // Save using ZLib level 9 compression flag (default value is 6)
+        // Save using ZLib level 5 compression flag (default value is 6)
         if( m_format == FIF_PNG)
-            flags |= PNG_Z_BEST_COMPRESSION;
+            flags |= 0x5;
         if( m_format == FIF_BMP)
             flags |= BMP_SAVE_RLE;
         if( m_format == FIF_TARGA)

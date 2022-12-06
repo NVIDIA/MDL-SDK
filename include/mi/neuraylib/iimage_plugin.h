@@ -60,7 +60,7 @@ class IPlugin_api; class ITile;
 */
 
 /// Type of image plugins
-#define MI_NEURAY_IMAGE_PLUGIN_TYPE "image v30"
+#define MI_NEURAY_IMAGE_PLUGIN_TYPE "image v31"
 
 /// Abstract interface for image plugins.
 ///

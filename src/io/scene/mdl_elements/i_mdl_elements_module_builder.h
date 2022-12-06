@@ -33,6 +33,7 @@
 
 #include <mi/base/handle.h>
 #include <mi/mdl/mdl_mdl.h>
+#include <mi/neuraylib/iexpression.h>
 #include <base/data/db/i_db_access.h>
 #include <base/data/db/i_db_tag.h>
 
@@ -281,9 +282,9 @@ private:
         bool is_exported,
         Execution_context* context);
 
-    /// Upgrades the module to \p new_version, but not beyond \c m_max_mdl_version.
+    /// Upgrades the module to \p version, but not beyond \c m_max_mdl_version.
     void upgrade_mdl_version(
-        mi::mdl::IMDL::MDL_version new_version, Execution_context* context);
+        mi::neuraylib::Mdl_version version, Execution_context* context);
 
     /// Converts an IAnnotation to an mi::mdl::IAnnotation.
     ///

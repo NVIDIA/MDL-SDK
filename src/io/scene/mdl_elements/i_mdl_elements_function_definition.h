@@ -315,18 +315,14 @@ public:
     Mdl_ident get_ident() const;
 
     /// Computes the MDL versions in m_since_version and m_removed_version.
-    void compute_mdl_version( const mi::mdl::IModule* module);
-
-    /// Returns the MDL version when this function definition was added and removed.
     ///
-    /// \param[out] since     The MDL version in which this function definition was added. If the
+    /// m_since_version       The MDL version in which this function definition was added. If the
     ///                       function definition does not belong to the standard library, the
     ///                       MDL version of the module is returned.
-    /// \param[out] removed   The MDL version in which this function definition was removed, or
-    ///                       mi_mdl_IMDL_MDL_VERSION_INVALID if the function has not been
+    /// m_removed_version     The MDL version in which this function definition was removed, or
+    ///                       mi::neuraylib::MDL_VERSION_INVALID if the function has not been
     ///                       removed so far or does not belong to the standard library.
-    void get_mdl_version(
-        mi::mdl::IMDL::MDL_version& since, mi::mdl::IMDL::MDL_version& removed) const;
+    void compute_mdl_version( const mi::mdl::IModule* module);
 
     /// Improved version of SERIAL::Serializable::dump().
     ///
@@ -438,8 +434,8 @@ private:
     bool m_is_exported;                           ///< The export flag.
     bool m_is_uniform;                            ///< The uniform flag.
     bool m_is_material;                           ///< Material or function
-    mi::mdl::IMDL::MDL_version m_since_version;   ///< The version when this def. was added.
-    mi::mdl::IMDL::MDL_version m_removed_version; ///< The version when this def. was removed.
+    mi::neuraylib::Mdl_version m_since_version;   ///< The version when this def. was added.
+    mi::neuraylib::Mdl_version m_removed_version; ///< The version when this def. was removed.
 
     mi::base::Handle<IType_list> m_parameter_types;
     std::vector<std::string> m_parameter_type_names; ///< The MDL parameter type names.

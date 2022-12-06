@@ -53,7 +53,7 @@
 /// of the interfaces offered through the shared library have changed.
 ///
 /// Despite the name, this number tracks \em ABI changes, not \em API changes.
-#define MI_NEURAYLIB_API_VERSION  48
+#define MI_NEURAYLIB_API_VERSION  49
 
 // The following three to four macros define the API version.
 // The macros thereafter are defined in terms of the first four.
@@ -97,11 +97,11 @@
 #endif // MI_NEURAYLIB_VERSION_QUALIFIER_EMPTY
 
 /// \NeurayProductName product version number in a string representation, such as \c "2.0".
-#define MI_NEURAYLIB_PRODUCT_VERSION_STRING  "2022.0.1"
+#define MI_NEURAYLIB_PRODUCT_VERSION_STRING  "2022.1.0"
 
 /// Type of plugins for the \NeurayApiName.
 /// \see #mi::base::Plugin::get_type().
-#define MI_NEURAYLIB_PLUGIN_TYPE "neuray API v40"
+#define MI_NEURAYLIB_PLUGIN_TYPE "neuray API v41"
 
 // Enables features that were deprecated with version 11.1.
 // #define MI_NEURAYLIB_DEPRECATED_11_1

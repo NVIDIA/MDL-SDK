@@ -36,9 +36,10 @@
 // - We do not use 'we' to talk about ourselves.
 //
 
-/*! \anchor mi_neuray_main
-
+/*!
 \mainpage \NeurayAdjectiveName \MiProductVersion  API Programmer's Manual
+
+\anchor mi_neuray_main
 
 This reference documentation is structured into introductory material, tutorials
 and examples, reference manuals, and auxiliary material.

@@ -606,35 +606,36 @@ private:
 
 // When adding new options
 // - adapt the Execution_context constructor to register the default and its type
-// - adapt create_thread_context() and create_execution_context if necessary
+// - adapt create_thread_context() and create_execution_context() if necessary
 
-#define MDL_CTX_OPTION_WARNING                            "warning"
-#define MDL_CTX_OPTION_OPTIMIZATION_LEVEL                 "optimization_level"
-#define MDL_CTX_OPTION_INTERNAL_SPACE                     "internal_space"
-#define MDL_CTX_OPTION_FOLD_METERS_PER_SCENE_UNIT         "fold_meters_per_scene_unit"
-#define MDL_CTX_OPTION_METERS_PER_SCENE_UNIT              "meters_per_scene_unit"
-#define MDL_CTX_OPTION_WAVELENGTH_MIN                     "wavelength_min"
-#define MDL_CTX_OPTION_WAVELENGTH_MAX                     "wavelength_max"
-#define MDL_CTX_OPTION_INCLUDE_GEO_NORMAL                 "include_geometry_normal"
-#define MDL_CTX_OPTION_BUNDLE_RESOURCES                   "bundle_resources"
-#define MDL_CTX_OPTION_MDL_NEXT                           "mdl_next"
-#define MDL_CTX_OPTION_EXPERIMENTAL                       "experimental"
-#define MDL_CTX_OPTION_RESOLVE_RESOURCES                  "resolve_resources"
-#define MDL_CTX_OPTION_FOLD_TERNARY_ON_DF                 "fold_ternary_on_df"
-#define MDL_CTX_OPTION_IGNORE_NOINLINE                    "ignore_noinline"
-#define MDL_CTX_OPTION_REMOVE_DEAD_PARAMETERS             "remove_dead_parameters"
-#define MDL_CTX_OPTION_FOLD_ALL_BOOL_PARAMETERS           "fold_all_bool_parameters"
-#define MDL_CTX_OPTION_FOLD_ALL_ENUM_PARAMETERS           "fold_all_enum_parameters"
-#define MDL_CTX_OPTION_FOLD_PARAMETERS                    "fold_parameters"
-#define MDL_CTX_OPTION_FOLD_TRIVIAL_CUTOUT_OPACITY        "fold_trivial_cutout_opacity"
-#define MDL_CTX_OPTION_FOLD_TRANSPARENT_LAYERS            "fold_transparent_layers"
-#define MDL_CTX_OPTION_SERIALIZE_CLASS_INSTANCE_DATA      "serialize_class_instance_data"
-#define MDL_CTX_OPTION_LOADING_WAIT_HANDLE_FACTORY        "loading_wait_handle_factory"
-#define MDL_CTX_OPTION_DEPRECATED_REPLACE_EXISTING        "replace_existing"
-#define MDL_CTX_OPTION_TARGET_MATERIAL_MODEL_MODE         "target_material_model_mode"
-#define MDL_CTX_OPTION_USER_DATA                          "user_data"
+#define MDL_CTX_OPTION_WARNING                             "warning"
+#define MDL_CTX_OPTION_OPTIMIZATION_LEVEL                  "optimization_level"
+#define MDL_CTX_OPTION_INTERNAL_SPACE                      "internal_space"
+#define MDL_CTX_OPTION_FOLD_METERS_PER_SCENE_UNIT          "fold_meters_per_scene_unit"
+#define MDL_CTX_OPTION_METERS_PER_SCENE_UNIT               "meters_per_scene_unit"
+#define MDL_CTX_OPTION_WAVELENGTH_MIN                      "wavelength_min"
+#define MDL_CTX_OPTION_WAVELENGTH_MAX                      "wavelength_max"
+#define MDL_CTX_OPTION_INCLUDE_GEO_NORMAL                  "include_geometry_normal"
+#define MDL_CTX_OPTION_BUNDLE_RESOURCES                    "bundle_resources"
+#define MDL_CTX_OPTION_EXPORT_RESOURCES_WITH_MODULE_PREFIX "export_resources_with_module_prefix"
+#define MDL_CTX_OPTION_MDL_NEXT                            "mdl_next"
+#define MDL_CTX_OPTION_EXPERIMENTAL                        "experimental"
+#define MDL_CTX_OPTION_RESOLVE_RESOURCES                   "resolve_resources"
+#define MDL_CTX_OPTION_FOLD_TERNARY_ON_DF                  "fold_ternary_on_df"
+#define MDL_CTX_OPTION_IGNORE_NOINLINE                     "ignore_noinline"
+#define MDL_CTX_OPTION_REMOVE_DEAD_PARAMETERS              "remove_dead_parameters"
+#define MDL_CTX_OPTION_FOLD_ALL_BOOL_PARAMETERS            "fold_all_bool_parameters"
+#define MDL_CTX_OPTION_FOLD_ALL_ENUM_PARAMETERS            "fold_all_enum_parameters"
+#define MDL_CTX_OPTION_FOLD_PARAMETERS                     "fold_parameters"
+#define MDL_CTX_OPTION_FOLD_TRIVIAL_CUTOUT_OPACITY         "fold_trivial_cutout_opacity"
+#define MDL_CTX_OPTION_FOLD_TRANSPARENT_LAYERS             "fold_transparent_layers"
+#define MDL_CTX_OPTION_SERIALIZE_CLASS_INSTANCE_DATA       "serialize_class_instance_data"
+#define MDL_CTX_OPTION_LOADING_WAIT_HANDLE_FACTORY         "loading_wait_handle_factory"
+#define MDL_CTX_OPTION_DEPRECATED_REPLACE_EXISTING         "replace_existing"
+#define MDL_CTX_OPTION_TARGET_MATERIAL_MODEL_MODE          "target_material_model_mode"
+#define MDL_CTX_OPTION_USER_DATA                           "user_data"
 // Not documented in the API (used by the module transformer, but not for general use).
-#define MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS  "keep_original_resource_file_paths"
+#define MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS   "keep_original_resource_file_paths"
 
 /// Represents an MDL execution context. Similar to mi::mdl::Thread_context.
 class Execution_context
@@ -1651,6 +1652,10 @@ const mi::mdl::IMDL::MDL_version mi_mdl_IMDL_MDL_VERSION_INVALID
 
 /// Converts mi::mdl::IMDL::MDL_version into mi::neuraylib::Mdl_version.
 mi::neuraylib::Mdl_version convert_mdl_version( mi::mdl::IMDL::MDL_version version);
+
+/// Converts values from mi::mdl::IMDL::MDL_version plus
+/// mi_mdl_IMDL_MDL_VERSION_INVALID into mi::neuraylib::Mdl_version.
+mi::neuraylib::Mdl_version convert_mdl_version_uint32( mi::Uint32 version);
 
 /// Converts mi::neuraylib::Mdl_version into mi::mdl::IMDL::MDL_version.
 mi::mdl::IMDL::MDL_version convert_mdl_version( mi::neuraylib::Mdl_version version);

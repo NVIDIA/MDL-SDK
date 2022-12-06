@@ -317,10 +317,16 @@ bool Texture::upload(D3DCommandList* command_list, const uint8_t* data, size_t d
         buffer = new uint8_t[buffer_size];
         memset((void*) buffer, 0, buffer_size);
 
-        for (size_t r = 0; r < m_height; ++r)
-            memcpy((void*) (buffer + r * gpu_row_pitch),
-                    (void*) (data + r * data_row_pitch),
+        for (size_t l = 0; l < m_depth; ++l)
+        {
+            const uint8_t* buffer_layer = buffer + gpu_row_pitch * m_height * l;
+            const uint8_t* data_layer = data + data_row_pitch * m_height * l;
+
+            for (size_t r = 0; r < m_height; ++r)
+                memcpy((void*)(buffer_layer + r * gpu_row_pitch),
+                    (void*)(data_layer + r * data_row_pitch),
                     data_row_pitch);
+        }
     }
 
     // create a resource that allows to upload data

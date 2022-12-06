@@ -155,6 +155,10 @@ if(TARGET shaders-plugin-freeimage)
     add_dependencies(${PROJECT_NAME} shaders-plugin-freeimage)
 endif()
 
+if(TARGET shaders-plugin-openimageio)
+    add_dependencies(${PROJECT_NAME} shaders-plugin-openimageio)
+endif()
+
 # add include directories
 target_include_directories(${PROJECT_NAME}
     INTERFACE

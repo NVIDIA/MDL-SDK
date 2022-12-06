@@ -804,13 +804,12 @@ static void replace_since_version(
         case 8:
             flags |= unsigned(IMDL::MDL_VERSION_1_8);
             break;
-        case 9:
-            flags |= unsigned(IMDL::MDL_VERSION_1_9);
-            break;
         default:
             MDL_ASSERT(!"Unsupported version");
             break;
         }
+    } else if (major == 99 && minor == 99) {
+        flags |= unsigned(IMDL::MDL_VERSION_EXP);
     }
     def->set_version_flags(flags);
 }
@@ -855,13 +854,12 @@ static void replace_removed_version(
         case 8:
             flags |= (unsigned(IMDL::MDL_VERSION_1_8) << 8);
             break;
-        case 9:
-            flags |= (unsigned(IMDL::MDL_VERSION_1_9) << 8);
-            break;
         default:
             MDL_ASSERT(!"Unsupported version");
             break;
         }
+    } else if (major == 99 && minor == 99) {
+        flags |= (unsigned(IMDL::MDL_VERSION_EXP) << 8);
     }
     def->set_version_flags(flags);
 }
@@ -6282,7 +6280,8 @@ void NT_analysis::handle_enable_ifs(IParameter const *param)
                 lit->access_position().get_start_line(),
                 lit->access_position().get_start_column() + 1,  // skip '"'
                 &m_module,
-                m_enable_mdl_next || m_enable_experimental_features,
+                m_enable_mdl_next,
+                m_enable_experimental_features,
                 msgs);
 
             // visit the condition in special "enable_if" mode
@@ -7045,6 +7044,24 @@ error_found:
     }
 }
 
+// Get the type scope of a type iff we can select from it.
+Scope *NT_analysis::get_select_scope(
+    IType const *type)
+{
+    type = type->skip_type_alias();
+
+    switch (type->get_kind()) {
+    case IType::TK_STRUCT:
+        // currently, we can select from struct types (and materials, which are struct types too)
+    case IType::TK_VECTOR:
+        // and vector types
+        break;
+    default:
+        return NULL;
+    }
+    return m_def_tab->get_type_scope(type);
+}
+
 // Handle scope transitions for a select expression name lookup.
 void NT_analysis::handle_select_scopes(IExpression_binary *sel_expr)
 {
@@ -7072,7 +7089,7 @@ void NT_analysis::handle_select_scopes(IExpression_binary *sel_expr)
         // kill the right type, because lhs is invalid, but later the type of the whole
         // expression is taken from this
         const_cast<IExpression *>(rhs)->set_type(m_tc.error_type);
-    } else if (Scope *scope = m_def_tab->get_type_scope(lhs_type->skip_type_alias())) {
+    } else if (Scope *scope = get_select_scope(lhs_type)) {
         IType_store                        condition(m_in_select, lhs_type);
         Definition_table::Scope_transition transition(*m_def_tab, scope);
 
@@ -7085,7 +7102,13 @@ void NT_analysis::handle_select_scopes(IExpression_binary *sel_expr)
         IExpression const *n_rhs = visit(rhs);
         if (n_rhs != rhs) {
             sel_expr->set_right_argument(n_rhs);
+            rhs = n_rhs;
         }
+
+        error(
+            SELECT_FROM_NON_STRUCT,
+            lhs->access_position(),
+            Error_params(*this).add(rhs));
 
         // kill the right type, because lhs is invalid, but later the type of the whole
         // expression is taken from this
@@ -14112,12 +14135,7 @@ Definition const *NT_analysis::handle_known_annotation(
             int v_major = 0;
             int v_minor = 0;
 
-            IMDL::MDL_version dest = IMDL::MDL_version(IMDL::MDL_LATEST_VERSION + 1);
-
-            if (!m_enable_experimental_features) {
-                // make inaccessible
-                dest = IMDL::MDL_version(IMDL::MDL_LATEST_VERSION + 2);
-            }
+            IMDL::MDL_version dest = IMDL::MDL_version(IMDL::MDL_VERSION_EXP);
 
             Module::get_version(dest, v_major, v_minor);
 

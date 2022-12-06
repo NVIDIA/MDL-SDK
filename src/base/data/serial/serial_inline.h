@@ -29,6 +29,7 @@
 /// \brief 
 
 #include <type_traits>
+#include <cassert>
 
 namespace MI {
 
@@ -633,6 +634,82 @@ void read_enum(D* deserializer, Enum_type* enum_value )
     read(deserializer,&v);
     *enum_value = static_cast<Enum_type>(v);
 }
+
+
+namespace DETAIL {
+
+template <std::size_t I, typename S, typename... Tp>
+void write_variant(S* ser, const std::variant<Tp...>& val, const std::size_t idx)
+{
+    if constexpr (I < sizeof...(Tp)) {
+        if (idx == 0) {
+            const auto& element = std::get<I>(val);
+            write(ser,element);
+        }
+        else {
+            write_variant<I+1>(ser,val,idx-1);
+        }
+        return;
+    }
+    assert(!"invalid variant index");
+}
+
+
+template <std::size_t I, typename D, typename... Tp>
+void read_variant(D* deser, std::variant<Tp...>* vp, const std::size_t idx)
+{
+    if constexpr (I < sizeof...(Tp)) {
+        if (idx == 0) {
+            auto& element = vp->template emplace<I>();
+            read(deser,&element);
+        }
+        else {
+            read_variant<I+1>(deser,vp,idx-1);
+        }
+        return;
+    }
+    assert(!"invalid variant index");
+}
+
+}
+
+
+template <typename... Tp, typename S, typename>
+void write(S* ser, const std::variant<Tp...>& val)
+{
+    write(ser,(mi::Uint64)val.index());
+    if (!val.valueless_by_exception()) {
+        // not available on MacOS and possibly poorly implemented elsewhere:
+        // std::visit([&ser](const auto& v){ write(ser,v); },val);
+        DETAIL::write_variant<0>(ser,val,val.index());
+    }
+}
+
+
+template <typename... Tp, typename D, typename>
+void read(D* deser, std::variant<Tp...>* vp)
+{
+    mi::Uint64 idx;
+    read(deser,&idx);
+    if (idx != std::variant_npos) {
+        DETAIL::read_variant<0>(deser,vp,idx);
+    }
+}
+
+
+template <typename T, std::size_t N, typename S, typename>
+void write(S* ser, const std::array<T,N>& val)
+{
+    write_range(*ser,val.begin(),val.end());
+}
+
+
+template <typename T, std::size_t N, typename D, typename>
+void read(D* deser, std::array<T,N>* vp)
+{
+    read_range(*deser,vp->begin(),vp->end());
+}
+
 
 } // namespace SERIAL
 

@@ -1350,13 +1350,13 @@ BSDF_INLINE float3 thin_film_factor(
     xyz *= float(1.0 / 16.0);
 
     // ("normalized" such that the loop for no shifted wave gives reflectivity (1,1,1))
-    return make_float3(
+    return math::saturate(make_float3(
         xyz.x * (float)( 3.240600 / 0.433509) + xyz.y * (float)(-1.537200 / 0.433509)
                                               + xyz.z * (float)(-0.498600 / 0.433509),
         xyz.x * (float)(-0.968900 / 0.341582) + xyz.y * (float)( 1.875800 / 0.341582)
                                               + xyz.z * (float)( 0.041500 / 0.341582),
         xyz.x * (float)( 0.055700 / 0.326950) + xyz.y * (float)(-0.204000 / 0.326950)
-                                              + xyz.z * (float)( 1.057000 / 0.326950));
+                                              + xyz.z * (float)( 1.057000 / 0.326950)));
 }
 
 BSDF_INLINE float3 thin_film_factor(

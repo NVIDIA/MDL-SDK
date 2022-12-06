@@ -55,7 +55,7 @@ float get_value_lerp(
 {
     MDL_ASSERT(num_values > 1);
 
-    const float f = (lambda - lambda_min) / (lambda_max - lambda_min) * (float)(num_values - 1);
+    const float f = std::max((lambda - lambda_min) / (lambda_max - lambda_min) * (float)(num_values - 1), 0.0f);
     unsigned int b0 = (unsigned int)(std::max(floorf(f), 0.0f));
     if (b0 >= num_values)
         b0 = num_values - 1;

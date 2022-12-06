@@ -34,13 +34,19 @@ function(FIND_BOOST_EXT)
         # remove trailing slashes/backslashes
         string(REGEX REPLACE "[/\\\\]$" "" _BOOST_INCLUDEDIR "${BOOST_INCLUDEDIR}")
         set(BOOST_INCLUDEDIR ${_BOOST_INCLUDEDIR} CACHE PATH "Directory that contains the boost headers." FORCE)
-        set(Boost_NO_SYSTEM_PATHS ON CACHE INTERNAL "")
-        set(Boost_NO_BOOST_CMAKE ON CACHE INTERNAL "")
-        #set(Boost_DEBUG ON)
     endif()
 
-    # headers only
-    find_package(Boost QUIET)
+    set(Boost_NO_SYSTEM_PATHS ON CACHE INTERNAL "")
+    set(Boost_NO_BOOST_CMAKE ON CACHE INTERNAL "")
+    set(Boost_NO_WARN_NEW_VERSIONS ON CACHE INTERNAL "")
+    #set(Boost_DEBUG ON)
+
+    if(MDL_BUILD_OPENIMAGEIO_PLUGIN)
+        find_package(Boost COMPONENTS filesystem thread)
+    else()
+        # headers only
+        find_package(Boost QUIET)
+    endif()
     mark_as_advanced(CLEAR BOOST_INCLUDEDIR)
     set(Boost_FOUND ${Boost_FOUND} CACHE INTERNAL "Dependency boost has been resolved.")
 

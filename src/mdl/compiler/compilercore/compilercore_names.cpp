@@ -545,7 +545,13 @@ Name_factory::Name_factory(
 {
 }
 
-// Create a new Symbol.
+// Return the error symbol.
+ISymbol const *Name_factory::get_error_symbol() const
+{
+    return m_sym_tab.get_error_symbol();
+}
+
+// Create a new symbol.
 ISymbol const *Name_factory::create_symbol(char const *name)
 {
     return m_sym_tab.create_symbol(name);

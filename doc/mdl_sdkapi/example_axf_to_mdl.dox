@@ -35,11 +35,11 @@
 
 This example loads an X-Rite AxF(Appearance Exchange Format) file and converts it to an equivalent representation in MDL format.
 
-\section example_modules_new New Topics
+\section example_axf_to_mdl_new New Topics
 
   - AxF to MDL material format conversion
 
-\section example_modules_descr Detailed Description
+\section example_axf_to_mdl_descr Detailed Description
 
 <dl>
     <dt><b>
@@ -67,7 +67,7 @@ This example loads an X-Rite AxF(Appearance Exchange Format) file and converts i
     </dd>
 </dl>
 
-\section example_modules Example Source
+\section example_axf_to_mdl_source Example Source
 
 <b>Source Code Location:</b>
   <tt>examples/mdl_sdk/axf_to_mdl/axf_to_mdl.cpp</tt>

@@ -236,7 +236,7 @@ BSDF_API void chiang_hair_bsdf_sample(
 
     const float3 k1_p = math::normalize(data->k1 - tangent_u * math::dot(data->k1, tangent_u));
     const float cos_gamma_o = math::dot(inherited_normal, k1_p);
-    float sin_gamma_o = math::sqrt(math::max(1.0f - cos_gamma_o * cos_gamma_o, 0.0f));
+    float sin_gamma_o = math::sqrt(math::saturate(1.0f - cos_gamma_o * cos_gamma_o));
     if (math::dot(k1_p, tangent_v) > 0.0f)
         sin_gamma_o = -sin_gamma_o;
     const float gamma_o = math::asin(sin_gamma_o);
@@ -248,7 +248,7 @@ BSDF_API void chiang_hair_bsdf_sample(
     // all the clamping below avoids issues with total internal reflection (eta < 1)
     // (fresnel will be 1.0 and angles computed here will have no actual effect in computations)
     const float cos_theta_t = math::sqrt(math::max(1.0f - sin_theta_t * sin_theta_t, 0.0f));
-    const float eta_p = math::sqrt(math::max(eta * eta - sin_theta_o * sin_theta_o, 0.0f)) / cos_theta_o;
+    const float eta_p = math::sqrt(math::max(eta * eta - sin_theta_o * sin_theta_o, 0.0f)) / math::max(cos_theta_o, 1e-8f);
     const float sin_gamma_t = math::max(math::min(sin_gamma_o / eta_p, 1.0f), -1.0f);
     const float cos_gamma_t = math::sqrt(1.0f - sin_gamma_t * sin_gamma_t);
     const float gamma_t = math::asin(sin_gamma_t);
@@ -256,7 +256,7 @@ BSDF_API void chiang_hair_bsdf_sample(
 
     const float fresnel = ior_fresnel(eta, cos_theta_o * cos_gamma_o);
     float3 T;
-    float T_min;
+    float T_s;
     if (fresnel < 1.0f)
     {
         const float3 sigma_a = absorption_coefficient;
@@ -266,17 +266,17 @@ BSDF_API void chiang_hair_bsdf_sample(
             (sigma_a.x > 0.0f) ? math::exp(-sigma_a.x * dist) : 1.0f,
             (sigma_a.y > 0.0f) ? math::exp(-sigma_a.y * dist) : 1.0f,
             (sigma_a.z > 0.0f) ? math::exp(-sigma_a.z * dist) : 1.0f);
-        T_min = math::min(T.x, math::min(T.y, T.z));
+        T_s = math::max(T.x, math::max(T.y, T.z));
     }
     else
     {
         T = make_float3(0.0f, 0.0f, 0.0f);
-        T_min = 0.0f;
+        T_s = 0.0f;
     }
 
-    const float T_min_f = T_min * fresnel;
+    const float T_s_f = T_s * fresnel;
 
-    const float sum = fresnel + (1.0f - fresnel) * (1.0f - fresnel) * (T_min + T_min * T_min_f + T_min * T_min_f * T_min_f / (1.0f - T_min_f));
+    const float sum = fresnel + (1.0f - fresnel) * (1.0f - fresnel) * (T_s + T_s * T_s_f + T_s * T_s_f * T_s_f / (1.0f - T_s_f));
 
     float sin_theta_i, cos_theta_i, dphi;
     if (data->event_type != BSDF_EVENT_DIFFUSE_REFLECTION) // sample hair bsdf
@@ -305,17 +305,17 @@ BSDF_API void chiang_hair_bsdf_sample(
             if (p == 0)
             {
                 const float f = (1.0f - fresnel) * (1.0f - fresnel);
-                weight_s = T_min * f;
+                weight_s = T_s * f;
                 weight = T * f;
             }
             else if (p == 1)
             {
-                weight_s *= T_min_f;
+                weight_s *= T_s_f;
                 weight *= T * fresnel;
             }
             else if (p == 2)
             {
-                weight_s *= T_min_f / (1.0f - T_min_f);
+                weight_s *= T_s_f / (1.0f - T_s_f);
                 weight *= T * fresnel / (make_float3(1.0f, 1.0f, 1.0f) - T * fresnel);
             }
             
@@ -406,17 +406,17 @@ BSDF_API void chiang_hair_bsdf_sample(
             if (fresnel >= 1.0f)
                 break;
             const float f = (1.0f - fresnel) * (1.0f - fresnel);
-            weight_s = T_min * f;
+            weight_s = T_s * f;
             vs = mi::libdf::hair::hair_prepare_roughness(roughness_TT);
         }
         else if (p == 1)
         {
-            weight_s *= T_min_f;
+            weight_s *= T_s_f;
             vs = mi::libdf::hair::hair_prepare_roughness(roughness_TRT);
         }
         else if (p == 2)
         {
-            weight_s *= T_min_f / (1.0f - T_min_f);
+            weight_s *= T_s_f / (1.0f - T_s_f);
         }
     }
     pdf /= sum;
@@ -454,7 +454,7 @@ BSDF_INLINE void chiang_hair_bsdf_evaluate_and_pdf(
 
     const float3 k1_p = math::normalize(data->k1 - tangent_u * math::dot(data->k1, tangent_u));
     const float cos_gamma_o = math::dot(inherited_normal, k1_p);
-    float sin_gamma_o = math::sqrt(math::max(1.0f - cos_gamma_o * cos_gamma_o, 0.0f));
+    float sin_gamma_o = math::sqrt(math::saturate(1.0f - cos_gamma_o * cos_gamma_o));
     if (math::dot(k1_p, tangent_v) > 0.0f)
         sin_gamma_o = -sin_gamma_o;
     const float gamma_o = math::asin(sin_gamma_o);
@@ -465,14 +465,14 @@ BSDF_INLINE void chiang_hair_bsdf_evaluate_and_pdf(
     // all the clamping below avoids issues with total internal reflection (eta < 1)
     // (fresnel will be 1.0 and angles computed here will have no actual effect in computations)
     const float cos_theta_t = math::sqrt(math::max(1.0f - sin_theta_t * sin_theta_t, 0.0f));
-    const float eta_p = math::sqrt(math::max(eta * eta - sin_theta_o * sin_theta_o, 0.0f)) / cos_theta_o;
+    const float eta_p = math::sqrt(math::max(eta * eta - sin_theta_o * sin_theta_o, 0.0f)) / math::max(cos_theta_o, 1e-8f);
     const float sin_gamma_t = math::max(math::min(sin_gamma_o / eta_p, 1.0f), -1.0f);
     const float cos_gamma_t = math::sqrt(1.0f - sin_gamma_t * sin_gamma_t);
     const float gamma_t = math::asin(sin_gamma_t);
 
     const float fresnel = ior_fresnel(eta, cos_theta_o * cos_gamma_o);
     float3 T = make_float3(0.0f, 0.0f, 0.0f);
-    float T_min = 0.0f;
+    float T_s = 0.0f;
     if (fresnel < 1.0f)
     {
         const float3 sigma_a = absorption_coefficient;
@@ -481,7 +481,7 @@ BSDF_INLINE void chiang_hair_bsdf_evaluate_and_pdf(
             (sigma_a.x > 0.0f) ? math::exp(-sigma_a.x * dist) : 1.0f,
             (sigma_a.y > 0.0f) ? math::exp(-sigma_a.y * dist) : 1.0f,
             (sigma_a.z > 0.0f) ? math::exp(-sigma_a.z * dist) : 1.0f);
-        T_min = math::min(T.x, math::min(T.y, T.z));
+        T_s = math::max(T.x, math::max(T.y, T.z));
     }
 
     bsdf = make_float3(0.0f, 0.0f, 0.0f);
@@ -512,19 +512,19 @@ BSDF_INLINE void chiang_hair_bsdf_evaluate_and_pdf(
                 break;
             const float f = (1.0f - fresnel) * (1.0f - fresnel);
             weight = T * f;
-            weight_s = T_min * f;
+            weight_s = T_s * f;
             vs = mi::libdf::hair::hair_prepare_roughness(roughness_TT);
         }
         else if (p == 1)
         {
             weight *= T * fresnel;
-            weight_s *= T_min * fresnel;
+            weight_s *= T_s * fresnel;
             vs = mi::libdf::hair::hair_prepare_roughness(roughness_TRT);
         }
         else if (p == 2)
         {
             weight *= T * fresnel / (make_float3(1.0f, 1.0f, 1.0f) - T * fresnel);
-            weight_s *= T_min * fresnel / (1.0f - T_min * fresnel);
+            weight_s *= T_s * fresnel / (1.0f - T_s * fresnel);
         }
     }
     pdf /= sum;

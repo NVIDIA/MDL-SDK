@@ -453,8 +453,8 @@ const char* Value_texture::get_file_path( DB::Transaction* transaction) const
         return nullptr;
     DB::Access<TEXTURE::Texture> texture( m_value, transaction);
     DB::Tag image_tag = texture->get_image();
-    if (image_tag && transaction->get_class_id(image_tag) == DBIMAGE::ID_IMAGE) {
-        DB::Access<DBIMAGE::Image> image(image_tag, transaction);
+    if( image_tag && transaction->get_class_id(image_tag) == DBIMAGE::ID_IMAGE) {
+        DB::Access<DBIMAGE::Image> image( image_tag, transaction);
         m_cached_file_path = image->get_mdl_file_path();
         return !m_cached_file_path.empty() ? m_cached_file_path.c_str() : nullptr;
     }

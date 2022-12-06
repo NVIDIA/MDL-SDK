@@ -2107,17 +2107,8 @@ Section_material::~Section_material()
 
 void Section_material::unbind_material()
 {
-    if (m_material_parameters)
-    {
-        delete m_material_parameters;
-        m_material_parameters = nullptr;
-    }
-
-    if (m_material_parameters_context)
-    {
-        delete m_material_parameters_context;
-        m_material_parameters_context = nullptr;
-    }
+    m_material_parameters.reset();
+    m_material_parameters_context.reset();
 
     while (!m_call_history.empty())
         m_call_history.pop();
@@ -2139,7 +2130,7 @@ void Section_material::bind_material(
         transaction->access<const mi::neuraylib::IFunction_call>(
             material_instance_db_name));
 
-    Parameter_context* parameter_context = new Parameter_context(
+    std::unique_ptr<Parameter_context> parameter_context = std::make_unique<Parameter_context>(
         argument_block_layout != nullptr && argument_block != nullptr,
         target_code,
         material_instance_db_name,
@@ -2179,8 +2170,8 @@ void Section_material::bind_material(
     mi::base::Handle<mi::neuraylib::IAnnotation_list const> param_annotations(
         mat_definition->get_parameter_annotations());
 
-    Parameter_node_call* new_material_parameters =
-        new Parameter_node_call("", nullptr, parameter_context);
+    std::unique_ptr<Parameter_node_call> new_material_parameters =
+        std::make_unique<Parameter_node_call>("", nullptr, parameter_context.get());
     new_material_parameters->initialize(mat_annotations.get(), material_instance_db_name);
 
     mi::base::Handle<const mi::neuraylib::IExpression_list> param_defaults(
@@ -2218,11 +2209,11 @@ void Section_material::bind_material(
             transaction,
             m_factory.get(),
             name,
-            new_material_parameters,
+            new_material_parameters.get(),
             param_value.get(),
             param_default.get(),
             param_anno.get(),
-            parameter_context));
+            parameter_context.get()));
 
         if (!param)
         {
@@ -2244,8 +2235,8 @@ void Section_material::bind_material(
 
     // replace the old hierarchy with the new one
     unbind_material();
-    m_material_parameters = new_material_parameters;
-    m_material_parameters_context = parameter_context;
+    m_material_parameters = std::move(new_material_parameters);
+    m_material_parameters_context = std::move(parameter_context);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -2274,7 +2265,7 @@ void Section_material::update(mi::neuraylib::ITransaction* transaction)
     }
 
     auto new_state = update_material_parameters(transaction, m_call_history.empty()
-        ? m_material_parameters
+        ? m_material_parameters.get()
         : m_call_history.top());
 
     // keep the most disrupting change until the next reset

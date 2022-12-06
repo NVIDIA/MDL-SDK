@@ -106,8 +106,9 @@ public:
     /// \returns true if the value was not in the set, yet.
     bool insert(const T &val)
     {
-        if (!m_set.insert(val).second)
+        if (!m_set.insert(val).second) {
             return false;
+        }
 
         m_vector.push_back(val);
         return true;
@@ -117,8 +118,9 @@ public:
     template <class Iter>
     void insert(Iter first, Iter last)
     {
-        for (; first != last; ++first)
+        for (; first != last; ++first) {
             insert(*first);
+        }
     }
 
     /// Erase the given value from the set.
@@ -275,7 +277,7 @@ private:
         Region              *&region);
 
     /// Dump the current graph.
-    void dumpRegionGraph(char const *suffix=nullptr, bool with_subgraphs=false);
+    void dumpRegionGraph(char const *suffix = nullptr, bool with_subgraphs = false);
 
     /// Creates a graph node.
     unsigned dumpRegion(FILE *file, Region const *region);
@@ -1042,8 +1044,9 @@ BasicBlock *RegionBuilder::processBB(
             region = ifCtx->createIfRegion(*this, exitBlock, termInst);
             delete ifCtx;
 
-            if (exitBlock == ctx.getExitBlock())
+            if (exitBlock == ctx.getExitBlock()) {
                 return nullptr;
+            }
             return exitBlock;
         }
     default:
@@ -1294,8 +1297,9 @@ bool IfContext::handleProperRegions(
                 ++predIt;
 
                 // not part of target region? -> predecessor does not need to be updated
-                if (!targetRegion.contains(exitPred))
+                if (!targetRegion.contains(exitPred)) {
                     continue;
+                }
 
                 // check whether we already jumped from this predecessor to the fused block
                 // for another exit block
@@ -1340,8 +1344,9 @@ bool IfContext::handleProperRegions(
             for (BasicBlock::iterator bbIt = curExitBlock->begin(); bbIt != curExitBlock->end(); ) {
                 Instruction *inst = &*bbIt;
                 PHINode *phi = llvm::dyn_cast<PHINode>(inst);
-                if (phi == nullptr)
+                if (phi == nullptr) {
                     break;  // end of phi list at beginning of block
+                }
                 ++bbIt;
 
                 PHINode *newPhi = PHINode::Create(phi->getType(), 0, "newPhi", fusedBlock);
@@ -1352,14 +1357,16 @@ bool IfContext::handleProperRegions(
                     BasicBlock *incomingBlock = phi->getIncomingBlock(i);
 
                     // was this incoming block not handled? -> skip it
-                    if (!targetRegion.contains(incomingBlock))
+                    if (!targetRegion.contains(incomingBlock)) {
                         continue;
+                    }
 
                     // check whether we created an intermediate block for this predecessor
                     std::map<BasicBlock *, BasicBlock *>::const_iterator it =
                         predToIntermediateMap.find(incomingBlock);
-                    if (it != predToIntermediateMap.end())
+                    if (it != predToIntermediateMap.end()) {
                         incomingBlock = it->second;
+                    }
 
                     newPhi->addIncoming(phi->getIncomingValue(i), incomingBlock);
                     phiIndicesToRemove.push_back(i);
@@ -1421,8 +1428,9 @@ bool IfContext::handleProperRegions(
             if (curIndex == exitSet.size() - 2) {
                 BasicBlock *lastExitBlock = exitSet.back();
 
-                if (lastExitBlock != fusedBlock)
+                if (lastExitBlock != fusedBlock) {
                     fixPHIsInBlock(lastExitBlock, fusedBlock, curSrcBlock);
+                }
 
                 BranchInst::Create(curExitBlock, lastExitBlock, cmp, curSrcBlock);
                 break;
@@ -1517,8 +1525,9 @@ void StructuredControlFlowPass::getAnalysisUsage(AnalysisUsage &usage) const
 bool StructuredControlFlowPass::runOnModule(Module &M)
 {
     for (Function &func : M.functions()) {
-        if (func.isDeclaration())
+        if (func.isDeclaration()) {
             continue;
+        }
 
         RegionBuilder RB(
             func,
@@ -1557,8 +1566,9 @@ static void dumpEdge(
 {
     for (unsigned source : sources) {
         fprintf(file, "n%u -> n%u", source, target);
-        if (label)
+        if (label != nullptr) {
             fprintf(file, " [label=\"%s\";]", label);
+        }
         fprintf(file, ";\n");
     }
 }
@@ -1693,13 +1703,15 @@ void RegionBuilder::dumpRegionGraph(
                 unsigned(region->get_id()), kind_str.c_str(), unsigned(region->get_id()),
                 std::string(top_region->get_bb()->getName()).c_str());
 
-            if (size_t copied_from = region->copied_from())
+            if (size_t copied_from = region->copied_from()) {
                 fprintf(file, " (%u)", unsigned(copied_from));
+            }
             fprintf(file, "\"");
-            if (region->is_loop_head())
+            if (region->is_loop_head()) {
                 fprintf(file, " shape=box");
-            else if (region->is_loop())
+            } else if (region->is_loop()) {
                 fprintf(file, " shape=diamond");
+            }
             fprintf(file, " ]\n");
         }
 #else
@@ -1714,10 +1726,11 @@ void RegionBuilder::dumpRegionGraph(
         /*if (size_t copied_from = region->copied_from())
             fprintf(file, " (%u)", unsigned(copied_from));
         fprintf(file, "\"");
-        if (region->is_loop_head())
+        if (region->is_loop_head()) {
             fprintf(file, " shape=box");
-        else if (region->is_loop())
+        } else if (region->is_loop()) {
             fprintf(file, " shape=diamond");
+        }
         fprintf(file, " ]\n");*/
     }
 
@@ -1763,8 +1776,9 @@ static void fillUpPhis(BasicBlock *bb, PHINode *reference_phi)
     unsigned visit_id = 1;
     for (BasicBlock::iterator new_exit_it = bb->begin(); isa<PHINode>(new_exit_it); ++new_exit_it) {
         // skip the pred_id PHI node, which is full per definition
-        if (&*new_exit_it == reference_phi)
+        if (&*new_exit_it == reference_phi) {
             continue;
+        }
 
         PHINode *phi = cast<PHINode>(new_exit_it);
 
@@ -1852,8 +1866,9 @@ bool LoopExitEnumerationPass::runOnFunction(Function &function)
                     bool exit_seen = false;
                     for (int i = 0, n = term->getNumSuccessors(); i < n; ++i) {
                         // target is not the current exit_block -> skip
-                        if (term->getSuccessor(i) != exit_block)
+                        if (term->getSuccessor(i) != exit_block) {
                             continue;
+                        }
 
                         term->setSuccessor(i, new_exit_block);
 

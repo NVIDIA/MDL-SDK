@@ -272,7 +272,7 @@ should return a raw texture value.
 </dd>
 </dl>
 
-\section example_execution_glsl Example Source
+\section example_execution_glsl_source Example Source
 
 To compile the source code, you need GLEW available at
 <a href="http://glew.sourceforge.net/">http://glew.sourceforge.net/</a> and GLFW available at

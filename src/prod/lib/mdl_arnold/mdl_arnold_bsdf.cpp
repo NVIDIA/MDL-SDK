@@ -28,6 +28,7 @@
 
 #include "mdl_arnold_bsdf.h"
 #include <mi/mdl_sdk.h>
+#include <cassert>
 
 AI_BSDF_EXPORT_METHODS(MdlBSDFData::methods);
 
@@ -156,6 +157,7 @@ bsdf_init
     MdlBSDFData& bsdf_data = *((MdlBSDFData*) AiBSDFGetData(bsdf));
     Mdl_extended_state* ext_state = &bsdf_data;
     setup_mdl_state(sg, *ext_state);
+    mi::Sint32 res;
 
     // for thin-walled materials, there is no 'inside', so the thin_walled property has to be
     // evaluated to set the IORs correctly. As an optimization, we check if the property
@@ -164,12 +166,13 @@ bsdf_init
     // Otherwise, code is generated for thin_walled and it is evaluated here at runtime.
     if (bsdf_data.shader.thin_walled_function_index != ~0)
     {
-        bsdf_data.shader.target_code->execute(
+        res = bsdf_data.shader.target_code->execute(
             bsdf_data.shader.thin_walled_function_index,
             reinterpret_cast<mi::neuraylib::Shading_state_material&>(bsdf_data.state),
             /*texture_handler=*/ nullptr,  // allows to provide a custom texturing runtime
             /*arg_block_data=*/ nullptr,   // only relevant when using class-compilation mode
             &bsdf_data.is_thin_walled);
+        assert(res == 0 && "execute thin_walled failed");
     }
     else
     {
@@ -183,11 +186,12 @@ bsdf_init
         : bsdf_data.shader.surface_bsdf_function_index;
     if (bsdf_function_index != ~0)
     {
-        bsdf_data.shader.target_code->execute_bsdf_init(
+        res = bsdf_data.shader.target_code->execute_bsdf_init(
             bsdf_function_index + 0,  // bsdf_function_index corresponds to 'init'
             reinterpret_cast<mi::neuraylib::Shading_state_material&>(bsdf_data.state),
             /*texture_handler*/ nullptr,
             /*arg_block_data=*/ nullptr);
+        assert(res == 0 && "execute_bsdf_init failed");
     }
 
     // initialize the BSDF lobes
@@ -251,13 +255,14 @@ bsdf_sample
         const float2 rnd_zw = to_uniform_2d(rnd.z);             // 'create' a 4th random variable
         sample_data.xi = { rnd.x, rnd.y, rnd_zw.x, rnd_zw.y };  // pseudo-random sample number
 
-        bsdf_data.shader.target_code->execute_bsdf_sample(
+        mi::Sint32 res = bsdf_data.shader.target_code->execute_bsdf_sample(
             bsdf_function_index + 1,                // bsdf_function_index corresponds to 'init'
                                                     // bsdf_function_index+1 to 'sample'
             &sample_data,   // input/output
             reinterpret_cast<mi::neuraylib::Shading_state_material&>(bsdf_data.state),
             /*texture_handler=*/ nullptr,
             /*arg_block_data=*/ nullptr);
+        assert(res == 0 && "execute_bsdf_sample failed");
         
         if (sample_data.event_type == mi::neuraylib::BSDF_EVENT_ABSORB)
             return AI_BSDF_LOBE_MASK_NONE;  // no valid sample
@@ -344,13 +349,14 @@ bsdf_eval
         eval_data.bsdf_diffuse = make<float3>(0.0f);
         eval_data.bsdf_glossy = make<float3>(0.0f);
 
-        bsdf_data.shader.target_code->execute_bsdf_evaluate(
+        mi::Sint32 res = bsdf_data.shader.target_code->execute_bsdf_evaluate(
             bsdf_function_index + 2,        // bsdf_function_index corresponds to 'init'
                                             // bsdf_function_index+2 to 'evaluate'
             &eval_data,
             reinterpret_cast<mi::neuraylib::Shading_state_material&>(bsdf_data.state),
             /*texture_handler=*/ nullptr,
             /*arg_block_data=*/ nullptr);
+        assert(res == 0 && "execute_bsdf_evaluate failed");
 
         // ensure, we got a valid result.
         // it may be invalid when samples below the surface are evaluated ...
@@ -431,13 +437,14 @@ bsdf_albedo
         aux_data.albedo = make<float3>(0.0f);
         aux_data.normal = make<float3>(0.0f);
 
-        bsdf_data.shader.target_code->execute_bsdf_auxiliary(
+        mi::Sint32 res = bsdf_data.shader.target_code->execute_bsdf_auxiliary(
             bsdf_function_index + 4,        // bsdf_function_index corresponds to 'init'
                                             // bsdf_function_index+4 to 'auxiliary'
             &aux_data,
             reinterpret_cast<mi::neuraylib::Shading_state_material&>(bsdf_data.state),
             /*texture_handler=*/ nullptr,
             /*arg_block_data=*/ nullptr);
+        assert(res == 0 && "execute_bsdf_auxiliary failed");
 
         return AtRGB(aux_data.albedo.x, aux_data.albedo.y, aux_data.albedo.z);
     }

@@ -329,15 +329,18 @@ public:
     /// Get the module.
     mi::mdl::IModule const *get_module() const { return m_mod; }
 
+    /// Get the position.
+    Position const *get_position() const { return m_pos; }
+
     /// Get the line.
-    unsigned get_line() const { return m_line; }
+    unsigned get_line() const { return m_pos != NULL ? m_pos->get_start_line() : 0; }
 
 private:
     /// The module of the exception occurrence.
     mi::mdl::IModule const *m_mod;
 
-    /// The line of the exception occurrence.
-    unsigned m_line;
+    /// The position of the exception occurrence.
+    mi::mdl::Position const *m_pos;
 };
 
 ///
@@ -1963,6 +1966,13 @@ public:
 
     /// Get the number of error messages.
     size_t get_error_message_count();
+
+    /// Add a JIT backend warning message to the messages.
+    ///
+    /// \param code    the code of the error message
+    /// \param loc     the location of the warning
+    /// \param params  the message parameters
+    void warning(int code, Exc_location const &loc, Error_params const &params);
 
     /// Add a JIT backend error message to the messages.
     ///
@@ -3880,6 +3890,9 @@ private:
     /// If true, all exported functions are entry points.
     bool m_exported_funcs_are_entries;
 
+    /// If true, do not create bounds check exceptions for state function, but return zero.
+    bool m_state_functions_no_bounds_exception;
+
     /// If true, bounds checks exceptions for all index expressions are disabled.
     bool m_bounds_check_exception_disabled;
 
@@ -3991,6 +4004,9 @@ private:
     /// If true, PDF functions are generated.
     bool m_enable_pdf;
 
+    /// If true, warn if a spectrum color is converted into an RGB value.
+    bool m_warn_spectrum_conversion;
+
     /// List of all compiled lambda functions in the module.
     mi::mdl::vector<llvm::Function *>::Type m_module_lambda_funcs;
 
@@ -4068,7 +4084,7 @@ private:
 
     /// Return type of the EDF PDF function.
     llvm::Type *m_type_edf_pdf_data;
-    
+
     /// Function type of the EDF auxiliary function.
     llvm::FunctionType *m_type_edf_auxiliary_func;
 

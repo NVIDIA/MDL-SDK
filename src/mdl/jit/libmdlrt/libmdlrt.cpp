@@ -230,7 +230,7 @@ static float get_value_lerp(
     const float lambda_max,
     const float lambda)
 {
-    const float f = (lambda - lambda_min) / (lambda_max - lambda_min) * (float)(num_values - 1);
+    const float f = math::max((lambda - lambda_min) / (lambda_max - lambda_min) * (float)(num_values - 1), 0.0f);
     unsigned int b0 = (unsigned int)(math::max(math::floor(f), 0.0f));
     if (b0 >= num_values)
         b0 = num_values - 1;

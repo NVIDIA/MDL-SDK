@@ -125,7 +125,7 @@ public:
         MDL_VERSION_1_6,                        ///< compile MDL 1.6
         MDL_VERSION_1_7,                        ///< compile MDL 1.7
         MDL_VERSION_1_8,                        ///< compile MDL 1.8 (partly implemented)
-        MDL_VERSION_1_9,                        ///< compile MDL 1.9 (unsupported yet)
+        MDL_VERSION_EXP,                        ///< experimental features
         MDL_LATEST_VERSION = MDL_VERSION_1_7,   ///< always the latest fully supported version
         MDL_DEFAULT_VERSION = MDL_VERSION_1_0,  ///< The default compiler version.
     };
@@ -559,7 +559,7 @@ These options set render specific constants in the standard library:
 - \ref mdl_option_limits_wavelength_min "limits::WAVELENGTH_MIN"
 - \ref mdl_option_state_wavelength_base_max "state::WAVELENGTH_BASE_MAX"
 
-\section mdl_compiler_options MDL compiler options
+\section mdl_compiler_options_descr MDL compiler options
 
 \anchor mdl_option_dump_call_graph
 - <b>dump_call_graph:</b> If set to "true", the compiler will dump a call graph for every compiled

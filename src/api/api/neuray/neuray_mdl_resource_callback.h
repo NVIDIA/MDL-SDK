@@ -213,6 +213,9 @@ private:
     /// Strips directories (and drive letters) from the filename.
     static std::string strip_directories( const std::string& filename);
 
+    /// Returns the directories (and driver letter) from the filename.
+    static std::string get_directory( const std::string& filename);
+
     /// Constructs an MDL file path by using the directory prefix from \p prefix, a "/" separator, and
     /// the filename suffix from \p suffix (which can contain frame and/or uvtile markers).
     static std::string construct_mdl_file_path( const std::string& prefix, const std::string& suffix);
@@ -264,6 +267,9 @@ private:
 
     /// Flag that indicates whether resources are bundled with the exported MDL module.
     bool m_bundle_resources;
+
+    /// Flag that indices whether generated filenames should add the module name as prefix.
+    bool m_add_module_prefix;
 
     /// Flag that indicates whether IValue_resource data should be returned as is (unless
     /// m_bundle_resources is set).

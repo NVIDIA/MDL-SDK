@@ -641,7 +641,7 @@ endfunction()
 #
 function(CREATE_FROM_BASE_PRESET)
     set(options WIN32 WINDOWS_UNICODE EXAMPLE DYNAMIC_MSVC_RUNTIME)
-    set(oneValueArgs TARGET VERSION TYPE NAMESPACE OUTPUT_NAME VS_PROJECT_NAME EMBED_RC)
+    set(oneValueArgs TARGET VERSION TYPE NAMESPACE EXPORT_NAME OUTPUT_NAME VS_PROJECT_NAME EMBED_RC)
     set(multiValueArgs SOURCES ADDITIONAL_INCLUDE_DIRS)
     cmake_parse_arguments(CREATE_FROM_BASE_PRESET "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
 
@@ -671,6 +671,11 @@ function(CREATE_FROM_BASE_PRESET)
     # default type is STATIC library
     if(NOT CREATE_FROM_BASE_PRESET_TYPE)
         set(CREATE_FROM_BASE_PRESET_TYPE STATIC)
+    endif()
+
+    # default export name is the same as output name if provided, CMake default otherwise (i.e. target name)
+    if(NOT CREATE_FROM_BASE_PRESET_EXPORT_NAME AND CREATE_FROM_BASE_PRESET_OUTPUT_NAME)
+        set(CREATE_FROM_BASE_PRESET_EXPORT_NAME ${CREATE_FROM_BASE_PRESET_OUTPUT_NAME})
     endif()
 
     # default namespace is mdl
@@ -722,6 +727,11 @@ function(CREATE_FROM_BASE_PRESET)
     # adjust output file name if requested
     if(CREATE_FROM_BASE_PRESET_OUTPUT_NAME)
         set_target_properties(${CREATE_FROM_BASE_PRESET_TARGET} PROPERTIES OUTPUT_NAME ${CREATE_FROM_BASE_PRESET_OUTPUT_NAME})
+    endif()
+
+    # adjust export target name if requested
+    if(CREATE_FROM_BASE_PRESET_EXPORT_NAME)
+        set_target_properties(${CREATE_FROM_BASE_PRESET_TARGET} PROPERTIES EXPORT_NAME ${CREATE_FROM_BASE_PRESET_EXPORT_NAME})
     endif()
 
     # log message
@@ -1218,14 +1228,20 @@ function(ADD_TARGET_INSTALL)
     # - ADD_TARGET_INSTALL_TARGET
     # - ADD_TARGET_INSTALL_DESTINATION
 
-    install(DIRECTORY $<TARGET_FILE_DIR:${ADD_TARGET_INSTALL_TARGET}>/
-        DESTINATION ${ADD_TARGET_INSTALL_DESTINATION}
-        USE_SOURCE_PERMISSIONS
-        FILES_MATCHING
-        PATTERN "*"
-        PATTERN "*.d" EXCLUDE
-    )
-
+    if(ADD_TARGET_INSTALL_DESTINATION)
+        install(DIRECTORY $<TARGET_FILE_DIR:${ADD_TARGET_INSTALL_TARGET}>/
+            DESTINATION ${ADD_TARGET_INSTALL_DESTINATION}
+            USE_SOURCE_PERMISSIONS
+            FILES_MATCHING
+            PATTERN "*"
+            PATTERN "*.d" EXCLUDE
+        )
+    else()
+        install(
+            TARGETS ${ADD_TARGET_INSTALL_TARGET}
+            EXPORT  mdl-targets
+        )
+    endif()
 endfunction()
 
 # -------------------------------------------------------------------------------------------------
@@ -1271,6 +1287,10 @@ function(CREATE_FROM_PYTHON_PRESET)
                 ${MDL_EXAMPLES_FOLDER}/mdl_python/cmake_templates/run_example.sh
                 ${CMAKE_CURRENT_BINARY_DIR}/${_CONFIG}/run_example.sh
                 @ONLY)
+            configure_file(
+                ${MDL_EXAMPLES_FOLDER}/mdl_python/cmake_templates/run_example.bat
+                ${CMAKE_CURRENT_BINARY_DIR}/${_CONFIG}/run_example.bat
+                @ONLY)
         endforeach()
     else()
         set(_CONFIG ${CMAKE_BUILD_TYPE})
@@ -1278,6 +1298,10 @@ function(CREATE_FROM_PYTHON_PRESET)
         configure_file(
             ${MDL_EXAMPLES_FOLDER}/mdl_python/cmake_templates/run_example.sh
             ${CMAKE_CURRENT_BINARY_DIR}/${_CONFIG}/run_example.sh
+            @ONLY)
+        configure_file(
+            ${MDL_EXAMPLES_FOLDER}/mdl_python/cmake_templates/run_example.bat
+            ${CMAKE_CURRENT_BINARY_DIR}/${_CONFIG}/run_example.bat
             @ONLY)
     endif()
 

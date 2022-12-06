@@ -50,6 +50,51 @@ inline Value_factory *impl_cast(IValue_factory *t) {
     return static_cast<Value_factory *>(t);
 }
 
+#if defined(_MSC_VER) && (defined(HAS_SSE) || defined(SSE_INTRINSICS))
+// MSVC cannot bitcast from float to int WITHOUT load/store
+#ifdef MI_ARCH_X86_64
+ #include <xmmintrin.h>
+#elif defined(MI_ARCH_ARM_64)
+ #define SIMDE_ENABLE_NATIVE_ALIASES
+ #include <base/lib/simde/x86/sse2.h>
+#endif
+
+static inline unsigned float_as_uint(float a)
+{
+    __m128 fa;
+    __m128i ia;
+    fa = _mm_set1_ps(a);
+    ia = _mm_castps_si128(fa);
+    return _mm_cvtsi128_si32(ia);
+}
+
+static inline size_t double_as_size_t(double a)
+{
+    __m128d da;
+    __m128i ia;
+    da = _mm_set1_pd(a);
+    ia = _mm_castpd_si128(da);
+    return _mm_cvtsi128_si64(ia);
+}
+
+#else
+
+static inline unsigned float_as_uint(float f)
+{
+    union { unsigned z; float f; } u;
+    u.z = 0;
+    u.f = f;
+    return u.z;
+}
+static inline size_t double_as_size_t(double f)
+{
+    union { size_t z; double f; } u;
+    u.z = 0;
+    u.f = f;
+    return u.z;
+}
+#endif
+
 /// A mixin base class for all base IValue methods.
 ///
 /// \tparam Interface  the base class for the desired IValue
@@ -3260,20 +3305,9 @@ size_t Value_factory::IValue_hash::operator() (IValue const *value) const
     case IValue::VK_ENUM:
         return h + size_t(cast<IValue_enum>(value)->get_value());
     case IValue::VK_FLOAT:
-        {
-            union { size_t z; float f; } u;
-            u.z = 0;
-            u.f = cast<IValue_float>(value)->get_value();
-            return h + u.z;
-        }
+        return h + float_as_uint(cast<IValue_float>(value)->get_value());
     case IValue::VK_DOUBLE:
-        {
-            union { size_t z[2]; double d; } u;
-            u.z[0] = 0;
-            u.z[1] = 0;
-            u.d = cast<IValue_double>(value)->get_value();
-            return h + (u.z[0] ^ u.z[1]);
-        }
+        return h + double_as_size_t(cast<IValue_double>(value)->get_value());
     case IValue::VK_STRING:
         {
             char const *s = cast<IValue_string>(value)->get_value();

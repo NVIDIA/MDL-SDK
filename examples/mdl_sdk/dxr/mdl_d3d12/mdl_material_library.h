@@ -48,7 +48,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
     class Mdl_material_description;
     class IMdl_material_description_loader;
     class Mdl_sdk;
-    struct Mdl_resource_set;
+    class Light_profile;
+    class Bsdf_measurement;
+    struct Mdl_texture_set;
     enum class Texture_dimension;
 
     // --------------------------------------------------------------------------------------------
@@ -56,20 +58,6 @@ namespace mi { namespace examples { namespace mdl_d3d12
     /// keeps all materials that are loaded by the application
     class Mdl_material_library
     {
-        // --------------------------------------------------------------------
-
-        struct Target_entry
-        {
-            // Constructor.
-            explicit Target_entry(Mdl_material_target* target);
-
-            // Destructor.
-            ~Target_entry();
-
-            Mdl_material_target* m_target;
-            std::mutex m_mutex;
-        };
-
         // --------------------------------------------------------------------
 
         /// Import relationships between loaded modules.
@@ -103,8 +91,11 @@ namespace mi { namespace examples { namespace mdl_d3d12
         virtual ~Mdl_material_library();
 
         /// Creates a new material to be used in the scene.
-        /// The action type and parameterization is set using a description.
+        /// The actual type and parameterization is set using a description.
         Mdl_material* create_material();
+
+        /// Called by the Mdl_material destructor to unregister the material.
+        void destroy_material(Mdl_material* material);
 
         /// Set the type and parameterization for this material as defined
         /// in the Scene to load or the material to assign.
@@ -120,12 +111,12 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// Reload all modules required by a certain material.
         bool reload_material(Mdl_material* material, bool& targets_changed);
 
-        /// Reload a module (already loaded) module and all importing modules in order
+        /// Reload an (already loaded) module and all importing modules in order
         /// get back to a consistent state.
         bool reload_module(const std::string& module_db_name, bool& targets_changed);
 
-        /// Reload a module (already loaded) module and all importing modules in order
-        /// get back to a consistent state. if \c module_source_code is not empty,
+        /// Reload an (already loaded) module and all importing modules in order
+        /// get back to a consistent state. If \c module_source_code is not empty,
         /// the module is reloaded from string.
         bool reload_module(
             const std::string& module_db_name,
@@ -162,15 +153,27 @@ namespace mi { namespace examples { namespace mdl_d3d12
         void update_module_dependencies(const std::string& module_db_name);
 
         /// get access to the texture data by the texture database name and create a resource.
-        /// if there resource is loaded already, no loading is required
-        Mdl_resource_set* access_texture_resource(
+        /// if the resource is loaded already, no loading is required
+        Mdl_texture_set* access_texture_resource(
             std::string db_name,
             Texture_dimension dimension,
             D3DCommandList* command_list);
 
+        /// get access to the light profile data by the database name and create a resource.
+        /// if the resource is loaded already, no loading is required
+        Light_profile* access_light_profile_resource(
+            std::string db_name,
+            D3DCommandList* command_list);
+
+        /// get access to the bsdf measurement data by the database name and create a resource.
+        /// if the resource is loaded already, no loading is required
+        Bsdf_measurement* access_bsdf_measurement_resource(
+            std::string db_name,
+            D3DCommandList* command_list);
+
         /// Add a custom MDL code generated to handle materials by naming convention in gltf.
         void register_mdl_material_description_loader(
-            const IMdl_material_description_loader* loader);
+            std::unique_ptr<IMdl_material_description_loader> loader);
 
         /// iterate over all registered loaders
         ///
@@ -183,28 +186,42 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
     private:
         /// get an already existing target or a created new one.
-        Mdl_material_library::Target_entry* get_target_for_material_creation(
+        Mdl_material_target* get_target_for_material_creation(
             const std::string& key);
+
+        /// registers a material at the target code that matches the material hash.
+        void register_material(Mdl_material* material);
+
+        /// unregister a material from its current target code.
+        void unregister_material(Mdl_material* material);
 
         Base_application* m_app;
         Mdl_sdk* m_sdk;
 
-        // map that stores targets based on the compiled material hash
-        std::map<size_t, Mdl_material_target*> m_targets;
-        std::map<std::string, Target_entry*> m_target_map;
+        // map that stores targets based on the compiled material hash,
+        // which all materials registered with this target have in common.
+        std::map<std::string, std::unique_ptr<Mdl_material_target>> m_targets;
         std::mutex m_targets_mtx;
 
         // all texture resources used by MDL materials
         // TODO: use ref counting when considering dynamic loading and unloading of materials
-        std::map<std::string, Mdl_resource_set> m_resources;
-        std::mutex m_resources_mtx;
+        std::map<std::string, Mdl_texture_set> m_textures;
+        std::mutex m_textures_mtx;
+
+        // all light profile resources used by MDL materials
+        std::map<std::string, Light_profile*> m_light_profiles;
+        std::mutex m_light_profiles_mtx;
+
+        // all MBSDF resources used by MDL materials
+        std::map<std::string, Bsdf_measurement*> m_mbsdfs;
+        std::mutex m_mbsdfs_mtx;
 
         /// dependencies between loaded modules
         std::unordered_map<std::string, Mdl_module_dependency> m_module_dependencies;
         std::mutex m_module_dependencies_mtx;
 
         /// registered loaders to process generated MDL materials
-        std::vector<const IMdl_material_description_loader*> m_loaders;
+        std::vector<std::unique_ptr<IMdl_material_description_loader>> m_loaders;
     };
 
 }}} // mi::examples::mdl_d3d12

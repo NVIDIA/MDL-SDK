@@ -37,6 +37,7 @@
 #include <cstring>
 #include <map>
 #include <string>
+using namespace std::string_literals;
 
 #include <mi/base/handle.h>
 #include <mi/base/types.h>
@@ -992,7 +993,7 @@ public:
                 break;
             case -1:
                 m_error = -2;
-                m_error_string = std::string("Type mismatch for argument \"") +
+                m_error_string = "Type mismatch for argument \""s +
                     mdl_arguments[i].param_name +
                     "\" of function call \"" +
                     function_call->get_mdl_function_definition() +
@@ -1002,7 +1003,7 @@ public:
                 return NULL;
             case -2:
                 m_error = -2;
-                m_error_string = std::string("Array size mismatch for argument \"") +
+                m_error_string = "Array size mismatch for argument \""s +
                     mdl_arguments[i].param_name +
                     "\" of function call \"" +
                     function_call->get_mdl_function_definition() +
@@ -3226,7 +3227,18 @@ mi::Sint32 Mdl_llvm_backend::set_option(
         return 0;
     }
 
-    // llvm specific options
+    // LLVM specific options
+    if (strcmp(name, "jit_warn_spectrum_conversion") == 0) {
+        if (strcmp(value, "off") == 0) {
+            value = "false";
+        } else if (strcmp(value, "on") == 0) {
+            value = "true";
+        } else {
+            return -2;
+        }
+        jit_options.set_option(MDL_JIT_WARN_SPECTRUM_CONVERSION, value);
+        return 0;
+    }
 
     if (strcmp(name, "inline_aggressively") == 0) {
         if (strcmp(value, "off") == 0) {
@@ -3584,10 +3596,8 @@ mi::Sint32 Mdl_llvm_backend::set_option(
 
         if (strcmp(name, "glsl_use_resource_data") == 0) {
             if (strcmp(value, "on") == 0) {
-                m_use_builtin_resource_handler = true;
                 value = "true";
             } else if (strcmp(value, "off") == 0) {
-                m_use_builtin_resource_handler = false;
                 value = "false";
             } else {
                 return -2;
@@ -3618,10 +3628,8 @@ mi::Sint32 Mdl_llvm_backend::set_option(
     case mi::neuraylib::IMdl_backend_api::MB_HLSL:
         if (strcmp(name, "hlsl_use_resource_data") == 0) {
             if (strcmp(value, "on") == 0) {
-                m_use_builtin_resource_handler = true;
                 value = "true";
             } else if (strcmp(value, "off") == 0) {
-                m_use_builtin_resource_handler = false;
                 value = "false";
             } else {
                 return -2;

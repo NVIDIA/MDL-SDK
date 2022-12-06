@@ -26,7 +26,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #*****************************************************************************
 
-cmake_minimum_required(VERSION 3.9.6 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 # policies
 if(POLICY CMP0025)
@@ -49,11 +49,15 @@ option(MDL_BUILD_CORE_EXAMPLES "Adds MDL Core examples to the build." ON)
 option(MDL_BUILD_ARNOLD_PLUGIN "Enable the build of the MDL Arnold plugin." OFF)
 option(MDL_BUILD_DDS_PLUGIN "Enable the build of the MDL DDS image plugin." ON)
 option(MDL_BUILD_FREEIMAGE_PLUGIN "Enable the build of the MDL Freeimage image plugin." ON)
+option(MDL_BUILD_OPENIMAGEIO_PLUGIN "Enable the build of the MDL OpenImageIO image plugin." OFF)
 option(MDL_LOG_PLATFORM_INFOS "Prints some infos about the current build system (relevant for error reports)." ON)
 option(MDL_LOG_DEPENDENCIES "Prints the list of dependencies during the generation step." OFF)
 option(MDL_LOG_FILE_DEPENDENCIES "Prints the list of files that is copied after a successful build." OFF)
 set(MDL_ADDITIONAL_COMPILER_DEFINES "MDL_SOURCE_RELEASE" CACHE STRING "Additional compile defines that are passed to each of the projects")
 set(MDL_ADDITIONAL_COMPILER_OPTIONS "" CACHE STRING "Additional compile options that are passed to each of the projects")
+
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
 # set the default installation path
 if(NOT DEFINED CMAKE_INSTALL_PREFIX OR CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
@@ -153,6 +157,9 @@ endif()
 if(MDL_BUILD_FREEIMAGE_PLUGIN)
     add_subdirectory(${MDL_SRC_FOLDER}/shaders/plugin/freeimage)
 endif()
+if(MDL_BUILD_OPENIMAGEIO_PLUGIN)
+    add_subdirectory(${MDL_SRC_FOLDER}/shaders/plugin/openimageio)
+endif()
 
 # EXAMPLES
 #--------------------------------------------------------------------------------------------------
@@ -161,9 +168,11 @@ endif()
 add_subdirectory(${MDL_EXAMPLES_FOLDER}/thirdparty/imgui)
 add_subdirectory(${MDL_EXAMPLES_FOLDER}/thirdparty/tinyxml2)
 
+# Shared code used by MDL SDK examples, Python bindings, and other tools
+add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/shared)
+
 # MDL SDK
 if(MDL_BUILD_SDK_EXAMPLES)
-    add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/shared)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/archives)
     if(MDL_ENABLE_AXF_EXAMPLES AND ARCH_X64)
         add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/axf_to_mdl)
@@ -244,6 +253,7 @@ if(MDL_ENABLE_PYTHON_BINDINGS)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_python)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_python/create_expression_graph)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_python/modules)
+    add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_python/pymdl_inspection)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_python/start_shutdown)
 endif()
 
@@ -252,3 +262,49 @@ foreach(_TEST_POST ${MDL_TEST_LIST_POST})
     add_subdirectory(${_TEST_POST})
 endforeach()
 
+
+# Config
+#--------------------------------------------------------------------------------------------------
+set(mdl_config_cmake_in_dir "${CMAKE_CURRENT_SOURCE_DIR}")
+set(_find_neuray_version 1)
+
+
+set(PATH_EXPORT_TARGETS "${CMAKE_INSTALL_DATADIR}/mdl/mdl-targets.cmake")
+configure_package_config_file(
+    "${mdl_config_cmake_in_dir}/mdl-config.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/mdl-config.cmake"
+    PATH_VARS
+        PATH_EXPORT_TARGETS
+    INSTALL_DESTINATION ${CMAKE_INSTALL_DATADIR}/mdl
+)
+
+if(_find_neuray_version)
+   file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/include/mi/neuraylib/version.h" neuraylib_product_version_line REGEX "^#define MI_NEURAYLIB_PRODUCT_VERSION_STRING ")
+
+   string(REGEX MATCHALL [[[0-9]+(\.[0-9]+)+|trunk]] neuraylib_product_version "${neuraylib_product_version_line}")
+
+   if(NOT neuraylib_product_version)
+       message(FATAL_ERROR "Unable to extract MDL-SDK product version from header.")
+   endif()
+endif()
+
+write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/mdl-config-version.cmake"
+    VERSION ${neuraylib_product_version}
+    COMPATIBILITY SameMajorVersion
+)
+
+# Install
+#--------------------------------------------------------------------------------------------------
+
+install(
+    EXPORT       mdl-targets
+    NAMESPACE    "mdl::"
+    DESTINATION  "${CMAKE_INSTALL_DATADIR}/mdl"
+)
+
+install(
+    FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/mdl-config.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/mdl-config-version.cmake
+    DESTINATION  "${CMAKE_INSTALL_DATADIR}/mdl"
+)

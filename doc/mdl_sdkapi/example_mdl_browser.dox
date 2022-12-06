@@ -102,7 +102,7 @@ configured search paths.
         
         Please note, that always showing all possible materials in the selection pane might not scale arbitrarily. 
         Furthermore, it would make sense to introduce pages, similar to many web shops, 
-        or to only show the materials that are exported by the modules of the current level – and not deeper levels – of the hierarchy.
+        or to only show the materials that are exported by the modules of the current level -- and not deeper levels -- of the hierarchy.
     </dd>
 
     <dt><b>Searching for materials based on the cached information</b></dt>
@@ -118,7 +118,7 @@ configured search paths.
         Each material or function acts as document that can be retrieved by the search and all 
         the text information we store in the cache is treated as content of the individual documents. 
         This content is split into single words and each word can be weighted based on the type of information, 
-        as a word appearing in the name might be more descriptive than a word in the description or in the author’s name. 
+        as a word appearing in the name might be more descriptive than a word in the description or in the author's name.
         During the construction of the index structure, each document is processed into a list 
         of pairs containing all words and their relevance for the document. 
         The index itself consists of a hash map that is indexed by the words retrieved from all documents. 
@@ -139,13 +139,13 @@ configured search paths.
         in all results are presented to the user and the product of their relevance is used 
         for ranking the selectable materials. Adding a leading minus sign directly in front 
         of a search term allows to negate a search result. Only elements that do not appear 
-        in result list for that term are excepted. So, searching for “metal -copper” 
+        in result list for that term are excepted. So, searching for "metal -copper"
         will retrieve all materials that are made of metal but not of copper. 
     </dd>
 
     <dt><b>Presentation of selectable materials</b></dt>
     <dd><br>
-        Depending on the user’s intention, we support him or her by sorting the results on the selection pane. 
+        Depending on the user's intention, we support him or her by sorting the results on the selection pane. 
         The example provides three example sorting strategies: 
         sorting by name, by modification date, and by search ranking, 
         while all of them can be sorted ascending and descending. 

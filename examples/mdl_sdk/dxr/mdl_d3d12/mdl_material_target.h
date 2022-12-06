@@ -71,6 +71,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
     // --------------------------------------------------------------------------------------------
 
+    // The target that is responsible for shader code generation.
+    // for simplicity, we use one target code for a unique material
+    // (same compiled material but potentially different parameter values)
     class Mdl_material_target
     {
         /// Callback that notifies the application about new resources when generating an
@@ -116,7 +119,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// Constructor.
         explicit Mdl_material_target(
             Base_application* app,
-            Mdl_sdk* sdk);
+            Mdl_sdk* sdk,
+            const std::string& compiled_material_hash);
 
         /// Destructor.
         ~Mdl_material_target();
@@ -127,6 +131,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
         /// unique id of this target code.
         size_t get_id() const { return m_id; }
+
+        /// Get the hash of the material(s) this target generates code for.
+        const std::string& get_compiled_material_hash() { return m_compiled_material_hash; }
 
         /// Get the generated target.
         /// Note, this is managed and has to put into a handle.
@@ -223,6 +230,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
         Base_application* m_app;
         Mdl_sdk* m_sdk;
         const size_t m_id;
+
+        // The compiled material hash of the material(s) we generate code for
+        const std::string m_compiled_material_hash;
 
         mi::base::Handle<const mi::neuraylib::ITarget_code> m_target_code;
 

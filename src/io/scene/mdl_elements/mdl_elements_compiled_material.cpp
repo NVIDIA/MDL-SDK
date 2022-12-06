@@ -102,7 +102,6 @@ Mdl_compiled_material::Mdl_compiled_material(
         /*code_dag*/ nullptr,
         /*immutable*/ true,
         /*create_direct_calls*/ true,
-        module_filename,
         module_name,
         /*prototype_tag*/ DB::Tag(),
         resolve_resources,
@@ -294,6 +293,8 @@ mi::base::Uuid Mdl_compiled_material::get_slot_hash( mi::neuraylib::Material_slo
             return m_slot_hashes[T::MS_VOLUME_ABSORPTION_COEFFICIENT];
         case mi::neuraylib::SLOT_VOLUME_SCATTERING_COEFFICIENT:
             return m_slot_hashes[T::MS_VOLUME_SCATTERING_COEFFICIENT];
+        case mi::neuraylib::SLOT_VOLUME_EMISSION_INTENSITY:
+            return m_slot_hashes[T::MS_VOLUME_EMISSION_INTENSITY];
         case mi::neuraylib::SLOT_GEOMETRY_DISPLACEMENT:
             return m_slot_hashes[T::MS_GEOMETRY_DISPLACEMENT];
         case mi::neuraylib::SLOT_GEOMETRY_CUTOUT_OPACITY:

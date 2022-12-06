@@ -156,8 +156,7 @@ public:
     /// \param call  the call that is visited
     void visit(DAG_call *call) MDL_FINAL
     {
-        switch (call->get_semantic())
-        {
+        switch (call->get_semantic()) {
         case IDefinition::DS_INTRINSIC_STATE_NORMAL:
         case IDefinition::DS_INTRINSIC_STATE_GEOMETRY_NORMAL:
         case IDefinition::DS_INTRINSIC_STATE_TEXTURE_SPACE_MAX:
@@ -555,8 +554,9 @@ private:
                 mi::mdl::vector<Lambda_info>::Type &infos,
                 Node_set &visited_nodes)
         {
-            if (visited_nodes.count(expr))
+            if (visited_nodes.count(expr)) {
                 return;
+            }
             visited_nodes.insert(expr);
 
             switch (expr->get_kind()) {
@@ -2679,8 +2679,7 @@ bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
                             llvm::ConstantInt::get(int_type, cur_df_idx));
                         llvm::MDNode *md = llvm::MDNode::get(m_llvm_context, param_idx);
 
-                        switch (df_kind)
-                        {
+                        switch (df_kind) {
                         case IType::TK_BSDF:
                         case IType::TK_HAIR_BSDF:
                             arg_var->setMetadata(m_bsdf_param_metadata_id, md);
@@ -2898,8 +2897,9 @@ llvm::Value *LLVM_code_generator::load_from_float4_array_impl(
     unsigned         &src_offs)
 {
     if (llvm::IntegerType *it = llvm::dyn_cast<llvm::IntegerType>(val_type)) {
-        if (it->getBitWidth() > 8)
+        if (it->getBitWidth() > 8) {
             src_offs = (src_offs + 3) & ~3;
+        }
 
         llvm::Value *access[] = {
             ctx.get_constant(int(0)),
@@ -2915,8 +2915,9 @@ llvm::Value *LLVM_code_generator::load_from_float4_array_impl(
             ptr = ctx->CreatePointerCast(ptr, i32_type->getPointerTo());
             llvm::Value *val = ctx->CreateLoad(ptr);
 
-            if ((src_offs & 3) != 0)
+            if ((src_offs & 3) != 0) {
                 val = ctx->CreateLShr(val, (src_offs & 3) * 8);
+            }
             val = ctx->CreateTrunc(val, it);
             ++src_offs;
             return val;
@@ -3270,9 +3271,12 @@ void LLVM_code_generator::rewrite_df_component_usages(
                     llvm_args.push_back(call->getArgOperand(2));     // inherited_normal param
                     if (call_state == Distribution_function_state::DFSTATE_EVALUATE ||
                         call_state == Distribution_function_state::DFSTATE_AUXILIARY)
-                            llvm_args.push_back(call->getArgOperand(3));  // inherited_weight param
-                    if (comp_info.is_switch_function())
+                    {
+                        llvm_args.push_back(call->getArgOperand(3));  // inherited_weight param
+                    }
+                    if (comp_info.is_switch_function()) {
                         llvm_args.push_back(idx_val);                // BSDF function index
+                    }
                     llvm::CallInst::Create(df_func, llvm_args, "", call);
                     delete_list.push_back(call);
                 }
@@ -3553,8 +3557,9 @@ void LLVM_code_generator::handle_df_array_parameter(
 DAG_node const *LLVM_code_generator::get_factor_base_bsdf(DAG_node const *node)
 {
     DAG_call const *call = as<DAG_call>(node);
-    if (call == NULL)
+    if (call == NULL) {
         return NULL;
+    }
 
     // return the base BSDF for factor BSDFs
     switch (call->get_semantic()) {
@@ -3951,8 +3956,9 @@ llvm::Value *LLVM_code_generator::instantiate_and_call_df(
     llvm_args.push_back(ctx.has_exec_ctx_parameter()
         ? ctx.get_exec_ctx_parameter() : ctx.get_state_parameter());
     llvm_args.push_back(inherited_normal);  // inherited_normal
-    if (df_state == DFSTATE_EVALUATE || df_state == DFSTATE_AUXILIARY)
+    if (df_state == DFSTATE_EVALUATE || df_state == DFSTATE_AUXILIARY) {
         llvm_args.push_back(opt_inherited_weight);
+    }
     llvm::Value *call = llvm::CallInst::Create(param_bsdf_func, llvm_args, "", insertBefore);
 
     m_dist_func_state = old_state;
@@ -4203,11 +4209,12 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                             Distribution_function_state new_state = DFSTATE_NONE;
 
                             // check for BSDF::select_sample(...)
-                            if (func_name.startswith("_ZN4BSDF13select_sample"))
+                            if (func_name.startswith("_ZN4BSDF13select_sample")) {
                                 new_state = DFSTATE_SAMPLE;
-                            // check for BSDF::select_pdf(...)
-                            else if (func_name.startswith("_ZN4BSDF10select_pdf"))
+                            } else if (func_name.startswith("_ZN4BSDF10select_pdf")) {
+                                // check for BSDF::select_pdf(...)
                                 new_state = DFSTATE_PDF;
+                            }
 
                             if (new_state != DFSTATE_NONE) {
                                 llvm::Value *param_cond                   = call->getArgOperand(0);
@@ -4220,15 +4227,17 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                                 // get the DAG node for the true_bsdf argument
                                 int true_param_idx = get_metadata_df_param_id(
                                     llvm::dyn_cast<llvm::Instruction>(param_true_bsdf), kind);
-                                if (true_param_idx < 0)
+                                if (true_param_idx < 0) {
                                     continue;
+                                }
                                 DAG_node const *true_arg = dag_call->get_argument(true_param_idx);
 
                                 // get the DAG node for the false_bsdf argument
                                 int false_param_idx = get_metadata_df_param_id(
                                     llvm::dyn_cast<llvm::Instruction>(param_false_bsdf), kind);
-                                if (false_param_idx < 0)
+                                if (false_param_idx < 0) {
                                     continue;
+                                }
                                 DAG_node const *false_arg = dag_call->get_argument(false_param_idx);
 
                                 // true_bsdf and false_bsdf point to same DAG node?
@@ -4592,15 +4601,17 @@ Expression_result LLVM_code_generator::translate_distribution_function(
             llvm::Value *handle_count = NULL;
             if (m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_POINTER) { // DF_HSM_POINTER
                 int handle_count_idx = -1;
-                if (df_kind == mi::mdl::IType::TK_BSDF || df_kind == mi::mdl::IType::TK_HAIR_BSDF)
+                if (df_kind == mi::mdl::IType::TK_BSDF || df_kind == mi::mdl::IType::TK_HAIR_BSDF) {
                     handle_count_idx = m_dist_func_state == DFSTATE_EVALUATE ? 5 : 4;
-                else if (df_kind == mi::mdl::IType::TK_EDF)
+                } else if (df_kind == mi::mdl::IType::TK_EDF) {
                     handle_count_idx = m_dist_func_state == DFSTATE_EVALUATE ? 2 : -1;
+                }
 
-                if(handle_count_idx >=0)
+                if (handle_count_idx >= 0) {
                     handle_count = ctx->CreateLoad(
                         ctx.create_simple_gep_in_bounds(
                             ctx.get_function()->arg_begin(), handle_count_idx));
+                }
             } else {                                                            // DF_HSM_FIXED_X
                 handle_count = ctx.get_constant(
                     static_cast<int>(m_link_libbsdf_df_handle_slot_mode));
@@ -4764,7 +4775,7 @@ Expression_result LLVM_code_generator::translate_distribution_function(
             ctx->CreateCondBr(cond_normalize, if_non_zero_block, if_non_zero_block_end);
             ctx->SetInsertPoint(if_non_zero_block);
 
-            // if (cond_normalize) 
+            // if (cond_normalize)
             //     result_normalized = normalize(result_normalized)
             llvm::Value *result_normalized = call_rt_func(ctx, norm_func, {result_normal});
             ctx.convert_and_store(result_normalized, result_normal_ptr);
@@ -4826,7 +4837,7 @@ Expression_result LLVM_code_generator::translate_distribution_function(
         ctx->CreateCondBr(cond_normalize, if_non_zero_block, if_non_zero_block_end);
         ctx->SetInsertPoint(if_non_zero_block);
 
-        // if (cond_normalize) 
+        // if (cond_normalize)
         //     result_normalized = normalize(result_normalized)
         llvm::Value *result_normalized = call_rt_func(ctx, norm_func, {result_normal});
         ctx.convert_and_store(result_normalized, result_normal_ptr);
@@ -4876,7 +4887,9 @@ void LLVM_code_generator::translate_distribution_function_init(
         // calculate all texture results required to calculate geometry.normal
         for (size_t i = 0, n = texture_result_exprs.size(); i < n; ++i) {
             size_t expr_index = texture_result_exprs[i];
-            if (expr_index > geometry_normal_index) continue;
+            if (expr_index > geometry_normal_index) {
+                continue;
+            }
 
             generate_expr_lambda_call(ctx, expr_index, texture_results, i);
         }
@@ -4886,7 +4899,9 @@ void LLVM_code_generator::translate_distribution_function_init(
         // The Expr_lambda_scheduler ensures the correct order of the expression lambdas.
         for (size_t i = 0, n = lambda_result_exprs.size(); i < n; ++i) {
             size_t expr_index = lambda_result_exprs[i];
-            if (expr_index > geometry_normal_index) continue;
+            if (expr_index > geometry_normal_index) {
+                continue;
+            }
 
             size_t result_index = m_lambda_result_indices[expr_index];
             generate_expr_lambda_call(ctx, expr_index, lambda_results, result_index);
@@ -4902,8 +4917,9 @@ void LLVM_code_generator::translate_distribution_function_init(
             llvm::Function *adapt_normal = get_internal_function(m_int_func_state_adapt_normal);
             llvm::SmallVector<llvm::Value *, 3> args;
             args.push_back(ctx.get_state_parameter());
-            if (target_uses_resource_data_parameter())
+            if (target_uses_resource_data_parameter()) {
                 args.push_back(ctx.get_resource_data_parameter());
+            }
             args.push_back(normal);
             normal = call_rt_func(ctx, adapt_normal, args);
         }
@@ -4922,7 +4938,9 @@ void LLVM_code_generator::translate_distribution_function_init(
         size_t expr_index = texture_result_exprs[i];
 
         // already processed during geometry.normal evaluation?
-        if (geometry_normal_index != ~0 && expr_index <= geometry_normal_index) continue;
+        if (geometry_normal_index != ~0 && expr_index <= geometry_normal_index) {
+            continue;
+        }
 
         generate_expr_lambda_call(ctx, expr_index, texture_results, i);
     }

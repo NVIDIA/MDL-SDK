@@ -755,7 +755,7 @@ export texture_coordinate_info coordinate_source(
 }
 
 export texture_coordinate_info transform_coordinate(
-    uniform float4x4 transform
+    float4x4 transform
         [[ anno::description("A transformation to be applied to the source coordinates. rotation_translation_scale() is a suggested means to compute the transformation matrix") ]],
     texture_coordinate_info coordinate = texture_coordinate_info()
         [[ anno::description("Coordinate, typically sourced from coordinate_source or coordinate_projection") ]]
@@ -819,12 +819,12 @@ export texture_coordinate_info transform_coordinate(
         new_tangent_v);*/
 }
 
-export uniform float4x4 rotation_translation_scale(
-    uniform float3 rotation = float3(0.)
+export float4x4 rotation_translation_scale(
+    float3 rotation = float3(0.)
         [[ anno::description("Rotation applied to every UVW coordinate") ]],
-    uniform float3 translation = float3(0.)
+    float3 translation = float3(0.)
         [[ anno::description("Offset applied to every UVW coordinate") ]],
-    uniform float3 scaling = float3(1.)
+    float3 scaling = float3(1.)
         [[ anno::description("Scale applied to every UVW coordinate") ]]
 )
 [[
@@ -1193,18 +1193,14 @@ color calc_sun_color(float3 sun_dir, float turbidity)
 }
 
 float3 sky_color_xyz(
-    float3 in_dir,
     float3 in_sun_pos,
-    float in_turbidity, float in_luminance)
+    float in_turbidity, float in_luminance,
+    float cos_theta,
+    float cos_gamma,
+    float gamma)
 {
     float3 xyz;
     float A, B, C, D, E;
-    float cos_gamma = math::dot(in_sun_pos, in_dir);
-    if (cos_gamma > 1.0) {
-        cos_gamma = 2.0 - cos_gamma;
-    }
-    float gamma = math::acos(cos_gamma);
-    float cos_theta = in_dir.z;
     float cos_theta_sun = in_sun_pos.z;
     float theta_sun = math::acos(cos_theta_sun);
     float t2  = in_turbidity * in_turbidity;
@@ -1255,19 +1251,12 @@ float3 sky_color_xyz(
 }
 
 float sky_luminance(
-    float3 in_dir,
     float3 in_sun_pos,
-    float in_turbidity)
+    float in_turbidity,
+    float cos_theta,
+    float cos_gamma,
+    float gamma)
 {
-    float cos_gamma = math::dot(in_sun_pos, in_dir);
-    if (cos_gamma < 0.0) {
-        cos_gamma = 0.0;
-    }
-    if (cos_gamma > 1.0) {
-        cos_gamma = 2.0 - cos_gamma;
-    }
-    float gamma = math::acos(cos_gamma);
-    float cos_theta = in_dir.z;
     float cos_theta_sun = in_sun_pos.z;
     float theta_sun = math::acos(cos_theta_sun);
 
@@ -1286,17 +1275,19 @@ float sky_luminance(
 
 color calc_env_color(
     float3 in_sun_dir,
-    float3 in_dir,
-    float in_turbidity)
+    float in_turbidity,
+    float cos_theta,
+    float cos_gamma,
+    float gamma)
 {
     // start with absolute value of zenith luminance in K cd/m2
     float theta_sun = math::acos(in_sun_dir.z);
     float chi = (4.0 / 9.0 - in_turbidity / 120.0) * (math::PI - 2 * theta_sun);
     float luminance = 1000.0 * ((4.0453 * in_turbidity - 4.9710) * math::tan(chi) -
                        0.2155 * in_turbidity + 2.4192);
-    luminance *= sky_luminance(in_dir, in_sun_dir, in_turbidity);
+    luminance *= sky_luminance(in_sun_dir, in_turbidity, cos_theta, cos_gamma, gamma);
     // calculate the sky color - this uses 2 matrices (for 'x' and for 'y')
-    float3 XYZ = sky_color_xyz(in_dir, in_sun_dir, in_turbidity, luminance);
+    float3 XYZ = sky_color_xyz(in_sun_dir, in_turbidity, luminance, cos_theta, cos_gamma, gamma);
     // use result
     color env_color = color( 3.241 * XYZ.x - 1.537 * XYZ.y - 0.499 * XYZ.z,
                 -0.969 * XYZ.x + 1.876 * XYZ.y + 0.042 * XYZ.z,
@@ -1312,8 +1303,6 @@ color calc_irrad(
     color colaccu = color(0.0);
     float3 nuState_normal = float3(0.0, 0.0, 1.0);
 
-
-
     float3 sun_dir = in_data_sun_dir;
 
     color work = color( 0.0);
@@ -1321,7 +1310,11 @@ color calc_irrad(
         for(float v=1./10.;v<1.;v+=1./5.) {
             float3 diff;
             diff = mi_reflection_dir_diffuse_x( nuState_normal, float2(u,v));
-            work = calc_env_color(sun_dir, diff, in_data_sun_dir_haze);
+            float cos_gamma = math::dot(sun_dir, diff);
+            if (cos_gamma > 1.0f)
+                cos_gamma = 2.0f - cos_gamma;
+            float gamma = math::acos(cos_gamma);
+            work = calc_env_color(sun_dir, diff.z, in_data_sun_dir_haze, cos_gamma, gamma);
             colaccu += work;
         }
     }
@@ -1421,24 +1414,9 @@ float2 calc_physical_scale(
     /* We calculate the integral of the glow intensity function */
     float glow_func_integral;
     {
-        /* Calculate the integral of the glow function over its, i.e.:
-        integral[x=0 to x=sun_glow_radius] (pow(factor / 10.0, 3.0) *
-                2.0f * glow_intensity * sin(x) dx)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        With x being "sun_angle". */
+        /* Calculate the integral of the glow function, i.e.:
+          2.0 * pi * integral[x=0 to x=sun_glow_radius] ((1.0 - sun_angle / sun_glow_radius)^3 * 2.0f * glow_intensity * sin(sun_angle) dsun_angle)
+        = 4.0 * pi * glow_intensity * (1.0 - 6/sun_glow_radius^2 + 6 * sin(sun_angle)/sun_glow_radius^3) */
         // flattened code:
         glow_func_integral = sun_glow_intensity * ( (4.*math::PI) - (24.*math::PI)/(sun_glow_radius*sun_glow_radius) + (24.*math::PI)*math::sin(sun_glow_radius)/(sun_glow_radius*sun_glow_radius*sun_glow_radius) );
     }
@@ -1546,19 +1524,12 @@ export texture_return sun_and_sky(
     if (multiplier <= 0.0 || (!on)) {
         return texture_return(color(0.),1.);
     }
-    // downness
-    float downness = dir.z;
-    float3 real_dir = dir;
     // only calc for above-the-horizon
-    if (dir.z < 0.001) {
-        dir.z = 0.001;
-        dir = math::normalize(dir);
-    }
+    float cos_theta = math::max(dir.z, 0.001f);
     // sun_dir
     float3 sun_dir = sun_direction;
     sun_dir = math::normalize(sun_dir);
     sun_dir = arch_vectortweak(sun_dir, y_is_up, horiz_height);
-    float3 real_sun_dir = sun_dir;
     if (sun_dir.z < 0.001) {
         if (sun_dir.z < 0.0)  {
             factor = night_brightness_adjustment(sun_dir);
@@ -1566,20 +1537,23 @@ export texture_return sun_and_sky(
         sun_dir.z = 0.001;
         sun_dir = math::normalize(sun_dir);
     }
+    float cos_gamma = math::dot(sun_dir, dir);
+    if (cos_gamma > 1.0)
+        cos_gamma = 2.0 - cos_gamma;
+    float gamma = math::acos(cos_gamma);
     color tint;
     if (factor > 0.0) {
-        tint = calc_env_color(sun_dir, dir, local_haze);
+        tint = calc_env_color(sun_dir, local_haze, cos_theta, cos_gamma, gamma);
         if (factor < 1.0) {
             tint *= factor;
         }
     } else {
         tint = color(0.);
     }
-    color data_sun_color = calc_sun_color(sun_dir, downness>0?local_haze:2.0);
+    color data_sun_color = calc_sun_color(sun_dir, dir.z>0?local_haze:2.0);
     if (sun_disk_intensity > 0.0 && sun_disk_scale > 0.0) {
-        float sun_angle = math::acos(math::dot(real_dir, real_sun_dir));
         float sun_radius = 0.00465 * sun_disk_scale * 10.0;
-        if (sun_angle < sun_radius) {
+        if (gamma < sun_radius) {
             /* Calculate the scales necessary to get a sun with physical intensity */
             /* default values */
             float sky_sundisk_scale = 1.0f;
@@ -1590,7 +1564,7 @@ export texture_return sun_and_sky(
                 sky_sunglow_scale = return_value.y;
             }
 
-            float sun_factor = (1.0 - sun_angle / sun_radius) * 10.0;
+            float sun_factor = (1.0 - gamma / sun_radius) * 10.0;
 
             sun_factor = (math::pow(sun_factor / 10.0, 3.0) * 2.0 *
                     sun_glow_intensity *  sky_sunglow_scale +
@@ -1602,7 +1576,7 @@ export texture_return sun_and_sky(
     }
     // set the output
     out_color = tint * rgb_scale;
-    if (downness <= 0.0) {
+    if (dir.z <= 0.0) {
         color irrad = color(0.0);
         color downcolor = ground_color;
 
@@ -1616,7 +1590,7 @@ export texture_return sun_and_sky(
         }
         float hor_blur = horizon_blur / 10.0;
         if (hor_blur > 0.0) {
-            float dness = -downness;
+            float dness = -dir.z;
             dness /= hor_blur;
             if (dness > 1.0) {
                 dness = 1.0;
@@ -1846,19 +1820,6 @@ float compute_direct_illuminance(
             0.0f);
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 const float[128] randxi(0.0,0.5,0.25,0.75,0.125,0.625,0.375,0.875,0.0625,0.5625,0.3125,0.8125,0.1875,0.6875,0.4375,0.9375,
 0.03125,0.53125,0.28125,0.78125,0.15625,0.65625,0.40625,0.90625,0.09375,0.59375,0.34375,0.84375,0.21875,0.71875,0.46875,0.96875,
 0.015625,0.515625,0.265625,0.765625,0.140625,0.640625,0.390625,0.890625,0.078125,0.578125,0.328125,0.828125,0.203125,0.703125,0.453125,0.953125,
@@ -1952,7 +1913,9 @@ uniform perez_data compute_perez_all_weather(
     float eccentricity = compute_eccentricity(julian_date);
 
     float perez_clearness = compute_perez_clearness(diffuse_irradiance, direct_irradiance, theta_sun);
-    float perez_brightness = compute_perez_brightness(diffuse_irradiance, air_mass, eccentricity);
+    float perez_brightness = math::min(
+        compute_perez_brightness(diffuse_irradiance, air_mass, eccentricity),
+        0.6f); // limit brightness to reasonable value in case of implausible input
 
     // compute illuminances
     // [1] equation 3
@@ -1984,7 +1947,7 @@ uniform perez_data compute_perez_all_weather(
         float cos_gamma = math::max(math::sin(phi) * sin_theta * sin_theta_sun + cos_theta * cos_theta_sun, 0.0f);
         float gamma = math::acos(cos_gamma);
 
-        float Y = eval_perez(data.abcde.c, cos_theta, gamma, cos_gamma);
+        float Y = math::max(eval_perez(data.abcde.c, cos_theta, gamma, cos_gamma), 0.0f);
         float x = eval_perez(perez_data_xy.x, cos_theta, gamma, cos_gamma) * perez_data_xy.perez_x_scale;
         float y = eval_perez(perez_data_xy.y, cos_theta, gamma, cos_gamma) * perez_data_xy.perez_y_scale;
 
@@ -1995,8 +1958,10 @@ uniform perez_data compute_perez_all_weather(
         sum_XYZ += XYZ;
     }
     sum_XYZ *= math::PI * inv_num_samples;
-
-    data.perez_lum_scale = sky_illuminance / sum_XYZ.y;
+    if (sum_XYZ.y > 0.0f)
+        data.perez_lum_scale = sky_illuminance / sum_XYZ.y;
+    else
+        data.perez_lum_scale = 0.0f;
     sum_XYZ *= data.perez_lum_scale;
     // convert CIE XYZ to sRGB
     data.sky_illuminance_rgb = float3(
@@ -3593,6 +3558,7 @@ noise_return mi_noise(int3 xyz)
 }
 
 float fade(float t) { return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f); }
+float fade_deriv(float t) { return t * t * (t * (t * 30.0f - 60.0f) + 30.0f); }
 
 const float4[128] grad4(
         float4(0,1,1,1), float4(0,-1,1,0), float4(1,1,0,-1), float4(0,-1,1,-1), float4(0,1,1,0), float4(1,0,-1,1), float4(0,-1,-1,0), float4(-1,0,-1,-1), float4(0,1,-1,1),  float4(1,1,0,1), float4(1,0,-1,-1), float4(0,1,1,-1), float4(0,1,-1,0), float4(-1,1,0,1), float4(0,-1,-1,1), float4(-1,0,1,-1), float4(0,-1,-1,-1), float4(1,0,1,1), float4(-1,-1,0,-1), float4(0,-1,1,1), float4(-1,1,0,-1), float4(0,1,-1,-1), float4(1,-1,0,1), float4(0,-1,-1,0), float4(-1,0,-1,1), float4(1,-1,0,-1), float4(0,-1,1,0), float4(-1,-1,0,1), float4(0,1,-1,0), float4(1,1,0,-1), float4(-1,0,1,1), float4(0,1,1,0),
@@ -3603,6 +3569,11 @@ const float4[128] grad4(
 float grad128(int hash, float x, float y, float z, float w)
 {
     return x*grad4[hash].x + y*grad4[hash].y + z*grad4[hash].z + w*grad4[hash].w;
+}
+
+float4 grad128_deriv(int hash)
+{
+    return grad4[hash];
 }
 
 float grad128(int hash, float x, float y, float z)[[anno::unused()]]
@@ -3664,6 +3635,138 @@ float perlin_noise(float4 pos)
     }
 
     return math::lerp(result[0], result[1], x);
+}
+
+struct noise_deriv {
+    float value;
+    float3 deriv;
+};
+
+noise_deriv perlin_noise_deriv(float4 pos)
+{
+    int X = math::floor(pos.x),
+        Y = math::floor(pos.y),
+        Z = math::floor(pos.z),
+        W = math::floor(pos.w);
+    pos.x -= math::floor(pos.x);
+    pos.y -= math::floor(pos.y);
+    pos.z -= math::floor(pos.z);
+    pos.w -= math::floor(pos.w);
+    float u = fade(pos.x);
+    float v = fade(pos.y),
+          w = fade(pos.z),
+          x = fade(pos.w);
+    float du = fade_deriv(pos.x),
+          dv = fade_deriv(pos.y),
+          dw = fade_deriv(pos.z);
+    int AX = rnd1[ X   &255] & 127, // &127 = hash for grad4 lookups
+        BX = rnd1[(X+1)&255] & 127,
+        AY = rnd2[ Y   &255] & 127,
+        BY = rnd2[(Y+1)&255] & 127,
+        AZ = rnd3[ Z   &255] & 127,
+        BZ = rnd3[(Z+1)&255] & 127,
+        AW = rnd4[ W   &255] & 127,
+        BW = rnd4[(W+1)&255] & 127;
+
+    // .w always holds the actual value, .xyz the derivative
+    float4 x0y0z0w0_d = grad128_deriv(AX^AY^AZ^AW);
+    x0y0z0w0_d.w = pos.x*x0y0z0w0_d.x + pos.y*x0y0z0w0_d.y + pos.z*x0y0z0w0_d.z + pos.w*x0y0z0w0_d.w;
+    float4 x1y0z0w0_d = grad128_deriv(BX^AY^AZ^AW);
+    x1y0z0w0_d.w = pos.x*x1y0z0w0_d.x - x1y0z0w0_d.x + pos.y*x1y0z0w0_d.y + pos.z*x1y0z0w0_d.z + pos.w*x1y0z0w0_d.w;
+    float4 x0y1z0w0_d = grad128_deriv(AX^BY^AZ^AW);
+    x0y1z0w0_d.w = pos.x*x0y1z0w0_d.x + pos.y*x0y1z0w0_d.y - x0y1z0w0_d.y + pos.z*x0y1z0w0_d.z + pos.w*x0y1z0w0_d.w;
+    float4 x1y1z0w0_d = grad128_deriv(BX^BY^AZ^AW);
+    x1y1z0w0_d.w = pos.x*x1y1z0w0_d.x - x1y1z0w0_d.x + pos.y*x1y1z0w0_d.y - x1y1z0w0_d.y + pos.z*x1y1z0w0_d.z + pos.w*x1y1z0w0_d.w;
+    float4 x0y0z1w0_d = grad128_deriv(AX^AY^BZ^AW);
+    x0y0z1w0_d.w = pos.x*x0y0z1w0_d.x + pos.y*x0y0z1w0_d.y + pos.z*x0y0z1w0_d.z - x0y0z1w0_d.z + pos.w*x0y0z1w0_d.w;
+    float4 x1y0z1w0_d = grad128_deriv(BX^AY^BZ^AW);
+    x1y0z1w0_d.w = pos.x*x1y0z1w0_d.x - x1y0z1w0_d.x + pos.y*x1y0z1w0_d.y + pos.z*x1y0z1w0_d.z - x1y0z1w0_d.z + pos.w*x1y0z1w0_d.w;
+    float4 x0y1z1w0_d = grad128_deriv(AX^BY^BZ^AW);
+    x0y1z1w0_d.w = pos.x*x0y1z1w0_d.x + pos.y*x0y1z1w0_d.y - x0y1z1w0_d.y + pos.z*x0y1z1w0_d.z - x0y1z1w0_d.z + pos.w*x0y1z1w0_d.w;
+    float4 x1y1z1w0_d = grad128_deriv(BX^BY^BZ^AW);
+    x1y1z1w0_d.w = pos.x*x1y1z1w0_d.x - x1y1z1w0_d.x + pos.y*x1y1z1w0_d.y - x1y1z1w0_d.y + pos.z*x1y1z1w0_d.z - x1y1z1w0_d.z + pos.w*x1y1z1w0_d.w;
+    float4 x0y0z0w1_d = grad128_deriv(AX^AY^AZ^BW);
+    x0y0z0w1_d.w = pos.x*x0y0z0w1_d.x + pos.y*x0y0z0w1_d.y + pos.z*x0y0z0w1_d.z + pos.w*x0y0z0w1_d.w - x0y0z0w1_d.w;
+    float4 x1y0z0w1_d = grad128_deriv(BX^AY^AZ^BW);
+    x1y0z0w1_d.w = pos.x*x1y0z0w1_d.x - x1y0z0w1_d.x + pos.y*x1y0z0w1_d.y + pos.z*x1y0z0w1_d.z + pos.w*x1y0z0w1_d.w - x1y0z0w1_d.w;
+    float4 x0y1z0w1_d = grad128_deriv(AX^BY^AZ^BW);
+    x0y1z0w1_d.w = pos.x*x0y1z0w1_d.x + pos.y*x0y1z0w1_d.y - x0y1z0w1_d.y + pos.z*x0y1z0w1_d.z + pos.w*x0y1z0w1_d.w - x0y1z0w1_d.w;
+    float4 x1y1z0w1_d = grad128_deriv(BX^BY^AZ^BW);
+    x1y1z0w1_d.w = pos.x*x1y1z0w1_d.x - x1y1z0w1_d.x + pos.y*x1y1z0w1_d.y - x1y1z0w1_d.y + pos.z*x1y1z0w1_d.z + pos.w*x1y1z0w1_d.w - x1y1z0w1_d.w;
+
+    float4 i1_d = x1y0z0w0_d - x0y0z0w0_d;
+    float4 i2_d = x0y1z0w0_d - x0y0z0w0_d;
+
+    float4 d_r = x0y0z0w0_d + i1_d*u + i2_d*v;
+    d_r.x += i1_d.w*du;
+    d_r.y += i2_d.w*dv;
+
+    float4 i5_d = x1y1z0w0_d - x0y1z0w0_d - i1_d;
+    float4 i3_d = x0y0z1w0_d - x0y0z0w0_d;
+    float4 i4_d = x0y0z0w1_d - x0y0z0w0_d;
+    float4 i6_d = x0y1z1w0_d - x0y1z0w0_d - i3_d;
+    float4 i7t_d = x0y1z0w1_d - x0y1z0w0_d;
+    float4 i7_d = i7t_d - i4_d;
+    float4 i8t_d = x1y0z1w0_d - x1y0z0w0_d;
+    float4 i8_d = i8t_d - i3_d;
+    float4 i9_d = x1y0z0w1_d - x1y0z0w0_d - i4_d;
+
+    float4 x0y0z1w1_d = grad128_deriv(AX^AY^BZ^BW);
+    x0y0z1w1_d.w = pos.x*x0y0z1w1_d.x + pos.y*x0y0z1w1_d.y + pos.z*x0y0z1w1_d.z - x0y0z1w1_d.z + pos.w*x0y0z1w1_d.w - x0y0z1w1_d.w;
+
+    float4 i10t_d = x0y0z1w1_d - x0y0z0w1_d;
+    float4 i10_d = i10t_d - i3_d;
+    float4 i11_d = x1y1z1w0_d - i6_d - i8t_d - x1y1z0w0_d;
+    float4 i12_d = x0y0z0w1_d - x0y1z0w1_d + x1y1z0w1_d - i5_d - x1y0z0w1_d;
+
+    float4 x0y1z1w1_d = grad128_deriv(AX^BY^BZ^BW);
+    x0y1z1w1_d.w = pos.x*x0y1z1w1_d.x + pos.y*x0y1z1w1_d.y - x0y1z1w1_d.y + pos.z*x0y1z1w1_d.z - x0y1z1w1_d.z + pos.w*x0y1z1w1_d.w - x0y1z1w1_d.w;
+
+    float4 i13t_d = x0y1z1w1_d - x0y0z1w1_d;
+    float4 i13_d = i13t_d + x0y0z0w1_d - i6_d - x0y1z0w1_d;
+
+    float4 x1y0z1w1_d = grad128_deriv(BX^AY^BZ^BW);
+    x1y0z1w1_d.w = pos.x*x1y0z1w1_d.x - x1y0z1w1_d.x + pos.y*x1y0z1w1_d.y + pos.z*x1y0z1w1_d.z - x1y0z1w1_d.z + pos.w*x1y0z1w1_d.w - x1y0z1w1_d.w;
+
+    float4 i14_d = x1y0z1w1_d - i10t_d - i8_d - x1y0z0w1_d;
+
+    float4 x1y1z1w1_d = grad128_deriv(BX^BY^BZ^BW);
+    x1y1z1w1_d.w = pos.x*x1y1z1w1_d.x - x1y1z1w1_d.x + pos.y*x1y1z1w1_d.y - x1y1z1w1_d.y + pos.z*x1y1z1w1_d.z - x1y1z1w1_d.z + pos.w*x1y1z1w1_d.w - x1y1z1w1_d.w;
+
+    float4 i15_d = x1y1z1w1_d + i9_d + x1y0z1w0_d + i7t_d - x0y0z1w0_d + x1y1z0w0_d - x1y1z1w0_d - x0y1z1w0_d - x1y1z0w1_d - i13t_d - x1y0z1w1_d;
+
+    d_r += i5_d*(u*v) + i6_d*(v*w) + i3_d*w + i4_d*x + i7_d*(v*x) + i8_d*(u*w) + i9_d*(u*x) + i10_d*(w*x) + i11_d*(u*v*w) + i12_d*(u*v*x) + i13_d*(v*w*x) + i14_d*(w*x*u) + i15_d*(u*v*w*x);
+
+    float3 deriv;
+    deriv.x = d_r.x
+    + i5_d.w*du*v
+    + i8_d.w*du*w
+    + i9_d.w*du*x
+    + i11_d.w*du*v*w
+    + i12_d.w*du*v*x
+    + i14_d.w*w*x*du
+    + i15_d.w*du*v*w*x;
+
+    deriv.y = d_r.y
+    + i5_d.w*u*dv
+    + i6_d.w*dv*w
+    + i7_d.w*dv*x
+    + i11_d.w*u*dv*w
+    + i12_d.w*u*dv*x
+    + i13_d.w*dv*w*x
+    + i15_d.w*u*dv*w*x;
+
+    deriv.z = d_r.z
+    + i3_d.w*dw
+    + i6_d.w*v*dw
+    + i8_d.w*u*dw
+    + i10_d.w*dw*x
+    + i11_d.w*u*v*dw
+    + i13_d.w*v*dw*x
+    + i14_d.w*dw*x*u
+    + i15_d.w*u*v*dw*x;
+
+    return noise_deriv(deriv: float3(deriv.x, deriv.y, deriv.z), value: d_r.w);
 }
 
 float perlin_noise(float2 pos)
@@ -3730,6 +3833,60 @@ float summed_perlin_noise(float3 pos, float time,  int terms, float3 turbulence_
     }
     return sn;
 }
+
+float3 abs_d(float n, float3 deriv)
+{
+    return (n < 0.f) ? -deriv : deriv;
+}
+
+float2 abs_d(float n, float2 deriv)
+{
+    return (n < 0.f) ? -deriv : deriv;
+}
+
+float3 ridge_d(float n, float3 deriv, float ridged_n)
+{
+    return deriv * (2.0f*((n > 0.f) ? -ridged_n : ridged_n));
+}
+
+
+noise_deriv summed_perlin_noise_deriv(float3 pos, float time, int terms, float3 turbulence_weight, bool abs_noise, bool ridged)
+{
+    float sum = 0.0f;
+    float3 deriv = float3(0.0f);
+    float weight = ridged ? 0.625f : 1.0f;
+    float prev = 1.0f;
+    float4 p = float4(pos.x,pos.y,pos.z,time);
+    while(terms != 0) {
+        terms--;
+        noise_deriv n_d = perlin_noise_deriv(p);
+        float n2 = ridged ? ridge(n_d.value, 1.0f) : (abs_noise ? math::abs(n_d.value) : n_d.value); // ridged offset = 1.0f, could be configurable
+        float3 deriv2 = ridged ? ridge_d(n_d.value, n_d.deriv, n_d.value) : (abs_noise ? abs_d(n_d.value, n_d.deriv) : n_d.deriv);
+
+        sum += weight*prev*n2;
+        deriv += prev*deriv2; // gain (weight) cancels frequency doubling (0.5*2)
+        p += p;       // frequency doubled, could be configurable
+        if (ridged)
+            prev = n2;
+        weight *= 0.5f; // gain halved, could be configurable
+    }
+
+    if((turbulence_weight.x != 0.0f) || (turbulence_weight.y != 0.0f) || (turbulence_weight.z != 0.0f))
+    {
+    float[2] sc = math::sincos(pos.x*turbulence_weight.x + pos.y*turbulence_weight.y + pos.z*turbulence_weight.z + sum);
+        sum = sc[0];
+    deriv = sc[1] * (deriv + turbulence_weight);
+    }
+
+    if (!abs_noise && !ridged) { // Absolute & Ridged already are in 0..1
+        // Scale [-1,1] to [0,1]
+        sum = sum*0.5f+0.5f;
+        deriv *= 0.5f;
+    }
+    return noise_deriv(value: sum, deriv: deriv);
+}
+
+
 float apply_noise_modifications(
     float value,
     float position,
@@ -3792,6 +3949,82 @@ float apply_noise_modifications(
     return sn;
 
 }
+
+float3 apply_noise_modifications_deriv(
+    float value,
+    float3 deriv,
+    float position,
+    uniform bool apply_marble = false
+        [[
+            anno::description("Triggers a modification to make the pattern have a marble like appearance (cosine)")
+        ]],
+    uniform bool apply_dent = false
+        [[
+            anno::description("Raises the output of the function to the power of 3")
+        ]],
+    uniform float noise_threshold_high = 1.0
+        [[
+            anno::description("Noise values greater then \"noise_threshold_high\" are mapped to \"color1\""),
+            anno::hard_range(0.0, 1.0)
+        ]],
+    uniform float noise_threshold_low = 0.0
+        [[
+            anno::description("Noise values greater then \"noise_threshold_low\" are mapped to \"color2\""),
+            anno::hard_range(0.0, 1.0)
+        ]],
+    uniform float noise_bands = 1.0
+        [[
+            anno::description("Creates a \"tree ring\" like banding effect")
+        ]]
+)
+{
+    float sn = value;
+    if(apply_marble)
+    {
+        // Classic Perlin marble function
+        float[2] sc = math::sincos(math::cos(position + sn*5.0f)); //!! 5.0f = magic
+        sn = sc[1];
+        deriv = sc[0] * float3(deriv.x*-5.0f-1.0f, deriv.y*-5.0f, deriv.z*-5.0f);
+    }
+
+    if(apply_dent)
+    {
+        // Cube
+        sn *= sn * sn;
+        deriv *= 3.0f * (sn * sn);
+    }
+
+    // Create banding/stripes by using the fraction component only
+    if(noise_bands != 1.0f) // avoid case of sn = 1 being wrapped to 0
+    {
+        sn *= noise_bands;
+        sn -= math::floor(sn);
+
+        // Smooth transition slightly
+        float tmp = 1.0f - sn;
+        float tmp2 = tmp*tmp;          // ^2
+        float tmp4 = tmp2*tmp2;        // ^4
+    float tmp16 = tmp4*tmp4;       // ^8
+        tmp16 *= tmp16;                // ^16
+        deriv *= 1.0f - 20.0f*tmp16*tmp2*tmp; // ^19
+        sn += tmp16*tmp4;              // ^20
+    }
+
+    // Clamp the noise
+    if (noise_threshold_high > noise_threshold_low)
+    {
+        sn = (sn - noise_threshold_low) / (noise_threshold_high - noise_threshold_low);
+        if (sn < 0.0f || sn > 1.0f) {
+            deriv = float3(0.0f);
+            sn = math::saturate(sn);
+        }
+        else
+            deriv /= (noise_threshold_high - noise_threshold_low);
+    }
+
+    return deriv;
+}
+
 
 export texture_return perlin_noise_texture(
     texture_coordinate_info uvw = texture_coordinate_info()
@@ -3970,41 +4203,32 @@ export float3 perlin_noise_bump_texture(
     if (factor == 0.0f || size == 0.0f)
         return normal;
 
-    float delta = 0.0001 * size / noise_bands; //!! magic
+    float3 scaled_position = uvw.position / size;
 
-    float3[4] offsets;
-    offsets[0] = float3(0.0f, 0.0f,0.0f);
-    offsets[1] = float3(delta,0.0f,0.0f);
-    offsets[2] = float3(0.0f,delta,0.0f);
-    offsets[3] = float3(0.0f, 0.0f,delta);
-    float[4] results;
-    for(int i = 0; i < 4; ++i)
-    {
-        float3 scaled_position=(uvw.position+offsets[i])/size;
-        results[i] = apply_noise_modifications(
-        summed_perlin_noise(
-                scaled_position,
-                noise_phase,
-                noise_levels,
-                noise_distortion,
-                absolute_noise,
-                ridged_noise
-                ),
+    noise_deriv nd = summed_perlin_noise_deriv(
+        scaled_position,
+        noise_phase,
+        noise_levels,
+        noise_distortion,
+        absolute_noise,
+        ridged_noise);
+
+    float3 deriv = apply_noise_modifications_deriv(
+        nd.value,
+        nd.deriv,
         scaled_position.x,
         apply_marble,
         apply_dent,
         noise_threshold_high,
         noise_threshold_low,
-        noise_bands
-        );
-    }
+        noise_bands);
 
-    float bump_factor = -factor * (0.1 / 0.0001); // original code used 0.1 as magic constant for delta, obtain same magnitude
+    float bump_factor = -0.065f * factor; // original code used 0.1 as magic constant for delta, obtain same magnitude
 
     return math::normalize(
-        normal    * (math::abs((results[3]-results[0]) * bump_factor) + 1.) +
-        uvw.tangent_u * (results[1]-results[0])        * bump_factor  +
-        uvw.tangent_v * (results[2]-results[0])        * bump_factor);
+        normal * (math::abs(deriv.z) * bump_factor + 1.0f) +
+        uvw.tangent_u * (deriv.x * bump_factor)  +
+        uvw.tangent_v * (deriv.y * bump_factor));
 }
 
 float  sqrlength(float3 a)                   { return a.x * a.x + a.y * a.y + a.z * a.z; }
@@ -4076,6 +4300,131 @@ worley_return worley_noise(float3 pos, float jitter, int metric, float edge)
     return ret;
 }
 
+struct worley_return_deriv {
+    float3 nearest_pos_0;
+    float3 nearest_pos_1;
+    float2 val;
+    float3 deriv_0;
+    float3 deriv_1;
+};
+
+worley_return_deriv worley_noise_deriv(float3 pos, float jitter, int metric, float edge)
+{
+    float3 cell = float3(math::floor(pos.x),math::floor(pos.y),math::floor(pos.z));
+    edge = (edge < 1.0f) ? (1.0f + 63.0f*(edge*edge)*(edge*edge)) : 0.0f;
+    float2 f1f2 = (edge != 0.0f) ? float2(0.0f,0.0f) : float2(limits::FLOAT_MAX,limits::FLOAT_MAX);
+    jitter *= float(1.0/255.0);
+
+    float3 nearest_pos_0, nearest_pos_1, deriv_0, deriv_1;
+    for (int i = -1; i <= 1; ++i) {
+        float localcellx = cell.x + float(i);
+        int X = math::floor(localcellx);
+        int RNDX = rnd1[X&255];
+        for (int j = -1; j <= 1; ++j) {
+            float localcelly = cell.y + float(j);
+            int Y = math::floor(localcelly);
+            int RNDXY = RNDX^rnd2[Y&255];
+            for (int k = -1; k <= 1; ++k) {
+                //!! unroll??
+                float localcellz = cell.z + float(k);
+                int Z = math::floor(localcellz);
+                int RNDXYZ = RNDXY^rnd3[Z&255];
+                float3 localpos = float3(localcellx,localcelly,localcellz) + float3(float(rnd4[RNDXYZ]),float(rnd1[RNDXYZ]),float(rnd2[RNDXYZ]))*jitter;
+                float3 diff = localpos-pos;
+                float dist = (metric == 0/*TextureNoise_WorleyMetric_Euclidean*/) ? sqrlength(diff) : ((metric == 1/*TextureNoise_WorleyMetric_Manhattan*/) ? length_manhattan(diff) : length_chebyshev(diff));
+
+                float3 deriv_tmp;
+                float d_tmp = (edge == 0.0f) ? f1f2.y : 2.0f;
+        if(dist < d_tmp)
+        {
+            if((metric == 0 /*TextureNoise_WorleyMetric_Euclidean*/))
+            deriv_tmp = -2.0f*diff;
+            else //!! opt.?
+            {
+            bool manhattan = (metric == 1 /*TextureNoise_WorleyMetric_Manhattan*/);
+            float3 diff_abs;
+            if(!manhattan)
+            {
+                deriv_tmp = float3(0.f,0.f,0.f);
+                diff_abs = math::abs(diff);
+            }
+
+            if(manhattan || ((diff_abs.x > diff_abs.y) && (diff_abs.x > diff_abs.z)))
+                deriv_tmp.x = (diff.x < 0.f) ? 1.0f : -1.0f;
+            if(manhattan || ((diff_abs.y > diff_abs.x) && (diff_abs.y > diff_abs.z)))
+                deriv_tmp.y = (diff.y < 0.f) ? 1.0f : -1.0f;
+            if(manhattan || ((diff_abs.z > diff_abs.x) && (diff_abs.z > diff_abs.y)))
+                deriv_tmp.z = (diff.z < 0.f) ? 1.0f : -1.0f;
+            }
+        }
+
+        if(edge == 0.0f)
+        {
+            if(dist < f1f2.x) {
+            f1f2.y = f1f2.x; nearest_pos_1 = nearest_pos_0; deriv_1 = deriv_0;
+            f1f2.x = dist;   nearest_pos_0 = localpos;      deriv_0 = deriv_tmp;
+            } else if(dist < f1f2.y) {
+            f1f2.y = dist;   nearest_pos_1 = localpos;      deriv_1 = deriv_tmp;
+            }
+        } else if(dist < 2.0f)
+        {
+            float sd = math::sqrt(dist);
+            deriv_tmp *= 1.0606601717798212866012665431573f*sd-1.5f; //sqrt(0.5)*3/2
+            float w = 1.0f-dist*(1.5f-0.70710678118654752440084436210485f*sd); //sqrt(0.5)
+                    w = math::max(w, 0.0f); // w should be >= 0.0f, but need to ensure numerically for dist close to 2
+                    float e = edge-1.0f;
+                    float pwe = e <= 0.0f ? 1.0f : math::pow(w, e);
+            deriv_tmp *= edge*pwe;
+            w *= pwe;
+
+            f1f2.x += w*float(rnd5[RNDXYZ])*float(1.0/255.0);
+            f1f2.y += w;
+            deriv_0 += deriv_tmp*float(rnd5[RNDXYZ])*float(1.0/255.0);
+            deriv_1 += deriv_tmp;
+        }
+            }
+        }
+    }
+
+    if(edge != 0.0f)
+    {
+        // protect against numerical issues for edge input > 0.92
+        f1f2.x = math::max(f1f2.x, limits::FLOAT_MIN);
+        f1f2.y = math::max(f1f2.y, limits::FLOAT_MIN);
+
+    float t = f1f2.x/f1f2.y;
+
+        //deriv_0 = (deriv_0*f1f2.y - f1f2.x*deriv_1)/(f1f2.y*f1f2.y);
+        deriv_0 = (deriv_0 - deriv_1*t)/f1f2.y;
+
+    if(metric != 0 /*TextureNoise_WorleyMetric_Euclidean*/)
+    {
+        deriv_0 *= 2.0f*t;
+        t *= t;
+    }
+
+    deriv_1 = deriv_0;
+    f1f2 = float2(t,t);
+    }
+    else
+    {
+    if((metric == 0 /*TextureNoise_WorleyMetric_Euclidean*/))
+    {
+        f1f2.x = math::max(math::sqrt(f1f2.x), limits::FLOAT_MIN);
+        f1f2.y = math::max(math::sqrt(f1f2.y), limits::FLOAT_MIN);
+        deriv_0 *= 0.5f/f1f2.x;
+        deriv_1 *= 0.5f/f1f2.y;
+    }
+    }
+
+    return worley_return_deriv(
+        nearest_pos_0: nearest_pos_0,
+        nearest_pos_1: nearest_pos_1,
+        val: f1f2,
+        deriv_0: deriv_0,
+        deriv_1: deriv_1);
+}
+
 float worley_noise(float3 pos, float3 turbulence_weight, float step_threshold, int mode, int metric, float edge, float jitter = 1.0f)
 {
     worley_return worley = worley_noise(pos, jitter, metric, edge);
@@ -4129,6 +4478,83 @@ float worley_noise(float3 pos, float3 turbulence_weight, float step_threshold, i
            ? math::sin(pos.x*turbulence_weight.x + pos.y*turbulence_weight.y + pos.z*turbulence_weight.z + result)
            : result;
 }
+
+noise_deriv worley_noise_deriv(float3 pos, float3 turbulence_weight, float step_threshold, int mode, int metric, float edge, float jitter = 1.0f)
+{
+    worley_return_deriv worley = worley_noise_deriv(pos, jitter, metric, edge);
+    float2 f1f2 = worley.val;
+    float result;
+    float3 deriv;
+
+    switch (mode) {
+    default:
+    case 0://TextureNoise_WorleyMode_Simple0:
+        deriv = worley.deriv_0;
+        result = f1f2.x;
+        break;
+    case 1://TextureNoise_WorleyMode_Simple1: // Squared simple worley
+        deriv = worley.deriv_0 * (2.0f * f1f2.x);
+        result = f1f2.x*f1f2.x;
+        break;
+    case 8://TextureNoise_WorleyMode_Simple2:
+        deriv = worley.deriv_1;
+        result = f1f2.y;
+        break;
+    case 9://TextureNoise_WorleyMode_Simple3:
+        deriv = worley.deriv_1 * (2.0f * f1f2.y);
+        result = f1f2.y*f1f2.y;
+        break;
+    case 2://TextureNoise_WorleyMode_Cell:
+    {
+        deriv = float3(0.0f);
+        float3 fractf = float3(worley.nearest_pos_0.x - math::floor(worley.nearest_pos_0.x), worley.nearest_pos_0.y - math::floor(worley.nearest_pos_0.y), worley.nearest_pos_0.z - math::floor(worley.nearest_pos_0.z));
+        result = float(rnd1[int(fractf.x*255.0f)]^rnd2[int(fractf.y*255.0f)]^rnd3[int(fractf.z*255.0f)])*(1.0/255.0);
+        break;
+    }
+    case 3://TextureNoise_WorleyMode_Step0: // "Hard" Step
+        deriv = float3(0.0f);
+        result = (f1f2.y-f1f2.x < step_threshold) ? 0.0f : 1.0f;
+        break;
+    case 4://TextureNoise_WorleyMode_Step1: // "Smooth" Step
+        deriv = worley.deriv_1 - worley.deriv_0;
+        result = f1f2.y-f1f2.x;
+        break;
+    case 5://TextureNoise_WorleyMode_Step2: // Normalized "Smooth" Step
+    {
+        float tmp = 1.0f/(f1f2.y+f1f2.x);
+        float tmp2 = 2.0f*tmp*tmp;
+        deriv = worley.deriv_1*(f1f2.x*tmp2) - worley.deriv_0*(f1f2.y*tmp2);
+        result = (f1f2.y-f1f2.x)/(f1f2.y+f1f2.x);
+        break;
+    }
+    case 6://TextureNoise_WorleyMode_Mul:
+        deriv = worley.deriv_1 * f1f2.x + worley.deriv_0 * f1f2.y;
+        result = f1f2.x*f1f2.y;
+        break;
+    case 7://TextureNoise_WorleyMode_Add:
+        deriv = worley.deriv_0 + worley.deriv_1;
+        result = f1f2.x+f1f2.y;
+        break;
+    case 10://TextureNoise_WorleyMode_Manhattan:
+        deriv = float3(0.0f);
+        result = length_manhattan(worley.nearest_pos_0, worley.nearest_pos_1);
+        break;
+    case 11://TextureNoise_WorleyMode_Chebyshev:
+        deriv = float3(0.0f);
+        result = length_chebyshev(worley.nearest_pos_0, worley.nearest_pos_1);
+        break;
+    }
+
+    if((turbulence_weight.x != 0.0f) || (turbulence_weight.y != 0.0f) || (turbulence_weight.z != 0.0f))
+    {
+        float[2] sc = math::sincos(pos.x*turbulence_weight.x + pos.y*turbulence_weight.y + pos.z*turbulence_weight.z + result);
+        result = sc[0];
+        deriv = sc[1] * (deriv + turbulence_weight);
+    }
+
+    return noise_deriv(value: result, deriv: deriv);
+}
+
 
 export texture_return worley_noise_texture(
     texture_coordinate_info uvw = texture_coordinate_info()
@@ -4293,41 +4719,32 @@ export float3 worley_noise_bump_texture(
     if (factor == 0.0f || size == 0.0f)
         return normal;
 
-    float delta = 0.0001 * size / noise_bands; //!! magic
+    float3 scaled_position = uvw.position / size;
 
-    // Use a loop, it proves to be faster than without a loop
-    float3[4] offsets;
-    offsets[0] = float3(0.0f, 0.0f,0.0f);
-    offsets[1] = float3(delta,0.0f,0.0f);
-    offsets[2] = float3(0.0f,delta,0.0f);
-    offsets[3] = float3(0.0f, 0.0f,delta);
-    float[4] results;
-    for (int i = 0; i < 4; ++i) {
-        float3 scaled_position=(uvw.position+offsets[i])/size;
-        results[i] = apply_noise_modifications(
-            worley_noise(
-                scaled_position,
-                noise_distortion,
-                step_threshold,
-                mode,
-                metric,
-                edge),
-            scaled_position.x,
-            apply_marble,
-            apply_dent,
-            noise_threshold_high,
-            noise_threshold_low,
-            noise_bands
-        );
-    }
+    noise_deriv nd = worley_noise_deriv(
+        scaled_position,
+        noise_distortion,
+        step_threshold,
+        mode,
+        metric,
+        edge);
 
+    float3 deriv = apply_noise_modifications_deriv(
+        nd.value,
+        nd.deriv,
+        scaled_position.x,
+        apply_marble,
+        apply_dent,
+        noise_threshold_high,
+        noise_threshold_low,
+        noise_bands);
 
-    float bump_factor = -factor * (0.1 / 0.0001);
+    float bump_factor = -0.055f * factor; // original code used 0.1 as magic constant for delta, obtain same magnitude
 
     return math::normalize(
-        normal    * (math::abs((results[3]-results[0]) * bump_factor) + 1.) +
-        uvw.tangent_u * (results[1]-results[0])        * bump_factor +
-        uvw.tangent_v * (results[2]-results[0])        * bump_factor);
+        normal * (math::abs(deriv.z) * bump_factor + 1.0f) +
+        uvw.tangent_u * (deriv.x * bump_factor)  +
+        uvw.tangent_v * (deriv.y * bump_factor));
 }
 
 int permute_flow2(int x)
@@ -4381,6 +4798,53 @@ float flow_noise(float2 p, float rot)
     return result;
 }
 
+struct noise_deriv2 {
+    float value;
+    float2 deriv;
+};
+
+noise_deriv2 flow_noise_deriv(float2 p, float rot)
+{
+    float  SQRT3 = 1.7320508075688772935274463415059;
+
+
+    float2 pi = math::floor(p + (p.x+p.y)*(SQRT3/2.0-0.5));
+
+
+    float2 v0 = p - pi + (pi.x+pi.y)*(0.5-SQRT3/6.0);
+
+    // offsets for other 2 corners
+    float2 v1 = v0 + ((v0.x < v0.y) ? float2((0.5-SQRT3/6.0), (-0.5-SQRT3/6.0)) : float2((-0.5-SQRT3/6.0), (0.5-SQRT3/6.0)));
+    float2 v2 = v0 + (-1.0/SQRT3);
+
+    // calc circularly symmetric part of each noise wiggle
+    float3 t = math::max(float3(0.5f-math::dot(v0,v0), 0.5f-math::dot(v1,v1), 0.5f-math::dot(v2,v2)), float3(0.0f,0.0f,0.0f));
+
+    int2 pii = int2(int(pi.x), int(pi.y));
+    int tmpp0 = permute_flow2(pii.x) + pii.y;
+    int tmpp2 = permute_flow2(pii.x+1) + pii.y;
+    float2 g0 = grad_flow2(permute_flow2(tmpp0),                                                     rot);
+    float g0v0 = math::dot(g0,v0);
+    float2 g1 = grad_flow2(permute_flow2(((v0.x < v0.y) ? tmpp0 : tmpp2) + ((v0.x < v0.y) ? 1 : 0)), rot);
+    float g1v1 = math::dot(g1,v1);
+    float2 g2 = grad_flow2(permute_flow2(tmpp2+1),                                                   rot);
+
+    // compute noise contributions from each corner
+    float3 gv = float3(g0v0, g1v1, math::dot(g2,v2)); // ramp
+    float3 t2 = t*t;
+    float3 t4 = t2*t2;
+    // add contributions from all 3 corners
+    float result = 40.0f*(t4.x*gv.x + t4.y*gv.y + t4.z*gv.z); // circular kernel * ramp
+
+    // compute partial derivatives x,y to return for grad
+    float3 tmp = t2 * t * gv;
+    float2 grad;
+    grad.x = float(40.0*-8.0)*(tmp.x*v0.x + tmp.y*v1.x + tmp.z*v2.x) + 40.0f*math::dot(t4, float3(g0.x, g1.x, g2.x));
+    grad.y = float(40.0*-8.0)*(tmp.x*v0.y + tmp.y*v1.y + tmp.z*v2.y) + 40.0f*math::dot(t4, float3(g0.y, g1.y, g2.y));
+
+    return noise_deriv2(value: result, deriv: grad);
+}
+
 float summed_flow_noise2(
     float2 pos,
     float time,
@@ -4412,6 +4876,43 @@ float summed_flow_noise2(
     }
 
     return sum;
+}
+
+float2 summed_flow_noise2_deriv(
+    float2 pos,
+    float time,
+    int iterations,
+    bool abs_noise,
+    float weight_factor = 0.5f,
+    float pos_factor = 2.0f,
+    float u_progressive_scale = 1.0f,
+    float v_progressive_offset = 0.0f)
+{
+    float2 deriv = float2(0.0f);
+    float weight = 1.0f;
+    float pos_accum = 1.0f;
+    float3 p = float3(pos.x,pos.y,time);
+    // iteration_offset is used to avoid creating concentric artifacts around the origin from having all
+    // wave sizes originate from the same origin.
+    float iteration_offset = 0.0f;
+    float inv_iterations = 1.0f / float(iterations - 1);
+    for(int i = 0; i < iterations; ++i, iteration_offset += 7.0f)
+    {
+        float lerp_pos = (iterations > 1) ? float(i)*inv_iterations : 1.0f;
+        float xw = 1.0f-lerp_pos + lerp_pos*u_progressive_scale;
+        noise_deriv2 n_d = flow_noise_deriv(
+            float2(
+                p.x * (1.0f-lerp_pos + lerp_pos*u_progressive_scale),
+                p.y + lerp_pos*v_progressive_offset + iteration_offset),
+            p.z);
+        n_d.deriv *= xw;
+    deriv += (pos_accum*weight) * (abs_noise ? abs_d(n_d.value, n_d.deriv) : n_d.deriv);
+        p *= pos_factor;
+    pos_accum *= pos_factor;
+        weight *= weight_factor;
+    }
+
+    return deriv;
 }
 
 export texture_return flow_noise_texture(
@@ -4542,36 +5043,22 @@ export float3 flow_noise_bump_texture(
     if (factor == 0.0f || size == 0.0f)
         return normal;
 
-    float delta = 0.0001 * size ; //!! magic
-    // Use a loop, it proves to be faster than without a loop
-    float2[3] offsets;
-    offsets[0] = float2(0.0f, 0.0f);
-    offsets[1] = float2(delta,0.0f);
-    offsets[2] = float2(0.0f,delta);
-    float[3] results;
-    for (int i = 0; i < 3; ++i) {
-        results[i] = summed_flow_noise2(
-            (float2(uvw.position.x,uvw.position.y)+offsets[i])/size,
+    float2 deriv = summed_flow_noise2_deriv(
+        (float2(uvw.position.x,uvw.position.y))/size,
+        phase,
+        levels,
+        absolute_noise,
+        level_gain,
+        level_scale,
+        level_progressive_u_scale,
+        level_progressive_v_motion) * 0.5f;
 
-            phase,
-            levels,
-            absolute_noise,
-            level_gain,
-            level_scale,
-            level_progressive_u_scale,
-            level_progressive_v_motion);
-
-        // Scale [-1,1] to [0,1]
-        results[i]= results[i]*0.5f+0.5f;
-    }
-
-
-    float bump_factor = factor * (0.1 / 0.0001);
+    float bump_factor = factor * 0.065f; // original code used 0.1 as magic constant for delta, obtain same magnitude
 
     return math::normalize(
-        normal  +
-        uvw.tangent_v * (results[2] - results[0])   * bump_factor  +
-        uvw.tangent_u * (results[1] - results[0])   * bump_factor   );
+        normal +
+        uvw.tangent_u * (deriv.x * bump_factor)  +
+        uvw.tangent_v * (deriv.y * bump_factor));
 }
 
 export texture_return flake_noise_texture(

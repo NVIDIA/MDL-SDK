@@ -67,7 +67,7 @@ IMdl_cache_item* Mdl_cache::create(
         case IMdl_cache_item::CK_PACKAGE:
         {
             auto item_impl = new Mdl_cache_package();
-            item_impl->initialize(this, entity_name, entity_name, qualified_name);
+            item_impl->initialize(this, entity_name, simple_name, qualified_name);
             item = item_impl;
             break;
         }
@@ -75,7 +75,7 @@ IMdl_cache_item* Mdl_cache::create(
         case IMdl_cache_item::CK_MODULE:
         {
             auto item_impl = new Mdl_cache_module();
-            item_impl->initialize(this, entity_name, entity_name, qualified_name);
+            item_impl->initialize(this, entity_name, simple_name, qualified_name);
             item = item_impl;
             break;
         }
@@ -83,7 +83,7 @@ IMdl_cache_item* Mdl_cache::create(
         case IMdl_cache_item::CK_MATERIAL:
         {
             auto item_impl = new Mdl_cache_material();
-            item_impl->initialize(this, entity_name, entity_name, qualified_name);
+            item_impl->initialize(this, entity_name, simple_name, qualified_name);
             item = item_impl;
             break;
         }
@@ -91,7 +91,7 @@ IMdl_cache_item* Mdl_cache::create(
         case IMdl_cache_item::CK_FUNCTION:
         {
             auto item_impl = new Mdl_cache_function();
-            item_impl->initialize(this, entity_name, entity_name, qualified_name);
+            item_impl->initialize(this, entity_name, simple_name, qualified_name);
             item = item_impl;
             break;
         }

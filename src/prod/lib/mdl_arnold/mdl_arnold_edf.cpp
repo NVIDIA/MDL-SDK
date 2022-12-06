@@ -28,11 +28,14 @@
 
 #include "mdl_arnold_bsdf.h"
 #include <mi/mdl_sdk.h>
+#include <cassert>
 
 AtClosure MdlEDFCreate(
     const AtShaderGlobals* sg,
     const MdlShaderNodeDataCPU* shader_data)
 {
+    mi::Sint32 res;
+
     // there is no emission
     if (shader_data->surface_edf_function_index == ~0 &&
         shader_data->backface_edf_function_index == ~0)
@@ -55,36 +58,38 @@ AtClosure MdlEDFCreate(
 
     // here, potentially redundant texture accesses in sample/eval are pre-fetched (text_results).
     // even if sample is not called here, it is required since `eval` expects the data to be there.
-    shader_data->target_code->execute_edf_init(
-        edf_function_index + 0,  // edf_function_index corresponds to 'init'
+    res = shader_data->target_code->execute_edf_init(
+        edf_function_index + 0,  // execute corresponds to 'init'
             reinterpret_cast<mi::neuraylib::Shading_state_material&>(ext_state.state),
             /*texture_handler*/ nullptr,    // allows to provide a custom texturing runtime
             /*arg_block_data=*/ nullptr);   // only relevant when using class-compilation mode
-
+    assert(res == 0 && "execute_edf_init failed");
 
     // input/output data for evaluate
     mi::neuraylib::Edf_evaluate_data<mi::neuraylib::DF_HSM_NONE> eval_data;
     eval_data.k1 = ext_state.outgoing;  // outgoing direction
 
     // evaluate the EDF
-    shader_data->target_code->execute_edf_evaluate(
+    res = shader_data->target_code->execute_edf_evaluate(
         edf_function_index + 2,  // edf_function_index corresponds to 'init'
-                                              // edf_function_index+2 to 'evaluate'
+                                 // edf_function_index+2 to 'evaluate'
         &eval_data,
         reinterpret_cast<mi::neuraylib::Shading_state_material&>(ext_state.state),
         /*texture_handler=*/ nullptr,
         /*arg_block_data=*/ nullptr);
+    assert(res == 0 && "execute_edf_evaluate failed");
 
     // evaluate intensity
     if (intensity_function_index != ~0)
     {
         float3 intensity{ 1.0f, 1.0f, 1.0f };
-        shader_data->target_code->execute(
+        res = shader_data->target_code->execute(
             intensity_function_index,
             reinterpret_cast<mi::neuraylib::Shading_state_material&>(ext_state.state),
             /*texture_handler=*/ nullptr,
             /*arg_block_data=*/ nullptr,
             &intensity);
+        assert(res == 0 && "execute intensity failed");
 
         // apply intensity
         eval_data.edf.x *= intensity.x;

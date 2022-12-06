@@ -167,10 +167,10 @@ void Bsdf_measurement::prepare_mbsdfs_part(Mbsdf_part part,
                 float value = 0.0f;
                 if (num_channels == 3)
                 {
-                    value = fmax(fmaxf(src_data[3 * idx + 0], src_data[3 * idx + 1]),
-                                 fmaxf(src_data[3 * idx + 2], 0.0f))
-                          + fmax(fmaxf(src_data[3 * idx2 + 0], src_data[3 * idx2 + 1]),
-                                 fmaxf(src_data[3 * idx2 + 2], 0.0f));
+                    value = fmaxf(fmaxf(src_data[3 * idx + 0], src_data[3 * idx + 1]),
+                                  fmaxf(src_data[3 * idx + 2], 0.0f))
+                          + fmaxf(fmaxf(src_data[3 * idx2 + 0], src_data[3 * idx2 + 1]),
+                                  fmaxf(src_data[3 * idx2 + 2], 0.0f));
                 }
                 else /* num_channels == 1 */
                 {

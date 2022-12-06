@@ -117,11 +117,13 @@
 #include <base/system/stlext/i_stlext_safe_cast.h>
 #include <map>
 #include <set>
+#include <array>
 #include <list>
 #include <string>
 #include <vector>
 #include <utility>
 #include <type_traits>
+#include <variant>
 
 #include <mi/base/interface_implement.h>
 #include <mi/neuraylib/iserializer.h>
@@ -593,6 +595,18 @@ void write_enum(S* serializer, Enum_type enum_value );
 
 template <typename Enum_type, typename D, typename = enable_if_deserializer_t<D>>
 void read_enum(D* deserializer, Enum_type* enum_value );
+
+template <typename... Tp, typename S, typename = enable_if_serializer_t<S>>
+void write(S* ser, const std::variant<Tp...>& val);
+
+template <typename... Tp, typename D, typename = enable_if_deserializer_t<D>>
+void read(D* deser, std::variant<Tp...>* vp);
+
+template <typename T, std::size_t N, typename S, typename = enable_if_serializer_t<S>>
+void write(S* ser, const std::array<T,N>& val);
+
+template <typename T, std::size_t N, typename D, typename = enable_if_deserializer_t<D>>
+void read(D* deser, std::array<T,N>* vp);
 
 } /// namespace SERIAL
 

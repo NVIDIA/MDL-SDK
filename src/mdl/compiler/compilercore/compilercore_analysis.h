@@ -1258,6 +1258,10 @@ private:
     /// \param fkt_decl  the associated material declaration
     void declare_material_preset(IDeclaration_function *mat_decl);
 
+    /// Get the type scope of a type iff we can select from it.
+    Scope *get_select_scope(
+        IType const *type);
+
     /// Handle scope transitions for a select expression name lookup.
     ///
     /// \param sel_expr  the select expression

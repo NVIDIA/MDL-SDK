@@ -46,32 +46,35 @@ add_dependencies(${__TARGET_ADD_DEPENDENCY_TARGET} mdl::mdl_sdk)
 
 # runtime dependencies
 if(NOT __TARGET_ADD_DEPENDENCY_NO_RUNTIME_COPY)
-    if(WINDOWS)
-        # instead of copying, we add the library paths the debugger environment
-        target_add_vs_debugger_env_path(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
-            PATHS 
-                ${CMAKE_BINARY_DIR}/src/prod/lib/mdl_sdk/$(Configuration)
-                ${CMAKE_BINARY_DIR}/src/shaders/plugin/dds/$(Configuration)
-                ${CMAKE_BINARY_DIR}/src/shaders/plugin/freeimage/$(Configuration)
-            )
-    else()
-        # for unix systems we can set the rpath to guide the library resolution
-        target_add_rpath(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
-            RPATHS
-                ${CMAKE_BINARY_DIR}/prod/lib/mdl_sdk/${CMAKE_BUILD_TYPE}
-                ${CMAKE_BINARY_DIR}/shaders/plugin/dds/${CMAKE_BUILD_TYPE}
-                ${CMAKE_BINARY_DIR}/shaders/plugin/freeimage/${CMAKE_BUILD_TYPE}
-            )
 
-        # add the shared lib path as RPATH
-        foreach(_SHARED ${MDL_DEPENDENCY_FREEIMAGE_SHARED})
-        get_filename_component(_SHARED_DIR ${_SHARED} DIRECTORY)
-        target_add_rpath(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
-                RPATHS ${_SHARED_DIR}
-            )
-        endforeach()
+    if(WINDOWS)
+
+            # instead of copying, we add the library paths the debugger environment
+            target_add_vs_debugger_env_path(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
+                PATHS 
+                    ${CMAKE_BINARY_DIR}/src/prod/lib/mdl_sdk/$(Configuration)
+                    ${CMAKE_BINARY_DIR}/src/shaders/plugin/dds/$(Configuration)
+                    ${CMAKE_BINARY_DIR}/src/shaders/plugin/freeimage/$(Configuration)
+                    ${CMAKE_BINARY_DIR}/src/shaders/plugin/openimageio/$(Configuration)
+                )
+
+    else()
+
+            # instead of copying, we set the rpath for the MDL SDK in the executables
+            # the rpath for plugins is set in the MDL SDK library itself
+            target_add_rpath(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
+                RPATHS
+                    ${CMAKE_BINARY_DIR}/src/prod/lib/mdl_sdk/${CMAKE_BUILD_TYPE}
+                )
+
+            # add the shared lib path as RPATH
+            foreach(_SHARED ${MDL_DEPENDENCY_FREEIMAGE_SHARED})
+            get_filename_component(_SHARED_DIR ${_SHARED} DIRECTORY)
+            target_add_rpath(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
+                    RPATHS ${_SHARED_DIR}
+                )
+            endforeach()
+
     endif()
 
-    # on linux, the user has to setup the LD_LIBRARY_PATH when running examples
-    # on mac, DYLD_LIBRARY_PATH, respectively.
 endif()

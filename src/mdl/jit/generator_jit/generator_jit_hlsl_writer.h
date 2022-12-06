@@ -545,6 +545,9 @@ protected:
     /// HLSL has C-style type casts.
     static bool has_c_style_type_casts() { return true; }
 
+    /// HLSL has the double type.
+    static bool has_double_type() { return true; }
+
     /// Generates a new global static const variable to hold an LLVM value.
     hlsl::Definition *create_global_const(
         llvm::StringRef name, hlsl::Expr *c_expr);

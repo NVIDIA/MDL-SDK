@@ -45,7 +45,7 @@ Mdl_material_description_loader_mtlx::Mdl_material_description_loader_mtlx(
 
 bool Mdl_material_description_loader_mtlx::match_gltf_name(const std::string& gltf_name) const
 {
-    return mi::examples::strings::ends_with(gltf_name, ".mtlx");
+    return strstr(gltf_name.c_str(), ".mtlx") != nullptr;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -62,6 +62,22 @@ std::string Mdl_material_description_loader_mtlx::generate_mdl_source_code(
         ? gltf_name
         : scene_directory + "/" + gltf_name;
 
+    // parse the file name and optional query
+    std::string query = mi::examples::strings::get_url_query(mtlx_material_file);
+    std::string selected_material_name = "";
+    if (!query.empty())
+    {
+        // drop the query from the file name
+        size_t pos = mtlx_material_file.find_first_of('?');
+        mtlx_material_file = mtlx_material_file.substr(0, pos);
+
+        // parse the query
+        auto query_map = mi::examples::strings::parse_url_query(query);
+        const auto& it = query_map.find("name");
+        if (it != query_map.end())
+            selected_material_name = it->second;
+    }
+
     // allow to configure MaterialX search and library paths by the user
     for (auto& p : m_paths)
         mtlx2mdl.add_path(p);
@@ -71,7 +87,7 @@ std::string Mdl_material_description_loader_mtlx::generate_mdl_source_code(
 
     // set the materials main source file
     bool valid = true;
-    valid &= mtlx2mdl.set_source(mtlx_material_file);
+    valid &= mtlx2mdl.set_source(mtlx_material_file, selected_material_name);
 
     // generate the mdl code
     try

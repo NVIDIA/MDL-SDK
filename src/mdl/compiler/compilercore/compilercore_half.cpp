@@ -53,11 +53,11 @@ uint16_t bit_single_to_half(uint32_t f)
         int32_t  t = -e - 1;                  // determine how many bits we have to throw away
 
         // is value equally far away from two nearest floating-point numbers?
-        if ((m & ((1u << t) - 1)) == 1u << (t - 1))
+        if ((m & ((1u << t) - 1)) == 1u << (t - 1)) {
             m += m & (1u << t);  // round to even
-        else
+        } else {
             m += 1u << (t - 1);  // round normally
-
+        }
         return s | (m >> t);
     }
     if (e == 128) {
@@ -74,8 +74,9 @@ uint16_t bit_single_to_half(uint32_t f)
             } else {
                 // an sNAN, preserve the lowest if possible
                 m &= 0x3FF;
-                if (m == 0)
+                if (m == 0) {
                     m = 1;
+                }
                 return s | (0x1F << 10) | m;
             }
         }
@@ -84,10 +85,11 @@ uint16_t bit_single_to_half(uint32_t f)
     // supported range
 
     // is value equally far away from two nearest floating-point numbers?
-    if ((m & ((1u << 13) - 1)) == 1u << 12)
+    if ((m & ((1u << 13) - 1)) == 1u << 12) {
         m += m & (1u << 13);  // round to even
-    else
+    } else {
         m += 1u << 12;        // round normally
+    }
 
     if (m == 0x00800000) {
         // overflow
@@ -139,8 +141,9 @@ uint32_t bit_half_to_single(uint16_t h)
             }
         }
 
-        if (m == 0)
+        if (m == 0) {
             return s;
+        }
 
         m &= ~(1u << 10);
 
@@ -156,8 +159,7 @@ uint32_t bit_half_to_single(uint16_t h)
 
 static float int_as_float(uint32_t v)
 {
-    union
-    {
+    union {
         uint32_t bit;
         float    value;
     } temp;
@@ -168,8 +170,7 @@ static float int_as_float(uint32_t v)
 
 static uint32_t float_as_int(float v)
 {
-    union
-    {
+    union {
         uint32_t bit;
         float    value;
     } temp;
@@ -198,12 +199,13 @@ static int test_rounding(
         uint32_t one_plus_low_bit = f_bit + low_mantissa * (denormalized ? 2 : 1);
         uint16_t h_bit = bit_single_to_half(one_plus_low_bit);
         uint16_t expected_h_bit;
-        if (low_mantissa < 0x1000)
+        if (low_mantissa < 0x1000) {
             expected_h_bit = expected_h_down;
-        else if (low_mantissa == 0x1000)
+        } else if (low_mantissa == 0x1000) {
             expected_h_bit = expected_h_middle;
-        else
+        } else {
             expected_h_bit = expected_h_up;
+        }
         if (h_bit != expected_h_bit) {
             printf("bad rounding for %.8X -> %.4X != %.4X\n",
                 one_plus_low_bit, h_bit, expected_h_bit);

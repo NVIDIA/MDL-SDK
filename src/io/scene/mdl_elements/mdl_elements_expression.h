@@ -234,8 +234,8 @@ public:
         const std::vector<std::string>& parameter_type_names,
         mi::neuraylib::IAnnotation_definition::Semantics semantic,
         bool is_exported,
-        mi::mdl::IMDL::MDL_version since_version,
-        mi::mdl::IMDL::MDL_version removed_version,
+        mi::neuraylib::Mdl_version since_version,
+        mi::neuraylib::Mdl_version removed_version,
         const IType_list* parameter_types,
         const IExpression_list* parameter_defaults,
         const IAnnotation_block* annotations)
@@ -285,9 +285,6 @@ public:
 
     // internal
 
-    void get_mdl_version(
-        mi::mdl::IMDL::MDL_version& since, mi::mdl::IMDL::MDL_version& removed) const;
-
     mi::Size get_memory_consumption() const;
 
     std::string get_mdl_name_without_parameter_types() const;
@@ -300,8 +297,8 @@ private:
     std::vector<std::string> m_parameter_type_names;
     mi::neuraylib::IAnnotation_definition::Semantics m_semantic;
     bool m_is_exported;
-    mi::mdl::IMDL::MDL_version m_since_version;
-    mi::mdl::IMDL::MDL_version m_removed_version;
+    mi::neuraylib::Mdl_version m_since_version;
+    mi::neuraylib::Mdl_version m_removed_version;
     mi::base::Handle<const IType_list> m_parameter_types;
     mi::base::Handle<const IExpression_list> m_parameter_defaults;
     mi::base::Handle<const IAnnotation_block> m_annotations;
@@ -428,8 +425,8 @@ public:
         const std::vector<std::string>& parameter_type_names,
         mi::neuraylib::IAnnotation_definition::Semantics sema,
         bool is_exported,
-        mi::mdl::IMDL::MDL_version since,
-        mi::mdl::IMDL::MDL_version removed,
+        mi::neuraylib::Mdl_version since,
+        mi::neuraylib::Mdl_version removed,
         const IType_list* parameter_types,
         const IExpression_list* parameter_defaults,
         const IAnnotation_block* annotations) const;

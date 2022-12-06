@@ -258,7 +258,7 @@ Mdl_sdk_interface::Mdl_sdk_interface()
     if (!m_mdl_sdk)
     {
         m_state = EMdl_sdk_state::error_libmdl_not_found;
-        AiMsgWarning("[mdl] Loading MDL SDK failed.");
+        AiMsgError("[mdl] Loading MDL SDK failed.");
         return;
     }
 
@@ -355,16 +355,18 @@ Mdl_sdk_interface::~Mdl_sdk_interface()
     m_factory = nullptr;
     m_native_backend = nullptr;
 
-    m_transaction->commit();
+    if(m_transaction)
+        m_transaction->commit();
     m_transaction = nullptr;
 
     m_mdl_impexp_api = nullptr;
     m_mdl_config = nullptr;
 
-    m_mdl_sdk->shutdown();
+    if(m_mdl_sdk)
+        m_mdl_sdk->shutdown();
     m_mdl_sdk = nullptr;
 
-    if (!unload(m_so_handle))
+    if (m_so_handle && !unload(m_so_handle))
         AiMsgWarning("[mdl] Unloading the plugin failed.\n");
 }
 

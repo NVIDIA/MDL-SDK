@@ -34,6 +34,8 @@
 #include "mdl_material_library.h"
 #include "mdl_sdk.h"
 #include "texture.h"
+#include "light_profile.h"
+#include "bsdf_measurement.h"
 #include "shader.h"
 
 namespace mi { namespace examples { namespace mdl_d3d12
@@ -60,7 +62,9 @@ Mdl_material::Mdl_material(Base_application* app)
     , m_argument_layout_index(static_cast<mi::Size>(-1))
     , m_first_resource_heap_handle()
     , m_resources()
-    , m_resource_infos(nullptr)
+    , m_texture_infos(nullptr)
+    , m_light_profile_infos(nullptr)
+    , m_mbsdf_infos(nullptr)
 {
     // add the empty resources
     for (size_t i = 0, n = static_cast<size_t>(Mdl_resource_kind::_Count); i < n; ++i)
@@ -76,11 +80,14 @@ Mdl_material::Mdl_material(Base_application* app)
 
 Mdl_material::~Mdl_material()
 {
-    if (m_argument_block_buffer) delete m_argument_block_buffer;
-    if (m_resource_infos) delete m_resource_infos;
+    // unregister
+    m_sdk->get_library()->destroy_material(this);
 
-    m_target->unregister_material(this);
-    m_target = nullptr;
+    // delete local resources
+    if (m_argument_block_buffer) delete m_argument_block_buffer;
+    if (m_texture_infos) delete m_texture_infos;
+    if (m_light_profile_infos) delete m_light_profile_infos;
+    if (m_mbsdf_infos) delete m_mbsdf_infos;
 
     // free heap block
     m_app->get_resource_descriptor_heap()->free_views(m_first_resource_heap_handle);
@@ -250,6 +257,12 @@ void Mdl_material::set_target_interface(
 
 // ------------------------------------------------------------------------------------------------
 
+void Mdl_material::reset_target_interface()
+{
+    m_target = nullptr;
+}
+// ------------------------------------------------------------------------------------------------
+
 const Descriptor_table Mdl_material::get_descriptor_table()
 {
     // same as the static case + additional per material resources
@@ -261,14 +274,32 @@ const Descriptor_table Mdl_material::get_descriptor_table()
     // bind material argument block
     table.register_srv(1, 3, 1);
 
-    // bind per material resources info
+    // bind per material texture info
     table.register_srv(2, 3, 2);
 
+    // bind per material light profile info
+    table.register_srv(3, 3, 3);
+
+    // bind per material mbsdf info
+    table.register_srv(4, 3, 4);
+
     // bind textures
-    size_t tex_count =
-        std::max(size_t(1), m_target->get_material_resource_count(Mdl_resource_kind::Texture));
-    table.register_srv(0, 4, 3, tex_count);
-    table.register_srv(0, 5, 3, tex_count);
+    size_t light_profile_count = m_target->get_material_resource_count(Mdl_resource_kind::Light_profile);
+    size_t mbsdf_count = m_target->get_material_resource_count(Mdl_resource_kind::Bsdf_measurement);
+    size_t tex_count = m_target->get_material_resource_count(Mdl_resource_kind::Texture);
+    size_t tex_srv_count = tex_count
+                         + light_profile_count // one texture per light profile
+                         + mbsdf_count * 2;    // one texture per mbsdf part
+    tex_srv_count = std::max(size_t(1), tex_srv_count);
+    table.register_srv(0, 4, 5, tex_srv_count);
+    table.register_srv(0, 5, 5, tex_srv_count);
+
+    // bind buffers
+    size_t buffer_srv_count = light_profile_count  // one buffer per light profile
+                            + mbsdf_count * 2 * 2; // two buffers per mbsdf part
+    buffer_srv_count = std::max(size_t(1), buffer_srv_count);
+    table.register_srv(0, 6, 5 + tex_srv_count, buffer_srv_count);
+
     return table;
 }
 
@@ -295,11 +326,25 @@ std::vector<D3D12_STATIC_SAMPLER_DESC> Mdl_material::get_sampler_descriptions()
     desc.RegisterSpace = 0;
     samplers.push_back(desc);
 
+    // for light profiles
+    desc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    desc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    desc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    desc.ShaderRegister = 1;                        // bind sampler to shader register(s1)
+    samplers.push_back(desc);
+
+    // for bsdf measurements
+    desc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    desc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    desc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    desc.ShaderRegister = 2;                        // bind sampler to shader register(s2)
+    samplers.push_back(desc);
+
     // for latitude-longitude environment maps
     desc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     desc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     desc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    desc.ShaderRegister = 1;                        // bind sampler to shader register(s1)
+    desc.ShaderRegister = 3;                        // bind sampler to shader register(s3)
     samplers.push_back(desc);
 
     return samplers;
@@ -309,7 +354,7 @@ std::vector<D3D12_STATIC_SAMPLER_DESC> Mdl_material::get_sampler_descriptions()
 
 size_t Mdl_material::get_target_code_id() const
 {
-    return m_target->get_id();
+    return m_target ?  m_target->get_id() : static_cast<size_t>(-1);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -378,7 +423,7 @@ size_t Mdl_material::register_resource(
 {
     std::vector<Mdl_resource_assignment>& vec = m_resources[kind];
 
-    // check if that texture is know already
+    // check if that resource is know already
     for (auto& a : vec)
         if (a.resource_name == resource_name)
             return a.runtime_resource_id;
@@ -499,7 +544,8 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
             {
                 log_error("Failed to create material argument block: " + get_name(), SRC);
                 return false;
-            }}
+            }
+        }
 
         // create a buffer to provide those parameters to the shader
         size_t buffer_size = round_to_power_of_two(arg_block->get_size(), 4);
@@ -530,32 +576,68 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
     Command_queue* command_queue = m_app->get_command_queue(D3D12_COMMAND_LIST_TYPE_DIRECT);
     std::vector<std::thread> tasks;
 
-    // textures
-    for (size_t t = 0; t < m_resources[Mdl_resource_kind::Texture].size(); ++t)
+    for (Mdl_resource_kind resource_kind : {
+            Mdl_resource_kind::Texture,
+            Mdl_resource_kind::Light_profile,
+            Mdl_resource_kind::Bsdf_measurement
+        })
     {
-        Mdl_resource_assignment* assignment = &m_resources[Mdl_resource_kind::Texture][t];
-        if (assignment->data != nullptr)
-            continue; // data already loaded, e.g. by the target
+        for (size_t t = 0; t < m_resources[resource_kind].size(); ++t)
+        {
+            Mdl_resource_assignment* assignment = &m_resources[resource_kind][t];
+            if (assignment->has_data())
+                continue; // data already loaded, e.g. by the target
 
-        // load sequentially
-        if (m_app->get_options()->force_single_threading)
-        {
-            assignment->data = m_sdk->get_library()->access_texture_resource(
-                assignment->resource_name, assignment->dimension, command_list);
-        }
-        // load asynchronously
-        else
-        {
-            tasks.emplace_back(std::thread([&, assignment]()
+            // load sequentially
+            if (m_app->get_options()->force_single_threading)
             {
-                // do not fill command lists from different threads
-                D3DCommandList* local_command_list = command_queue->get_command_list();
+                switch (resource_kind)
+                {
+                case Mdl_resource_kind::Texture:
+                    assignment->texture_data = m_sdk->get_library()->access_texture_resource(
+                        assignment->resource_name, assignment->dimension, command_list);
+                    break;
 
-                assignment->data = m_sdk->get_library()->access_texture_resource(
-                    assignment->resource_name, assignment->dimension, local_command_list);
+                case Mdl_resource_kind::Light_profile:
+                    assignment->light_profile_data = m_sdk->get_library()->access_light_profile_resource(
+                        assignment->resource_name, command_list);
+                    break;
 
-                command_queue->execute_command_list(local_command_list);
-            }));
+                case Mdl_resource_kind::Bsdf_measurement:
+                    assignment->mbsdf_data = m_sdk->get_library()->access_bsdf_measurement_resource(
+                        assignment->resource_name, command_list);
+                    break;
+                }
+            }
+            // load asynchronously
+            else
+            {
+                tasks.emplace_back(std::thread([&, assignment, resource_kind]()
+                {
+                    // do not fill command lists from different threads
+                    D3DCommandList* local_command_list = command_queue->get_command_list();
+
+                    switch (resource_kind)
+                    {
+                    case Mdl_resource_kind::Texture:
+                        assignment->texture_data = m_sdk->get_library()->access_texture_resource(
+                            assignment->resource_name, assignment->dimension, local_command_list);
+                        break;
+
+                    case Mdl_resource_kind::Light_profile:
+                        assignment->light_profile_data = m_sdk->get_library()->access_light_profile_resource(
+                            assignment->resource_name, local_command_list);
+                        break;
+
+                    case Mdl_resource_kind::Bsdf_measurement:
+                        assignment->mbsdf_data = m_sdk->get_library()->access_bsdf_measurement_resource(
+                            assignment->resource_name, local_command_list);
+                        break;
+                    }
+
+                    command_queue->execute_command_list(local_command_list);
+                }));
+            }
         }
     }
 
@@ -566,17 +648,23 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
     // check the actual texture2D resource count (uv-tiles)
     size_t tex_count = 0;
     for (auto& set : m_resources[Mdl_resource_kind::Texture])
-        tex_count += set.data ? set.data->get_uvtile_count() : 0;
+        tex_count += set.has_data() ? set.texture_data->get_uvtile_count() : 0;
         // check for null textures in uv-tiles
+
+    size_t light_profile_count = m_resources[Mdl_resource_kind::Light_profile].size();
+    size_t mbsdf_count = m_resources[Mdl_resource_kind::Bsdf_measurement].size();
 
     // reserve/create resource views
     Descriptor_heap& resource_heap = *m_app->get_resource_descriptor_heap();
 
-    size_t handle_count = 1;    // for constant buffer
-    handle_count++;             // for argument block
-    handle_count++;             // for resource infos
-    handle_count += tex_count;  // textures 2D and 3D
-    // light profiles, ...
+    size_t handle_count = 1;                 // for constant buffer
+    handle_count++;                          // for argument block
+    handle_count++;                          // for texture infos
+    handle_count++;                          // for light profile infos
+    handle_count++;                          // for mbsdf infos
+    handle_count += tex_count;               // textures 2D and 3D
+    handle_count += light_profile_count * 2; // light profiles (sample buffer, data texture)
+    handle_count += mbsdf_count * 6;         // MBSDFs (sample buffer, albedo buffer, data texture)
 
     // if we already have a block on the resource heap (previous generation)
     // we try to reuse is if it fits
@@ -607,46 +695,92 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
         m_argument_block_buffer, true, argument_block_data_srv))
             return false;
 
-    // create the resource info buffer and view to handle resource mapping
-    std::vector<Mdl_resource_info> info_data(
+    // create the texture info buffer and view to handle resource mapping
+    std::vector<Mdl_texture_info> texture_info_data(
         m_resources[Mdl_resource_kind::Texture].size(), {0, 0, 0});
 
-    if (m_resource_infos &&
-        m_resource_infos->get_element_count() < std::max(info_data.size(), size_t(1)))
+    if (m_texture_infos &&
+        m_texture_infos->get_element_count() < std::max(texture_info_data.size(), size_t(1)))
     {
-        delete m_resource_infos;
-        m_resource_infos = nullptr;
+        delete m_texture_infos;
+        m_texture_infos = nullptr;
     }
-    if (!m_resource_infos)
+    if (!m_texture_infos)
     {
-        m_resource_infos = new Structured_buffer<Mdl_resource_info>(
-            m_app, std::max(info_data.size(), size_t(1)), get_name() + "_ResourceInfos");
+        m_texture_infos = new Structured_buffer<Mdl_texture_info>(
+            m_app, std::max(texture_info_data.size(), size_t(1)), get_name() + "_TextureInfos");
     }
 
-    auto resource_info_srv = m_first_resource_heap_handle.create_offset(2);
-    if (!resource_info_srv.is_valid())
+    auto texture_info_srv = m_first_resource_heap_handle.create_offset(2);
+    if (!texture_info_srv.is_valid())
         return false;
 
-    if (!resource_heap.create_shader_resource_view(m_resource_infos, resource_info_srv))
+    if (!resource_heap.create_shader_resource_view(m_texture_infos, texture_info_srv))
         return false;
 
-    // create shader resource views for resources for textures
-    size_t descriptor_heap_offset = 3;
-    size_t gpu_resource_array_offset = 0;
+    // create the light profile info buffer and view to handle resource mapping
+    std::vector<Mdl_light_profile_info> light_profile_info_data(
+        m_resources[Mdl_resource_kind::Light_profile].size());
+
+    if (m_light_profile_infos &&
+        m_light_profile_infos->get_element_count() < std::max(light_profile_info_data.size(), size_t(1)))
+    {
+        delete m_light_profile_infos;
+        m_light_profile_infos = nullptr;
+    }
+    if (!m_light_profile_infos)
+    {
+        m_light_profile_infos = new Structured_buffer<Mdl_light_profile_info>(
+            m_app, std::max(light_profile_info_data.size(), size_t(1)), get_name() + "_LightProfileInfos");
+    }
+
+    auto light_profile_info_srv = m_first_resource_heap_handle.create_offset(3);
+    if (!light_profile_info_srv.is_valid())
+        return false;
+
+    if (!resource_heap.create_shader_resource_view(m_light_profile_infos, light_profile_info_srv))
+        return false;
+
+    // create the mbsdf info buffer and view to handle resource mapping
+    std::vector<Mdl_mbsdf_info> mbsdf_info_data(
+        m_resources[Mdl_resource_kind::Bsdf_measurement].size());
+
+    if (m_mbsdf_infos &&
+        m_mbsdf_infos->get_element_count() < std::max(mbsdf_info_data.size(), size_t(1)))
+    {
+        delete m_mbsdf_infos;
+        m_mbsdf_infos = nullptr;
+    }
+    if (!m_mbsdf_infos)
+    {
+        m_mbsdf_infos = new Structured_buffer<Mdl_mbsdf_info>(
+            m_app, std::max(mbsdf_info_data.size(), size_t(1)), get_name() + "_MbsdfInfos");
+    }
+
+    auto mbsdf_info_srv = m_first_resource_heap_handle.create_offset(4);
+    if (!mbsdf_info_srv.is_valid())
+        return false;
+
+    if (!resource_heap.create_shader_resource_view(m_mbsdf_infos, mbsdf_info_srv))
+        return false;
+
+    // create shader resource views for textures
+    size_t descriptor_heap_offset = 5;
+    size_t gpu_texture_array_offset = 0;
     for (size_t t = 0; t < m_resources[Mdl_resource_kind::Texture].size(); ++t)
     {
         Mdl_resource_assignment& assignment = m_resources[Mdl_resource_kind::Texture][t];
 
         // dense uv-tile-map, for large and sparse maps, this approach is too simple
         std::vector<Resource*> tile_map(
-            assignment.data ? assignment.data->get_uvtile_count() : 0, nullptr);
+            assignment.texture_data ? assignment.texture_data->get_uvtile_count() : 0, nullptr);
 
-        if (assignment.data)
+        if (assignment.texture_data)
         {
-            for (size_t e = 0, n = assignment.data->entries.size(); e < n; ++e)
+            for (size_t e = 0, n = assignment.texture_data->entries.size(); e < n; ++e)
             {
-                size_t index = assignment.data->compute_linear_uvtile_index(e);
-                tile_map[index] = assignment.data->entries[e].resource;
+                size_t index = assignment.texture_data->compute_linear_uvtile_index(e);
+                tile_map[index] = assignment.texture_data->entries[e].resource;
             }
         }
 
@@ -667,28 +801,147 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
         }
 
         // mapping from runtime texture id to index into the array of views
-        Mdl_resource_info& info = info_data[assignment.runtime_resource_id - 1];
-        info.gpu_resource_array_start = gpu_resource_array_offset;
+        Mdl_texture_info& info = texture_info_data[assignment.runtime_resource_id - 1];
+        info.gpu_resource_array_start = gpu_texture_array_offset;
         info.gpu_resource_array_size = tile_map.size();
-        info.gpu_resource_frame_first = assignment.data ? assignment.data->frame_first : 0;
-        info.gpu_resource_uvtile_u_min = assignment.data ? assignment.data->uvtile_u_min : 0;
-        info.gpu_resource_uvtile_v_min = assignment.data ? assignment.data->uvtile_v_min : 0;
-        info.gpu_resource_uvtile_width = assignment.data ? assignment.data->get_uvtile_width() : 1;
+        info.gpu_resource_frame_first = assignment.has_data() ? assignment.texture_data->frame_first : 0;
+        info.gpu_resource_uvtile_u_min = assignment.has_data() ? assignment.texture_data->uvtile_u_min : 0;
+        info.gpu_resource_uvtile_v_min = assignment.has_data() ? assignment.texture_data->uvtile_v_min : 0;
+        info.gpu_resource_uvtile_width = assignment.has_data() ? assignment.texture_data->get_uvtile_width() : 1;
         info.gpu_resource_uvtile_height =
-            assignment.data ? assignment.data->get_uvtile_height() : 1;
+            assignment.has_data() ? assignment.texture_data->get_uvtile_height() : 1;
 
-        gpu_resource_array_offset += tile_map.size();
+        gpu_texture_array_offset += tile_map.size();
+    }
+
+    // create texture and buffer shader resource views and gpu infos for light profiles
+    size_t gpu_buffer_array_offset = 0;
+    for (size_t i = 0; i < m_resources[Mdl_resource_kind::Light_profile].size(); ++i)
+    {
+        Mdl_resource_assignment& assignment = m_resources[Mdl_resource_kind::Light_profile][i];
+
+        size_t eval_tex_descriptor_heap_offset = 5 + tex_count + i; // 1 texture per light profile
+        size_t buffer_descriptor_heap_offset = 5 + tex_count
+                                             + light_profile_count // handles for light profile textures
+                                             + i; // 1 buffer per light profile
+
+        Descriptor_heap_handle eval_tex_heap_handle =
+            m_first_resource_heap_handle.create_offset(eval_tex_descriptor_heap_offset);
+        if (!eval_tex_heap_handle.is_valid())
+            return false;
+
+        if (!resource_heap.create_shader_resource_view(
+            assignment.light_profile_data->get_evaluation_data(),
+            Texture_dimension::Texture_2D,
+            eval_tex_heap_handle))
+                return false;
+
+        Descriptor_heap_handle sample_buffer_heap_handle =
+            m_first_resource_heap_handle.create_offset(buffer_descriptor_heap_offset);
+        if (!sample_buffer_heap_handle.is_valid())
+            return false;
+
+        if (!resource_heap.create_shader_resource_view(
+            assignment.light_profile_data->get_sample_data(),
+            sample_buffer_heap_handle))
+                return false;
+
+        Mdl_light_profile_info& light_profile_info = light_profile_info_data[i];
+        light_profile_info.eval_data_index = gpu_texture_array_offset++;
+        light_profile_info.sample_data_index = gpu_buffer_array_offset++;
+
+        light_profile_info.angular_resolution = assignment.light_profile_data->get_angular_resolution();
+        light_profile_info.inv_angular_resolution = {
+            1.0f / float(light_profile_info.angular_resolution.x),
+            1.0f / float(light_profile_info.angular_resolution.y)
+        };
+        light_profile_info.theta_phi_start = assignment.light_profile_data->get_theta_phi_start();
+        light_profile_info.theta_phi_delta = assignment.light_profile_data->get_theta_phi_delta();
+        light_profile_info.theta_phi_inv_delta = {
+            1.0f / float(light_profile_info.theta_phi_delta.x),
+            1.0f / float(light_profile_info.theta_phi_delta.y)
+        };
+        light_profile_info.candela_multiplier = assignment.light_profile_data->get_candela_multiplier();
+        light_profile_info.total_power = assignment.light_profile_data->get_total_power();
+    }
+    
+    // create texture and buffer shader resource views and gpu infos for MBSDFs
+    for (size_t i = 0; i < m_resources[Mdl_resource_kind::Bsdf_measurement].size(); ++i)
+    {
+        Mdl_resource_assignment& assignment = m_resources[Mdl_resource_kind::Bsdf_measurement][i];
+
+        size_t eval_tex_descriptor_heap_offset = 5 + tex_count
+                                               + light_profile_count // 1 texture per light profile
+                                               + i * 2;              // 1 texture per mbsdf part
+        size_t buffer_descriptor_heap_offset = 5 + tex_count
+                                             + light_profile_count // 1 texture per light profile
+                                             + mbsdf_count * 2     // 2 textures per mbsdf
+                                             + light_profile_count // 1 buffer per light profile
+                                             + i * 2 * 2;          // 2 buffers per mbsdf part
+
+        Mdl_mbsdf_info& mbsdf_info = mbsdf_info_data[i];
+        for (mi::neuraylib::Mbsdf_part part : { mi::neuraylib::MBSDF_DATA_REFLECTION, mi::neuraylib::MBSDF_DATA_TRANSMISSION })
+        {
+            mbsdf_info.has_data[part] = assignment.mbsdf_data->has_part(part) ? 1 : 0;
+            if (mbsdf_info.has_data[part] == 0)
+                continue;
+
+            const Bsdf_measurement::Part& mbsdf_part = assignment.mbsdf_data->get_part(part);
+
+            Descriptor_heap_handle eval_tex_heap_handle =
+                m_first_resource_heap_handle.create_offset(eval_tex_descriptor_heap_offset++);
+            if (!eval_tex_heap_handle.is_valid())
+                return false;
+
+            if (!resource_heap.create_shader_resource_view(
+                mbsdf_part.evaluation_data,
+                Texture_dimension::Texture_3D,
+                eval_tex_heap_handle))
+                    return false;
+
+            Descriptor_heap_handle sample_buffer_heap_handle =
+                m_first_resource_heap_handle.create_offset(buffer_descriptor_heap_offset++);
+            if (!sample_buffer_heap_handle.is_valid())
+                return false;
+
+            if (!resource_heap.create_shader_resource_view(
+                mbsdf_part.sample_data,
+                sample_buffer_heap_handle))
+                    return false;
+
+            Descriptor_heap_handle albedo_buffer_heap_handle =
+                m_first_resource_heap_handle.create_offset(buffer_descriptor_heap_offset++);
+            if (!albedo_buffer_heap_handle.is_valid())
+                return false;
+
+            if (!resource_heap.create_shader_resource_view(
+                mbsdf_part.albedo_data,
+                albedo_buffer_heap_handle))
+                    return false;
+
+            mbsdf_info.eval_data_index[part] = gpu_texture_array_offset++;
+            mbsdf_info.sample_data_index[part] = gpu_buffer_array_offset++;
+            mbsdf_info.albedo_data_index[part] = gpu_buffer_array_offset++;
+            mbsdf_info.max_albedo[part] = mbsdf_part.max_albedo;
+            mbsdf_info.angular_resolution_theta[part] = mbsdf_part.angular_resolution_theta;
+            mbsdf_info.angular_resolution_phi[part] = mbsdf_part.angular_resolution_phi;
+            mbsdf_info.num_channels[part] = mbsdf_part.num_channels;
+        }
     }
 
     // copy the infos into the buffer
-    m_resource_infos->set_data(info_data.data(), info_data.size());
+    m_texture_infos->set_data(texture_info_data.data(), texture_info_data.size());
+    m_light_profile_infos->set_data(light_profile_info_data.data(), light_profile_info_data.size());
+    m_mbsdf_infos->set_data(mbsdf_info_data.data(), mbsdf_info_data.size());
 
     // optimization potential
     m_constants.data.material_flags = static_cast<uint32_t>(m_flags);
 
     m_constants.upload();
     if (!m_argument_block_buffer->upload(command_list)) return false;
-    if (!m_resource_infos->upload(command_list)) return false;
+    if (!m_texture_infos->upload(command_list)) return false;
+    if (!m_light_profile_infos->upload(command_list)) return false;
+    if (!m_mbsdf_infos->upload(command_list)) return false;
 
     return true;
 }

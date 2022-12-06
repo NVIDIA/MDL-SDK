@@ -10,6 +10,9 @@
 
 %begin %{
 #ifdef _MSC_VER
+// use the 'Release' build of the Python interpreter with a 'Debug' build of the wrappers
+// adding the `corecrt.h` here because problems when un-defining and re-defining '_DEBUG` done by SWIG
+#include <corecrt.h>
 #define SWIG_PYTHON_INTERPRETER_NO_DEBUG
 #endif
 %}
@@ -372,6 +375,11 @@ struct Color_struct
     /// Alpha value, 0.0 is fully transparent and 1.0 is opaque; value can lie outside that range.
     Float32 a;
 };
+enum Clip_mode {
+    CLIP_RGB,   ///< First clip RGB to [0,1], then clip A to [max(R,G,B),1].
+    CLIP_ALPHA, ///< First clip A to [0,1], then clip RGB to [0,A].
+    CLIP_RAW    ///< Clip RGB and A to [0,1].
+};
 } // namespace
 } // namespace
 
@@ -420,6 +428,8 @@ DICE_INTERFACE_MI(IData);
 DICE_INTERFACE_MI(IData_simple);
 DICE_INTERFACE_MI(IData_collection);
 DICE_INTERFACE_MI(IFloat32);
+DICE_INTERFACE_MI(IColor);
+DICE_INTERFACE_MI(IColor3);
 DICE_INTERFACE_MI(IFloat64);
 DICE_INTERFACE_MI(INumber);
 DICE_INTERFACE_MI(ISint8);
@@ -432,13 +442,17 @@ DICE_INTERFACE_MI(IUint16);
 DICE_INTERFACE_MI(IUint32);
 DICE_INTERFACE_MI(IUint64);
 DICE_INTERFACE_MI(IVoid);
+DICE_INTERFACE_MI(IEnum_decl);
+DICE_INTERFACE_MI(IEnum);
 
 %include "mi/neuraylib/vector_typedefs.h"
+%include "mi/neuraylib/typedefs.h"
 %include "mi/neuraylib/idata.h"
 %include "mi/neuraylib/istring.h"
 %include "mi/neuraylib/iarray.h"
 %include "mi/neuraylib/inumber.h"
 %include "mi/neuraylib/icompound.h"
+%include "mi/neuraylib/icolor.h"
 %include "mi/neuraylib/ivector.h"
 
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IArray)
@@ -466,6 +480,8 @@ NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IData_simple)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IString)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IData_collection)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat32)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IColor)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IColor3)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat64)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::INumber)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::ISint8)
@@ -478,6 +494,8 @@ NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint16)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint32)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint64)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IVoid)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IEnum_decl)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IEnum)
 
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IArray)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, ICompound)
@@ -503,6 +521,8 @@ NEURAY_CREATE_HANDLE_TEMPLATE(mi, IData)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IData_simple)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IData_collection)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat32)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IColor)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IColor3)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat64)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, INumber)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, ISint8)
@@ -515,6 +535,8 @@ NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint16)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint32)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint64)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IVoid)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IEnum_decl)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IEnum)
 
 // ----------------------------------------------------------------------------
 // mi::neuray
@@ -650,6 +672,14 @@ DICE_INTERFACE(IValue_vector)
         }
 }
 
+%extend mi::IColor {
+        mi::math::Color_struct get_value(mi::math::Color_struct& value) const
+        {
+            mi::math::Color_struct v = $self->get_value();
+            return v;
+        }
+}
+
 // special handling for: mi::neuraylib::INeuray
 // ----------------------------------------------------------------------------
 // Rewrite of special template functions to make life easier
@@ -732,6 +762,272 @@ WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::neuraylib::IExpression_list, get_expression
 // ----------------------------------------------------------------------------
 %rename(create_function_call_with_ret) mi::neuraylib::IFunction_definition::create_function_call(IExpression_list const*, Sint32*) const;
 
+// We manually define the enums in the correct proxy class
+%extend SmartPtr<mi::neuraylib::IFunction_definition> {
+    %pythoncode{
+        class Semantics(Enum):
+            DS_UNKNOWN = _pymdlsdk._IFunction_definition_DS_UNKNOWN
+
+            DS_CONV_CONSTRUCTOR = _pymdlsdk._IFunction_definition_DS_CONV_CONSTRUCTOR
+            DS_ELEM_CONSTRUCTOR = _pymdlsdk._IFunction_definition_DS_ELEM_CONSTRUCTOR
+            DS_COLOR_SPECTRUM_CONSTRUCTOR = _pymdlsdk._IFunction_definition_DS_COLOR_SPECTRUM_CONSTRUCTOR
+            DS_MATRIX_ELEM_CONSTRUCTOR = _pymdlsdk._IFunction_definition_DS_MATRIX_ELEM_CONSTRUCTOR
+            DS_MATRIX_DIAG_CONSTRUCTOR = _pymdlsdk._IFunction_definition_DS_MATRIX_DIAG_CONSTRUCTOR
+            DS_INVALID_REF_CONSTRUCTOR = _pymdlsdk._IFunction_definition_DS_INVALID_REF_CONSTRUCTOR
+            DS_DEFAULT_STRUCT_CONSTRUCTOR = _pymdlsdk._IFunction_definition_DS_DEFAULT_STRUCT_CONSTRUCTOR
+            DS_TEXTURE_CONSTRUCTOR = _pymdlsdk._IFunction_definition_DS_TEXTURE_CONSTRUCTOR
+            DS_CONV_OPERATOR = _pymdlsdk._IFunction_definition_DS_CONV_OPERATOR
+            DS_COPY_CONSTRUCTOR = _pymdlsdk._IFunction_definition_DS_COPY_CONSTRUCTOR
+
+            DS_BITWISE_COMPLEMENT = _pymdlsdk._IFunction_definition_DS_BITWISE_COMPLEMENT
+            DS_UNARY_FIRST = _pymdlsdk._IFunction_definition_DS_UNARY_FIRST
+            DS_OPERATOR_FIRST = _pymdlsdk._IFunction_definition_DS_OPERATOR_FIRST
+            DS_LOGICAL_NOT = _pymdlsdk._IFunction_definition_DS_LOGICAL_NOT
+            DS_POSITIVE = _pymdlsdk._IFunction_definition_DS_POSITIVE
+            DS_NEGATIVE = _pymdlsdk._IFunction_definition_DS_NEGATIVE
+            DS_PRE_INCREMENT = _pymdlsdk._IFunction_definition_DS_PRE_INCREMENT
+            DS_PRE_DECREMENT = _pymdlsdk._IFunction_definition_DS_PRE_DECREMENT
+            DS_POST_INCREMENT = _pymdlsdk._IFunction_definition_DS_POST_INCREMENT
+            DS_POST_DECREMENT = _pymdlsdk._IFunction_definition_DS_POST_DECREMENT
+            DS_CAST = _pymdlsdk._IFunction_definition_DS_CAST
+            DS_UNARY_LAST = _pymdlsdk._IFunction_definition_DS_UNARY_LAST
+
+            DS_SELECT = _pymdlsdk._IFunction_definition_DS_SELECT
+            DS_BINARY_FIRST = _pymdlsdk._IFunction_definition_DS_BINARY_FIRST
+            DS_ARRAY_INDEX = _pymdlsdk._IFunction_definition_DS_ARRAY_INDEX
+            DS_MULTIPLY = _pymdlsdk._IFunction_definition_DS_MULTIPLY
+            DS_DIVIDE = _pymdlsdk._IFunction_definition_DS_DIVIDE
+            DS_MODULO = _pymdlsdk._IFunction_definition_DS_MODULO
+            DS_PLUS = _pymdlsdk._IFunction_definition_DS_PLUS
+            DS_MINUS = _pymdlsdk._IFunction_definition_DS_MINUS
+            DS_SHIFT_LEFT = _pymdlsdk._IFunction_definition_DS_SHIFT_LEFT
+            DS_SHIFT_RIGHT = _pymdlsdk._IFunction_definition_DS_SHIFT_RIGHT
+            DS_UNSIGNED_SHIFT_RIGHT = _pymdlsdk._IFunction_definition_DS_UNSIGNED_SHIFT_RIGHT
+            DS_LESS = _pymdlsdk._IFunction_definition_DS_LESS
+            DS_LESS_OR_EQUAL = _pymdlsdk._IFunction_definition_DS_LESS_OR_EQUAL
+            DS_GREATER_OR_EQUAL = _pymdlsdk._IFunction_definition_DS_GREATER_OR_EQUAL
+            DS_GREATER = _pymdlsdk._IFunction_definition_DS_GREATER
+            DS_EQUAL = _pymdlsdk._IFunction_definition_DS_EQUAL
+            DS_NOT_EQUAL = _pymdlsdk._IFunction_definition_DS_NOT_EQUAL
+            DS_BITWISE_AND = _pymdlsdk._IFunction_definition_DS_BITWISE_AND
+            DS_BITWISE_XOR = _pymdlsdk._IFunction_definition_DS_BITWISE_XOR
+            DS_BITWISE_OR = _pymdlsdk._IFunction_definition_DS_BITWISE_OR
+            DS_LOGICAL_AND = _pymdlsdk._IFunction_definition_DS_LOGICAL_AND
+            DS_LOGICAL_OR = _pymdlsdk._IFunction_definition_DS_LOGICAL_OR
+            DS_ASSIGN = _pymdlsdk._IFunction_definition_DS_ASSIGN
+            DS_MULTIPLY_ASSIGN = _pymdlsdk._IFunction_definition_DS_MULTIPLY_ASSIGN
+            DS_DIVIDE_ASSIGN = _pymdlsdk._IFunction_definition_DS_DIVIDE_ASSIGN
+            DS_MODULO_ASSIGN = _pymdlsdk._IFunction_definition_DS_MODULO_ASSIGN
+            DS_PLUS_ASSIGN = _pymdlsdk._IFunction_definition_DS_PLUS_ASSIGN
+            DS_MINUS_ASSIGN = _pymdlsdk._IFunction_definition_DS_MINUS_ASSIGN
+            DS_SHIFT_LEFT_ASSIGN = _pymdlsdk._IFunction_definition_DS_SHIFT_LEFT_ASSIGN
+            DS_SHIFT_RIGHT_ASSIGN = _pymdlsdk._IFunction_definition_DS_SHIFT_RIGHT_ASSIGN
+            DS_UNSIGNED_SHIFT_RIGHT_ASSIGN = _pymdlsdk._IFunction_definition_DS_UNSIGNED_SHIFT_RIGHT_ASSIGN
+            DS_BITWISE_OR_ASSIGN = _pymdlsdk._IFunction_definition_DS_BITWISE_OR_ASSIGN
+            DS_BITWISE_XOR_ASSIGN = _pymdlsdk._IFunction_definition_DS_BITWISE_XOR_ASSIGN
+            DS_BITWISE_AND_ASSIGN = _pymdlsdk._IFunction_definition_DS_BITWISE_AND_ASSIGN
+            DS_SEQUENCE = _pymdlsdk._IFunction_definition_DS_SEQUENCE
+            DS_BINARY_LAST = _pymdlsdk._IFunction_definition_DS_BINARY_LAST
+
+            DS_TERNARY = _pymdlsdk._IFunction_definition_DS_TERNARY
+            DS_OPERATOR_LAST = _pymdlsdk._IFunction_definition_DS_OPERATOR_LAST
+
+            DS_INTRINSIC_MATH_FIRST = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_FIRST
+            DS_INTRINSIC_MATH_ABS = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_ABS
+            DS_INTRINSIC_MATH_ACOS = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_ACOS
+            DS_INTRINSIC_MATH_ALL = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_ALL
+            DS_INTRINSIC_MATH_ANY = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_ANY
+            DS_INTRINSIC_MATH_ASIN = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_ASIN
+            DS_INTRINSIC_MATH_ATAN = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_ATAN
+            DS_INTRINSIC_MATH_ATAN2 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_ATAN2
+            DS_INTRINSIC_MATH_AVERAGE = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_AVERAGE
+            DS_INTRINSIC_MATH_CEIL = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_CEIL
+            DS_INTRINSIC_MATH_CLAMP = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_CLAMP
+            DS_INTRINSIC_MATH_COS = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_COS
+            DS_INTRINSIC_MATH_CROSS = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_CROSS
+            DS_INTRINSIC_MATH_DEGREES = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_DEGREES
+            DS_INTRINSIC_MATH_DISTANCE = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_DISTANCE
+            DS_INTRINSIC_MATH_DOT = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_DOT
+            DS_INTRINSIC_MATH_EVAL_AT_WAVELENGTH = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_EVAL_AT_WAVELENGTH
+            DS_INTRINSIC_MATH_EXP = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_EXP
+            DS_INTRINSIC_MATH_EXP2 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_EXP2
+            DS_INTRINSIC_MATH_FLOOR = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_FLOOR
+            DS_INTRINSIC_MATH_FMOD = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_FMOD
+            DS_INTRINSIC_MATH_FRAC = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_FRAC
+            DS_INTRINSIC_MATH_ISNAN = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_ISNAN
+            DS_INTRINSIC_MATH_ISFINITE = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_ISFINITE
+            DS_INTRINSIC_MATH_LENGTH = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_LENGTH
+            DS_INTRINSIC_MATH_LERP = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_LERP
+            DS_INTRINSIC_MATH_LOG = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_LOG
+            DS_INTRINSIC_MATH_LOG2 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_LOG2
+            DS_INTRINSIC_MATH_LOG10 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_LOG10
+            DS_INTRINSIC_MATH_LUMINANCE = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_LUMINANCE
+            DS_INTRINSIC_MATH_MAX = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_MAX
+            DS_INTRINSIC_MATH_MAX_VALUE = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_MAX_VALUE
+            DS_INTRINSIC_MATH_MAX_VALUE_WAVELENGTH = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_MAX_VALUE_WAVELENGTH
+            DS_INTRINSIC_MATH_MIN = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_MIN
+            DS_INTRINSIC_MATH_MIN_VALUE = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_MIN_VALUE
+            DS_INTRINSIC_MATH_MIN_VALUE_WAVELENGTH = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_MIN_VALUE_WAVELENGTH
+            DS_INTRINSIC_MATH_MODF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_MODF
+            DS_INTRINSIC_MATH_NORMALIZE = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_NORMALIZE
+            DS_INTRINSIC_MATH_POW = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_POW
+            DS_INTRINSIC_MATH_RADIANS = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_RADIANS
+            DS_INTRINSIC_MATH_ROUND = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_ROUND
+            DS_INTRINSIC_MATH_RSQRT = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_RSQRT
+            DS_INTRINSIC_MATH_SATURATE = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_SATURATE
+            DS_INTRINSIC_MATH_SIGN = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_SIGN
+            DS_INTRINSIC_MATH_SIN = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_SIN
+            DS_INTRINSIC_MATH_SINCOS = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_SINCOS
+            DS_INTRINSIC_MATH_SMOOTHSTEP = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_SMOOTHSTEP
+            DS_INTRINSIC_MATH_SQRT = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_SQRT
+            DS_INTRINSIC_MATH_STEP = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_STEP
+            DS_INTRINSIC_MATH_TAN = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_TAN
+            DS_INTRINSIC_MATH_TRANSPOSE = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_TRANSPOSE
+            DS_INTRINSIC_MATH_BLACKBODY = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_BLACKBODY
+            DS_INTRINSIC_MATH_EMISSION_COLOR = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_EMISSION_COLOR
+            DS_INTRINSIC_MATH_COSH = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_COSH
+            DS_INTRINSIC_MATH_SINH = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_SINH
+            DS_INTRINSIC_MATH_TANH = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_TANH
+            DS_INTRINSIC_MATH_INT_BITS_TO_FLOAT = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_INT_BITS_TO_FLOAT
+            DS_INTRINSIC_MATH_FLOAT_BITS_TO_INT = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_FLOAT_BITS_TO_INT
+            DS_INTRINSIC_MATH_DX = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_DX
+            DS_INTRINSIC_MATH_DY = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_DY
+            DS_INTRINSIC_MATH_LAST = _pymdlsdk._IFunction_definition_DS_INTRINSIC_MATH_LAST
+
+            DS_INTRINSIC_STATE_POSITION = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_POSITION
+            DS_INTRINSIC_STATE_FIRST = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_FIRST
+            DS_INTRINSIC_STATE_NORMAL = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_NORMAL
+            DS_INTRINSIC_STATE_GEOMETRY_NORMAL = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_GEOMETRY_NORMAL
+            DS_INTRINSIC_STATE_MOTION = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_MOTION
+            DS_INTRINSIC_STATE_TEXTURE_SPACE_MAX = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_TEXTURE_SPACE_MAX
+            DS_INTRINSIC_STATE_TEXTURE_COORDINATE = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_TEXTURE_COORDINATE
+            DS_INTRINSIC_STATE_TEXTURE_TANGENT_U = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_TEXTURE_TANGENT_U
+            DS_INTRINSIC_STATE_TEXTURE_TANGENT_V = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_TEXTURE_TANGENT_V
+            DS_INTRINSIC_STATE_TANGENT_SPACE = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_TANGENT_SPACE
+            DS_INTRINSIC_STATE_GEOMETRY_TANGENT_U = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_GEOMETRY_TANGENT_U
+            DS_INTRINSIC_STATE_GEOMETRY_TANGENT_V = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_GEOMETRY_TANGENT_V
+            DS_INTRINSIC_STATE_DIRECTION = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_DIRECTION
+            DS_INTRINSIC_STATE_ANIMATION_TIME = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_ANIMATION_TIME
+            DS_INTRINSIC_STATE_WAVELENGTH_BASE = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_WAVELENGTH_BASE
+            DS_INTRINSIC_STATE_TRANSFORM = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_TRANSFORM
+            DS_INTRINSIC_STATE_TRANSFORM_POINT = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_TRANSFORM_POINT
+            DS_INTRINSIC_STATE_TRANSFORM_VECTOR = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_TRANSFORM_VECTOR
+            DS_INTRINSIC_STATE_TRANSFORM_NORMAL = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_TRANSFORM_NORMAL
+            DS_INTRINSIC_STATE_TRANSFORM_SCALE = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_TRANSFORM_SCALE
+            DS_INTRINSIC_STATE_ROUNDED_CORNER_NORMAL = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_ROUNDED_CORNER_NORMAL
+            DS_INTRINSIC_STATE_METERS_PER_SCENE_UNIT = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_METERS_PER_SCENE_UNIT
+            DS_INTRINSIC_STATE_SCENE_UNITS_PER_METER = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_SCENE_UNITS_PER_METER
+            DS_INTRINSIC_STATE_OBJECT_ID = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_OBJECT_ID
+            DS_INTRINSIC_STATE_WAVELENGTH_MIN = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_WAVELENGTH_MIN
+            DS_INTRINSIC_STATE_WAVELENGTH_MAX = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_WAVELENGTH_MAX
+            DS_INTRINSIC_STATE_LAST = _pymdlsdk._IFunction_definition_DS_INTRINSIC_STATE_LAST
+
+            DS_INTRINSIC_TEX_WIDTH = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_WIDTH
+            DS_INTRINSIC_TEX_FIRST = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_FIRST
+            DS_INTRINSIC_TEX_HEIGHT = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_HEIGHT
+            DS_INTRINSIC_TEX_DEPTH = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_DEPTH
+            DS_INTRINSIC_TEX_LOOKUP_FLOAT = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_LOOKUP_FLOAT
+            DS_INTRINSIC_TEX_LOOKUP_FLOAT2 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_LOOKUP_FLOAT2
+            DS_INTRINSIC_TEX_LOOKUP_FLOAT3 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_LOOKUP_FLOAT3
+            DS_INTRINSIC_TEX_LOOKUP_FLOAT4 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_LOOKUP_FLOAT4
+            DS_INTRINSIC_TEX_LOOKUP_COLOR = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_LOOKUP_COLOR
+            DS_INTRINSIC_TEX_TEXEL_FLOAT = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_TEXEL_FLOAT
+            DS_INTRINSIC_TEX_TEXEL_FLOAT2 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_TEXEL_FLOAT2
+            DS_INTRINSIC_TEX_TEXEL_FLOAT3 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_TEXEL_FLOAT3
+            DS_INTRINSIC_TEX_TEXEL_FLOAT4 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_TEXEL_FLOAT4
+            DS_INTRINSIC_TEX_TEXEL_COLOR = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_TEXEL_COLOR
+            DS_INTRINSIC_TEX_TEXTURE_ISVALID = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_TEXTURE_ISVALID
+            DS_INTRINSIC_TEX_WIDTH_OFFSET = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_WIDTH_OFFSET
+            DS_INTRINSIC_TEX_HEIGHT_OFFSET = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_HEIGHT_OFFSET
+            DS_INTRINSIC_TEX_DEPTH_OFFSET = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_DEPTH_OFFSET
+            DS_INTRINSIC_TEX_FIRST_FRAME = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_FIRST_FRAME
+            DS_INTRINSIC_TEX_LAST_FRAME = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_LAST_FRAME
+            DS_INTRINSIC_TEX_GRID_TO_OBJECT_SPACE = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_GRID_TO_OBJECT_SPACE
+            DS_INTRINSIC_TEX_LAST = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_LAST
+
+            DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF
+            DS_INTRINSIC_DF_FIRST = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_FIRST
+            DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF
+            DS_INTRINSIC_DF_SPECULAR_BSDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_SPECULAR_BSDF
+            DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF
+            DS_INTRINSIC_DF_BACKSCATTERING_GLOSSY_REFLECTION_BSDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_BACKSCATTERING_GLOSSY_REFLECTION_BSDF
+            DS_INTRINSIC_DF_MEASURED_BSDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_MEASURED_BSDF
+            DS_INTRINSIC_DF_DIFFUSE_EDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_DIFFUSE_EDF
+            DS_INTRINSIC_DF_MEASURED_EDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_MEASURED_EDF
+            DS_INTRINSIC_DF_SPOT_EDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_SPOT_EDF
+            DS_INTRINSIC_DF_ANISOTROPIC_VDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_ANISOTROPIC_VDF
+            DS_INTRINSIC_DF_NORMALIZED_MIX = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_NORMALIZED_MIX
+            DS_INTRINSIC_DF_CLAMPED_MIX = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_CLAMPED_MIX
+            DS_INTRINSIC_DF_WEIGHTED_LAYER = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_WEIGHTED_LAYER
+            DS_INTRINSIC_DF_FRESNEL_LAYER = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_FRESNEL_LAYER
+            DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_CUSTOM_CURVE_LAYER
+            DS_INTRINSIC_DF_MEASURED_CURVE_LAYER = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_MEASURED_CURVE_LAYER
+            DS_INTRINSIC_DF_THIN_FILM = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_THIN_FILM
+            DS_INTRINSIC_DF_TINT = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_TINT
+            DS_INTRINSIC_DF_DIRECTIONAL_FACTOR = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_DIRECTIONAL_FACTOR
+            DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR
+            DS_INTRINSIC_DF_LIGHT_PROFILE_POWER = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_LIGHT_PROFILE_POWER
+            DS_INTRINSIC_DF_LIGHT_PROFILE_MAXIMUM = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_LIGHT_PROFILE_MAXIMUM
+            DS_INTRINSIC_DF_LIGHT_PROFILE_ISVALID = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_LIGHT_PROFILE_ISVALID
+            DS_INTRINSIC_DF_BSDF_MEASUREMENT_ISVALID = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_BSDF_MEASUREMENT_ISVALID
+            DS_INTRINSIC_DF_MICROFACET_BECKMANN_SMITH_BSDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_MICROFACET_BECKMANN_SMITH_BSDF
+            DS_INTRINSIC_DF_MICROFACET_GGX_SMITH_BSDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_MICROFACET_GGX_SMITH_BSDF
+            DS_INTRINSIC_DF_MICROFACET_BECKMANN_VCAVITIES_BSDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_MICROFACET_BECKMANN_VCAVITIES_BSDF
+            DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_MICROFACET_GGX_VCAVITIES_BSDF
+            DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_WARD_GEISLER_MORODER_BSDF
+            DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX
+            DS_INTRINSIC_DF_COLOR_CLAMPED_MIX = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_COLOR_CLAMPED_MIX
+            DS_INTRINSIC_DF_COLOR_WEIGHTED_LAYER = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_COLOR_WEIGHTED_LAYER
+            DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_COLOR_FRESNEL_LAYER
+            DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_COLOR_CUSTOM_CURVE_LAYER
+            DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER
+            DS_INTRINSIC_DF_FRESNEL_FACTOR = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_FRESNEL_FACTOR
+            DS_INTRINSIC_DF_MEASURED_FACTOR = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_MEASURED_FACTOR
+            DS_INTRINSIC_DF_CHIANG_HAIR_BSDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_CHIANG_HAIR_BSDF
+            DS_INTRINSIC_DF_SHEEN_BSDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_SHEEN_BSDF
+            DS_INTRINSIC_DF_UNBOUNDED_MIX = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_UNBOUNDED_MIX
+            DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX
+            DS_INTRINSIC_DF_LAST = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_LAST
+
+            DS_INTRINSIC_SCENE_DATA_ISVALID = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_DATA_ISVALID
+            DS_INTRINSIC_SCENE_FIRST = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_FIRST
+            DS_INTRINSIC_SCENE_DATA_LOOKUP_INT = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_DATA_LOOKUP_INT
+            DS_INTRINSIC_SCENE_DATA_LOOKUP_INT2 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_DATA_LOOKUP_INT2
+            DS_INTRINSIC_SCENE_DATA_LOOKUP_INT3 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_DATA_LOOKUP_INT3
+            DS_INTRINSIC_SCENE_DATA_LOOKUP_INT4 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_DATA_LOOKUP_INT4
+            DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT
+            DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT2 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT2
+            DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT3 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT3
+            DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4
+            DS_INTRINSIC_SCENE_DATA_LOOKUP_COLOR = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_DATA_LOOKUP_COLOR
+            DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT
+            DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2
+            DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3
+            DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT4 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT4
+            DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT
+            DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2
+            DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3
+            DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4 = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4
+            DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR
+            DS_INTRINSIC_SCENE_LAST = _pymdlsdk._IFunction_definition_DS_INTRINSIC_SCENE_LAST
+
+            DS_INTRINSIC_DEBUG_BREAKPOINT = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DEBUG_BREAKPOINT
+            DS_INTRINSIC_DEBUG_FIRST = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DEBUG_FIRST
+            DS_INTRINSIC_DEBUG_ASSERT = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DEBUG_ASSERT
+            DS_INTRINSIC_DEBUG_PRINT = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DEBUG_PRINT
+            DS_INTRINSIC_DEBUG_LAST = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DEBUG_LAST
+
+            DS_INTRINSIC_DAG_FIELD_ACCESS = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DAG_FIELD_ACCESS
+            DS_INTRINSIC_DAG_FIRST = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DAG_FIRST
+            DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR
+            DS_INTRINSIC_DAG_ARRAY_LENGTH = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DAG_ARRAY_LENGTH
+            DS_INTRINSIC_DAG_LAST = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DAG_LAST
+
+            DS_FORCE_32_BIT = _pymdlsdk._IFunction_definition_DS_FORCE_32_BIT
+    }
+}
+WRAP_RETURN_IN_FUNCTION(mi::neuraylib::IFunction_definition, get_semantic, IFunction_definition.Semantics)
+
 // special handling for: mi::neuraylib::IMdl_factory
 // ----------------------------------------------------------------------------
 %rename(create_texture_with_ret) mi::neuraylib::IMdl_factory::create_texture(ITransaction*, char const*, IType_texture::Shape, Float32, char const*, bool, Sint32*);
@@ -802,6 +1098,18 @@ WRAP_RETURN_IN_FUNCTION(mi::neuraylib::IType_hair_bsdf, get_kind, IType.Kind)
 WRAP_RETURN_IN_FUNCTION(mi::neuraylib::IType_edf, get_kind, IType.Kind)
 WRAP_RETURN_IN_FUNCTION(mi::neuraylib::IType_vdf, get_kind, IType.Kind)
 
+// We manually define the enums in the correct proxy class
+%extend SmartPtr<mi::neuraylib::IType_texture> {
+    %pythoncode{
+        class Shape(Enum):
+            TS_2D = _pymdlsdk._IType_texture_TS_2D
+            TS_3D = _pymdlsdk._IType_texture_TS_3D
+            TS_CUBE = _pymdlsdk._IType_texture_TS_CUBE
+            TS_PTEX = _pymdlsdk._IType_texture_TS_PTEX
+            TS_BSDF_DATA = _pymdlsdk._IType_texture_TS_BSDF_DATA
+    }
+}
+WRAP_RETURN_IN_FUNCTION(mi::neuraylib::IType_texture, get_shape, IType_texture.Shape)
 
 // special handling for: mi::neuraylib::IValue
 // ----------------------------------------------------------------------------
@@ -914,6 +1222,8 @@ WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::neuraylib::ITransaction, edit)
 %include "mi/neuraylib/icompiled_material.h"
 %include "mi/neuraylib/ilightprofile.h"
 %include "mi/neuraylib/itransaction.h"
+%include "mi/neuraylib/ienum_decl.h"
+%include "mi/neuraylib/ienum.h"
 
 
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IAttribute_set)

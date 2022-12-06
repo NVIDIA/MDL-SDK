@@ -188,6 +188,8 @@ public:
     /// - \c "bundle_resources" of type bool: If \c true, referenced resources are exported
     ///   into the same directory as the module, even if they can be found via the module search
     ///   path. Default: \c false.
+    /// - \c bool "export_resources_with_module_prefix": If \c true, the name of the exported
+    ///   resources start with the module name as prefix. Default: \c true.
     ///
     /// \param filename          The name of the file to be used for the export.
     /// \param context           The execution context can be used to obtain messages like errors

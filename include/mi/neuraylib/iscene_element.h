@@ -71,6 +71,7 @@ enum Element_type
     ELEMENT_TYPE_FIBERS                          = 25, ///< #mi::neuraylib::IFibers
     ELEMENT_TYPE_VOLUME                          = 26, ///< #mi::neuraylib::IVolume
     ELEMENT_TYPE_VOLUME_DATA                     = 27, ///< #mi::neuraylib::IVolume_data
+    ELEMENT_TYPE_PARTICLES                       = 28, ///< #mi::neuraylib::IParticles
 #endif // MI_SKIP_WITH_MDL_SDK_DOXYGEN
     ELEMENT_TYPE_MODULE                          = 29, ///< #mi::neuraylib::IModule
     ELEMENT_TYPE_FUNCTION_DEFINITION             = 30, ///< #mi::neuraylib::IFunction_definition

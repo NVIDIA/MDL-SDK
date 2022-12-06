@@ -90,7 +90,7 @@ Also please refer to the \c create_material_texture function on how to create th
 in Vulkan.
 </dd>
 
-\section example_execution_glsl Example Source
+\section example_execution_glsl_vk_source Example Source
 
 To compile the source code, you require a recent version of the Vulkan SDK and GLFW.
 For detailed instructions, please refer to the \link mi_neuray_getting_started Getting Started \endlink section.

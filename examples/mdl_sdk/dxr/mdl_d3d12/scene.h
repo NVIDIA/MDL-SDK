@@ -361,7 +361,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
                     Repeat = 10497
                 };
 
-                std::string resource_identifier = "";
+                std::string resource_uri = "";
+                std::string resource_db_name = "";
 
                 DirectX::XMFLOAT2 offset = { 0.0f, 0.0f };
                 float rotation = 0.0f;
@@ -491,7 +492,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         class Resource
         {
         public:
-            std::string resource_db_name;
+            std::string resource_db_name = "";
         };
 
         // --------------------------------------------------------------------

@@ -64,6 +64,7 @@ public:
     bool m_fold_all_bool_parameters = false;
     bool m_fold_all_enum_parameters = false;
     bool m_ignore_noinline = true;
+    bool m_warn_spectrum_conv = false;
     std::string m_backend = "hlsl";
     bool m_use_derivatives = false;
     std::string m_num_texture_results = "16";
@@ -291,6 +292,8 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
                 options.m_use_derivatives ? "on" : "off");
             backend->set_option("num_texture_results", options.m_num_texture_results.c_str());
             backend->set_option("num_texture_spaces", "4");
+            backend->set_option("jit_warn_spectrum_conversion",
+                options.m_warn_spectrum_conv ? "on" : "off");
 
             // ----------------------------------------------------------------------------------------
 
@@ -491,7 +494,8 @@ options:
   --ft                          Fold ternary operators when used on distribution functions.
   --fb                          Fold boolean parameters.
   --fe                          Fold enum parameters.
-  --dian                        Disable ignoring anno::noinline() annotations.)";
+  --dian                        Disable ignoring anno::noinline() annotations.
+  --warn-spectrum-conv          Warn if a spectrum constructor is converted into RGB.)";
 
 
     s << std::endl;
@@ -521,6 +525,8 @@ bool Options::parse(int argc, char* argv[])
                 m_fold_all_enum_parameters = true;
             else if (arg == "--dian")
                 m_ignore_noinline = false;
+            else if (arg == "--warn-spectrum-conv")
+                m_warn_spectrum_conv = true;
             else if (arg == "-p" || arg == "--mdl_path")
             {
                 if (i == argc - 1)

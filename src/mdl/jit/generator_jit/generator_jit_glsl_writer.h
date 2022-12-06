@@ -648,6 +648,9 @@ protected:
     /// GLSL does not have C-style type casts.
     static bool has_c_style_type_casts() { return false; }
 
+    /// Returns true if the double type exists in the current context.
+    bool has_double_type() const { return m_ctx.has_double_type(); }
+
     /// Check if the constant data is too big for the code itself and should be moved to
     /// an uniform buffer.
     ///

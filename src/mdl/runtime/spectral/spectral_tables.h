@@ -36,10 +36,10 @@ namespace mdl {
 namespace spectral {
 
 // CIE standard observer color matching functions (1931)
-static const unsigned int SPECTRAL_XYZ_RES = 81;
-static const float SPECTRAL_XYZ_LAMBDA_MIN = 380.000000f;
-static const float SPECTRAL_XYZ_LAMBDA_MAX = 780.000000f;
-static const float SPECTRAL_XYZ_LAMBDA_STEP = 5.0f;
+constexpr unsigned int SPECTRAL_XYZ_RES = 81;
+constexpr float SPECTRAL_XYZ_LAMBDA_MIN = 380.000000f;
+constexpr float SPECTRAL_XYZ_LAMBDA_MAX = 780.000000f;
+constexpr float SPECTRAL_XYZ_LAMBDA_STEP = 5.0f;
 extern const float SPECTRAL_XYZ1931_X[];
 extern const float SPECTRAL_XYZ1931_Y[];
 extern const float SPECTRAL_XYZ1931_Z[];

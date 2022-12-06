@@ -247,8 +247,8 @@ namespace mi { namespace examples { namespace dxr
         bool m_toggle_fullscreen;
 
         Example_dxr_gui_mode m_gui_mode;
-        Gui_performance_overlay* m_main_window_performance_overlay;
-        Info_overlay* m_info_overlay;
+        std::unique_ptr<Gui_performance_overlay> m_main_window_performance_overlay;
+        std::unique_ptr<Info_overlay> m_info_overlay;
     };
 
 }}} // mi::examples::mdl_d3d12

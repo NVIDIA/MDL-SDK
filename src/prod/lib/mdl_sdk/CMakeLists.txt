@@ -42,11 +42,16 @@ create_from_base_preset(
     TYPE SHARED
     SOURCES ${PROJECT_SOURCES}
     EMBED_RC "mdl_sdk.rc"
+    OUTPUT_NAME "mdl_sdk"
     )
+
+target_include_directories(${PROJECT_NAME}
+    PUBLIC
+        $<INSTALL_INTERFACE:include>
+)
 
 # customize name
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "lib")
-set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "mdl_sdk")
 
 if(MACOSX)
     set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".so") # corresponding to the binary release
@@ -104,12 +109,23 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         ${LINKER_NO_WHOLE_ARCHIVE}
     )
 
+# on Linux/MacOS set rpath for plugins
+if(NOT WINDOWS)
+
+        target_add_rpath(TARGET ${PROJECT_NAME}
+            RPATHS
+                ${CMAKE_BINARY_DIR}/src/shaders/plugin/dds/${CMAKE_BUILD_TYPE}
+                ${CMAKE_BINARY_DIR}/src/shaders/plugin/freeimage/${CMAKE_BUILD_TYPE}
+                ${CMAKE_BINARY_DIR}/src/shaders/plugin/openimageio/${CMAKE_BUILD_TYPE}
+            )
+
+endif()
+
 # -------------------------------------------------------------------------------------------------
 # Create installation rules to copy the build directory
 # -------------------------------------------------------------------------------------------------
 add_target_install(
     TARGET ${PROJECT_NAME}
-    DESTINATION "lib"
     )
 
 # -------------------------------------------------------------------------------------------------

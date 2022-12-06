@@ -427,8 +427,12 @@ class CNSLimitGraph
     /// Less operator for Backedges.
     struct EdgeLess {
         bool operator()(BackEdge const &a, BackEdge const &b) const {
-            if (a.src < b.src) return true;
-            if (a.src == b.src) return a.dst < b.dst;
+            if (a.src < b.src) {
+                return true;
+            }
+            if (a.src == b.src) {
+                return a.dst < b.dst;
+            }
             return false;
         }
     };

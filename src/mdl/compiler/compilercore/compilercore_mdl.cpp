@@ -1119,12 +1119,12 @@ Module *MDL::load_module(
 
     parser.set_imdl(get_allocator(), this);
 
-    // experimental feature require next MDL version either
     bool enable_mdl_next =
-        get_compiler_bool_option(ctx, option_mdl_next, false) ||
+        get_compiler_bool_option(ctx, option_mdl_next, false);
+    bool enable_experimental =
         get_compiler_bool_option(ctx, option_experimental_features, false);
 
-    parser.set_module(mod, enable_mdl_next);
+    parser.set_module(mod, enable_mdl_next, enable_experimental);
     parser.Parse();
 
     mi::base::Handle<IArchive_input_stream> iarchvice_s(s->get_interface<IArchive_input_stream>());
@@ -1501,7 +1501,8 @@ IExpression const *MDL::parse_expression(
     int           start_line,
     int           start_col,
     Module        *module,
-    bool          enable_experimental_features,
+    bool          enable_mdl_next,
+    bool          enable_experimental,
     Messages_impl &msgs)
 {
     mi::base::Handle<IInput_stream> input(m_builder.create<Buffer_Input_stream>(
@@ -1513,7 +1514,7 @@ IExpression const *MDL::parse_expression(
 
     parser.set_imdl(get_allocator(), this);
 
-    parser.set_module(module, enable_experimental_features);
+    parser.set_module(module, enable_mdl_next, enable_experimental);
     return parser.parse_expression();
 }
 
@@ -2270,7 +2271,12 @@ bool MDL::remove_foreign_module_translator(
 }
 
 // Check if the compiler supports a requested MDL version.
-bool MDL::check_version(int major, int minor, MDL_version &version, bool enable_mdl_next)
+bool MDL::check_version(
+    int         major,
+    int         minor,
+    MDL_version &version,
+    bool        enable_mdl_next,
+    bool        enable_experimental)
 {
     version = MDL_DEFAULT_VERSION;
 
@@ -2311,6 +2317,10 @@ bool MDL::check_version(int major, int minor, MDL_version &version, bool enable_
             // unsupported yet
             return false;
         }
+    } if (major == 99 && minor == 99 && enable_experimental) {
+        // experimental supported
+        version = MDL_VERSION_EXP;
+        return true;
     }
     return false;
 }

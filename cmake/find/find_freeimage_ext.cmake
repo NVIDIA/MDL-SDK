@@ -86,6 +86,11 @@ function(FIND_FREEIMAGE_EXT)
                     ${FREEIMAGE_DIR}/lib/${ARCH_NAME}-${OS_NAME}-gnu
                     /usr/lib/${ARCH_NAME}-${OS_NAME}-gnu
                 )
+                if("${ARCH_NAME}" STREQUAL "x86-64")
+                    set(_HINTS ${_HINTS}
+                        /usr/lib/x86_64-${OS_NAME}-gnu
+                    )
+                endif()
             elseif(MACOSX)
                 set(_HINTS ${_HINTS}
                     ${FREEIMAGE_DIR}/lib-${OS_NAME}-${ARCH_NAME}-clang900

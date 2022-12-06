@@ -52,7 +52,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
     class Mdl_sdk;
     enum class Mdl_resource_kind;
     struct Mdl_resource_assignment;
-    struct Mdl_resource_info;
+    struct Mdl_texture_info;
+    struct Mdl_light_profile_info;
+    struct Mdl_mbsdf_info;
     enum class Texture_dimension;
 
     // --------------------------------------------------------------------------------------------
@@ -96,6 +98,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
         void set_target_interface(
             Mdl_material_target* target,
             const Mdl_material_target_interface& target_data);
+
+        /// reset the target code to none.
+        void reset_target_interface();
 
         /// called by the Mdl_material_target after the target code was generated in order to
         /// allocate and update per material buffers for constants and textures.
@@ -208,8 +213,14 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// all material resources have views on the descriptor heap (all in one continuous block)
         Descriptor_heap_handle m_first_resource_heap_handle;    // first descriptor on the heap
 
-        /// Mapping from runtime resource IDs to actual resource views in the shader
-        Structured_buffer<Mdl_resource_info>* m_resource_infos;
+        /// Mapping from runtime texture IDs to actual resource views in the shader
+        Structured_buffer<Mdl_texture_info>* m_texture_infos;
+
+        /// Information needed during runtime for light profile resources
+        Structured_buffer<Mdl_light_profile_info>* m_light_profile_infos;
+
+        /// Information needed during runtime for bsdf measurement resources
+        Structured_buffer<Mdl_mbsdf_info>* m_mbsdf_infos;
 
         /// references to the resources used by the material
         /// resources are owned by the material library to avoid duplications

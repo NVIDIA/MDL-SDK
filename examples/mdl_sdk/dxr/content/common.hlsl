@@ -40,7 +40,7 @@ static const float M_PI =          3.14159265358979323846;
 static const float M_ONE_OVER_PI = 0.318309886183790671538;
 static const float DIRAC = -1.0f;
 
-SamplerState sampler_latlong : register(s1);
+SamplerState sampler_latlong : register(s3);
 
 cbuffer SceneConstants : register(b1)
 {

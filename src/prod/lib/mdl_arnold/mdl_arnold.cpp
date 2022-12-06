@@ -33,7 +33,8 @@ node_plugin_initialize
 node_plugin_cleanup
 {
     Mdl_sdk_interface* mdl_sdk = static_cast<Mdl_sdk_interface*>(plugin_data);
-    delete mdl_sdk;
+    if (mdl_sdk)
+        delete mdl_sdk;
 }
 
 namespace
@@ -350,6 +351,10 @@ bool load_material(AtNode* node, Mdl_sdk_interface& mdl_sdk)
     // otherwise, it's loaded already because of an other material in the scene
     if (!module)
     {
+        // enables (possible incomplete) features from upcoming MDL version
+        mdl_context->set_option("mdl_next", true);
+
+        // load the module
         mi::Sint32 load_res_code = mdl_sdk.get_impexp_api().load_module(
             &mdl_sdk.get_transaction(), mdl_module_name.c_str(), mdl_context.get());
 
@@ -943,6 +948,8 @@ node_initialize
 
     // get the sdk
     Mdl_sdk_interface& mdl_sdk = *static_cast<Mdl_sdk_interface*>(AiNodeGetPluginData(node));
+    if (mdl_sdk.get_sdk_state() != EMdl_sdk_state::loaded)
+        return;
 
     // load the specified material and compile it
     if (!load_material(node, mdl_sdk) || !compile_material(node, mdl_sdk))
@@ -960,6 +967,8 @@ node_update
 {
     MdlLocalNodeData *data = static_cast<MdlLocalNodeData*>(AiNodeGetLocalData(node));
     Mdl_sdk_interface& mdl_sdk = *static_cast<Mdl_sdk_interface*>(AiNodeGetPluginData(node));
+    if (mdl_sdk.get_sdk_state() != EMdl_sdk_state::loaded)
+        return;
 
     // check if the selected material changed
     auto deprecated_qualified_name = AiNodeGetStr(node, CONST_STRINGS::qualified_name);

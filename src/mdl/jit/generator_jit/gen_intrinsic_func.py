@@ -484,6 +484,12 @@ class SignatureParser:
 		elif name == "texture_tangent_v":
 			self.intrinsic_modes[name + signature] = "state::texture_tangent_v"
 			return True
+		elif name == "geometry_tangent_u":
+			self.intrinsic_modes[name + signature] = "state::geometry_tangent_u"
+			return True
+		elif name == "geometry_tangent_v":
+			self.intrinsic_modes[name + signature] = "state::geometry_tangent_v"
+			return True
 		elif name == "direction":
 			self.intrinsic_modes[name + signature] = "state::environment_set"
 			return True
@@ -3360,6 +3366,104 @@ class SignatureParser:
 			if (inst.get_return_derivs()) { // expand to dual
 				res = ctx.get_dual(res);
 			}
+			"""
+			self.format_code(f, code)
+
+		elif mode == "state::geometry_tangent_u":
+			code = """
+			// normal = state::geometry_normal()
+			// geom_tu = math::normalize(tangent_u - math::dot(tangent_u, normal) * normal);
+			llvm::Value *state = ctx.get_state_parameter();
+
+			llvm::Value *tu_args[3] = { state, a, NULL };
+			size_t len              = 2;
+
+			if (m_code_gen.target_uses_exception_state_parameter()) {
+				tu_args[1] = ctx.get_exc_state_parameter();
+				tu_args[2] = a;
+				++len;
+			}
+
+			mi::mdl::IDefinition const *gn_def = m_code_gen.find_stdlib_signature("::state", "geometry_normal()");
+			llvm::Function *gn_fkt = get_intrinsic_function(gn_def, /*return_derivs=*/ false);
+			llvm::Value *gn_args[] = { state };
+			llvm::Value *normal = call_rt_func(ctx, gn_fkt, gn_args);
+
+			mi::mdl::IDefinition const *tu_def = m_code_gen.find_stdlib_signature("::state", "texture_tangent_u(int)");
+			llvm::Function *tu_fkt = get_intrinsic_function(tu_def, /*return_derivs=*/ false);
+			llvm::Value *tangent_u = call_rt_func(ctx, tu_fkt, llvm::ArrayRef<llvm::Value *>(tu_args, len));
+
+			mi::mdl::IDefinition const *dot_def = m_code_gen.find_stdlib_signature("::math", "dot(float3,float3)");
+			llvm::Function *dot_fkt = get_intrinsic_function(dot_def, /*return_derivs=*/ false);
+			llvm::Value *dot_args[] = { tangent_u, normal };
+			llvm::Value *dot_res = call_rt_func(ctx, dot_fkt, dot_args);
+
+			llvm::Type *ret_tp = ctx_data->get_return_type();
+			llvm::Value *mul_res =  ctx.create_mul(ret_tp, dot_res, normal);
+			llvm::Value *sub_res =  ctx.create_sub(ret_tp, tangent_u, mul_res);
+
+			mi::mdl::IDefinition const *nz_def = m_code_gen.find_stdlib_signature("::math", "normalize(float3)");
+			llvm::Function *nz_fkt = get_intrinsic_function(nz_def, /*return_derivs=*/ false);
+			llvm::Value *nz_args[] = { sub_res };
+			res = call_rt_func(ctx, nz_fkt, nz_args);
+			"""
+			self.format_code(f, code)
+
+		elif mode == "state::geometry_tangent_v":
+			code = """
+			// normal = state::geometry_normal()
+			// geom_tv = math::normalize(tangent_v - math::dot(tangent_v, geom_tu) * geom_tu - math::dot(tangent_v, normal) * normal);
+			llvm::Value *state = ctx.get_state_parameter();
+
+			llvm::Value *tu_args[3] = { state, a, NULL };
+			size_t len              = 2;
+
+			if (m_code_gen.target_uses_exception_state_parameter()) {
+				tu_args[1] = ctx.get_exc_state_parameter();
+				tu_args[2] = a;
+				++len;
+			}
+
+			mi::mdl::IDefinition const *gn_def = m_code_gen.find_stdlib_signature("::state", "geometry_normal()");
+			llvm::Function *gn_fkt = get_intrinsic_function(gn_def, /*return_derivs=*/ false);
+			llvm::Value *gn_args[] = { state };
+			llvm::Value *normal = call_rt_func(ctx, gn_fkt, gn_args);
+
+			mi::mdl::IDefinition const *tu_def = m_code_gen.find_stdlib_signature("::state", "texture_tangent_u(int)");
+			llvm::Function *tu_fkt = get_intrinsic_function(tu_def, /*return_derivs=*/ false);
+			llvm::Value *tangent_u = call_rt_func(ctx, tu_fkt, llvm::ArrayRef<llvm::Value *>(tu_args, len));
+
+			mi::mdl::IDefinition const *dot_def = m_code_gen.find_stdlib_signature("::math", "dot(float3,float3)");
+			llvm::Function *dot_fkt = get_intrinsic_function(dot_def, /*return_derivs=*/ false);
+			llvm::Value *dot_args_u[] = { tangent_u, normal };
+			llvm::Value *dot_res_u = call_rt_func(ctx, dot_fkt, dot_args_u);
+
+			llvm::Type *ret_tp = ctx_data->get_return_type();
+			llvm::Value *mul_res_u =  ctx.create_mul(ret_tp, dot_res_u, normal);
+			llvm::Value *sub_res_u =  ctx.create_sub(ret_tp, tangent_u, mul_res_u);
+
+			mi::mdl::IDefinition const *nz_def = m_code_gen.find_stdlib_signature("::math", "normalize(float3)");
+			llvm::Function *nz_fkt = get_intrinsic_function(nz_def, /*return_derivs=*/ false);
+			llvm::Value *nz_args[] = { sub_res_u };
+			llvm::Value *geom_tu = call_rt_func(ctx, nz_fkt, nz_args);
+
+			mi::mdl::IDefinition const *tv_def = m_code_gen.find_stdlib_signature("::state", "texture_tangent_v(int)");
+			llvm::Function *tv_fkt = get_intrinsic_function(tv_def, /*return_derivs=*/ false);
+			llvm::Value *tangent_v = call_rt_func(ctx, tv_fkt, llvm::ArrayRef<llvm::Value *>(tu_args, len));
+
+			llvm::Value *dot_args_v[] = { tangent_v, normal };
+			llvm::Value *dot_res_v = call_rt_func(ctx, dot_fkt, dot_args_v);
+			llvm::Value *part_2 = ctx.create_mul(ret_tp, dot_res_v, normal);
+
+			llvm::Value *dot_args_tu[] = { tangent_v, geom_tu };
+			llvm::Value *dot_res_tu = call_rt_func(ctx, dot_fkt, dot_args_tu);
+			llvm::Value *part_1 = ctx.create_mul(ret_tp, dot_res_tu, geom_tu);
+
+			res = ctx.create_sub(ret_tp, tangent_v, part_1);
+			res = ctx.create_sub(ret_tp, res, part_2);
+
+			llvm::Value *nz_args_v[] = { res };
+			res = call_rt_func(ctx, nz_fkt, nz_args_v);
 			"""
 			self.format_code(f, code)
 

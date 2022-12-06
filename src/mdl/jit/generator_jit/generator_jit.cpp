@@ -338,6 +338,11 @@ static void fill_default_cg_options(
     options.add_binary_option(
         MDL_JIT_BINOPTION_LLVM_RENDERER_MODULE,
         "Link and optimize this user-specified LLVM renderer module with the generated code");
+
+    options.add_option(
+        MDL_JIT_WARN_SPECTRUM_CONVERSION,
+        "false",
+        "Warn if a spectrum color is converted into an RGB value");
 }
 
 // Constructor.
@@ -1131,7 +1136,9 @@ IGenerated_code_executable *Code_generator_jit::compile_into_switch_function_for
         size_t data_size = 0;
         unsigned char const *data = code_gen.get_ro_segment(data_size);
 
-        code->add_data_segment("RO", data, data_size);
+        if (data_size > 0) {
+            code->add_data_segment("RO", data, data_size);
+        }
 
         // copy the render state usage
         code->set_render_state_usage(code_gen.get_render_state_usage());
@@ -1372,7 +1379,9 @@ IGenerated_code_executable *Code_generator_jit::compile_into_llvm_ir(
         size_t data_size = 0;
         unsigned char const *data = code_gen.get_ro_segment(data_size);
 
-        code->add_data_segment("RO", data, data_size);
+        if (data_size > 0) {
+            code->add_data_segment("RO", data, data_size);
+        }
 
         // create the argument block layout if any arguments are captured
         if (code_gen.get_captured_arguments_llvm_type() != NULL) {
@@ -1616,7 +1625,9 @@ IGenerated_code_executable *Code_generator_jit::compile_distribution_function_gp
         size_t data_size = 0;
         unsigned char const *data = code_gen.get_ro_segment(data_size);
 
-        code->add_data_segment("RO", data, data_size);
+        if (data_size > 0) {
+            code->add_data_segment("RO", data, data_size);
+        }
 
         // copy the render state usage
         code->set_render_state_usage(code_gen.get_render_state_usage());
@@ -1650,7 +1661,9 @@ void Code_generator_jit::fill_code_from_cache(
 
     code->access_src_code() = string(entry->code, entry->code_size, alloc);
 
-    code->add_data_segment("RO", (unsigned char *)entry->const_seg, entry->const_seg_size);
+    if (entry->const_seg_size > 0) {
+        code->add_data_segment("RO", (unsigned char *)entry->const_seg, entry->const_seg_size);
+    }
 
     // only add a captured arguments layout, if it's non-empty
     if (entry->arg_layout_size != 0) {
@@ -1971,7 +1984,9 @@ IGenerated_code_executable *Code_generator_jit::compile_into_source(
         // copy the read-only segment
         size_t data_size = 0;
         unsigned char const *data = code_gen.get_ro_segment(data_size);
-        code->add_data_segment("RO", data, data_size);
+        if (data_size > 0) {
+            code->add_data_segment("RO", data, data_size);
+        }
 
         // copy the render state usage
         code->set_render_state_usage(code_gen.get_render_state_usage());

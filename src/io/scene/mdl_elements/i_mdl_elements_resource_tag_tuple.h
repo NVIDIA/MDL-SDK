@@ -68,7 +68,7 @@ public:
     Resource_tag_tuple( const mi::mdl::Resource_tag_tuple& t)
       : m_kind( t.m_kind),
         m_mdl_file_path( t.m_url),
-        m_selector(t.m_selector),
+        m_selector( t.m_selector),
         m_tag( t.m_tag)
      {
      }

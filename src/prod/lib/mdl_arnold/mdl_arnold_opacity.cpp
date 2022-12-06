@@ -28,6 +28,7 @@
 
 #include "mdl_arnold_bsdf.h"
 #include <mi/mdl_sdk.h>
+#include <cassert>
 
 float MdlOpacityCreate(const AtShaderGlobals* sg, const MdlShaderNodeDataCPU* shader_data)
 {
@@ -41,12 +42,13 @@ float MdlOpacityCreate(const AtShaderGlobals* sg, const MdlShaderNodeDataCPU* sh
 
     // call the generated code
     float opacity = 1.0f;
-    shader_data->target_code->execute(
+    mi::Sint32 res = shader_data->target_code->execute(
         shader_data->cutout_opacity_function_index,
         reinterpret_cast<mi::neuraylib::Shading_state_material&>(ext_state.state),
         /*texture_handler=*/ nullptr,
         /*arg_block_data=*/ nullptr,
         &opacity);
+    assert(res == 0 && "execute opacity failed");
 
     return opacity;
 }

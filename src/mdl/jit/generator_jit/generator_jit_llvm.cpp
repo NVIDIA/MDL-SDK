@@ -82,6 +82,7 @@
 #include "mdl/compiler/compilercore/compilercore_bitset.h"
 #include "mdl/compiler/compilercore/compilercore_cc_conf.h"
 #include "mdl/compiler/compilercore/compilercore_errors.h"
+#include "mdl/compiler/compilercore/compilercore_positions.h"
 #include "mdl/compiler/compilercore/compilercore_tools.h"
 #include "mdl/compiler/compilercore/compilercore_visitor.h"
 #include "mdl/codegenerators/generator_dag/generator_dag_derivatives.h"
@@ -103,6 +104,8 @@ namespace mdl {
 // statics
 Jitted_code *Jitted_code::m_instance = NULL;
 mi::base::Lock Jitted_code::m_singleton_lock;
+
+static Position_impl zero(0, 0, 0, 0);
 
 namespace {
 
@@ -493,12 +496,12 @@ Exc_location::Exc_location(
     LLVM_code_generator const &code_gen,
     mi::mdl::Position const   *pos)
 : m_mod(NULL)
-, m_line(0)
+, m_pos(NULL)
 {
     if (pos != NULL) {
         mi::mdl::IModule const *mod = code_gen.tos_module();
         m_mod  = mod;
-        m_line = pos->get_start_line();
+        m_pos  = pos;
     }
 }
 
@@ -1224,6 +1227,7 @@ LLVM_code_generator::LLVM_code_generator(
 , m_enable_full_debug(enable_debug)
 , m_enable_type_debug(target_is_structured_language(target_lang))
 , m_exported_funcs_are_entries(false)
+, m_state_functions_no_bounds_exception(true)
 , m_bounds_check_exception_disabled(
     target_lang != ICode_generator::TL_NATIVE ||
     options.get_bool_option(MDL_JIT_OPTION_DISABLE_EXCEPTIONS))
@@ -1260,6 +1264,7 @@ LLVM_code_generator::LLVM_code_generator(
 , m_libbsdf_template_funcs(get_allocator())
 , m_enable_auxiliary(options.get_bool_option(MDL_JIT_OPTION_ENABLE_AUXILIARY))
 , m_enable_pdf(options.get_bool_option(MDL_JIT_OPTION_ENABLE_PDF))
+, m_warn_spectrum_conversion(options.get_bool_option(MDL_JIT_WARN_SPECTRUM_CONVERSION))
 , m_module_lambda_funcs(get_allocator())
 , m_module_lambda_index_map(get_allocator())
 , m_lambda_results_struct_type(NULL)
@@ -6985,6 +6990,17 @@ Expression_result LLVM_code_generator::translate_call(
 
     case mi::mdl::IDefinition::DS_COLOR_SPECTRUM_CONSTRUCTOR:
         // translate to rgb color, fall into the default case
+        if (m_warn_spectrum_conversion) {
+            // but warn because a spectrum is converted
+            mi::mdl::Position const *pos = call_expr->get_position();
+            if (pos == NULL) {
+                pos = &zero;
+            }
+            warning(
+                SPECTRUM_CONVERTED_TO_RGB,
+                Exc_location(*this, pos),
+                Error_params(get_allocator()));
+        }
         break;
 
     case mi::mdl::IDefinition::DS_INTRINSIC_MATH_EMISSION_COLOR:
@@ -6994,6 +7010,16 @@ Expression_result LLVM_code_generator::translate_call(
                 *this, ctx, 0, return_derivs);  // for DAG return_derivs is ignored
             res.ensure_deriv_result(ctx, return_derivs);
             return res;
+        } else if (m_warn_spectrum_conversion) {
+            // warn because a spectrum is converted
+            mi::mdl::Position const *pos = call_expr->get_position();
+            if (pos == NULL) {
+                pos = &zero;
+            }
+            warning(
+                SPECTRUM_CONVERTED_TO_RGB,
+                Exc_location(*this, pos),
+                Error_params(get_allocator()));
         }
         // else fall into the default case
         break;
@@ -9674,7 +9700,8 @@ void LLVM_code_generator::ptx_compile(
 
     // LLVM supports only "known" processors, so ensure that we do not pass an unsupported one
     unsigned sm_version = m_sm_version;
-    if (sm_version == 86)
+    if (sm_version > 90)  sm_version = 90;
+    else if (sm_version == 86 || sm_version == 87 || sm_version == 89)
         /* ok */;
     else if (sm_version > 80)  sm_version = 80;
     else if (sm_version == 75)
@@ -9973,14 +10000,26 @@ size_t LLVM_code_generator::get_error_message_count()
     return m_messages.get_error_message_count();
 }
 
-// Add a compiler error message to the messages.
+// Add a JIT backend warning message to the messages.
+void LLVM_code_generator::warning(int code, Exc_location const &loc, Error_params const &params)
+{
+    char const *fname = loc.get_module()->get_filename();
+    size_t mod_id = 0;
+    if (fname != NULL) {
+        mod_id = m_messages.register_fname(fname);
+    }
+    string msg(m_messages.format_msg(code, MESSAGE_CLASS, params));
+    m_messages.add_warning_message(code, MESSAGE_CLASS, mod_id, loc.get_position(), msg.c_str());
+}
+
+// Add a JIT backend error message to the messages.
 void LLVM_code_generator::error(int code, Error_params const &params)
 {
     string msg(m_messages.format_msg(code, MESSAGE_CLASS, params));
     m_messages.add_error_message(code, MESSAGE_CLASS, 0, NULL, msg.c_str());
 }
 
-/// Add a compiler error message to the messages.
+// Add a JIT backend error message to the messages.
 void LLVM_code_generator::error(int code, char const *str_param)
 {
     error(code, Error_params(get_allocator()).add(str_param));

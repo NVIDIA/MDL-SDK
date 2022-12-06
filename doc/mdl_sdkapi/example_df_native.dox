@@ -243,7 +243,7 @@ For detailed instructions, please refer to the \link mi_neuray_getting_started G
 <div align="right">
     [\link mi_neuray_example_df_cuda Previous\endlink]
     [\link mi_neuray_examples Up\endlink]
-    [\link mi_neuray_example_vulkan Next\endlink]
+    [\link mi_neuray_example_df_vulkan Next\endlink]
 </div>
 
 */

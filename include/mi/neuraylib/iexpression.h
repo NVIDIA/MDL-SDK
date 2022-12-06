@@ -58,6 +58,7 @@ enum Mdl_version {
     MDL_VERSION_1_6,                       ///< MDL version 1.6
     MDL_VERSION_1_7,                       ///< MDL version 1.7
     MDL_VERSION_1_8,                       ///< MDL version 1.8
+    MDL_VERSION_EXP,                       ///< MDL experimental features.
     MDL_VERSION_LATEST = MDL_VERSION_1_8,  ///< Latest MDL version
     MDL_VERSION_INVALID = 0xffffffffU,     ///< Invalid MDL version
     MDL_VERSION_FORCE_32_BIT = 0xffffffffU // Undocumented, for alignment only
