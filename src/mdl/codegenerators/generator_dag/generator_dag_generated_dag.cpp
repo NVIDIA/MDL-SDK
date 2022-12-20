@@ -4023,13 +4023,13 @@ IGenerated_code_dag::IMaterial_instance *Generated_code_dag::create_material_ins
     return result;
 }
 
-// Get the number of exported types.
+// Get the number of (exported and non-exported) user defined types of this compiled module.
 size_t Generated_code_dag::get_type_count() const
 {
     return m_user_types.size();
 }
 
-// Get the name of the type at index.
+// Get the name of the user defined type at index.
 char const *Generated_code_dag::get_type_name(
     size_t index) const
 {
@@ -4039,7 +4039,7 @@ char const *Generated_code_dag::get_type_name(
     return NULL;
 }
 
-// Get the original name of the type at index  if the type name is an alias..
+// Get the original name of the user defined type at index  if the type name is an alias.
 char const *Generated_code_dag::get_original_type_name(
     size_t index) const
 {
@@ -4049,7 +4049,7 @@ char const *Generated_code_dag::get_original_type_name(
     return NULL;
 }
 
-// Get the user type at index.
+// Get the user defined type at index.
 IType const *Generated_code_dag::get_type(
     size_t index) const
 {
@@ -4059,7 +4059,7 @@ IType const *Generated_code_dag::get_type(
     return NULL;
 }
 
-// Returns true if the type at index is exported.
+// Returns true if the user defined type at index is exported.
 bool Generated_code_dag::is_type_exported(
     size_t index) const
 {
@@ -4069,7 +4069,7 @@ bool Generated_code_dag::is_type_exported(
     return false;
 }
 
-// Get the number of annotations of the type at index.
+// Get the number of annotations of the user defined type at index.
 size_t Generated_code_dag::get_type_annotation_count(
     size_t index) const
 {
@@ -4079,7 +4079,7 @@ size_t Generated_code_dag::get_type_annotation_count(
     return 0;
 }
 
-// Get the annotation at annotation_index of the type at type_index.
+// Get the annotation at annotation_index of the user defined type at type_index.
 DAG_node const *Generated_code_dag::get_type_annotation(
     size_t type_index,
     size_t annotation_index) const
@@ -4092,7 +4092,7 @@ DAG_node const *Generated_code_dag::get_type_annotation(
     return NULL;
 }
 
-// Get the number of type sub-entities (fields or enum constants).
+// Get the number of user defined type sub-entities (fields or enum constants).
 size_t Generated_code_dag::get_type_sub_entity_count(
     size_t type_index) const
 {
@@ -4102,7 +4102,7 @@ size_t Generated_code_dag::get_type_sub_entity_count(
     return 0;
 }
 
-// Get the number of type sub-entities (fields or enum constants).
+// Get the number of user defined type sub-entities (fields or enum constants).
 char const *Generated_code_dag::get_type_sub_entity_name(
     size_t type_index,
     size_t entity_index) const
@@ -4152,7 +4152,7 @@ char const *Generated_code_dag::get_type_sub_entity_name(
     return NULL;
 }
 
-// Get the type of a type sub-entity (field or enum constant).
+// Get the type of an user defined type sub-entity (field or enum constant).
 IType const *Generated_code_dag::get_type_sub_entity_type(
     size_t type_index,
     size_t entity_index) const
@@ -4189,7 +4189,8 @@ IType const *Generated_code_dag::get_type_sub_entity_type(
     return NULL;
 }
 
-// Get the number of annotations of a type sub-entity (field or enum constant) at index.
+// Get the number of annotations of an user defined type sub-entity
+// (field or enum constant) at index.
 size_t Generated_code_dag::get_type_sub_entity_annotation_count(
     size_t type_index,
     size_t entity_index) const
@@ -4202,7 +4203,8 @@ size_t Generated_code_dag::get_type_sub_entity_annotation_count(
     return 0;
 }
 
-// Get the annotation at annotation_index of the type sub-entity at (type_index, entity_index).
+// Get the annotation at annotation_index of the user defined type sub-entity at
+// (type_index, entity_index).
 DAG_node const *Generated_code_dag::get_type_sub_entity_annotation(
     size_t type_index,
     size_t entity_index,

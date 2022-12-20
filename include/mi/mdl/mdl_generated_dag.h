@@ -1251,45 +1251,45 @@ public:
         size_t     index,
         Error_code *error_code = NULL) const = 0;
 
-    /// Get the number of exported user types.
+    /// Get the number of (exported and non-exported) user defined types of this compiled module.
     virtual size_t get_type_count() const = 0;
 
-    /// Get the name of the type at index.
+    /// Get the name of the user type at index.
     ///
     /// \param index  The index of the type.
     /// \returns      The name of the type.
     virtual char const *get_type_name(
         size_t index) const = 0;
 
-    /// Get the original name of the type at index if the type is an alias.
+    /// Get the original name of the user defined type at index if the type is an alias.
     ///
     /// \param index  The index of the type.
     /// \returns      The original name of the type or NULL.
     virtual char const *get_original_type_name(
         size_t index) const = 0;
 
-    /// Get the user type at index.
+    /// Get the user defined type at index.
     ///
     /// \param index  The index of the type.
     /// \returns      The type.
     virtual IType const *get_type(
         size_t index) const = 0;
 
-    /// Returns true if the type at index is exported.
+    /// Returns true if the user defined type at index is exported.
     ///
     /// \param index  The index of the type.
     /// \returns      true for exported types.
     virtual bool is_type_exported(
         size_t index) const = 0;
 
-    /// Get the number of annotations of the type at index.
+    /// Get the number of annotations of the user defined type at index.
     ///
     /// \param index  The index of the type.
     /// \return       The number of annotations of the type.
     virtual size_t get_type_annotation_count(
         size_t index) const = 0;
 
-    /// Get the annotation at annotation_index of the type at type_index.
+    /// Get the annotation at annotation_index of the user defined type at type_index.
     ///
     /// \param type_index          The index of the type.
     /// \param annotation_index    The index of the annotation.
@@ -1298,14 +1298,14 @@ public:
         size_t type_index,
         size_t annotation_index) const = 0;
 
-    /// Get the number of type sub-entities (fields or enum constants).
+    /// Get the number of user defined type sub-entities (fields or enum constants).
     ///
     /// \param type_index          The index of the type.
     /// \returns                   The number of sub entities.
     virtual size_t get_type_sub_entity_count(
         size_t type_index) const = 0;
 
-    /// Get the name of a type sub-entity (field or enum constant).
+    /// Get the name of an user defined type sub-entity (field or enum constant).
     ///
     /// \param type_index          The index of the type.
     /// \param entity_index        The index of the sub entity.
@@ -1314,7 +1314,7 @@ public:
         size_t type_index,
         size_t entity_index) const = 0;
 
-    /// Get the type of a type sub-entity (field or enum constant).
+    /// Get the type of an user defined type sub-entity (field or enum constant).
     ///
     /// \param type_index          The index of the type.
     /// \param entity_index        The index of the sub entity.
@@ -1323,7 +1323,8 @@ public:
         size_t type_index,
         size_t entity_index) const = 0;
 
-    /// Get the number of annotations of a type sub-entity (field or enum constant) at index.
+    /// Get the number of annotations of an user defined type sub-entity
+    /// (field or enum constant) at index.
     ///
     /// \param type_index          The index of the type.
     /// \param entity_index        The index of the sub entity.
@@ -1332,7 +1333,8 @@ public:
         size_t type_index,
         size_t entity_index) const = 0;
 
-    /// Get the annotation at annotation_index of the type sub-entity at (type_index, entity_index).
+    /// Get the annotation at annotation_index of the user defined type sub-entity at
+    /// (type_index, entity_index).
     ///
     /// \param type_index          The index of the type.
     /// \param entity_index        The index of the sub entity.

@@ -1,9 +1,24 @@
 Change Log
 ==========
-MDL SDK 2022.1 (363600.1420): 05 Dec 2022
+MDL SDK 2022.1.1 (363600.1657): 14 Dec 2022
 -----------------------------------------------
 
-ABI compatible with the MDL SDK 2022.1 (363600.1420) binary release
+ABI compatible with the MDL SDK 2022.1.1 (363600.1657) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+    - Fixed a memory leak when copying canvases (regression since MDL SDK 2022).
+    - Restored compatibility of `base::perlin_noise_bump_texture()`,
+      `base::worley_noise_bump_texture()`, and
+      `base::flow_noise_bump_texture()` with previous versions (differences were
+      noticeable, in particular with strong bump factors).
+
+MDL SDK 2022.1 (3636300.1420): 05 Dec 2022
+------------------------------------------
+
+ABI compatible with the MDL SDK 2022.1 (3636300.1420) binary release
 (see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
 
 **Added and Changed Features**
@@ -21,8 +36,6 @@ ABI compatible with the MDL SDK 2022.1 (363600.1420) binary release
       If set to false, the module prefix is avoided if resources are exported as part of an
       exported MDL module.
       While the correct behavior is debatable, it restores the historical behavior of FreeImage.
-    - Embeded RPATH into the examples and libmdl_sdk.so itself. It is no longer necessary to
-      explicitly set the `LD_LIBRARY_PATH` for the library and image plugins.
     - Python Bindings
         - Added high-level Python binding module pymdl.py.
         - Generated .sh and .bat scripts to run Python examples without manually setting
@@ -120,7 +133,7 @@ ABI compatible with the MDL SDK 2022.0.1 (359000.3383) binary release
     - Fixed error message regarding wrong array type issued two times.
     - Speed up material compilation: Instantiation of a material instance is now faster due to
       less database queries and lesser reference counted operations.
-    - Fixed module inliner handling of relative resource pathes.
+    - Fixed module inliner handling of relative resource paths.
     - Fixed libbsdf handling of Fresnel factors.
 
 - MDL SDK examples

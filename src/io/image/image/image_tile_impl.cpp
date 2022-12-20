@@ -43,7 +43,8 @@ namespace MI {
 namespace IMAGE {
 
 template <Pixel_type T>
-Tile_impl<T>::Tile_impl( mi::Uint32 width, mi::Uint32 height) : m_data(static_cast<mi::Size>(width) * height * s_components_per_pixel)
+Tile_impl<T>::Tile_impl( mi::Uint32 width, mi::Uint32 height)
+  : m_data( static_cast<mi::Size>( width) * height * s_components_per_pixel)
 {
     // check incorrect arguments
     ASSERT( M_IMAGE, width > 0 && height > 0);
@@ -53,12 +54,15 @@ Tile_impl<T>::Tile_impl( mi::Uint32 width, mi::Uint32 height) : m_data(static_ca
 }
 
 template <Pixel_type T>
-Tile_impl<T>::Tile_impl( const mi::neuraylib::ITile* other) : m_data((typename Pixel_type_traits<T>::Base_type*)other->get_data(), (typename Pixel_type_traits<T>::Base_type*)other->get_data() + (size_t)other->get_resolution_x() * other->get_resolution_y() * s_components_per_pixel)
+Tile_impl<T>::Tile_impl( const mi::neuraylib::ITile* other)
+  : m_data( reinterpret_cast<const typename Pixel_type_traits<T>::Base_type*>( other->get_data()),
+            reinterpret_cast<const typename Pixel_type_traits<T>::Base_type*>( other->get_data())
+                + static_cast<mi::Size>( other->get_resolution_x()) * other->get_resolution_y() * s_components_per_pixel)
 {
     m_width = other->get_resolution_x();
     m_height = other->get_resolution_y();
 
-	// check incorrect arguments
+    // check incorrect arguments
     ASSERT( M_IMAGE, m_width > 0 && m_height > 0);
 }
 

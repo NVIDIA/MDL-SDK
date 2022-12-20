@@ -87,15 +87,15 @@ Canvas_impl::Canvas_impl(
         m_tiles[i] = create_tile( m_pixel_type, m_width, m_height);
 }
 
-Canvas_impl::Canvas_impl(const mi::neuraylib::ICanvas* other)
+Canvas_impl::Canvas_impl( const mi::neuraylib::ICanvas* other)
 {
-    const Pixel_type pixel_type = convert_pixel_type_string_to_enum(other->get_type());
+    const Pixel_type pixel_type = convert_pixel_type_string_to_enum( other->get_type());
     const mi::Uint32 width = other->get_resolution_x();
     const mi::Uint32 height = other->get_resolution_y();
     const mi::Uint32 layers = other->get_layers_size();
     const mi::Float32 gamma = other->get_gamma();
 
-    mi::base::Handle<const ICanvas> canvas_internal(other->get_interface<ICanvas>());
+    mi::base::Handle<const ICanvas> canvas_internal( other->get_interface<ICanvas>());
     const bool is_cubemap = canvas_internal && canvas_internal->get_is_cubemap();
 
     // check incorrect arguments
@@ -113,8 +113,10 @@ Canvas_impl::Canvas_impl(const mi::neuraylib::ICanvas* other)
     m_gamma         = gamma == 0.0f ? get_default_gamma( m_pixel_type) : gamma;
 
     m_tiles.resize( m_nr_of_layers);
-    for( mi::Uint32 i = 0; i < m_nr_of_layers; ++i)
-        m_tiles[i] = copy_tile( other->get_tile(i));
+    for( mi::Uint32 i = 0; i < m_nr_of_layers; ++i) {
+        mi::base::Handle<const mi::neuraylib::ITile> tile( other->get_tile( i));
+        m_tiles[i] = copy_tile( tile.get());
+    }
 }
 
 Canvas_impl::Canvas_impl(

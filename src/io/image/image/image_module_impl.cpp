@@ -371,6 +371,7 @@ mi::neuraylib::ICanvas* Image_module_impl::copy_canvas( const mi::neuraylib::ICa
     const Pixel_type pixel_type = convert_pixel_type_string_to_enum( other->get_type());
     if( pixel_type == PT_UNDEF)
         return nullptr;
+
     const mi::Uint32 width  = other->get_resolution_x();
     const mi::Uint32 height = other->get_resolution_y();
     const mi::Uint32 layers = other->get_layers_size();

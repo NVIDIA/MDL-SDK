@@ -3982,7 +3982,7 @@ float3 apply_noise_modifications_deriv(
     if(apply_marble)
     {
         // Classic Perlin marble function
-        float[2] sc = math::sincos(math::cos(position + sn*5.0f)); //!! 5.0f = magic
+        float[2] sc = math::sincos(position + sn*5.0f); //!! 5.0f = magic
         sn = sc[1];
         deriv = sc[0] * float3(deriv.x*-5.0f-1.0f, deriv.y*-5.0f, deriv.z*-5.0f);
     }
@@ -4004,7 +4004,7 @@ float3 apply_noise_modifications_deriv(
         float tmp = 1.0f - sn;
         float tmp2 = tmp*tmp;          // ^2
         float tmp4 = tmp2*tmp2;        // ^4
-    float tmp16 = tmp4*tmp4;       // ^8
+        float tmp16 = tmp4*tmp4;       // ^8
         tmp16 *= tmp16;                // ^16
         deriv *= 1.0f - 20.0f*tmp16*tmp2*tmp; // ^19
         sn += tmp16*tmp4;              // ^20
@@ -4223,10 +4223,10 @@ export float3 perlin_noise_bump_texture(
         noise_threshold_low,
         noise_bands);
 
-    float bump_factor = -0.065f * factor; // original code used 0.1 as magic constant for delta, obtain same magnitude
+    float bump_factor = -0.1f * factor; // original code used 0.1 as magic constant for delta, obtain same magnitude
 
     return math::normalize(
-        normal * (math::abs(deriv.z) * bump_factor + 1.0f) +
+        normal * (math::abs(deriv.z * bump_factor) + 1.0f) +
         uvw.tangent_u * (deriv.x * bump_factor)  +
         uvw.tangent_v * (deriv.y * bump_factor));
 }
@@ -4335,53 +4335,53 @@ worley_return_deriv worley_noise_deriv(float3 pos, float jitter, int metric, flo
 
                 float3 deriv_tmp;
                 float d_tmp = (edge == 0.0f) ? f1f2.y : 2.0f;
-        if(dist < d_tmp)
-        {
-            if((metric == 0 /*TextureNoise_WorleyMetric_Euclidean*/))
-            deriv_tmp = -2.0f*diff;
-            else //!! opt.?
-            {
-            bool manhattan = (metric == 1 /*TextureNoise_WorleyMetric_Manhattan*/);
-            float3 diff_abs;
-            if(!manhattan)
-            {
-                deriv_tmp = float3(0.f,0.f,0.f);
-                diff_abs = math::abs(diff);
-            }
+                if(dist < d_tmp)
+                {
+                    if((metric == 0 /*TextureNoise_WorleyMetric_Euclidean*/))
+                        deriv_tmp = -2.0f*diff;
+                    else //!! opt.?
+                    {
+                        bool manhattan = (metric == 1 /*TextureNoise_WorleyMetric_Manhattan*/);
+                        float3 diff_abs;
+                        if(!manhattan)
+                        {
+                            deriv_tmp = float3(0.f,0.f,0.f);
+                            diff_abs = math::abs(diff);
+                        }
 
-            if(manhattan || ((diff_abs.x > diff_abs.y) && (diff_abs.x > diff_abs.z)))
-                deriv_tmp.x = (diff.x < 0.f) ? 1.0f : -1.0f;
-            if(manhattan || ((diff_abs.y > diff_abs.x) && (diff_abs.y > diff_abs.z)))
-                deriv_tmp.y = (diff.y < 0.f) ? 1.0f : -1.0f;
-            if(manhattan || ((diff_abs.z > diff_abs.x) && (diff_abs.z > diff_abs.y)))
-                deriv_tmp.z = (diff.z < 0.f) ? 1.0f : -1.0f;
-            }
-        }
+                        if(manhattan || ((diff_abs.x > diff_abs.y) && (diff_abs.x > diff_abs.z)))
+                            deriv_tmp.x = (diff.x < 0.f) ? 1.0f : -1.0f;
+                        if(manhattan || ((diff_abs.y > diff_abs.x) && (diff_abs.y > diff_abs.z)))
+                            deriv_tmp.y = (diff.y < 0.f) ? 1.0f : -1.0f;
+                        if(manhattan || ((diff_abs.z > diff_abs.x) && (diff_abs.z > diff_abs.y)))
+                            deriv_tmp.z = (diff.z < 0.f) ? 1.0f : -1.0f;
+                    }
+                }
 
-        if(edge == 0.0f)
-        {
-            if(dist < f1f2.x) {
-            f1f2.y = f1f2.x; nearest_pos_1 = nearest_pos_0; deriv_1 = deriv_0;
-            f1f2.x = dist;   nearest_pos_0 = localpos;      deriv_0 = deriv_tmp;
-            } else if(dist < f1f2.y) {
-            f1f2.y = dist;   nearest_pos_1 = localpos;      deriv_1 = deriv_tmp;
-            }
-        } else if(dist < 2.0f)
-        {
-            float sd = math::sqrt(dist);
-            deriv_tmp *= 1.0606601717798212866012665431573f*sd-1.5f; //sqrt(0.5)*3/2
-            float w = 1.0f-dist*(1.5f-0.70710678118654752440084436210485f*sd); //sqrt(0.5)
+                if(edge == 0.0f)
+                {
+                    if(dist < f1f2.x) {
+                        f1f2.y = f1f2.x; nearest_pos_1 = nearest_pos_0; deriv_1 = deriv_0;
+                        f1f2.x = dist;   nearest_pos_0 = localpos;      deriv_0 = deriv_tmp;
+                    } else if(dist < f1f2.y) {
+                        f1f2.y = dist;   nearest_pos_1 = localpos;      deriv_1 = deriv_tmp;
+                    }
+                } else if(dist < 2.0f)
+                {
+                    float sd = math::sqrt(dist);
+                    deriv_tmp *= 1.0606601717798212866012665431573f*sd-1.5f; //sqrt(0.5)*3/2
+                    float w = 1.0f-dist*(1.5f-0.70710678118654752440084436210485f*sd); //sqrt(0.5)
                     w = math::max(w, 0.0f); // w should be >= 0.0f, but need to ensure numerically for dist close to 2
                     float e = edge-1.0f;
                     float pwe = e <= 0.0f ? 1.0f : math::pow(w, e);
-            deriv_tmp *= edge*pwe;
-            w *= pwe;
+                    deriv_tmp *= edge*pwe;
+                    w *= pwe;
 
-            f1f2.x += w*float(rnd5[RNDXYZ])*float(1.0/255.0);
-            f1f2.y += w;
-            deriv_0 += deriv_tmp*float(rnd5[RNDXYZ])*float(1.0/255.0);
-            deriv_1 += deriv_tmp;
-        }
+                    f1f2.x += w*float(rnd5[RNDXYZ])*float(1.0/255.0);
+                    f1f2.y += w;
+                    deriv_0 += deriv_tmp*float(rnd5[RNDXYZ])*float(1.0/255.0);
+                    deriv_1 += deriv_tmp;
+                }
             }
         }
     }
@@ -4392,29 +4392,29 @@ worley_return_deriv worley_noise_deriv(float3 pos, float jitter, int metric, flo
         f1f2.x = math::max(f1f2.x, limits::FLOAT_MIN);
         f1f2.y = math::max(f1f2.y, limits::FLOAT_MIN);
 
-    float t = f1f2.x/f1f2.y;
+        float t = f1f2.x/f1f2.y;
 
         //deriv_0 = (deriv_0*f1f2.y - f1f2.x*deriv_1)/(f1f2.y*f1f2.y);
         deriv_0 = (deriv_0 - deriv_1*t)/f1f2.y;
 
-    if(metric != 0 /*TextureNoise_WorleyMetric_Euclidean*/)
-    {
-        deriv_0 *= 2.0f*t;
-        t *= t;
-    }
+        if(metric != 0 /*TextureNoise_WorleyMetric_Euclidean*/)
+        {
+            deriv_0 *= 2.0f*t;
+            t *= t;
+        }
 
-    deriv_1 = deriv_0;
-    f1f2 = float2(t,t);
+        deriv_1 = deriv_0;
+        f1f2 = float2(t,t);
     }
     else
     {
-    if((metric == 0 /*TextureNoise_WorleyMetric_Euclidean*/))
-    {
-        f1f2.x = math::max(math::sqrt(f1f2.x), limits::FLOAT_MIN);
-        f1f2.y = math::max(math::sqrt(f1f2.y), limits::FLOAT_MIN);
-        deriv_0 *= 0.5f/f1f2.x;
-        deriv_1 *= 0.5f/f1f2.y;
-    }
+        if((metric == 0 /*TextureNoise_WorleyMetric_Euclidean*/))
+        {
+            f1f2.x = math::max(math::sqrt(f1f2.x), limits::FLOAT_MIN);
+            f1f2.y = math::max(math::sqrt(f1f2.y), limits::FLOAT_MIN);
+            deriv_0 *= 0.5f/f1f2.x;
+            deriv_1 *= 0.5f/f1f2.y;
+        }
     }
 
     return worley_return_deriv(
@@ -4739,10 +4739,10 @@ export float3 worley_noise_bump_texture(
         noise_threshold_low,
         noise_bands);
 
-    float bump_factor = -0.055f * factor; // original code used 0.1 as magic constant for delta, obtain same magnitude
+    float bump_factor = -0.1f * factor; // original code used 0.1 as magic constant for delta, obtain same magnitude
 
     return math::normalize(
-        normal * (math::abs(deriv.z) * bump_factor + 1.0f) +
+        normal * (math::abs(deriv.z * bump_factor) + 1.0f) +
         uvw.tangent_u * (deriv.x * bump_factor)  +
         uvw.tangent_v * (deriv.y * bump_factor));
 }
@@ -5053,7 +5053,7 @@ export float3 flow_noise_bump_texture(
         level_progressive_u_scale,
         level_progressive_v_motion) * 0.5f;
 
-    float bump_factor = factor * 0.065f; // original code used 0.1 as magic constant for delta, obtain same magnitude
+    float bump_factor = factor * 0.1f; // original code used 0.1 as magic constant for delta, obtain same magnitude
 
     return math::normalize(
         normal +
