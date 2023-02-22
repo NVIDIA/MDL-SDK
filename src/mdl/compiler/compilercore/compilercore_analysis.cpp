@@ -1003,6 +1003,18 @@ static bool is_assign_operator(IExpression::Operator op)
     return false;
 }
 
+/// Checks, if the given definition is a material constructor.
+static bool is_material_constructor(Definition const *def)
+{
+    if (def->get_kind() != IDefinition::DK_CONSTRUCTOR) {
+        return false;
+    }
+    IType_function const *f_type   = cast<IType_function>(def->get_type());
+    IType const          *ret_type = f_type->get_return_type();
+
+    return is_material_type(ret_type);
+}
+
 /* ------------------------------ Helper classes ------------------------------- */
 
 /// Helper class to modify a default initializer.
@@ -3363,6 +3375,13 @@ void NT_analysis::create_default_constructors(
     Definition const       *def,
     IDeclaration_type_enum *enum_decl)
 {
+    if (e_type->get_value_count() == 0) {
+        // Only enum types with at least one variant can be
+        // default-constructed. This happens for enum type
+        // declarations with errors.
+        return;
+    }
+
     // enter the type scope for constructors
     Scope *type_scope = m_def_tab->get_type_scope(e_type);
     Definition_table::Scope_transition transition(*m_def_tab, type_scope);
@@ -5549,6 +5568,11 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
         has_error = true;
     }
 
+    if (is_syntax_error(f_sym)) {
+        // Error was already reported during parsing.
+        has_error = true;
+    }
+
     // for now, set the error definition, update it later
     f_def = get_error_definition();
 
@@ -5583,9 +5607,6 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
 
             visit(param);
 
-            IType_name const *pt_name = param->get_type_name();
-            IType const      *p_type  = pt_name->get_type();
-
             ISimple_name const *p_name = param->get_name();
             ISymbol const      *p_sym  = p_name->get_symbol();
 
@@ -5593,6 +5614,9 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
             if (p_def->has_flag(Definition::DEF_IS_DERIVABLE)) {
                 deriv_mask |= unsigned(1 << i);
             }
+
+            IType_name const *pt_name = param->get_type_name();
+            IType const      *p_type  = p_def->get_type();
 
             IType const *bad_type = has_forbidden_function_parameter_type(p_type, m_is_stdlib);
             if (bad_type != NULL) {
@@ -6002,9 +6026,7 @@ void NT_analysis::declare_function_preset(
             const_cast<IExpression_call *>(call)->set_type(m_tc.error_type);
             has_error = true;
         } else {
-            IType_name const      *tn    = callee->get_name();
-            IQualified_name const *qname = tn->get_qualified_name();
-            IDefinition const     *def   = qname->get_definition();
+            IDefinition const *def = callee->get_definition();
 
             instance_def = impl_cast<Definition>(def);
             if (instance_def->has_flag(Definition::DEF_IS_IMPORTED)) {
@@ -6018,6 +6040,11 @@ void NT_analysis::declare_function_preset(
                 IType_function const *f_tp = cast<IType_function>(def->get_type());
 
                 call_ret_type = f_tp->get_return_type();
+                if (is<IType_auto>(call_ret_type->skip_type_alias())) {
+                    // if the function is auto typed, use the calculated base type from overload
+                    IType::Modifiers mod = call_ret_type->get_type_modifiers();
+                    call_ret_type = m_tc.create_alias(call->get_type(), NULL, mod);
+                }
             }
         }
     }
@@ -6126,7 +6153,8 @@ error_found:
                 Definition::DK_FUNCTION, m_sym, m_con_type, &fkt_decl->access_position());
             if (fkt_decl->is_exported()) {
                 if (!instance_def->has_flag(Definition::DEF_IS_EXPORTED) &&
-                    !instance_def->has_flag(Definition::DEF_IS_IMPORTED)) {
+                    !instance_def->has_flag(Definition::DEF_IS_IMPORTED) &&
+                    !is_material_constructor(instance_def)) {
                     error(
                         EXPORTED_PRESET_OF_UNEXPORTED_ORIGIN,
                         *con_def->get_position(),
@@ -11031,9 +11059,9 @@ bool NT_analysis::pre_visit(IDeclaration_annotation *anno_decl)
     ISimple_name const *a_name = anno_decl->get_name();
     ISymbol const      *a_sym  = a_name->get_symbol();
 
-    bool               has_error = false;
+    bool               has_error = is_syntax_error(a_sym);
 
-    Definition *a_def = get_definition_at_scope(a_sym);
+    Definition *a_def = has_error ? NULL : get_definition_at_scope(a_sym);
     if (a_def != NULL && a_def->get_kind() != Definition::DK_ANNOTATION) {
         err_redeclaration(
             Definition::DK_ANNOTATION, a_def, anno_decl->access_position(), ENT_REDECLARATION);
@@ -11503,6 +11531,9 @@ bool NT_analysis::pre_visit(IDeclaration_type_struct *struct_decl)
 
             Definition *f_def  = NULL;
 
+            Definition const *t_def =
+                impl_cast<Definition>(t_name->get_qualified_name()->get_definition());
+
             if (f_sym == sym) {
                 // we do not allow a field of the name of the constructor
                 if (!is<IType_error>(f_type)) {
@@ -11511,6 +11542,12 @@ bool NT_analysis::pre_visit(IDeclaration_type_struct *struct_decl)
                         f_name->access_position(),
                         Error_params(*this).add(f_type).add(sym).add(f_sym).add("struct"));
                 }
+                f_def = get_error_definition();
+            } else if (t_def->has_flag(Definition::DEF_IS_INCOMPLETE)) {
+                error(
+                    FIELD_HAS_INCOMPLETE_TYPE,
+                    f_name->access_position(),
+                    Error_params(*this).add(f_sym));
                 f_def = get_error_definition();
             } else {
                 f_def = get_definition_at_scope(f_sym);
@@ -11632,6 +11669,8 @@ bool NT_analysis::pre_visit(IParameter *param)
     if (p_def != NULL) {
         err_redeclaration(
             Definition::DK_PARAMETER, p_def, p_name->access_position(), PARAMETER_REDECLARATION);
+        p_def = get_error_definition();
+    } else if (is_syntax_error(p_sym)) {
         p_def = get_error_definition();
     } else {
         p_def = m_def_tab->enter_definition(
@@ -14210,11 +14249,13 @@ Definition const *NT_analysis::handle_known_annotation(
 
                             const_cast<IArgument *>(anno->get_argument(0))
                                 ->set_argument_expr(min_expr);
-                            const_cast<IArgument *>(anno->get_argument(1))
-                                ->set_argument_expr(max_expr);
-                            anno_type = min_expr->get_type()->skip_type_alias();
+                            if (max_expr != NULL) {
+                                const_cast<IArgument*>(anno->get_argument(1))
+                                    ->set_argument_expr(max_expr);
+                                anno_type = min_expr->get_type()->skip_type_alias();
 
-                            def = select_range_overload(def, anno_type);
+                                def = select_range_overload(def, anno_type);
+                            }
                         }
                     }
                     if (ent_type != anno_type) {
@@ -16670,6 +16711,11 @@ Definition const *NT_analysis::get_definition_for_reference(
         }
 
         if (is<IType_error>(type)) {
+            def = get_error_definition();
+        } else if (is_syntax_error(qual_name)) {
+            // This can happen as a follow-up error, when an invalid type declaration causes
+            // an invalid type with an error symbol as the name to be entered into the 
+            // declaration table.
             def = get_error_definition();
         } else {
             if (IType_array const *a_type = as<IType_array>(type)) {

@@ -190,7 +190,7 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
         material_db_name = mi::examples::mdl::add_missing_material_signature(
             module.get(), material_db_name);
         if (material_db_name.empty())
-            exit_failure("Failed to find the material %s in the module %s.",
+            exit_failure("Failed to find the material '%s' in the module '%s'.",
                 material_name.c_str(), module_name.c_str());
 
         // Check if there is such a definition.

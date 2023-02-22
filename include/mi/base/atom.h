@@ -108,7 +108,11 @@ public:
 private:
 #if defined( MI_ATOM32_STD)
     // The counter.
+#if defined( MI_COMPILER_GCC) && (__GNUC__ <= 6)
+    std::atomic<std::uint32_t> m_value;
+#else
     std::atomic_uint32_t m_value;
+#endif
 #else
     // The counter.
     volatile Uint32 m_value;

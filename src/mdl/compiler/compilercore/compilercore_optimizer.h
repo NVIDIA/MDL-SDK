@@ -163,6 +163,9 @@ private:
 
     /// Current optimizer level.
     int m_opt_level;
+
+    /// True if we optimize a preset body.
+    bool m_in_preset;
 };
 
 }  // mdl

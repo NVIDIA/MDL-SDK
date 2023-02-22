@@ -1532,19 +1532,15 @@ case en: \
     } \
     break;
 
-#define HLSL_INTRINSIC(en, name, type) \
+#define _SL_INTRINSIC(en, prefix, name, type) \
 case en: \
-    func = decl_from_signature("hlsl." #name, signature, is_sret); \
+    func = decl_from_signature(prefix #name "." #type, signature, is_sret); \
     add_attributes(func, Signature_trait<type>::NO_CAPTURE_ARG_IDX); \
     func->setLinkage(llvm::GlobalValue::ExternalLinkage); \
     break;
 
-#define GLSL_INTRINSIC(en, name, type) \
-case en: \
-    func = decl_from_signature("glsl." #name, signature, is_sret); \
-    add_attributes(func, Signature_trait<type>::NO_CAPTURE_ARG_IDX); \
-    func->setLinkage(llvm::GlobalValue::ExternalLinkage); \
-    break;
+#define HLSL_INTRINSIC(en, name, type) _SL_INTRINSIC(en, "hlsl.", name, type)
+#define GLSL_INTRINSIC(en, name, type) _SL_INTRINSIC(en, "glsl.", name, type)
 
 #define UNSUPPORTED(en) \
 case en: return NULL;

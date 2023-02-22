@@ -1561,11 +1561,10 @@ glsl::Expr *GLSLWriterBasePass::create_runtime_call(
     if (is_llvm_intrinsic || name.startswith("glsl.")) {
         // handle GLSL or LLVM intrinsics
         name = name.drop_front(5);
+        size_t pos = name.find('.');
+        name = name.slice(0, pos);
 
         if (is_llvm_intrinsic) {
-            size_t pos = name.find('.');
-            name = name.slice(0, pos);
-
             // need some mapping between LLVM intrinsics and HLSL/GLSL
             if (name == "fabs") {
                 name = "abs";

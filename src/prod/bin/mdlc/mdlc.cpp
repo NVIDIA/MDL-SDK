@@ -154,6 +154,9 @@ void Mdlc::usage()
         "  --strict\n"
         "  --no-strict\n"
         "\tEnables (default) or disables strict compilation mode.\n"
+        "  --resolve-resources\n"
+        "  --no-resolve-resources\n"
+        "\tEnables (default) or disables resource resolving.\n"
         "  --version\n"
         "  -V\n"
         "\tPrint version of the MDLC compiler.\n"
@@ -225,23 +228,25 @@ int Mdlc::run(int argc, char *argv[])
         /* 1*/ { "warn",                   mi::getopt::REQUIRED_ARGUMENT, NULL, 'W' },
         /* 2*/ { "strict",                 mi::getopt::NO_ARGUMENT,       NULL, 0 },
         /* 3*/ { "no-strict",              mi::getopt::NO_ARGUMENT,       NULL, 0 },
-        /* 4*/ { "version",                mi::getopt::NO_ARGUMENT,       NULL, 'V' },
-        /* 5*/ { "verbose",                mi::getopt::NO_ARGUMENT,       NULL, 'v' },
-        /* 6*/ { "path",                   mi::getopt::REQUIRED_ARGUMENT, NULL, 'p' },
-        /* 7*/ { "syntax-coloring",        mi::getopt::NO_ARGUMENT,       NULL, 'C' },
-        /* 8*/ { "check-lib",              mi::getopt::REQUIRED_ARGUMENT, NULL, 0 },
-        /* 9*/ { "target",                 mi::getopt::REQUIRED_ARGUMENT, NULL, 't' },
-        /*10*/ { "dump",                   mi::getopt::REQUIRED_ARGUMENT, NULL, 'd' },
-        /*11*/ { "backend",                mi::getopt::REQUIRED_ARGUMENT, NULL, 'B' },
-        /*12*/ { "internal-space",         mi::getopt::REQUIRED_ARGUMENT, NULL, 0 },
-        /*13*/ { "show-positions",         mi::getopt::NO_ARGUMENT,       NULL, 0 },
-        /*14*/ { "show-resource-table",    mi::getopt::NO_ARGUMENT,       NULL, 0 },
-        /*15*/ { "mdl-next",               mi::getopt::NO_ARGUMENT,       NULL, 'N' },
-        /*16*/ { "experimental-features",  mi::getopt::NO_ARGUMENT,       NULL, 'e' },
-        /*17*/ { "inline",                 mi::getopt::NO_ARGUMENT,       NULL, 'i' },
-        /*18*/ { "plugin",                 mi::getopt::REQUIRED_ARGUMENT, NULL, 'l' },
-        /*20*/ { "help",                   mi::getopt::NO_ARGUMENT,       NULL, '?' },
-        /*21*/ { NULL,                     0,                             NULL, 0 }
+        /* 4*/ { "resolve-resources",      mi::getopt::NO_ARGUMENT,       NULL, 0 },
+        /* 5*/ { "no-resolve-resources",   mi::getopt::NO_ARGUMENT,       NULL, 0 },
+        /* 6*/ { "version",                mi::getopt::NO_ARGUMENT,       NULL, 'V' },
+        /* 7*/ { "verbose",                mi::getopt::NO_ARGUMENT,       NULL, 'v' },
+        /* 8*/ { "path",                   mi::getopt::REQUIRED_ARGUMENT, NULL, 'p' },
+        /* 9*/ { "syntax-coloring",        mi::getopt::NO_ARGUMENT,       NULL, 'C' },
+        /*10*/ { "check-lib",              mi::getopt::REQUIRED_ARGUMENT, NULL, 0 },
+        /*11*/ { "target",                 mi::getopt::REQUIRED_ARGUMENT, NULL, 't' },
+        /*12*/ { "dump",                   mi::getopt::REQUIRED_ARGUMENT, NULL, 'd' },
+        /*13*/ { "backend",                mi::getopt::REQUIRED_ARGUMENT, NULL, 'B' },
+        /*14*/ { "internal-space",         mi::getopt::REQUIRED_ARGUMENT, NULL, 0 },
+        /*15*/ { "show-positions",         mi::getopt::NO_ARGUMENT,       NULL, 0 },
+        /*16*/ { "show-resource-table",    mi::getopt::NO_ARGUMENT,       NULL, 0 },
+        /*17*/ { "mdl-next",               mi::getopt::NO_ARGUMENT,       NULL, 'N' },
+        /*18*/ { "experimental-features",  mi::getopt::NO_ARGUMENT,       NULL, 'e' },
+        /*19*/ { "inline",                 mi::getopt::NO_ARGUMENT,       NULL, 'i' },
+        /*20*/ { "plugin",                 mi::getopt::REQUIRED_ARGUMENT, NULL, 'l' },
+        /*22*/ { "help",                   mi::getopt::NO_ARGUMENT,       NULL, '?' },
+        /*23*/ { NULL,                     0,                             NULL, 0 }
     };
 
     bool opt_error = false;
@@ -396,10 +401,16 @@ int Mdlc::run(int argc, char *argv[])
             case 3:
                 comp_options.set_option(MDL_OPTION_STRICT, "false");
                 break;
-            case 8:
+            case 4:
+                comp_options.set_option(MDL_OPTION_RESOLVE_RESOURCES, "true");
+                break;
+            case 5:
+                comp_options.set_option(MDL_OPTION_RESOLVE_RESOURCES, "false");
+                break;
+            case 10:
                 m_check_root = mi::getopt::optarg;
                 break;
-            case 12:
+            case 14:
                 if (strcasecmp(mi::getopt::optarg, "internal") == 0) {
                     // ok
                 } else if (strcasecmp(mi::getopt::optarg, "object") == 0) {
@@ -416,13 +427,13 @@ int Mdlc::run(int argc, char *argv[])
                 }
                 m_internal_space = mi::getopt::optarg;
                 break;
-            case 13:
+            case 15:
                 m_show_positions = true;
                 break;
-            case 14:
+            case 16:
                 m_show_resource_table = true;
                 break;
-            case 18:
+            case 20:
                 plugin_filenames.push_back(mi::getopt::optarg);
                 break;
             default:

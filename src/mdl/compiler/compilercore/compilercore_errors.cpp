@@ -624,6 +624,8 @@ char const *get_error_template(
             return "unicode identifiers not supported in this MDL version";
         case SELECT_FROM_NON_STRUCT:
             return "request for member '$0' in something not a structure or vector";
+        case FIELD_HAS_INCOMPLETE_TYPE:
+            return "field '$0' has incomplete type";
 
         // ------------------------------------------------------------- //
         case EXTERNAL_APPLICATION_ERROR:

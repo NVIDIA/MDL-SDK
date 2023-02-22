@@ -170,7 +170,7 @@ bool Image_plugin_impl::test( const mi::Uint8* buffer, mi::Uint32 file_size) con
 
 mi::neuraylib::Impexp_priority Image_plugin_impl::get_priority() const
 {
-    return mi::neuraylib::IMPEXP_PRIORITY_OVERRIDE;
+    return mi::neuraylib::IMPEXP_PRIORITY_WELL_DEFINED;
 }
 
 mi::neuraylib::IImage_file* Image_plugin_impl::open_for_writing(

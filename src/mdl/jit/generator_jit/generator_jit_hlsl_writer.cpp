@@ -950,7 +950,7 @@ hlsl::Expr *HLSLWriterBasePass::create_binary(
     return m_expr_factory.create_binary(op, left, right);
 }
 
-// Create a call to a GLSL runtime function.
+// Create a call to a HLSL runtime function.
 hlsl::Expr *HLSLWriterBasePass::create_runtime_call(
     hlsl::Location const          &loc,
     llvm::Function                *func,
@@ -963,11 +963,10 @@ hlsl::Expr *HLSLWriterBasePass::create_runtime_call(
     if (is_llvm_intrinsic || name.startswith("hlsl.")) {
         // handle HLSL or LLVM intrinsics
         name = name.drop_front(5);
+        size_t pos = name.find('.');
+        name = name.slice(0, pos);
 
         if (is_llvm_intrinsic) {
-            size_t pos = name.find('.');
-            name = name.slice(0, pos);
-
             // need some mapping between LLVM intrinsics and HLSL
             if (name == "fabs") {
                 name = "abs";

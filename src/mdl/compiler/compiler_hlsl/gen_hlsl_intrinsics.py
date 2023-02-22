@@ -383,7 +383,7 @@ g_templ_name = None
 def get_db_hlsl():
     global g_db_hlsl
     if g_db_hlsl is None:
-        with open(g_templ_name, "rU") as f:
+        with open(g_templ_name, "r") as f:
             g_db_hlsl = db_hlsl(f)
     return g_db_hlsl
 

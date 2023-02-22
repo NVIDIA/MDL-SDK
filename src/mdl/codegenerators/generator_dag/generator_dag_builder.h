@@ -418,6 +418,14 @@ private:
         DAG_node const     *c_val,
         DAG_node const     *e_val);
 
+    /// Convert a node to a destination type.
+    ///
+    /// \param dst_type  the destination type
+    /// \param n         the DAG node
+    DAG_node const *convert_to_type(
+        IType const    *dst_type,
+        DAG_node const *n);
+
     /// Convert an MDL binary expression to a DAG IR node.
     ///
     /// \param binary       The MDL binary expression to convert.

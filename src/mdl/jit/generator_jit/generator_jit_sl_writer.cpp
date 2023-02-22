@@ -654,8 +654,8 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
             if (llvm::Function *called_func = call->getCalledFunction()) {
                 // FIXME: check by name is slow
                 llvm::StringRef name = called_func->getName();
-                if (name == "hlsl.modf" || name == "hlsl.sincos" ||
-                    name == "glsl.modf" || name == "glsl.sincos") {
+                if (name.startswith("hlsl.modf.") || name.startswith("hlsl.sincos.") ||
+                        name.startswith("glsl.modf.") || name.startswith("glsl.sincos.")) {
                     // second parameter is the out parameter
                     llvm::Value *out_pointer = call->getArgOperand(1);
                     llvm::Value *base_pointer = get_base_pointer(out_pointer);
@@ -752,7 +752,10 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
                             } else {
                                 // FIXME: check by name is slow
                                 llvm::StringRef name = called_func->getName();
-                                if (name == "hlsl.modf" || name == "hlsl.sincos") {
+                                if (name.startswith("hlsl.modf.") ||
+                                        name.startswith("hlsl.sincos.") ||
+                                        name.startswith("glsl.modf.") ||
+                                        name.startswith("glsl.sincos.")) {
                                     gen_statement = true;
                                 }
                             }

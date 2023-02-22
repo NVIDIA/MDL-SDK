@@ -1,5 +1,41 @@
 Change Log
 ==========
+MDL SDK 2022.1.4 (363600.2768): 14 Feb 2023
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2022.1.4 (363600.2768) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+    - The priority of the FreeImage and OpenImageIO plugin has been decreased by one level, such
+      that it is possible again to override the default plugin with a custom image plugin.
+
+**Fixed Bugs**
+
+- General
+    - Fix loading of uv-tilesets/animated textures with filenames containing meta-characters of
+      regular expressions.
+
+- MDL Compiler and Backends
+    - Fixed a crash related to parameters declared with `auto` type.
+    - Fixed wrong compilation and/or possible crashes if a function with an assignment of an atomic
+      type to a vector type was inlined into a material body.
+    - Fixed generated code for MDL math functions that are directly mapped to HLSL/GLSL intrinsics
+      when several overloads of the same intrinsic are used.
+    - Fixed uninitialized variables in generated HLSL code in some cases when the layer and the
+      base BSDF of a layering distribution function are the same.
+    - Fixed support for `modf()` and `sincos()` for HLSL and GLSL.
+    - Fixed a crash in the MDL compiler if a variant of a struct constructor is created.
+    - Fixed calculation of return type for variants of auto declared functions.
+    - Allow the creation of variants of the material type itself.
+    - Fixed wrong optimization of the body of function variants.
+    - Fixed crash when processing invalid annotations.
+    - Fixed handling of struct fields with incomplete type.
+    - Fixed crash when the same namespace is declared again.
+    - Fixed negative results in `df::fresnel_factor` in numerical corner cases (libbsdf).
+
 MDL SDK 2022.1.1 (363600.1657): 14 Dec 2022
 -----------------------------------------------
 
@@ -11,9 +47,8 @@ ABI compatible with the MDL SDK 2022.1.1 (363600.1657) binary release
 - General
     - Fixed a memory leak when copying canvases (regression since MDL SDK 2022).
     - Restored compatibility of `base::perlin_noise_bump_texture()`,
-      `base::worley_noise_bump_texture()`, and
-      `base::flow_noise_bump_texture()` with previous versions (differences were
-      noticeable, in particular with strong bump factors).
+      `base::worley_noise_bump_texture()`, and `base::flow_noise_bump_texture()` with previous
+      versions (differences were noticeable, in particular with strong bump factors).
 
 MDL SDK 2022.1 (3636300.1420): 05 Dec 2022
 ------------------------------------------

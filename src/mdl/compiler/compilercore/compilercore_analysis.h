@@ -73,9 +73,12 @@ struct Resource_table_key;
 /// \param def  the definition to check
 extern inline bool is_error(IDefinition const *def)
 {
-    IType const *type = def->get_type();
-    if (is<IType_error>(type))
-        return true;
+    if (def->get_kind() != IDefinition::DK_NAMESPACE) {
+        IType const *type = def->get_type();
+        if (is<IType_error>(type)) {
+            return true;
+        }
+    }
     return def->get_symbol()->get_id() == ISymbol::SYM_ERROR;
 }
 

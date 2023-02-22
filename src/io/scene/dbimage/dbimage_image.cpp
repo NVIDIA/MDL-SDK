@@ -1090,6 +1090,23 @@ enum Uvtile_mode
     MODE_UVTILE1
 };
 
+/// Escapes meta-characters for basic regular expressions.
+std::string escape_for_regex( const std::string& s)
+{
+    const char meta_characters[] = "[]\\^$.|?*+(){}";
+
+    std::string result;
+    result.reserve( s.size());
+
+    for( const char ch : s) {
+        if( std::strchr( meta_characters, ch) != nullptr)
+            result.push_back( '\\');
+        result.push_back( ch);
+    }
+
+    return result;
+}
+
 /// Returns the number of hashes in the pattern "<###...>" in s.
 ///
 /// The pattern has to start at offset 0. Returns 0 if the pattern is not found.
@@ -1135,7 +1152,7 @@ std::string get_regex(
     while( true) {
 
         size_t q = mask.find( '<', p);
-        result += mask.substr( p, q-p);
+        result += escape_for_regex( mask.substr( p, q-p));
         if( q == std::string::npos)
             break;
 
@@ -1275,12 +1292,13 @@ Image_set* Image::resolve_filename( const std::string& filename, const char* sel
     SYSTEM::Access_module<PATH::Path_module> path_module( false);
 
     // Get regular expression for filename.
+    std::string basename = HAL::Ospath::basename( filename);
     size_t mode_index = 0;
     size_t frames_index = 0;
     Uvtile_mode mode = MODE_OFF;
     size_t frames_max_digits = 0;
     std::string filename_regex
-        = get_regex( filename, mode_index, frames_index, mode, frames_max_digits);
+        = get_regex( basename, mode_index, frames_index, mode, frames_max_digits);
     if( filename_regex.empty())
         return nullptr;
 
@@ -1340,7 +1358,6 @@ Image_set* Image::resolve_filename( const std::string& filename, const char* sel
     dirname.clear();
 
     // Strip directories from regular expression for file name
-    filename_regex = HAL::Ospath::basename( filename_regex);
     std::wstring filename_wregex( STRING::utf8_to_wchar( filename_regex.c_str()));
     std::wregex regex( filename_wregex);
 

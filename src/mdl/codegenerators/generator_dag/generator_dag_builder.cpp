@@ -2325,6 +2325,42 @@ DAG_node const *DAG_builder::create_vector_insert(
         name.c_str(), IDefinition::DS_ELEM_CONSTRUCTOR, call_args.data(), n_fields, v_type);
 }
 
+// Convert a node to a destination type.
+DAG_node const *DAG_builder::convert_to_type(
+    IType const    *dst_type,
+    DAG_node const *n)
+{
+    IType  const *src_type = n->get_type()->skip_type_alias();
+
+    dst_type = dst_type->skip_type_alias();
+
+    if (dst_type == src_type) {
+        return n;
+    }
+
+    if (is<IType_int>(dst_type) && is<IType_enum>(src_type)) {
+        // ignore the no-op enum to int conversion here
+        return n;
+    }
+
+    // this should only happen for vector destination type, because no other mixed assignment
+    // exists for far
+    MDL_ASSERT(
+        is<IType_vector>(dst_type) &&
+        as<IType_vector>(dst_type)->get_element_type() == src_type &&
+        "Unexpected type conversion requested");
+
+    // assume there exists a constructor, input should be valid
+    string name = type_to_name(dst_type);
+    name.append('(');
+    name.append(type_to_name(src_type));
+    name.append(')');
+
+    DAG_call::Call_argument arg(n, "x");
+    return m_node_factory.create_call(
+        name.c_str(), IDefinition::DS_CONV_CONSTRUCTOR, &arg, 1, dst_type);
+}
+
 // Convert an MDL binary expression to a DAG expression.
 DAG_node const *DAG_builder::binary_to_dag(
     IExpression_binary const *binary)
@@ -2520,7 +2556,8 @@ DAG_node const *DAG_builder::binary_to_dag(
     DAG_node const *res = NULL;
 
     if (op == IExpression_binary::OK_ASSIGN) {
-        res = r;
+        // assign operator might include type conversion
+        res = convert_to_type(m_type_factory.import(left->get_type()), r);
     } else {
         DAG_node const *l = expr_to_dag(left);
         DAG_node const *args[2] = { l, r };

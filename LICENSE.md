@@ -80,6 +80,8 @@ additional or alternate copyrights, licenses, and/or restrictions:
 * jQuery v3.2.1: [doc/js/jquery/jquery-3.2.1.min.js](doc/js/jquery/jquery-3.2.1.min.js), see https://jquery.org/license
 * jQuery UI v1.12.1: [doc/core_definitions/ext/jquery/jquery-ui-1.12.1/LICENSE.txt](doc/core_definitions/ext/jquery/jquery-ui-1.12.1/LICENSE.txt),
   [doc/base_module/ext/jquery/jquery-ui-1.12.1/LICENSE.txt](doc/base_module/ext/jquery/jquery-ui-1.12.1/LICENSE.txt)
+* Google Roboto Mono Fonts: [doc/core_definitions/ext/fonts/roboto-mono/LICENSE.txt](doc/core_definitions/ext/fonts/roboto-mono/LICENSE.txt),
+  [doc/base_module/ext/fonts/roboto-mono/LICENSE.txt](doc/base_module/ext/fonts/roboto-mono/LICENSE.txt)
 * normalize.css v1.1.3: [doc/core_definitions/kt_css/normalize.css](doc/core_definitions/kt_css/normalize.css),
   [doc/base_module/kt_css/normalize.css](doc/base_module/kt_css/normalize.css)
 * Libre Baskerville: [doc/css/librebaskerville/LICENSE-LibreBaskerville.txt](doc/css/librebaskerville/LICENSE-LibreBaskerville.txt)

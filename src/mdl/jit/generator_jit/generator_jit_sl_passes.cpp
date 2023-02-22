@@ -338,6 +338,10 @@ RemovePointerPHIs::ValueCompareResult RemovePointerPHIs::compare_values(
             a->getNumOperands() != b->getNumOperands())
         return VCR_DIFFERENT;
 
+    // Two allocas are only the same, if they are identical
+    if (llvm::isa<llvm::AllocaInst>(a))
+        return VCR_DIFFERENT;
+
     bool all_ops_same = true;
     for (unsigned i = 0, n = a->getNumOperands(); i < n; ++i) {
         if (a->getOperand(i) != b->getOperand(i)) {

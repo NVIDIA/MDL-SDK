@@ -49,6 +49,8 @@ namespace mdl {
     (pos).get_start_line(), (pos).get_start_column(), \
     (pos).get_end_line(), (pos).get_end_column()
 
+typedef Store<bool> Flag_store;
+
 /// Inverse a binary relation, i.e. return R^(-1)
 static bool inverse_relation(
     IExpression_binary::Operator op,
@@ -260,6 +262,8 @@ void Optimizer::run_on_function(
 
             // should be of this module
             MDL_ASSERT(def->get_original_import_idx() == 0);
+
+            Flag_store in_preset(m_in_preset, fdecl->is_preset());
 
             for (int i = 0, n = fdecl->get_parameter_count(); i < n; ++i) {
                 IParameter const *param = fdecl->get_parameter(i);
@@ -1340,20 +1344,25 @@ IExpression const *Optimizer::local_opt(IExpression const *cexpr)
 
             VLA<IValue const *> c_args(m_module.get_allocator(), n);
 
-            for (int i = 0; i < n; ++i) {
-                IArgument         *arg  = const_cast<IArgument *>(call->get_argument(i));
-                IExpression const *expr = local_opt(arg->get_argument_expr());
+            {
+                // enable full optimization for the arguments of a call, no matter if in a preset
+                Flag_store in_preset(m_in_preset, false);
+                for (int i = 0; i < n; ++i) {
+                    IArgument *arg = const_cast<IArgument *>(call->get_argument(i));
+                    IExpression const *expr = local_opt(arg->get_argument_expr());
 
-                arg->set_argument_expr(expr);
-                if (IExpression_literal const *lit = as<IExpression_literal>(expr)) {
-                    c_args[i] = lit->get_value();
-                } else {
-                    all_const = false;
+                    arg->set_argument_expr(expr);
+                    if (IExpression_literal const *lit = as<IExpression_literal>(expr)) {
+                        c_args[i] = lit->get_value();
+                    } else {
+                        all_const = false;
+                    }
                 }
             }
 
+            // if this is a real call (i.e. NOT inside a preset body), try to optimize it
             IExpression_reference const *ref = as<IExpression_reference>(call->get_reference());
-            if (ref != NULL) {
+            if (ref != NULL && !m_in_preset) {
                 if (ref->is_array_constructor()) {
                     IType_array const *a_type =
                         cast<IType_array>(call->get_type()->skip_type_alias());
@@ -1591,6 +1600,7 @@ Optimizer::Optimizer(
 , m_value_factory(*module.get_value_factory())
 , m_stmt_info_data(stmt_info_data)
 , m_opt_level(opt_level)
+, m_in_preset(false)
 {
 }
 
