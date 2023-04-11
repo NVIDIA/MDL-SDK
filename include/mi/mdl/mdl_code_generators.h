@@ -368,6 +368,7 @@ public:
         unsigned uses_state_normal:1;     ///< Set, if state::normal() may be used.
         unsigned uses_state_rc_normal:1;  ///< Set, if state::rounded_corner_normal() may be used.
         unsigned uses_texresult_lookup:1; ///< Set, if texture result lookups may be used.
+        unsigned uses_state_position : 1; ///< Set, f state::position() may be used.
     };
 
 public:

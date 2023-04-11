@@ -2456,7 +2456,7 @@ bool Buffered_archive_resource_reader::seek(Sint64 offset, Position origin)
     m_curr_pos = m_buf_size = 0;
 
     // now seek
-    return m_file->get_container_file()->seek(offset, origin) != 0;
+    return m_file->get_container_file()->seek(offset, origin) == 0;
 }
 
 // Get the UTF8 encoded name of the resource on which this reader operates.

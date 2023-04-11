@@ -463,6 +463,10 @@ int UTF8Buffer::Read() {
 		// must be U+10000 .. U+10FFFF
 		error |= (ch < 0x1000) || (ch > 0x10FFFF);
 
+		// Because surrogate code points are not Unicode scalar values, any UTF-8 byte
+		// sequence that would otherwise map to code points U+D800..U+DFFF is illformed
+		error |= (0xD800 <= ch) && (ch <= 0xDFFF);
+
 		if (error) {
 			ch = 0xFFFD;  // replacement character
 			Buffer::SetPos(pos);
@@ -478,7 +482,11 @@ int UTF8Buffer::Read() {
 		ch = (c1 << 12) | (c2 << 6) | c3;
 
 		// must be U+0800 .. U+FFFF
-		error |= ch < 0x800;
+		error |= ch < 0x0800;
+
+		// Because surrogate code points are not Unicode scalar values, any UTF-8 byte
+		// sequence that would otherwise map to code points U+D800..U+DFFF is illformed
+		error |= (0xD800 <= ch) && (ch <= 0xDFFF);
 
 		if (error) {
 			ch = 0xFFFD;  // replacement character

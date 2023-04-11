@@ -626,6 +626,12 @@ char const *get_error_template(
             return "request for member '$0' in something not a structure or vector";
         case FIELD_HAS_INCOMPLETE_TYPE:
             return "field '$0' has incomplete type";
+        case INVALID_USE_OF_AUTO:
+            return "invalid use of 'auto'";
+        case CAST_REQUIRES_TYPE_NAME:
+            return "'$0' does not name a type and can not be used in a cast expression";
+        case CAST_REQUIRES_TYPE_ARGUMENT:
+            return "cast expression requires a type argument";
 
         // ------------------------------------------------------------- //
         case EXTERNAL_APPLICATION_ERROR:

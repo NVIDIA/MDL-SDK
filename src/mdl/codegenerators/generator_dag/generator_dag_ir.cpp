@@ -622,18 +622,18 @@ int DAG_node_factory_impl::get_field_index(
     IType_compound const *c_type,
     char const           *call_name)
 {
-    char const *p   = strstr(call_name, ".mdle::");
-    char const *dot = strchr(p != NULL ? (p + 7) : call_name, '.');
-    if (dot != NULL) {
-        ++dot;
-        if (char const *n = strchr(dot, '(')) {
-            string field(dot, n - dot, get_allocator());
+    if (IType_vector const *v_type = as<IType_vector>(c_type)) {
+        // the type name is a predefined name here, we know it does not contain a '.'
+        char const *dot = strchr(call_name, '.');
 
-            if (IType_struct const *s_type = as<IType_struct>(c_type))
-                return s_type->find_field(field.c_str());
-            if (IType_vector const *v_type = as<IType_vector>(c_type)) {
-                if (field.size() != 1)
+        if (dot != NULL) {
+            ++dot;
+            if (char const *n = strchr(dot, '(')) {
+                string field(dot, n - dot, get_allocator());
+
+                if (field.size() != 1) {
                     return -1;
+                }
                 int index = -1;
 
                 switch (field[0]) {
@@ -644,11 +644,30 @@ int DAG_node_factory_impl::get_field_index(
                 default:
                     break;
                 }
-                if (index < v_type->get_size())
+                if (index < v_type->get_size()) {
                     return index;
+                }
+            }
+        }
+    } else if (IType_struct const *s_type = as<IType_struct>(c_type)) {
+        char const *type_name = s_type->get_symbol()->get_name();
+        size_t     l          = strlen(type_name);
+
+        char const *dot = NULL;
+        // a valid getter name is <type_name> '.' <field_name>
+        if (strncmp(call_name, type_name, l) == 0 && call_name[l] == '.') {
+            dot = &call_name[l + 1];
+
+            if (char const *n = strchr(dot, '(')) {
+                string field(dot, n - dot, get_allocator());
+
+                if (IType_struct const *s_type = as<IType_struct>(c_type)) {
+                    return s_type->find_field(field.c_str());
+                }
             }
         }
     }
+    // error: not a valid getter name
     return -1;
 }
 
@@ -2062,6 +2081,7 @@ DAG_node const *DAG_node_factory_impl::create_call(
                         // T(..., f: x, ...).f ==> x
                         if (IType_compound const *c_type = as<IType_compound>(call->get_type())) {
                             int field_index = get_field_index(c_type, name);
+                            MDL_ASSERT(field_index >= 0 && "field index not found");
                             if (DAG_node const *node = call->get_argument(field_index)) {
                                 return node;
                             }
@@ -2072,6 +2092,7 @@ DAG_node const *DAG_node_factory_impl::create_call(
                     IValue const *v = c->get_value();
                     if (IType_compound const *c_type = as<IType_compound>(v->get_type())) {
                         int idx = get_field_index(c_type, name);
+                        MDL_ASSERT(idx >= 0 && "field index not found");
 
                         v = v->extract(&m_value_factory, idx);
                         if (!is<IValue_bad>(v)) {

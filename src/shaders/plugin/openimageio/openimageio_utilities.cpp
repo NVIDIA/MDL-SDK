@@ -433,7 +433,7 @@ mi::neuraylib::ITile* unassociate_alpha(
     return tile2.get();
 }
 
-// Wraps IReader as IOProxy. Unused (slower than local buffer).
+// Wraps IReader as IOProxy.
 class Input_proxy : public OIIO::Filesystem::IOProxy
 {
 public:

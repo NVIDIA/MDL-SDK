@@ -340,7 +340,7 @@ Uint64 MDL_zip_resource_reader::tell()
 // Reposition stream position indicator.
 bool MDL_zip_resource_reader::seek(Sint64 offset, Position origin)
 {
-    return m_file->get_container_file()->seek(offset, origin) != 0;
+    return m_file->get_container_file()->seek(offset, origin) == 0;
 }
 
 // Get the UTF8 encoded name of the resource on which this reader operates.

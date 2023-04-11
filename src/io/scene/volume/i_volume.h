@@ -137,6 +137,7 @@ private:
     mi::Float32_4_4 m_trafo{1.f};
     mi::neuraylib::Tag m_data_t;
 
+    void clear();
 
     mi::Sint32 load_data(DB::Transaction*, mi::neuraylib::IReader* reader = nullptr, const char* format = nullptr);
 };

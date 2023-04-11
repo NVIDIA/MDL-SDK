@@ -861,38 +861,32 @@ public:
         if (m_call->get_semantic() == mi::mdl::IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS) {
             char const *call_name = m_call->get_name();
 
-            char const *s = call_name;
-            if (call_name[0] == ':' && call_name[1] == ':' &&
-                    (call_name[2] =='/' ||
-                        (isalpha(call_name[2]) && call_name[3] == ':' && call_name[4] == '/'))) {
-                // found an MDLE prefix, skip it
-                s = strstr(s, ".mdle::");
-                if (s != NULL) {
-                    s += 7;
-                } else {
-                    s = call_name;
-                }
-            }
+            mi::mdl::IType const *arg_type = get_argument_type(0)->skip_type_alias();
+            arg_type = code_gen.get_type_mapper().skip_deriv_type(arg_type);
 
-            char const *p = strchr(s, '.');
+            switch (arg_type->get_kind()) {
+            case mi::mdl::IType::TK_STRUCT:
+                {
+                    IType_struct const *s_type    = cast<IType_struct>(arg_type);
+                    char const         *type_name = s_type->get_symbol()->get_name();
+                    size_t             l          = strlen(type_name);
 
-            if (p != NULL) {
-                string f_name(alloc);
+                    // skip derivative prefix
+                    if (call_name[0] == '#')
+                        call_name++;
 
-                ++p;
-                if (char const *n = strchr(p, '(')) {
-                    f_name = string(p, n - p, alloc);
-                } else {
-                    f_name = string(p, alloc);
-                }
+                    char const *dot = nullptr;
+                    // a valid getter name is <type_name> '.' <field_name>
+                    if (strncmp(call_name, type_name, l) == 0 && call_name[l] == '.') {
+                        dot = &call_name[l + 1];
 
-                mi::mdl::IType const *arg_type = get_argument_type(0)->skip_type_alias();
-                arg_type = code_gen.get_type_mapper().skip_deriv_type(arg_type);
+                        string f_name(alloc);
+                        if (char const *n = strchr(dot, '(')) {
+                            f_name = string(dot, n - dot, alloc);
+                        } else {
+                            f_name = string(dot, alloc);
+                        }
 
-                switch (arg_type->get_kind()) {
-                case mi::mdl::IType::TK_STRUCT:
-                    {
-                        mi::mdl::IType_struct const *s_type = cast<mi::mdl::IType_struct>(arg_type);
                         for (int i = 0, n = s_type->get_field_count(); i < n; ++i) {
                             mi::mdl::ISymbol const *f_sym;
                             mi::mdl::IType const   *f_tp;
@@ -904,9 +898,23 @@ public:
                             }
                         }
                     }
-                    break;
-                case  mi::mdl::IType::TK_VECTOR:
-                    {
+                }
+                break;
+            case  mi::mdl::IType::TK_VECTOR:
+                {
+                    // the type name is a predefined name here, we know it does not contain a '.'
+                    char const *p = strchr(call_name, '.');
+
+                    if (p != NULL) {
+                        string f_name(alloc);
+
+                        ++p;
+                        if (char const* n = strchr(p, '(')) {
+                            f_name = string(p, n - p, alloc);
+                        } else {
+                            f_name = string(p, alloc);
+                        }
+
                         int index = -1;
                         switch (f_name[0]) {
                         case 'x': index = 0; break;
@@ -918,10 +926,10 @@ public:
                         }
                         return index;
                     }
-                    break;
-                default:
-                    break;
                 }
+                break;
+            default:
+                break;
             }
         }
         return -1;

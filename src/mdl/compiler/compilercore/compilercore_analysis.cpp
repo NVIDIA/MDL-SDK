@@ -4813,8 +4813,8 @@ static IType const *has_forbidden_parameter_type(
             return allow_resource ? NULL : type;
 
         case IType::TK_AUTO:
-            MDL_ASSERT(!"auto type occured unexpected");
-            return NULL;
+            // Placeholder types are not allowed on parameters.
+            return type;
 
         case IType::TK_ERROR:
             // error was already reported
@@ -9905,13 +9905,18 @@ IExpression const *NT_analysis::find_init_constructor(
     IExpression const  *init_expr,
     Position const     &pos)
 {
-    if (is<IType_error>(type)) {
+    if (type == NULL || is<IType_error>(type)) {
         // already error state
         return init_expr;
     }
+    
     type = type->skip_type_alias();
 
     if (init_expr != NULL) {
+        if (is<IType_error>(init_expr->get_type())) {
+            // already error state
+            return init_expr;
+        }
         if (IExpression_call const *call = as<IExpression_call>(init_expr)) {
             if (IExpression_reference const *ref =
                 as<IExpression_reference>(call->get_reference()))
@@ -10862,9 +10867,10 @@ bool NT_analysis::pre_visit(IDeclaration_constant *con_decl)
         ISymbol const *sym = c_name->get_symbol();
 
         bool update_var_type = is_auto_type;
+        bool sym_is_error = is_syntax_error(sym);
 
         // check if this is already defined
-        Definition *def = get_definition_at_scope(sym);
+        Definition *def = sym_is_error ? NULL : get_definition_at_scope(sym);
         bool def_is_error = false;
         if (def != NULL) {
             err_redeclaration(
@@ -10872,6 +10878,9 @@ bool NT_analysis::pre_visit(IDeclaration_constant *con_decl)
                 def,
                 c_name->access_position(),
                 ENT_REDECLARATION);
+            def = get_error_definition();
+            def_is_error = true;
+        } else if (sym_is_error) {
             def = get_error_definition();
             def_is_error = true;
         } else {
@@ -10912,6 +10921,8 @@ bool NT_analysis::pre_visit(IDeclaration_constant *con_decl)
                     Error_params(*this)
                         .add_signature(def));
             }
+
+            check_auto_constructor(init);
 
             bool is_invalid = false;
             if (!is_const_expression(init, is_invalid)) {
@@ -11032,7 +11043,7 @@ bool NT_analysis::pre_visit(IDeclaration_constant *con_decl)
                 Error_params(*this).add(sym));
         }
 
-        if (update_var_type) {
+        if (update_var_type && auto_type != NULL) {
             // update the AST
             Qualifier qual = t_name->get_qualifier();
             auto_type = qualify_type(qual, auto_type);
@@ -11871,6 +11882,28 @@ IType const *NT_analysis::handle_allowed_var_type(
     return var_type;
 }
 
+void NT_analysis::check_auto_constructor(IExpression const *expr)
+{
+    if (expr == NULL) {
+        return;
+    }
+    if (IExpression_call const* call = as<IExpression_call>(expr)) {
+        if (IExpression_reference const* rf = as<IExpression_reference>(call->get_reference())) {
+            IType_name const* tn = rf->get_name();
+            IQualified_name const* qn = tn->get_qualified_name();
+            size_t n = qn->get_component_count();
+            ISimple_name const* sn = qn->get_component(n - 1);
+            ISymbol const* sym = sn->get_symbol();
+            if (sym->get_id() == ISymbol::SYM_TYPE_AUTO) {
+                error(
+                    INVALID_USE_OF_AUTO,
+                    expr->access_position(),
+                    Error_params(*this));
+            }
+        }
+    }
+}
+
 // Start of a variable declaration
 bool NT_analysis::pre_visit(IDeclaration_variable *var_decl)
 {
@@ -11893,7 +11926,9 @@ bool NT_analysis::pre_visit(IDeclaration_variable *var_decl)
         ISimple_name  *v_name = const_cast<ISimple_name *>(var_decl->get_variable_name(i));
         ISymbol const *v_sym  = v_name->get_symbol();
 
-        Definition *v_def = m_def_tab->get_definition(v_sym);
+        bool sym_is_error = is_syntax_error(v_sym);
+
+        Definition *v_def = sym_is_error ? NULL : m_def_tab->get_definition(v_sym);
         if (v_def != NULL) {
             if (v_def->get_def_scope() == m_def_tab->get_curr_scope()) {
                 if (v_def->get_kind() == Definition::DK_PARAMETER) {
@@ -11920,6 +11955,8 @@ bool NT_analysis::pre_visit(IDeclaration_variable *var_decl)
                 }
                 v_def = NULL;
             }
+        } else if (sym_is_error) {
+            v_def = get_error_definition();
         }
 
         bool update_var_type = is_auto_type;
@@ -11964,6 +12001,7 @@ bool NT_analysis::pre_visit(IDeclaration_variable *var_decl)
 
        if (is_auto_type) {
             // auto variable
+            check_auto_constructor(init);
             if (init != NULL) {
                 var_type = init->get_type();
                 var_type = handle_allowed_var_type(var_type, init->access_position());
@@ -12055,6 +12093,8 @@ bool NT_analysis::pre_visit(IDeclaration_variable *var_decl)
                             init->access_position(),
                             Error_params(*this).add(init_type).add(var_type));
                         init_err = true;
+                    } else if (is<IType_error>(init_type)) {
+                        init_err = true;
                     }
                 }
 
@@ -12072,7 +12112,7 @@ bool NT_analysis::pre_visit(IDeclaration_variable *var_decl)
             }
         }
 
-        if (update_var_type) {
+        if (update_var_type && auto_type != NULL) {
             // update the AST
             Qualifier qual = t_name->get_qualifier();
             auto_type = qualify_type(qual, auto_type);
@@ -15053,7 +15093,22 @@ void NT_analysis::handle_cast_expression(IExpression_unary *cast_expr)
     } else {
         dst_type = tn->get_type();
 
-        d_incomplete = tn->is_incomplete_array();
+        if (dst_type == NULL) {
+            dst_type = m_tc.error_type;
+            if (is_error(tn->get_qualified_name())) {
+                error(
+                    CAST_REQUIRES_TYPE_ARGUMENT,
+                    tn->access_position(),
+                    Error_params(*this));
+            } else {
+                error(
+                    CAST_REQUIRES_TYPE_NAME,
+                    tn->access_position(),
+                    Error_params(*this).add(tn->get_qualified_name()));
+            }
+        } else {
+            d_incomplete = tn->is_incomplete_array();
+        }
     }
 
     if (!is<IType_error>(dst_type)) {
@@ -15135,9 +15190,6 @@ bool NT_analysis::pre_visit(IAnnotation *anno)
             }
         }
     }
-    if (arg_error) {
-        def = get_error_definition();
-    }
 
     if (!is_error(def)) {
         bool bound_to_scope = false;
@@ -15150,6 +15202,10 @@ bool NT_analysis::pre_visit(IAnnotation *anno)
         }
 
         def = find_annotation_overload(def, anno, bound_to_scope);
+    }
+
+    if (arg_error) {
+        def = get_error_definition();
     }
 
     if (is_error(def)) {
@@ -16699,8 +16755,8 @@ Definition const *NT_analysis::get_definition_for_reference(
     IQualified_name const *qual_name = type_name->get_qualified_name();
     Definition const *tdef = impl_cast<Definition>(qual_name->get_definition());
 
-    Definition const *def = tdef;
-    Definition::Kind kind = tdef->get_kind();
+    Definition const *def = tdef == NULL ? get_error_definition() : tdef;
+    Definition::Kind kind = def->get_kind();
     if (kind == Definition::DK_TYPE) {
         // we are referencing a type/material, must be a constructor: look if there is one
         IType const *type = def->get_type()->skip_type_alias();

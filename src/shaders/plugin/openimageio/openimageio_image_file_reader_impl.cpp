@@ -67,11 +67,10 @@ Image_file_reader_impl::Image_file_reader_impl(
     m_pixel_type( IMAGE::PT_UNDEF),
     m_nv_header_only( false)
 {
-    // Some plugins do not accept a generic IOProxy, but require a IOMemReader (using m_buffer).
-    // bool use_buffer = plugin_name == "oiio_jpg";
-    // Reading into a local buffer first is 5-10% faster than adapting IReader to IOProxy (at least
-    // for debug builds, no noticeable difference for release builds).
-    constexpr bool use_buffer = true;
+    // Adapting IReader to IOProxy is faster than reading the data first into a local buffer, in
+    // particular if only the metadata is needed.
+    // - "oiio_jpg" does  not accept a generic IOProxy, but requires a IOMemReader (using m_buffer).
+    bool use_buffer = plugin_name == "oiio_jpg";
     m_io_proxy = std::unique_ptr<OIIO::Filesystem::IOProxy>(
         create_input_proxy( reader, use_buffer, m_buffer));
 

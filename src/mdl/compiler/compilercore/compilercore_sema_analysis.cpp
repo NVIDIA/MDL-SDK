@@ -2384,6 +2384,7 @@ IExpression *Sema_analysis::post_visit(IExpression_reference *expr)
     IQualified_name const *qual_name = type_name->get_qualified_name();
     Definition const      *def = impl_cast<Definition>(qual_name->get_definition());
 
+    def = def == NULL ? get_error_definition() : def;
     if (!is_error(def)) {
         if (!def->has_flag(Definition::DEF_IS_INCOMPLETE)) {
             if (def != m_curr_assigned_def) {

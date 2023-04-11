@@ -33,6 +33,7 @@
 #ifndef EXAMPLE_VULKAN_SHARED_H
 #define EXAMPLE_VULKAN_SHARED_H
 
+#include <memory>
 #include <vector>
 #include <iostream>
 

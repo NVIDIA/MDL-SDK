@@ -1311,6 +1311,7 @@ bool Lambda_function::analyze(
     result.uses_state_normal        = 0;
     result.uses_state_rc_normal     = 0;
     result.uses_texresult_lookup    = 0;
+    result.uses_state_position      = 0;
 
     DAG_node const *root = !m_roots.empty() ? m_roots[proj] : m_body_expr;
 
@@ -1769,10 +1770,13 @@ public:
                 m_result.uses_state_normal     = 1;
                 m_result.uses_state_rc_normal  = 1;
                 m_result.uses_texresult_lookup = 1;
+                m_result.uses_state_position   = 1;
             }
             break;
 
         case IDefinition::DS_INTRINSIC_STATE_TANGENT_SPACE:
+            // tangent space is constructed from state::normal(), state::texture_[u|v](), see
+            // MDL spec
             m_result.uses_state_normal = 1;
             [[fallthrough]];
         case IDefinition::DS_INTRINSIC_STATE_TEXTURE_TANGENT_U:
@@ -1790,6 +1794,10 @@ public:
 
         case IDefinition::DS_INTRINSIC_STATE_NORMAL:
             m_result.uses_state_normal = 1;
+            break;
+
+        case IDefinition::DS_INTRINSIC_STATE_POSITION:
+            m_result.uses_state_position = 1;
             break;
 
         case IDefinition::DS_INTRINSIC_STATE_ROUNDED_CORNER_NORMAL:
@@ -1969,6 +1977,8 @@ public:
             break;
 
         case IDefinition::DS_INTRINSIC_STATE_TANGENT_SPACE:
+            // tangent space is constructed from state::normal(), state::texture_[u|v](), see
+            // MDL spec
             m_result.uses_state_normal = 1;
             [[fallthrough]];
         case IDefinition::DS_INTRINSIC_STATE_TEXTURE_TANGENT_U:
@@ -1986,6 +1996,10 @@ public:
 
         case IDefinition::DS_INTRINSIC_STATE_NORMAL:
             m_result.uses_state_normal = 1;
+            break;
+
+        case IDefinition::DS_INTRINSIC_STATE_POSITION:
+            m_result.uses_state_position = 1;
             break;
 
         case IDefinition::DS_INTRINSIC_STATE_ROUNDED_CORNER_NORMAL:

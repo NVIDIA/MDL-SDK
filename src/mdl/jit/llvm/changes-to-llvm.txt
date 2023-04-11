@@ -28,3 +28,4 @@ Changes:
  - guard ObjectC specific transformations and analysis with #ifdef LLVM_ENABLE_OBJC (currently impossible to enable)
  - made llvm::createNVVMReflectPass() external visible
  - disabled funnel shift creation inside (aggressive) instruction combiner pass
+ - fix compile error for VS2017 in ModuleSummaryIndex.h regarding TypeIdCompatibleVtableMap

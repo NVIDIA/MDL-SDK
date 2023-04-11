@@ -1,5 +1,35 @@
 Change Log
 ==========
+MDL SDK 2022.1.6 (363600.3938): 22 Mar 2023
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2022.1.6 (363600.3938) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+    - Improved performance of texture import via the OpenImageIO plugin, in particular when only
+      the metadata is needed.
+      
+- MDL Compiler and Backends
+    - Improved output messages for errors in annotations.
+      
+**Fixed Bugs**
+
+- General
+    - Fixed usability and layout problems in API reference documentation.
+    - Added missing images in the documentation for `nvidia::core\_definitions`.
+    - Fixed layout of API reference documentation for types using the `__align__(x)` macro.
+    - Fixed `ITargetCode` serialization for cases when there are multiple materials in the
+      link unit.
+
+- MDL Compiler and Backends
+    - Fixed potential crashes in the code generator when a module name contains a '.'.
+    - Fixed crash in the MDL compiler caused by invalid constant declarations.
+    - Fixed compiling error in LLVM for VS2017.
+    - Fixed some cases where invalid MDL source code can lead to compiler crashes.    
+
 MDL SDK 2022.1.4 (363600.2768): 14 Feb 2023
 -----------------------------------------------
 

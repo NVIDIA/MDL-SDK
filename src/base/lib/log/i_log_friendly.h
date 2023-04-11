@@ -299,7 +299,7 @@ inline std::ostream& operator<<(std::ostream& str, const Bytes bytes)
         size /= 1024.;
         ++i;
     }
-    return str << std::fixed << std::setprecision(3) << size << units[i];
+    return str << std::fixed << std::setprecision(i==0?0:3) << size << units[i];
 }
 
 }

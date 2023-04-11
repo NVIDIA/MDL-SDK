@@ -1196,13 +1196,16 @@ BSDF_INLINE float2 fresnel_dielectric(const float n_a, const float n_b, const fl
 // for reference, see Born/Wolf - "Principles of Optics", section 13.4.2, equation 30
 BSDF_INLINE float3 thin_film_factor(
     float coating_thickness,
-    const float3 &coating_ior3,
+          float3 coating_ior3,
     const float3 &base_ior3,
     const float3 &base_k3,
     const float3 &incoming_ior3,
     const float kh)
 {
-    coating_thickness = math::max(coating_thickness, 0.0f);
+    if (coating_thickness <= 0.0f) {
+        coating_thickness = 0.0f;
+        coating_ior3 = incoming_ior3;
+    }
 
     float3 xyz = make_float3(0.0f, 0.0f, 0.0f);
 

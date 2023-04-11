@@ -164,10 +164,10 @@ IGNORE_PREFIX          =
 GENERATE_HTML          = YES
 HTML_OUTPUT            = html
 HTML_FILE_EXTENSION    = .html
-HTML_HEADER            = ../build/doxygen_header_1_8_4.html
-HTML_FOOTER            = ../build/doxygen_footer_1_8_4.html
+HTML_HEADER            = ../build/doxygen_header_1_9_4.html
+HTML_FOOTER            = ../build/doxygen_footer_1_9_4.html
 HTML_STYLESHEET        =
-HTML_EXTRA_STYLESHEET  = ../css/doxygen_custom_stylesheet_1_8_4.css
+HTML_EXTRA_STYLESHEET  = ../css/doxygen_custom_stylesheet_1_9_4.css
 HTML_EXTRA_FILES       =
 HTML_COLORSTYLE_HUE    = 120
 HTML_COLORSTYLE_SAT    = 8
@@ -304,7 +304,8 @@ PREDEFINED             = MI_FOR_DOXYGEN_ONLY=1 \
                          MI_DLL_LOCAL= \
                          MI_PREVENT_MACRO_EXPAND= \
                          MI_ARCH_64BIT= \
-                         MI_CXX_FEATURE_RVALUE_REFERENCES=
+                         MI_CXX_FEATURE_RVALUE_REFERENCES= \
+                         __align__(x)=
 EXPAND_AS_DEFINED      = MI_DLL_EXPORT \
                          MI_DLL_LOCAL \
                          __cplusplus \

@@ -114,7 +114,8 @@ mi_static_assert( sizeof( Propagation_type) == sizeof( Uint32));
 ///   their referencing instance element; it would be much more expensive to detach or attach them
 ///   to the scene graph because that requires preprocessing the scene again.
 /// - bool \b visible \n
-///   The object or light is visible to primary rays. This attribute is not supported for decals.
+///   The object or light is visible to primary rays. This attribute is not supported for decals or
+///   volumes.
 /// - bool \b picking_disabled \n
 ///   The object, light, or volume is invisible to pick rays. This attribute does not have an effect
 ///   on generated images and merely affects the behavior of mi::neuraylib::IRender_context::pick().

@@ -134,6 +134,11 @@ char const *utf8_to_unicode_char(char const *up, unsigned &res)
 
         // must be U+10000 .. U+10FFFF
         error |= (res < 0x1000) || (res > 0x10FFFF);
+
+        // Because surrogate code points are not Unicode scalar values, any UTF-8 byte
+        // sequence that would otherwise map to code points U+D800..U+DFFF is illformed
+        error |= (0xD800 <= res) && (res <= 0xDFFF);
+
         if (!error) {
             up += 4;
         } else {
@@ -148,7 +153,11 @@ char const *utf8_to_unicode_char(char const *up, unsigned &res)
         res = (c1 << 12) | (c2 << 6) | c3;
 
         // must be U+0800 .. U+FFFF
-        error |= res < 0x800;
+        error |= res < 0x0800;
+
+        // Because surrogate code points are not Unicode scalar values, any UTF-8 byte
+        // sequence that would otherwise map to code points U+D800..U+DFFF is illformed
+        error |= (0xD800 <= res) && (res <= 0xDFFF);
 
         if (!error) {
             up += 3;

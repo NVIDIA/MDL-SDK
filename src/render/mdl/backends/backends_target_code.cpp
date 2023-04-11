@@ -1392,16 +1392,23 @@ const mi::neuraylib::IBuffer* Target_code::serialize(mi::neuraylib::IMdl_executi
     }
     else
     {
+        size_t texture_count = m_body_texture_count == static_cast<size_t>(-1)
+            ? 0 : m_body_texture_count;
+        size_t lp_count = m_body_light_profile_count == static_cast<size_t>(-1)
+            ? 0 : m_body_light_profile_count;
+        size_t mbsdf_count = m_body_bsdf_measurement_count == static_cast<size_t>(-1)
+            ? 0 : m_body_bsdf_measurement_count;
+
         auto copy_texture_table = m_texture_table;
-        copy_texture_table.resize(m_body_texture_count);
+        copy_texture_table.resize(texture_count);
         SERIAL::write(&serializer, copy_texture_table);
 
         auto copy_light_profile_table = m_light_profile_table;
-        copy_light_profile_table.resize(m_body_light_profile_count);
+        copy_light_profile_table.resize(lp_count);
         SERIAL::write(&serializer, copy_light_profile_table);
 
         auto copy_bsdf_measurement_table = m_bsdf_measurement_table;
-        copy_bsdf_measurement_table.resize(m_body_bsdf_measurement_count);
+        copy_bsdf_measurement_table.resize(mbsdf_count);
         SERIAL::write(&serializer, copy_bsdf_measurement_table);
     }
 

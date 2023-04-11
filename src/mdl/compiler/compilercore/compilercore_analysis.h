@@ -978,6 +978,11 @@ private:
         Module const   *imp_mod,
         Position const &pos);
 
+    /// Check if the expression is a call to the 'auto' constructor.
+    ///
+    /// \param expr     the expression
+    void check_auto_constructor(IExpression const *expr);
+
     /// Find and load a module to if possible.
     ///
     /// \param rel_name       the (relative) name of the module
