@@ -564,7 +564,9 @@ mi::Sint32 Target_code::execute_df_init_function(
 {
     if (!m_native_code.is_valid_interface()) return -2;
     if (index >= m_callable_function_infos.size()) return -2;
-    if (m_callable_function_infos[index].m_dist_kind != dist_kind) return -2;
+    // for single-init mode, don't care, which dist_kind was provided
+    if (m_callable_function_infos[index].m_dist_kind != mi::neuraylib::ITarget_code::DK_NONE &&
+        m_callable_function_infos[index].m_dist_kind != dist_kind) return -2;
     if (m_callable_function_infos[index].m_kind != mi::neuraylib::ITarget_code::FK_DF_INIT)
         return -2;
 

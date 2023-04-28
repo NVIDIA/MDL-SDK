@@ -58,6 +58,9 @@
 
 #define GL_DISPLAY_CUDA
 #include "utils/gl_display.h"
+#include "utils/profiling.h"
+
+using namespace mi::examples::profiling;
 
 #define terminate()          \
     do {                     \
@@ -2325,6 +2328,8 @@ int MAIN_UTF8(int argc, char* argv[])
             descs.push_back(
                 mi::neuraylib::Target_function_description("backface.emission.intensity"));
 
+            Timing timing_compile("Compile MDL to PTX");
+
             // Generate code for all materials
             std::vector<std::string> used_material_names;
             for (size_t i = 0; i < options.material_names.size(); ++i) {
@@ -2428,6 +2433,8 @@ int MAIN_UTF8(int argc, char* argv[])
             // Generate the CUDA PTX code for the link unit
             mi::base::Handle<const mi::neuraylib::ITarget_code> target_code(
                 mc.generate_cuda_ptx());
+
+            timing_compile.stop();
 
             // convert handles to tag IDs
             for (auto& mat : material_bundle)

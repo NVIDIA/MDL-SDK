@@ -51,6 +51,8 @@
 #include <cuda_runtime.h>
 #include <vector_functions.h>
 
+#include "utils/profiling.h"
+
 // Structure representing an MDL texture, containing filtered and unfiltered CUDA texture
 // objects and the size of the texture.
 struct Texture
@@ -1840,6 +1842,8 @@ CUmodule build_linked_kernel(
     CUjit_option  options[4];
     void         *optionVals[4];
 
+    mi::examples::profiling::Timing timing("PTX to SASS");
+
     // Setup the linker
 
     // Pass a buffer for info messages
@@ -1891,6 +1895,8 @@ CUmodule build_linked_kernel(
         std::cerr << "PTX linker error:\n" << error_log << std::endl;
         check_cuda_success(link_result);
     }
+
+    timing.stop();
 
     std::cout << "CUDA link completed." << std::endl;
     if (info_log[0])

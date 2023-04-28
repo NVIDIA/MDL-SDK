@@ -168,9 +168,23 @@ public:
                     MDL_ASSERT(!"unexpected kind");
                     break;
 
+                case IType::TK_ARRAY:
+                {
+                    // handle arrays seperately, because get_compount_type(0) returns null,
+                    // for zero-size arrays
+                    IType_array const *array_type =
+                        static_cast<IType_array const *>(mdl_type);
+
+                    // all elements have the same type, only generate it for the first element
+                    IType const *subcomp_type = array_type->get_element_type();
+                    build_one_type_layout(
+                        subcomp_type,
+                        m_code_gen.lookup_type(subcomp_type));
+                    break;
+                }
+
                 case IType::TK_VECTOR:
                 case IType::TK_MATRIX:
-                case IType::TK_ARRAY:
                 case IType::TK_COLOR:
                 {
                     IType_compound const *comp_type =
@@ -179,7 +193,7 @@ public:
                     // all elements have the same type, only generate it for the first element
                     IType const *subcomp_type = comp_type->get_compound_type(0);
                     build_one_type_layout(
-                        comp_type->get_compound_type(0),
+                        subcomp_type,
                         m_code_gen.lookup_type(subcomp_type));
                     break;
                 }

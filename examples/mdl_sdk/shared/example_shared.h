@@ -33,16 +33,18 @@
 #ifndef EXAMPLE_SHARED_H
 #define EXAMPLE_SHARED_H
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
-#include <vector>
 #include <tuple>
+#include <vector>
 
 #include "utils/io.h"
 #include "utils/mdl.h"
 #include "utils/os.h"
 #include "utils/strings.h"
+
 
 /// called to abort the execution of an example in case of failure.
 /// \param  file        current file determined using the `__FILE__` macro

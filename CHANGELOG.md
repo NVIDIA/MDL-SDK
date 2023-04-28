@@ -1,6 +1,19 @@
 Change Log
 ==========
-MDL SDK 2022.1.6 (363600.3938): 22 Mar 2023
+MDL SDK 2022.1.7 (363600.4887): 18 Apr 2023
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2022.1.7 (363600.4887) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Fixed Bugs**
+
+- MDL Compiler and Backends
+    - Fixed rare crash in HLSL code generator regarding translation of load instructions.
+    - Fixed crash for zero sized arrays in argument block layout builder.
+    - Several bug fixed in the MDL compiler when compiling syntactically invalid MDL code.
+
+MDL SDK 2022.1.6 (363600.3938): 20 Mar 2023
 -----------------------------------------------
 
 ABI compatible with the MDL SDK 2022.1.6 (363600.3938) binary release

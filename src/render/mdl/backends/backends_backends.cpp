@@ -2148,7 +2148,7 @@ Link_unit::Link_unit(
 , m_compile_consts(llvm_be.get_compile_consts())
 , m_strings_mapped_to_ids(llvm_be.get_strings_mapped_to_ids())
 , m_calc_derivatives(llvm_be.get_calc_derivatives())
-, m_internal_space(context->get_option<std::string>(MDL_CTX_OPTION_INTERNAL_SPACE))
+, m_internal_space(get_context_option<std::string>(context, MDL_CTX_OPTION_INTERNAL_SPACE))
 {
 }
 
@@ -3672,7 +3672,7 @@ void Mdl_llvm_backend::update_jit_context_options(
 
     if (internal_space == nullptr) {
         const std::string internal_space_obj =
-            context->get_option<std::string>(MDL_CTX_OPTION_INTERNAL_SPACE);
+            get_context_option<std::string>(context, MDL_CTX_OPTION_INTERNAL_SPACE);
         cg_opts.set_option(
             MDL_CG_OPTION_INTERNAL_SPACE, internal_space_obj.c_str());
     } else {

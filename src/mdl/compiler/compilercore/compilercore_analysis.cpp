@@ -10212,18 +10212,20 @@ void NT_analysis::check_argument_range(
             check_expression_range(range, expr, ARGUMENT_OUTSIDE_HARD_RANGE, p_name->get_symbol());
         }
     } else if (IDeclaration_type_struct const *s_decl = as<IDeclaration_type_struct>(decl)) {
-        // when calling a struct constructor, the declaration of the struct is passed
-        ISimple_name const *f_name = s_decl->get_field_name(idx);
+        if (idx < s_decl->get_field_count()) {
+            // when calling a struct constructor, the declaration of the struct is passed
+            ISimple_name const* f_name = s_decl->get_field_name(idx);
 
-        if (IAnnotation_block const *block = s_decl->get_annotations(idx)) {
-            IAnnotation const *range =
-                find_annotation_by_semantics(block, IDefinition::DS_HARD_RANGE_ANNOTATION);
+            if (IAnnotation_block const* block = s_decl->get_annotations(idx)) {
+                IAnnotation const* range =
+                    find_annotation_by_semantics(block, IDefinition::DS_HARD_RANGE_ANNOTATION);
 
-            if (range == NULL) {
-                return;
+                if (range == NULL) {
+                    return;
+                }
+
+                check_expression_range(range, expr, ARGUMENT_OUTSIDE_HARD_RANGE, f_name->get_symbol());
             }
-
-            check_expression_range(range, expr, ARGUMENT_OUTSIDE_HARD_RANGE, f_name->get_symbol());
         }
     }
 }
@@ -11282,7 +11284,9 @@ bool NT_analysis::pre_visit(IDeclaration_type_alias *alias_decl)
 // Start an enum type declaration
 bool NT_analysis::pre_visit(IDeclaration_type_enum *enum_decl)
 {
-    ISymbol const *sym = enum_decl->get_name()->get_symbol();
+    ISimple_name const* name = enum_decl->get_name();
+    bool sym_error = is_error(name);
+    ISymbol const *sym = name->get_symbol();
 
     bool is_enum_class = enum_decl->is_enum_class();
 
@@ -11305,10 +11309,12 @@ bool NT_analysis::pre_visit(IDeclaration_type_enum *enum_decl)
     IType_enum *e_type = is_builtin_enum_type ?
         const_cast<IType_enum *>(m_tc.tex_gamma_mode_type) : m_tc.create_enum(fq_sym);
 
-    Definition *type_def = get_definition_at_scope(sym);
+    Definition *type_def = sym_error ? NULL : get_definition_at_scope(sym);
     if (type_def != NULL) {
         err_redeclaration(
             Definition::DK_TYPE, type_def, enum_decl->access_position(), TYPE_REDECLARATION);
+        type_def = get_error_definition();
+    } else if (sym_error) {
         type_def = get_error_definition();
     } else {
         type_def = m_def_tab->enter_definition(
@@ -11407,13 +11413,17 @@ bool NT_analysis::pre_visit(IDeclaration_type_enum *enum_decl)
             }
         }
 
-        Definition *v_def = get_definition_at_scope(v_sym);
+        Definition *v_def = sym_error ? NULL : get_definition_at_scope(v_sym);
         if (v_def != NULL) {
             err_redeclaration(
                 Definition::DK_ENUM_VALUE, v_def, v_name->access_position(), ENT_REDECLARATION);
             v_def = get_error_definition();
         } else {
-            if (is_syntax_error(v_sym)) {
+            if (sym_error || is_syntax_error(v_sym)) {
+                // Enum values are not defined
+                // - if the enum value name is the error symbol, or
+                // - if the enum type name is the error symbol.
+
                 // parse errors on names are expressed by error symbols
                 v_def = get_error_definition();
             } else {
@@ -11532,6 +11542,13 @@ bool NT_analysis::pre_visit(IDeclaration_type_struct *struct_decl)
                     f_type = m_tc.error_type;
                 }
             }
+            if (is<IType_auto>(f_type)) {
+                error(
+                    INVALID_USE_OF_AUTO,
+                    t_name->access_position(),
+                    Error_params(*this).add(f_type).add(f_sym));
+                f_type = m_tc.error_type;
+            }
             if (!m_is_stdlib && !is_allowed_field_type(f_type, m_mdl_version)) {
                 error(
                     FORBIDDEN_FIELD_TYPE,
@@ -11553,6 +11570,8 @@ bool NT_analysis::pre_visit(IDeclaration_type_struct *struct_decl)
                         f_name->access_position(),
                         Error_params(*this).add(f_type).add(sym).add(f_sym).add("struct"));
                 }
+                f_def = get_error_definition();
+            } else if (t_def == NULL) {
                 f_def = get_error_definition();
             } else if (t_def->has_flag(Definition::DEF_IS_INCOMPLETE)) {
                 error(
@@ -13189,6 +13208,8 @@ IExpression *NT_analysis::post_visit(IExpression_call *call_expr)
                                 }
                             }
                         } else if (m_exc_handler.has_error()) {
+                            is_invalid = true;
+                        } else if (is<IValue_bad>(val)) {
                             is_invalid = true;
                         } else {
                             MDL_ASSERT(!"const folding failed");
@@ -15697,14 +15718,38 @@ bool NT_analysis::check_file_path(char const *path, Position const &pos)
         if (c32 < 32 || c32 == 127 || c32 == ':' || c32 == '\\') {
             char buffer[8];
 
-            if (c32 == ':') {
+            memset(buffer, 0, sizeof(buffer));
+            switch (c32) {
+            case ':':
                 buffer[0] = ':';
-                buffer[1] = '\0';
-            } else if (c32 == '\\') {
+                break;
+            case '\\':
                 buffer[0] = '\\';
-                buffer[1] = '\0';
-            } else {
-                snprintf(buffer, 8, "\\u%04u", c32);
+                break;
+            case '\a':
+                buffer[0] = '\\'; buffer[1] = 'a';
+                break;
+            case '\b':
+                buffer[0] = '\\'; buffer[1] = 'b';
+                break;
+            case '\f':
+                buffer[0] = '\\'; buffer[1] = 'f';
+                break;
+            case '\n':
+                buffer[0] = '\\'; buffer[1] = 'n';
+                break;
+            case '\r':
+                buffer[0] = '\\'; buffer[1] = 'r';
+                break;
+            case '\t':
+                buffer[0] = '\\'; buffer[1] = 't';
+                break;
+            case '\v':
+                buffer[0] = '\\'; buffer[1] = 'v';
+                break;
+            default:
+                snprintf(buffer, sizeof(buffer), "\\x%02u", c32);
+                break;
             }
 
             error(

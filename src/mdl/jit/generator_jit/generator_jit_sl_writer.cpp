@@ -2953,8 +2953,19 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_expr_lo
     Type    *conv_to_type  = res_type;
     if (Type_vector *vt = as<Type_vector>(res_type)) {
         res_elem_type = vt->get_element_type();
-        res_elem_size = m_cur_data_layout->getTypeStoreSize(
-            llvm::cast<llvm::FixedVectorType>(inst->getType())->getElementType());
+
+        llvm::Type *llvm_elem_type;
+        if (llvm::FixedVectorType *fvt = llvm::dyn_cast<llvm::FixedVectorType>(inst->getType())) {
+            llvm_elem_type = fvt->getElementType();
+        } else if (llvm::StructType *st = llvm::dyn_cast<llvm::StructType>(inst->getType())) {
+            // assumed to be a vector, so all element types are the same
+            llvm_elem_type = st->getElementType(0);
+        } else {
+            MDL_ASSERT(!"Unexpected LLVM type for an HLSL vector");
+            return Base::m_expr_factory.create_invalid(Base::zero_loc);
+        }
+
+        res_elem_size = m_cur_data_layout->getTypeStoreSize(llvm_elem_type);
         conv_to_type = res_elem_type;
     }
 

@@ -1786,9 +1786,13 @@ IAnnotation_block *Module::clone_annotation_block(
         IAnnotation const *anno = anno_block->get_annotation(i);
         IDefinition const *def = anno->get_name()->get_definition();
 
-        if (def->get_semantics() == IDefinition::DS_VERSION_NUMBER_ANNOTATION &&
-            m_mdl_version >= IMDL::MDL_VERSION_1_3) {
+        // `def' can be NULL at this point during parsing if a syntax error in an
+        // annotation block is encountered. 
+        if (def != NULL) {
+            if (def->get_semantics() == IDefinition::DS_VERSION_NUMBER_ANNOTATION &&
+                m_mdl_version >= IMDL::MDL_VERSION_1_3) {
                 continue; // skip
+            }
         }
         IAnnotation *new_anno = clone_annotation(anno_block->get_annotation(i), modifier);
         new_block->add_annotation(new_anno);
