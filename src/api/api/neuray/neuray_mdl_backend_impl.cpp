@@ -44,6 +44,7 @@
 #include <render/mdl/runtime/i_mdlrt_resource_handler.h>
 #include <render/mdl/backends/backends_target_code.h>
 #include <api/api/neuray/neuray_compiled_material_impl.h>
+#include <api/api/neuray/neuray_function_definition_impl.h>
 #include <api/api/neuray/neuray_function_call_impl.h>
 #include <api/api/neuray/neuray_transaction_impl.h>
 #include <api/api/neuray/neuray_mdl_execution_context_impl.h>
@@ -74,6 +75,14 @@ static MDL::Mdl_compiled_material const *unwrap(
     Compiled_material_impl const *compiled_material_impl =
         static_cast<Compiled_material_impl const *>(compiled_material);
      return compiled_material_impl->get_db_element();
+}
+
+static MDL::Mdl_function_definition const *unwrap(
+    mi::neuraylib::IFunction_definition const* function_definition)
+{
+    Function_definition_impl const* function_definition_impl =
+        static_cast<Function_definition_impl const*>(function_definition);
+    return function_definition_impl->get_db_element();
 }
 
 static BACKENDS::Link_unit const *unwrap(mi::neuraylib::ILink_unit const *lu)
@@ -145,6 +154,17 @@ mi::Sint32 Link_unit::add_material(
         unwrap(material),
         function_descriptions,
         static_cast<size_t>(description_count),
+        unwrap_and_clear(context));
+}
+
+Sint32 Link_unit::add_function(
+    const mi::neuraylib::IFunction_definition* function,
+    char const* name,
+    mi::neuraylib::IMdl_execution_context* context)
+{
+    return m_link_unit.add_function(
+        unwrap(function),
+        name,
         unwrap_and_clear(context));
 }
 

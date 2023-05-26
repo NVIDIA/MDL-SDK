@@ -2108,7 +2108,8 @@ Link_unit_jit *Code_generator_jit::create_link_unit(
 // Compile a link unit into a LLVM-IR using the JIT.
 IGenerated_code_executable *Code_generator_jit::compile_unit(
     ICode_generator_thread_context *ctx,
-    ILink_unit const               *iunit)
+    ILink_unit const               *iunit,
+    bool                           llvm_ir_output)
 {
     if (iunit == NULL) {
         return NULL;
@@ -2201,25 +2202,28 @@ IGenerated_code_executable *Code_generator_jit::compile_unit(
             code_obj->get_interface<mi::mdl::Generated_code_source>());
 
         Target_language target = unit.get_target_language();
-        switch (target) {
-        case ICode_generator::TL_PTX:
-            unit->ptx_compile(llvm_module, code->access_src_code());
-            break;
-        case ICode_generator::TL_HLSL:
-        case ICode_generator::TL_GLSL:
-            unit->sl_compile(llvm_module, target, options, *code);
-            break;
-        case ICode_generator::TL_LLVM_IR:
+        if (llvm_ir_output || target == ICode_generator::TL_LLVM_IR) {
             if (options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE)) {
                 unit->llvm_bc_compile(llvm_module, code->access_src_code());
             } else {
                 unit->llvm_ir_compile(llvm_module, code->access_src_code());
             }
-            break;
-        default:
-            MDL_ASSERT(!"unexpected target kind");
-            break;
+        } else {
+            switch (target) {
+            case ICode_generator::TL_PTX:
+                unit->ptx_compile(llvm_module, code->access_src_code());
+                break;
+            case ICode_generator::TL_HLSL:
+            case ICode_generator::TL_GLSL:
+                unit->sl_compile(llvm_module, target, options, *code);
+                break;
+            case ICode_generator::TL_LLVM_IR:
+            default:
+                MDL_ASSERT(!"unexpected target kind");
+                break;
+            }
         }
+
         unit->fill_function_info(code.get());
 
         // set the read-only data segment
