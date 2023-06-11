@@ -42,6 +42,7 @@ namespace neuraylib {
 
 class IBuffer;
 class ICompiled_material;
+class IFunction_definition;
 class IFunction_call;
 class ILink_unit;
 class IMdl_execution_context;
@@ -1664,6 +1665,11 @@ public:
         Target_function_description*    function_descriptions,
         Size                            description_count,
         IMdl_execution_context*         context) = 0;
+
+    virtual Sint32 add_function(
+        const IFunction_definition* function,
+        char const*                 name,
+        IMdl_execution_context* context) = 0;
 };
 
 /// Description of target function

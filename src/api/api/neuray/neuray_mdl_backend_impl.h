@@ -185,6 +185,11 @@ public:
 
     BACKENDS::Link_unit const *get_link_unit() const { return &m_link_unit; }
 
+    Sint32 add_function(
+        const mi::neuraylib::IFunction_definition* function,
+        char const* name,
+        mi::neuraylib::IMdl_execution_context* context) final;
+
 private:
     BACKENDS::Link_unit m_link_unit;
 };

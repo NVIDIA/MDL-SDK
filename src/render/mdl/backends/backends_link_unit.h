@@ -48,6 +48,7 @@ namespace DB { class Transaction; }
 namespace MDL {
 class Mdl_function_call;
 class Mdl_compiled_material;
+class Mdl_function_definition;
 class IValue_list;
 class Execution_context; 
 };
@@ -222,6 +223,11 @@ public:
         mi::neuraylib::Target_function_description   *function_descriptions,
         mi::Size                                      function_count,
         MDL::Execution_context                       *context);
+
+    mi::Sint32 add_function(
+        MDL::Mdl_function_definition const *function,
+        char const                         *name,
+        MDL::Execution_context             * context);
 
     /// Get the number of functions inside this link unit.
     mi::Size get_num_functions() const;

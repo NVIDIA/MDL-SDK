@@ -1135,6 +1135,73 @@ public:
         return lambda.get();
     }
 
+    mi::mdl::ILambda_function *from_function_definition(
+        MDL::Mdl_function_definition const *fdef,
+        char const                         *fname)
+    {
+        if (fdef == NULL) {
+            m_error = -1;
+            m_error_string = "Invalid parameters (NULL pointer)";
+            return NULL;
+        }
+
+        mi::mdl::ILambda_function::Lambda_execution_context lec
+            = mi::mdl::ILambda_function::LEC_CORE; // FIXME: could also be e.g. displacement, but why, and how to choose
+
+        mi::base::Handle<mi::mdl::ILambda_function> lambda(
+            m_compiler->create_lambda_function(lec));
+
+        if (fname != NULL) {
+            lambda->set_name(fname);
+        } else {
+            // if not set, use the simple name of the function definition
+            // FIXME: replace with the mangled name
+            lambda->set_name(fdef->get_mdl_simple_name());
+        }
+
+        size_t parameter_count =  fdef->get_parameter_count();
+        std::vector<mi::mdl::DAG_call::Call_argument> mdl_arguments(parameter_count);
+
+        MDL::Mdl_dag_builder<mi::mdl::IDag_builder> builder(
+            m_db_transaction, lambda.get(), /*compiled_material=*/NULL);
+
+        mi::mdl::IType_factory *tf = lambda->get_type_factory();
+
+        for (size_t i = 0; i < parameter_count; ++i) {
+            mi::mdl::IType const *type = fdef->get_mdl_parameter_type(m_db_transaction, i);
+
+            if (mi::mdl::IType_array const *arr_type = mi::mdl::as<mi::mdl::IType_array>(type)) {
+                if (!arr_type->is_immediate_sized()) {
+                    // compilation of deferred size arrays not supported yet
+                    m_error = -2;
+                    m_error_string = "Arguments of deferred size array type unsupported";
+                    return NULL;
+                }
+            }
+
+            type = tf->import(type->skip_type_alias());
+
+            lambda->add_parameter(type, fdef->get_parameter_name(i));
+            mdl_arguments[i].param_name = fdef->get_parameter_name(i);
+            mdl_arguments[i].arg = lambda->create_parameter(type, (int) i);
+        }
+
+        std::string decoded_mdl_name = MDL::decode_name_with_signature(fdef->get_mdl_name());
+        mi::mdl::DAG_node const *body = lambda->create_call(
+            decoded_mdl_name.c_str(),
+            fdef->get_mdl_semantic(),
+            parameter_count > 0 ? &mdl_arguments[0] : 0,
+            parameter_count,
+            fdef->get_mdl_return_type(m_db_transaction));
+
+        lambda->set_body(body);
+
+        m_error = 0;
+        lambda->retain();
+
+        return lambda.get();
+    }
+
     /// Build a distribution function from a material df (for example surface.scattering).
     mi::mdl::IDistribution_function *from_material_df(
         const MDL::Mdl_compiled_material* compiled_material,
@@ -2972,6 +3039,92 @@ mi::Sint32 Link_unit::add_material(
     return 0;
 }
 
+mi::Sint32 Link_unit::add_function(
+    MDL::Mdl_function_definition const* function,
+    char const* name,
+    MDL::Execution_context* context)
+{
+    Lambda_builder builder(
+        m_compiler.get(),
+        m_transaction,
+        m_compile_consts,
+        m_calc_derivatives);
+
+    mi::base::Handle<mi::mdl::ILambda_function> lambda(
+        builder.from_function_definition(function, name));
+
+    if (!lambda.is_valid_interface())
+    {
+        MDL::add_error_message(
+            context, builder.get_error_string(), builder.get_error_code() * 10);
+        return builder.get_error_code();
+    }
+
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module(/*deferred=*/false);
+    MDL::Module_cache module_cache(m_transaction, mdlc_module->get_module_wait_queue(), {});
+
+    MDL::Mdl_call_resolver resolver(m_transaction);
+
+    // enumerate resources ...
+    bool resolve_resources = get_context_option<bool>(context, MDL_CTX_OPTION_RESOLVE_RESOURCES);
+    m_tc_reg->set_in_argument_mode(false);
+    Function_enumerator enumerator(
+        *m_tc_reg,
+        lambda.get(),
+        m_transaction,
+        m_tex_idx,
+        m_lp_idx,
+        m_bm_idx,
+        m_res_index_map,
+        !resolve_resources,
+        resolve_resources);
+    lambda->enumerate_resources(resolver, enumerator, lambda->get_body());
+    if (!resolve_resources)
+        lambda->set_has_resource_attributes(false);
+
+    if (m_calc_derivatives)
+         lambda->initialize_derivative_infos(&resolver);
+
+    size_t arg_block_index = ~0;
+    size_t index = ~0;
+
+    if (!m_unit->add(
+        lambda.get(),
+        &module_cache,
+        &resolver,
+        mi::mdl::IGenerated_code_executable::FK_LAMBDA,
+        &arg_block_index,
+        &index))
+    {
+        MDL::convert_and_log_messages(m_unit->access_messages(), context);
+        MDL::add_error_message(
+            context, std::string("The JIT backend failed to compile the function ") +
+            function->get_mdl_name(), -1);
+        return -1;
+    }
+
+    if (arg_block_index != size_t(~0))
+    {
+        // Add it to the target code and remember the arguments of the function material
+        mi::base::Handle<mi::mdl::IGenerated_code_value_layout const> layout(
+            m_unit->get_arg_block_layout(arg_block_index));
+        mi::Size index = m_target_code->add_argument_block_layout(
+            mi::base::make_handle(
+                new Target_value_layout(layout.get(), m_strings_mapped_to_ids)).get());
+        ASSERT(M_BACKENDS, index == arg_block_index && "Unit and target code should be in sync");
+
+        //FIXME: should we add to m_arg_block_comp_material_args?
+        //m_arg_block_comp_material_args.push_back(
+        //    mi::base::make_handle(compiled_material->get_arguments()));
+        //ASSERT(M_BACKENDS, index == m_arg_block_comp_material_args.size() - 1 &&
+        //    "Unit and arg block material arg list should be in sync");
+
+        (void)index;  // avoid warning about unused variable
+    }
+
+    return 0;
+}
+
 // Get the number of functions inside this link unit.
 mi::Size Link_unit::get_num_functions() const
 {
@@ -4199,7 +4352,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_link_unit(
 #endif
 
     mi::base::Handle<mi::mdl::IGenerated_code_executable> code(
-        m_jit->compile_unit(cg_ctx.get(), mi::base::make_handle(lu->get_compilation_unit()).get()));
+        m_jit->compile_unit(cg_ctx.get(), mi::base::make_handle(lu->get_compilation_unit()).get(), !m_output_target_lang));
 
     if (!code.is_valid_interface()) {
         MDL::add_error_message(context,

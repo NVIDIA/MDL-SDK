@@ -754,15 +754,17 @@ public:
 
     /// Compile a link unit into a LLVM-IR, PTX or native code using the JIT.
     ///
-    /// \param ctx   the code generator thread context
-    /// \param unit  the link unit to compile
+    /// \param ctx              the code generator thread context
+    /// \param unit             the link unit to compile
+    /// \param llvm_ir_output   if true generate LLVM-IR (prepared for the target language)
     ///
     /// \return the compiled function or NULL on compilation errors
     ///
     /// \note the thread context should have the same value as in create_link_unit()
     IGenerated_code_executable *compile_unit(
         ICode_generator_thread_context *ctx,
-        ILink_unit const               *unit) MDL_FINAL;
+        ILink_unit const               *unit,
+        bool                           llvm_ir_output) MDL_FINAL;
 
     /// Create a blank layout used for deserialization of target codes.
     IGenerated_code_value_layout* create_value_layout() const MDL_FINAL;
