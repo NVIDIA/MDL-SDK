@@ -107,8 +107,7 @@ public:
     ///                 created
     ///           - -9: There is already an element of name \p name and overwriting elements of that
     ///                 type is not supported. This applies to elements of type
-    ///                 #mi::neuraylib::IModule, #mi::neuraylib::IMaterial_definition, and
-    ///                 #mi::neuraylib::IFunction_definition.
+    ///                 #mi::neuraylib::IModule and #mi::neuraylib::IFunction_definition.
     virtual mi::Sint32 store(
         Transaction_impl* transaction, const char* name, mi::Uint8 privacy) = 0;
 

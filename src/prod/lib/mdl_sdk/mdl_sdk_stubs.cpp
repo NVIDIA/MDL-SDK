@@ -33,6 +33,8 @@
 
 #include <io/scene/scene/i_scene_scene_element_base.h>
 
+namespace mi { namespace neuraylib { class IReader; } }
+
 namespace MI {
 
 // needed because MDL and other scene elements are used without linking the SCENE module
@@ -77,13 +79,16 @@ namespace VOLUME {
 
 DB::Tag load_mdl_volume_texture(
     DB::Transaction* transaction,
+    mi::neuraylib::IReader* reader,
     const std::string& filename,
     const std::string& container_filename,
     const std::string& container_membername,
     const std::string& mdl_file_path,
-    const std::string& channel,
-    bool shared)
+    const std::string& selector,
+    bool shared_proxy,
+    mi::Sint32& result)
 {
+    result = -3;
     return DB::Tag{};
 }
 

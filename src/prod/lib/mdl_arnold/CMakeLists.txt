@@ -131,17 +131,12 @@ list(APPEND _DEPENDS
 if(TARGET mdl::mdl_sdk)
     list(APPEND _COMANDS
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:mdl::mdl_sdk> ${_OUTPUT_DIRECTORY}/libmdl_sdk_ai${_SHARED_SUFFIX}
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:mdl::nv_freeimage> ${_OUTPUT_DIRECTORY}/nv_freeimage_ai${_SHARED_SUFFIX}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:mdl::nv_openimageio> ${_OUTPUT_DIRECTORY}/nv_openimageio_ai${_SHARED_SUFFIX}
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:mdl::dds> ${_OUTPUT_DIRECTORY}/dds_ai${_SHARED_SUFFIX}
     )
-    if(WINDOWS)
-        list(APPEND _COMANDS
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE_DIR:mdl::nv_freeimage>/freeimage.dll ${_OUTPUT_DIRECTORY}/freeimage.dll
-        )
-    endif()
     list(APPEND _DEPENDS
         mdl::mdl_sdk
-        mdl::nv_freeimage
+        mdl::nv_openimageio
         mdl::dds
     )
 # in case this example is used with the binary release of the MDL SDK
@@ -159,12 +154,12 @@ else()
             set(_SDK_BINARY_DIR $<$<CONFIG:Debug>:${MI_OBJ_G}>$<$<CONFIG:Release>:${MI_OBJ_O}>$<$<CONFIG:RelWithDebInfo>:${MI_OBJ_O_G}>)
         endif()
 
-        set(_FREEIMAGE_BINARY_DIR ${_SDK_BINARY_DIR})
+        set(_OPENIMAGEIO_BINARY_DIR ${_SDK_BINARY_DIR})
         set(_DDS_BINARY_DIR ${_SDK_BINARY_DIR})
 
         # prefer the src structure over the tape structure
-        if(EXISTS ${_SDK_BINARY_DIR}/shaders/plugin/freeimage/nv_freeimage${_SHARED_SUFFIX} )
-            set(_FREEIMAGE_BINARY_DIR ${_SDK_BINARY_DIR}/shaders/plugin/freeimage)
+        if(EXISTS ${_SDK_BINARY_DIR}/shaders/plugin/openimageio/nv_openimageio${_SHARED_SUFFIX} )
+            set(_OPENIMAGEIO_BINARY_DIR ${_SDK_BINARY_DIR}/shaders/plugin/openimageio)
         endif()
 
         if(EXISTS ${_SDK_BINARY_DIR}/shaders/plugin/dds/dds${_SHARED_SUFFIX}  )
@@ -176,19 +171,19 @@ else()
         endif()
     else()
         # copy and rename libraries shipped in the release bundle
-        set(_FREEIMAGE_BINARY_DIR ${MDL_BASE_FOLDER}/${MI_PLATFORM_NAME}/lib/)
+        set(_OPENIMAGEIO_BINARY_DIR ${MDL_BASE_FOLDER}/${MI_PLATFORM_NAME}/lib/)
         set(_DDS_BINARY_DIR ${MDL_BASE_FOLDER}/${MI_PLATFORM_NAME}/lib/)
         set(_SDK_BINARY_DIR ${MDL_BASE_FOLDER}/${MI_PLATFORM_NAME}/lib/)
     endif()
 
     list(APPEND _COMANDS
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_SDK_BINARY_DIR}/libmdl_sdk${_SHARED_SUFFIX} ${_OUTPUT_DIRECTORY}/libmdl_sdk_ai${_SHARED_SUFFIX}
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_FREEIMAGE_BINARY_DIR}/nv_freeimage${_SHARED_SUFFIX} ${_OUTPUT_DIRECTORY}/nv_freeimage_ai${_SHARED_SUFFIX}
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_OPENIMAGEIO_BINARY_DIR}/nv_openimageio${_SHARED_SUFFIX} ${_OUTPUT_DIRECTORY}/nv_openimageio_ai${_SHARED_SUFFIX}
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${_DDS_BINARY_DIR}/dds${_SHARED_SUFFIX} ${_OUTPUT_DIRECTORY}/dds_ai${_SHARED_SUFFIX}
     )
     list(APPEND _DEPENDS
         ${_SDK_BINARY_DIR}/libmdl_sdk${_SHARED_SUFFIX}
-        ${_FREEIMAGE_BINARY_DIR}/nv_freeimage${_SHARED_SUFFIX}
+        ${_OPENIMAGEIO_BINARY_DIR}/nv_openimageio${_SHARED_SUFFIX}
         ${_DDS_BINARY_DIR}/dds${_SHARED_SUFFIX}
     )
 endif()

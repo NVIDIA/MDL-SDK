@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright 2022 NVIDIA Corporation. All rights reserved.
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
  *****************************************************************************/
 
 // examples/mdl_sdk/df_vulkan/mdl_runtime.glsl
@@ -18,7 +18,7 @@
 #define MDL_RUNTIME_GLSL
 
 // The array indices of the material textures. This is needed because in MDL the 2D and 3D textures
-// are not differenciated and thus, the 2D and 3D sampler arrays should overlap.
+// are not differentiated and thus, the 2D and 3D sampler arrays should overlap.
 // e.g. 2D textures: | A | _ | C | D | _ | _ |
 //      3D textures: | _ | B | _ | _ | E | F |
 // However, in Vulkan 1.0 without extensions this is not possible since all bindings of a descriptor
@@ -105,7 +105,7 @@ struct Bsdf_sample_data
     /*Input*/ vec3 ior2;           // IOR other side
     /*Input*/ vec3 k1;             // outgoing direction
     /*Output*/ vec3 k2;            // incoming direction
-    /*Input*/ vec4 xi;             // pseudo-random sample number
+    /*Input*/ vec4 xi;             // pseudo-random sample numbers in range [0, 1)
     /*Output*/ float pdf;          // pdf (non-projected hemisphere)
     /*Output*/ vec3 bsdf_over_pdf; // bsdf * dot(normal, k2) / pdf
     /*Output*/ int event_type;     // the type of event for the generated sample
@@ -143,7 +143,7 @@ struct Bsdf_pdf_data
 
 struct Edf_sample_data
 {
-    /*Input*/ vec4 xi;            // pseudo-random sample number
+    /*Input*/ vec4 xi;            // pseudo-random sample numbers in range [0, 1)
     /*Output*/ vec3 k1;           // outgoing direction
     /*Output*/ float pdf;         // pdf (non-projected hemisphere)
     /*Output*/ vec3 edf_over_pdf; // edf * dot(normal,k1) / pdf
@@ -605,47 +605,52 @@ bool scene_data_isvalid(State state, int scene_data_id)
 
 vec4 scene_data_lookup_float4(State state, int scene_data_id, vec4 default_value, bool uniform_lookup)
 {
-    return vec4(0.0);
+    return default_value;
 }
 
 vec3 scene_data_lookup_float3(State state, int scene_data_id, vec3 default_value, bool uniform_lookup)
 {
-    return vec3(0.0);
+    return default_value;
 }
 
 vec3 scene_data_lookup_color(State state, int scene_data_id, vec3 default_value, bool uniform_lookup)
 {
-    return vec3(0.0);
+    return default_value;
 }
 
 vec2 scene_data_lookup_float2(State state, int scene_data_id, vec2 default_value, bool uniform_lookup)
 {
-    return vec2(0.0);
+    return default_value;
 }
 
 float scene_data_lookup_float(State state, int scene_data_id, float default_value, bool uniform_lookup)
 {
-    return 0.0;
+    return default_value;
 }
 
 ivec4 scene_data_lookup_int4(State state, int scene_data_id, ivec4 default_value, bool uniform_lookup)
 {
-    return ivec4(0);
+    return default_value;
 }
 
 ivec3 scene_data_lookup_int3(State state, int scene_data_id, ivec3 default_value, bool uniform_lookup)
 {
-    return ivec3(0);
+    return default_value;
 }
 
 ivec2 scene_data_lookup_int2(State state, int scene_data_id, ivec2 default_value, bool uniform_lookup)
 {
-    return ivec2(0);
+    return default_value;
 }
 
 int scene_data_lookup_int(State state, int scene_data_id, int default_value, bool uniform_lookup)
 {
-    return 0;
+    return default_value;
+}
+
+mat4 scene_data_lookup_float4x4(State state, int scene_data_id, mat4 default_value, bool uniform_lookup)
+{
+    return default_value;
 }
 
 #endif // MDL_RUNTIME_GLSL

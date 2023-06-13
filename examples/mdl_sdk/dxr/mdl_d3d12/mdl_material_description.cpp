@@ -365,59 +365,11 @@ namespace // anonymous
         mi::base::Handle<const mi::neuraylib::IType> type;
     };
 
-    struct texture_data
-    {
-        std::string db_name_image;
-        std::string db_name_texture_srgb;
-        std::string db_name_texture_linear;
-    };
-
-
-    std::string convert_module_uri_to_package(const std::string& uri)
-    {
-        // remove .mdl
-        std::string result = (uri.rfind(".mdl") != std::string::npos)
-            ? uri.substr(0, uri.size() - 4) : uri;
-
-        // remove mdl://
-        if (result.find("mdl://") != std::string::npos)
-            result = result.substr(6);
-
-        // remove preceding . and ..
-        if (result[0] == '.')
-        {
-            if (result[1] == '.')
-                result = result.substr(2);
-            else
-                result = result.substr(1);
-        }
-
-        // prepend slash (/) if missing
-        if (result[0] != '/')
-            result = '/' + result;
-
-        // replace all slashes (/) with a double colon (::)
-        for (size_t pos = 0; pos < result.size(); pos++)
-        {
-            if (result[pos] != '/')
-                continue;
-
-            // find end of multi slash
-            size_t end = pos + 1;
-            while (end < result.size() && result[end] == '/')
-                end++;
-
-            result.replace(pos, end - pos, "::");
-        }
-
-        return result;
-    }
 
     const mi::neuraylib::IType* create_type_from_gltf(
         Mdl_sdk& sdk,
         const IScene_loader::Scene* scene,
         const fx::gltf::NV_MaterialsMDL::Type& gltf_type,
-        std::unordered_map<int32_t, type_data>& types,
         mi::neuraylib::IType_factory* tf,
         mi::neuraylib::IMdl_execution_context* context
     )
@@ -429,232 +381,236 @@ namespace // anonymous
         mi::base::Handle<const mi::neuraylib::IType_atomic> vector_element_type;
 
         // handle builtin types as defined in the MDL specification Appendix A
-        if (gltf_type.kind == fx::gltf::NV_MaterialsMDL::Type::Kind::BuiltinType)
+        if (gltf_type.module == static_cast<int32_t>(-1))
         {
             // booleans, numeric types, strings, ...
-            if (gltf_type.builtinType == "bool")
+            if (gltf_type.typeName == "bool")
             {
                 type = tf->create_bool();
             }
-            else if (gltf_type.builtinType == "bool2")
+            else if (gltf_type.typeName == "bool2")
             {
                 vector_element_type = tf->create_bool();
                 vector_element_count = 2;
             }
-            else if (gltf_type.builtinType == "bool3")
+            else if (gltf_type.typeName == "bool3")
             {
                 vector_element_type = tf->create_bool();
                 vector_element_count = 3;
             }
-            else if (gltf_type.builtinType == "bool4")
+            else if (gltf_type.typeName == "bool4")
             {
                 vector_element_type = tf->create_bool();
                 vector_element_count = 4;
             }
-            else if (gltf_type.builtinType == "color")
+            else if (gltf_type.typeName == "color")
             {
                 type = tf->create_color();
             }
-            else if (gltf_type.builtinType == "double")
+            else if (gltf_type.typeName == "double")
             {
                 type = tf->create_double();
             }
-            else if (gltf_type.builtinType == "double2")
+            else if (gltf_type.typeName == "double2")
             {
                 vector_element_type = tf->create_double();
                 vector_element_count = 2;
             }
-            else if (gltf_type.builtinType == "double3")
+            else if (gltf_type.typeName == "double3")
             {
                 vector_element_type = tf->create_double();
                 vector_element_count = 3;
             }
-            else if (gltf_type.builtinType == "double4")
+            else if (gltf_type.typeName == "double4")
             {
                 vector_element_type = tf->create_double();
                 vector_element_count = 4;
             }
-            else if (gltf_type.builtinType == "double2x2")
+            else if (gltf_type.typeName == "double2x2")
             {
                 vector_element_type = tf->create_double();
                 vector_element_count = 2;
                 matrix_column_count = 2;
             }
-            else if (gltf_type.builtinType == "double2x3")
+            else if (gltf_type.typeName == "double2x3")
             {
                 vector_element_type = tf->create_double();
                 vector_element_count = 3;
                 matrix_column_count = 2;
             }
-            else if (gltf_type.builtinType == "double2x4")
+            else if (gltf_type.typeName == "double2x4")
             {
                 vector_element_type = tf->create_double();
                 vector_element_count = 4;
                 matrix_column_count = 2;
             }
-            else if (gltf_type.builtinType == "double3x2")
+            else if (gltf_type.typeName == "double3x2")
             {
                 vector_element_type = tf->create_double();
                 vector_element_count = 2;
                 matrix_column_count = 3;
             }
-            else if (gltf_type.builtinType == "double3x3")
+            else if (gltf_type.typeName == "double3x3")
             {
                 vector_element_type = tf->create_double();
                 vector_element_count = 3;
                 matrix_column_count = 3;
             }
-            else if (gltf_type.builtinType == "double3x4")
+            else if (gltf_type.typeName == "double3x4")
             {
                 vector_element_type = tf->create_double();
                 vector_element_count = 4;
                 matrix_column_count = 3;
             }
-            else if (gltf_type.builtinType == "double4x2")
+            else if (gltf_type.typeName == "double4x2")
             {
                 vector_element_type = tf->create_double();
                 vector_element_count = 2;
                 matrix_column_count = 4;
             }
-            else if (gltf_type.builtinType == "double4x3")
+            else if (gltf_type.typeName == "double4x3")
             {
                 vector_element_type = tf->create_double();
                 vector_element_count = 3;
                 matrix_column_count = 4;
             }
-            else if (gltf_type.builtinType == "double4x4")
+            else if (gltf_type.typeName == "double4x4")
             {
                 vector_element_type = tf->create_double();
                 vector_element_count = 4;
                 matrix_column_count = 4;
             }
-            else if (gltf_type.builtinType == "float")
+            else if (gltf_type.typeName == "float")
             {
                 type = tf->create_float();
             }
-            else if (gltf_type.builtinType == "float2")
+            else if (gltf_type.typeName == "float2")
             {
                 vector_element_type = tf->create_float();
                 vector_element_count = 2;
             }
-            else if (gltf_type.builtinType == "float3")
+            else if (gltf_type.typeName == "float3")
             {
                 vector_element_type = tf->create_float();
                 vector_element_count = 3;
             }
-            else if (gltf_type.builtinType == "float4")
+            else if (gltf_type.typeName == "float4")
             {
                 vector_element_type = tf->create_float();
                 vector_element_count = 4;
             }
-            else if (gltf_type.builtinType == "float2x2")
+            else if (gltf_type.typeName == "float2x2")
             {
                 vector_element_type = tf->create_float();
                 vector_element_count = 2;
                 matrix_column_count = 2;
             }
-            else if (gltf_type.builtinType == "float2x3")
+            else if (gltf_type.typeName == "float2x3")
             {
                 vector_element_type = tf->create_float();
                 vector_element_count = 3;
                 matrix_column_count = 2;
             }
-            else if (gltf_type.builtinType == "float2x4")
+            else if (gltf_type.typeName == "float2x4")
             {
                 vector_element_type = tf->create_float();
                 vector_element_count = 4;
                 matrix_column_count = 2;
             }
-            else if (gltf_type.builtinType == "float3x2")
+            else if (gltf_type.typeName == "float3x2")
             {
                 vector_element_type = tf->create_float();
                 vector_element_count = 2;
                 matrix_column_count = 3;
             }
-            else if (gltf_type.builtinType == "float3x3")
+            else if (gltf_type.typeName == "float3x3")
             {
                 vector_element_type = tf->create_float();
                 vector_element_count = 3;
                 matrix_column_count = 3;
             }
-            else if (gltf_type.builtinType == "float3x4")
+            else if (gltf_type.typeName == "float3x4")
             {
                 vector_element_type = tf->create_float();
                 vector_element_count = 4;
                 matrix_column_count = 3;
             }
-            else if (gltf_type.builtinType == "float4x2")
+            else if (gltf_type.typeName == "float4x2")
             {
                 vector_element_type = tf->create_float();
                 vector_element_count = 2;
                 matrix_column_count = 4;
             }
-            else if (gltf_type.builtinType == "float4x3")
+            else if (gltf_type.typeName == "float4x3")
             {
                 vector_element_type = tf->create_float();
                 vector_element_count = 3;
                 matrix_column_count = 4;
             }
-            else if (gltf_type.builtinType == "float4x4")
+            else if (gltf_type.typeName == "float4x4")
             {
                 vector_element_type = tf->create_float();
                 vector_element_count = 4;
                 matrix_column_count = 4;
             }
-            else if (gltf_type.builtinType == "int")
+            else if (gltf_type.typeName == "int")
             {
                 type = tf->create_int();
             }
-            else if (gltf_type.builtinType == "int2")
+            else if (gltf_type.typeName == "int2")
             {
                 vector_element_type = tf->create_int();
                 vector_element_count = 2;
             }
-            else if (gltf_type.builtinType == "int3")
+            else if (gltf_type.typeName == "int3")
             {
                 vector_element_type = tf->create_int();
                 vector_element_count = 3;
             }
-            else if (gltf_type.builtinType == "int4")
+            else if (gltf_type.typeName == "int4")
             {
                 vector_element_type = tf->create_int();
                 vector_element_count = 4;
             }
-            else if (gltf_type.builtinType == "string")
+            else if (gltf_type.typeName == "string")
             {
                 type = tf->create_string();
             }
             // resources
-            else if (gltf_type.builtinType == "texture_2d")
+            else if (gltf_type.typeName == "texture_2d")
             {
                 type = tf->create_texture(mi::neuraylib::IType_texture::TS_2D);
             }
-            else if (gltf_type.builtinType == "light_profile")
+            else if (gltf_type.typeName == "texture_3d")
+            {
+                type = tf->create_texture(mi::neuraylib::IType_texture::TS_3D);
+            }
+            else if (gltf_type.typeName == "light_profile")
             {
                 type = tf->create_light_profile();
             }
-            else if (gltf_type.builtinType == "bsdf_measurement")
+            else if (gltf_type.typeName == "bsdf_measurement")
             {
                 type = tf->create_bsdf_measurement();
             }
             // builtinType structures
             else if (
-                gltf_type.builtinType == "material" ||
-                gltf_type.builtinType == "material_emission" ||
-                gltf_type.builtinType == "material_geometry" ||
-                gltf_type.builtinType == "material_surface" ||
-                gltf_type.builtinType == "material_volume")
+                gltf_type.typeName == "material" ||
+                gltf_type.typeName == "material_emission" ||
+                gltf_type.typeName == "material_geometry" ||
+                gltf_type.typeName == "material_surface" ||
+                gltf_type.typeName == "material_volume")
             {
-                type = tf->create_struct(("::" + gltf_type.builtinType).c_str());
+                type = tf->create_struct(("::" + gltf_type.typeName).c_str());
             }
             // builtinType enums
-            else if (gltf_type.builtinType == "intensity_mode")
+            else if (gltf_type.typeName == "intensity_mode")
             {
-                type = tf->create_enum(("::" + gltf_type.builtinType).c_str());
+                type = tf->create_enum(("::" + gltf_type.typeName).c_str());
             }
             else
             {
-                log_error("NV_materials_ext: builtin type '" + gltf_type.builtinType +
+                log_error("NV_materials_ext: builtin type '" + gltf_type.typeName +
                     "' unknown or not handled. Do you intend to use a userType?", SRC);
             }
 
@@ -675,45 +631,32 @@ namespace // anonymous
         }
         else
         {
-            // type already processed?
-            auto it = types.find(gltf_type.userType);
-            if (it == types.end())
-            {
-                const auto& gltf_user_type =
-                    scene->ext_NV_materials_mdl.userTypes[gltf_type.userType];
-
-                // load/get the module that contains the type definition
-                const std::string& type_module_name =
-                    gltf_user_type.module == static_cast<int32_t>(-1)
-                    ? "::<builtins>"
-                    : convert_module_uri_to_package(scene->ext_NV_materials_mdl.modules[gltf_user_type.module].uri);
-
-                std::string type_module_db_name;
-                mi::base::Handle<const mi::neuraylib::IModule> type_module(
-                    access_module(sdk, type_module_name.c_str(), type_module_db_name, context));
-                if (!type_module)
-                    return nullptr;
-
-                // get the user type by name
-                mi::base::Handle<const mi::neuraylib::IType_list> module_type_list(
-                    type_module->get_types());
-                const std::string user_type_name =
-                    type_module_name + "::" + gltf_user_type.typeName;
-                type = module_type_list->get_type(user_type_name.c_str());
-                if (!type)
-                {
-                    log_error(
-                        "User gltf_type '" + gltf_user_type.typeName +
-                        "' not found in found in module '" + type_module_name.c_str() + "'.");
-                    return nullptr;
-                }
-
-                it = types.insert({ gltf_type.userType, type_data{} }).first;
-                it->second.type = mi::base::make_handle_dup(type.get());
-            }
+            // load/get the module that contains the type definition
+            std::string type_module_name;
+            const auto& gltf_module = scene->ext_NV_materials_mdl.modules[gltf_type.module];
+            if (gltf_module.bufferView != static_cast<int32_t>(-1) || gltf_module.IsEmbeddedResource())
+                type_module_name = fx::gltf::NV_MaterialsMDL::convert_module_uri_to_package(gltf_module.modulePath);
             else
+                type_module_name = fx::gltf::NV_MaterialsMDL::convert_module_uri_to_package(gltf_module.uri);
+
+            std::string type_module_db_name;
+            mi::base::Handle<const mi::neuraylib::IModule> type_module(
+                access_module(sdk, type_module_name.c_str(), type_module_db_name, context));
+            if (!type_module)
+                return nullptr;
+
+            // get the user type by name
+            mi::base::Handle<const mi::neuraylib::IType_list> module_type_list(
+                type_module->get_types());
+            const std::string user_type_name =
+                type_module_name + "::" + gltf_type.typeName;
+            type = module_type_list->get_type(user_type_name.c_str());
+            if (!type)
             {
-                type = it->second.type;
+                log_error(
+                    "User gltf_type '" + gltf_type.typeName +
+                    "' not found in found in module '" + type_module_name.c_str() + "'.");
+                return nullptr;
             }
         }
 
@@ -724,7 +667,6 @@ namespace // anonymous
     mi::neuraylib::IValue* create_value_from_gltf(
         const mi::neuraylib::IType* mdl_type,
         const fx::gltf::NV_MaterialsMDL::Argument& gltf_arg,
-        std::unordered_map<int32_t, type_data>& types,
         mi::neuraylib::IType_factory* tf,
         mi::neuraylib::IValue_factory* vf,
         size_t array_offset
@@ -898,8 +840,6 @@ std::string Mdl_material_description::build_material_graph_NV_materials_mdl(
     std::unordered_set<std::string> modules_used;
 
     std::unordered_map<int32_t, function_call_data> nodes;
-    std::unordered_map<int32_t, type_data> types;
-    std::unordered_map<int32_t, texture_data> textures;
 
     mi::base::Handle<mi::neuraylib::IExpression_factory> ef(
         sdk.get_factory().create_expression_factory(sdk.get_transaction().get()));
@@ -926,9 +866,19 @@ std::string Mdl_material_description::build_material_graph_NV_materials_mdl(
         // load/get the module that contains the function call definition
         // NOTE: The MDL glTF extension uses URIs for modules, which the SDK doesn't support yet.
         //       For now convert URI to the old package style names.
-        std::string module_name = gltf_function_call.module == static_cast<int32_t>(-1)
-            ? "::<builtins>"
-            : convert_module_uri_to_package(m_scene->ext_NV_materials_mdl.modules[gltf_function_call.module].uri);
+        std::string module_name;
+        if (gltf_function_call.module == static_cast<int32_t>(-1))
+        {
+            module_name = "::<builtins>";
+        }
+        else
+        {
+            const auto& gltf_module = m_scene->ext_NV_materials_mdl.modules[gltf_function_call.module];
+            if (gltf_module.bufferView != static_cast<int32_t>(-1) || gltf_module.IsEmbeddedResource())
+                module_name = fx::gltf::NV_MaterialsMDL::convert_module_uri_to_package(gltf_module.modulePath);
+            else
+                module_name = fx::gltf::NV_MaterialsMDL::convert_module_uri_to_package(gltf_module.uri);
+        }
 
         std::string module_db_name;
         mi::base::Handle<const mi::neuraylib::IModule> module(
@@ -956,7 +906,7 @@ std::string Mdl_material_description::build_material_graph_NV_materials_mdl(
 
             // convert the gltf argument to an neuray type...
             mi::base::Handle<const mi::neuraylib::IType> mdl_type(
-                create_type_from_gltf(sdk, m_scene, type, types, tf.get(), context));
+                create_type_from_gltf(sdk, m_scene, type, tf.get(), context));
 
             // ... and convert the values
             mi::base::Handle<mi::neuraylib::IValue> value;
@@ -967,7 +917,7 @@ std::string Mdl_material_description::build_material_graph_NV_materials_mdl(
                     value = vf->create(mdl_type.get());
                 else
                     value = create_value_from_gltf(
-                        mdl_type.get(), gltf_arg, types, tf.get(), vf.get(), 0);
+                        mdl_type.get(), gltf_arg, tf.get(), vf.get(), 0);
             }
             else
             {
@@ -984,7 +934,7 @@ std::string Mdl_material_description::build_material_graph_NV_materials_mdl(
                     {
                         mi::base::Handle<mi::neuraylib::IValue> element(
                             create_value_from_gltf(
-                                mdl_type.get(), gltf_arg, types, tf.get(), vf.get(), i));
+                                mdl_type.get(), gltf_arg, tf.get(), vf.get(), i));
                         array_value->set_value(i, element.get());
                     }
                 }
@@ -1006,82 +956,109 @@ std::string Mdl_material_description::build_material_graph_NV_materials_mdl(
         function_definition_name += "::" + gltf_function_call.functionName;
 
         // special handling for resources in glTF
-        if (function_definition_name == "::texture_2d")
+        if (function_definition_name == "::texture_2d"
+            || function_definition_name == "::texture_3d"
+            || function_definition_name == "::light_profile"
+            || function_definition_name == "::bsdf_measurement")
         {
             // as arguments we get the texture name (in form of an image array index)
             // we can also get a value for gamma and a selector
             // the API handles resources a differently and for that we replace the constructor
             // call here.
 
-            std::string texture_db_name;
-            mi::base::Handle<const mi::neuraylib::IImage> image;
-            mi::base::Handle<mi::neuraylib::IValue_texture> tex_value;
+            mi::base::Handle<mi::neuraylib::IValue> value;
 
-            bool load_image_from_uri = true; // hard coded for now
-            if (load_image_from_uri)
+            bool load_resource_from_uri = true; // hard coded for now
+            if (load_resource_from_uri)
             {
                 // read back the arguments parsed
 
-                // the index of the image in the glTF image array
+                // the index of the resource in the glTF array
+                //   images         -> glTF images array
+                //   light profiles -> glTF EXT_lights_ies lights array
+                //   mbsdfs         -> glTF NV_materials_mdl bsdfMeasurements array
                 mi::base::Handle<const mi::neuraylib::IExpression_constant> name_expr(
                     arguments->get_expression<mi::neuraylib::IExpression_constant>("name"));
                 mi::base::Handle<const mi::neuraylib::IValue_int> name_value(
                     name_expr->get_value<mi::neuraylib::IValue_int>());
 
-                // images are loaded to the db while parsing the glTF file
-                const std::string& image_db_name =
-                    m_scene->resources[name_value->get_value()].resource_db_name;
-
-                // gamma is optional
-                float gamma = 0.0f;
-                mi::base::Handle<const mi::neuraylib::IExpression_constant> gamma_expr(
-                    arguments->get_expression<mi::neuraylib::IExpression_constant>("gamma"));
-                if (gamma_expr)
+                if (function_definition_name == "::texture_2d" || function_definition_name == "::texture_3d")
                 {
-                    mi::base::Handle<const mi::neuraylib::IValue_enum> gamma_value(
-                        gamma_expr->get_value<mi::neuraylib::IValue_enum>());
-                    switch (gamma_value->get_index())
+                    // images are loaded to the db while parsing the glTF file
+                    const std::string& resource_db_name
+                        = m_scene->image_resources[name_value->get_value()].resource_db_name;
+
+                    // gamma is optional
+                    float gamma = 0.0f;
+                    mi::base::Handle<const mi::neuraylib::IExpression_constant> gamma_expr(
+                        arguments->get_expression<mi::neuraylib::IExpression_constant>("gamma"));
+                    if (gamma_expr)
                     {
-                    case 1:
-                        gamma = 1.0f;
-                        break;
-                    case 2:
-                        gamma = 2.2f;
-                        break;
-                    default:
-                        gamma = 0.0f;
-                        break;
+                        mi::base::Handle<const mi::neuraylib::IValue_enum> gamma_value(
+                            gamma_expr->get_value<mi::neuraylib::IValue_enum>());
+                        switch (gamma_value->get_index())
+                        {
+                        case 1:
+                            gamma = 1.0f;
+                            break;
+                        case 2:
+                            gamma = 2.2f;
+                            break;
+                        default:
+                            gamma = 0.0f;
+                            break;
+                        }
                     }
+
+                    // compute new database name
+                    std::string gamma_str = std::to_string(int(gamma * 100));
+                    std::string texture_db_name = (function_definition_name == "::texture_2d")
+                        ? resource_db_name + "_texture2d_" + gamma_str
+                        : resource_db_name + "_texture3d_" + gamma_str;
+
+                    // if the texture does not exist yet, create it
+                    mi::base::Handle<const mi::neuraylib::ITexture> texture(
+                        sdk.get_transaction().access<mi::neuraylib::ITexture>(texture_db_name.c_str()));
+                    if (!texture)
+                    {
+                        mi::base::Handle<mi::neuraylib::ITexture> new_texture(
+                            sdk.get_transaction().create<mi::neuraylib::ITexture>("Texture"));
+                        new_texture->set_image(resource_db_name.c_str());
+                        new_texture->set_gamma(gamma);
+                        sdk.get_transaction().store(new_texture.get(), texture_db_name.c_str());
+                    }
+
+                    // create a value
+                    mi::neuraylib::IType_texture::Shape tex_shape =
+                        (function_definition_name == "::texture_2d")
+                            ? mi::neuraylib::IType_texture::TS_2D
+                            : mi::neuraylib::IType_texture::TS_3D;
+                    mi::base::Handle<const mi::neuraylib::IType_texture> tex_type(tf->create_texture(tex_shape));
+                    value = vf->create_texture(tex_type.get(), texture_db_name.c_str());
                 }
-
-                // compute new database name
-                std::string gamma_str = std::to_string(int(gamma * 100));
-                texture_db_name = image_db_name + "_texture2d_" + gamma_str;
-
-                // if the texture does not exist yet, create it
-                mi::base::Handle<const mi::neuraylib::ITexture> texture(
-                    sdk.get_transaction().access<mi::neuraylib::ITexture>(texture_db_name.c_str()));
-                if (!texture)
+                else if (function_definition_name == "::light_profile")
                 {
-                    mi::base::Handle<mi::neuraylib::ITexture> new_texture(
-                        sdk.get_transaction().create<mi::neuraylib::ITexture>("Texture"));
-                    new_texture->set_image(image_db_name.c_str());
-                    new_texture->set_gamma(gamma);
-                    sdk.get_transaction().store(new_texture.get(), texture_db_name.c_str());
-                }
+                    // light profiles are loaded to the db while parsing the glTF file
+                    const std::string& light_profile_db_name =
+                        m_scene->light_profile_resources[name_value->get_value()].resource_db_name;
 
-                // create a value
-                mi::base::Handle<const mi::neuraylib::IType_texture> tex_type(
-                    tf->create_texture(mi::neuraylib::IType_texture::TS_2D));
-                tex_value = vf->create_texture(tex_type.get(), texture_db_name.c_str());
+                    value = vf->create_light_profile(light_profile_db_name.c_str());
+                }
+                else // function_definition_name == "::bsdf_measurement"
+                {
+                    // mbsdfs are loaded to the db while parsing the glTF file
+                    const std::string& mbsdf_db_name =
+                        m_scene->mbsdf_resources[name_value->get_value()].resource_db_name;
+
+                    value = vf->create_bsdf_measurement(mbsdf_db_name.c_str());
+                }
             }
 
             // replace the entire constructor call by the copy constructor
-            // that takes the texture_2d object we just created
-            mi::base::Handle<mi::neuraylib::IExpression> tex_expr(
-                ef->create_constant(tex_value.get()));
+            // that takes the resource object we just created
+            mi::base::Handle<mi::neuraylib::IExpression> value_expr(ef->create_constant(value.get()));
             arguments = ef->create_expression_list();
-            arguments->add_expression("value", tex_expr.get());
+            arguments->add_expression("value", value_expr.get());
         }
 
         // special handling for template functions, since overload resolution
@@ -1110,7 +1087,7 @@ std::string Mdl_material_description::build_material_graph_NV_materials_mdl(
             // determine the return type of the call
             fx::gltf::NV_MaterialsMDL::Type return_type = gltf_function_call.type;
             mi::base::Handle<const mi::neuraylib::IType> mdl_type(
-                create_type_from_gltf(sdk, m_scene, return_type, types, tf.get(), context));
+                create_type_from_gltf(sdk, m_scene, return_type, tf.get(), context));
             mi::base::Handle<mi::neuraylib::IValue> value(
                 vf->create(mdl_type.get()));
 
@@ -1168,6 +1145,17 @@ std::string Mdl_material_description::build_material_graph_NV_materials_mdl(
                 m_scene_material.name + "\nUsing a fall-back material.");
             return "";
         }
+
+        // check if the root is a material and not a function
+        if (m_scene_material.ext_NV_materials_mdl.functionCall == current_function_call_index &&
+            !dw.is_material())
+        {
+            log_error(
+                "Module was loaded but the root function is not a material: " +
+                m_scene_material.name + "\nUsing a fall-back material.");
+            return "";
+        }
+
         // create a call with default arguments, we will edit them later
         mi::Sint32 ret = 0;
         mi::base::Handle<mi::neuraylib::IScene_element> scene_element(
@@ -1270,13 +1258,12 @@ const char* Mdl_material_description::regenerate_source_code(
 
     // materials with generated code
     std::string generated_code = "";
+    std::string generated_name = "";
 
-    // handle loader
-    if (m_loader)
-        generated_code = m_loader->generate_mdl_source_code(m_scene_material.name, scene_directory);
-
-    // code was generated successfully
-    if (!generated_code.empty())
+    // loader available
+    // and code was generated successfully
+    if (m_loader && m_loader->generate_mdl_source_code(
+        sdk, m_scene_material.name, scene_directory, generated_code, generated_name))
     {
         m_source_code = generated_code;
         return m_source_code.c_str();
@@ -1370,9 +1357,6 @@ bool Mdl_material_description::load_material_definition_mdl(
         return false;
     }
 
-    // name only for display
-    m_name_in_scene = "[mdl] " + m_material_name + " (" + std::to_string(m_unique_id) + ")";
-
     // load the module
     if (!load_mdl_module(sdk, scene_directory, context))
         return false;
@@ -1381,14 +1365,24 @@ bool Mdl_material_description::load_material_definition_mdl(
     mi::base::Handle<const mi::neuraylib::IModule> module(
         sdk.get_transaction().access<mi::neuraylib::IModule>(m_module_db_names[0].c_str()));
 
-    // database name of the material
-    std::string material_definition_db_name = mi::examples::mdl::add_missing_material_signature(
-        module.get(), m_module_db_names[0] + "::" + m_material_name);
+    // replace the wild card symbol by the first material found
+    std::string material_definition_db_name;
+    if (m_material_name == "*" && module->get_material_count() > 0)
+    {
+        material_definition_db_name = module->get_material(0);
+    }
+    else
+    {
+        // database name of the material
+        material_definition_db_name = mi::examples::mdl::add_missing_material_signature(
+            module.get(), m_module_db_names[0] + "::" + m_material_name);
+    }
 
     // check if the module contains the requested material
     mi::base::Handle<const mi::neuraylib::IFunction_definition> definition(
         sdk.get_transaction().access<const mi::neuraylib::IFunction_definition>(
             material_definition_db_name.c_str()));
+
     if (!definition)
     {
         log_error(
@@ -1397,6 +1391,21 @@ bool Mdl_material_description::load_material_definition_mdl(
         m_module_db_names[0] = "";
         return false;
     }
+
+    if (!definition->is_material())
+    {
+        log_error(
+            "Module was loaded but the selected function is not a material: " +
+            m_scene_material.name +
+            "\nUsing a fall-back material instead.");
+        m_module_db_names[0] = "";
+        return false;
+    }
+
+    // name only for display
+    m_material_name = definition->get_mdl_simple_name();
+    m_name_in_scene = "[mdl] " + m_material_name + " (" + std::to_string(m_unique_id) + ")";
+
 
     // create a parameter list for all parameters (even without default)
     // for that the Definition_wrapper can also be used when creating an instance
@@ -2012,8 +2021,9 @@ bool Mdl_material_description::load_material_definition_loader(
     std::string gltf_name = m_scene_material.name;
 
     // generate the source code
-    m_source_code = loader->generate_mdl_source_code(gltf_name, scene_directory);
-    if (m_source_code.empty())
+    m_source_code = "";
+    std::string function_name = "";
+    if (!loader->generate_mdl_source_code(sdk, gltf_name, scene_directory, m_source_code, function_name))
         return false;
 
     // compute a full qualified module name

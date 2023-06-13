@@ -52,12 +52,14 @@ namespace mi { namespace examples { namespace mdl_d3d12
     /// Contains the function indices required for evaluating mdl functions in the shader.
     struct Mdl_material_function_indices
     {
+        int32_t init_index;
         int32_t scattering_function_index;
         int32_t opacity_function_index;
         int32_t emission_function_index;
         int32_t emission_intensity_function_index;
         int32_t thin_walled_function_index;
         int32_t volume_absorption_coefficient_function_index;
+        int32_t standalone_opacity_function_index;
     };
 
     // --------------------------------------------------------------------------------------------
@@ -129,9 +131,6 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// a material registered to this target.
         mi::neuraylib::ITarget_resource_callback* create_resource_callback(Mdl_material* material);
 
-        /// unique id of this target code.
-        size_t get_id() const { return m_id; }
-
         /// Get the hash of the material(s) this target generates code for.
         const std::string& get_compiled_material_hash() { return m_compiled_material_hash; }
 
@@ -157,8 +156,29 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// compiles the generated HLSL code into a DXIL library.
         bool compile();
 
+        /// get the shader entry point name for the closet hit shader
+        const std::string get_entrypoint_radiance_closest_hit_name() const
+        {
+            return m_radiance_closest_hit_name;
+        }
+
+        /// get the shader entry point name for the any hit shader
+        const std::string get_entrypoint_radiance_any_hit_name() const
+        {
+            return m_radiance_any_hit_name;
+        }
+
+        /// get the shader entry point name for the any hit shader
+        const std::string get_entrypoint_shadow_any_hit_name() const
+        {
+            return m_shadow_any_hit_name;
+        }
+
         /// get the result of the compiling step.
-        const IDxcBlob* get_dxil_compiled_library() const { return m_dxil_compiled_library.Get(); }
+        const std::vector<Shader_library>& get_dxil_compiled_libraries() const
+        {
+            return m_dxil_compiled_libraries;
+        }
 
         /// all per target resources can be access in this region of the descriptor heap
         D3D12_GPU_DESCRIPTOR_HANDLE get_descriptor_heap_region() const
@@ -216,7 +236,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// Get the shader suffix for this target to create unique hit groups names.
         /// is not enabled.
         const std::string get_shader_name_suffix() const {
-            return m_shader_cache_name.empty() ? std::to_string(m_id) : m_shader_cache_name;
+            return m_compiled_material_hash;
         }
 
     private:
@@ -229,7 +249,6 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
         Base_application* m_app;
         Mdl_sdk* m_sdk;
-        const size_t m_id;
 
         // The compiled material hash of the material(s) we generate code for
         const std::string m_compiled_material_hash;
@@ -239,8 +258,11 @@ namespace mi { namespace examples { namespace mdl_d3d12
         bool m_generation_required;
         std::string m_hlsl_source_code;
         bool m_compilation_required;
-        ComPtr<IDxcBlob> m_dxil_compiled_library;
-        std::string m_shader_cache_name;
+
+        std::string m_radiance_any_hit_name;
+        std::string m_radiance_closest_hit_name;
+        std::string m_shadow_any_hit_name;
+        std::vector<Shader_library> m_dxil_compiled_libraries;
 
         Descriptor_heap_handle m_first_resource_heap_handle;
         Descriptor_table m_resource_descriptor_table;

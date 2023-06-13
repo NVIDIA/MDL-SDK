@@ -1,0 +1,269 @@
+/******************************************************************************
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_distilling_unity Example for Material Distilling and Baking for Unity
+
+<div align="right">
+    [\link mi_neuray_example_distilling Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_distilling_glsl Next\endlink]
+</div>
+
+This example introduces the distillation of MDL materials to \c transmissive_pbr target model
+and showcases how to compile all material expressions into one link unit and how to
+bake material sub-expressions to a texture that fits the texture channel layout for the
+Unity High Definition Render Pipeline (HDRP) material model.
+
+\section example_distilling_unity_new New Topics
+  - Compiling into one link unit
+  - Baking material to Unity texture channel layout
+
+\section example_distilling_unity_descr Detailed Description
+
+<dl>
+    <dt><b>
+        Compiling all material expressions into one link unit
+    </b></dt>
+    <dd><br>
+        While the distilling part of the example is identical to \link mi_neuray_example_distilling Example for Material Distilling and Baking\endlink,
+        the baking part invokes custom bakers (i.e. this example is not using #mi::neuraylib::IBaker).
+
+        The class \c Baker is responsible for creating and invoking programs for GPU and CPU baking.
+        In \c Baker::init_function_descriptions(), we first create a list of \c mi::neuraylib::Target_function_description from material sub-expressions
+        required by the Unity material model.
+
+        In \c Baker::build_baker_programs(), we use #mi::neuraylib::IMdl_backend_api to generate the GPU and CPU code for all selected expressions
+        in one go using an #mi::neuraylib::ILink_unit.
+
+        The resulting #mi::neuraylib::ITarget_code can then be used in the routine \c Baker::bake() to invoke the custom baking codes.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+         Baking material to Unity material texture channel layout
+    </b></dt>
+    <dd><br>
+        The routine \c Baker::bake_native() implements baking on the CPU while \c Baker::bake_cuda_ptx() implements baking on the GPU.
+
+        Baking results are stored in textures following the Unity texture channel layout.
+        The Unity High Definition Render Pipeline (HDRP) uses channel-packed Textures to store multiple Material maps in a single Texture.
+        Channel packing is efficient because it allows the renderer to sample up to four grayscale maps that use the same UV coordinates
+        with a single Texture fetch. HDRP uses two types of channel-packed Textures: the Mask Map and the Detail Map. The Detail Map is not baked in this example.
+
+        Mask Map is a texture that packs different Material maps into each of its RGBA channels.
+        <ul>
+        <li>Red: Stores the metallic map.
+        <li>Green: Stores the ambient occlusion map.
+        <li>Blue: Stores the detail mask map.
+        <li>Alpha: Stores the smoothness map.
+        </ul>
+
+        In this example we store the result of the evaluation of \c metallic and \c smoothness expressions in the Mask Map.
+        The mapping of the MDL \c roughness to Unity \c smoothness is done with the formula:
+
+        \code
+          smoothness = 1 - sqrt(roughness)
+        \endcode
+        Green channel of the Mask Map is set to 1, Blue channel is set to 0.
+
+        An extra map, the Base map stores \c base_color and \c opacity.
+        The \c opacity value is derived from \c transparency using the formula:
+
+        \code
+          opacity = 1 - transparency
+        \endcode
+
+        In order to use the output maps, create an HDRP/Lit material shader in Unity and connect
+        the Base map and the Mask map to the corresponding parameters.
+
+        Here are some examples of material expressions computed in this example using the \c transmissive_pbr target model:
+
+        <table border="1" cellpadding="3" cellspacing="3">
+          <tr valign="top"><th>Expression Name</th><th>Expression</th></tr>
+          <tr valign="top">
+            <td class="indexkey">
+              anisotropy
+            </td>
+            <td class="indexvalue">
+              surface.scattering.base.layer.components.0.component.layer.roughness_u.s.r.anisotropy
+            </td>
+          </tr>
+          <tr valign="top">
+            <td class="indexkey">
+              anisotropy_rotation
+            </td>
+            <td class="indexvalue">
+              surface.scattering.base.layer.components.0.component.layer.roughness_u.s.r.rotation
+            </td>
+          </tr>
+          <tr valign="top">
+            <td class="indexkey">
+              attenuation_color
+            </td>
+            <td class="indexvalue">
+              volume.absorption_coefficient.s.v.attenuation
+            </td>
+          </tr>
+          <tr valign="top">
+            <td class="indexkey">
+              attenuation_distance
+            </td>
+            <td class="indexvalue">
+              volume.scattering_coefficient.s.v.distance
+            </td>
+          </tr>
+          <tr valign="top">
+            <td class="indexkey">
+              base_color
+            </td>
+            <td class="indexvalue">
+              surface.scattering.base.layer.components.1.component.tint
+            </td>
+          </tr>
+          <tr valign="top">
+            <td class="indexkey">
+              clearcoat_normal
+            </td>
+            <td class="indexvalue">
+              surface.scattering.normal
+            </td>
+          </tr>
+          <tr valign="top">
+            <td class="indexkey">
+              clearcoat_roughness
+            </td>
+            <td class="indexvalue">
+              surface.scattering.layer.roughness_u
+            </td>
+          </tr>
+          <tr valign="top">
+            <td class="indexkey">
+              clearcoat_weight
+            </td>
+            <td class="indexvalue">
+              surface.scattering.weight
+            </td>
+          </tr>
+          <tr valign="top">
+            <td class="indexkey">
+              metallic
+            </td>
+            <td class="indexvalue">
+              surface.scattering.base.layer.components.1.weight
+            </td>
+          </tr>
+          <tr valign="top">
+            <td class="indexkey">
+              normal
+            </td>
+            <td class="indexvalue">
+              surface.scattering.base.normal
+            </td>
+          </tr>
+          <tr valign="top">
+            <td class="indexkey">
+              opacity
+            </td>
+            <td class="indexvalue">
+              geometry.cutout_opacity
+            </td>
+          </tr>
+          <tr valign="top">
+            <td class="indexkey">
+              roughness
+            </td>
+            <td class="indexvalue">
+              surface.scattering.base.layer.components.0.component.layer.roughness_u.s.r.roughness
+            </td>
+          </tr>
+          <tr valign="top">
+            <td class="indexkey">
+              specular
+            </td>
+            <td class="indexvalue">
+              surface.scattering.base.layer.components.0.component.weight
+            </td>
+          </tr>
+          <tr valign="top">
+            <td class="indexkey">
+              subsurface_color
+            </td>
+            <td class="indexvalue">
+              volume.absorption_coefficient.s.v.subsurface
+            </td>
+          </tr>
+          <tr valign="top">
+            <td class="indexkey">
+              transmission_color
+            </td>
+            <td class="indexvalue">
+              surface.scattering.layer.components.0.component.base.components.1.component.tint
+            </td>
+          </tr>
+          <tr valign="top">
+            <td class="indexkey">
+              transparency
+            </td>
+            <td class="indexvalue">
+              surface.scattering.layer.components.0.component.base.components.1.weight
+            </td>
+          </tr>
+          <tr valign="top">
+            <td class="indexkey">
+              volume_ior
+            </td>
+            <td class="indexvalue">
+              ior
+            </td>
+          </tr>
+          <tr valign="top">
+            <td class="indexkey">
+              ...
+            </td>
+            <td class="indexvalue">
+              ...
+            </td>
+          </tr>
+        </table>
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+</dl>
+
+\section example_distilling_unity Example Source
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/distilling_unity/example_distilling_unity.cpp</tt>
+
+\include distilling_unity/example_distilling_unity.cpp
+
+<div align="right">
+    [\link mi_neuray_example_distilling Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_distilling_glsl Next\endlink]
+</div>
+
+*/

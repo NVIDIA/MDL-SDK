@@ -62,9 +62,12 @@ namespace mi { namespace examples { namespace mdl_d3d12
         virtual bool match_gltf_name(const std::string& gltf_name) const = 0;
 
         /// Generate source code based an the provided \c gltf_name.
-        virtual std::string generate_mdl_source_code(
+        virtual bool generate_mdl_source_code(
+            Mdl_sdk& mdl_sdk,
             const std::string& gltf_name,
-            const std::string& scene_directory) const = 0;
+            const std::string& scene_directory,
+            std::string& out_generated_mdl_code,
+            std::string& out_generated_mdl_name) const = 0;
 
         /// Get a small token used as prefix in the GUI and the scene graph. e.g. "[MDLE]"
         virtual std::string get_scene_name_prefix() const = 0;

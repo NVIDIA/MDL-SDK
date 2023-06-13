@@ -311,46 +311,6 @@ public:
     virtual void set_entity_resolver( IMdl_entity_resolver* resolver) = 0;
 
     //@}
-    /// \name Miscellaneous settings
-    //@{
-
-    /// Defines whether materials are treated as functions.
-    ///
-    /// \see \ref mi_mdl_materials_are_functions, #get_materials_are_functions().
-    virtual Sint32 set_materials_are_functions( bool value) = 0;
-
-    /// Indicates whether materials are treated as functions.
-    ///
-    /// \see \ref mi_mdl_materials_are_functions, #set_materials_are_functions().
-    virtual bool get_materials_are_functions() const = 0;
-
-    /// Defines whether encoded names are enabled.
-    ///
-    /// See \ref mi_mdl_encoded_names for details.
-    ///
-    /// This feature is enabled by default. Support for the disabled feature will be deprecated and
-    /// removed in a future release.
-    ///
-    /// This can only be configured before \neurayProductName has been started.
-    ///
-    /// \note This feature does not yet support module names containing parentheses or commas.
-    ///
-    /// \if IRAY_API \note All hosts in a cluster need to agree on this setting. \endif
-    ///
-    /// \if IRAY_API \note This setting needs to be the identical during export and import of
-    ///                    \c .mib files. \endif
-    ///
-    /// \if IRAY_API \note Support for Iray Bridge requires that this feature is enabled. \endif
-    ///
-    /// \see #get_encoded_names_enabled().
-    virtual Sint32 set_encoded_names_enabled( bool value) = 0;
-
-    /// Indicates whether encoded names are enabled.
-    ///
-    /// \see #set_encoded_names_enabled().
-    virtual bool get_encoded_names_enabled() const = 0;
-
-    //@}
 };
 
 /**@}*/ // end group mi_neuray_configuration

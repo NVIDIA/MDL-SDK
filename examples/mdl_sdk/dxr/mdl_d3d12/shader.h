@@ -36,21 +36,81 @@
 namespace mi { namespace examples { namespace mdl_d3d12
 {
     class Base_application;
+    class Base_options;
     class Raytracing_pipeline;
+
+    // --------------------------------------------------------------------------------------------
+
+    class Shader_library
+    {
+    public:
+        struct Data
+        {
+            std::vector<std::wstring> m_exported_symbols_w;
+            std::vector<D3D12_EXPORT_DESC> m_exports;
+            D3D12_DXIL_LIBRARY_DESC m_desc;
+        };
+
+        Shader_library(IDxcBlob* blob, const std::vector<std::string>& exported_symbols);
+
+        const Data* getData() const { return m_d3d_data.get(); }
+
+        IDxcBlob* get_dxil_library() { return m_dxil_library.Get(); }
+        const IDxcBlob* get_dxil_library() const { return m_dxil_library.Get(); }
+
+        const std::vector<std::string>& get_exports() const { return m_exported_symbols; }
+
+    private:
+        ComPtr<IDxcBlob> m_dxil_library;
+        std::vector<std::string> m_exported_symbols;
+
+        // keep the data in a shared ptr to allow copying the library while keeping string pointers
+        std::shared_ptr<Data> m_d3d_data;
+    };
 
     // --------------------------------------------------------------------------------------------
 
     class Shader_compiler
     {
     public:
-        IDxcBlob* compile_shader_library(
-            const std::string& file_name,
-            const std::map<std::string, std::string>* defines = nullptr);
+        Shader_compiler(Base_application* app)
+            : m_app(app)
+        {}
 
-        IDxcBlob* compile_shader_library_from_string(
+        std::vector<Shader_library> compile_shader_library(
+            const Base_options* options,
+            const std::string& file_name,
+            const std::map<std::string, std::string>* defines = nullptr,
+            const std::vector<std::string>& entry_points = {});
+
+        std::vector<Shader_library> compile_shader_library_from_string(
+            const Base_options* options,
             const std::string& shader_source,
             const std::string& debug_name,
-            const std::map<std::string, std::string>* defines = nullptr);
+            const std::map<std::string, std::string>* defines = nullptr,
+            const std::vector<std::string>& entry_points = {});
+
+    private:
+
+        std::vector<Shader_library> compile_shader_library_from_string_dxc(
+            const Base_options* options,
+            const std::string& shader_source,
+            const std::string& debug_name,
+            const std::map<std::string, std::string>* defines,
+            const std::vector<std::string>& entry_points,
+            const std::string& base_file_name);
+
+#ifdef MDL_ENABLE_SLANG
+        std::vector<Shader_library> compile_shader_library_from_string_slang(
+            const Base_options* options,
+            const std::string& shader_source,
+            const std::string& debug_name,
+            const std::map<std::string, std::string>* defines,
+            const std::vector<std::string>& entry_points,
+            const std::string& base_file_name);
+#endif
+
+        Base_application* m_app;
     };
 
     // --------------------------------------------------------------------------------------------

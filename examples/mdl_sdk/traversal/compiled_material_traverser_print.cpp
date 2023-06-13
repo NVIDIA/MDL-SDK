@@ -282,7 +282,7 @@ void Compiled_material_traverser_print::visit_begin(
                     {
                         // Keep imports for structure definitions and arrays of structures as
                         // well as enums and arrays of enums as they can be user defined.
-                        // For ther types, we can drop the qualification part
+                        // For their types, we can drop the qualification part
                         bool drop_qualification = true;
 
                         const mi::base::Handle<const mi::neuraylib::IType> return_type(
@@ -343,7 +343,7 @@ void Compiled_material_traverser_print::visit_begin(
                             ctx->m_imports.insert(function_name.substr(0, pos_dot));
                         }
                     }
-                    // - ternary operator can have non build-in types in the signature and we don't
+                    // - ternary operator can have non built-in types in the signature and we don't
                     //   need an import for them
                     // - the index operator can introduce no new type as the array type is known
                     else if (is_ternary_operator(semantic) || is_array_index_operator(semantic))
@@ -699,7 +699,7 @@ void Compiled_material_traverser_print::visit_begin(
 
         // include the return type if required
         const std::string return_type = type_to_string(temporary_return_type.get(), ctx);
-        if(return_type.rfind("::") != std::string::npos) // no '::' has to be a build-in type
+        if(return_type.rfind("::") != std::string::npos) // no '::' has to be a built-in type
             ctx->m_imports.insert(return_type);
 
         ctx->m_print << indent(ctx) << return_type << " " << get_temporary_name(
@@ -1139,7 +1139,7 @@ std::string Compiled_material_traverser_print::struct_type_to_string(
         if (context->m_keep_compiled_material_structure &&
             context->m_stage == Compiled_material_traverser_base::ES_PARAMETERS)
         {
-            std::cerr << "error:\tThe compiled material defines a parameter of type '"
+            std::cerr << "error:\the compiled material defines a parameter of type '"
                       << s.substr(2) << "', which results in the printing of invalid mdl code.\n";
             context->m_is_valid_mdl = false;
         }

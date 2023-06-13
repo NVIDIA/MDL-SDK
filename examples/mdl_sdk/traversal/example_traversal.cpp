@@ -46,7 +46,7 @@ bool consume_cmd_options(int argc, char *argv[]);
 // several test cases:
 static const char* MODULE_TO_TRAVERSE = "::nvidia::sdk_examples::tutorials";
 
-static const bool WRTIE_TO_FILE = true;
+static const bool WRITE_TO_FILE = true;
 
 // command line settings
 std::string g_qualified_module_name = MODULE_TO_TRAVERSE;
@@ -228,7 +228,7 @@ int MAIN_UTF8(int argc, char* argv[])
             */
 
             // write to file if enabled
-            if (WRTIE_TO_FILE)
+            if (WRITE_TO_FILE)
             {
                 // note the extra underscore: this is used to avoid conflicts while loading
                 std::ofstream file_stream;

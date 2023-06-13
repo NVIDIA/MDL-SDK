@@ -606,6 +606,7 @@ struct Render_context
     mi::base::Handle<const mi::neuraylib::ITarget_code> target_code;
     Texture_handler *tex_handler;
     Texture_handler_deriv *tex_handler_deriv;
+    uint64_t init_function_index;
     uint64_t surface_bsdf_function_index;
     uint64_t surface_edf_function_index;
     uint64_t surface_emission_intensity_function_index;
@@ -1143,6 +1144,7 @@ void generate_native(
 #endif
 
     check_success(be_native->set_option("num_texture_spaces", "1") == 0);
+    check_success(be_native->set_option("num_texture_results", "128") == 0);
 
     if (render_context.render_auxiliary)
         check_success(be_native->set_option("enable_auxiliary", "on") == 0);
@@ -1170,6 +1172,7 @@ void generate_native(
 
     // select expressions to generate code for
     std::vector<mi::neuraylib::Target_function_description> descs;
+    descs.push_back(mi::neuraylib::Target_function_description("init"));
     descs.push_back(mi::neuraylib::Target_function_description("surface.scattering"));
     descs.push_back(mi::neuraylib::Target_function_description("surface.emission.emission"));
     descs.push_back(mi::neuraylib::Target_function_description("surface.emission.intensity"));
@@ -1236,18 +1239,19 @@ void generate_native(
 
     // update render context
     render_context.target_code = code_native;
-    render_context.surface_bsdf_function_index = descs[0].function_index;
-    render_context.surface_edf_function_index = descs[1].function_index;
-    render_context.surface_emission_intensity_function_index = descs[2].function_index;
+    render_context.init_function_index = descs[0].function_index;
+    render_context.surface_bsdf_function_index = descs[1].function_index;
+    render_context.surface_edf_function_index = descs[2].function_index;
+    render_context.surface_emission_intensity_function_index = descs[3].function_index;
 
     render_context.backface_bsdf_function_index = need_backface_bsdf
-        ? descs[backface_scattering_index].function_index : descs[0].function_index;
+        ? descs[backface_scattering_index].function_index : descs[1].function_index;
 
     render_context.backface_edf_function_index = need_backface_edf
-        ? descs[backface_edf_index].function_index : descs[1].function_index;
+        ? descs[backface_edf_index].function_index : descs[2].function_index;
 
     render_context.backface_emission_intensity_function_index = need_backface_emission_intensity
-        ? descs[backface_emission_intensity_index].function_index : descs[2].function_index;
+        ? descs[backface_emission_intensity_index].function_index : descs[3].function_index;
 
     render_context.cutout_opacity_function_index = !render_context.cutout.is_constant
         ? descs[cutout_opacity_desc_index].function_index : ~0;
@@ -1364,9 +1368,10 @@ bool trace_shadow(Render_context& rc, Render_context::Ray& shadow_ray, unsigned 
                 /*arg_block_data=*/ nullptr,
                 &cutout_opacity);
             assert(ret_code == 0 && "execute opacity function failed");
+            (void) ret_code;
         }
 
-        // it's the surface cutted out?.
+        // is the surface cut out?.
         return (cutout_opacity >= rnd(seed));
 
     }
@@ -1379,7 +1384,7 @@ bool trace_shadow(Render_context& rc, Render_context::Ray& shadow_ray, unsigned 
 ///////////////////////////////////////////////////////////////////////////////
 // Recursive raytracing
 ///////////////////////////////////////////////////////////////////////////////
-bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render_context::Ray &ray, unsigned &seed)
+bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::Ray &ray, unsigned &seed)
 {
     if (ray.level >= rc.max_ray_length)
         return false;
@@ -1391,8 +1396,9 @@ bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
     // ray hits sphere?
     if (rc.isect(ray, rc.sphere, isect_info))
     {
-        void *shading_state = nullptr;
-        void *tex_handler   = nullptr;
+        mi::neuraylib::Shading_state_material *shading_state = nullptr;
+        mi::neuraylib::Texture_handler_base   *tex_handler   = nullptr;
+        mi::neuraylib::tct_float4 text_results[128];
 
         // update material shader state
         if (rc.use_derivatives) {
@@ -1418,9 +1424,12 @@ bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
             rc.shading_state_derivs.text_coords = texture_coords;
             rc.shading_state_derivs.tangent_u = &isect_info.tan_u;
             rc.shading_state_derivs.tangent_v = &isect_info.tan_v;
+            rc.shading_state_derivs.text_results = text_results;
 
-            shading_state = &rc.shading_state_derivs;
-            tex_handler   = rc.tex_handler_deriv;
+            shading_state =
+                reinterpret_cast<mi::neuraylib::Shading_state_material *>(&rc.shading_state_derivs);
+            tex_handler =
+                reinterpret_cast<mi::neuraylib::Texture_handler_base *>(rc.tex_handler_deriv);
 
         } else {
             rc.shading_state.position = isect_info.pos;
@@ -1429,6 +1438,7 @@ bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
             rc.shading_state.text_coords = &isect_info.uvw;
             rc.shading_state.tangent_u = &isect_info.tan_u;
             rc.shading_state.tangent_v = &isect_info.tan_v;
+            rc.shading_state.text_results = text_results;
 
             shading_state = &rc.shading_state;
             tex_handler   = rc.tex_handler;
@@ -1443,20 +1453,28 @@ bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
         // return code to check if the code execution succeeded
         mi::Sint32 ret_code;
 
+        // shader initialization for the current hit point
+        ret_code = rc.target_code->execute_init(
+            rc.init_function_index,
+            *shading_state,
+            tex_handler,
+            /*arg_block_data=*/ nullptr);
+        assert(ret_code == 0 && "execute_bsdf_init failed");
+
         // evaluate material cutout opacity
         float cutout_opacity = rc.cutout.constant_opacity;
         if (!rc.cutout.is_constant)
         {
             ret_code = rc.target_code->execute(
                 rc.cutout_opacity_function_index,
-                *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
-                static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
+                *shading_state,
+                tex_handler,
                 /*arg_block_data=*/ nullptr,
                 &cutout_opacity);
             assert(ret_code == 0 && "execute opacity function failed");
         }
 
-        // it's the surface cutted out?. Then skip the surface and send a ray through
+        // is the surface cut out? Then skip the surface and send a ray through
         if (cutout_opacity < rnd(seed))
         {
             ray.p0 = isect_info.pos;
@@ -1474,42 +1492,28 @@ bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
             {
                 ret_code = rc.target_code->execute(
                     rc.thin_walled_function_index,
-                    *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
-                    static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
+                    *shading_state,
+                    tex_handler,
                     /*arg_block_data=*/ nullptr,
                     &is_thin_walled);
                 assert(ret_code == 0 && "execute thin_walled function failed");
-
             }
 
             // evaluate material surface emission contribution
             {
-                // restore material shader state normal
-                normal = ray.is_inside ?
-                    -isect_info.normal : isect_info.normal;
-
                 uint64_t edf_function_index = (is_thin_walled && ray.is_inside) ? 
                     rc.backface_edf_function_index : rc.surface_edf_function_index;
-
-                // shader initialization for the current hit point
-                ret_code = rc.target_code->execute_edf_init(
-                    edf_function_index,
-                    *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
-                    static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
-                    nullptr);
-                assert(ret_code == 0 && "execute_edf_init failed");
-
 
                 mi::neuraylib::Edf_evaluate_data<mi::neuraylib::DF_HSM_NONE> eval_data;
                 eval_data.k1 = -ray.dir;
 
                 // evaluate material surface edf
                 ret_code = rc.target_code->execute_edf_evaluate(
-                    edf_function_index + 2, // edf_function_index corresponds to 'init'
-                                                       // edf_function_index+2 to 'evaluate'
+                    edf_function_index + 1,  // edf_function_index corresponds to 'sample'
+                                             // edf_function_index+1 to 'evaluate'
                     &eval_data,
-                    *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
-                    static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
+                    *shading_state,
+                    tex_handler,
                     /*arg_block_data=*/ nullptr);
                 assert(ret_code == 0 && "execute_edf_evaluate failed");
 
@@ -1517,12 +1521,15 @@ bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                 // emission contribution is only valid for positive pdf
                 if (eval_data.pdf > 1.e-6f)
                 {
+                    uint64_t emission_intensity_function_index = (is_thin_walled && ray.is_inside)
+                        ? rc.backface_emission_intensity_function_index
+                        : rc.surface_emission_intensity_function_index;
+
                     mi::Float32_3 intensity(1.f);
                     ret_code = rc.target_code->execute(
-                        (is_thin_walled && ray.is_inside) ?
-                            rc.backface_emission_intensity_function_index : rc.surface_emission_intensity_function_index,
-                        *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
-                        static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
+                        emission_intensity_function_index,
+                        *shading_state,
+                        tex_handler,
                         /*arg_block_data=*/ nullptr,
                         &intensity);
                     assert(ret_code == 0 && "execute emission intensity function failed");
@@ -1531,22 +1538,10 @@ bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                 }
             }
 
-            // restore material shader state normal
-            normal = ray.is_inside ?
-                -isect_info.normal : isect_info.normal;
+            uint64_t surface_bsdf_function_index = (is_thin_walled && ray.is_inside)
+                ? rc.backface_bsdf_function_index : rc.surface_bsdf_function_index;
 
-            uint64_t surface_bsdf_function_index =
-                (is_thin_walled && ray.is_inside) ? rc.backface_bsdf_function_index : rc.surface_bsdf_function_index;
-
-            // shader initialization for the current hit point
-            ret_code = rc.target_code->execute_bsdf_init(
-                surface_bsdf_function_index,
-                *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
-                static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
-                nullptr);
-            assert(ret_code == 0 && "execute_bsdf_init failed");
-
-            // get auxiliarity data
+            // get auxiliary data
             if (rc.render_auxiliary && ray.level == 1)
             {
                 mi::neuraylib::Bsdf_auxiliary_data<mi::neuraylib::DF_HSM_NONE> aux_data;
@@ -1563,11 +1558,11 @@ bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                 aux_data.k1 = -ray.dir;
 
                 ret_code = rc.target_code->execute_bsdf_auxiliary(
-                    surface_bsdf_function_index + 4,    // bsdf_function_index corresponds to 'init'
-                                                        // bsdf_function_index+4 to 'auxiliary'
+                    surface_bsdf_function_index + 3,    // bsdf_function_index corresponds to 'sample'
+                                                        // bsdf_function_index+3 to 'auxiliary'
                     &aux_data,
-                    *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
-                    static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
+                    *shading_state,
+                    tex_handler,
                     nullptr);
                 assert(ret_code == 0 && "execute_bsdf_auxiliary failed");
 
@@ -1586,7 +1581,7 @@ bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                     (light_pdf != 0.0f) && 
                     ((dot(normal, light_dir) > 0.f) != (ray.is_inside && !ray.is_inside_cutout)) );
 
-                // check if light is visble from inside a cutout by checking if a shadow ray can leave the object.
+                // check if light is visible from inside a cutout by checking if a shadow ray can leave the object.
                 if (!light_culled && ray.is_inside_cutout)
                 {
                     Render_context::Ray shadow_ray = ray;
@@ -1617,11 +1612,11 @@ bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
 
                     // evaluate material surface bsdf
                     ret_code = rc.target_code->execute_bsdf_evaluate(
-                        surface_bsdf_function_index + 2,    // bsdf_function_index corresponds to 'init'
-                                                            // bsdf_function_index+2 to 'evaluate'
+                        surface_bsdf_function_index + 1,    // bsdf_function_index corresponds to 'sample'
+                                                            // bsdf_function_index+1 to 'evaluate'
                         &eval_data,
-                        *static_cast<mi::neuraylib::Shading_state_material*>(shading_state),
-                        static_cast<mi::neuraylib::Texture_handler_base*>(tex_handler),
+                        *shading_state,
+                        tex_handler,
                         /*arg_block_data=*/ nullptr);
                     assert(ret_code == 0 && "execute_bsdf_evaluate failed");
 
@@ -1655,11 +1650,10 @@ bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                 sample_data.xi.w = rnd(seed);
 
                 ret_code = rc.target_code->execute_bsdf_sample(
-                    surface_bsdf_function_index + 1,         // bsdf_function_index corresponds to 'init'
-                                                             // bsdf_function_index+1 to 'sample'
+                    surface_bsdf_function_index,      // bsdf_function_index corresponds to 'sample'
                     &sample_data,   // input/output
-                    *static_cast<mi::neuraylib::Shading_state_material *>(shading_state),
-                    static_cast<mi::neuraylib::Texture_handler_base *>(tex_handler),
+                    *shading_state,
+                    tex_handler,
                     /*arg_block_data=*/ nullptr);
                 assert(ret_code == 0 && "execute_bsdf_sample failed");
 
@@ -1670,13 +1664,13 @@ bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                     else
                         ray.last_pdf = sample_data.pdf;
 
-                    // there is a scattering event, trace either the reflection or transmision ray
+                    // there is a scattering event, trace either the reflection or transmission ray
                     ray.weight *= static_cast<mi::Float32_3>(sample_data.bsdf_over_pdf);
                     ray.p0 = isect_info.pos;
                     ray.dir = normalize(sample_data.k2);
 
                     // medium change?
-                    if (sample_data.event_type&mi::neuraylib::BSDF_EVENT_TRANSMISSION)
+                    if (sample_data.event_type & mi::neuraylib::BSDF_EVENT_TRANSMISSION)
                     {
                         ray.offset_ray(-mi::Float32_3(geom_normal));
                         ray.is_inside = !ray.is_inside;
@@ -1686,7 +1680,7 @@ bool trace_ray(std::vector<mi::Float32_3> &vp_sample, Render_context &rc, Render
                         ray.offset_ray(geom_normal);
                     }
 
-                    std::vector<mi::Float32_3> scat_color = {mi::Float32_3(0.f)};
+                    mi::Float32_3 scat_color[3] = {mi::Float32_3(0.f)};
                     trace_ray(scat_color, rc, ray, seed);
                     vp_sample[VPCH_ILLUM] += scat_color[VPCH_ILLUM];
                 }
@@ -1744,7 +1738,7 @@ void render_scene(
 
         for (size_t x = 0; x < width; ++x, ++vp_idx)
         {
-            std::vector<mi::Float32_3> vp_sample =
+            mi::Float32_3 vp_sample[3] =
                 { mi::Float32_3(0.f), mi::Float32_3(0.f), mi::Float32_3(0.f) };
 
             float x_rnd = rnd(seed);
@@ -1932,7 +1926,7 @@ int MAIN_UTF8(int argc, char *argv[])
             {
                 options.cam_fov = static_cast<float>(atof(argv[++i]));
             }
-            else if (strcmp(opt, "-p") == 0 && i < argc - 3)
+            else if (strcmp(opt, "--pos") == 0 && i < argc - 3)
             {
                 options.cam_pos.x = static_cast<float>(atof(argv[++i]));
                 options.cam_pos.y = static_cast<float>(atof(argv[++i]));
@@ -2091,8 +2085,8 @@ int MAIN_UTF8(int argc, char *argv[])
         std::vector<Texture>                            textures;
         Texture_handler                                 tex_handler = { 0, 0, 0 };
         Texture_handler_deriv                           tex_handler_deriv = { 0, 0, 0 };
-        mi::neuraylib::Texture_handler_vtable           tex_only_adapt_normal_vtable = { 0 };
-        mi::neuraylib::Texture_handler_deriv_vtable     tex_only_adapt_normal_vtable_deriv = { 0 };
+        mi::neuraylib::Texture_handler_vtable           tex_only_adapt_normal_vtable { };
+        mi::neuraylib::Texture_handler_deriv_vtable     tex_only_adapt_normal_vtable_deriv { };
 
         if (options.enable_derivatives)
         {
@@ -2482,7 +2476,7 @@ int MAIN_UTF8(int argc, char *argv[])
                 size_t lpt = window_height / num_threads +
                     (window_height % num_threads != 0 ? 1 : 0); // lines per thread
 
-                  //Launch render threads
+                // launch render threads
                 for (int i = 0; i < num_threads; ++i)
                     threads.push_back(std::thread(render_scene, rc, frame_nb, &vp_buffers,
                         dst_image_data, lpt*i, lpt*(i + 1), window_width, window_height, 4));

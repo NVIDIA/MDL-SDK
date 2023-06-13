@@ -189,6 +189,8 @@ Function_context::Function_context(
     }
     // create the function scope
     push_block_scope(func_def != NULL ? func_def->get_position() : NULL);
+
+    code_gen.enter_function(*this, func);
 }
 
 // Constructor, creates a context for modification of an already existing function.
@@ -2996,7 +2998,7 @@ llvm::FunctionCallee Function_context::get_tex_lookup_func(
         Core_tex_handler const *self, \
         Shading_state_material *state, \
         unsigned scene_data_id, \
-        float default_value[2], \
+        float const default_value[2], \
         bool uniform_lookup \
     )
 
@@ -3006,7 +3008,7 @@ llvm::FunctionCallee Function_context::get_tex_lookup_func(
         Core_tex_handler const *self, \
         Shading_state_material *state, \
         unsigned scene_data_id, \
-        float default_value[3], \
+        float const default_value[3], \
         bool uniform_lookup \
     )
 
@@ -3016,7 +3018,7 @@ llvm::FunctionCallee Function_context::get_tex_lookup_func(
         Core_tex_handler const *self, \
         Shading_state_material *state, \
         unsigned scene_data_id, \
-        float default_value, \
+        float const default_value[4], \
         bool uniform_lookup \
     )
 
@@ -3035,7 +3037,7 @@ llvm::FunctionCallee Function_context::get_tex_lookup_func(
         Core_tex_handler const *self, \
         Shading_state_material *state, \
         unsigned scene_data_id, \
-        int default_value, \
+        int const default_value[2], \
         bool uniform_lookup \
     )
 
@@ -3045,7 +3047,7 @@ llvm::FunctionCallee Function_context::get_tex_lookup_func(
         Core_tex_handler const *self, \
         Shading_state_material *state, \
         unsigned scene_data_id, \
-        int default_value, \
+        int const default_value[3], \
         bool uniform_lookup \
     )
 
@@ -3055,7 +3057,7 @@ llvm::FunctionCallee Function_context::get_tex_lookup_func(
         Core_tex_handler const *self, \
         Shading_state_material *state, \
         unsigned scene_data_id, \
-        int default_value, \
+        int const default_value[4], \
         bool uniform_lookup \
     )
 
@@ -3065,7 +3067,17 @@ llvm::FunctionCallee Function_context::get_tex_lookup_func(
         Core_tex_handler const *self, \
         Shading_state_material *state, \
         unsigned scene_data_id, \
-        float default_value[3], \
+        float const default_value[3], \
+        bool uniform_lookup \
+    )
+
+#define ARGS_sdata_lookup_float4x4 \
+    ARGS6( \
+        float result[16], \
+        Core_tex_handler const *self, \
+        Shading_state_material *state, \
+        unsigned scene_data_id, \
+        float const default_value[16], \
         bool uniform_lookup \
     )
 
@@ -3160,6 +3172,7 @@ llvm::FunctionCallee Function_context::get_tex_lookup_func(
         { "scene_data_lookup_int3",             OCP(ARGS_sdata_lookup_int3) },
         { "scene_data_lookup_int4",             OCP(ARGS_sdata_lookup_int4) },
         { "scene_data_lookup_color",            OCP(ARGS_sdata_lookup_color) },
+        { "scene_data_lookup_float4x4",         OCP(ARGS_sdata_lookup_float4x4) },
     };
 
     static Runtime_functions names_deriv[] = {
@@ -3198,6 +3211,7 @@ llvm::FunctionCallee Function_context::get_tex_lookup_func(
         { "scene_data_lookup_int3",             OCP(ARGS_sdata_lookup_int3) },
         { "scene_data_lookup_int4",             OCP(ARGS_sdata_lookup_int4) },
         { "scene_data_lookup_color",            OCP(ARGS_sdata_lookup_color) },
+        { "scene_data_lookup_float4x4",         OCP(ARGS_sdata_lookup_float4x4) },
         { "scene_data_lookup_deriv_float",      OCP(ARGS_sdata_lookup_deriv_float) },
         { "scene_data_lookup_deriv_float2",     OCP(ARGS_sdata_lookup_deriv_float2) },
         { "scene_data_lookup_deriv_float3",     OCP(ARGS_sdata_lookup_deriv_float3) },
@@ -3540,13 +3554,7 @@ char const *Function_context::get_dbg_curr_filename()
     return fname == NULL ? "<unknown>" : fname;
 }
 
-// Get the current function name.
-char const *Function_context::get_dbg_curr_function()
-{
-    return m_function->getName().str().c_str();
-}
-
-/// Returns true, if the value \p val is a constant with a value equal to \p int_val.
+// Returns true, if the value \p val is a constant with a value equal to \p int_val.
 bool Function_context::is_constant_value(llvm::Value *val, int int_val)
 {
     llvm::ConstantInt *const_int = llvm::dyn_cast<llvm::ConstantInt>(val);

@@ -420,37 +420,25 @@ static void create_environment(
     res->x = rx;
     res->y = ry;
 
-    FIBITMAP *dib = env.get_dib();
+    std::vector<float> data(4 * rx * ry);
+    std::shared_ptr<OIIO::ImageInput> image(env.get_image());
+    mi::Sint32 bytes_per_row = 4 * rx * sizeof(float);
+    image->read_image(
+        /*subimage*/ 0,
+        /*miplevel*/ 0,
+        /*chbegin*/ 0,
+        /*chend*/ 4,
+        OIIO::TypeDesc::FLOAT,
+        data.data() + (ry-1) * 4 * rx,
+        /*xstride*/ 4 * sizeof(float),
+        /*ystride*/ -bytes_per_row,
+        /*zstride*/ OIIO::AutoStride);
 
-    float *pixels;
-    float4 *own_buf = nullptr;
+    if (image->spec().nchannels <= 3)
+        for (size_t i = 0, n = data.size(); i < n; i += 4)
+            data[i+3] = 1.0f;
 
-    // Check, whether we need to convert the image
-    if (FreeImage_GetImageType(dib) == FIT_RGBF) {
-        // This example expects, that there is no additional padding per image line
-        check_success(FreeImage_GetPitch(dib) == unsigned(env.get_width() * 3 * sizeof(float)));
-
-        // Implement conversion of RGBF to RGBAF on our own, because FreeImage_ConvertToRGBAF
-        // clamps the values to 1.0.
-        const float3 *dib_pixels = reinterpret_cast<float3 *>(FreeImage_GetBits(dib));
-        own_buf = (float4 *) malloc(rx * ry * sizeof(float4));
-        for(size_t i = 0, n = rx * ry; i < n; ++i) {
-            own_buf[i].x = dib_pixels[i].x;
-            own_buf[i].y = dib_pixels[i].y;
-            own_buf[i].z = dib_pixels[i].z;
-            own_buf[i].w = 1;
-        }
-
-        pixels = reinterpret_cast<float *>(own_buf);
-    } else if (FreeImage_GetImageType(dib) == FIT_RGBAF) {
-        // This example expects, that there is no additional padding per image line
-        check_success(FreeImage_GetPitch(dib) == unsigned(env.get_width() * 4 * sizeof(float)));
-
-        // We can use the image data directly
-        pixels = reinterpret_cast<float *>(FreeImage_GetBits(dib));
-    } else {
-        check_success(!"Only RGBF and RGBAF environments are supported.");
-    }
+    const float* pixels = reinterpret_cast<float*>(data.data());
 
     // Copy the image data to a CUDA array
     const cudaChannelFormatDesc channel_desc = cudaCreateChannelDesc<float4>();
@@ -507,7 +495,6 @@ static void create_environment(
     *env_accel = gpu_mem_dup(env_accel_host, rx * ry * sizeof(Env_accel));
 
     free(env_accel_host);
-    free(own_buf);
 }
 
 // Save current result image to disk
@@ -1570,8 +1557,6 @@ int MAIN_UTF8(int argc, char* argv[])
     mi::base::Handle<mi::mdl::IMDL> mdl_compiler(load_mdl_compiler());
     check_success(mdl_compiler);
 
-    FreeImage_Initialise();
-
     // Use default material, if non was provided via command line
     if (options.material_names.empty())
         options.material_names.push_back("::nvidia::sdk_examples::tutorials::example_df");
@@ -1669,8 +1654,6 @@ int MAIN_UTF8(int argc, char* argv[])
             }
         }
     }
-
-    FreeImage_DeInitialise();
 
     // Free MDL compiler before shutting down MDL Core
     mdl_compiler = 0;

@@ -235,7 +235,7 @@ const mi::neuraylib::ITarget_code* generate_glsl_code(
     const std::vector<std::string>& expression_paths,
     const std::vector<std::string>& function_names)
 {
-    // Optain and configure the GLSL backend
+    // Obtain and configure the GLSL backend
     mi::base::Handle<mi::neuraylib::IMdl_backend> be_glsl(
         mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_GLSL));
 
@@ -290,7 +290,7 @@ const mi::neuraylib::ITarget_code* generate_glsl_code(
         // Compile the material instance in instance compilation mode (DEFAULT_OPTIONS).
         // This means that material arguments are baked into the shader code
         // can't be changed without recompiling the material instance. In
-        // class compiliation mode (CLASS_COMPILATION) arguments can be changed
+        // class compilation mode (CLASS_COMPILATION) arguments can be changed
         // without the need for recompiling, but this also limits optimizations.
         mi::Uint32 compile_flags = mi::neuraylib::IMaterial_instance::DEFAULT_OPTIONS;
 
@@ -300,7 +300,7 @@ const mi::neuraylib::ITarget_code* generate_glsl_code(
             material_instance2->create_compiled_material(compile_flags, context));
         check_success(print_messages(context));
 
-        // Add the material expression with the given path relativ to the material
+        // Add the material expression with the given path relative to the material
         // root (e.g. surface.scattering.tint) of the compiled material to the link
         // unit and give it a function name to use when generating the GLSL code.
         // This is the name of the generated GLSL function. The path to the material
@@ -1124,7 +1124,7 @@ int MAIN_UTF8(int argc, char* argv[])
         exit_failure("Failed to initialize the SDK. Result code: %d", result);
 
     {
-        // Create a transation
+        // Create a transaction
         mi::base::Handle<mi::neuraylib::IDatabase> database(
             neuray->get_api_component<mi::neuraylib::IDatabase>());
         mi::base::Handle<mi::neuraylib::IScope> scope(database->get_global_scope());

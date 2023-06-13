@@ -92,20 +92,20 @@ Image_file_writer_impl::Image_file_writer_impl(
     OIIO::ImageSpec image_spec(
         get_image_spec( m_pixel_type, m_resolution_x, m_resolution_y, 1));
 
-    // Do not enable unassociated alpha for "oiio_tif" since imf_diff reports differences. Unclear
-    // on which side the error is.
+    // Pass unassociated alpha for the image handlers that support it.
     if(    plugin_name == "oiio_png"
-    //  || plugin_name == "oiio_tif"
+        || plugin_name == "oiio_tif"
         || plugin_name == "oiio_tga"
         || plugin_name == "oiio_jp2"
         || plugin_name == "oiio_j2k") {
         m_pass_unassociated_alpha = true;
         image_spec["oiio:UnassociatedAlpha"] = 1;
     }
-    
+
     // It is unclear whether BMP uses associated or unassociated alpha. We use unassociated alpha
     // for historic reasons, in contrast to OIIO. Doing so without support from the OIIO handler
-    // for BMP is a misuse of the OIIO API.
+    // for BMP is a misuse of the OIIO API. (There is no point in setting image_spec[...] as above
+    // since the BMP handler does not support it.)
     if( plugin_name == "oiio_bmp")
         m_pass_unassociated_alpha = true;
 

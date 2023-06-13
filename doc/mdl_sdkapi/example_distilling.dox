@@ -1,0 +1,111 @@
+/******************************************************************************
+ * Copyright (c) 2017-2023, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_distilling Example for Material Distilling and Baking
+
+<div align="right">
+    [\link mi_neuray_example_derivatives Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_distilling_unity Next\endlink]
+</div>
+
+This example introduces the distillation of mdl materials to a fixed target model
+and showcases how to bake material sub-expressions to a texture.
+
+\section example_distilling_new New Topics
+  - Material Distilling
+  - Baking material sub-expressions
+
+\section example_distilling_descr Detailed Description
+
+<dl>
+    <dt><b>
+         Material Distilling
+    </b></dt>
+    <dd><br>
+        MDL materials can be of arbitrary complexity. In some contexts like
+        realtime environments it may however be desirable to deal with a fixed material
+        model instead. The #mi::neuraylib::IMdl_distiller_api
+        provides a mechanism to transform MDL materials to a number of predefined target material
+        models. <br><br>
+        In this example we will show how to distill a material to a specific target model,
+        how to extract sub-expressions from the resulting material and how to bake those 
+        sub-expressions into textures and constant values.<br>
+        In \c create_material_instance we first load an mdl module and create a material instance.
+         The material distilling requires our source material to be compiled, therefore we call
+        \c compile_material_instance to build a compiled representation of it. We
+        then acquire a pointer to the #mi::neuraylib::IMdl_distiller_api interface. In 
+        \c create_distilled_material we call \c 
+        #mi::neuraylib::IMdl_distiller_api::distill_material(), passing in the compiled
+        material and the desired target model. The function returns the distilled material
+        in compiled form. Now we need to investigate the distilled material and extract the 
+        information we need for further processing. This is done in setup_target_material. Here, 
+        we first lookup a pointer to the call expression associated with the \c surface.scattering
+        sub-expression of the distilled material and extract the semantic of that function for
+        later use.
+        Depending of the target model, we set up a simple container storing material parameter
+        names and associated parameter values. We then analyze the distilled material and extract
+        material sub-expressions that match our parameters and collect them for later baking.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Baking material subexpressions
+    </b></dt>
+    <dd><br>
+        The function \c bake_target_material_inputs contains the code needed to bake the extracted 
+        sub-expressions to textures and constants. Here, we loop over the material container and
+        check for each parameter if a bake path has been found. If so, we acquire a pointer to
+        an #mi::neuraylib::IBaker instance by calling
+        #mi::neuraylib::IMdl_distiller_api::create_baker() for the given bake-path. If the function
+        #mi::neuraylib::IBaker::is_uniform returns \c true the expression attached to the path
+        is constant in the sense that it does not depend on texture coordinates. Therefore,
+        it is sufficient to bake a constant value. We call #mi::neuraylib::IBaker::bake_constant()
+        and store the computed value in the material parameter struct.<br>
+        In case of a varying bake path, we use the #mi::neuraylib::IImage_api to create a canvas
+        of the appropriate type, pass it to
+        mi::neuraylib::IBaker::bake_texture() and store it in the material parameter structure.
+        Back in main we call \c process_target_material. In this simple example we loop over all
+        material parameters again, print some information to stdout and save the baked textures.
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+</dl>
+
+\section example_distilling Example Source
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/distilling/example_distilling.cpp</tt>
+
+\include distilling/example_distilling.cpp
+
+<div align="right">
+    [\link mi_neuray_example_derivatives Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_distilling_unity Next\endlink]
+</div>
+
+*/

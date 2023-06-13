@@ -109,6 +109,12 @@ void (assertfail)(
      ::mi::mdl::report_assertion_failure(reason, file_name, line);
 }
 
+/// Enter function hint.
+void enter_func(void *hint)
+{
+    (void)hint;
+}
+
 /// Helper class to print a whole line.
 class Line_buffer
 {
@@ -1263,6 +1269,7 @@ typedef void   (*VV_lbCS)(LB *, char const *);
 typedef void   (*VV_xsIIZZCSII)(Exc_state &, int, size_t, char const *, int);
 typedef void   (*VV_xsCSII)(Exc_state &, char const *, int);
 typedef void  *(*vv_vvIIZZ)(void *, int, size_t);
+typedef void   (VV_vv)(void *);
 
 // Note: we use structs here instead of vectors, BUT we will never match the type against C-lib
 struct F2 { float a; float b; };
@@ -2075,7 +2082,7 @@ llvm::Function *MDL_runtime_creator::decl_from_signature(
         llvm::GlobalValue::InternalLinkage,
         name,
         m_code_gen.m_module);
-    m_code_gen.set_llvm_function_attributes(func);
+    m_code_gen.set_llvm_function_attributes(func, /*mark_noinline=*/false);
 
     return func;
 }
@@ -2976,6 +2983,14 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         func->setLinkage(llvm::GlobalValue::ExternalLinkage);
         return func;
 
+    case RT_MDL_ENTER_FUNC:
+        func->setDoesNotThrow();
+        func->addParamAttr(0, llvm::Attribute::NoCapture); // funcname
+
+        func->setLinkage(llvm::GlobalValue::ExternalLinkage);
+        return func;
+
+
     case RT_MDL_TO_CSTRING:
         func->setDoesNotThrow();
         if (!m_code_gen.m_type_mapper.strings_mapped_to_ids()) {
@@ -3035,7 +3050,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             llvm::Value *res = ctx->CreateCall(max_func, { x, a });
             ctx.create_return(ctx->CreateCall(min_func, { res, b }));
         }
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_CLAMPF:
         // clamp(x, a, b) = min(max(x, a), b)
@@ -3049,7 +3066,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             llvm::Value *res = ctx->CreateCall(max_func, { x, a });
             ctx.create_return(ctx->CreateCall(min_func, { res, b }));
         }
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_CLAMPI:
         // clamp(x, a, b) = min(max(x, a), b)
@@ -3063,7 +3082,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             llvm::Value *res = ctx->CreateCall(max_func, { x, a });
             ctx.create_return(ctx->CreateCall(min_func, { res, b }));
         }
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
 
     case RT_MDL_EXP2:
@@ -3085,7 +3106,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             }
             ctx.create_return(ctx->CreateCall(exp_func, ctx->CreateFMul(x, c)));
         }
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
 
     case RT_MDL_FRAC:
@@ -3113,7 +3136,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             llvm::Value *res = ctx->CreateFAdd(ctx->CreateCall(modf_func, { x, tmp }), c);
             ctx.create_return(res);
         }
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_LOG2:
     case RT_MDL_LOG2F:
@@ -3134,7 +3159,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             }
             ctx.create_return(ctx->CreateCall(exp_func, ctx->CreateFMul(x, c)));
         }
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_POWI:
         {
@@ -3157,7 +3184,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
                 ctx.create_return(ctx->CreateFPToSI(x, m_code_gen.m_type_mapper.get_int_type()));
             }
         }
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_ROUND:
     case RT_MDL_ROUNDF:
@@ -3177,7 +3206,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             }
             ctx.create_return(ctx->CreateCall(floor_func, ctx->CreateFAdd(x, c)));
         }
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_RSQRT:
     case RT_MDL_RSQRTF:
@@ -3197,7 +3228,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             }
             ctx.create_return(ctx->CreateCall(exp_func, ctx->CreateFDiv(one, x)));
         }
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_SATURATE:
     case RT_MDL_SATURATEF:
@@ -3219,7 +3252,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             }
             ctx.create_return(ctx->CreateCall(clamp_func, { x, z, o }));
         }
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_SIGN:
     case RT_MDL_SIGNF:
@@ -3288,10 +3323,12 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             llvm::Value *res    = ctx->CreateSelect(cmp, zero, cpsgn);
             ctx.create_return(res);
         }
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_SIGNI:
-        // integer sign
+        // integer sign: x == 0 ? 0 : x >> 31
         {
             llvm::Value *x     = arg_it;
             llvm::Value *zero  = ctx.get_constant(int(0));
@@ -3300,7 +3337,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             llvm::Value *res   = ctx->CreateSelect(cmp, zero, cpsgn);
             ctx.create_return(res);
         }
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_SMOOTHSTEP:
     case RT_MDL_SMOOTHSTEPF:
@@ -3357,7 +3396,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             llvm::Value *res = ctx->CreateSelect(cmp, a, b);
             ctx.create_return(res);
         }
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_MIN:
     case RT_MDL_MINF:
@@ -3369,7 +3410,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             llvm::Value *res = ctx->CreateSelect(cmp, a, b);
             ctx.create_return(res);
         }
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_MAXI:
         // integer max
@@ -3380,7 +3423,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             llvm::Value *res = ctx->CreateSelect(cmp, a, b);
             ctx.create_return(res);
         }
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_MAX:
     case RT_MDL_MAXF:
@@ -3392,7 +3437,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             llvm::Value *res = ctx->CreateSelect(cmp, a, b);
             ctx.create_return(res);
         }
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_TEX_RES_FLOAT:
     case RT_MDL_TEX_RES_FLOAT3:
@@ -3411,7 +3458,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             llvm::Value *res   = ctx.load_and_convert(res_type, ptr);
             ctx.create_return(res);
         }
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
 
     case RT_MDL_TO_CSTRING:
@@ -3438,7 +3487,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
             }
             ctx.create_return(res);
         }
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
 
     case RT_MDL_EQUAL_B2:
@@ -3446,42 +3497,54 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
     case RT_MDL_EQUAL_B4:
         // bool vector compare for for GLSL
         create_vector_compare(llvm::ICmpInst::ICMP_EQ, ctx, arg_it);
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_EQUAL_D2:
     case RT_MDL_EQUAL_D3:
     case RT_MDL_EQUAL_D4:
         // double vector compare for for GLSL
         create_vector_compare(llvm::ICmpInst::FCMP_OEQ, ctx, arg_it);
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_NOTEQUAL_B2:
     case RT_MDL_NOTEQUAL_B3:
     case RT_MDL_NOTEQUAL_B4:
         // bool vector compare for for GLSL
         create_vector_compare(llvm::ICmpInst::ICMP_NE, ctx, arg_it);
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_NOTEQUAL_D2:
     case RT_MDL_NOTEQUAL_D3:
     case RT_MDL_NOTEQUAL_D4:
         // double vector compare for for GLSL
         create_vector_compare(llvm::ICmpInst::FCMP_UNE, ctx, arg_it);
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_LESSTHAN_D2:
     case RT_MDL_LESSTHAN_D3:
     case RT_MDL_LESSTHAN_D4:
         // double vector compare for for GLSL
         create_vector_compare(llvm::ICmpInst::FCMP_OLT, ctx, arg_it);
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_LESSTHANEQUAL_D2:
     case RT_MDL_LESSTHANEQUAL_D3:
     case RT_MDL_LESSTHANEQUAL_D4:
         // double vector compare for for GLSL
         create_vector_compare(llvm::ICmpInst::FCMP_OLE, ctx, arg_it);
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_GREATERTHAN_D2:
     case RT_MDL_GREATERTHAN_D3:
@@ -3495,19 +3558,25 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
     case RT_MDL_GREATERTHANEQUAL_D4:
         // double vector compare for for GLSL
         create_vector_compare(llvm::ICmpInst::FCMP_OGE, ctx, arg_it);
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_AND_B2:
     case RT_MDL_AND_B3:
     case RT_MDL_AND_B4:
         create_bool_vector_op(mdl::IExpression_binary::OK_LOGICAL_AND, ctx, arg_it);
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     case RT_MDL_OR_B2:
     case RT_MDL_OR_B3:
     case RT_MDL_OR_B4:
         create_bool_vector_op(mdl::IExpression_binary::OK_LOGICAL_OR, ctx, arg_it);
-        func->addFnAttr(llvm::Attribute::AlwaysInline);
+        if (m_always_inline_rt) {
+            func->addFnAttr(llvm::Attribute::AlwaysInline);
+        }
         break;
     default:
         MDL_ASSERT(!"Unsupported MDL runtime function");
@@ -3691,6 +3760,8 @@ void LLVM_code_generator::register_native_runtime_functions(Jitted_code *jitted_
     REG_FUNC2("mdl_print_float", check_sig<VV_lbFF>(debug::print_float));
     REG_FUNC2("mdl_print_double", check_sig<VV_lbDD>(debug::print_double));
     REG_FUNC2("mdl_print_string", check_sig<VV_lbCS>(debug::print_string));
+
+    REG_FUNC2("mdl_enter_func", check_sig<VV_vv>(debug::enter_func));
 
     REG_FUNC2(
         "mdl_out_of_bounds", check_sig<VV_xsIIZZCSII>(LLVM_code_generator::mdl_out_of_bounds));
@@ -4671,6 +4742,9 @@ llvm::Value *LLVM_code_generator::translate_call_intrinsic_function(
 
         Expression_result expr_res = call_expr->translate_argument(*this, ctx, i, arg_is_deriv);
 
+        // make sure, the argument is a derivative if needed
+        expr_res.ensure_deriv_result(ctx, arg_is_deriv);
+
         mi::mdl::IType const   *p_type = NULL;
         mi::mdl::ISymbol const *p_sym = NULL;
 
@@ -4814,6 +4888,7 @@ MDL_runtime_creator *LLVM_code_generator::create_mdl_runtime(
     Target_language        target_lang,
     bool                   fast_math,
     bool                   has_texture_handler,
+    bool                   always_inline_rt,
     char const             *internal_space)
 {
     int encoding = coordinate_world;
@@ -4827,6 +4902,7 @@ MDL_runtime_creator *LLVM_code_generator::create_mdl_runtime(
         fast_math,
         code_gen->target_has_sincos(),
         has_texture_handler,
+        always_inline_rt,
         encoding);
 }
 
@@ -4847,6 +4923,12 @@ llvm::Function *LLVM_code_generator::get_out_of_bounds() const
 llvm::Function *LLVM_code_generator::get_div_by_zero() const
 {
     return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_DIV_BY_ZERO);
+}
+
+// Retrieve the enter_func routine.
+llvm::Function *LLVM_code_generator::get_enter_func() const
+{
+    return m_runtime->get_runtime_func(MDL_runtime_creator::RT_MDL_ENTER_FUNC);
 }
 
 // Retrieve the target specific compare function if any.
@@ -5377,7 +5459,7 @@ Expression_result LLVM_code_generator::translate_jit_intrinsic(
             args.push_back(ctx.get_state_parameter());
 
             llvm::Value *index = call_expr->translate_argument_value(
-                *this, ctx, 0, /*return_derivs=*/ false);
+                *this, ctx, 0, /*wants_derivs=*/ false);
             args.push_back(index);
 
             llvm::Value *max_index = ctx.get_constant(int(m_num_texture_results));

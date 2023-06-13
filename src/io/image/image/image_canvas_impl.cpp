@@ -120,69 +120,109 @@ Canvas_impl::Canvas_impl( const mi::neuraylib::ICanvas* other)
 }
 
 Canvas_impl::Canvas_impl(
+    File_based,
     const std::string& filename,
     const char* selector,
     mi::Uint32 miplevel,
-    mi::neuraylib::IImage_file* image_file,
-    mi::Sint32* errors) : m_filename(filename)
+    mi::Sint32* errors)
 {
     mi::Sint32 dummy_errors = 0;
     if( !errors)
         errors = &dummy_errors;
 
+    mi::base::Handle<DISK::File_reader_impl> reader(
+        new DISK::File_reader_impl);
+    if( !reader->open( filename.c_str())) {
+        LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
+            "Failed to open image file \"%s\".", filename.c_str());
+        *errors = -5;
+        set_default_pink_dummy_canvas();
+        return;
+    }
+
+    std::string root, extension;
+    HAL::Ospath::splitext( filename, root, extension);
+    if( !extension.empty() && extension[0] == '.' )
+        extension = extension.substr( 1);
+
+    SYSTEM::Access_module<Image_module> image_module( false);
+    mi::neuraylib::IImage_plugin* plugin
+        = image_module->find_plugin_for_import( extension.c_str(), reader.get());
+    if( !plugin) {
+        LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
+            "No image plugin found to handle \"%s\".", filename.c_str());
+        *errors = -3;
+        set_default_pink_dummy_canvas();
+        return;
+    }
+
+    bool plugin_supports_selectors = plugin->supports_selectors();
+    const char* plugin_selector = plugin_supports_selectors ? selector : nullptr;
+    mi::base::Handle<mi::neuraylib::IImage_file> image_file(
+        plugin->open_for_reading( reader.get(), plugin_selector));
+    if( !image_file) {
+        LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
+            "The image plugin \"%s\" failed to import \"%s\".",
+            plugin->get_name(), filename.c_str());
+        *errors = -7;
+        set_default_pink_dummy_canvas();
+        return;
+    }
+
+    do_init(
+        File_based(),
+        filename,
+        selector,
+        miplevel,
+        image_file.get(),
+        plugin_supports_selectors,
+        errors);
+}
+
+Canvas_impl::Canvas_impl(
+    File_based,
+    const std::string& filename,
+    const char* selector,
+    mi::Uint32 miplevel,
+    mi::neuraylib::IImage_file* image_file,
+    bool plugin_supports_selectors,
+    mi::Sint32* errors)
+{
+    mi::Sint32 dummy_errors = 0;
+    if( !errors)
+        errors = &dummy_errors;
+
+    do_init(
+        File_based(),
+        filename,
+        selector,
+        miplevel,
+        image_file,
+        plugin_supports_selectors,
+        errors);
+}
+
+void Canvas_impl::do_init(
+    File_based,
+    const std::string& filename,
+    const char* selector,
+    mi::Uint32 miplevel,
+    mi::neuraylib::IImage_file* image_file,
+    bool plugin_supports_selectors,
+    mi::Sint32* errors)
+{
+    m_filename = filename;
+
     if( selector)
         m_selector = selector;
 
-    mi::base::Handle<mi::neuraylib::IImage_file> image_file2;
-    mi::base::Handle<DISK::File_reader_impl> reader;
-
-    if( image_file) {
-        image_file2 = make_handle_dup( image_file);
-        image_file = nullptr; // only use image_file2 below
-    } else {
-        reader = new DISK::File_reader_impl;
-        if( !reader->open( m_filename.c_str())) {
-            LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-                "Failed to open image file \"%s\".", m_filename.c_str());
-            *errors = -3;
-            set_default_pink_dummy_canvas();
-            return;
-        }
-
-        std::string root, extension;
-        HAL::Ospath::splitext( m_filename, root, extension);
-        if( !extension.empty() && extension[0] == '.' )
-            extension = extension.substr( 1);
-
-        SYSTEM::Access_module<Image_module> image_module( false);
-        mi::neuraylib::IImage_plugin* plugin
-            = image_module->find_plugin_for_import( extension.c_str(), reader.get());
-        if( !plugin) {
-            LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-                "No image plugin found to handle \"%s\".", m_filename.c_str());
-            *errors = -4;
-            set_default_pink_dummy_canvas();
-            return;
-        }
-
-        image_file2 = plugin->open_for_reading( reader.get());
-        if( !image_file2) {
-            LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-                "The image plugin \"%s\" failed to import \"%s\".",
-                plugin->get_name(), m_filename.c_str());
-            *errors = -5;
-            set_default_pink_dummy_canvas();
-            return;
-        }
-    }
-
-    m_pixel_type    = convert_pixel_type_string_to_enum( image_file2->get_type());
-    m_width         = std::max( image_file2->get_resolution_x() >> miplevel, 1u);
-    m_height        = std::max( image_file2->get_resolution_y() >> miplevel, 1u);
-    m_nr_of_layers  = image_file2->get_layers_size();
+    m_pixel_type    = convert_pixel_type_string_to_enum( image_file->get_type());
+    m_width         = std::max( image_file->get_resolution_x() >> miplevel, 1u);
+    m_height        = std::max( image_file->get_resolution_y() >> miplevel, 1u);
+    m_nr_of_layers  = image_file->get_layers_size();
     m_miplevel      = miplevel;
-    m_is_cubemap    = image_file2->get_is_cubemap();
-    m_gamma         = image_file2->get_gamma();
+    m_is_cubemap    = image_file->get_is_cubemap();
+    m_gamma         = image_file->get_gamma();
 
     if(    m_pixel_type == PT_UNDEF
         || m_width == 0
@@ -191,18 +231,18 @@ Canvas_impl::Canvas_impl(
         || m_gamma <= 0) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin failed to import \"%s\".", m_filename.c_str());
-        *errors = -5;
+        *errors = -7;
         set_default_pink_dummy_canvas();
         return;
     }
 
-    if( selector) {
+    if( selector && !plugin_supports_selectors) {
         const Pixel_type new_pixel_type = get_pixel_type_for_channel( m_pixel_type, selector);
         if( new_pixel_type == PT_UNDEF) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                 "Failed to apply selector \"%s\" to \"%s\" with pixel type \"%s\".",
-                m_selector.c_str(), m_filename.c_str(), image_file2->get_type());
-            *errors = -5;
+                selector, m_filename.c_str(), image_file->get_type());
+            *errors = -10;
             set_default_pink_dummy_canvas();
             return;
         }
@@ -211,7 +251,7 @@ Canvas_impl::Canvas_impl(
     }
 
     if( m_miplevel == 0) {
-        const mi::Uint32 miplevels = image_file2->get_miplevels();
+        const mi::Uint32 miplevels = image_file->get_miplevels();
         LOG::mod_log->info( M_IMAGE, LOG::Mod_log::C_IO, //-V576 PVS
             "Loading image \"%s\", %s, pixel type \"%s\", "
 #ifdef MI_IMAGE_LOG_ASSUMED_GAMMA
@@ -239,69 +279,121 @@ Canvas_impl::Canvas_impl(
 Canvas_impl::Canvas_impl(
     Container_based,
     mi::neuraylib::IReader* reader,
-    const std::string& archive_filename,
+    const std::string& container_filename,
     const std::string& member_filename,
     const char* selector,
     mi::Uint32 miplevel,
-    mi::neuraylib::IImage_file* image_file,
     mi::Sint32* errors)
 {
     mi::Sint32 dummy_errors = 0;
     if( !errors)
         errors = &dummy_errors;
 
-    if( !reader || !reader->supports_absolute_access()) {
+    if( !reader) {
+        *errors = -1;
+        set_default_pink_dummy_canvas();
+        return;
+    }
+
+    if( !reader->supports_absolute_access()) {
+        *errors = -6;
+        set_default_pink_dummy_canvas();
+        return;
+    }
+
+    std::string root, extension;
+    HAL::Ospath::splitext( member_filename, root, extension);
+    if( !extension.empty() && extension[0] == '.' )
+        extension = extension.substr( 1);
+
+    SYSTEM::Access_module<Image_module> image_module( false);
+    mi::neuraylib::IImage_plugin* plugin
+        = image_module->find_plugin_for_import( extension.c_str(), reader);
+    if( !plugin) {
+        LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
+            "No image plugin found to handle \"%s\" in \"%s\".",
+            member_filename.c_str(), container_filename.c_str());
         *errors = -3;
         set_default_pink_dummy_canvas();
         return;
     }
 
-    m_archive_filename = archive_filename;
+    bool plugin_supports_selectors = plugin->supports_selectors();
+    const char* plugin_selector = plugin_supports_selectors ? selector : nullptr;
+    mi::base::Handle<mi::neuraylib::IImage_file> image_file(
+        plugin->open_for_reading( reader, plugin_selector));
+    if( !image_file) {
+        LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
+            "The image plugin \"%s\" failed to import \"%s\" in \"%s\".",
+            plugin->get_name(), member_filename.c_str(), container_filename.c_str());
+        *errors = -7;
+        set_default_pink_dummy_canvas();
+        return;
+    }
+
+    do_init(
+        Container_based(),
+        reader,
+        container_filename,
+        member_filename,
+        selector,
+        miplevel,
+        image_file.get(),
+        plugin_supports_selectors,
+        errors);
+}
+
+Canvas_impl::Canvas_impl(
+    Container_based,
+    mi::neuraylib::IReader* reader,
+    const std::string& container_filename,
+    const std::string& member_filename,
+    const char* selector,
+    mi::Uint32 miplevel,
+    mi::neuraylib::IImage_file* image_file,
+    bool plugin_supports_selectors,
+    mi::Sint32* errors)
+{
+    mi::Sint32 dummy_errors = 0;
+    if( !errors)
+        errors = &dummy_errors;
+
+    do_init(
+        Container_based(),
+        reader,
+        container_filename,
+        member_filename,
+        selector,
+        miplevel,
+        image_file,
+        plugin_supports_selectors,
+        errors);
+}
+
+void Canvas_impl::do_init(
+    Container_based,
+    mi::neuraylib::IReader* reader,
+    const std::string& container_filename,
+    const std::string& member_filename,
+    const char* selector,
+    mi::Uint32 miplevel,
+    mi::neuraylib::IImage_file* image_file,
+    bool plugin_supports_selectors,
+    mi::Sint32* errors)
+{
+    m_container_filename = container_filename;
     m_member_filename  = member_filename;
 
     if( selector)
         m_selector = selector;
 
-    mi::base::Handle<mi::neuraylib::IImage_file> image_file2;
-    if( image_file) {
-        image_file2 = make_handle_dup( image_file);
-        image_file = nullptr; // only use image_file2 below
-    } else {
-        std::string root, extension;
-        HAL::Ospath::splitext( member_filename, root, extension);
-        if( !extension.empty() && extension[0] == '.' )
-            extension = extension.substr( 1);
-
-        SYSTEM::Access_module<Image_module> image_module( false);
-        mi::neuraylib::IImage_plugin* plugin
-            = image_module->find_plugin_for_import( extension.c_str(), reader);
-        if( !plugin) {
-            LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-                "No image plugin found to handle \"%s\" in \"%s\".",
-                member_filename.c_str(), archive_filename.c_str());
-            *errors = -4;
-            set_default_pink_dummy_canvas();
-            return;
-        }
-
-        image_file2 = plugin->open_for_reading( reader);
-        if( !image_file2) {
-            LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-                "The image plugin \"%s\" failed to import \"%s\" in \"%s\".",
-                plugin->get_name(), member_filename.c_str(), archive_filename.c_str());
-            *errors = -5;
-            set_default_pink_dummy_canvas();
-            return;
-        }
-    }
-
-    m_pixel_type    = convert_pixel_type_string_to_enum( image_file2->get_type());
-    m_width         = std::max( image_file2->get_resolution_x() >> miplevel, 1u);
-    m_height        = std::max( image_file2->get_resolution_y() >> miplevel, 1u);
-    m_nr_of_layers  = image_file2->get_layers_size();
+    m_pixel_type    = convert_pixel_type_string_to_enum( image_file->get_type());
+    m_width         = std::max( image_file->get_resolution_x() >> miplevel, 1u);
+    m_height        = std::max( image_file->get_resolution_y() >> miplevel, 1u);
+    m_nr_of_layers  = image_file->get_layers_size();
     m_miplevel      = miplevel;
-    m_is_cubemap    = image_file2->get_is_cubemap();
-    m_gamma         = image_file2->get_gamma();
+    m_is_cubemap    = image_file->get_is_cubemap();
+    m_gamma         = image_file->get_gamma();
 
     if(    m_pixel_type == PT_UNDEF
         || m_width == 0
@@ -310,20 +402,20 @@ Canvas_impl::Canvas_impl(
         || m_gamma <= 0) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin failed to import \"%s\" in \"%s\".",
-            member_filename.c_str(), archive_filename.c_str());
-        *errors = -5;
+            member_filename.c_str(), container_filename.c_str());
+        *errors = -7;
         set_default_pink_dummy_canvas();
         return;
     }
 
-    if( selector && m_pixel_type) {
+    if( selector && !plugin_supports_selectors) {
         const Pixel_type new_pixel_type = get_pixel_type_for_channel( m_pixel_type, selector);
         if( new_pixel_type == PT_UNDEF) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                 "Failed to apply selector \"%s\" to \"%s\" in \"%s\" with pixel type \"%s\".",
-                m_selector.c_str(), member_filename.c_str(), archive_filename.c_str(),
-                image_file2->get_type());
-            *errors = -5;
+                selector, member_filename.c_str(), container_filename.c_str(),
+                image_file->get_type());
+            *errors = -10;
             set_default_pink_dummy_canvas();
             return;
         }
@@ -332,7 +424,7 @@ Canvas_impl::Canvas_impl(
     }
 
     if( m_miplevel == 0) {
-        const mi::Uint32 miplevels = image_file2->get_miplevels();
+        const mi::Uint32 miplevels = image_file->get_miplevels();
         LOG::mod_log->info( M_IMAGE, LOG::Mod_log::C_IO, //-V576 PVS
             "Loading image \"%s\" in \"%s\", %s, pixel type \"%s\", "
 #ifdef MI_IMAGE_LOG_ASSUMED_GAMMA
@@ -340,7 +432,7 @@ Canvas_impl::Canvas_impl(
 #endif
             "%ux%ux%u pixels, %u miplevel%s.",
             member_filename.c_str(),
-            archive_filename.c_str(),
+            container_filename.c_str(),
             get_selector_string( selector).c_str(),
             convert_pixel_type_enum_to_string( m_pixel_type),
 #ifdef MI_IMAGE_LOG_ASSUMED_GAMMA
@@ -361,11 +453,11 @@ Canvas_impl::Canvas_impl(
     }
 
     for( mi::Uint32 z = 0; z < m_nr_of_layers; ++z) {
-        m_tiles[z] = image_file2->read( z, m_miplevel);
+        m_tiles[z] = image_file->read( z, m_miplevel);
         if( !m_tiles[z]) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                     "The image plugin failed to import \"%s\" in \"%s\".",
-                    member_filename.c_str(), archive_filename.c_str());
+                    member_filename.c_str(), container_filename.c_str());
             *errors = -5;
             set_default_pink_dummy_canvas();
             return;
@@ -382,18 +474,20 @@ Canvas_impl::Canvas_impl(
     const char* selector,
     const char* mdl_file_path,
     mi::Uint32 miplevel,
-    mi::neuraylib::IImage_file* image_file,
     mi::Sint32* errors)
 {
-    ASSERT( M_IMAGE, reader);
-    ASSERT( M_IMAGE, image_format);
-
     mi::Sint32 dummy_errors = 0;
     if( !errors)
         errors = &dummy_errors;
 
-    if( !reader || !reader->supports_absolute_access()) {
-        *errors = -3;
+    if( !reader || !image_format) {
+        *errors = -1;
+        set_default_pink_dummy_canvas();
+        return;
+    }
+
+    if( !reader->supports_absolute_access()) {
+        *errors = -6;
         set_default_pink_dummy_canvas();
         return;
     }
@@ -405,39 +499,95 @@ Canvas_impl::Canvas_impl(
         ? std::string( "an image from MDL file path \"") + mdl_file_path + '\"'
         : std::string( "a memory-based image with image format \"") + image_format + '\"';
 
-    mi::base::Handle<mi::neuraylib::IImage_file> image_file2;
-    if( image_file) {
-        image_file2 = make_handle_dup( image_file);
-        image_file = nullptr; // only use image_file2 below
-    } else {
-        SYSTEM::Access_module<Image_module> image_module( false);
-        mi::neuraylib::IImage_plugin* plugin
-            = image_module->find_plugin_for_import( image_format, reader);
-        if( !plugin) {
-            LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-                "No image plugin found to handle %s.", log_identifier.c_str());
-            *errors = -4;
-            set_default_pink_dummy_canvas();
-            return;
-        }
-
-        image_file2 = plugin->open_for_reading( reader);
-        if( !image_file2) {
-            LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-                "The image plugin failed to import %s.", log_identifier.c_str());
-            *errors = -5;
-            set_default_pink_dummy_canvas();
-            return;
-        }
+    SYSTEM::Access_module<Image_module> image_module( false);
+    mi::neuraylib::IImage_plugin* plugin
+        = image_module->find_plugin_for_import( image_format, reader);
+    if( !plugin) {
+        LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
+            "No image plugin found to handle %s.", log_identifier.c_str());
+        *errors = -3;
+        set_default_pink_dummy_canvas();
+        return;
     }
 
-    m_pixel_type    = convert_pixel_type_string_to_enum( image_file2->get_type());
-    m_width         = std::max( image_file2->get_resolution_x() >> miplevel, 1u);
-    m_height        = std::max( image_file2->get_resolution_y() >> miplevel, 1u);
-    m_nr_of_layers  = image_file2->get_layers_size();
+    bool plugin_supports_selectors = plugin->supports_selectors();
+    const char* plugin_selector = plugin_supports_selectors ? selector : nullptr;
+    mi::base::Handle<mi::neuraylib::IImage_file> image_file(
+        plugin->open_for_reading( reader, plugin_selector));
+    if( !image_file) {
+        LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
+            "The image plugin failed to import %s.", log_identifier.c_str());
+        *errors = -7;
+        set_default_pink_dummy_canvas();
+        return;
+    }
+
+    do_init(
+        Memory_based(),
+        reader,
+        image_format,
+        selector,
+        mdl_file_path,
+        miplevel,
+        image_file.get(),
+        plugin_supports_selectors,
+        errors);
+}
+
+Canvas_impl::Canvas_impl(
+    Memory_based,
+    mi::neuraylib::IReader* reader,
+    const char* image_format,
+    const char* selector,
+    const char* mdl_file_path,
+    mi::Uint32 miplevel,
+    mi::neuraylib::IImage_file* image_file,
+    bool plugin_supports_selectors,
+    mi::Sint32* errors)
+{
+    mi::Sint32 dummy_errors = 0;
+    if( !errors)
+        errors = &dummy_errors;
+
+    do_init(
+        Memory_based(),
+        reader,
+        image_format,
+        selector,
+        mdl_file_path,
+        miplevel,
+        image_file,
+        plugin_supports_selectors,
+        errors);
+}
+
+void Canvas_impl::do_init(
+    Memory_based,
+    mi::neuraylib::IReader* reader,
+    const char* image_format,
+    const char* selector,
+    const char* mdl_file_path,
+    mi::Uint32 miplevel,
+    mi::neuraylib::IImage_file* image_file,
+    bool plugin_supports_selectors,
+    mi::Sint32* errors)
+{
+    ASSERT( M_IMAGE, image_format);
+
+    if( selector)
+        m_selector = selector;
+
+    const std::string log_identifier = mdl_file_path
+        ? std::string( "an image from MDL file path \"") + mdl_file_path + '\"'
+        : std::string( "a memory-based image with image format \"") + image_format + '\"';
+
+    m_pixel_type    = convert_pixel_type_string_to_enum( image_file->get_type());
+    m_width         = std::max( image_file->get_resolution_x() >> miplevel, 1u);
+    m_height        = std::max( image_file->get_resolution_y() >> miplevel, 1u);
+    m_nr_of_layers  = image_file->get_layers_size();
     m_miplevel      = miplevel;
-    m_is_cubemap    = image_file2->get_is_cubemap();
-    m_gamma         = image_file2->get_gamma();
+    m_is_cubemap    = image_file->get_is_cubemap();
+    m_gamma         = image_file->get_gamma();
 
     if(    m_pixel_type == PT_UNDEF
         || m_width == 0
@@ -446,18 +596,18 @@ Canvas_impl::Canvas_impl(
         || m_gamma <= 0) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin failed to import %s.", log_identifier.c_str());
-        *errors = -5;
+        *errors = -7;
         set_default_pink_dummy_canvas();
         return;
     }
 
-    if( selector) {
+    if( selector && !plugin_supports_selectors) {
         const Pixel_type new_pixel_type = get_pixel_type_for_channel( m_pixel_type, selector);
         if( new_pixel_type == PT_UNDEF) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                 "Failed to apply selector \"%s\" to \"%s\" with pixel type \"%s\".",
-                m_selector.c_str(), log_identifier.c_str(), image_file2->get_type());
-            *errors = -5;
+                selector, log_identifier.c_str(), image_file->get_type());
+            *errors = -10;
             set_default_pink_dummy_canvas();
             return;
         }
@@ -466,7 +616,7 @@ Canvas_impl::Canvas_impl(
     }
 
     if( m_miplevel == 0) {
-        const mi::Uint32 miplevels = image_file2->get_miplevels();
+        const mi::Uint32 miplevels = image_file->get_miplevels();
         LOG::mod_log->info( M_IMAGE, LOG::Mod_log::C_IO, //-V576 PVS
             "Loading %s, %s, pixel type \"%s\", "
 #ifdef MI_IMAGE_LOG_ASSUMED_GAMMA
@@ -489,11 +639,11 @@ Canvas_impl::Canvas_impl(
     m_tiles.resize( m_nr_of_layers);
 
     for( mi::Uint32 z = 0; z < m_nr_of_layers; ++z) {
-        m_tiles[z] = image_file2->read( z, m_miplevel);
+        m_tiles[z] = image_file->read( z, m_miplevel);
         if( !m_tiles[z]) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                 "The image plugin failed to import %s.", log_identifier.c_str());
-            *errors = -5;
+            *errors = -7;
             set_default_pink_dummy_canvas();
             return;
         }
@@ -503,7 +653,9 @@ Canvas_impl::Canvas_impl(
 }
 
 Canvas_impl::Canvas_impl(
-    const std::vector<mi::base::Handle<mi::neuraylib::ITile>>& tiles, Float32 gamma) : m_tiles(tiles)
+    const std::vector<mi::base::Handle<mi::neuraylib::ITile>>& tiles,
+    Float32 gamma)
+  : m_tiles( tiles)
 {
     // check incorrect arguments
     ASSERT( M_IMAGE, !tiles.empty());
@@ -611,23 +763,23 @@ bool Canvas_impl::release_tiles() const
 
     mi::base::Lock::Block block( &m_lock);
     for( mi::Uint32 z = 0; z < m_nr_of_layers; ++z)
-        m_tiles[z] = 0;
+        m_tiles[z] = nullptr;
 
     return true;
 }
 
 bool Canvas_impl::supports_lazy_loading() const
 {
-    // either both m_archive_filename or m_member_filename are set or none
-    ASSERT( M_IMAGE,  m_archive_filename.empty() || !m_member_filename.empty());
-    ASSERT( M_IMAGE, !m_archive_filename.empty() ||  m_member_filename.empty());
+    // either both m_container_filename or m_member_filename are set or none
+    ASSERT( M_IMAGE,  m_container_filename.empty() || !m_member_filename.empty());
+    ASSERT( M_IMAGE, !m_container_filename.empty() ||  m_member_filename.empty());
 
-    // m_filename and m_archive_filename (or m_member_filename) are not both set
-    ASSERT( M_IMAGE,  m_filename.empty() || m_archive_filename.empty());
+    // m_filename and m_container_filename (or m_member_filename) are not both set
+    ASSERT( M_IMAGE,  m_filename.empty() || m_container_filename.empty());
 
     if( !m_filename.empty())
         return true;
-    if( m_archive_filename.empty())
+    if( m_container_filename.empty())
         return false;
 
     SYSTEM::Access_module<Image_module> image_module( false);
@@ -664,8 +816,11 @@ mi::neuraylib::ITile* Canvas_impl::do_load_tile( mi::Uint32 z) const
         return nullptr;
     }
 
+    bool plugin_supports_selectors = plugin->supports_selectors();
+    const char* plugin_selector
+        = plugin_supports_selectors && !m_selector.empty() ? m_selector.c_str() : nullptr;
     mi::base::Handle<mi::neuraylib::IImage_file> image_file(
-        plugin->open_for_reading( reader.get()));
+        plugin->open_for_reading( reader.get(), plugin_selector));
     if( !image_file) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin \"%s\" failed to import \"%s\".",
@@ -683,7 +838,7 @@ mi::neuraylib::ITile* Canvas_impl::do_load_tile( mi::Uint32 z) const
 
     const char* pixel_type = tile->get_type();
     const std::string pixel_type_str = pixel_type ? pixel_type : "(invalid)";
-    if( !m_selector.empty()) {
+    if( !plugin_supports_selectors && !m_selector.empty()) {
         tile = image_module->extract_channel( tile.get(), m_selector.c_str());
         if( !tile) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
@@ -697,9 +852,9 @@ mi::neuraylib::ITile* Canvas_impl::do_load_tile( mi::Uint32 z) const
     // Check pixel type of the tile
     if( convert_pixel_type_string_to_enum( pixel_type) != m_pixel_type) {
         // We report here the pixel type after selector application, whereas strictly speaking, the
-        // plugin returned a different pixel (before selector application).
+        // plugin might have returned a different pixel (before selector application).
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-            "The image plugin \"%s\" returned failed to import \"%s\" (incorrect pixel type \"%s\" "
+            "The image plugin \"%s\" failed to import \"%s\" (incorrect pixel type \"%s\" "
             "vs expected \"%s\").",
             plugin->get_name(), log_identifier.c_str(), pixel_type,
             convert_pixel_type_enum_to_string( m_pixel_type));
@@ -710,7 +865,7 @@ mi::neuraylib::ITile* Canvas_impl::do_load_tile( mi::Uint32 z) const
     const mi::Uint32 width = tile->get_resolution_x();
     if( width != m_width) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-            "The image plugin \"%s\" returned failed to import \"%s\" (incorrect width %u "
+            "The image plugin \"%s\" failed to import \"%s\" (incorrect width %u "
             "vs expected %u).",
             plugin->get_name(), log_identifier.c_str(), width, m_width);
         return nullptr;
@@ -721,7 +876,7 @@ mi::neuraylib::ITile* Canvas_impl::do_load_tile( mi::Uint32 z) const
     const mi::Uint32 height = tile->get_resolution_y();
     if( height != m_height) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-            "The image plugin \"%s\" returned failed to import \"%s\" (incorrect height %u "
+            "The image plugin \"%s\" failed to import \"%s\" (incorrect height %u "
             "vs expected %u).",
             plugin->get_name(), log_identifier.c_str(), height, m_height);
         return nullptr;
@@ -754,16 +909,16 @@ mi::neuraylib::IReader* Canvas_impl::get_reader( std::string& log_identifier) co
 
     }
 
-    // archive-based
-    if( !m_archive_filename.empty() && !m_member_filename.empty()) {
+    // container-based
+    if( !m_container_filename.empty() && !m_member_filename.empty()) {
 
-        log_identifier = m_archive_filename + "\" in \"" + m_member_filename;
+        log_identifier = m_container_filename + "\" in \"" + m_member_filename;
 
         SYSTEM::Access_module<Image_module> image_module( false);
         mi::base::Handle<IMdl_container_callback> callback(
             image_module->get_mdl_container_callback());
         mi::base::Handle<mi::neuraylib::IReader> reader(
-            callback->get_reader( m_archive_filename.c_str(), m_member_filename.c_str()));
+            callback->get_reader( m_container_filename.c_str(), m_member_filename.c_str()));
         if( !reader) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
                  "Failed to open image file \"%s\".", log_identifier.c_str());
@@ -783,7 +938,7 @@ void Canvas_impl::set_default_pink_dummy_canvas()
     m_tiles.clear();
 
     m_filename.clear();
-    m_archive_filename.clear();
+    m_container_filename.clear();
     m_member_filename.clear();
 
     m_pixel_type    = PT_RGBA;

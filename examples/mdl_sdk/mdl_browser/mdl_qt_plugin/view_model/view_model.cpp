@@ -95,7 +95,7 @@ View_model::View_model(mi::neuraylib::INeuray* neuray,
         m_cache->set_locale(current_locale.c_str());
     }
 
-    // timings are measured withing (broken down)
+    // timings are measured within (broken down)
     if (!m_cache->update(neuray, transaction))
         std::cerr << "[Mdl_sdk] start: failed to update the cache.\n";
 

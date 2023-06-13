@@ -30,8 +30,8 @@
 # Note, this enables CUDA for all projects (only of concern for Visual Studio)
 if(MDL_ENABLE_CUDA_EXAMPLES)
 
-    # use the c++ compiler as host compiler (setting this does not work with apple clang 9.x)
-    if(NOT MACOSX)
+    # use the c++ compiler as host compiler (setting this does not work with Visual Studio or Apple clang 9.x)
+    if(LINUX)
         set(CMAKE_CUDA_HOST_COMPILER ${CMAKE_CXX_COMPILER} CACHE STRING "")
     endif()
 
@@ -154,9 +154,9 @@ function(FIND_CUDA_EXT)
     set(MDL_DEPENDENCY_CUDA_SHARED ${_CUDA_SHARED} CACHE INTERNAL "cuda shared libs")
 
     if(MDL_LOG_DEPENDENCIES)
-        message(STATUS "[INFO] MDL_DEPENDENCY_CUDA_INCLUDE:        ${MDL_DEPENDENCY_CUDA_INCLUDE}")
-        message(STATUS "[INFO] MDL_DEPENDENCY_CUDA_LIBS:           ${MDL_DEPENDENCY_CUDA_LIBS}")
-        message(STATUS "[INFO] MDL_DEPENDENCY_CUDA_SHARED:         ${MDL_DEPENDENCY_CUDA_SHARED}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_CUDA_INCLUDE:          ${MDL_DEPENDENCY_CUDA_INCLUDE}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_CUDA_LIBS:             ${MDL_DEPENDENCY_CUDA_LIBS}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_CUDA_SHARED:           ${MDL_DEPENDENCY_CUDA_SHARED}")
     endif()
 
 endfunction()

@@ -235,7 +235,7 @@ public:
                 } else if (unicode_char <= 0xFFFF) {
                     printf(out, "\\u%04x", unsigned(unicode_char));
                 } else {
-                    printf(out, "\\U%06x", unsigned(unicode_char));
+                    printf(out, "\\U%08x", unsigned(unicode_char));
                 }
                 break;
             }
@@ -762,16 +762,55 @@ namespace {
         return ((c & 0x80) != 0);
     }
 
-    bool contains_non_ascii(char const* name)
+    bool is_alphabetic(unsigned char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+    }
+
+    bool is_alphanumeric(unsigned char c) {
+        return is_alphabetic(c) || (c >= '0' && c <= '9');
+    }
+
+    bool is_ident_start(unsigned char c) {
+        return is_alphabetic(c);
+    }
+
+    bool is_ident_follow(unsigned char c) {
+        return is_alphanumeric(c) || c == '_';
+    }
+
+    // Return true if the given string corresponds to the syntax of
+    // a regular MDL identifier [a-zA-Z][a-zA-Z0-9_]*.
+    bool is_identifier(char const* name)
     {
         char const* p = name;
+        if (!is_ident_start(*p)) {
+            // Also returns if name is the empty string.
+            return false;
+        }
+        p++;
         while (*p) {
             unsigned char c = *p;
-            if (is_non_ascii(c))
-                return true;
+            if (is_non_ascii(c) || !is_ident_follow(c)) {
+                return false;
+            }
             p++;
         }
-        return false;
+        return true;
+    }
+
+    // Return true if name is an identifier that must be quoted as a
+    // Unicode identifier. If is_special is true, it should be handled
+    // like ., .. or * in an import statement (that is, not quoted.)
+    bool must_quote(char const* name) {
+        return !is_identifier(name);
+    }
+
+    // Return true if the given symbol is one of the special symbols
+    // in import statements (., .. or *).
+    bool is_special_import_symbol(ISymbol const* sym) {
+        return sym->get_id() == ISymbol::SYM_DOT
+            || sym->get_id() == ISymbol::SYM_DOTDOT
+            || sym->get_id() == ISymbol::SYM_STAR;
     }
 } // Anonymous
 
@@ -780,11 +819,11 @@ namespace {
 void Printer::print(ISymbol const *sym)
 {
     char const *name = sym->get_name();
-    bool is_unicode = contains_non_ascii(name);
-    if (is_unicode)
+    bool quote_needed = must_quote(name) && !is_special_import_symbol(sym);
+    if (quote_needed)
         print('\'');
     print(name);
-    if (is_unicode)
+    if (quote_needed)
         print('\'');
 }
 
@@ -1552,8 +1591,12 @@ void Printer::print(IExpression const *expr, int priority)
     case IExpression::EK_LET:
         {
             IExpression_let const *l = cast<IExpression_let>(expr);
-            int op_priority = get_priority(IExpression::OK_LOGICAL_NOT);
+            int op_priority = get_priority(IExpression::OK_SEQUENCE);
             int count = l->get_declaration_count();
+
+            if (op_priority < priority) {
+                print("( ");
+            }
 
             keyword("let");
             if (1 < count) {
@@ -1574,6 +1617,10 @@ void Printer::print(IExpression const *expr, int priority)
             ++m_indent;
             nl();
             print(l->get_expression(), op_priority);
+
+            if (op_priority < priority) {
+                print(')');
+            }
             --m_indent;
             break;
         }
@@ -2965,8 +3012,12 @@ public:
     /// \param res   the resource value
     void print_resource(IValue_resource const *res) MDL_FINAL;
 
-    /// Given an imported definition, prints the name of its import scope.
-    void print_import_scope_name(IDefinition const *def);
+    /// Given a definition, prints its scope.
+    ///
+    /// \param def  the imported definition
+    ///
+    /// \return false if the scope is empty, true otherwise
+    bool print_scope(IDefinition const *def);
 
     /// Prints a definition name.
     ///
@@ -3200,11 +3251,11 @@ void Sema_printer::print_resource(IValue_resource const *res)
     }
 }
 
-// Given an imported definition, prints the name of its import scope.
-void Sema_printer::print_import_scope_name(IDefinition const *idef)
+// Given a definition, prints its scope.
+bool Sema_printer::print_scope(IDefinition const *idef)
 {
-    Definition const *def = impl_cast<Definition>(idef);
-    Scope const      *scope   = def->get_def_scope();
+    Definition const *def   = impl_cast<Definition>(idef);
+    Scope const      *scope = def->get_def_scope();
 
     if (def->get_kind() == Definition::DK_CONSTRUCTOR) {
         // constructors live "inside" its type-scope,
@@ -3220,25 +3271,42 @@ void Sema_printer::print_import_scope_name(IDefinition const *idef)
         }
     }
 
+    if (m_sym_stack.empty() &&
+        def->get_def_scope() == m_module->get_definition_table().get_global_scope())
+    {
+        // need "::" in front
+        m_sym_stack.push(NULL);
+    }
+
+    if (m_sym_stack.empty()) {
+        return false;
+    }
+
     bool first = true;
     while (!m_sym_stack.empty()) {
         ISymbol const *sym = m_sym_stack.top();
 
-        if (first) {
-            first = false;
-        } else {
+        if (sym == NULL) {
             Base::print("::");
+        } else {
+            if (first) {
+                first = false;
+            } else {
+                Base::print("::");
+            }
+            char const *name = sym->get_name();
+            bool quote_needed = must_quote(name) && !is_special_import_symbol(sym);
+            if (quote_needed) {
+                Base::print('\'');
+            }
+            Base::print(name);
+            if (quote_needed) {
+                Base::print('\'');
+            }
         }
-        char const* name = sym->get_name();
-        bool unicode = contains_non_ascii(name);
-        if (unicode)
-            Base::print('\'');
-        Base::print(name);
-        if (unicode)
-            Base::print('\'');
-
         m_sym_stack.pop();
     }
+    return !first;
 }
 
 // Prints a definition name.
@@ -3283,54 +3351,23 @@ void Sema_printer::print_def_name(
         enforce_simple = true;
     }
 
-    vector<ISymbol const *>::Type syms(m_alloc);
-
-    syms.push_back(def->get_sym());
-    bool first = true;
+    bool has_scope = false;
 
     if (!enforce_simple) {
-        if (def->get_property(IDefinition::DP_IS_IMPORTED)) {
-            if (def->get_semantics() == Definition::DS_CONV_OPERATOR) {
-                // the name of the conversion operator is ALWAYS its return type
-                IType_function const *f_type = cast<IType_function>(def->get_type());
-                IType const *ret_type = f_type->get_return_type();
-                return print_type(ret_type, NULL);
-            }
-            // ALWAYS add the full qualified name
-            print_import_scope_name(def);
-            first = false;
-        } else {
-            Scope const *scope = def->get_def_scope();
-
-            if (def->get_kind() == Definition::DK_CONSTRUCTOR) {
-                // constructors live "inside" its type-scope,
-                // skip that to create valid MDL syntax.
-                if (scope != NULL && scope->get_scope_type() != NULL) {
-                    scope = scope->get_parent();
-                }
-            }
-            while (scope != NULL) {
-                ISymbol const *scope_sym = scope->get_scope_name();
-                if (scope_sym == NULL) {
-                    break;
-                }
-                syms.push_back(scope_sym);
-                scope = scope->get_parent();
-            }
+        if (def->get_semantics() == Definition::DS_CONV_OPERATOR) {
+            // the name of the conversion operator is ALWAYS its return type
+            IType_function const *f_type = cast<IType_function>(def->get_type());
+            IType const *ret_type = f_type->get_return_type();
+            return print_type(ret_type, NULL);
         }
+        has_scope = print_scope(def);
     }
 
-    for (size_t i = syms.size(); i > (only_package ? 1 : 0);) {
-        --i;
-        if (!first) {
-            Base::print("::");
-        }
-        first = false;
-        Base::print(syms[i]);
-    }
-
-    if (only_package && !first) {
+    if (has_scope) {
         Base::print("::");
+    }
+    if (!only_package) {
+        Base::print(def->get_sym());
     }
 
     if (!no_color_change) {

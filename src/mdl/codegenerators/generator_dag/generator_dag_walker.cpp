@@ -146,14 +146,6 @@ void DAG_ir_walker::walk_instance(
     }
 }
 
-/// Skip a temporaries if necessary.
-static DAG_node const *skip_temporary(DAG_node const *node)
-{
-    if (DAG_temporary const *tmp = as<DAG_temporary>(node))
-        node = tmp->get_expr();
-    return node;
-}
-
 // Walk the IR nodes of an instance material slot, including temporaries.
 void DAG_ir_walker::walk_instance_slot(
     Generated_code_dag::Material_instance       *instance,
@@ -188,7 +180,7 @@ void DAG_ir_walker::walk_instance_slot(
                         v = s_strct->get_field(locator.third_name);
                     }
                 } else {
-                    f_comp = skip_temporary(f_comp);
+                    f_comp = skip_temporaries(f_comp);
                     if (is<DAG_parameter>(f_comp)) {
                         // we cannot dive further, because we stopped at a parameter
                         node = const_cast<DAG_node *>(f_comp);
@@ -220,7 +212,7 @@ void DAG_ir_walker::walk_instance_slot(
                                         cast<IValue_struct>(cnst->get_value());
                                     v = strct->get_field(locator.third_name);
                                 } else {
-                                    s_comp = skip_temporary(s_comp);
+                                    s_comp = skip_temporaries(s_comp);
                                     if (is<DAG_parameter>(s_comp)) {
                                         // we cannot dive further, because we stopped at a parameter
                                         node = const_cast<DAG_node *>(s_comp);
@@ -429,7 +421,7 @@ void Dag_hasher::hash_instance_slot(
                         v = s_strct->get_field(locator.third_name);
                     }
                 } else {
-                    f_comp = skip_temporary(f_comp);
+                    f_comp = skip_temporaries(f_comp);
                     if (is<DAG_parameter>(f_comp)) {
                         // we cannot dive further, because we stopped at a parameter
                         node = f_comp;
@@ -461,7 +453,7 @@ void Dag_hasher::hash_instance_slot(
                                         cast<IValue_struct>(cnst->get_value());
                                     v = strct->get_field(locator.third_name);
                                 } else {
-                                    s_comp = skip_temporary(s_comp);
+                                    s_comp = skip_temporaries(s_comp);
                                     if (is<DAG_parameter>(s_comp)) {
                                         // we cannot dive further, because we stopped at a parameter
                                         node = s_comp;

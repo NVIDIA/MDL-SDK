@@ -47,7 +47,7 @@ namespace i18n
         std::vector<std::string> m_modules;
         std::vector<std::string> m_packages;
         bool m_recursive = true; // Traverse sub-packages if set to true
-        bool m_output_context = true; // Ouput group/context information
+        bool m_output_context = true; // Output group/context information
         bool m_dry_run = false; // If true, do not create XLIFF but report what would be done
         bool m_force = false; // If true, force overwriting XLIFF files
     private:

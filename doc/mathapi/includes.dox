@@ -46,7 +46,7 @@ fact, the <tt>mi/math.h</tt> include file just includes
 subdirectory.
 
 See \subpage mi_base_includes for the individual base API include
-files grouped by compoment.
+files grouped by component.
 
 Include files are self-contained. Internal dependencies are resolved
 automatically.  As a consequence, their inclusion is order independent.

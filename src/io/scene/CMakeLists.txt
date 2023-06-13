@@ -100,5 +100,11 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         boost
     )
 
+# Boost::uuid
+# See https://github.com/microsoft/vcpkg/issues/4481
+if(WINDOWS)
+    target_link_libraries(${PROJECT_NAME} PRIVATE Bcrypt)
+endif()
+
 # add tests if available
 add_tests(POST)

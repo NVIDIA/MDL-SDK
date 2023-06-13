@@ -292,7 +292,7 @@ public:
 private:
 
     // processes an expression during the construction of the NFA from LPE expressions.
-    void proccess(NFA_node* start, NFA_node* end, const LPE_expression& expr);
+    void process(NFA_node* start, NFA_node* end, const LPE_expression& expr);
 
     // all string 'handles' with corresponding 'global tags' present in the scene.
     std::unordered_map<std::string, uint32_t> m_global_tag_map;

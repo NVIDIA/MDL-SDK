@@ -66,6 +66,7 @@ public:
         mi::Float32 gamma) const;
 
     IMipmap* create_mipmap(
+        File_based,
         const std::string& filename,
         const char* selector,
         bool only_first_level,
@@ -74,7 +75,7 @@ public:
     IMipmap* create_mipmap(
         Container_based,
         mi::neuraylib::IReader* reader,
-        const std::string& archive_filename,
+        const std::string& container_filename,
         const std::string& member_filename,
         const char* selector,
         bool only_first_level,
@@ -89,16 +90,18 @@ public:
         bool only_first_level,
         mi::Sint32* errors) const;
 
-    IMipmap* create_mipmap(
-        std::vector<mi::base::Handle<mi::neuraylib::ICanvas> >& canvases,
-        bool is_cubemap) const;
-
-    void create_mipmaps(
+    void create_mipmap(
         std::vector<mi::base::Handle<mi::neuraylib::ICanvas> >& mipmaps,
         const mi::neuraylib::ICanvas* base_canvas,
         mi::Float32 gamma) const;
 
+    IMipmap* create_mipmap(
+        std::vector<mi::base::Handle<mi::neuraylib::ICanvas> >& canvases,
+        bool is_cubemap) const;
+
     IMipmap* create_dummy_mipmap();
+
+    bool is_dummy_mipmap( const IMipmap* mipmap) const;
 
     mi::neuraylib::ICanvas* create_canvas(
         Pixel_type pixel_type,
@@ -109,6 +112,7 @@ public:
         mi::Float32 gamma) const;
 
     mi::neuraylib::ICanvas* create_canvas(
+        File_based,
         const std::string& filename,
         const char* selector,
         mi::Uint32 miplevel,
@@ -117,7 +121,7 @@ public:
     mi::neuraylib::ICanvas* create_canvas(
         Container_based,
         mi::neuraylib::IReader* reader,
-        const std::string& archive_filename,
+        const std::string& container_filename,
         const std::string& member_filename,
         const char* selector,
         mi::Uint32 miplevel,
@@ -277,7 +281,7 @@ private:
     /// The registered image plugins. Needs #m_plugins_lock.
     Plugin_vector m_plugins;
 
-    /// Callback to support lazy loading of images in MDL archives.
+    /// Callback to support lazy loading of images in MDL containers.
     mi::base::Handle<IMdl_container_callback> m_mdl_container_callback;
 };
 

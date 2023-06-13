@@ -398,7 +398,8 @@ public:
         DB::Transaction* transaction,
         bool copy_immutable_calls) const = 0;
 
-    // Transaction is required if mi::neuraylib::IExpression::DEEP_CALL_COMPARISONS is set in \p flags.
+    // Transaction is required if mi::neuraylib::IExpression::DEEP_CALL_COMPARISONS is set in
+    // \p flags.
     virtual mi::Sint32 compare(
         const IExpression* lhs,
         const IExpression* rhs,
@@ -406,7 +407,8 @@ public:
         mi::Float64 epsilon = 0.0,
         DB::Transaction* transaction = nullptr) const = 0;
 
-    // Transaction is required if mi::neuraylib::IExpression::DEEP_CALL_COMPARISONS is set in \p flags.
+    // Transaction is required if mi::neuraylib::IExpression::DEEP_CALL_COMPARISONS is set in
+    // \p flags.
     virtual mi::Sint32 compare(
         const IExpression_list* lhs,
         const IExpression_list* rhs,

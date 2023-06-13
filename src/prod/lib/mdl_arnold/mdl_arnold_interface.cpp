@@ -301,11 +301,11 @@ Mdl_sdk_interface::Mdl_sdk_interface()
         m_mdl_sdk->get_api_component<mi::neuraylib::IPlugin_configuration>());
 
     mi::Sint32 result = plugin_conf->load_plugin_library(
-        resolve_dynamic_library(plugin_path, "nv_freeimage_ai" MI_BASE_DLL_FILE_EXT).c_str());
+        resolve_dynamic_library(plugin_path, "nv_openimageio_ai" MI_BASE_DLL_FILE_EXT).c_str());
     if (result != 0)
     {
-        m_state = EMdl_sdk_state::error_freeimage_not_found;
-        AiMsgWarning("[mdl] Loading MDL SDK FreeImage library failed.");
+        m_state = EMdl_sdk_state::error_openimageio_not_found;
+        AiMsgWarning("[mdl] Loading MDL SDK OpenImageIO library failed.");
         return;
     }
     

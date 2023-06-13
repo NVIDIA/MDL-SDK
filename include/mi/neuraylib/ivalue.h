@@ -317,7 +317,7 @@ public:
     /// \param value   The new value of the field.
     /// \return
     ///                -  0: Success.
-    ///                - -1: Invalid parameter (\p NULL pointer).
+    ///                - -1: Invalid parameter (\c NULL pointer).
     ///                - -2: \p index is out of bounds.
     ///                - -3: Incorrect type of \p value.
     virtual Sint32 set_value( Size index, IValue* value) = 0;
@@ -432,12 +432,12 @@ public:
     /// Returns the type of this value.
     virtual const IType_array* get_type() const = 0;
 
-    /// Sets the size for dynamic arrays.
+    /// Sets the size for deferred-sized arrays.
     ///
     /// \param size   The desired array size.
     /// \return
     ///               -  0: Success.
-    ///               - -1: The array is a static array.
+    ///               - -1: The array is an immediate-sized array.
     virtual Sint32 set_size( Size size) = 0;
 };
 
@@ -838,8 +838,8 @@ public:
     ///   - For atomic types, their values are compared using \c operator< or \c strcmp(), with the
     ///     exception of enums, for which the indices rather than the values are compared.
     ///   - For compounds, the compound size is compared using \c operator< (the compound size might
-    ///     be different for dynamic arrays). If both compounds are of equal size, the compounds
-    ///     elements are compared in lexicographic order.
+    ///     be different for deferred-sized arrays). If both compounds are of equal size, the
+    ///     compounds elements are compared in lexicographic order.
     ///   - For resources, the values are compared using \c strcmp().
     ///
     /// \param lhs          The left-hand side operand for the comparison.
@@ -893,6 +893,21 @@ public:
 
 /// Simplifies setting the value of #mi::neuraylib::IValue from the corresponding classes from the
 /// %base and %math API.
+///
+/// The various overloads of this method support all atomic MDL types with the corresponding C-type
+/// as type of \p v (and \c int for #mi::neuraylib::IValue_enum). Vectors and matrices are
+/// supported if \p v is of type #mi::math::Vector and #mi::math::Matrix, respectively. For
+/// arrays, see #set_value(mi::neuraylib::IValue*,const T*,Size). For components of compounds, see
+/// #set_value(mi::neuraylib::IValue*,Size,const T&) and
+/// #set_value(mi::neuraylib::IValue*,const char*,const T&).
+///
+/// It is not possible to set entire structs with a single call (in general there is no
+/// corresponding C++ class, and absence of introspection machinery). Struct fields need to
+/// be set one by one.
+///
+/// There is no support for inner-most components of multi-dimensional compounds (arrays of
+/// compounds or structs of compounds) -- this would require additional overloads accepting two
+/// or more component indices and/or field names.    
 ///
 /// \param value           The instance of #mi::neuraylib::IValue to modify.
 /// \param v               The new value to be set.
@@ -1119,6 +1134,8 @@ inline mi::Sint32 set_value( mi::neuraylib::IValue* value, const mi::math::Spect
 
 /// This variant handles elements of compounds identified via an additional index.
 ///
+/// See also #mi::neuraylib::set_value() for more details about overloads.
+///
 /// \param value           The instance of #mi::neuraylib::IValue to modify.
 /// \param index           The index of the affected compound element.
 /// \param v               The new value to be set.
@@ -1144,6 +1161,8 @@ mi::Sint32 set_value( mi::neuraylib::IValue* value, mi::Size index, const T& v)
 
 /// This variant handles fields of structs identified via an additional field name.
 ///
+/// See also #mi::neuraylib::set_value() for more details about overloads.
+///
 /// \param value           The instance of #mi::neuraylib::IValue to modify.
 /// \param name            The name of the affected struct field.
 /// \param v               The new value to be set.
@@ -1167,8 +1186,55 @@ mi::Sint32 set_value( mi::neuraylib::IValue* value, const char* name, const T& v
     return -1;
 }
 
-// Simplifies reading the value of #mi::neuraylib::IValue into the corresponding classes from the
+/// This variant handles entire arrays.
+///
+/// See also #mi::neuraylib::set_value() for more details about overloads.
+///
+/// \param value           The instance of #mi::neuraylib::IValue to modify.
+/// \param v               The new value to be set (as pointer to a C array).
+/// \param n               The size of the C array (needs to match the size of \p value).
+/// \return
+///                        -  0: Success.
+///                        - -1: The dynamic type of \p value does not match the static type of
+///                              \p v.
+///                        - -4: The array sizes do not match.
+template<class T>
+mi::Sint32 set_value( mi::neuraylib::IValue* value, const T* v, mi::Size n)
+{
+    mi::base::Handle<mi::neuraylib::IValue_array> value_array(
+        value->get_interface<mi::neuraylib::IValue_array>());
+    if( value_array) {
+        if( value_array->get_size() != n)
+            return -3;
+        for( mi::Size i = 0; i < n; ++i) {
+            mi::base::Handle<mi::neuraylib::IValue> element( value_array->get_value( i));
+            mi::Sint32 result = set_value( element.get(), v[i]);
+            if( result != 0)
+                return result;
+        }
+        return 0;
+    }
+
+    return -1;
+}
+
+/// Simplifies reading the value of #mi::neuraylib::IValue into the corresponding classes from the
 /// %base and %math API.
+///
+/// The various overloads of this method support all atomic MDL types with the corresponding C-type
+/// as type of \p v (and \c int for #mi::neuraylib::IValue_enum). Vectors and matrices are
+/// supported if \p v is of type #mi::math::Vector and #mi::math::Matrix, respectively. For arrays,
+/// see #get_value(const mi::neuraylib::IValue*,T*,Size). For components of compounds, see
+/// #get_value(const mi::neuraylib::IValue*,Size,T&) and
+/// #get_value(const mi::neuraylib::IValue*,const char*,T&).
+///
+/// It is not possible to read entire structs with a single call (in general there is no
+/// corresponding C++ class, and absence of introspection machinery). Struct fields need to
+/// be read one by one.
+///
+/// There is no support for inner-most components of multi-dimensional compounds (arrays of
+/// compounds or structs of compounds) -- this would require additional overloads accepting two
+/// or more component indices and/or field names.
 ///
 /// \param value           The instance of #mi::neuraylib::IValue to read.
 /// \param[out] v          The new value will be stored here.
@@ -1393,6 +1459,8 @@ inline mi::Sint32 get_value( const mi::neuraylib::IValue* value, mi::math::Spect
 
 /// This variant handles elements of compounds identified via an additional index.
 ///
+/// See also #mi::neuraylib::get_value() for more details about overloads.
+///
 /// \param value           The instance of #mi::neuraylib::IValue to read.
 /// \param index           The index of the affected compound element.
 /// \param v               The new value will be stored here.
@@ -1418,6 +1486,8 @@ mi::Sint32 get_value( const mi::neuraylib::IValue* value, mi::Size index, T& v)
 
 /// This variant handles fields of structs identified via an additional field name.
 ///
+/// See also #mi::neuraylib::get_value() for more details about overloads.
+///
 /// \param value           The instance of #mi::neuraylib::IValue to read.
 /// \param name            The name of the affected struct field.
 /// \param v               The new value will be stored here.
@@ -1440,6 +1510,39 @@ mi::Sint32 get_value( const mi::neuraylib::IValue* value, const char* name, T& v
 
     return -1;
 }
+
+/// This variant handles entire arrays.
+///
+/// See also #mi::neuraylib::get_value() for more details about overloads.
+///
+/// \param value           The instance of #mi::neuraylib::IValue to read.
+/// \param v               The new value will be stored here (as pointer to a C array).
+/// \param n               The size of the C array (needs to match the size of \p value).
+/// \return
+///                        -  0: Success.
+///                        - -1: The dynamic type of \p value does not match the static type of
+///                              \p v.
+///                        - -4: The array sizes do not match.
+template<class T>
+mi::Sint32 get_value( const mi::neuraylib::IValue* value, T* v, mi::Size n)
+{
+    mi::base::Handle<const mi::neuraylib::IValue_array> value_array(
+        value->get_interface<mi::neuraylib::IValue_array>());
+    if( value_array) {
+        if( value_array->get_size() != n)
+            return -3;
+        for( mi::Size i = 0; i < n; ++i) {
+            mi::base::Handle<const  mi::neuraylib::IValue> element( value_array->get_value( i));
+            mi::Sint32 result = get_value( element.get(), v[i]);
+            if( result != 0)
+                return result;
+        }
+        return 0;
+    }
+
+    return -1;
+}
+
 
 /**@}*/ // end group mi_neuray_mdl_types
 

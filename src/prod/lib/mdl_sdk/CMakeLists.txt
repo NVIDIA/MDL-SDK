@@ -98,10 +98,12 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         mdl::mdl-compiler-compilercore
         mdl::mdl-compiler-compiler_glsl
         mdl::mdl-compiler-compiler_hlsl
+        mdl::mdl-distiller-dist
         mdl::mdl-integration-mdlnr
         mdl::mdl-integration-i18n
         mdl::mdl-jit-generator_jit
         mdl::mdl-runtime
+        mdl::render-baker-baker
         mdl::render-mdl-backends
         mdl::render-mdl-runtime
         ${LINKER_END_GROUP}
@@ -117,6 +119,8 @@ if(NOT WINDOWS)
                 ${CMAKE_BINARY_DIR}/src/shaders/plugin/dds/${CMAKE_BUILD_TYPE}
                 ${CMAKE_BINARY_DIR}/src/shaders/plugin/freeimage/${CMAKE_BUILD_TYPE}
                 ${CMAKE_BINARY_DIR}/src/shaders/plugin/openimageio/${CMAKE_BUILD_TYPE}
+                ${CMAKE_BINARY_DIR}/src/shaders/plugin/mdl_distiller/${CMAKE_BUILD_TYPE}
+                ${CMAKE_BINARY_DIR}/examples/mdl_sdk/distilling_target_plugin/${CMAKE_BUILD_TYPE}
             )
 
 endif()

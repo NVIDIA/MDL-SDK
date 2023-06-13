@@ -23,3 +23,6 @@ zutil.c
 
 zutil.h
     Added #ifdef __cplusplus extern "C" { ... }
+
+zutil.h/c
+    Added "const" in signature of z_error().

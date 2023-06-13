@@ -85,7 +85,7 @@ Doing this one by one will result in a lot of duplicated code and data, because 
 Also when combining the generated code into one GLSL or CUDA kernel, this may fail because of multiple definitions for commonly used functions.
 
 Link units (#mi::neuraylib::ILink_unit) solve this problem:
-Instead of compiling MDL expressions separately, create a link unit via #mi::neuraylib::IMdl_backend::create_link_unit() and add expressions to it via #mi::neuraylib::ILink_unit::add_environment(), #mi::neuraylib::ILink_unit::add_material_expression(), and #mi::neuraylib::ILink_unit::add_material_df().
+Instead of compiling MDL expressions separately, create a link unit via #mi::neuraylib::IMdl_backend::create_link_unit() and add expressions to it via #mi::neuraylib::ILink_unit::add_function(), #mi::neuraylib::ILink_unit::add_material_expression(), and #mi::neuraylib::ILink_unit::add_material_df().
 When the link unit is compiled via #mi::neuraylib::IMdl_backend::translate_link_unit(), commonly used code and data will only be translated once.
 The resulting #mi::neuraylib::ITarget_code object will then contain code and data of multiple functions in the order in which they were added to the link unit.
 Note, that for #mi::neuraylib::ILink_unit::add_material_df() multiple functions are added at once.

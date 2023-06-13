@@ -674,7 +674,7 @@ uint32_t LPE_state_machine::handle_to_global_tag(const char* handle)
     return tag;
 }
 
-void LPE_state_machine::proccess(NFA_node* start, NFA_node* end, const LPE_expression& expr)
+void LPE_state_machine::process(NFA_node* start, NFA_node* end, const LPE_expression& expr)
 {
     switch (expr.get_kind())
     {
@@ -713,7 +713,7 @@ void LPE_state_machine::proccess(NFA_node* start, NFA_node* end, const LPE_expre
     case LPE_expression::Kind::Operator_alternative:
     {
         for (auto& operand : expr.m_operands)
-            proccess(start, end, operand);
+            process(start, end, operand);
         return;
     }
 
@@ -722,7 +722,7 @@ void LPE_state_machine::proccess(NFA_node* start, NFA_node* end, const LPE_expre
         // special case, only one element
         if (expr.m_operands.size() == 1)
         {
-            proccess(start, end, expr.m_operands[0]);
+            process(start, end, expr.m_operands[0]);
             return;
         }
 
@@ -732,12 +732,12 @@ void LPE_state_machine::proccess(NFA_node* start, NFA_node* end, const LPE_expre
         {
             if (i == expr.m_operands.size() - 1)
             {
-                proccess(tmp, end, expr.m_operands[i]);
+                process(tmp, end, expr.m_operands[i]);
                 return;
             }
 
             tmp = new NFA_node();
-            proccess(start, tmp, expr.m_operands[i]);
+            process(start, tmp, expr.m_operands[i]);
             start = tmp;
         }
         return;
@@ -747,7 +747,7 @@ void LPE_state_machine::proccess(NFA_node* start, NFA_node* end, const LPE_expre
     {
         NFA_node* inner_start = new NFA_node();
         NFA_node* inner_end = new NFA_node();
-        proccess(inner_start, inner_end, expr.m_operands[0]);
+        process(inner_start, inner_end, expr.m_operands[0]);
 
         uint32_t epsilon = static_cast<uint32_t>(Transition_type::EPSILON);
         start->children.insert({epsilon, end});              // start to end (skip exec)
@@ -794,7 +794,7 @@ void LPE_state_machine::build()
     {
         NFA_node* end = new NFA_node();
         end->final_state_for_ith_lpe = i;
-        proccess(start, end, expanded[i]);
+        process(start, end, expanded[i]);
     }
 
     // map of all states of the NFA

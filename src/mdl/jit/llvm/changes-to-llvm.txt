@@ -29,3 +29,8 @@ Changes:
  - made llvm::createNVVMReflectPass() external visible
  - disabled funnel shift creation inside (aggressive) instruction combiner pass
  - fix compile error for VS2017 in ModuleSummaryIndex.h regarding TypeIdCompatibleVtableMap
+ - fix compile error for GCC12 in PointerSumType.h (missing template keyword)
+ - applied llvm-project commit d58c7a92 "[IR] Added operator delete to subclasses of User to avoid UB"
+ - applied llvm-project commit 1d9086bf "Fix use of uninitialized member in constructor"
+ - fix race-condition in LLVM Orc JIT notifying other threads of an emitted object before the memory manager
+   for the object is properly registered

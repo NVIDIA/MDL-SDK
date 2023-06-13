@@ -1284,8 +1284,8 @@ class Type_factory : public Interface_owned
             {
                 if (a.kind != b.kind) {
                     Type_function       *ft = NULL;
-                    Type                *rt;
-                    Function_type const *sk;
+                    Type                *rt = NULL;
+                    Function_type const *sk = NULL;
 
                     // compare a function type and a function search key
                     if (a.kind == KEY_FUNC_TYPE && b.kind == KEY_FUNC_KEY) {

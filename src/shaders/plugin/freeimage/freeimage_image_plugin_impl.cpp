@@ -123,12 +123,12 @@ bool Image_plugin_impl::init( mi::neuraylib::IPlugin_api* plugin_api)
 
 bool Image_plugin_impl::exit( mi::neuraylib::IPlugin_api* plugin_api)
 {
-    m_image_api = 0;
+    m_image_api = nullptr;
 
     if( --g_freeimage_libray_initialization_counter == 0)
         FreeImage_DeInitialise();
 
-    g_logger = 0;
+    g_logger = nullptr;
     return true;
 }
 
@@ -139,64 +139,60 @@ const char* Image_plugin_impl::get_file_extension( mi::Uint32 index) const
         case FIF_IFF:
             if( index == 0) return "iff";
             if( index == 1) return "lbm";
-            return 0;
+            return nullptr;
         case FIF_J2K:
             if( index == 0) return "j2c";
             if( index == 1) return "j2k";
-            return 0;
+            return nullptr;
         case FIF_JPEG:
             if( index == 0) return "jpe";
             if( index == 1) return "jpeg";
             if( index == 2) return "jpg";
             if( index == 3) return "jif";
-            return 0;
+            return nullptr;
         case FIF_PICT:
             if( index == 0) return "pct";
             if( index == 1) return "pic";
             if( index == 2) return "pict";
-            return 0;
+            return nullptr;
         case FIF_SGI:
             if( index == 0) return "rgb";
             if( index == 1) return "sgi";
-            return 0;
+            return nullptr;
         case FIF_TARGA:
             if( index == 0) return "targa";
             if( index == 1) return "tga";
-            return 0;
+            return nullptr;
         case FIF_TIFF:
             if( index == 0) return "tif";
             if( index == 1) return "tiff";
-            return 0;
+            return nullptr;
         case FIF_WBMP:
             if( index == 0) return "wap";
             if( index == 1) return "wbmp";
             if( index == 2) return "wbm";
-            return 0;
+            return nullptr;
         default:
             if( index == 0) return m_name.c_str() + 3;
-            return 0;
+            return nullptr;
     }
 
     assert( false); //-V779 PVS
-    return 0;
+    return nullptr;
 }
 
 const char* Image_plugin_impl::get_supported_type( mi::Uint32 index) const
 {
     if( index >= m_supported_types.size())
-        return 0;
+        return nullptr;
     return m_supported_types[index];
 }
 
-bool Image_plugin_impl::test( const mi::Uint8* buffer, mi::Uint32 file_size) const
+bool Image_plugin_impl::test( mi::neuraylib::IReader* reader) const
 {
-    FIMEMORY* fimemory = FreeImage_OpenMemory(
-        const_cast<mi::Uint8*>( buffer), std::min( file_size, mi::Uint32( 512)));
-    if( !fimemory)
-        return false;
-
-    FREE_IMAGE_FORMAT format = FreeImage_GetFileTypeFromMemory( fimemory);
-    FreeImage_CloseMemory( fimemory);
+    FreeImageIO io = construct_io_for_reading();
+    FREE_IMAGE_FORMAT format
+        = FreeImage_GetFileTypeFromHandle( &io, static_cast<fi_handle>( reader));
     return format == m_format;
 }
 
@@ -218,42 +214,42 @@ mi::neuraylib::IImage_file* Image_plugin_impl::open_for_writing(
     mi::Uint32 quality) const
 {
     if( !writer || !pixel_type)
-        return 0;
+        return nullptr;
 
     if( !writer->supports_absolute_access())
-        return 0;
+        return nullptr;
 
     if( !supports_export())
-        return 0;
+        return nullptr;
 
     // Invalid canvas properties
     if( resolution_x == 0 || resolution_y == 0 || nr_of_layers == 0 || miplevels == 0
         || gamma <= 0.0f)
-        return 0;
+        return nullptr;
 
     // FreeImage cannot handle any of these features
     if( nr_of_layers != 1 || miplevels != 1 || is_cubemap)
-        return 0;
+        return nullptr;
 
     return new Image_file_writer_impl(
         writer, pixel_type, resolution_x, resolution_y, gamma, quality, m_format, m_name);
 }
 
 mi::neuraylib::IImage_file* Image_plugin_impl::open_for_reading(
-    mi::neuraylib::IReader* reader) const
+    mi::neuraylib::IReader* reader, const char* selector) const
 {
     if( !reader)
-        return 0;
+        return nullptr;
 
     if( !reader->supports_absolute_access())
-        return 0;
+        return nullptr;
 
     return new Image_file_reader_impl( m_image_api.get(), reader, m_format);
 }
 
 bool Image_plugin_impl::supports_export() const
 {
-    return get_supported_type( 0) != 0;
+    return get_supported_type( 0) != nullptr;
 }
 
 /// Describes a plugin in g_plugin_list below.
@@ -322,7 +318,7 @@ mi::base::Plugin* mi_plugin_factory(
     void* context)            // context given to the library, ignore
 {
     if( static_cast<size_t>( index) >= sizeof( g_plugin_list) / sizeof( g_plugin_list[0]))
-        return 0;
+        return nullptr;
     return new Image_plugin_impl( g_plugin_list[index].m_name, g_plugin_list[index].m_format);
 }
 

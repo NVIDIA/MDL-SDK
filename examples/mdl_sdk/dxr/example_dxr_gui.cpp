@@ -282,6 +282,16 @@ Gui_section_mdl_options::Gui_section_mdl_options(
     , m_group_class_compilation(true)
     , m_created_shader_cache_folder(false)
 {
+    mi::examples::mdl_d3d12::Mdl_sdk::Options& mdl_options =
+        m_app->get_mdl_sdk().get_options();
+
+    distilling_target_selected = 0;
+    if (mdl_options.distilling_support_enabled)
+    {
+        mi::Size n = m_app->get_mdl_sdk().get_distiller().get_target_count();
+        for (mi::Size i = 0; i < n; ++i)
+            distilling_targets.push_back(m_app->get_mdl_sdk().get_distiller().get_target_name(i));
+    }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -309,7 +319,7 @@ void Gui_section_mdl_options::update(mi::neuraylib::ITransaction* /*transaction*
                 "Performance optimization that bakes the value of boolean parameters into the "
                 "material. This improves compile and runtime performance but editing a boolean "
                 "will be slow as it requires recompilation.",
-                &mdl_options.fold_all_bool_parameters, &default_false,
+                &mdl_options.fold_all_bool_parameters, &m_options->fold_all_bool_parameters,
                 mdl_options.use_class_compilation
                     ? mi::examples::gui::Control::Flags::None
                     : mi::examples::gui::Control::Flags::Disabled))
@@ -342,10 +352,21 @@ void Gui_section_mdl_options::update(mi::neuraylib::ITransaction* /*transaction*
         if (!m_created_shader_cache_folder)
         {
             m_created_shader_cache_folder = true;
-            mi::examples::io::mkdir(mi::examples::io::get_executable_folder() + "/shader_cache");
         }
     }
 
+    if (mdl_options.distilling_support_enabled)
+    {
+        if (mi::examples::gui::Control::selection("Distilling Target",
+            "If the target is different from 'None' all materials used for rendering will be "
+            "distilled to selected target.",
+            &distilling_target_selected, &size_t_zero,
+            mi::examples::gui::Control::Flags::None, distilling_targets))
+        {
+            mdl_options.distilling_target = distilling_targets[distilling_target_selected].c_str();
+            create_event(static_cast<mi::Size>(Example_dxr_gui_event::Recompile_all_materials));
+        }
+    }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -1084,4 +1105,3 @@ void Info_overlay::update(const char* text)
 }
 
 }}}
-

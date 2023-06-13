@@ -573,6 +573,15 @@ void Mdl_compiled_material::dump( DB::Transaction* transaction) const
     else
         s << "Cutout_opacity: <Unknown>" << std::endl;
 
+    s << "Resource table size: " <<  m_resources.size() << std::endl;
+    for( mi::Size i = 0, n = m_resources.size(); i < n; ++i) {
+        const Resource_tag_tuple& tuple = m_resources[i];
+        s << "Resource " << i << ": kind " << tuple.m_kind
+          << ",  MDL file path \"" << tuple.m_mdl_file_path
+          << "\", selector \"" << tuple.m_selector
+          << "\", tag " << tuple.m_tag.get_uint() << std::endl;
+    }
+
     s << std::endl;
     LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_DATABASE, "%s", s.str().c_str());
 }
@@ -623,9 +632,15 @@ void Mdl_compiled_material::get_scene_element_references( DB::Tag_set* result) c
     collect_references( m_body.get(), result);
     collect_references( m_temporaries.get(), result);
     collect_references( m_arguments.get(), result);
+
+    for( const auto& res: m_resources)
+        if( res.m_tag)
+            result->insert( res.m_tag);
+
+    for( const auto& mod: m_module_idents)
+        result->insert( mod.first);
 }
 
 } // namespace MDL
 
 } // namespace MI
-

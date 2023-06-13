@@ -325,7 +325,8 @@ private:
 
     DB::Tag m_module_tag;                        ///< The corresponding MDL module. (*)
     DB::Tag m_definition_tag;                    ///< The corresponding function definition.
-    Mdl_ident m_definition_ident;                ///< The corresponding function definition identifier.
+    Mdl_ident m_definition_ident;                ///< The corresponding function definition
+                                                 ///  identifier.
     mi::mdl::IDefinition::Semantics m_mdl_semantic; ///< The MDL semantic. (*)
     std::string m_module_db_name;                ///< The DB name of the module. (*)
     std::string m_definition_name;               ///< The MDL name of the function definition. (*)

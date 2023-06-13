@@ -52,7 +52,7 @@ namespace neuraylib {
 ///     mi::base::Handle<mi::neuraylib::INeuray> neuray(...);
 ///     Handle<IMdl_i18n_configuration> i18n_configuration(
 ///             neuray->get_api_component<IMdl_i18n_configuration>());
-///     const char * locale = NULL;
+///     const char* locale = 0;
 ///
 ///     // Set locale to French language
 ///     i18n_configuration->set_locale("fr");
@@ -68,7 +68,7 @@ namespace neuraylib {
 ///     i18n_configuration->set_locale(i18n_configuration->get_system_keyword());
 ///
 ///     // Disable any translation
-///     i18n_configuration->set_locale(NULL);
+///     i18n_configuration->set_locale(0);
 /// \endcode
 ///
 class IMdl_i18n_configuration : public

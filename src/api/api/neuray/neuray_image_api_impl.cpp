@@ -90,13 +90,13 @@ mi::neuraylib::ICanvas_cuda* Image_api_impl::create_canvas_cuda(
     return nullptr;
 }
 
-mi::IArray* Image_api_impl::create_mipmaps(
+mi::IArray* Image_api_impl::create_mipmap(
     const mi::neuraylib::ICanvas* canvas, mi::Float32 gamma) const
 {
     // Not implemented by IMAGE::IMage_api_impl due to the dependencies on Array_impl and IPointer.
 
     std::vector<mi::base::Handle<mi::neuraylib::ICanvas> > mipmaps;
-    m_image_module->create_mipmaps( mipmaps, canvas, gamma);
+    m_image_module->create_mipmap( mipmaps, canvas, gamma);
     if( mipmaps.empty())
         return nullptr;
 
@@ -186,15 +186,16 @@ mi::neuraylib::IBuffer* Image_api_impl::create_buffer_from_canvas(
 
 mi::neuraylib::ICanvas* Image_api_impl::create_canvas_from_buffer(
     const mi::neuraylib::IBuffer* buffer,
-    const char* image_format) const
+    const char* image_format,
+    const char* selector) const
 {
-    return m_impl.create_canvas_from_buffer( buffer, image_format);
+    return m_impl.create_canvas_from_buffer( buffer, image_format, selector);
 }
 
 mi::neuraylib::ICanvas* Image_api_impl::create_canvas_from_reader(
-    mi::neuraylib::IReader* reader, const char* image_format) const
+    mi::neuraylib::IReader* reader, const char* image_format, const char* selector) const
 {
-    return m_impl.create_canvas_from_reader( reader, image_format);
+    return m_impl.create_canvas_from_reader( reader, image_format, selector);
 }
 
 bool Image_api_impl::supports_format_for_decoding(

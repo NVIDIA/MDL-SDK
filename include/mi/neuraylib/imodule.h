@@ -76,18 +76,15 @@ interface #mi::neuraylib::IFunction_call.
 \section mi_mdl_names Naming scheme for MDL elements
 
 There are four different types of names for MDL elements: DB names, MDL names, simple MDL names,
-and serialized names. In addition, there is a global configuration option to enable encoded names.
+and serialized names.
 
 
 \subsection mi_mdl_encoded_names Encoded names
 
-Encoded names are a new naming scheme for MDL elements. Its purpose is to avoid certain problems
+Encoded names are a naming scheme for MDL elements. Its purpose is to avoid certain problems
 that exist with the old naming scheme, especially in the context of package and module names
 containing certain meta-characters. For example, given the function name
 \c "::f::g(int)::h::i(j::k)": does the signature start at the first or second left parenthesis?
-
-This new naming scheme can be enabled or disabled using
-#mi::neuraylib::IMdl_configuration::set_encoded_names_enabled().
 
 The main idea is to use percent-encoding for certain characters when they do \em not appear as
 meta-character.
@@ -111,7 +108,7 @@ To avoid redundant representations, only upper-case letters are used as hexadeci
 encoded characters. All characters not listed in the table above are never encoded.
 
 Encoding these characters when they do \em not appear as meta-characters avoids the known
-ambiguities. With encoded names enabled, the example from above would be either
+ambiguities. The example from above would be either
 \c "::f::g(int%29::h::i%28j::k)" (if the signature starts at the first left parenthesis) or
 \c "::f::g%28int%29::h::i(j::k)" (if the signature starts at the second left parenthesis).
 
@@ -120,17 +117,16 @@ decode an encoded name, whereas (in general) it is \em not possible to encode a 
 context. Therefore, you should use encoded names as much as possible, and use decoded names \em
 only e.g. for display purposes.
 
-\note If encoded names are enabled, then all DB names of modules, material and function
-definitions, their MDL names and simple names, and all MDL-related type names in the API are
-encoded; exceptions from this rule are explicitly documented. One such exception are the functions
+\note All DB names of modules, material and function definitions, their MDL names and simple names,
+and all MDL-related type names in the API are encoded; exceptions from this rule are explicitly
+documented. One such exception are the functions
 #mi::neuraylib::IMdl_factory::decode_name(),
 #mi::neuraylib::IMdl_factory::encode_module_name(),
 #mi::neuraylib::IMdl_factory::encode_function_definition_name(), and
 #mi::neuraylib::IMdl_factory::encode_type_name(), which help with decoding and encoding of names.
 
-Enabling the encoded names also activates another change for material definitions: Their name also
-includes the signature (as for function definitions). This avoids ambiguities between names of
-modules and material definitions.
+\note Due to a technical limitation module names containing parentheses or commas are not yet
+supported.
 
 
 \subsection mi_mdl_db_names DB names
@@ -146,11 +142,14 @@ compiled materials might use the prefix, but are not required to.
 If the interface of an MDL element is given, then its DB name can be obtained from
 #mi::neuraylib::ITransaction::name_of().
 
+Decoded DB names are shown in the table below only for better understanding and comparison with
+subsequent tables. There is hardly any use of them, except for dealing with older file formats.
+
 <table>
   <tr>
     <th>MDL entity</th>
-    <th>Encoded names disabled</th>
-    <th>Encoded names enabled</th>
+    <th>Decoded name</th>
+    <th>Encoded name</th>
   </tr>
   <tr>
     <td>module with builtins</td>
@@ -199,7 +198,7 @@ If the interface of an MDL element is given, then its DB name can be obtained fr
   </tr>
   <tr>
     <td>user material</td>
-    <td><code>mdl::foo::my_mat</code></td>
+    <td><code>mdl::foo::my_mat(color)</code></td>
     <td><code>mdl::foo::my_mat(color)</code></td>
   </tr>
 </table>
@@ -230,8 +229,8 @@ For display purposes you might want to decode the MDL name using
 <table>
   <tr>
     <th>MDL entity</th>
-    <th>Encoded names disabled</th>
-    <th>Encoded names enabled</th>
+    <th>Decoded name</th>
+    <th>Encoded name</th>
   </tr>
   <tr>
     <td>module with builtins</td>
@@ -280,7 +279,7 @@ For display purposes you might want to decode the MDL name using
   </tr>
   <tr>
     <td>user material</td>
-    <td><code>::%foo::my_mat</code></td>
+    <td><code>::%foo::my_mat(color)</code></td>
     <td><code>::%foo::my_mat(color)</code></td>
   </tr>
 </table>
@@ -311,8 +310,8 @@ For display purposes you might want to decode the simple MDL name using
 <table>
   <tr>
     <th>MDL entity</th>
-    <th>Encoded names disabled</th>
-    <th>Encoded names enabled</th>
+    <th>Decoded name</th>
+    <th>Encoded name</th>
   </tr>
   <tr>
     <td>module with builtins</td>
@@ -368,13 +367,13 @@ For display purposes you might want to decode the simple MDL name using
 
 (3) Note that the simple MDL name for an MDLE module is \em not the same as the filename, in
     particular on Windows (slash before drive letter, encoded colon after drive letter, slashes vs
-    backslashes) Even on non-Windows systems there might be differences due to filename
+    backslashes). Even on non-Windows systems there might be differences due to filename
     normalization.
 
 
 \subsection mi_mdl_serialized_names Serialized names
 
-Serialized names are identical to DB names with the exception of \ref
+Serialized names are identical to encoded DB names with the exception of \ref
 mi_neuray_mdl_template_like_function_definitions. For these functions, the serialized names have a
 suffix in angle brackets that contains additional information about the template parameters. This
 extra information is useful to reconstruct the correct template instance upon deserialization.
@@ -385,13 +384,13 @@ The methods #mi::neuraylib::IMdl_impexp_api::serialize_function_name(),
 #mi::neuraylib::IMdl_impexp_api::deserialize_function_name(), and
 #mi::neuraylib::IMdl_impexp_api::deserialize_module_name() deal with serialized names.
 
-Serialized names exist only if encoded names are enabled.
+Serialized names occur only in the encoded form.
 
 <table>
   <tr>
     <th>MDL entity</th>
-    <th>Encoded names disabled</th>
-    <th>Encoded names enabled</th>
+    <th>Decoded name</th>
+    <th>Encoded name</th>
   </tr>
   <tr>
     <td>module with builtins</td>
@@ -490,9 +489,10 @@ export struct Foo {
 };
 \endcode
 in a module \c "mod_struct" creates the two function definitions named \c
-"mdl::struct::Foo.param_int(::struct::Foo)" and \c "mdl::struct::Foo.param_float(::struct::Foo)" to
-represent the member selection operators \c "Foo.param_int" and \c "Foo.param_float". The function
-definitions have a single parameter \c "s" of type \c "mdl::struct::Foo" and return type
+"mdl::mod_struct::Foo.param_int(::mod_struct::Foo)" and \c
+"mdl::mod_struct::Foo.param_float(::mod_struct::Foo)" to represent the member selection operators
+\c "Foo.param_int" and \c "Foo.param_float". The function definitions have a single parameter \c
+"s" of type \c "mdl::mod_struct::Foo" and return type
 #mi::neuraylib::IType_int and #mi::neuraylib::IType_float, respectively.
 
 \section mi_neuray_mdl_arrays Arrays
@@ -535,13 +535,13 @@ More details about the five different template-like function definitions follow.
 \subsection mi_neuray_mdl_array_constructor Array constructor
 
 Semantic: #mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR \n
-DB name (encoded names disabled/enabled): \c "mdl::T[](...)" \n
-MDL name (encoded names disabled/enabled): \c "T[](...)" \n
-Serialized named (encoded names enabled, example): \c "mdl::T[](...)<int,42>"
+DB name: \c "mdl::T[](...)" \n
+MDL name: \c "T[](...)" \n
+Serialized named (example): \c "mdl::T[](...)<int,42>"
 
 The following requirements apply when creating function calls of the array constructor:
-- the expression list for the arguments contains a non-zero number of arguments named "0", "1", and
-  so on,
+- the expression list for the arguments contains a non-zero number of arguments
+  named "value0", "value1", and so on,
 - all arguments must be of the same type (which is the element type of the constructed array).
 
 The suffix for the serialized name has two arguments, the type name of the element type, and the
@@ -550,11 +550,9 @@ size of the array.
 \subsection mi_neuray_mdl_array_length_operator Array length operator
 
 Semantic: #mi::neuraylib::IFunction_definition::DS_INTRINSIC_DAG_ARRAY_LENGTH \n
-DB name (encoded names disabled): \c "mdl::operator_len(<0>[])" \n
-DB name (encoded names enabled): \c "mdl::operator_len(%3C0%3E[])" \n
-MDL name (encoded names disabled): \c "operator_len(<0>[])" \n
-MDL name (encoded names enabled): \c "operator_len(%3C0%3E[])" \n
-Serialized name (encoded names enabled, example): \c "operator_len(%3C0%3E[])<float[42]>"
+DB name: \c "mdl::operator_len(%3C0%3E[])" \n
+MDL name): \c "operator_len(%3C0%3E[])" \n
+Serialized name (example): \c "operator_len(%3C0%3E[])<float[42]>"
 
 The following requirements apply when creating function calls of the array length operator:
 - the expression list for the arguments contains a single expression named \c "a" of type
@@ -566,11 +564,9 @@ The suffix for the serialized name has one argument, the type name of the array.
 \subsection mi_neuray_mdl_array_index_operator Array index operator
 
 Semantic: #mi::neuraylib::IFunction_definition::DS_ARRAY_INDEX \n
-DB name (encoded names disabled): \c "mdl::operator[](<0>[],int)" \n
-DB name (encoded names enabled): \c "mdl::operator[](%3C0%3E[],int)" \n
-MDL name (encoded names disabled): \c "operator[](<0>[],int)" \n
-MDL name (encoded names enabled): \c "operator[](%3C0%3E[],int)" \n
-Serialized name (encoded names enabled, example): \c "operator[](%3C0%3E[],int)<float[42]>"
+DB name: \c "mdl::operator[](%3C0%3E[],int)" \n
+MDL name: \c "operator[](%3C0%3E[],int)" \n
+Serialized name (example): \c "operator[](%3C0%3E[],int)<float[42]>"
 
 Despite its name, the array index operator can also be used on vectors and matrices.
 
@@ -587,11 +583,9 @@ The suffix for the serialized name has one argument, the type name of the array,
 \subsection mi_neuray_mdl_ternary_operator Ternary operator
 
 Semantic: #mi::neuraylib::IFunction_definition::DS_TERNARY \n
-DB name (encoded names disabled): \c "mdl::operator?(bool,<0>,<0>)" \n
-DB name (encoded names enabled): \c "mdl::operator%3F(bool,%3C0%3E,%3C0%3E)" \n
-MDL name (encoded names disabled): \c "operator?(bool,<0>,<0>)" \n
-MDL name (encoded names enabled): \c "operator%3F(bool,%3C0%3E,%3C0%3E)" \n
-Serialized name (encoded names enabled, example): \c "operator%3F(bool,%3C0%3E,%3C0%3E)<float>"
+DB name: \c "mdl::operator%3F(bool,%3C0%3E,%3C0%3E)" \n
+MDL name: \c "operator%3F(bool,%3C0%3E,%3C0%3E)" \n
+Serialized name (example): \c "operator%3F(bool,%3C0%3E,%3C0%3E)<float>"
 
 The following requirements apply when creating function calls of the ternary operator:
 - the expression list for the arguments contains three expressions named \c "cond", \c "true_exp",
@@ -606,14 +600,12 @@ The suffix for the serialized name has one argument, the type name of the \c "tr
 \subsection mi_neuray_mdl_cast_operator Cast operator
 
 Semantic: #mi::neuraylib::IFunction_definition::DS_CAST \n
-DB name (encoded names disabled): \c "mdl::operator_cast(<0>)" \n
-DB name (encoded names enabled): \c "mdl::operator_cast(%3C0%3E)" \n
-MDL name (encoded names disabled): \c "operator_cast(<0>)" \n
-MDL name (encoded names enabled): \c "operator_cast(%3C0%3E)" \n
-Serialized name (encoded names enabled, example):
+DB name: \c "mdl::operator_cast(%3C0%3E)" \n
+MDL name: \c "operator_cast(%3C0%3E)" \n
+Serialized name (example):
   \c "operator_cast(%3C0%3E)<::foo::my_enum,::bar::my_enum>"
 
-The following requirements apply when creating function calls of the ternary operator:
+The following requirements apply when creating function calls of the cast operator:
 - the expression list for the arguments contains \em two expressions named \c "cast" and
   \c "cast_return", respectively,
 - the expression named \c "cast" is of an arbitrary type (this is the intended argument of the
@@ -627,79 +619,6 @@ followed by the type name of the \c "cast_return" expression.
 
 See also #mi::neuraylib::IExpression_factory::create_cast().
 
-
-\section mi_mdl_materials_are_functions Materials are functions
-
-From an MDL language point of view [\ref MDLLS], materials look quite similar to functions with the
-\c material struct as return type. However, in the past the \neurayApiName used separate interfaces
-like #mi::neuraylib::IMaterial_definition and #mi::neuraylib::IMaterial_instance for materials, in
-contrast to #mi::neuraylib::IFunction_definition and #mi::neuraylib::IFunction_call for functions
-(although these interfaces are quite similar). This required that code that acts in a similar way
-on both, functions and materials, needed to be written twice.
-
-Nowadays, it is possible to treat materials as functions, i.e., it is possible to use
-#mi::neuraylib::IFunction_definition instead of #mi::neuraylib::IMaterial_definition, and
-#mi::neuraylib::IFunction_call instead of #mi::neuraylib::IMaterial_instance. This allows to write
-code that acts on both, functions and materials, just once. The only exception is the method
-#mi::neuraylib::IMaterial_instance::create_compiled_material(), which still requires to use the
-#mi::neuraylib::IMaterial_instance interface.
-
-This feature is now enabled by default. It can still be disabled by
-#mi::neuraylib::IMdl_configuration::set_materials_are_functions(), but this possibility is
-deprecated and will be removed in a future release. Likewise for the interfaces
-#mi::neuraylib::IMaterial_definition and almost all methods of #mi::neuraylib::IMaterial_instance
-(one exception is #mi::neuraylib::IMaterial_instance::create_compiled_material()).
-
-It is recommended to avoid using #mi::neuraylib::IMaterial_definition and
-#mi::neuraylib::IMaterial_instance as much as possible in new code, and eventually to replace usage
-of these interfaces in existing code. If
-#mi::neuraylib::IMaterial_instance::create_compiled_material() is to be used, it is recommended to
-obtain that interface right before that call, and to use it only for that call itself.
-
-
-
-\subsection mi_mdl_materials_are_functions_api_changes API Changes when materials are functions
-
-Treating materials as functions comes with a few API changes that need to be takes into account.
-Code shared between different applications, i.e., in plugins, should be able to handle both
-settings.
-
-- <b>Values returned by #mi::neuraylib::IScene_element::get_element_type() (and derived
-  interfaces)</b> \n \n
-  The method mi::neuraylib::IScene_element::get_element_type() returns
-  #mi::neuraylib::ELEMENT_TYPE_FUNCTION_DEFINITION instead of
-  mi::neuraylib::ELEMENT_TYPE_MATERIAL_DEFINITION. The value
-  mi::neuraylib::ELEMENT_TYPE_MATERIAL_DEFINITION is only returned by
-  mi::neuraylib::IMaterial_definition::get_element_type() (for backward compatibility),
-  but no longer by its base class #mi::neuraylib::IScene_element. \n \n Similarly, the method
-  mi::neuraylib::IScene_element::get_element_type() returns
-  #mi::neuraylib::ELEMENT_TYPE_FUNCTION_CALL instead of
-  mi::neuraylib::ELEMENT_TYPE_MATERIAL_INSTANCE. The value
-  mi::neuraylib::ELEMENT_TYPE_MATERIAL_INSTANCE is only returned by
-  #mi::neuraylib::IMaterial_instance::get_element_type() (for backward compatibility), but
-  no longer by its base class #mi::neuraylib::IScene_element. \n \n As a consequence,
-  #mi::neuraylib::Definition_wrapper::get_type() and
-  #mi::neuraylib::Definition_wrapper::get_element_type() only return
-  #mi::neuraylib::ELEMENT_TYPE_FUNCTION_DEFINITION. Similarly,
-  #mi::neuraylib::Argument_editor::get_type() and
-  #mi::neuraylib::Argument_editor::get_element_type() only return
-  #mi::neuraylib::ELEMENT_TYPE_FUNCTION_CALL.
-.
-- <b>Interface queries to distinguish functions and materials</b> \n \n
-  Interface queries like #mi::base::IInterface::get_interface<mi::neuraylib::IFunction_definition>()
-  can no longer be used to distinguish functions and materials. Note that such queries might occur
-  inside other template inline methods, e.g., they occur as part of
-  #mi::neuraylib::ITransaction::access<mi::neuraylib::IFunction_definition>(). The recommended way
-  to do this is using #mi::neuraylib::IFunction_definition::is_material(). Similarly for
-  #mi::base::IInterface::get_interface<mi::neuraylib::IFunction_call>() and
-  #mi::neuraylib::IFunction_call::is_material().
-.
-- <b>Type names passed to #mi::neuraylib::ITransaction::list_elements()</b> \n \n
-  The method #mi::neuraylib::ITransaction::list_elements() will not return any hits for type names
-  \c "Material_definition" and \c "Material_instance". Use the type names \c "Function_definition"
-  and \c "Function_call" instead, and, if necessary,
-  #mi::neuraylib::IFunction_definition::is_material() and
-  #mi::neuraylib::IFunction_call::is_material() to discriminate the results.
 
 @}*/ // end group mi_neuray_mdl_elements
 
@@ -882,7 +801,7 @@ public:
     ///
     /// \param context     In case of failure, the execution context can be checked for error
     ///                    messages. Can be \c NULL.
-    /// \param recursive   If \c true, all imported file based modules are reloaded
+    /// \param recursive   If \c true, all imported file-based modules are reloaded
     ///                    prior to this one.
     /// \return
     ///               -     0: Success
@@ -891,12 +810,11 @@ public:
 
     /// Reload the module from string.
     ///
-    /// \note This function works for string/memory-based modules, only. Standard modules and
-    /// the built-in \if MDL_SOURCE_RELEASE module mdl::base \else modules \c mdl::base and
-    /// \c mdl::nvidia::distilling_support \endif cannot be reloaded.
+    /// \note This function works for string/memory-based modules, only. Standard modules and the
+    /// built-in modules \c mdl::base and \c mdl::nvidia::distilling_support cannot be reloaded.
     ///
     /// \param module_source The module source code.
-    /// \param recursive     If \c true, all imported file based modules are reloaded
+    /// \param recursive     If \c true, all imported file-based modules are reloaded
     ///                      prior to this one.
     /// \param context       In case of failure, the execution context can be checked for error
     ///                      messages. Can be \c NULL.
@@ -907,17 +825,6 @@ public:
         const char* module_source,
         bool recursive,
         IMdl_execution_context* context) = 0;
-
-    virtual const IArray* deprecated_get_function_overloads(
-        const char* name, const char* param_sig) const = 0;
-
-#ifdef MI_NEURAYLIB_DEPRECATED_11_1
-    inline const IArray* get_function_overloads(
-        const char* name, const char* param_sig) const
-    {
-        return deprecated_get_function_overloads( name, param_sig);
-    }
-#endif
 
     virtual const IType_resource* MI_NEURAYLIB_DEPRECATED_METHOD_12_1(get_resource_type)(
         Size index) const = 0;
@@ -936,4 +843,3 @@ public:
 } // namespace mi
 
 #endif // MI_NEURAYLIB_IMODULE_H
-

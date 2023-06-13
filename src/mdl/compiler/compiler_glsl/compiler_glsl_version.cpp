@@ -363,7 +363,6 @@ bool GLSLang_context::set_version(unsigned version, unsigned profile)
         }
     }
 
-    bool needs_update = m_version != version || m_profile != profile;
 
     m_version = version;
     m_profile = profile;

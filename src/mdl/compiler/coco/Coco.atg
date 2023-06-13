@@ -47,8 +47,8 @@ COMPILER Coco
 	ParserGen *pgen;
 
 	bool genScanner;
-	wchar_t* tokenString;  // used in declarations of literal tokens
-	wchar_t* noString;     // used in declarations of literal tokens
+	char* tokenString;  // used in declarations of literal tokens
+	char* noString;     // used in declarations of literal tokens
 
 	// This method will be called by the contructor if it exits.
 	// This support is specific to the C++ version of Coco/R.
@@ -59,7 +59,7 @@ COMPILER Coco
 		id  = 0;
 		str = 1;
 		tokenString = NULL;
-		noString = coco_string_create(L"-none-");
+		noString = coco_string_create("-none-");
 	}
 
 	// Uncomment this method if cleanup is necessary,
@@ -105,7 +105,7 @@ IGNORE cr + lf + tab
 
 PRODUCTIONS
 
-Coco                            (. Symbol *sym; Graph *g, *g1, *g2; wchar_t* gramName = NULL; CharSet *s; .)
+Coco                            (. Symbol *sym; Graph *g, *g1, *g2; char* gramName = NULL; CharSet *s; .)
 =
                                 (. int beg = la->pos; int line = la->line; .)
   { // this section can be used
@@ -145,8 +145,8 @@ Coco                            (. Symbol *sym; Graph *g, *g1, *g2; wchar_t* gra
                                    if (undef) sym = tab->NewSym(Node::nt, t->val, t->line);
                                    else {
                                      if (sym->typ == Node::nt) {
-                                       if (sym->graph != NULL) SemErr(L"name declared twice");
-                                   	 } else SemErr(L"this symbol kind not allowed on left side of production");
+                                       if (sym->graph != NULL) SemErr("name declared twice");
+                                   	 } else SemErr("this symbol kind not allowed on left side of production");
                                    	 sym->line = t->line;
                                    }
                                    bool noAttrs = (sym->attrPos == NULL);
@@ -154,7 +154,7 @@ Coco                            (. Symbol *sym; Graph *g, *g1, *g2; wchar_t* gra
                                  .)
     [ AttrDecl<sym> ]           (. if (!undef)
                                      if (noAttrs != (sym->attrPos == NULL))
-                                       SemErr(L"attribute mismatch between declaration and use of this symbol");
+                                       SemErr("attribute mismatch between declaration and use of this symbol");
                                  .)
     [ SemText<.sym->semPos.> ] WEAK
     '='
@@ -165,32 +165,32 @@ Coco                            (. Symbol *sym; Graph *g, *g1, *g2; wchar_t* gra
     '.'
   }
   "END" ident                   (. if (!coco_string_equal(gramName, t->val))
-                                     SemErr(L"name does not match grammar name");
+                                     SemErr("name does not match grammar name");
                                    tab->gramSy = tab->FindSym(gramName);
                                    if (tab->gramSy == NULL)
-                                     SemErr(L"missing production for grammar name");
+                                     SemErr("missing production for grammar name");
                                    else {
                                      sym = tab->gramSy;
                                      if (sym->attrPos != NULL)
-                                       SemErr(L"grammar symbol must not have attributes");
+                                       SemErr("grammar symbol must not have attributes");
                                    }
-                                   tab->noSym = tab->NewSym(Node::t, L"???", 0); // noSym gets highest number
+                                   tab->noSym = tab->NewSym(Node::t, "???", 0); // noSym gets highest number
                                    tab->SetupAnys();
                                    tab->RenumberPragmas();
                                    if (tab->ddt[Tab::DDT_PRINT_SYNTAX_GRAPH]) tab->PrintNodes();
                                    if (errors->count == 0) {
-                                     wprintf(L"checking\n");
+                                     printf("checking\n");
                                      tab->CompSymbolSets();
                                      if (tab->ddt[Tab::DDT_LIST_XREF_TABLE]) tab->XRef();
                                      if (tab->GrammarOk()) {
-                                       wprintf(L"parser");
+                                       printf("parser");
                                        pgen->WriteParser();
                                        if (genScanner) {
-                                         wprintf(L" + scanner");
+                                         printf(" + scanner");
                                          dfa->WriteScanner();
                                          if (tab->ddt[Tab::DDT_TRACE_AUTOMATON]) dfa->PrintStates();
                                        }
-                                       wprintf(L" generated\n");
+                                       printf(" generated\n");
                                        if (tab->ddt[Tab::DDP_PRINT_STATS]) pgen->WriteStatistics();
                                      }
                                    }
@@ -203,11 +203,11 @@ Coco                            (. Symbol *sym; Graph *g, *g1, *g2; wchar_t* gra
 
 SetDecl                         (. CharSet *s; .)
 =
-  ident                         (. wchar_t *name = coco_string_create(t->val);
+  ident                         (. char *name = coco_string_create(t->val);
                                    CharClass *c = tab->FindCharClass(name);
-                                   if (c != NULL) SemErr(L"name declared twice");
+                                   if (c != NULL) SemErr("name declared twice");
                                  .)
-  '=' Set<s>                    (. if (s->Elements() == 0) SemErr(L"character set must not be empty");
+  '=' Set<s>                    (. if (s->Elements() == 0) SemErr("character set must not be empty");
                                    tab->NewCharClass(name, s);
                                  .)
   '.'
@@ -228,13 +228,13 @@ Set<CharSet* &s>               (. CharSet *s2; .)
 SimSet<CharSet* &s>             (. int n1, n2; .)
 =                               (. s = new CharSet(); .)
 ( ident                         (. CharClass *c = tab->FindCharClass(t->val);
-                                   if (c == NULL) SemErr(L"undefined name"); else s->Or(c->set);
+                                   if (c == NULL) SemErr("undefined name"); else s->Or(c->set);
                                 .)
 | string                        (.
-								   wchar_t *subName2 = coco_string_create(t->val, 1, coco_string_length(t->val)-2);
-								   wchar_t *name = tab->Unescape(subName2);
+								   char *subName2 = coco_string_create(t->val, 1, coco_string_length(t->val)-2);
+								   char *name = tab->Unescape(subName2);
 								   coco_string_delete(subName2);
-                                   wchar_t ch;
+                                   char ch;
                                    int len = coco_string_length(name);
                                    for(int i=0; i < len; i++) {
                                      ch = name[i];
@@ -257,24 +257,24 @@ SimSet<CharSet* &s>             (. int n1, n2; .)
 Char<int &n>
 =
   char                          (. n = 0;
-								   wchar_t* subName = coco_string_create(t->val, 1, coco_string_length(t->val)-2);
-								   wchar_t* name = tab->Unescape(subName);
+								   char* subName = coco_string_create(t->val, 1, coco_string_length(t->val)-2);
+								   char* name = tab->Unescape(subName);
 								   coco_string_delete(subName);
 								   
 								   // "<= 1" instead of "== 1" to allow the escape sequence '\0' in c++
 								   if (coco_string_length(name) <= 1) n = name[0];
-								   else SemErr(L"unacceptable character value");
+								   else SemErr("unacceptable character value");
 								   coco_string_delete(name);
-								   if (dfa->ignoreCase && (((wchar_t) n) >= 'A') && (((wchar_t) n) <= 'Z')) n += 32;
+								   if (dfa->ignoreCase && (n >= 'A') && (n <= 'Z')) n += 32;
                                  .)
 .
 
 /*------------------------------------------------------------------------------------*/
 
-TokenDecl<Node::Kind typ>       (. wchar_t* name = NULL; int kind; Symbol *sym; Graph *g; .)
+TokenDecl<Node::Kind typ>       (. char* name = NULL; int kind; Symbol *sym; Graph *g; .)
 =
   Sym<name, kind>               (. sym = tab->FindSym(name);
-                                   if (sym != NULL) SemErr(L"name declared twice");
+                                   if (sym != NULL) SemErr("name declared twice");
                                    else {
                                      sym = tab->NewSym(typ, name, t->line);
                                      sym->tokenKind = Symbol::fixedToken;
@@ -282,13 +282,13 @@ TokenDecl<Node::Kind typ>       (. wchar_t* name = NULL; int kind; Symbol *sym; 
                                    tokenString = NULL;
                                  .)
   SYNC
-  ( '=' TokenExpr<g> '.'        (. if (kind == str) SemErr(L"a literal must not be declared with a structure");
+  ( '=' TokenExpr<g> '.'        (. if (kind == str) SemErr("a literal must not be declared with a structure");
                                    tab->Finish(g);
                                    if (tokenString == NULL || coco_string_equal(tokenString, noString))
                                      dfa->ConvertToStates(g->l, sym);
                                    else { // TokenExpr is a single string
                                      if ((*(tab->literals))[tokenString] != NULL)
-                                       SemErr(L"token string declared twice");
+                                       SemErr("token string declared twice");
                                      tab->literals->Set(tokenString, sym);
                                      dfa->MatchLiteral(tokenString, sym);
                                    }
@@ -297,7 +297,7 @@ TokenDecl<Node::Kind typ>       (. wchar_t* name = NULL; int kind; Symbol *sym; 
                                    else dfa->MatchLiteral(sym->name, sym);
                                  .)
   )
-  [ SemText<.sym->semPos.>      (. if (typ != Node::pr) SemErr(L"semantic action not allowed here"); .)
+  [ SemText<.sym->semPos.>      (. if (typ != Node::pr) SemErr("semantic action not allowed here"); .)
   ]
 .
 
@@ -307,13 +307,13 @@ AttrDecl<Symbol *sym>
 =
   '<'                           (. int beg = la->pos; int col = la->col; int line = la->line; .)
   { ANY
-  | badString                   (. SemErr(L"bad string in attributes"); .)
+  | badString                   (. SemErr("bad string in attributes"); .)
   }
   '>'                           (. if (t->pos > beg)
                                      sym->attrPos = new Position(beg, t->pos, col, line); .)
 | "<."                          (. int beg = la->pos; int col = la->col; int line = la->line; .)
   { ANY
-  | badString                   (. SemErr(L"bad string in attributes"); .)
+  | badString                   (. SemErr("bad string in attributes"); .)
   }
   ".>"                          (. if (t->pos > beg)
                                      sym->attrPos = new Position(beg, t->pos, col, line); .)
@@ -350,7 +350,7 @@ Term<Graph* &g>               (. Graph *g2; Node *rslv = NULL; g = NULL; .)
 
 /*------------------------------------------------------------------------------------*/
 
-Factor<Graph* &g>             (. wchar_t* name = NULL; int kind; Position *pos; bool weak = false; 
+Factor<Graph* &g>             (. char* name = NULL; int kind; Position *pos; bool weak = false; 
                                    g = NULL;
                                  .)
 =
@@ -367,25 +367,25 @@ Factor<Graph* &g>             (. wchar_t* name = NULL; int kind; Position *pos; 
                                        sym = tab->NewSym(Node::t, name, t->line);
                                        dfa->MatchLiteral(sym->name, sym);
                                      } else {  // undefined string in production
-                                       SemErr(L"undefined string in production");
+                                       SemErr("undefined string in production");
                                        sym = tab->eofSy;  // dummy
                                      }
                                    }
                                    Node::Kind typ = sym->typ;
                                    if (typ != Node::t && typ != Node::nt)
-                                     SemErr(L"this symbol kind is not allowed in a production");
+                                     SemErr("this symbol kind is not allowed in a production");
                                    if (weak) {
                                      if (typ == Node::t) typ = Node::wt;
-                                     else SemErr(L"only terminals may be weak");
+                                     else SemErr("only terminals may be weak");
                                    }
                                    Node *p = tab->NewNode(typ, sym, t->line);
                                    g = new Graph(p);
                                  .)
-  [ Attribs<p>                  (. if (kind != id) SemErr(L"a literal must not have attributes"); .)
+  [ Attribs<p>                  (. if (kind != id) SemErr("a literal must not have attributes"); .)
   ]                             (. if (undef)
                                      sym->attrPos = p->pos;  // dummy
                                    else if ((p->pos == NULL) != (sym->attrPos == NULL))
-                                     SemErr(L"attribute mismatch between declaration and use of this symbol");
+                                     SemErr("attribute mismatch between declaration and use of this symbol");
                                  .)
 | '(' Expression<g> ')'
 | '[' Expression<g> ']'     (. tab->MakeOption(g); .)
@@ -446,13 +446,13 @@ TokenTerm<Graph* &g>        (. Graph *g2; .)
 
 /*------------------------------------------------------------------------------------*/
 
-TokenFactor<Graph* &g>        (. wchar_t* name = NULL; int kind; .)
+TokenFactor<Graph* &g>        (. char* name = NULL; int kind; .)
 =
                               (. g = NULL; .)
 ( Sym<name, kind>             (. if (kind == id) {
                                      CharClass *c = tab->FindCharClass(name);
                                      if (c == NULL) {
-                                       SemErr(L"undefined name");
+                                       SemErr("undefined name");
                                        c = tab->NewCharClass(name, new CharSet());
                                      }
                                      Node *p = tab->NewNode(Node::clas, (Symbol*)NULL, 0); p->val = c->n;
@@ -473,25 +473,25 @@ TokenFactor<Graph* &g>        (. wchar_t* name = NULL; int kind; .)
 
 /*------------------------------------------------------------------------------------*/
 
-Sym<wchar_t* &name, int &kind>
-=                               (. name = coco_string_create(L"???"); kind = id; .)
+Sym<char* &name, int &kind>
+=                               (. name = coco_string_create("???"); kind = id; .)
 ( ident                         (. kind = id; coco_string_delete(name); name = coco_string_create(t->val); .)
 | (string                       (. coco_string_delete(name); name = coco_string_create(t->val); .)
   | char                        (.
-								   wchar_t *subName = coco_string_create(t->val, 1, coco_string_length(t->val)-2);
-								   coco_string_delete(name); 
-								   name = coco_string_create_append(L"\"", subName);
+								   char *subName = coco_string_create(t->val, 1, coco_string_length(t->val)-2);
+								   coco_string_delete(name);
+								   name = coco_string_create_append("\"", subName);
 								   coco_string_delete(subName);
-								   coco_string_merge(name, L"\""); 
+								   coco_string_merge(name, "\"");
 							    .)
   )                             (. kind = str;
                                    if (dfa->ignoreCase) {
-								     wchar_t *oldName = name;
+								     char *oldName = name;
 									 name = coco_string_create_lower(name);
 									 coco_string_delete(oldName);
 								   }
                                    if (coco_string_indexof(name, ' ') >= 0)
-                                     SemErr(L"literal tokens must not contain blanks"); .)
+                                     SemErr("literal tokens must not contain blanks"); .)
 )
 .
 
@@ -501,12 +501,12 @@ Attribs<Node *p>
 =
   '<'                           (. int beg = la->pos; int col = la->col; int line = la->line; .)
   { ANY 
-  | badString                   (. SemErr(L"bad string in attributes"); .)
+  | badString                   (. SemErr("bad string in attributes"); .)
   }
   '>'                           (. if (t->pos > beg) p->pos = new Position(beg, t->pos, col, line); .)
 | "<."                          (. int beg = la->pos; int col = la->col; int line = la->line; .)
   { ANY 
-  | badString                   (. SemErr(L"bad string in attributes"); .)
+  | badString                   (. SemErr("bad string in attributes"); .)
   }
   ".>"                          (. if (t->pos > beg) p->pos = new Position(beg, t->pos, col, line); .)
 .
@@ -517,8 +517,8 @@ SemText<Position* &pos>
 =
   "(."                          (. int beg = la->pos; int col = la->col; int line = t->line; .)
   { ANY
-  | badString                   (. SemErr(L"bad string in semantic action"); .)
-  | "(."                        (. SemErr(L"missing end of previous semantic action"); .)
+  | badString                   (. SemErr("bad string in semantic action"); .)
+  | "(."                        (. SemErr("missing end of previous semantic action"); .)
   }
   ".)"                          (. pos = new Position(beg, t->pos, col, line); .)
 .

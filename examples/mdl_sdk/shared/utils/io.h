@@ -38,6 +38,9 @@
 #include <sstream>
 #include <cstring>
 #include <iostream>
+#include <functional>
+#include <vector>
+#include <stack>
 
 #include <mi/base/config.h>
 #include "strings.h"
@@ -64,11 +67,49 @@ namespace mi { namespace examples { namespace io
 {
     /// Normalize a path.
     /// On windows, this turns backslashes into forward slashes. No changes on Linux and Mac.
-    inline std::string normalize(std::string path)
+    inline std::string normalize(std::string path, bool remove_dir_ups = false)
     {
+        if (path.empty())
+            return path;
+
         #ifdef MI_PLATFORM_WINDOWS
             std::replace(path.begin(), path.end(), '\\', '/');
         #endif
+
+        if (remove_dir_ups)
+        {
+            bool isAbsolute = path[0] == '/';
+            std::vector<std::string> chunks = mi::examples::strings::split(path, '/');
+            std::stack<std::string> pathStack;
+            for (const std::string& c : chunks)
+            {
+                if (c.empty() || c == ".")
+                    continue;
+                if (c == "..")
+                {
+                    if (pathStack.empty())
+                        pathStack.push(c);
+                    else
+                        pathStack.pop();
+                    continue;
+                }
+                pathStack.push(c);
+            }
+            if (pathStack.empty())
+                return "";
+
+            path = pathStack.top();
+            pathStack.pop();
+
+            while (!pathStack.empty())
+            {
+                path = pathStack.top() + "/" + path;
+                pathStack.pop();
+            }
+
+            if (isAbsolute)
+                path = "/" + path;
+        }
         return path;
     }
 
@@ -105,11 +146,36 @@ namespace mi { namespace examples { namespace io
     }
 
     // --------------------------------------------------------------------------------------------
+    std::string dirname(const std::string& path);
 
-    /// creates a directory (not recursively)
+    /// creates a directory (not recursively, by default)
     /// return true if the directory was created successfully or if it already existed.
-    inline bool mkdir(const std::string& dirpath)
+    inline bool mkdir(const std::string& dirpath, bool recursively = false)
     {
+        if (recursively)
+        {
+            std::function<bool(const std::string&)> mkdir_recursively =
+                [&mkdir_recursively](const std::string& dirpath) -> bool
+            {
+                if (dirpath.empty())
+                    return false;
+
+                if (directory_exists(dirpath))
+                    return true;
+
+                // check if the parent exists, or can be created
+                const std::string parent = dirname(dirpath);
+                bool parent_exits = directory_exists(parent);
+                if (!parent_exits)
+                    parent_exits = mkdir_recursively(parent);
+
+                // create the current folder
+                return parent_exits && mkdir(dirpath, false);
+            };
+
+            return mkdir_recursively(dirpath);
+        }
+
 #ifdef MI_PLATFORM_WINDOWS
         _set_errno(0);
         if (_mkdir(dirpath.c_str()) == 0)
@@ -198,6 +264,39 @@ namespace mi { namespace examples { namespace io
 
         size_t pos = npath.rfind('/');
         return pos == std::string::npos ? "" : npath.substr(0, pos);
+    }
+
+    // --------------------------------------------------------------------------------------------
+
+    /// Get filename (with extension if selected) of a given path without its parent folders or an
+    /// empty string if there is no parent directory in \c path.
+    inline std::string basename(const std::string& path, bool with_extension = true)
+    {
+        std::string npath = normalize(path);
+
+        size_t pos = npath.rfind('/');
+        if (pos == std::string::npos)
+            return "";
+
+        std::string name = npath.substr(pos + 1);
+        if (!with_extension)
+        {
+            pos = name.rfind('.');
+            name = pos == std::string::npos ? name : name.substr(0, pos);
+        }
+        return name;
+    }
+
+    // --------------------------------------------------------------------------------------------
+
+    /// Get the extension of a given path or an empty
+    /// string if there is no file extension in the last path segment (i.e. basename).
+    inline std::string extension(const std::string& path)
+    {
+        std::string name = basename(path);
+
+        size_t pos = name.rfind('.');
+        return pos == std::string::npos ? "" : name.substr(pos + 1);
     }
 
     // --------------------------------------------------------------------------------------------

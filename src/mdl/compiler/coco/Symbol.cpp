@@ -31,7 +31,7 @@ Coco/R itself) does not fall under the GNU General Public License.
 
 namespace Coco {
 
-Symbol::Symbol(Node::Kind typ, const wchar_t* name, int line) {
+Symbol::Symbol(Node::Kind typ, char const *name, int line) {
 	n = 0;
 	graph = NULL;
 	tokenKind = fixedToken;

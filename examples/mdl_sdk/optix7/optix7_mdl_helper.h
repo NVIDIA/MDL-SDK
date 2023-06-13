@@ -515,15 +515,15 @@ public:
             // only accept body resources
             switch (resource->get_kind()) {
             case mi::neuraylib::IValue::VK_TEXTURE:
-                if (res_idx < m_target_code->get_body_texture_count())
+                if (m_target_code->get_texture_is_body_resource(res_idx))
                     return res_idx;
                 break;
             case mi::neuraylib::IValue::VK_LIGHT_PROFILE:
-                if (res_idx < m_target_code->get_body_light_profile_count())
+                if (m_target_code->get_light_profile_is_body_resource(res_idx))
                     return res_idx;
                 break;
             case mi::neuraylib::IValue::VK_BSDF_MEASUREMENT:
-                if (res_idx < m_target_code->get_body_bsdf_measurement_count())
+                if (m_target_code->get_bsdf_measurement_is_body_resource(res_idx))
                     return res_idx;
                 break;
             default:
@@ -682,24 +682,23 @@ Mdl_helper::Compile_result Mdl_helper::compile_mdl_material(
         res.target_code = it->second;
 
         // initialize with body resources always being required
-        if (res.target_code->get_body_texture_count() > 0) {
-            for (mi::Size i = 1, n = res.target_code->get_body_texture_count(); i < n; ++i) {
+        for (mi::Size i = 1, n = res.target_code->get_texture_count(); i < n; ++i) {
+            if (res.target_code->get_texture_is_body_resource(i)) {
                 res.textures.emplace_back(
                     res.target_code->get_texture(i),
                     res.target_code->get_texture_shape(i));
             }
         }
 
-        if (res.target_code->get_body_light_profile_count() > 0) {
-            for (mi::Size i = 1, n = res.target_code->get_body_light_profile_count(); i < n; ++i) {
+        for (mi::Size i = 1, n = res.target_code->get_light_profile_count(); i < n; ++i) {
+            if (res.target_code->get_light_profile_is_body_resource(i)) {
                 res.light_profiles.emplace_back(
                     res.target_code->get_light_profile(i));
             }
         }
 
-        if (res.target_code->get_body_bsdf_measurement_count() > 0) {
-            for (mi::Size i = 1, n = res.target_code->get_body_bsdf_measurement_count(); i < n;
-                    ++i) {
+        for (mi::Size i = 1, n = res.target_code->get_bsdf_measurement_count(); i < n; ++i) {
+            if (res.target_code->get_bsdf_measurement_is_body_resource(i)) {
                 res.bsdf_measurements.emplace_back(
                     res.target_code->get_bsdf_measurement(i));
             }
@@ -894,7 +893,7 @@ bool Mdl_helper::prepare_texture(
             &device_tex_miparray, &channel_desc, extent, num_levels));
 
         // create all mipmap levels and copy them to the CUDA arrays in the mipmapped array
-        mi::base::Handle<mi::IArray> mipmaps(m_image_api->create_mipmaps(canvas.get(), 1.0f));
+        mi::base::Handle<mi::IArray> mipmaps(m_image_api->create_mipmap(canvas.get(), 1.0f));
 
         for (mi::Uint32 level = 0; level < num_levels; ++level) {
             mi::base::Handle<mi::neuraylib::ICanvas const> level_canvas;

@@ -63,7 +63,6 @@
 /// -40..-47: annotations
 /// -50..-57: uniform analysis
 /// -60..-66: enums/structs
-/// -70..-78: deprecated call-based functions/materials
 ///
 /// In use by API wrapper: -1, -10
 
@@ -102,106 +101,6 @@ mi::mdl::IType_name* create_return_type_name(
 
     const mi::mdl::IType* return_mdl_type = definition->get_mdl_return_type( transaction);
     return create_type_name( module, return_mdl_type);
-}
-
-/// Skips a potential cast expression by extracting and returning its argument (unless the
-/// parameter name is explicitly "cast").
-///
-/// Otherwise returns the original expression, \c NULL in case of errors.
-const IExpression* skip_cast(
-    DB::Transaction* transaction, const IExpression* expr, const std::string& param_name)
-{
-    if( !expr)
-        return nullptr;
-
-    mi::base::Handle<const IExpression_call> expr_call(
-        expr->get_interface<IExpression_call>());
-    if( !expr_call) {
-        expr->retain();
-        return expr;
-    }
-
-    DB::Tag tag = expr_call->get_call();
-    SERIAL::Class_id class_id = transaction->get_class_id( tag);
-    if( class_id != Mdl_function_call::id)
-        return nullptr;
-
-    DB::Access<Mdl_function_call> fcall( tag, transaction);
-    DB::Tag def_tag = fcall->get_function_definition( transaction);
-    if( !def_tag)
-        return nullptr;
-
-    DB::Access<Mdl_function_definition> fdef( def_tag, transaction);
-    if( fdef->get_semantic() != mi::neuraylib::IFunction_definition::DS_CAST) {
-        expr->retain();
-        return expr;
-    }
-
-    if( param_name == "cast") {
-        expr->retain();
-        return expr;
-    }
-
-    mi::base::Handle<const IExpression_list> args( fcall->get_arguments());
-    return args->get_expression( "cast");
-}
-
-/// Find the expression a path is pointing on.
-///
-/// \param transaction  the current transaction
-/// \param path         the path
-/// \param args         the material arguments
-const IExpression* find_path(
-    DB::Transaction* transaction, const std::string& path, const IExpression_list* args)
-{
-    size_t pos = path.find( '.');
-    std::string param( path.substr( 0, pos));
-
-    mi::base::Handle<const IExpression> expr( args->get_expression( param.c_str()));
-    if( !expr)
-        return nullptr;
-
-    for( ; pos != std::string::npos; ) {
-
-        size_t p = path.find( '.', pos + 1);
-        param = path.substr( pos + 1, p != std::string::npos ? p - pos - 1 : p);
-        pos = p;
-
-        expr = skip_cast( transaction, expr.get(), param);
-        if( !expr)
-            return nullptr;
-
-        IExpression::Kind kind = expr->get_kind();
-        if( kind == IExpression::EK_CALL) {
-
-            const mi::base::Handle<const IExpression_call> call(
-                expr->get_interface<IExpression_call>());
-
-            DB::Tag tag = call->get_call();
-            SERIAL::Class_id class_id = transaction->get_class_id( tag);
-            if( class_id != Mdl_function_call::id)
-                return nullptr;
-
-            DB::Access<Mdl_function_call> fcall( tag, transaction);
-            mi::base::Handle<const IExpression_list> args( fcall->get_arguments());
-            expr = args->get_expression( param.c_str());
-
-        } else if (kind == IExpression::EK_DIRECT_CALL) {
-
-            mi::base::Handle<const IExpression_direct_call> call(
-                expr->get_interface<IExpression_direct_call>());
-            mi::base::Handle<const IExpression_list> args( call->get_arguments());
-            expr = args->get_expression( param.c_str());
-
-        } else
-            return nullptr;
-
-        if( !expr)
-            return nullptr;
-    }
-
-    expr->retain();
-    return expr.get();
 }
 
 } // anonymous
@@ -1580,23 +1479,6 @@ mi::Sint32 Mdl_module_builder::add_function(
         context);
 }
 
-mi::Sint32 Mdl_module_builder::deprecated_add_function(
-    const Mdl_data* mdl_data,
-    bool is_exported,
-    Execution_context* context)
-{
-    if( !check_valid( context))
-        return -1;
-
-    SERIAL::Class_id class_id = m_transaction->get_class_id( mdl_data->m_prototype_tag);
-    if( class_id != Mdl_function_call::id) {
-        add_error_message( context, "The prototype has an unsupported type.", -13);
-        return -1;
-    }
-
-    return deprecated_add_call_based( mdl_data, is_exported, context);
-}
-
 const mi::mdl::IModule* Mdl_module_builder::get_module() const
 {
     if( !m_module || !m_module->is_valid())
@@ -1909,138 +1791,6 @@ mi::Sint32 Mdl_module_builder::add_prototype_based(
     return 0;
 }
 
-mi::Sint32 Mdl_module_builder::deprecated_add_call_based(
-    const Mdl_data* mdl_data,
-    bool is_exported,
-    Execution_context* context)
-{
-    // Note that the name "prototype" is misleading. It is just the material instance of function
-    // call to be used for the body of the new material/function definition.
-
-    DB::Access<Mdl_function_call> callee( mdl_data->m_prototype_tag, m_transaction);
-
-    mi::base::Handle<const IExpression_list> old_callee_args( callee->get_arguments());
-    mi::base::Handle<const IType_list> callee_param_types( callee->get_parameter_types());
-    if( !old_callee_args && !mdl_data->m_parameters.empty()) {
-        add_error_message( context, "Prototype does not have any parameters.", -70);
-        return -1;
-    }
-
-    // check and setup parameters
-    const std::vector<Parameter_data>& parameters = mdl_data->m_parameters;
-    mi::Size n_parameters = parameters.size();
-
-    std::set<std::string> parameter_names;
-    mi::base::Handle<IType_list> new_parameter_types( m_int_tf->create_type_list());
-    std::vector<mi::base::Handle<const IExpression>> old_defaults( n_parameters);
-    mi::base::Handle<IExpression_list> new_defaults(
-        m_int_ef->create_expression_list());
-    mi::base::Handle<IAnnotation_list> new_parameter_annotations(
-        m_int_ef->create_annotation_list());
-
-    for( mi::Size i = 0; i < n_parameters; ++i) {
-
-        // check for unique names
-        const Parameter_data& param = mdl_data->m_parameters[i];
-        if( !parameter_names.insert( param.m_name).second) {
-            add_error_message( context,
-                STRING::formatted_string( "Parameter name \"%s\" is not unique.",
-                    param.m_name.c_str()), -71);
-            return -1;
-        }
-
-        // check paths and get expression
-        mi::base::Handle<const IExpression> expr(
-            find_path( m_transaction, param.m_path, old_callee_args.get()));
-        if( !expr) {
-            add_error_message( context,
-                STRING::formatted_string( "Invalid path \"%s\".", param.m_path.c_str()), -72);
-            return -1;
-        }
-
-        // find corresponding callee arg
-        size_t pos = param.m_path.find( '.');
-        std::string callee_arg_name( param.m_path.substr( 0, pos));
-        mi::base::Handle<const IExpression> callee_arg(
-            old_callee_args->get_expression( callee_arg_name.c_str()));
-        mi::base::Handle<const IType> callee_parameter_type(
-            callee_param_types->get_type( callee_arg_name.c_str()));
-
-        // compute uniform property
-        bool callee_arg_uniform
-            = (callee_parameter_type->get_all_type_modifiers() & IType::MK_UNIFORM) != 0;
-        std::vector<bool> uniform_parameters;
-        bool uniform_query_expr = false;
-        std::string dummy_error_path;
-        analyze_uniform(
-            m_transaction,
-            callee_arg.get(),
-            callee_arg_uniform,
-            expr.get(),
-            uniform_parameters,
-            uniform_query_expr,
-            dummy_error_path,
-            context);
-        if( context->get_error_messages_count() > 0)
-            return -1;
-
-        // compute parameter type
-        mi::base::Handle<const IType> type( expr->get_type());
-        mi::base::Handle<const IType_resource> resource_type(
-            type->get_interface<IType_resource>());
-        if( (param.m_enforce_uniform | uniform_query_expr | !!resource_type)
-            && (type->get_all_type_modifiers() & IType::MK_UNIFORM) == 0)
-            type = m_int_tf->create_alias( type.get(), IType::MK_UNIFORM, /*symbol*/ nullptr);
-        new_parameter_types->add_type( param.m_name.c_str(), type.get());
-
-        // compute default
-        mi::base::Handle<IExpression> new_default( int_expr_call_to_int_expr_direct_call(
-            m_transaction, m_int_ef.get(), expr.get(), {}, context));
-        if( !new_default) {
-            add_error_message( context,
-                STRING::formatted_string( "Failed to convert expression for parameter \"%s\".",
-                    param.m_name.c_str()), -74);
-            return -1;
-        }
-        new_defaults->add_expression( param.m_name.c_str(), new_default.get());
-
-        // copy over annotation
-        if( param.m_annotations)
-            new_parameter_annotations->add_annotation_block(
-                param.m_name.c_str(), param.m_annotations.get());
-
-        old_defaults[i] = expr;
-    }
-
-    // create type of body expression
-    DB::Tag definition_tag = callee->get_function_definition( m_transaction);
-    if( !definition_tag)
-        return -1;
-
-    // create body expression
-    mi::base::Handle<const IType> return_type( callee->get_return_type());
-    mi::base::Handle<IExpression> new_expr( int_expr_call_to_int_expr_direct_call(
-        m_transaction, m_int_ef.get(), return_type.get(), callee.get_ptr(), old_defaults, context));
-    if( !new_expr) {
-        add_error_message( context, "Failed to convert callee expression.", -75);
-        return -1;
-    }
-
-    mi::Sint32 result = add_function(
-        mdl_data->m_simple_name.c_str(),
-        new_expr.get(),
-        new_parameter_types.get(),
-        new_defaults.get(),
-        new_parameter_annotations.get(),
-        mdl_data->m_annotations.get(),
-        mdl_data->m_return_annotations.get(),
-        is_exported,
-        IType::MK_NONE,
-        context);
-
-    return result;
-}
-
 void Mdl_module_builder::upgrade_mdl_version(
     mi::neuraylib::Mdl_version version, Execution_context* context)
 {
@@ -2255,8 +2005,11 @@ void Mdl_module_builder::create_module( Execution_context* context)
     if( tag) {
         SERIAL::Class_id class_id = m_transaction->get_class_id( tag);
         if( class_id != ID_MDL_MODULE) {
-            add_error_message( context,
-                STRING::formatted_string( "The module name \"%s\" is invalid.", m_db_module_name.c_str()), -3);
+            add_error_message(
+                context,
+                STRING::formatted_string(
+                    "The module name \"%s\" is invalid.", m_db_module_name.c_str()),
+                -3);
             return;
         }
         DB::Access<Mdl_module> db_module( tag, m_transaction);
@@ -2572,7 +2325,8 @@ struct Entry
     std::string m_path;
 };
 
-std::string get_path( const std::string& prefix, const std::string& element, bool is_array_constructor)
+std::string get_path(
+    const std::string& prefix, const std::string& element, bool is_array_constructor)
 {
     std::string result = prefix;
     if( is_array_constructor)

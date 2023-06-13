@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright 2022 NVIDIA Corporation. All rights reserved.
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -480,15 +480,13 @@ float3 compute_spheric_projection(
     uniform bool normalized = false) uniform
 {
     float3 uv_coord(0.);
-    if (math::abs(dir.x) > 0. || math::abs(dir.y) > 0.){
+    bool xy_nonzero = math::abs(dir.x) > 0. || math::abs(dir.y) > 0.;
+    if (xy_nonzero || math::abs(dir.z) > 0.){
         float xy = dir.x * dir.x + dir.y * dir.y;
-        float OrgDist = normalized?1./math::PI:math::sqrt(xy + dir.z * dir.z);
-        uv_coord.x = OrgDist * math::atan2(dir.y, dir.x);
-        uv_coord.y = OrgDist * math::atan2(dir.z, math::sqrt(xy));
-        uv_coord.z = OrgDist;
-    }  else if (math::abs(dir.z) > 0.) {
-        float xy = dir.x * dir.x + dir.y * dir.y;
-        float OrgDist  = normalized?1./math::PI:math::sqrt(xy + dir.z * dir.z);
+        float OrgDist = normalized ? 1. / math::PI : math::sqrt(xy + dir.z * dir.z);
+        if (xy_nonzero) {
+            uv_coord.x = OrgDist * math::atan2(dir.y, dir.x);
+        }
         uv_coord.y = OrgDist * math::atan2(dir.z, math::sqrt(xy));
         uv_coord.z = OrgDist;
     }
@@ -681,26 +679,26 @@ export texture_coordinate_info coordinate_projection(
     float4x4 finaltransform;
     switch (projection_type) {
     case projection_cylindrical:
-        finaltransform = compute_cylindric_transform(projection_transform,normal,g_normal,int_pos);
+    case projection_infinite_cylindrical:
+    case projection_cylindrical_normalized:
+    case projection_infinite_cylindrical_normalized:
+        finaltransform = compute_cylindric_transform(
+            projection_transform,normal,g_normal,int_pos,
+            // infinite
+            projection_type == projection_infinite_cylindrical ||
+            projection_type == projection_infinite_cylindrical_normalized,
+            // normalized
+            projection_type == projection_cylindrical_normalized ||
+            projection_type == projection_infinite_cylindrical_normalized);
         break;
     case projection_spherical:
-        finaltransform = compute_spheric_transform(projection_transform,int_pos);
+    case projection_spherical_normalized:
+        finaltransform = compute_spheric_transform(
+            projection_transform,int_pos,projection_type == projection_spherical_normalized);
         break;
     case projection_tri_planar:
     case projection_cubic:
         finaltransform = compute_cubic_transform(projection_transform,normal,g_normal,int_pos);
-        break;
-    case projection_infinite_cylindrical:
-        finaltransform = compute_cylindric_transform(projection_transform,normal,g_normal,int_pos, true);
-        break;
-    case projection_spherical_normalized:
-        finaltransform = compute_spheric_transform(projection_transform,int_pos,true);
-        break;
-    case projection_cylindrical_normalized:
-        finaltransform = compute_cylindric_transform(projection_transform,normal,g_normal,int_pos, false, true);
-        break;
-    case projection_infinite_cylindrical_normalized:
-        finaltransform = compute_cylindric_transform(projection_transform,normal,g_normal,int_pos, true, true);
         break;
     case projection_planar:
     default:
@@ -709,7 +707,6 @@ export texture_coordinate_info coordinate_projection(
     }
 
     float4  r_pos =  finaltransform*float4(int_pos.x,int_pos.y,int_pos.z,1.);
-
 
     float3x3 finaltransform2= float3x3(finaltransform[0][0],finaltransform[1][0],finaltransform[2][0],
                                        finaltransform[0][1],finaltransform[1][1],finaltransform[2][1],
@@ -782,7 +779,7 @@ export texture_coordinate_info transform_coordinate(
             coordinate.tangent_u,
             coordinate.tangent_v);
 
-    //Approximation1: try approximating it for the case that the rotation is only aroud z and assuming the texture layout is nice and z is ~constant.
+    //Approximation1: try approximating it for the case that the rotation is only around z and assuming the texture layout is nice and z is ~constant.
     //just pretend there is no other rotation happening
     //get rid of scaling and translation. Then extract fields where sin and cos would be in a simple 2d transform around z.
     /*float4 u = transform[0];
@@ -995,7 +992,6 @@ export color abbe_number_ior(
     uniform float abbe_number = 0.0
         [[
             anno::description("Dispersion in relation to index of refraction"),
-            anno::unused(),
             anno::soft_range(10.0, 100.0)
         ]]
 )
@@ -1004,7 +1000,23 @@ export color abbe_number_ior(
     anno::noinline()
 ]]
 {
-    return color(ior); //simplified for RGB
+    if (abbe_number <= 0.0f)
+        return color(ior);
+
+    // abbe_number = (ior(D) - 1) / (ior(F) - ior(C))
+    float C = 656.3f;
+    float D = 589.2f;
+    float F = 486.1f;
+
+    // approximating IOR as linear function of wavelength
+    float m = (ior - 1.0f) / (abbe_number * (F - C));
+
+    // compute ior for 3 lambdas: 700 nm (red), 546.1 nm (green) and 435.8 nm (blue)
+    float r = (700.0f - D) * m + ior;
+    float g = (546.0f - D) * m + ior;
+    float b = (435.8f - D) * m + ior;
+
+    return color(r, g, b);
 }
 
 
@@ -4776,7 +4788,7 @@ float flow_noise(float2 p, float rot)
     float2 v1 = v0 + ((v0.x < v0.y) ? float2((0.5-SQRT3/6.0), (-0.5-SQRT3/6.0)) : float2((-0.5-SQRT3/6.0), (0.5-SQRT3/6.0)));
     float2 v2 = v0 + (-1.0/SQRT3);
 
-    // calc circularly symmetric part of each noise wiggle
+    // calc circular symmetric part of each noise wiggle
     float3 t = math::max(float3(0.5f-math::dot(v0,v0), 0.5f-math::dot(v1,v1), 0.5f-math::dot(v2,v2)), float3(0.0f,0.0f,0.0f));
 
     int2 pii = int2(int(pi.x), int(pi.y));
@@ -4817,7 +4829,7 @@ noise_deriv2 flow_noise_deriv(float2 p, float rot)
     float2 v1 = v0 + ((v0.x < v0.y) ? float2((0.5-SQRT3/6.0), (-0.5-SQRT3/6.0)) : float2((-0.5-SQRT3/6.0), (0.5-SQRT3/6.0)));
     float2 v2 = v0 + (-1.0/SQRT3);
 
-    // calc circularly symmetric part of each noise wiggle
+    // calc circular symmetric part of each noise wiggle
     float3 t = math::max(float3(0.5f-math::dot(v0,v0), 0.5f-math::dot(v1,v1), 0.5f-math::dot(v2,v2)), float3(0.0f,0.0f,0.0f));
 
     int2 pii = int2(int(pi.x), int(pi.y));
@@ -5794,7 +5806,8 @@ export volume_coefficients lookup_volume_coefficients(
 ]]
 {
     color density_val = color(
-        volume_lookup_float3(density, transform, density_relative_to_size) * density_multiplier
+        volume_lookup_float3(density, transform, density_relative_to_size)
+        * density_multiplier
     );
 
     return volume_coefficients(

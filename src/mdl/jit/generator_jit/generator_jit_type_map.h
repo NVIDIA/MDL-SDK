@@ -208,6 +208,7 @@ public:
         THV_scene_data_lookup_int3,         ///< scene_data_lookup_int3()
         THV_scene_data_lookup_int4,         ///< scene_data_lookup_int4()
         THV_scene_data_lookup_color,        ///< scene_data_lookup_color()
+        THV_scene_data_lookup_float4x4,     ///< scene_data_lookup_float4x4()
         THV_scene_data_lookup_deriv_float,  ///< scene_data_lookup_deriv_float()
         THV_scene_data_lookup_deriv_float2, ///< scene_data_lookup_deriv_float2()
         THV_scene_data_lookup_deriv_float3, ///< scene_data_lookup_deriv_float3()
@@ -506,6 +507,12 @@ public:
     /// Get the LLVM (float[4]) * type.
     llvm::PointerType *get_arr_float_4_ptr_type() const { return get_ptr(m_type_arr_float_4); }
 
+    /// Get the LLVM float[16] type.
+    llvm::ArrayType* get_arr_float_16_type() const { return m_type_arr_float_16; }
+
+    /// Get the LLVM (float[16]) * type.
+    llvm::PointerType* get_arr_float_16_ptr_type() const { return get_ptr(m_type_arr_float_16); }
+
     /// Get the LLVM derivative type for float.
     llvm::Type *get_deriv_float_type() const { return m_type_deriv_float; }
 
@@ -749,6 +756,7 @@ private:
     llvm::ArrayType   *m_type_arr_float_2;
     llvm::ArrayType   *m_type_arr_float_3;
     llvm::ArrayType   *m_type_arr_float_4;
+    llvm::ArrayType   *m_type_arr_float_16;
 
     llvm::StructType  *m_type_deriv_float;
     llvm::StructType  *m_type_deriv_float2;

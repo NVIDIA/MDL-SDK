@@ -117,11 +117,9 @@ them, assertions, and configurations.
 
 \section mi_neuray_contents_related Related Pages
 
+  - \subpage mi_neuray_mdltl
   - \subpage mi_neuray_biblio
   - \subpage mi_def_lexicographic_order
-\if MDL_BIN_RELEASE  
-  - <b><a href="../release_notes/relnotes_mdl_sdk.pdf">Release Notes</a></b> 
-\endif
 
 */
 

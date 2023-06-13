@@ -163,27 +163,39 @@ bool Mdl_material::recompile_material(mi::neuraylib::IMdl_execution_context* con
             if (compile_material(get_material_desciption()))
             {
                 log_info("Recreated the material instance from scratch: " + get_name());
-                return false;
             }
-
-            // fall-back, the invalid material
-            const IScene_loader::Scene* scene = get_material_desciption().get_scene();
-            IScene_loader::Material copy = get_material_desciption().get_scene_material();
-            copy.name = Mdl_material_description::Invalid_material_identifier;
-            Mdl_material_description invalid(scene, copy); // invalid but keep material parameters
-            if (compile_material(invalid))
+            else
             {
-                log_warning("Repairing and recreating the material instance failed. "
-                            "Using invalid material as fall-back: " + get_name());
-                return false;
+
+                // fall-back, the invalid material
+                const IScene_loader::Scene* scene = get_material_desciption().get_scene();
+                IScene_loader::Material copy = get_material_desciption().get_scene_material();
+                copy.name = Mdl_material_description::Invalid_material_identifier;
+
+                // invalid but keep material parameters
+                Mdl_material_description invalid(scene, copy); 
+                if (compile_material(invalid))
+                {
+                    log_warning("Repairing and recreating the material instance failed. "
+                        "Using invalid material as fall-back: " + get_name());
+                }
+                else
+                {
+                    log_error("[FATAL] Repairing and all fall-backs failed: " + get_name());
+                    return false;
+                }
             }
 
-            log_error("[FATAL] Repairing and all fall-backs failed: " + get_name());
-            return false;
+            // get the recreated or fallback instance
+            material_instance = 
+                m_sdk->get_transaction().access<const mi::neuraylib::IFunction_call>(
+                    m_instance_db_name.c_str());
         }
-
-        // repairing successful
-        material_instance = material_instance_edit;
+        else
+        {
+            // repairing successful
+            material_instance = material_instance_edit;
+        }
     }
 
     // compile the instance and store it in the database
@@ -210,6 +222,37 @@ bool Mdl_material::recompile_material(mi::neuraylib::IMdl_execution_context* con
             !compiled_material)
                 return false;
 
+        if (mdl_options.distilling_support_enabled &&
+            strcmp(mdl_options.distilling_target, "none") != 0)
+        {
+            mi::base::Handle<mi::neuraylib::ICompiled_material> distilled_material(
+                m_app->get_mdl_sdk().get_distiller().distill_material(
+                    compiled_material.get(), mdl_options.distilling_target));
+
+            if (distilled_material)
+            {
+                log_error("Distilled material to '" + std::string(mdl_options.distilling_target) +
+                    "': " + get_name());
+
+                const mi::base::Uuid compiled_hash = compiled_material->get_hash();
+                const mi::base::Uuid distilled_hash = distilled_material->get_hash();
+
+                std::string compiled_hash_s = mi::examples::strings::format(
+                    "%08x_%08x_%08x_%08x", compiled_hash.m_id1, compiled_hash.m_id2,
+                    compiled_hash.m_id3, compiled_hash.m_id4);
+
+                std::string distilled_hash_s = mi::examples::strings::format(
+                    "%08x_%08x_%08x_%08x", distilled_hash.m_id1, distilled_hash.m_id2,
+                    distilled_hash.m_id3, distilled_hash.m_id4);
+
+                log_verbose("Compiled Hash: " + get_name() + ": " + compiled_hash_s);
+                log_verbose("Distilled Hash: " + get_name() + ": " + distilled_hash_s);
+
+                compiled_material = distilled_material;
+            }
+            else
+                log_error("Distilling material failed, continue with original: " + get_name());
+        }
 
         m_sdk->get_transaction().store(compiled_material.get(), m_compiled_db_name.c_str());
     }
@@ -348,13 +391,6 @@ std::vector<D3D12_STATIC_SAMPLER_DESC> Mdl_material::get_sampler_descriptions()
     samplers.push_back(desc);
 
     return samplers;
-}
-
-// ------------------------------------------------------------------------------------------------
-
-size_t Mdl_material::get_target_code_id() const
-{
-    return m_target ?  m_target->get_id() : static_cast<size_t>(-1);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -947,4 +983,3 @@ bool Mdl_material::on_target_generated(D3DCommandList* command_list)
 }
 
 }}} // mi::examples::mdl_d3d12
-

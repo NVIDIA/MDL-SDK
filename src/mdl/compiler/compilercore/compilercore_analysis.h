@@ -111,41 +111,56 @@ protected:
     ///
     /// Helper class to capture a constant fold exception.
     ///
-    class Const_fold_expression : public IConst_fold_handler
-    {
+    class Const_fold_expression : public IConst_fold_handler {
     public:
-        /// Handle constant folding exceptions.
+        /// Called by IExpression::fold() if an exception occurs.
+        ///
+        /// \param r       the exception reason
+        /// \param expr    the erroneous expression
+        /// \param index   additional parameter for ER_INDEX_OUT_OF_BOUND
+        /// \param length  additional parameter for ER_INDEX_OUT_OF_BOUND
         void exception(
             Reason            r,
             IExpression const *expr,
             int               index = 0,
             int               length = 0) MDL_FINAL;
 
-        /// Handle variable lookup.
+        /// Called by IExpression_reference::fold() to lookup a value of a (constant) variable.
+        ///
+        /// \param var   the definition of the variable
+        ///
+        /// \return IValue_bad if this variable is not constant, its value otherwise
         IValue const *lookup(
             IDefinition const *var) MDL_FINAL;
 
-        /// Check whether evaluate_intrinsic_function should be called for an unhandled
+        /// Check whether evaluate_intrinsic_function() should be called for an unhandled
         /// intrinsic functions with the given semantic.
+        ///
+        /// \param semantic  the semantic to check for
         bool is_evaluate_intrinsic_function_enabled(
-            IDefinition::Semantics semantic) const MDL_FINAL
-        {
-            return false;
-        }
+            IDefinition::Semantics semantic) const MDL_FINAL;
 
-        /// Handle intrinsic call evaluation.
+        /// Called by IExpression_call::fold() to evaluate unhandled intrinsic functions.
+        ///
+        /// \param semantic     the semantic of the function to call
+        /// \param arguments    the arguments for the call
+        /// \param n_arguments  the number of arguments
+        ///
+        /// \return IValue_bad if this function could not be evaluated, its value otherwise
         IValue const *evaluate_intrinsic_function(
             IDefinition::Semantics semantic,
-            const IValue *const arguments[],
+            IValue const *const arguments[],
             size_t n_arguments) MDL_FINAL;
 
         /// Constructor.
+        ///
+        /// \param ana  the Analysis pass
         explicit Const_fold_expression(Analysis &ana)
         : m_ana(ana), m_error_state(false)
         {
         }
 
-        /// Clear the captures error state.
+        /// Clear the captured error state.
         void clear_error_state() { m_error_state = false; }
 
         /// Returns true if an error occurred since the last clear_error_state() call.
@@ -330,10 +345,10 @@ protected:
     /// \param prev_def  the previous definition
     void add_prev_definition_note(Definition const *prev_def);
 
-    /// Add a compiler note if the given expression references an let temporary.
+    /// Add a compiler note if the given expression references an rvalue.
     ///
     /// \param lhs  an expression used as an lvalue
-    void add_let_temporary_note(IExpression const *lhs);
+    void add_rvalue_note(IExpression const *lhs);
 
     /// Helper, gets the file_id for a module id.
     ///
@@ -920,7 +935,7 @@ private:
     /// Enter builtin annotations for stdlib modules.
     void enter_builtin_annotations();
 
-    /// Enter builtin annotations for native modules.
+    /// Enter builtin annotations for pre 1.8 native modules and 1.8+ native functions.
     void enter_native_annotations();
 
     /// Create an exported constant declaration for a given value and add it to the current module.
@@ -1935,6 +1950,11 @@ private:
     Definition const *get_definition_for_reference(
         IExpression_reference *ref);
 
+    /// Check if an expression represents an lvalue.
+    ///
+    /// \param expr  the expression to check
+    bool is_lvalue(IExpression const *expr) const;
+
     bool pre_visit(IDeclaration_import *import_decl) MDL_OVERRIDE;
 
     bool pre_visit(IDeclaration_constant *con_decl) MDL_OVERRIDE;
@@ -2063,6 +2083,9 @@ private:
 
     /// If true, we are inside a function with auto return type.
     bool m_has_auto_return;
+
+    /// If true, parameters are rvalue, else lvalues.
+    bool m_parameters_are_rvalues;
 
 
     /// The current module cache.
@@ -2410,6 +2433,11 @@ private:
     ///
     /// \param expr  an debug::assert call
     void insert_assert_params(IExpression_call *expr);
+
+    /// Check the expression of a single return function.
+    ///
+    /// \param expr  the return expression
+    void check_single_return_expr(IExpression const *expr);
 
     bool pre_visit(IStatement *stmt) MDL_FINAL;
     void post_visit(IStatement *stmt) MDL_FINAL;

@@ -306,6 +306,13 @@ template <class T, bool WAIT = true> class Access : public Access_base
         ASSERT(M_DB, !T::id || !get_base_ptr() || get_base_ptr()->is_type_of(T::id));
     }
 
+    /// Resets the access
+    void reset()
+    {
+        set_access(DB::Tag(), nullptr, T::id, WAIT);
+        clear_transaction();
+    }
+
     /// Set the access object to the same values as the source
     ///
     /// \param source                   The source access object.

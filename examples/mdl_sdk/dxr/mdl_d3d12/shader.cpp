@@ -33,6 +33,12 @@
 #include <sstream>
 #include <algorithm>
 #include <example_shared.h>
+#include <d3d12shader.h>
+
+#ifdef MDL_ENABLE_SLANG
+#include <slang.h>
+#include <slang-com-ptr.h>
+#endif
 
 namespace mi { namespace examples { namespace mdl_d3d12
 {
@@ -109,14 +115,100 @@ private:
     LONG m_cRef;
 };
 
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
+
+#ifdef MDL_ENABLE_SLANG
+class SlangSessionPool
+{
+public:
+    SlangSessionPool(size_t initial_pool_size)
+    {
+        for (size_t i = 0; i < initial_pool_size; ++i)
+            m_sessions.push_back(spCreateSession());
+    }
+
+    ~SlangSessionPool()
+    {
+        while (!m_sessions.empty())
+        {
+            spDestroySession(m_sessions.back());
+            m_sessions.pop_back();
+        }
+    }
+
+    SlangSession* acquire_session()
+    {
+        SlangSession* session = nullptr;
+        if (!m_sessions.empty())
+        {
+            session = m_sessions.back();
+            m_sessions.pop_back();
+        }
+        else
+            session = spCreateSession();
+
+        return session;
+    }
+
+    void release_session(SlangSession* session)
+    {
+        m_sessions.push_back(session);
+    }
+
+private:
+    std::vector<SlangSession*> m_sessions;
+};
+
+SlangSessionPool g_slang_session_pool(std::thread::hardware_concurrency());
+
+SlangOptimizationLevel shader_opt_to_slang_opt(const std::string& shader_opt)
+{
+    if (shader_opt == "Od" || shader_opt == "O0") return SLANG_OPTIMIZATION_LEVEL_NONE;
+    else if (shader_opt == "O1") return SLANG_OPTIMIZATION_LEVEL_DEFAULT;
+    else if (shader_opt == "O2") return SLANG_OPTIMIZATION_LEVEL_HIGH;
+    else if (shader_opt == "O3") return SLANG_OPTIMIZATION_LEVEL_MAXIMAL;
+    return SLANG_OPTIMIZATION_LEVEL_DEFAULT;
+}
+#endif //MDL_ENABLE_SLANG
+
 } // anonymous
 
-// ------------------------------------------------------------------------------------------------
+
+Shader_library::Shader_library(IDxcBlob* blob, const std::vector<std::string>& exported_symbols)
+    : m_dxil_library(blob)
+    , m_exported_symbols(exported_symbols)
+{
+    m_d3d_data = std::make_shared<Shader_library::Data>();
+    m_d3d_data->m_exported_symbols_w.resize(exported_symbols.size());
+    m_d3d_data->m_exports.resize(exported_symbols.size());
+
+    // Create one export descriptor per symbol
+    for (size_t i = 0; i < exported_symbols.size(); i++)
+    {
+        m_d3d_data->m_exported_symbols_w[i] = mi::examples::strings::str_to_wstr(exported_symbols[i]);
+        m_d3d_data->m_exports[i] = {};
+        m_d3d_data->m_exports[i].Name = m_d3d_data->m_exported_symbols_w[i].c_str();
+        m_d3d_data->m_exports[i].ExportToRename = nullptr;
+        m_d3d_data->m_exports[i].Flags = D3D12_EXPORT_FLAG_NONE;
+    }
+
+    // Create a library descriptor combining the DXIL code and the export names
+    m_d3d_data->m_desc.DXILLibrary.BytecodeLength = m_dxil_library->GetBufferSize();
+    m_d3d_data->m_desc.DXILLibrary.pShaderBytecode = m_dxil_library->GetBufferPointer();
+
+    m_d3d_data->m_desc.NumExports = static_cast<UINT>(m_exported_symbols.size());
+    m_d3d_data->m_desc.pExports = m_d3d_data->m_exports.data();
+}
+
 // ------------------------------------------------------------------------------------------------
 
-IDxcBlob* Shader_compiler::compile_shader_library(
+std::vector<Shader_library> Shader_compiler::compile_shader_library(
+    const Base_options* options,
     const std::string& file_name,
-    const std::map<std::string, std::string>* defines)
+    const std::map<std::string, std::string>* defines,
+    const std::vector<std::string>& entry_points)
 {
     std::string shader_source = "";
     {
@@ -131,129 +223,419 @@ IDxcBlob* Shader_compiler::compile_shader_library(
     if (shader_source.empty())
     {
         log_error("Failed to load shader source from file: " + file_name, SRC);
-        return nullptr;
+        return {};
     }
-    return compile_shader_library_from_string(shader_source, file_name, defines);
+    return compile_shader_library_from_string(options, shader_source, file_name, defines, entry_points);
 }
 
 // ------------------------------------------------------------------------------------------------
 
-IDxcBlob* Shader_compiler::compile_shader_library_from_string(
+std::vector<Shader_library> Shader_compiler::compile_shader_library_from_string(
+    const Base_options* options,
     const std::string& shader_source,
     const std::string& debug_name,
-    const std::map<std::string, std::string>* defines)
+    const std::map<std::string, std::string>* defines,
+    const std::vector<std::string>& entry_points)
 {
-    IDxcCompiler* compiler = nullptr;
-    IDxcLibrary* library = nullptr;
-    ComPtr<IncludeHandler> include_handler;
+    // compute virtual hlsl and debug file names
+    std::string filename = mi::examples::io::normalize(debug_name);
+    size_t p = filename.find_last_of('/');
+    if (p != std::string::npos)
+        filename = filename.substr(p + 1);
+    filename = filename.substr(0, filename.find_last_of('.'));
 
-    if (log_on_failure(DxcCreateInstance(
-        CLSID_DxcCompiler, __uuidof(IDxcCompiler), (void**)&compiler),
-        "Failed to create IDxcCompiler", SRC))
-        return nullptr;
+    std::string dump_dir = mi::examples::io::get_working_directory() + "/dxc";
+    std::string base_file_name = dump_dir + "/" + filename;
 
-    if (log_on_failure(DxcCreateInstance(
-        CLSID_DxcLibrary, __uuidof(IDxcLibrary), (void**)&library),
-        "Failed to create IDxcLibrary", SRC))
-        return nullptr;
+    std::wstring file_name_hlsl = mi::examples::strings::str_to_wstr(
+        dump_dir + "/" + filename + ".hlsl");
 
-    IDxcIncludeHandler* base_handler;
-    if (log_on_failure(library->CreateIncludeHandler(&base_handler),
-        "Failed to create Include Handler.", SRC))
-        return nullptr;
+    // we only need this directory when dumping shader files
+    if (options->gpu_debug)
+    {
+        // store all intermediate debug files into a sub-folder
+        mi::examples::io::mkdir(dump_dir);
 
-    include_handler = new IncludeHandler(base_handler);
-
-    IDxcBlobEncoding* shader_source_blob;
-    if (log_on_failure(library->CreateBlobWithEncodingFromPinned(
-        (LPBYTE)shader_source.c_str(), (uint32_t)shader_source.size(), 0,
-        &shader_source_blob),
-        "Failed to create shader source blob: " + debug_name, SRC))
-        return nullptr;
-
-    // compilation arguments
-#if DEBUG
-    LPCWSTR pp_args[] = {
-        L"/Zi", // debug info
-    };
-    UINT32 args_count = _countof(pp_args);
-
-#else
-    LPCWSTR* pp_args = nullptr;
-    UINT32 args_count = 0;
-#endif
-
-    // since there are only a few defines, copying them seems okay
-    std::vector<DxcDefine> wdefines;
-    std::vector<std::wstring> wstrings;
-    if (defines) {
-        for (const auto d : *defines) {
-            wstrings.push_back(mi::examples::strings::str_to_wstr(d.first));
-            wstrings.push_back(mi::examples::strings::str_to_wstr(d.second));
-            wdefines.push_back(DxcDefine{
-                wstrings[wstrings.size() - 2].c_str(),
-                wstrings[wstrings.size() - 1].c_str(),
-                });
+        // dump hlsl code
+        FILE* file = _wfopen(file_name_hlsl.c_str(), L"w");
+        if (file)
+        {
+            fwrite(shader_source.c_str(), shader_source.size(), 1, file);
+            fclose(file);
         }
     }
 
-    IDxcOperationResult* result;
-    std::wstring file_name_w = mi::examples::strings::str_to_wstr(debug_name);
-    if (log_on_failure(compiler->Compile(
-        shader_source_blob, file_name_w.c_str(), L"", L"lib_6_3",
-        pp_args, args_count,
-        wdefines.data(), wdefines.size(),
-        include_handler.Get(), &result),
-
-        "Failed to compile shader source: " + debug_name, SRC))
-        return nullptr;
-
-    HRESULT result_code = S_OK;
-    if (log_on_failure(result->GetStatus(&result_code),
-        "Failed to get compilation result for source: " + debug_name, SRC))
-        return nullptr;
-
-    if (FAILED(result_code))
+#ifdef MDL_ENABLE_SLANG
+    if (options->use_slang)
     {
-        IDxcBlobEncoding* error;
-        if (log_on_failure(result->GetErrorBuffer(&error),
-            "Failed to get compilation error for source: " + debug_name, SRC))
-            return nullptr;
+        return compile_shader_library_from_string_slang(
+            options, shader_source, debug_name, defines, entry_points, base_file_name);
+    }
+#endif
+    return compile_shader_library_from_string_dxc(
+        options, shader_source, debug_name, defines, entry_points, base_file_name);
+}
 
+std::vector<Shader_library> Shader_compiler::compile_shader_library_from_string_dxc(
+    const Base_options* options,
+    const std::string& shader_source,
+    const std::string& debug_name,
+    const std::map<std::string, std::string>* defines,
+    const std::vector<std::string>& entry_points,
+    const std::string& base_file_name)
+{
+    // will be filled
+    std::vector<Shader_library> dxil_libraries;
+
+    // DXC compilation arguments
+    std::vector<LPCWSTR> arguments;
+
+    // include directory
+    std::wstring inc = mi::examples::strings::str_to_wstr(
+        mi::examples::io::get_executable_folder());
+    arguments.push_back(L"-I");
+    arguments.push_back(inc.c_str());
+
+    // target profile
+    arguments.push_back(L"-T");
+    arguments.push_back(L"lib_6_3");
+
+    // add debug symbols
+    if (options->gpu_debug)
+    {
+        arguments.push_back(DXC_ARG_DEBUG); // -Zi
+        // arguments.push_back(DXC_ARG_WARNINGS_ARE_ERRORS); //-WX
+    }
+    else
+    {
+        // arguments.push_back(DXC_ARG_SKIP_VALIDATION); // -Vd // will fail the pipeline creation
+    }
+
+    // optimization Od, O0, O1, O2, O3
+    std::wstring optimization = mi::examples::strings::str_to_wstr("/" + options->shader_opt);
+    arguments.push_back(optimization.c_str());
+
+    // remove debug and reflection info from the actual shader blob
+    // since we will have them in separate files (they are part of the compiler result anyway)
+    arguments.push_back(L"-Qstrip_debug");
+    arguments.push_back(L"-Qstrip_reflect");
+
+    // since there are only a few defines, copying them seems okay
+    std::vector<std::wstring> wstrings;
+    if (defines) {
+        for (const auto d : *defines) {
+            arguments.push_back(L"-D");
+            wstrings.push_back(mi::examples::strings::str_to_wstr(d.first + "=" + d.second));
+            arguments.push_back(wstrings.back().c_str());
+        }
+    }
+
+    ComPtr<IDxcCompiler3> compiler = nullptr;
+    if (log_on_failure(DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(compiler.GetAddressOf())),
+        "Failed to create IDxcCompiler", SRC))
+        return {};
+
+    ComPtr<IDxcUtils> utils = nullptr;
+    if (log_on_failure(DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(utils.GetAddressOf())),
+        "Failed to create IDxcUtils", SRC))
+        return {};
+
+    // create a source blob
+    ComPtr<IDxcBlobEncoding> shader_source_blob;
+    if (log_on_failure(utils->CreateBlob(
+        (LPBYTE)shader_source.c_str(), (uint32_t)shader_source.size(), CP_UTF8,
+        shader_source_blob.GetAddressOf()),
+        "Failed to create shader source blob: " + debug_name, SRC))
+        return {};
+
+    // create a special include handler to be able to run the applications with
+    // different working directories
+    IDxcIncludeHandler* base_handler;
+    if (log_on_failure(utils->CreateDefaultIncludeHandler(&base_handler),
+        "Failed to create Include Handler.", SRC))
+        return {};
+    ComPtr<IncludeHandler> include_handler = new IncludeHandler(base_handler);
+
+    // compile the library
+    DxcBuffer sourceBuffer;
+    sourceBuffer.Ptr = shader_source_blob->GetBufferPointer();
+    sourceBuffer.Size = shader_source_blob->GetBufferSize();
+    sourceBuffer.Encoding = 0;
+    ComPtr<IDxcResult> result;
+    HRESULT hr;
+    {
+        Timing t("DXC Compile: " + debug_name);
+        auto p = m_app->get_profiling().measure("DXC Compile: " + debug_name);
+
+        hr = compiler->Compile(&sourceBuffer,
+            arguments.data(), (UINT32)arguments.size(),
+            include_handler.Get(), IID_PPV_ARGS(result.GetAddressOf()));
+    }
+
+    // check for errors
+    result->GetStatus(&hr);
+    ComPtr<IDxcBlobUtf8> error;
+    if (log_on_failure(result->GetOutput(
+        DXC_OUT_ERRORS, IID_PPV_ARGS(error.GetAddressOf()), nullptr),
+        "Failed to get compilation error for source: " + debug_name, SRC))
+        return {};
+    if (error && error->GetStringLength())
+    {
         std::vector<char> infoLog(error->GetBufferSize() + 1);
         memcpy(infoLog.data(), error->GetBufferPointer(), error->GetBufferSize());
         infoLog[error->GetBufferSize()] = 0;
-        std::string message = "Shader Compiler Error: " + debug_name + "\n";
-        message.append(infoLog.data());
-        log_error(message, SRC);
-        return nullptr;
-    }
 
-    IDxcBlob* shader_blob;
-    if (log_on_failure(result->GetResult(&shader_blob),
+        // if the status is successful, the output only contains warnings
+        if (SUCCEEDED(hr)) {
+            std::string message = "Shader Compiler Warning: " + debug_name + "\n";
+            message.append(infoLog.data());
+            log_warning(message, SRC);
+        } else {
+            // otherwise, the output contains at least one error
+            std::string message = "Shader Compiler Error: " + debug_name + "\n";
+            message.append(infoLog.data());
+            log_error(message, SRC);
+        }
+    }
+    if (log_on_failure(hr, "Failed to compile shader source: " + debug_name, SRC))
+        return {};
+
+    // get the library DXIL code
+    IDxcBlob* dxil_blob;
+    if (log_on_failure(result->GetOutput(
+        DXC_OUT_OBJECT, __uuidof(IDxcBlob), (void**)&dxil_blob, nullptr),
         "Failed to get shader blob for source: " + debug_name, SRC))
-        return nullptr;
+        return {};
 
-    static std::atomic<size_t> sl_counter = 0;
+    dxil_libraries.push_back(Shader_library(dxil_blob, entry_points));
 
-#if 0
-    // setup debug name
-    std::string file_name = mi::examples::io::normalize(debug_name);
-    size_t p = file_name.find_last_of('/');
-    if (p != std::string::npos)
-        file_name = file_name.substr(p + 1);
-    file_name = file_name.substr(0, file_name.find_last_of('.'));
-    file_name += ".dxil";
-
-    FILE* file = fopen(file_name.c_str(), "wb");
-    if (file)
+    if (options->gpu_debug)
     {
-        fwrite(shader_blob->GetBufferPointer(), shader_blob->GetBufferSize(), 1, file);
-        fclose(file);
+        // get and write pdb
+        ComPtr<IDxcBlob> debug_info_blob;
+        IDxcBlobUtf16* debug_info_path;
+        if (log_on_failure(result->GetOutput(
+            DXC_OUT_PDB, IID_PPV_ARGS(debug_info_blob.GetAddressOf()), &debug_info_path),
+            "Failed to get debug blob for source: " + debug_name, SRC))
+            return {};
+
+        std::wstring file_name_dbg = mi::examples::strings::str_to_wstr(base_file_name + ".dbg");
+        FILE* file = _wfopen(file_name_dbg.c_str(), L"wb");
+        if (file)
+        {
+            fwrite(debug_info_blob->GetBufferPointer(), debug_info_blob->GetBufferSize(), 1, file);
+            fclose(file);
+        }
+
+        // write compiled shader library
+        std::wstring file_name_dxil = mi::examples::strings::str_to_wstr(base_file_name + ".dxil");
+        file = _wfopen(file_name_dxil.c_str(), L"wb");
+        if (file)
+        {
+            fwrite(dxil_blob->GetBufferPointer(), dxil_blob->GetBufferSize(), 1, file);
+            fclose(file);
+        }
+
+        // llvm code dump not available in dxcompiler library
+        // so we print dxc arguments to a file to reproduce externally
+        std::wstring file_name_hlsl = mi::examples::strings::str_to_wstr(base_file_name + ".hlsl");
+        std::wstring file_name_ll = mi::examples::strings::str_to_wstr(base_file_name + ".ll");
+        std::wstring dxc_command_line = L"";
+        for (const auto& it : arguments)
+        {
+            if (dxc_command_line.empty())
+                dxc_command_line = std::wstring(it);
+            else
+                dxc_command_line += L" " + std::wstring(it);
+        }
+        dxc_command_line += L" -Fc " + file_name_ll;
+        dxc_command_line += L" " + file_name_hlsl;
+
+        std::wstring file_name_ll_cmd_args = file_name_ll + L".cmd_args";
+        file = _wfopen(file_name_ll_cmd_args.c_str(), L"w");
+        if (file)
+        {
+            std::string dxc_command_line_a = mi::examples::strings::wstr_to_str(dxc_command_line);
+            fwrite(dxc_command_line_a.c_str(), dxc_command_line_a.size(), 1, file);
+            fclose(file);
+        }
+
+        log_verbose("DXC Command: " + mi::examples::strings::wstr_to_str(dxc_command_line));
     }
-#endif
-    return shader_blob;
+
+    // return the dxil shader blob
+    return dxil_libraries;
 }
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
+#ifdef MDL_ENABLE_SLANG
+std::vector<Shader_library> Shader_compiler::compile_shader_library_from_string_slang(
+    const Base_options* options,
+    const std::string& shader_source,
+    const std::string& debug_name,
+    const std::map<std::string, std::string>* defines,
+    const std::vector<std::string>& entry_points,
+    const std::string& base_file_name)
+{
+    // will be filled
+    std::vector<Shader_library> dxil_libraries;
+
+    std::unique_ptr<SlangSession, void(*)(SlangSession*)> slang_session(
+        g_slang_session_pool.acquire_session(),
+        [](SlangSession* session) { g_slang_session_pool.release_session(session); }
+    );
+
+    std::string dxr_dir = mi::examples::io::get_executable_folder();
+    slang_session->setDownstreamCompilerPath(SLANG_PASS_THROUGH_DXC, dxr_dir.c_str());
+
+    Slang::ComPtr<slang::ICompileRequest> slang_compile_request;
+    SlangResult result = slang_session->createCompileRequest(slang_compile_request.writeRef());
+    if (SLANG_FAILED(result))
+    {
+        log_error("SlangSession::createCompileRequest failed with code "
+            + std::to_string(result) + ": " + debug_name, SRC);
+        return {};
+    }
+
+    std::string include_path = mi::examples::io::get_executable_folder();
+    spAddSearchPath(slang_compile_request, include_path.c_str());
+
+    spSetDebugInfoLevel(slang_compile_request, SLANG_DEBUG_INFO_LEVEL_NONE);
+    spSetOptimizationLevel(slang_compile_request, shader_opt_to_slang_opt(options->shader_opt));
+
+    SlangProfileID slang_profile = spFindProfile(slang_session.get(), "lib_6_3");
+    if (slang_profile == SLANG_PROFILE_UNKNOWN)
+    {
+        log_error("spFindProfile failed to find a compatible profile for 'lib_6_3': " + debug_name, SRC);
+        return {};
+    }
+
+    int target_index = spAddCodeGenTarget(slang_compile_request, SLANG_DXIL);
+    int target_index_asm = 0;
+    spSetTargetProfile(slang_compile_request, target_index, slang_profile);
+
+    if (options->gpu_debug)
+    {
+        target_index_asm = spAddCodeGenTarget(slang_compile_request, SLANG_DXIL_ASM);
+        spSetTargetProfile(slang_compile_request, target_index_asm, slang_profile);
+    }
+    //spSetPassThrough(slang_compile_request, SLANG_PASS_THROUGH_DXC);
+
+    int unit_index = spAddTranslationUnit(slang_compile_request, SLANG_SOURCE_LANGUAGE_HLSL, nullptr);
+
+    for (const auto& it : entry_points)
+    {
+        SlangStage stage = SLANG_STAGE_NONE;
+        if (mi::examples::strings::contains(it.c_str(), "MissProgram"))
+            stage = SLANG_STAGE_MISS;
+        else if (mi::examples::strings::contains(it.c_str(), "AnyHitProgram"))
+            stage = SLANG_STAGE_ANY_HIT;
+        else if (mi::examples::strings::contains(it.c_str(), "ClosestHitProgram"))
+            stage = SLANG_STAGE_CLOSEST_HIT;
+        else if (mi::examples::strings::contains(it.c_str(), "RayGenProgram"))
+            stage = SLANG_STAGE_RAY_GENERATION;
+        if (stage == SLANG_STAGE_NONE)
+        {
+            log_error("Entrypoint name is not following naming convention': " + it, SRC);
+            return {};
+        }
+
+        spAddEntryPoint(slang_compile_request, unit_index, it.c_str(), stage);
+    }
+
+    size_t sep_pos = base_file_name.rfind('/');
+    std::string filepath = include_path + "/" + base_file_name.substr(sep_pos + 1) + ".hlsl";
+    spAddTranslationUnitSourceString(slang_compile_request, unit_index, filepath.c_str(), shader_source.c_str());
+
+    if (defines)
+    {
+        for (const auto d : *defines)
+            spAddPreprocessorDefine(slang_compile_request, d.first.c_str(), d.second.c_str());
+    }
+
+    {
+        Timing t("Slang Compile: " + debug_name);
+        auto p = m_app->get_profiling().measure("Slang Compile: " + debug_name);
+
+        result = spCompile(slang_compile_request);
+
+
+        if (auto diagnostics = spGetDiagnosticOutput(slang_compile_request))
+        {
+            std::string errMsg(diagnostics);
+
+            if (errMsg.size() > 0) {
+                int line = -1;
+                std::string msg = "";
+
+                size_t lineLocBegin = errMsg.find_first_of('(');
+                size_t lineLocEnd = errMsg.find_first_of(')');
+                if (lineLocBegin != std::string::npos) {
+                    std::string lineStr = errMsg.substr(lineLocBegin + 1, lineLocEnd - lineLocBegin - 1);
+                    msg = errMsg.substr(lineLocEnd + 3);
+
+                    line = std::stoi(lineStr);
+                }
+
+                if (lineLocBegin != std::string::npos)
+                    log_info(msg.c_str());
+            }
+        }
+
+        if (SLANG_FAILED(result))
+        {
+            std::string message = "Shader Compiler Error: " + debug_name + "\n";
+            message.append(spGetDiagnosticOutput(slang_compile_request));
+            log_error(message, SRC);
+            log_error("spCompile failed with code " + std::to_string(result) + ": " + debug_name, SRC);
+            return {};
+        }
+    }
+
+    SlangReflection* slang_reflection = spGetReflection(slang_compile_request);
+    SlangUInt entry_point_count = spReflection_getEntryPointCount(slang_reflection);
+
+    for (int i = 0; i < entry_point_count; ++i)
+    {
+        size_t entry_point_code_size;
+        spGetEntryPointCode(slang_compile_request, i, &entry_point_code_size);
+
+        std::vector<char> code(entry_point_code_size);
+        const void* entry_point_code = spGetEntryPointCode(slang_compile_request, i, &entry_point_code_size);
+
+        // get the DXIL code block
+        ISlangBlob* dxil_blob = nullptr;
+        spGetEntryPointCodeBlob(slang_compile_request, i, target_index, &dxil_blob);
+        SlangReflectionEntryPoint* entry_point_relf = spReflection_getEntryPointByIndex(slang_reflection, i);
+        const char* entry_point_name = spReflectionEntryPoint_getName(entry_point_relf);
+        dxil_libraries.push_back(Shader_library((IDxcBlob*)dxil_blob, { entry_point_name }));
+
+        // get ll
+        if (options->gpu_debug)
+        {
+            ISlangBlob* asm_blob = nullptr;
+            spGetEntryPointCodeBlob(slang_compile_request, i, target_index_asm, &asm_blob);
+            if (asm_blob)
+            {
+                std::wstring filename_ll =
+                    mi::examples::strings::str_to_wstr(base_file_name + "_" + entry_point_name + ".ll");
+                FILE* file = _wfopen(filename_ll.c_str(), L"wb");
+                if (file)
+                {
+                    size_t buffer_size = asm_blob->getBufferSize();
+                    fwrite(asm_blob->getBufferPointer(), buffer_size, 1, file);
+                    fclose(file);
+                }
+            }
+            asm_blob->release();
+        }
+    }
+
+    return dxil_libraries;
+}
+#endif // MDL_ENABLE_SLANG
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
@@ -594,7 +976,8 @@ ID3D12RootSignature* Root_signature::get_signature()
 // ------------------------------------------------------------------------------------------------
 
 Shader_binding_tables::Shader_record::Shader_record()
-    : m_mapped_table_pointer(nullptr)
+    : m_shader_id(nullptr)
+    , m_mapped_table_pointer(nullptr)
     , m_local_root_arguments(0)
 {
 }

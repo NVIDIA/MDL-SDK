@@ -159,7 +159,7 @@ If you need multiple sub-expressions per GLSL program, you should create an
 the backend from generating illegal duplicate functions and globals.
 With the link unit, you can then add material subexpressions or environment functions by calling
 #mi::neuraylib::ILink_unit::add_material_expression() and
-#mi::neuraylib::ILink_unit::add_environment(), respectively.
+#mi::neuraylib::ILink_unit::add_function(), respectively.
 Finally, you can create the GLSL target code with
 #mi::neuraylib::IMdl_backend::translate_link_unit().
 
@@ -222,7 +222,7 @@ uniform data or the SSBO data in OpenGL.
 
 <dt><b>Loading textures (GLSL)</b></dt>
 <dd><br>
-When the \c nv_freeimage plugin has been loaded via
+When the \c nv_openimageio plugin has been loaded via
 #mi::neuraylib::IPlugin_configuration::load_plugin_library() before starting the MDL SDK, the SDK will
 automatically load textures on the host side for many common image formats and make them
 available via #mi::neuraylib::ITarget_code::get_texture().

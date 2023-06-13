@@ -114,14 +114,6 @@ public:
 
     bool get_simple_glossy_bsdf_legacy_enabled() const final;
 
-    mi::Sint32 set_materials_are_functions( bool value) final;
-
-    bool get_materials_are_functions() const final;
-
-    mi::Sint32 set_encoded_names_enabled( bool value) /*final*/;
-
-    bool get_encoded_names_enabled() const /*final*/;
-    
     
     mi::neuraylib::IMdl_entity_resolver* get_entity_resolver() const final;
 
@@ -165,7 +157,6 @@ private:
     bool m_implicit_cast_enabled;
     bool m_expose_names_of_let_expressions;
     bool m_simple_glossy_bsdf_legacy_enabled;
-    bool m_materials_are_functions;
     mi::base::Handle<mi::neuraylib::IMdl_entity_resolver> m_entity_resolver;
     std::vector<std::string> m_mdl_system_paths;
     std::vector<std::string> m_mdl_user_paths;

@@ -46,6 +46,7 @@ create_from_base_preset(
     OUTPUT_NAME "execution_cuda"
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
+    STATIC_MSVC_RUNTIME
 )
 
 # add dependencies
@@ -54,7 +55,7 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         mdl::mdl_core
         mdl_core::shared
         cuda
-        freeimage
+        openimageio
         )
 
 # creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)
@@ -64,12 +65,13 @@ target_create_vs_user_settings(TARGET ${PROJECT_NAME})
 # PTX Target
 # -------------------------------------------------------------------------------------------------
 target_add_cuda_ptx_rule(TARGET ${PROJECT_NAME}
-    DEPENDS 
+    DEPENDS
         mdl::mdl_core
         mdl_core::shared
     CUDA_SOURCES
         "example_execution_cuda.cu"
         "example_execution_cuda_derivatives.cu"
+    FAST_MATH
     )
 
 # -------------------------------------------------------------------------------------------------

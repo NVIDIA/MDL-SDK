@@ -29,13 +29,6 @@
 #ifndef MDL_DXR_EXAMPLE_COMMON_HLSL
 #define MDL_DXR_EXAMPLE_COMMON_HLSL
 
-// macros the append the target code ID to the function name.
-// this is required because the resulting DXIL libraries will be linked to same pipeline object
-// and for that, the entry point names have to be unique.
-#define export_name_impl(name, id) name ## _ ## id
-#define export_name_impl_2(name, id) export_name_impl(name, id)
-#define export_name(name) export_name_impl_2(name, TARGET_CODE_ID)
-
 static const float M_PI =          3.14159265358979323846;
 static const float M_ONE_OVER_PI = 0.318309886183790671538;
 static const float DIRAC = -1.0f;
@@ -74,7 +67,21 @@ cbuffer SceneConstants : register(b1)
 
     // enable animation mode, progression is limited, mdl state will have an animation_time
     uint enable_animiation;
+
+    /// replace the background with a constant color when visible to the camera
+    uint background_color_enabled;
+    float3 background_color;
+
+    /// uv transformations
+    float2 uv_scale;
+    float2 uv_offset;
+    uint uv_repeat;
+    uint uv_saturate;
+
+    // rotation of the environment [0, 1]
+    float environment_rotation;
 }
+
 
 // Ray typed, has to match with CPU version
 #if defined(WITH_ENUM_SUPPORT)
@@ -99,7 +106,9 @@ enum RadianceHitInfoFlags
     FLAG_NONE = 0,
     FLAG_INSIDE = 1,
     FLAG_DONE = 2,
-    FLAG_FIRST_PATH_SEGMENT = 4
+    FLAG_FIRST_PATH_SEGMENT = 4,
+    FLAG_LAST_PATH_SEGMENT = 8,
+    FLAG_CAMERA_RAY = 16
 };
 #else
     #define RadianceHitInfoFlags uint
@@ -108,6 +117,7 @@ enum RadianceHitInfoFlags
     #define FLAG_DONE               2
     #define FLAG_FIRST_PATH_SEGMENT 4
     #define FLAG_LAST_PATH_SEGMENT  8
+    #define FLAG_CAMERA_RAY        16
 #endif
 
 void add_flag(inout uint flags, uint to_add) { flags |= to_add; }
@@ -245,17 +255,8 @@ struct SceneDataInfo
 // renderer state object that is passed to mdl runtime functions
 struct DXRRendererState
 {
-    // scene data buffer for object/instance data
-    ByteAddressBuffer scene_data_instance;
-
-    // The mapping between scene_data_id and scene data buffer layout
-    StructuredBuffer<SceneDataInfo> scene_data_infos;
-
     // index offset for the first info object relevant for this geometry
     uint scene_data_info_offset;
-
-    // the per mesh scene data buffer, includes the vertex buffer
-    ByteAddressBuffer scene_data_vertex;
 
     // global offset in the data buffer (for object, geometry, ...)
     uint scene_data_geometry_byte_offset;
@@ -266,7 +267,7 @@ struct DXRRendererState
     // barycentric coordinates of the hit point within the triangle
     float3 barycentric;
 };
-// use this structure as renderer state int the MDL shading state material
+// use this structure as renderer state in the MDL shading state material
 #define RENDERER_STATE_TYPE DXRRendererState
 
 
@@ -368,7 +369,10 @@ float3 environment_evaluate(
     out float pdf)
 {
     // assuming lat long
-    const float u = atan2(normalized_dir.z, normalized_dir.x) * 0.5f * M_ONE_OVER_PI + 0.5f;
+    float u = atan2(normalized_dir.z, normalized_dir.x) * 0.5f * M_ONE_OVER_PI + 0.5f;
+    u -= environment_rotation;
+    if (u < 0.0f)
+        u += 1.0f;
     const float v = acos(-normalized_dir.y) * M_ONE_OVER_PI;
 
     // get radiance and calculate pdf
@@ -415,7 +419,11 @@ float3 environment_sample(
 
     // uniformly sample spherical area of pixel
     const float u = float(px + xi.y) / float(width);
-    const float phi = u * (2.0f * M_PI) - M_PI;
+    float u_rot = u + environment_rotation;
+    if (u_rot > 1.0f)
+        u_rot -= 1.0f;
+
+    const float phi = u_rot * (2.0f * M_PI) - M_PI;
     float sin_phi;
     float cos_phi;
     sincos(phi, sin_phi, cos_phi);

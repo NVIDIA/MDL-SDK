@@ -109,6 +109,11 @@ public:
         mi::neuraylib::ITarget_code::Texture_shape type,
         mi::mdl::IValue_texture::Bsdf_data_kind    df_data_kind) = 0;
 
+    /// Updates an already registered resource when it is encountered again.
+    ///
+    /// \param index        the texture index
+    virtual void update_texture(size_t index) = 0;
+
     /// Return the number of texture resources.
     virtual size_t get_texture_count() const = 0;
 
@@ -133,6 +138,11 @@ public:
         char const                                 *name,
         char const                                 *owner_module) = 0;
 
+    /// Updates an already registered resource when it is encountered again.
+    ///
+    /// \param index        the light profile index
+    virtual void update_light_profile(size_t index) = 0;
+
     /// Return the number of light profile resources.
     virtual size_t get_light_profile_count() const = 0;
 
@@ -156,6 +166,11 @@ public:
         bool                                       is_resolved,
         char const                                 *name,
         char const                                 *owner_module) = 0;
+
+    /// Updates an already registered resource when it is encountered again.
+    ///
+    /// \param index        the BSDF measurement index
+    virtual void update_bsdf_measurement(size_t index) = 0;
 
     /// Return the number of BSDF measurement resources.
     virtual size_t get_bsdf_measurement_count() const = 0;
@@ -376,7 +391,12 @@ public:
                         selector,
                         get_texture_shape(tex->get_type()),
                         tex->get_bsdf_data_kind());
+                } else {
+                    // if a later expression uses a resource in the body that has been previously
+                    // used in the arguments only
+                    m_register.update_texture(tex_idx);
                 }
+
                 m_lambda->map_tex_resource(
                     tex->get_kind(),
                     tex->get_string_value(),
@@ -489,6 +509,7 @@ public:
                         // known
                         lp_idx = it->second;
                         new_entry = false;
+
                     }
                 } else {
                     // no map, always new
@@ -499,6 +520,9 @@ public:
                 if (new_entry) {
                     m_register.register_light_profile(
                         lp_idx, /*is_resolved=*/tag_value != 0, name, "");
+                }
+                else {
+                    m_register.update_light_profile(lp_idx);
                 }
 
                 m_lambda->map_lp_resource(
@@ -555,7 +579,7 @@ public:
 
             MI::MDL::get_bsdf_measurement_attributes(m_db_transaction, DB::Tag(tag_value), valid);
 
-            if (valid) {
+            if (valid || m_keep_unresolved_resources) {
                 char const *name = resource_to_name(tag_value, r);
                 if (m_additional_lambda != NULL) {
                     m_additional_lambda->map_bm_resource(
@@ -585,7 +609,10 @@ public:
                 if (new_entry) {
                     m_register.register_bsdf_measurement(
                         bm_idx, /*is_resolved=*/tag_value != 0, name, "");
+                } else {
+                    m_register.update_bsdf_measurement(bm_idx);
                 }
+
                 m_lambda->map_bm_resource(
                     r->get_kind(), r->get_string_value(), tag_value, bm_idx, /*valid=*/true);
 
@@ -891,35 +918,32 @@ public:
     const std::string& get_error_string() const { return m_error_string; }
 
     /// Build a lambda function from a call.
-    mi::mdl::ILambda_function *env_from_call(
-        MDL::Mdl_function_call const *function_call,
-        char const                   *fname)
+    mi::mdl::ILambda_function *from_call(
+        MDL::Mdl_function_call const                        *function_call,
+        char const                                          *fname,
+        mi::mdl::ILambda_function::Lambda_execution_context execution_ctx)
     {
         if (function_call == NULL) {
-            m_error = -1;
-            m_error_string = "Invalid parameters (NULL pointer).";
+            error(-1, "Invalid parameter (NULL pointer)");
             return NULL;
         }
 
         DB::Tag def_tag = function_call->get_function_definition(m_db_transaction);
         if (!def_tag.is_valid()) {
-            m_error = -2;
-            m_error_string = "Invalid expression.";
+            error(-2, "Invalid call expression");
             return NULL;
         }
         DB::Access<MDL::Mdl_function_definition> definition(
             def_tag, m_db_transaction);
 
         if (!definition.is_valid()) {
-            m_error = -2;
-            m_error_string = "Invalid expression.";
+            error(-2, "Invalid call expression");
             return NULL;
         }
 
         mi::mdl::IType const *mdl_type = definition->get_mdl_return_type(m_db_transaction);
         if (mdl_type == NULL) {
-            m_error = -2;
-
+            error(-2, "Invalid call expression");
             return NULL;
         }
         mdl_type = mdl_type->skip_type_alias();
@@ -928,37 +952,40 @@ public:
         if (sema == mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR) {
             // need special handling for array constructor because its definition is "broken".
             // However, array constructors are not allowed here
-            m_error = -2;
-            m_error_string = "Invalid expression.";
+            error(-2, "Unsupported array constructor call expression");
             return NULL;
         }
 
         bool type_ok = false;
-        mi::mdl::IType_struct const *tex_ret_type = NULL;
+        mi::mdl::IType_struct const *env_call_ret_type = NULL;
 
-        // check for base::texture_return compatible or color return type here
-        if (mi::mdl::IType_struct const *s_type = mi::mdl::as<mi::mdl::IType_struct>(mdl_type)) {
-            if (s_type->get_compound_size() == 2) {
-                mi::mdl::IType const *e0_tp = s_type->get_compound_type(0)->skip_type_alias();
-                mi::mdl::IType const *e1_tp = s_type->get_compound_type(1)->skip_type_alias();
+        if (execution_ctx == mi::mdl::ILambda_function::LEC_ENVIRONMENT) {
+            // check for base::texture_return compatible or color return type if
+            // compiling for environment
+            if (mi::mdl::IType_struct const *s_type = mi::mdl::as<mi::mdl::IType_struct>(mdl_type)) {
+                if (s_type->get_compound_size() == 2) {
+                    mi::mdl::IType const *e0_tp = s_type->get_compound_type(0)->skip_type_alias();
+                    mi::mdl::IType const *e1_tp = s_type->get_compound_type(1)->skip_type_alias();
 
-                if (mi::mdl::is<mi::mdl::IType_color>(e0_tp) && mi::mdl::is<mi::mdl::IType_float>(e1_tp)) {
-                    type_ok = true;
-                    tex_ret_type = s_type;
+                    if (mi::mdl::is<mi::mdl::IType_color>(e0_tp) &&
+                        mi::mdl::is<mi::mdl::IType_float>(e1_tp))
+                    {
+                        type_ok = true;
+                        env_call_ret_type = s_type;
+                    }
                 }
+            } else if (mi::mdl::is<mi::mdl::IType_color>(mdl_type)) {
+                type_ok = true;
             }
-        } else if (mi::mdl::is<mi::mdl::IType_color>(mdl_type)) {
-            type_ok = true;
-        }
 
-        if (!type_ok) {
-            m_error = -2;
-            m_error_string = "Invalid expression.";
-            return NULL;
+            if (!type_ok) {
+                error(-2, "Invalid return type for environment call");
+                return NULL;
+            }
         }
 
         mi::base::Handle<mi::mdl::ILambda_function> lambda(
-            m_compiler->create_lambda_function(mi::mdl::ILambda_function::LEC_ENVIRONMENT));
+            m_compiler->create_lambda_function(execution_ctx));
 
         MDL::Mdl_dag_builder<mi::mdl::IDag_builder> builder(
             m_db_transaction, lambda.get(), /*compiled_material=*/NULL);
@@ -979,7 +1006,7 @@ public:
             mdl_arguments[i].arg = builder.int_expr_to_mdl_dag_node(
                 parameter_type, argument.get());
             if (mdl_arguments[i].arg == NULL) {
-                m_error = -2;
+                error(-2, "Invalid argument");
                 return NULL;
             }
             mdl_arguments[i].param_name = function_call->get_parameter_name(i);
@@ -992,29 +1019,26 @@ public:
                 // nothing to do
                 break;
             case -1:
-                m_error = -2;
-                m_error_string = "Type mismatch for argument \""s +
+                error(-2, std::string("Type mismatch for argument \"") +
                     mdl_arguments[i].param_name +
                     "\" of function call \"" +
                     function_call->get_mdl_function_definition() +
-                    "\".";
+                    "\"");
                 LOG::mod_log->error(
                     M_BACKENDS, LOG::Mod_log::C_DATABASE, "%s", m_error_string.c_str());
                 return NULL;
             case -2:
-                m_error = -2;
-                m_error_string = "Array size mismatch for argument \""s +
+                error(-2, std::string("Array size mismatch for argument \"") +
                     mdl_arguments[i].param_name +
                     "\" of function call \"" +
                     function_call->get_mdl_function_definition() +
-                    "\".";
+                    "\"");
                 LOG::mod_log->error(
                     M_BACKENDS, LOG::Mod_log::C_DATABASE, "%s", m_error_string.c_str());
                 return NULL;
             default:
                 ASSERT(M_BACKENDS, false);
-                m_error = -2;
-                m_error_string = "Invalid expression.";
+                error(-2, "Invalid expression");
                 return NULL;
             }
 
@@ -1031,17 +1055,17 @@ public:
 
         // if return type is ::base::texture_return (see above) wrap the
         // DAG node by a select to extract the tint field
-        if (tex_ret_type != NULL) {
+        if (env_call_ret_type != NULL) {
             mi::mdl::IType const   *f_type;
             mi::mdl::ISymbol const *f_name;
 
-            tex_ret_type->get_field(0, f_type, f_name);
+            env_call_ret_type->get_field(0, f_type, f_name);
 
-            std::string name(tex_ret_type->get_symbol()->get_name());
+            std::string name(env_call_ret_type->get_symbol()->get_name());
             name += '.';
             name += f_name->get_name();
             name += '(';
-            name += tex_ret_type->get_symbol()->get_name();
+            name += env_call_ret_type->get_symbol()->get_name();
             name += ')';
 
             mi::mdl::DAG_call::Call_argument args[1];
@@ -1053,8 +1077,9 @@ public:
         }
 
         lambda->set_body(body);
-        if (fname != NULL)
+        if (fname != NULL) {
             lambda->set_name(fname);
+        }
 
         m_error = 0;
         lambda->retain();
@@ -1072,15 +1097,13 @@ public:
             compiled_material->lookup_sub_expression(path));
 
         if (!field.is_valid_interface()) {
-            m_error = -2;
-            m_error_string = "Invalid path (non-existing).";
+            error(-2, "Invalid path (non-existing)");
             return NULL;
         }
 
         // reject constants if not explicitly enabled
         if (!m_compile_consts && field->get_kind() == MDL::IExpression::EK_CONSTANT) {
-            m_error = -4;
-            m_error_string = "The requested expression is a constant.";
+            error(-4, "The requested expression is a constant");
             return NULL;
         }
 
@@ -1100,8 +1123,7 @@ public:
         mi::mdl::IType const   *field_type = MDL::int_type_to_mdl_type(field_int_type.get(), *tf);
         field_type = field_type->skip_type_alias();
         if (contains_df_type(field_type) || mi::mdl::is<mi::mdl::IType_resource>(field_type)) {
-            m_error = -5;
-            m_error_string = "Neither DFs nor resource type expressions can be handled.";
+            error(-5, "Neither DFs nor resource type expressions can be handled");
             return NULL;
         }
 
@@ -1127,26 +1149,25 @@ public:
 
         mi::mdl::DAG_node const *body = builder.int_expr_to_mdl_dag_node(field_type, field.get());
         lambda->set_body(body);
-        if (fname != NULL)
+        if (fname != NULL) {
             lambda->set_name(fname);
+        }
 
         m_error = 0;
         lambda->retain();
         return lambda.get();
     }
 
+    /// Build a lambda function from a function definition.
     mi::mdl::ILambda_function *from_function_definition(
-        MDL::Mdl_function_definition const *fdef,
-        char const                         *fname)
+        MDL::Mdl_function_definition const                  *fdef,
+        char const                                          *fname,
+        mi::mdl::ILambda_function::Lambda_execution_context lec)
     {
         if (fdef == NULL) {
-            m_error = -1;
-            m_error_string = "Invalid parameters (NULL pointer)";
+            error(-1, "Invalid parameters (NULL pointer)");
             return NULL;
         }
-
-        mi::mdl::ILambda_function::Lambda_execution_context lec
-            = mi::mdl::ILambda_function::LEC_CORE; // FIXME: could also be e.g. displacement, but why, and how to choose
 
         mi::base::Handle<mi::mdl::ILambda_function> lambda(
             m_compiler->create_lambda_function(lec));
@@ -1154,9 +1175,8 @@ public:
         if (fname != NULL) {
             lambda->set_name(fname);
         } else {
-            // if not set, use the simple name of the function definition
-            // FIXME: replace with the mangled name
-            lambda->set_name(fdef->get_mdl_simple_name());
+            // if not set, use the mangled name of the function definition
+            lambda->set_name(fdef->get_mdl_mangled_name(m_db_transaction));
         }
 
         size_t parameter_count =  fdef->get_parameter_count();
@@ -1166,6 +1186,7 @@ public:
             m_db_transaction, lambda.get(), /*compiled_material=*/NULL);
 
         mi::mdl::IType_factory *tf = lambda->get_type_factory();
+        MDL::DETAIL::Type_binder type_binder(tf);
 
         for (size_t i = 0; i < parameter_count; ++i) {
             mi::mdl::IType const *type = fdef->get_mdl_parameter_type(m_db_transaction, i);
@@ -1173,8 +1194,7 @@ public:
             if (mi::mdl::IType_array const *arr_type = mi::mdl::as<mi::mdl::IType_array>(type)) {
                 if (!arr_type->is_immediate_sized()) {
                     // compilation of deferred size arrays not supported yet
-                    m_error = -2;
-                    m_error_string = "Arguments of deferred size array type unsupported";
+                    error(-2, "Arguments of deferred size array type unsupported");
                     return NULL;
                 }
             }
@@ -1183,14 +1203,14 @@ public:
 
             lambda->add_parameter(type, fdef->get_parameter_name(i));
             mdl_arguments[i].param_name = fdef->get_parameter_name(i);
-            mdl_arguments[i].arg = lambda->create_parameter(type, (int) i);
+            mdl_arguments[i].arg        = lambda->create_parameter(type, int(i));
         }
 
         std::string decoded_mdl_name = MDL::decode_name_with_signature(fdef->get_mdl_name());
         mi::mdl::DAG_node const *body = lambda->create_call(
             decoded_mdl_name.c_str(),
             fdef->get_mdl_semantic(),
-            parameter_count > 0 ? &mdl_arguments[0] : 0,
+            parameter_count > 0 ? &mdl_arguments[0] : NULL,
             parameter_count,
             fdef->get_mdl_return_type(m_db_transaction));
 
@@ -1215,15 +1235,13 @@ public:
             compiled_material->lookup_sub_expression(path));
 
         if (!field) {
-            m_error = -2;
-            m_error_string = "Invalid path (non-existing).";
+            error(-2, "Invalid path (non-existing)");
             return NULL;
         }
 
         // reject constants if not explicitly enabled
         if (!m_compile_consts && field->get_kind() == MDL::IExpression::EK_CONSTANT) {
-            m_error = -4;
-            m_error_string = "The requested expression is a constant.";
+            error(-4, "The requested expression is a constant");
             return NULL;
         }
 
@@ -1251,28 +1269,24 @@ public:
         mi::mdl::IType const   *field_type = MDL::int_type_to_mdl_type(field_int_type.get(), *tf);
         field_type = field_type->skip_type_alias();
         if (!mi::mdl::is<mi::mdl::IType_df>(field_type)) {
-            m_error = -5;
-            m_error_string = "Only distribution functions are allowed.";
+            error(-5, "Only distribution functions are allowed");
             return NULL;
         }
 
         // currently only BSDFs and EDFs are supported
-        switch (field_type->get_kind())
-        {
-            case mi::mdl::IType::TK_BSDF:
-            case mi::mdl::IType::TK_HAIR_BSDF:
-            case mi::mdl::IType::TK_EDF:
-            //case mi::mdl::IType::TK_VDF:
-                break;
+        switch (field_type->get_kind()) {
+        case mi::mdl::IType::TK_BSDF:
+        case mi::mdl::IType::TK_HAIR_BSDF:
+        case mi::mdl::IType::TK_EDF:
+            break;
 
-            case mi::mdl::IType::TK_VDF:
-                m_error = -9;
-                m_error_string = "VDFs are not supported.";
-                return NULL;
+        case mi::mdl::IType::TK_VDF:
+            error(-9, "VDFs are not supported");
+            return NULL;
 
-            default:
-                MDL_ASSERT(false);
-                return NULL;
+        default:
+            MDL_ASSERT(false);
+            return NULL;
         }
 
         // ... and fill up ...
@@ -1296,8 +1310,7 @@ public:
             compiled_material->get_body());
         DB::Tag tag = mat_body->get_definition(m_db_transaction);
         if (!tag.is_valid()) {
-            m_error = -2;
-            m_error_string = "Invalid expression.";
+            error(-2, "Invalid expression");
             return NULL;
         }
 
@@ -1331,19 +1344,17 @@ public:
         case mi::mdl::IDistribution_function::EC_NONE:
             break;
         case mi::mdl::IDistribution_function::EC_INVALID_PATH:
-            m_error = -2;
+            error(-2, "Invalid path");
             return NULL;
         case mi::mdl::IDistribution_function::EC_UNSUPPORTED_BSDF:
         case mi::mdl::IDistribution_function::EC_UNSUPPORTED_EDF:
-            m_error = -10;
-            m_error_string = "VDFs are not supported.";
+            error(-10, "VDFs are not supported");  // FIXME: Strange error message
             return NULL;
         case mi::mdl::IDistribution_function::EC_UNSUPPORTED_DISTRIBUTION_TYPE:
         case mi::mdl::IDistribution_function::EC_UNSUPPORTED_EXPRESSION_TYPE:
         case mi::mdl::IDistribution_function::EC_INVALID_PARAMETERS:
             MDL_ASSERT(!"Unexpected error.");
-            m_error = -10;
-            m_error_string = "The requested BSDF is not supported, yet.";
+            error(-10, "The requested BSDF is not supported, yet");
             return NULL;
         }
 
@@ -1372,9 +1383,8 @@ public:
             lec = mi::mdl::ILambda_function::LEC_DISPLACEMENT;
         }
         if (lec != lambda->get_execution_context()) {
-            // we cannot mix expressions with different contexts so gefar
-            m_error = -7;
-            m_error_string = "Mixing displacement and non-displacement expression not possible.";
+            // we cannot mix expressions with different contexts so give up
+            error(-7, "Mixing displacement and non-displacement expression not possible");
             return 0;
         }
 
@@ -1383,13 +1393,13 @@ public:
             compiled_material->lookup_sub_expression(path));
 
         if (!field.is_valid_interface()) {
-            m_error = -2;
+            error(-2, "Invalid path");
             return 0;
         }
 
         // reject constants if not explicitly enabled
         if (!m_compile_consts && field->get_kind() == MDL::IExpression::EK_CONSTANT) {
-            m_error = -4;
+            error(-4, "The requested expression is a constant");
             return 0;
         }
 
@@ -1399,7 +1409,7 @@ public:
         mi::mdl::IType const   *field_type = MDL::int_type_to_mdl_type(field_int_type.get(), *tf);
         field_type = field_type->skip_type_alias();
         if (contains_df_type(field_type) || mi::mdl::is<mi::mdl::IType_resource>(field_type)) {
-            m_error = -5;
+            error(-5, "distribution functions are not allowed");
             return 0;
         }
 
@@ -1484,6 +1494,12 @@ public:
     }
 
 private:
+    /// Generate an error.
+    void error(int code, std::string const &message) {
+        m_error_string = message;
+        m_error        = code;
+    }
+
     /// Check if the given type contains a *df type.
     ///
     /// \param type  the type to check
@@ -1534,11 +1550,13 @@ public:
             size_t                                   index,
             std::string const                        &name,
             std::string const                        &owner_module,
-            bool                                     is_resolved)
+            bool                                     is_resolved,
+            bool                                     is_body_resource)
         : m_index(index)
         , m_name(name)
         , m_owner_module(owner_module)
         , m_is_resolved(is_resolved)
+        , m_is_body_resource(is_body_resource || name.empty()) // empty resource is body
         {
         }
 
@@ -1546,6 +1564,7 @@ public:
         std::string  m_name;
         std::string  m_owner_module;
         bool         m_is_resolved;
+        bool         m_is_body_resource;
     };
 
 
@@ -1555,11 +1574,12 @@ public:
             std::string const                          &name,
             std::string const                          &owner_module,
             bool                                       is_resolved,
+            bool                                       is_body_resource,
             float                                      gamma,
             std::string const                          &selector,
             mi::neuraylib::ITarget_code::Texture_shape type,
             mi::mdl::IValue_texture::Bsdf_data_kind    df_data_kind)
-        : Res_entry(index, name, owner_module, is_resolved)
+        : Res_entry(index, name, owner_module, is_resolved, is_body_resource)
         , m_gamma(gamma)
         , m_selector(selector)
         , m_type(type)
@@ -1621,6 +1641,7 @@ public:
                 name,
                 owner_module,
                 is_resolved,
+                !m_in_argument_mode,
                 gamma,
                 selector,
                 type,
@@ -1629,6 +1650,21 @@ public:
         // Is a body resource and body resources count has not been marked as invalid?
         if (!m_in_argument_mode && m_body_texture_count != ~0ull)
             ++m_body_texture_count;
+    }
+
+    /// Updates an already registered resource when it is encountered again.
+    ///
+    /// \param index        the texture index
+    void update_texture(size_t index) override
+    {
+        for (auto& it : m_texture_table)
+        {
+            if (it.m_index != index)
+                continue;
+
+            it.m_is_body_resource |= !m_in_argument_mode; // appearance in body sets true
+            break;
+        }
     }
 
     /// Return the number of texture resources.
@@ -1661,11 +1697,27 @@ public:
         char const                                 *name,
         char const                                 *owner_module) override
     {
-        m_light_profile_table.push_back(Res_entry(index, name, owner_module, is_resolved));
+        m_light_profile_table.push_back(
+            Res_entry(index, name, owner_module, is_resolved, !m_in_argument_mode));
 
         // Is a body resource and body resources count has not been marked as invalid?
         if (!m_in_argument_mode && m_body_light_profile_count != ~0ull)
             ++m_body_light_profile_count;
+    }
+
+    /// Updates an already registered resource when it is encountered again.
+    ///
+    /// \param index        the texture index
+    void update_light_profile(size_t index) override
+    {
+        for (auto& it : m_light_profile_table)
+        {
+            if (it.m_index != index)
+                continue;
+
+            it.m_is_body_resource |= !m_in_argument_mode; // appearance in body sets true
+            break;
+        }
     }
 
     /// Return the number of light profile resources.
@@ -1698,12 +1750,28 @@ public:
         char const                                 *name,
         char const                                 *owner_module) override
     {
-        m_bsdf_measurement_table.push_back(Res_entry(index, name, owner_module, is_resolved));
+        m_bsdf_measurement_table.push_back(
+            Res_entry(index, name, owner_module, is_resolved, !m_in_argument_mode));
 
         // Is a body resource and body resources count has not been marked as invalid?
         if (!m_in_argument_mode && m_body_bsdf_measurement_count != ~0ull)
             ++m_body_bsdf_measurement_count;
 
+    }
+
+    /// Updates an already registered resource when it is encountered again.
+    ///
+    /// \param index        the texture index
+    void update_bsdf_measurement(size_t index) override
+    {
+        for (auto& it : m_bsdf_measurement_table)
+        {
+            if (it.m_index != index)
+                continue;
+
+            it.m_is_body_resource |= !m_in_argument_mode; // appearance in body sets true
+            break;
+        }
     }
 
     /// Return the number of BSDF measurement resources.
@@ -1795,7 +1863,8 @@ static void fill_resource_tables(Target_code_register const &tc_reg, Target_code
             entry.m_gamma,
             entry.m_selector,
             entry.m_type,
-            entry.m_df_data_kind);
+            entry.m_df_data_kind,
+            entry.m_is_body_resource);
     }
 
     typedef Target_code_register::Resource_table RT;
@@ -1808,7 +1877,8 @@ static void fill_resource_tables(Target_code_register const &tc_reg, Target_code
         tc->add_light_profile_index(
             entry.m_index,
             entry.m_is_resolved ? entry.m_name : "",
-            !entry.m_is_resolved ? entry.m_name : "");
+            !entry.m_is_resolved ? entry.m_name : "",
+            entry.m_is_body_resource);
     }
 
     RT const &bm_table = tc_reg.get_bsdf_measurement_table();
@@ -1818,7 +1888,8 @@ static void fill_resource_tables(Target_code_register const &tc_reg, Target_code
         tc->add_bsdf_measurement_index(
             entry.m_index,
             entry.m_is_resolved ? entry.m_name : "",
-            !entry.m_is_resolved ? entry.m_name : "");
+            !entry.m_is_resolved ? entry.m_name : "",
+            entry.m_is_body_resource);
     }
 
     tc->set_body_resource_counts(
@@ -2225,9 +2296,36 @@ Link_unit::~Link_unit()
     delete m_tc_reg;
 }
 
-// Add an MDL environment function call as a function to this link unit.
-mi::Sint32 Link_unit::add_environment(
+/// Conversion helper.
+static mi::mdl::ILambda_function::Lambda_execution_context to_lambda_exc(
+    Link_unit::Function_execution_context ctx)
+{
+    switch (ctx) {
+    case Link_unit::FEC_ENVIRONMENT:  return mi::mdl::ILambda_function::LEC_ENVIRONMENT;
+    case Link_unit::FEC_CORE:         return mi::mdl::ILambda_function::LEC_CORE;
+    case Link_unit::FEC_DISPLACEMENT: return mi::mdl::ILambda_function::LEC_DISPLACEMENT;
+    }
+    MDL_ASSERT(!"Unexpected function execution context");
+    return mi::mdl::ILambda_function::LEC_CORE;
+}
+
+/// Conversion helper.
+static mi::mdl::IGenerated_code_executable::Function_kind  to_function_kind(
+    Link_unit::Function_execution_context ctx)
+{
+    switch (ctx) {
+    case Link_unit::FEC_ENVIRONMENT:  return mi::mdl::IGenerated_code_executable::FK_ENVIRONMENT;
+    case Link_unit::FEC_CORE:         return mi::mdl::IGenerated_code_executable::FK_LAMBDA;
+    case Link_unit::FEC_DISPLACEMENT: return mi::mdl::IGenerated_code_executable::FK_LAMBDA;
+    }
+    MDL_ASSERT(!"Unexpected function execution context");
+    return mi::mdl::IGenerated_code_executable::FK_LAMBDA;
+}
+
+// Add an MDL function call as a function to this link unit.
+mi::Sint32 Link_unit::add_function(
     MDL::Mdl_function_call const *function_call,
+    Function_execution_context   fxc,
     char const                   *fname,
     MDL::Execution_context       *context)
 {
@@ -2264,7 +2362,7 @@ mi::Sint32 Link_unit::add_environment(
         m_calc_derivatives);
 
     mi::base::Handle<mi::mdl::ILambda_function> lambda(
-        builder.env_from_call(function_call, fname));
+        builder.from_call(function_call, fname, to_lambda_exc(fxc)));
     if (!lambda.is_valid_interface()) {
         MDL::add_error_message(context,
             builder.get_error_string(), builder.get_error_code());
@@ -2301,7 +2399,7 @@ mi::Sint32 Link_unit::add_environment(
         lambda.get(),
         &module_cache,
         &resolver,
-        mi::mdl::IGenerated_code_executable::FK_ENVIRONMENT,
+        to_function_kind(fxc),
         &arg_block_index,
         NULL);
     if (!res) {
@@ -2310,7 +2408,7 @@ mi::Sint32 Link_unit::add_environment(
         return -1;
     }
     ASSERT(M_BACKENDS, arg_block_index == size_t(~0) &&
-        "Environments should not have captured arguments");
+        "Functions should not have captured arguments");
 
     return 0;
 }
@@ -2441,10 +2539,9 @@ mi::Sint32 Link_unit::add_material_single_init(
     // copy the resource map
     Lambda_builder::copy_resource_map(compiled_material, dist_func);
 
-    // set init function name, if available
+    // set init function name
     mi::base::Handle<mi::mdl::ILambda_function> root_lambda(dist_func->get_root_lambda());
-    if (function_descriptions[0].base_fname)
-        root_lambda->set_name(function_descriptions[0].base_fname);
+    root_lambda->set_name(base_fname_list[0].c_str());
 
     // copy the resource map to the lambda
     Lambda_builder::copy_resource_map(compiled_material, root_lambda);
@@ -3039,10 +3136,12 @@ mi::Sint32 Link_unit::add_material(
     return 0;
 }
 
+// Add an MDL function definition as a function to this link unit.
 mi::Sint32 Link_unit::add_function(
-    MDL::Mdl_function_definition const* function,
-    char const* name,
-    MDL::Execution_context* context)
+    MDL::Mdl_function_definition const *function,
+    Function_execution_context         fxc,
+    char const                         *name,
+    MDL::Execution_context             *context)
 {
     Lambda_builder builder(
         m_compiler.get(),
@@ -3051,10 +3150,9 @@ mi::Sint32 Link_unit::add_function(
         m_calc_derivatives);
 
     mi::base::Handle<mi::mdl::ILambda_function> lambda(
-        builder.from_function_definition(function, name));
+        builder.from_function_definition(function, name, to_lambda_exc(fxc)));
 
-    if (!lambda.is_valid_interface())
-    {
+    if (!lambda.is_valid_interface()) {
         MDL::add_error_message(
             context, builder.get_error_string(), builder.get_error_code() * 10);
         return builder.get_error_code();
@@ -3079,11 +3177,13 @@ mi::Sint32 Link_unit::add_function(
         !resolve_resources,
         resolve_resources);
     lambda->enumerate_resources(resolver, enumerator, lambda->get_body());
-    if (!resolve_resources)
+    if (!resolve_resources) {
         lambda->set_has_resource_attributes(false);
+    }
 
-    if (m_calc_derivatives)
-         lambda->initialize_derivative_infos(&resolver);
+    if (m_calc_derivatives) {
+        lambda->initialize_derivative_infos(&resolver);
+    }
 
     size_t arg_block_index = ~0;
     size_t index = ~0;
@@ -3092,7 +3192,7 @@ mi::Sint32 Link_unit::add_function(
         lambda.get(),
         &module_cache,
         &resolver,
-        mi::mdl::IGenerated_code_executable::FK_LAMBDA,
+        to_function_kind(fxc),
         &arg_block_index,
         &index))
     {
@@ -3103,8 +3203,7 @@ mi::Sint32 Link_unit::add_function(
         return -1;
     }
 
-    if (arg_block_index != size_t(~0))
-    {
+    if (arg_block_index != size_t(~0)) {
         // Add it to the target code and remember the arguments of the function material
         mi::base::Handle<mi::mdl::IGenerated_code_value_layout const> layout(
             m_unit->get_arg_block_layout(arg_block_index));
@@ -3875,7 +3974,7 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_environment(
         m_calc_derivatives);
 
     mi::base::Handle<mi::mdl::ILambda_function> lambda(
-        builder.env_from_call(function_call, fname));
+        builder.from_call(function_call, fname, mi::mdl::ILambda_function::LEC_ENVIRONMENT));
     if (!lambda.is_valid_interface()) {
         MDL::add_error_message(context,
             builder.get_error_string(), builder.get_error_code());
@@ -4347,12 +4446,18 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_link_unit(
 
     update_jit_context_options(*cg_ctx.get(), lu->get_internal_space(), context);
 
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module(/*deferred=*/false);
+    MDL::Module_cache module_cache(lu->get_transaction(), mdlc_module->get_module_wait_queue(), {});
+
 #ifdef ADD_EXTRA_TIMERS
     std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
 #endif
 
-    mi::base::Handle<mi::mdl::IGenerated_code_executable> code(
-        m_jit->compile_unit(cg_ctx.get(), mi::base::make_handle(lu->get_compilation_unit()).get(), !m_output_target_lang));
+    mi::base::Handle<mi::mdl::IGenerated_code_executable> code(m_jit->compile_unit(
+        cg_ctx.get(),
+	&module_cache,
+	mi::base::make_handle(lu->get_compilation_unit()).get(),
+	!m_output_target_lang));
 
     if (!code.is_valid_interface()) {
         MDL::add_error_message(context,
@@ -4502,7 +4607,7 @@ DB::Tag Df_data_helper::store_texture(
     mi::base::Handle<IMAGE::IMipmap> mipmap(image_module->create_mipmap(canvases));
 
     DBIMAGE::Image *img = new DBIMAGE::Image();
-    img->set_mipmap(m_transaction, mipmap.get(), mi::base::Uuid{0,0,0,0});
+    img->set_mipmap(m_transaction, mipmap.get(), /*selector*/ nullptr, mi::base::Uuid{0,0,0,0});
     std::string img_name = tex_name + "_img";
     DB::Tag img_tag = m_transaction->store_for_reference_counting(img, img_name.c_str());
 

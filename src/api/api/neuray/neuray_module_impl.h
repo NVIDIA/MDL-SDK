@@ -127,9 +127,6 @@ public:
         bool recursive,
         mi::neuraylib::IMdl_execution_context* context);
 
-    const mi::IArray* deprecated_get_function_overloads(
-        const char* name, const char* param_sig) const;
-
     const mi::neuraylib::IType_resource* deprecated_get_resource_type( mi::Size index) const;
 
     const char* deprecated_get_resource_mdl_file_path( mi::Size index) const;

@@ -35,6 +35,7 @@ AtClosure MdlEDFCreate(
     const MdlShaderNodeDataCPU* shader_data)
 {
     mi::Sint32 res;
+    (void) res;
 
     // there is no emission
     if (shader_data->surface_edf_function_index == ~0 &&

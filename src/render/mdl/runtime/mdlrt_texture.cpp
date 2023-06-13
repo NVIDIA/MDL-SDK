@@ -506,7 +506,7 @@ Texture_2d::Texture_2d(
                 continue;
 
             std::vector<mi::base::Handle<mi::neuraylib::ICanvas>> mipmaps;
-            image_module->create_mipmaps(mipmaps, canvas.get(), 1.0f);
+            image_module->create_mipmap(mipmaps, canvas.get(), 1.0f);
 
             mi::Uint32 n_levels = 1 + mipmaps.size();
             uvtile.m_canvas.resize(n_levels);

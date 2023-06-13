@@ -83,7 +83,7 @@ Item {
                     anchors.top: parent.top
                     anchors.topMargin: 5
 
-                    text: ((currentTabIndex < 0) ? "Titel" : id_control.tabs[currentTabIndex].titleText).toUpperCase()
+                    text: ((currentTabIndex < 0) ? "Title" : id_control.tabs[currentTabIndex].titleText).toUpperCase()
                     horizontalAlignment: Text.AlignLeft
                     font.pointSize: 10
                 }

@@ -31,6 +31,15 @@
 #ifndef MI_NEURAYLIB_TARGET_CODE_TYPES_H
 #define MI_NEURAYLIB_TARGET_CODE_TYPES_H
 
+// Portable alignment macro supporting pre C++11.
+#ifndef __align__
+#ifdef _MSC_VER
+#define __align__(n) __declspec(align(n))
+#else
+#define __align__(n) __attribute__((aligned(n)))
+#endif
+#endif
+
 
 // If neither TARGET_CODE_USE_CUDA_TYPES nor TARGET_CODE_USE_NEURAY_TYPES is set,
 // it will default to CUDA types when compiled by a CUDA compiler and use Neuray types otherwise.
@@ -189,7 +198,7 @@ struct Shading_state_environment {
     ///   \c ro_data_segment field of the MDL material state. Depending on the target platform
     ///   this may require copying the data to the GPU.
     ///
-    /// For other backends, this should be NULL.
+    /// For other backends, this should be \c NULL.
     char const           *ro_data_segment;
 };
 
@@ -267,7 +276,7 @@ struct Shading_state_material_impl {
     /// and duplicate calculation of values.
     /// This field is only relevant for code generated with
     /// #mi::neuraylib::IMdl_backend::translate_material_df() or
-    /// #mi::neuraylib::ILink_unit::add_material_df(). In other cases this may be NULL.
+    /// #mi::neuraylib::ILink_unit::add_material_df(). In other cases this may be \c NULL.
     tct_float4           *text_results;
 
     /// A pointer to a read-only data segment.
@@ -282,7 +291,7 @@ struct Shading_state_material_impl {
     ///   \c ro_data_segment field of the MDL material state. Depending on the target platform
     ///   this may require copying the data to the GPU.
     ///
-    /// For other backends, this should be NULL.
+    /// For other backends, this should be \c NULL.
     char const           *ro_data_segment;
 
     /// A 4x4 transformation matrix in row-major order transforming from world to object
@@ -539,7 +548,8 @@ struct Texture_handler_vtable_impl {
         Texture_handler_base const  *self,
         tct_uint                    bsdf_measurement_index,
         tct_float const             theta_phi_out[2],   //!< theta in [0, pi/2] and phi in [-pi, pi]
-        tct_float const             xi[3],              //!< uniform random values
+        tct_float const             xi[3],              /*!< pseudo-random sample numbers
+                                                             in range [0, 1) */
         Mbsdf_part                  part);              //!< reflection or transmission
 
     /// Implementation of \c bsdf_measurement_pdf() for an MBSDF.
@@ -654,6 +664,15 @@ struct Texture_handler_vtable_impl {
         tct_float const                        default_value[3],
         tct_bool                               uniform_lookup);
 
+    /// Implementation of scene_data_lookup_float4x4().
+    /// The result and default_value matrix are in column-major format.
+    void (*m_scene_data_lookup_float4x4)(
+        tct_float                              result[16],
+        Texture_handler_base const            *self_base,
+        Shading_state_material                *state,
+        tct_uint                               scene_data_id,
+        tct_float const                        default_value[16],
+        tct_bool                               uniform_lookup);
     //
     // The following functions are only used in the derivative variant,
     // and can be nullptr in the non-derivative variant
@@ -663,7 +682,7 @@ struct Texture_handler_vtable_impl {
     void (*m_scene_data_lookup_deriv_float)(
         tct_deriv_float                       *result,
         Texture_handler_base const            *self_base,
-        Shading_state_material_with_derivs     *state,
+        Shading_state_material_with_derivs    *state,
         tct_uint                               scene_data_id,
         tct_deriv_float const                 *default_value,
         tct_bool                               uniform_lookup);
@@ -716,7 +735,7 @@ typedef Texture_handler_vtable_impl<true> Texture_handler_deriv_vtable;
 /// function implementations.
 struct Texture_handler_base {
     /// In vtable-mode, the vtable field is used to call the texturing functions.
-    /// Otherwise, this field may be NULL.
+    /// Otherwise, this field may be \c NULL.
     Texture_handler_vtable const  *vtable;
 };
 
@@ -725,14 +744,14 @@ struct Texture_handler_base {
 /// function implementations.
 struct Texture_handler_deriv_base {
     /// In vtable-mode, the vtable field is used to call the texturing functions.
-    /// Otherwise, this field may be NULL.
+    /// Otherwise, this field may be \c NULL.
     Texture_handler_deriv_vtable const  *vtable;
 };
 
 
 /// The data structure providing access to resources for generated code.
 struct Resource_data {
-    void const                  *shared_data;      ///< currently unused, should be NULL
+    void const                  *shared_data;      ///< currently unused, should be \c NULL
     Texture_handler_base const  *texture_handler;  ///< will be provided as "self" parameter to
                                                    ///< texture functions
 };
@@ -763,13 +782,13 @@ enum Bsdf_event_type {
 #define MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR (-1.0f)
 
 /// Input and output structure for BSDF sampling data.
-struct Bsdf_sample_data {
+struct __align__(16) Bsdf_sample_data {
     tct_float3       ior1;           ///< mutual input: IOR current medium
     tct_float3       ior2;           ///< mutual input: IOR other side
     tct_float3       k1;             ///< mutual input: outgoing direction
 
     tct_float3       k2;             ///< output: incoming direction
-    tct_float4       xi;             ///< input: pseudo-random sample numbers
+    tct_float4       xi;             ///< input: pseudo-random sample numbers in range [0, 1)
     tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
     tct_float3       bsdf_over_pdf;  ///< output: bsdf * dot(normal, k2) / pdf
     Bsdf_event_type  event_type;     ///< output: the type of event for the generated sample
@@ -788,7 +807,7 @@ enum Df_handle_slot_mode
 };
 
 /// Input and output structure for BSDF evaluation data.
-struct Bsdf_evaluate_data_base {};
+struct __align__(16) Bsdf_evaluate_data_base {};
 
 template<Df_handle_slot_mode N>
 struct Bsdf_evaluate_data : public Bsdf_evaluate_data_base
@@ -837,7 +856,7 @@ struct Bsdf_evaluate_data<DF_HSM_NONE> : public Bsdf_evaluate_data_base
 };
 
 /// Input and output structure for BSDF PDF calculation data.
-struct Bsdf_pdf_data {
+struct __align__(16) Bsdf_pdf_data {
     tct_float3       ior1;           ///< mutual input: IOR current medium
     tct_float3       ior2;           ///< mutual input: IOR other side
     tct_float3       k1;             ///< mutual input: outgoing direction
@@ -847,7 +866,7 @@ struct Bsdf_pdf_data {
 };
 
 /// Input and output structure for BSDF auxiliary calculation data.
-struct Bsdf_auxiliary_data_base {};
+struct __align__(16) Bsdf_auxiliary_data_base {};
 
 template<Df_handle_slot_mode N>
 struct Bsdf_auxiliary_data : public Bsdf_auxiliary_data_base
@@ -893,13 +912,13 @@ struct Bsdf_auxiliary_data<DF_HSM_NONE> : public Bsdf_auxiliary_data_base
 
 /// Signature of environment functions created via
 /// #mi::neuraylib::IMdl_backend::translate_environment() and
-/// #mi::neuraylib::ILink_unit::add_environment().
+/// #mi::neuraylib::ILink_unit::add_function().
 ///
 /// \param result           pointer to the result buffer which must be large enough for the result
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
-/// \param arg_block_data   unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
+/// \param arg_block_data   unused, should be \c NULL
 typedef void (Environment_function)(
     void                             *result,
     Shading_state_environment const  *state,
@@ -915,7 +934,7 @@ typedef void (Environment_function)(
 /// \param result           pointer to the result buffer which must be large enough for the result
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Material_expr_function)(
     void                          *result,
@@ -932,7 +951,7 @@ typedef void (Material_expr_function)(
 /// \param result           pointer to the result buffer which must be large enough for the result
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Material_expr_function_with_derivs)(
     void                                      *result,
@@ -952,7 +971,7 @@ typedef void (Material_expr_function_with_derivs)(
 ///
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_init_function)(
     Shading_state_material  *state,
@@ -971,7 +990,7 @@ typedef void (Bsdf_init_function)(
 ///
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_init_function_with_derivs)(
     Shading_state_material_with_derivs  *state,
@@ -987,7 +1006,7 @@ typedef void (Bsdf_init_function_with_derivs)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_sample_function)(
     Bsdf_sample_data              *data,
@@ -1004,7 +1023,7 @@ typedef void (Bsdf_sample_function)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_sample_function_with_derivs)(
     Bsdf_sample_data                          *data,
@@ -1021,7 +1040,7 @@ typedef void (Bsdf_sample_function_with_derivs)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_evaluate_function)(
     Bsdf_evaluate_data_base               *data,
@@ -1038,7 +1057,7 @@ typedef void (Bsdf_evaluate_function)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_evaluate_function_with_derivs)(
     Bsdf_evaluate_data_base                     *data,
@@ -1055,7 +1074,7 @@ typedef void (Bsdf_evaluate_function_with_derivs)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_pdf_function)(
     Bsdf_pdf_data                 *data,
@@ -1072,7 +1091,7 @@ typedef void (Bsdf_pdf_function)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_pdf_function_with_derivs)(
     Bsdf_pdf_data                             *data,
@@ -1088,7 +1107,7 @@ typedef void (Bsdf_pdf_function_with_derivs)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_auxiliary_function)(
     Bsdf_auxiliary_data_base      *data,
@@ -1105,7 +1124,7 @@ typedef void (Bsdf_auxiliary_function)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_auxiliary_function_with_derivs)(
     Bsdf_auxiliary_data_base                  *data,
@@ -1125,9 +1144,9 @@ enum Edf_event_type
 
 
 /// Input and output structure for EDF sampling data.
-struct Edf_sample_data
+struct __align__(16) Edf_sample_data
 {
-    tct_float4      xi;             ///< input: pseudo-random sample number
+    tct_float4      xi;             ///< input: pseudo-random sample numbers in range [0, 1)
     tct_float3      k1;             ///< output: outgoing direction
     tct_float       pdf;            ///< output: pdf (non-projected hemisphere)
     tct_float3      edf_over_pdf;   ///< output: edf * dot(normal,k1) / pdf
@@ -1136,7 +1155,7 @@ struct Edf_sample_data
 };
 
 /// Input and output structure for EDF evaluation data.
-struct Edf_evaluate_data_base {};
+struct __align__(16) Edf_evaluate_data_base {};
 
 template<Df_handle_slot_mode N>
 struct Edf_evaluate_data : public Edf_evaluate_data_base
@@ -1171,14 +1190,14 @@ struct Edf_evaluate_data<DF_HSM_NONE> : public Edf_evaluate_data_base
 };
 
 /// Input and output structure for EDF PDF calculation data.
-struct Edf_pdf_data
+struct __align__(16) Edf_pdf_data
 {
     tct_float3      k1;             ///< input: outgoing direction
     tct_float       pdf;            ///< output: pdf (non-projected hemisphere)
 };
 
 /// Input and output structure for EDF auxiliary calculation data.
-struct Edf_auxiliary_data_base {};
+struct __align__(16) Edf_auxiliary_data_base {};
 
 template<Df_handle_slot_mode N>
 struct Edf_auxiliary_data : public Edf_auxiliary_data_base
@@ -1218,7 +1237,7 @@ struct Edf_auxiliary_data<DF_HSM_NONE> : public Edf_auxiliary_data_base
 ///
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_init_function)(
     Shading_state_material  *state,
@@ -1237,7 +1256,7 @@ typedef void (Edf_init_function)(
 ///
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_init_function_with_derivs)(
     Shading_state_material_with_derivs  *state,
@@ -1253,7 +1272,7 @@ typedef void (Edf_init_function_with_derivs)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_sample_function)(
     Edf_sample_data               *data,
@@ -1270,7 +1289,7 @@ typedef void (Edf_sample_function)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_sample_function_with_derivs)(
     Edf_sample_data                           *data,
@@ -1287,7 +1306,7 @@ typedef void (Edf_sample_function_with_derivs)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_evaluate_function)(
     Edf_evaluate_data_base       *data,
@@ -1304,7 +1323,7 @@ typedef void (Edf_evaluate_function)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_evaluate_function_with_derivs)(
     Edf_evaluate_data_base                    *data,
@@ -1321,7 +1340,7 @@ typedef void (Edf_evaluate_function_with_derivs)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_pdf_function)(
     Edf_pdf_data                  *data,
@@ -1338,7 +1357,7 @@ typedef void (Edf_pdf_function)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_pdf_function_with_derivs)(
     Edf_pdf_data                              *data,
@@ -1354,7 +1373,7 @@ typedef void (Edf_pdf_function_with_derivs)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_auxiliary_function)(
     Edf_auxiliary_data_base       *data,
@@ -1371,7 +1390,7 @@ typedef void (Edf_auxiliary_function)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be NULL
+/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_auxiliary_function_with_derivs)(
     Edf_auxiliary_data_base                   *data,

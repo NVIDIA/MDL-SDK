@@ -65,63 +65,185 @@ float get_value_lerp(
     return table_values[b0] * (1.0f - f1) + table_values[b1] * f1;
 }
 
+// compute integral of (af + bf * t) * (ag + bg * t) from t = t0 to t = t1
+static float linear_product_integral(
+    const float af,
+    const float bf,
+    const float ag,
+    const float bg,
+    const float t0,
+    const float t1)
+{
+#if 0
+    // direct formulation (somewhat imprecise numerically for our use case)
+    return
+        af * ag * (t1 - t0) +
+        0.5f * (af * bg  + bf * ag) * (t1 * t1 - t0 * t0) +
+        (float)(1.0 / 3.0) * bf * bg * (t1 * t1 * t1 - t0 * t0 * t0);
+#else
+    // change integration domain to t=0..1 for a numerically more stable result
+    const float aaf = af + bf * t0;
+    const float bbf = bf * (t1 - t0);
+    const float aag = ag + bg * t0;
+    const float bbg = bg * (t1 - t0);
 
+    return (t1 - t0) * (
+        aaf * aag +
+        0.5f * (aaf * bbg + bbf * aag) +
+        (float)(1.0 / 3.0) * bbf * bbg);
+#endif
+}
+
+// compute dot product of two spectra
+// - the spectra are linearly interpolated between data points
+// - data points are equidistant but not necessarily with the same spacing for 'f' and 'g'
+// - for 'f' the last values are duplicated beyond its boundaries
+// - for 'g' values are zero outside the boundaries
+static float dot_lerp(
+    const float *f,
+    const int f_num, const float f_min, const float f_max, 
+    const float *g,
+    const int g_num, const float g_min, const float g_max,
+    const float *g_scale = nullptr)
+{
+    // find first non-zero entries
+    int f_i = -1;
+    for (int i = 0; i < f_num; ++i) {
+        if (f[i] > 0.0f) {
+            f_i = i;
+            break;
+        }
+    }
+    if (f_i == -1) // all zero?
+        return 0.0f;
+
+    int g_i = -1;
+    for (int i = 0; i < g_num; ++i) {
+        if (g[i] > 0.0f) {
+            g_i = i;
+            break;
+        }
+    }
+    if (g_i == -1)
+        return 0.0f;
+
+    // within the data range we need to lerp towards first non-zero value
+    if (f_i > 0)
+        --f_i;
+    if (g_i > 0)
+        --g_i;
+    
+    const float f_step = (f_max - f_min) / (float)(f_num - 1);
+    const float g_step = (g_max - g_min) / (float)(g_num - 1);
+    
+    float f0 = f_min + f_i * f_step;
+    float g0 = g_min + g_i * g_step;
+    if (g0 < f0 && f[0] > 0.0f) {
+        // need to extend range for f to g's data range if first value of f isn't zero
+        f_i = -1;
+        f0 = g0;
+    } else {
+        // start with g where f's data starts
+        //!! TODO: could skip ahead while g_i + 1 < 0
+        g_i = (int)(floorf((f0 - g_min) / g_step));
+        g0 = g_min + g_i * g_step;
+    }
+    
+    float g1 = g0 + g_step;
+    float f1 = f_min + (float)(std::min(f_i + 1, f_num - 1)) * f_step;
+
+    float sum = 0.0f;
+    do {
+        float t0 = std::max(f0, g0);
+        float t1 = std::min(f1, g1);
+        MDL_ASSERT(t0 < t1);
+
+        float G0;
+        if (g_i >= 0 && g_i < g_num) {
+            G0 = g[g_i];
+            if (g_scale)
+                G0 *= g_scale[g_i];
+        } else
+            G0 = 0.0f;
+        const int g_j = g_i + 1;
+        float G1;
+        if (g_j >= 0 && g_j < g_num) {
+            G1 = g[g_j];
+            if (g_scale)
+                G1 *= g_scale[g_j];
+        } else
+            G1 = 0.0f;
+
+        if (G0 > 0.0f || G1 > 0.0f) {
+            const float F0 = f[std::max(0, std::min(f_i, f_num - 1))];
+            const float F1 = f[std::max(0, std::min(f_i + 1, f_num - 1))];
+
+            const float bf = (f1 > f0) ? (F1 - F0) / (f1 - f0) : 0.0f;
+            const float af = F0 - f0 * bf;
+            
+            const float bg = (G1 - G0) / (g1 - g0);
+            const float ag = G0 - g0 * bg;
+
+            sum += linear_product_integral(af, bf, ag, bg, t0, t1);
+        }
+
+        if (t1 >= f1) {
+            ++f_i;
+            f0 = f1;
+            // outside of f's data range we may only stop if last value was zero
+            if (f_i >= (f_num - 1)) {
+                if (f[f_num - 1] == 0.0f)
+                    break;
+                else
+                    // simply use a value large enough to ensure g loop completes
+                    f1 = 2.0f * g_max; 
+            } else
+                f1 += f_step;
+        }
+        if (t1 >= g1) {
+            ++g_i;
+            // outside of g's data range we can always stop
+            if (g_i >= (g_num - 1))
+                break;
+            g0 = g1;
+            g1 += g_step;
+        }
+
+    } while (true);
+    return sum;
+}
 
 void spectrum_to_XYZ(
     float XYZ[3], const float *spectrum, const unsigned int num_values, 
     const float lambda_min, const float lambda_max)
 {
-    XYZ[0] = 0.0f;
-    XYZ[1] = 0.0f;
-    XYZ[2] = 0.0f;
+    const float val_x = dot_lerp(
+        spectrum, num_values, lambda_min, lambda_max,
+        SPECTRAL_XYZ1931_X, SPECTRAL_XYZ_RES, SPECTRAL_XYZ_LAMBDA_MIN, SPECTRAL_XYZ_LAMBDA_MAX);
+    const float val_y = dot_lerp(
+        spectrum, num_values, lambda_min, lambda_max,
+        SPECTRAL_XYZ1931_Y, SPECTRAL_XYZ_RES, SPECTRAL_XYZ_LAMBDA_MIN, SPECTRAL_XYZ_LAMBDA_MAX);
+    const float val_z = dot_lerp(
+        spectrum, num_values, lambda_min, lambda_max,
+        SPECTRAL_XYZ1931_Z, SPECTRAL_XYZ_RES, SPECTRAL_XYZ_LAMBDA_MIN, SPECTRAL_XYZ_LAMBDA_MAX);
 
-    for (unsigned int i = 0; i < SPECTRAL_XYZ_RES; ++i)
-    {
-        const float lambda = SPECTRAL_XYZ_LAMBDA_MIN + (float)i * SPECTRAL_XYZ_LAMBDA_STEP;
-
-        const float val = get_value_lerp(spectrum, num_values, lambda_min, lambda_max, lambda);
-	XYZ[0] += SPECTRAL_XYZ1931_X[i] * val;
-	XYZ[1] += SPECTRAL_XYZ1931_Y[i] * val;
-	XYZ[2] += SPECTRAL_XYZ1931_Z[i] * val;
-    }
-
-    const float scale = (float)(683.002) * SPECTRAL_XYZ_LAMBDA_STEP;
-    XYZ[0] *= scale;
-    XYZ[1] *= scale;
-    XYZ[2] *= scale;
+    // conversion from Watt to lumen
+    XYZ[0] = val_x * 683.002f;
+    XYZ[1] = val_y * 683.002f;
+    XYZ[2] = val_z * 683.002f;
 }
 
 float spectrum_to_Y(
     const float *spectrum, const unsigned int num_values, 
     const float lambda_min, const float lambda_max)
 {
-    float sum = 0.0f;
-    for (unsigned int i = 0; i < SPECTRAL_XYZ_RES; ++i)
-    {
-        const float lambda = SPECTRAL_XYZ_LAMBDA_MIN + (float)i * SPECTRAL_XYZ_LAMBDA_STEP;
-
-        const float val = get_value_lerp(spectrum, num_values, lambda_min, lambda_max, lambda);
-        sum += SPECTRAL_XYZ1931_Y[i] * val;
-    }
+    const float y = dot_lerp(
+        spectrum, num_values, lambda_min, lambda_max,
+        SPECTRAL_XYZ1931_Y, SPECTRAL_XYZ_RES, SPECTRAL_XYZ_LAMBDA_MIN, SPECTRAL_XYZ_LAMBDA_MAX);
 
     // conversion from Watt to lumen
-    return sum * (float)(683.002) * SPECTRAL_XYZ_LAMBDA_STEP;
+    return y * 683.002f;
 }
-
-#if 0
-void spectrum_scale_to_Y(
-    float * const spectrum, const unsigned int num_values,
-    const float lambda_min, const float lambda_max, const float Y)
-{
-    const float luminance = spectrum_to_Y(
-	spectrum, num_values, lambda_min, lambda_max);
-    
-    const float scale = Y / luminance;
-    for (unsigned int i = 0; i < num_values; ++i)
-	spectrum[i] *= scale;
-}
-
-#endif
 
 void spectrum_resample(
     float *const target, const unsigned int target_num_values, 
@@ -428,22 +550,27 @@ void spectrum_to_cs_refl(
     }
 
     // compute true spectral multiplication result converted to XYZ
-    float XYZ_spectral[3] = {0.0f, 0.0f, 0.0f};
+    const float XYZ_spectral[3] = {
+        dot_lerp(
+            spectrum, num_lambda, lambda_min, lambda_max,
+            SPECTRAL_XYZ1931_X, SPECTRAL_XYZ_RES, SPECTRAL_XYZ_LAMBDA_MIN, SPECTRAL_XYZ_LAMBDA_MAX,
+            illuminant),
+        dot_lerp(
+            spectrum, num_lambda, lambda_min, lambda_max,
+            SPECTRAL_XYZ1931_Y, SPECTRAL_XYZ_RES, SPECTRAL_XYZ_LAMBDA_MIN, SPECTRAL_XYZ_LAMBDA_MAX,
+            illuminant),
+        dot_lerp(
+            spectrum, num_lambda, lambda_min, lambda_max,
+            SPECTRAL_XYZ1931_Z, SPECTRAL_XYZ_RES, SPECTRAL_XYZ_LAMBDA_MIN, SPECTRAL_XYZ_LAMBDA_MAX,
+            illuminant)
+    };
+    
     // and compute illuminant in converted to XYZ
+    //!! TODO: should be precomputed
     float XYZ_illum[3] = {0.0f, 0.0f, 0.0f};
     for (unsigned int i = 0; i < SPECTRAL_XYZ_RES; ++i)
     {
-        const float lambda = SPECTRAL_XYZ_LAMBDA_MIN + (float)i * SPECTRAL_XYZ_LAMBDA_STEP;
-
-
         const float illum = illuminant ? illuminant[i] : 1.0f;
-
-        const float val = get_value_lerp(
-                spectrum, num_lambda, lambda_min, lambda_max, lambda) * illum;
-
-        XYZ_spectral[0] += SPECTRAL_XYZ1931_X[i] * val;
-        XYZ_spectral[1] += SPECTRAL_XYZ1931_Y[i] * val;
-        XYZ_spectral[2] += SPECTRAL_XYZ1931_Z[i] * val;
 
         XYZ_illum[0] += SPECTRAL_XYZ1931_X[i] * illum;
         XYZ_illum[1] += SPECTRAL_XYZ1931_Y[i] * illum;

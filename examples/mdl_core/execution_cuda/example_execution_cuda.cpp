@@ -225,8 +225,6 @@ int MAIN_UTF8(int argc, char* argv[])
     mi::base::Handle<mi::mdl::IMDL> mdl_compiler(load_mdl_compiler());
     check_success(mdl_compiler);
 
-    FreeImage_Initialise();
-
     {
         Material_ptx_compiler mc(
             mdl_compiler.get(),
@@ -275,8 +273,6 @@ int MAIN_UTF8(int argc, char* argv[])
             uninit_cuda(cuda_context);
         }
     }
-
-    FreeImage_DeInitialise();
 
     // Free MDL compiler before shutting down MDL Core
     mdl_compiler = 0;

@@ -245,7 +245,12 @@ mi::Float32 Value_texture::get_gamma() const
     Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     DB::Tag texture_tag = m_value->get_value();
-    if( !texture_tag || db_transaction->get_class_id( texture_tag) != TEXTURE::ID_TEXTURE)
+    if( !texture_tag) {
+        // Misuse the unresolved MDL file path to detect whether the texture is really invalid or
+        // was just not loaded.
+        return m_value->get_unresolved_file_path()[0] != '\0' ? m_value->get_gamma() : 0.0f;
+    }
+    if( db_transaction->get_class_id( texture_tag) != TEXTURE::ID_TEXTURE)
        return m_value->get_gamma();
 
     DB::Access<TEXTURE::Texture> tex( texture_tag, db_transaction);
@@ -257,11 +262,10 @@ const char* Value_texture::get_selector() const
     Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     DB::Tag texture_tag = m_value->get_value();
-    if ( !texture_tag) {
-        if ( m_value->get_unresolved_mdl_url() && m_value->get_unresolved_mdl_url()[0] != '\0')
-            return m_value->get_selector();
-        else
-            return nullptr;
+    if( !texture_tag) {
+        // Misuse the unresolved MDL file path to detect whether the texture is really invalid or
+        // was just not loaded.
+        return m_value->get_unresolved_file_path()[0] != '\0' ? m_value->get_selector() : nullptr;
     }
     if( db_transaction->get_class_id( texture_tag) != TEXTURE::ID_TEXTURE)
        return nullptr;

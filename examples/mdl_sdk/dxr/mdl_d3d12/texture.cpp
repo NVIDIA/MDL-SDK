@@ -522,7 +522,8 @@ Environment::~Environment()
 {
     if (m_texture) delete m_texture;
     if (m_sampling_buffer) delete m_sampling_buffer;
-    m_app->get_resource_descriptor_heap()->free_views(m_first_resource_heap_handle);
+    if (m_first_resource_heap_handle.is_valid())
+        m_app->get_resource_descriptor_heap()->free_views(m_first_resource_heap_handle);
 }
 
 // ------------------------------------------------------------------------------------------------

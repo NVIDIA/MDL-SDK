@@ -187,8 +187,8 @@ public:
     /// \param[in]  i  The index of the resource.
     /// \param[out] u  The u coordinate of the resource.
     /// \param[out] v  The v coordinate of the resource.
-    /// \return        \c true if the uvtile mode is not #mi::neuraylib::UVTILE_MODE_NONE and \p i is
-    ///                in range, \c false otherwise (and the output values are undefined).
+    /// \return        \c true if the uvtile mode is not #mi::neuraylib::UVTILE_MODE_NONE and \p i
+    ///                is in range, \c false otherwise (and the output values are undefined).
     virtual bool get_uvtile_uv( Size i, Sint32& u, Sint32& v) const = 0;
 };
 

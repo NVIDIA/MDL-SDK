@@ -71,7 +71,6 @@ create_from_base_preset(
 target_add_dependencies(TARGET ${PROJECT_NAME} 
     DEPENDS 
         boost
-        llvm
         ${LINKER_START_GROUP}
         mdl::api-api-mdl
         mdl::base-hal-disk

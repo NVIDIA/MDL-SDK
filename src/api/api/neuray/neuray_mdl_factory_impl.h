@@ -87,19 +87,19 @@ public:
         mi::Float32 gamma,
         const char* selector,
         bool shared,
-        mi::Sint32* errors) final;
+        mi::neuraylib::IMdl_execution_context* context) final;
 
     mi::neuraylib::IValue_light_profile* create_light_profile(
         mi::neuraylib::ITransaction* transaction,
         const char* file_path,
         bool shared,
-        mi::Sint32* errors) final;
+        mi::neuraylib::IMdl_execution_context* context) final;
 
     mi::neuraylib::IValue_bsdf_measurement* create_bsdf_measurement(
         mi::neuraylib::ITransaction* transaction,
         const char* file_path,
         bool shared,
-        mi::Sint32* errors) final;
+        mi::neuraylib::IMdl_execution_context* context) final;
 
     mi::neuraylib::IMdl_module_builder* create_module_builder(
         mi::neuraylib::ITransaction* transaction,
@@ -134,22 +134,6 @@ public:
         const char* name, const mi::IArray* parameter_types) const final;
 
     const mi::IString* encode_type_name( const char* name) const final;
-
-    mi::Sint32 deprecated_create_variants(
-        mi::neuraylib::ITransaction* transaction,
-        const char* module_name,
-        const mi::IArray* variant_data) final;
-
-    mi::Sint32 deprecated_create_materials(
-        mi::neuraylib::ITransaction* transaction,
-        const char* module_name,
-        const mi::IArray* material_data) final;
-
-    mi::Sint32 deprecated_create_materials(
-        mi::neuraylib::ITransaction* transaction,
-        const char* module_name,
-        const mi::IArray* mdl_data,
-        mi::neuraylib::IMdl_execution_context* context) final;
 
     bool is_valid_mdl_identifier( const char* name) const final;
 

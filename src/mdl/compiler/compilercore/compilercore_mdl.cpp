@@ -119,14 +119,14 @@ public:
     ///
     /// \param la      the current look-ahead token
     /// \param s       the human readable error message
-    void Error(Token const *la, wchar_t const *s) MDL_FINAL;
+    void Error(Token const *la, char const *s) MDL_FINAL;
 
     /// Report a syntax warning at given line, column pair.
     ///
     /// \param line  the start line of the syntax error
     /// \param col   the start column of the syntax error
     /// \param s     the human readable error message
-    void Warning(int line, int col, wchar_t const *s) MDL_FINAL;
+    void Warning(int line, int col, char const *s) MDL_FINAL;
 
     /// Report an error at given line, column pair.
     ///
@@ -135,6 +135,14 @@ public:
     /// \param code    the error code
     /// \param params  additional error parameter/inserts
     void Error(int line, int col, int code, Error_params const &params) MDL_FINAL;
+
+    /// Report a warning at given line, column pair.
+    ///
+    /// \param line    the start line of the syntax error
+    /// \param col     the start column of the syntax error
+    /// \param code    the error code
+    /// \param params  additional error parameter/inserts
+    void Warning(int line, int col, int code, Error_params const &params) MDL_FINAL;
 
     /// Constructor.
     ///
@@ -167,25 +175,23 @@ private:
     Messages_impl &m_msg;
 };
 
-void Syntax_error::Error(Token const *t, wchar_t const *s)
+void Syntax_error::Error(Token const *t, char const *s)
 {
-    string tmp(m_builder.get_allocator());
-    Position_impl pos(t->line, t->col, t->line, t->col + wcslen(t->val) - 1);
+    Position_impl pos(t->line, t->col, t->line, t->col + utf8_len(t->val) - 1);
     if (is_reserved_keyword(t->kind)) {
         string msg("reserved keyword '", m_builder.get_allocator());
-        msg += wchar_to_utf8(tmp, t->val);
+        msg += t->val;
         msg += "' used";
         m_msg.add_error_message(SYNTAX_ERROR, MESSAGE_CLASS, 0, &pos, msg.c_str());
     } else {
-        m_msg.add_error_message(SYNTAX_ERROR, MESSAGE_CLASS, 0, &pos, wchar_to_utf8(tmp, s));
+        m_msg.add_error_message(SYNTAX_ERROR, MESSAGE_CLASS, 0, &pos, s);
     }
 }
 
-void Syntax_error::Warning(int line, int col, wchar_t const *s)
+void Syntax_error::Warning(int line, int col, char const *s)
 {
-    string tmp(m_builder.get_allocator());
     Position_impl pos(line, col, line, col);
-    m_msg.add_warning_message(SYNTAX_ERROR, MESSAGE_CLASS, 0, &pos, wchar_to_utf8(tmp, s));
+    m_msg.add_warning_message(SYNTAX_ERROR, MESSAGE_CLASS, 0, &pos, s);
 }
 
 void Syntax_error::Error(int line, int col, int code, Error_params const &params)
@@ -198,6 +204,16 @@ void Syntax_error::Error(int line, int col, int code, Error_params const &params
     m_msg.add_error_message(code, MESSAGE_CLASS, 0, &pos, m_string_buf->get_data());
 }
 
+void Syntax_error::Warning(int line, int col, int code, Error_params const &params)
+{
+    Position_impl pos(line, col, line, col);
+
+    m_string_buf->clear();
+
+    print_error_message(code, MESSAGE_CLASS, params, m_printer.get());
+    m_msg.add_warning_message(code, MESSAGE_CLASS, 0, &pos, m_string_buf->get_data());
+}
+
 // Check if the given token kind is a reserved keyword.
 bool Syntax_error::is_reserved_keyword(int t_kind)
 {
@@ -208,100 +224,100 @@ void Scanner::initialize_mdl_keywords()
 {
     // The CoCo/R grammar contains always ALL MDL keywords, so
     // first map all non MDL 1.0 keywords to IDENT and enable them later.
-    keywords.set(L"bsdf_measurement", Parser::TOK_IDENT);
-    keywords.set(L"intensity_mode", Parser::TOK_IDENT);
-    keywords.set(L"intensity_radiant_exitance", Parser::TOK_IDENT);
-    keywords.set(L"intensity_power", Parser::TOK_IDENT);
-    keywords.set(L"cast", Parser::TOK_IDENT);
+    keywords.set("bsdf_measurement", Parser::TOK_IDENT);
+    keywords.set("intensity_mode", Parser::TOK_IDENT);
+    keywords.set("intensity_radiant_exitance", Parser::TOK_IDENT);
+    keywords.set("intensity_power", Parser::TOK_IDENT);
+    keywords.set("cast", Parser::TOK_IDENT);
 
     // the "reserved" identifier is not really reserved
-    keywords.set(L"reserved", Parser::TOK_IDENT);
+    keywords.set("reserved", Parser::TOK_IDENT);
 
     // set the reserved MDL 1.0 keywords
-    keywords.set(L"auto",             Parser::TOK_R_RESERVED);
-    keywords.set(L"catch",            Parser::TOK_R_RESERVED);
-    keywords.set(L"char",             Parser::TOK_R_RESERVED);
-    keywords.set(L"class",            Parser::TOK_R_RESERVED);
-    keywords.set(L"const_cast",       Parser::TOK_R_RESERVED);
-    keywords.set(L"delete",           Parser::TOK_R_RESERVED);
-    keywords.set(L"dynamic_cast",     Parser::TOK_R_RESERVED);
-    keywords.set(L"explicit",         Parser::TOK_R_RESERVED);
-    keywords.set(L"extern",           Parser::TOK_R_RESERVED);
-    keywords.set(L"foreach",          Parser::TOK_R_RESERVED);
-    keywords.set(L"friend",           Parser::TOK_R_RESERVED);
-    keywords.set(L"goto",             Parser::TOK_R_RESERVED);
-    keywords.set(L"graph",            Parser::TOK_R_RESERVED);
-    keywords.set(L"bool2x2",          Parser::TOK_R_RESERVED);
-    keywords.set(L"bool2x3",          Parser::TOK_R_RESERVED);
-    keywords.set(L"bool2x4",          Parser::TOK_R_RESERVED);
-    keywords.set(L"bool3x2",          Parser::TOK_R_RESERVED);
-    keywords.set(L"bool3x3",          Parser::TOK_R_RESERVED);
-    keywords.set(L"bool3x4",          Parser::TOK_R_RESERVED);
-    keywords.set(L"bool4x2",          Parser::TOK_R_RESERVED);
-    keywords.set(L"bool4x3",          Parser::TOK_R_RESERVED);
-    keywords.set(L"bool4x4",          Parser::TOK_R_RESERVED);
-    keywords.set(L"int2x2",           Parser::TOK_R_RESERVED);
-    keywords.set(L"int2x3",           Parser::TOK_R_RESERVED);
-    keywords.set(L"int2x4",           Parser::TOK_R_RESERVED);
-    keywords.set(L"int3x2",           Parser::TOK_R_RESERVED);
-    keywords.set(L"int3x3",           Parser::TOK_R_RESERVED);
-    keywords.set(L"int3x4",           Parser::TOK_R_RESERVED);
-    keywords.set(L"int4x2",           Parser::TOK_R_RESERVED);
-    keywords.set(L"int4x3",           Parser::TOK_R_RESERVED);
-    keywords.set(L"int4x4",           Parser::TOK_R_RESERVED);
-    keywords.set(L"half",             Parser::TOK_R_RESERVED);
-    keywords.set(L"half2",            Parser::TOK_R_RESERVED);
-    keywords.set(L"half2x2",          Parser::TOK_R_RESERVED);
-    keywords.set(L"half2x3",          Parser::TOK_R_RESERVED);
-    keywords.set(L"half2x4",          Parser::TOK_R_RESERVED);
-    keywords.set(L"half3",            Parser::TOK_R_RESERVED);
-    keywords.set(L"half3x2",          Parser::TOK_R_RESERVED);
-    keywords.set(L"half3x3",          Parser::TOK_R_RESERVED);
-    keywords.set(L"half3x4",          Parser::TOK_R_RESERVED);
-    keywords.set(L"half4",            Parser::TOK_R_RESERVED);
-    keywords.set(L"half4x2",          Parser::TOK_R_RESERVED);
-    keywords.set(L"half4x3",          Parser::TOK_R_RESERVED);
-    keywords.set(L"half4x4",          Parser::TOK_R_RESERVED);
-    keywords.set(L"inline",           Parser::TOK_R_RESERVED);
-    keywords.set(L"inout",            Parser::TOK_R_RESERVED);
-    keywords.set(L"long",             Parser::TOK_R_RESERVED);
-    keywords.set(L"module",           Parser::TOK_R_RESERVED);
-    keywords.set(L"mutable",          Parser::TOK_R_RESERVED);
-    keywords.set(L"namespace",        Parser::TOK_R_RESERVED);
-    keywords.set(L"native",           Parser::TOK_R_RESERVED);
-    keywords.set(L"new",              Parser::TOK_R_RESERVED);
-    keywords.set(L"operator",         Parser::TOK_R_RESERVED);
-    keywords.set(L"out",              Parser::TOK_R_RESERVED);
-    keywords.set(L"phenomenon",       Parser::TOK_R_RESERVED);
-    keywords.set(L"private",          Parser::TOK_R_RESERVED);
-    keywords.set(L"protected",        Parser::TOK_R_RESERVED);
-    keywords.set(L"public",           Parser::TOK_R_RESERVED);
-    keywords.set(L"reinterpret_cast", Parser::TOK_R_RESERVED);
-    keywords.set(L"sampler",          Parser::TOK_R_RESERVED);
-    keywords.set(L"shader",           Parser::TOK_R_RESERVED);
-    keywords.set(L"short",            Parser::TOK_R_RESERVED);
-    keywords.set(L"signed",           Parser::TOK_R_RESERVED);
-    keywords.set(L"sizeof",           Parser::TOK_R_RESERVED);
-    keywords.set(L"static",           Parser::TOK_R_RESERVED);
-    keywords.set(L"static_cast",      Parser::TOK_R_RESERVED);
-    keywords.set(L"technique",        Parser::TOK_R_RESERVED);
-    keywords.set(L"template",         Parser::TOK_R_RESERVED);
-    keywords.set(L"this",             Parser::TOK_R_RESERVED);
-    keywords.set(L"throw",            Parser::TOK_R_RESERVED);
-    keywords.set(L"try",              Parser::TOK_R_RESERVED);
-    keywords.set(L"typeid",           Parser::TOK_R_RESERVED);
-    keywords.set(L"typename",         Parser::TOK_R_RESERVED);
-    keywords.set(L"union",            Parser::TOK_R_RESERVED);
-    keywords.set(L"unsigned",         Parser::TOK_R_RESERVED);
-    keywords.set(L"virtual",          Parser::TOK_R_RESERVED);
-    keywords.set(L"void",             Parser::TOK_R_RESERVED);
-    keywords.set(L"volatile",         Parser::TOK_R_RESERVED);
-    keywords.set(L"wchar_t",          Parser::TOK_R_RESERVED);
+    keywords.set("auto",             Parser::TOK_R_RESERVED);
+    keywords.set("catch",            Parser::TOK_R_RESERVED);
+    keywords.set("char",             Parser::TOK_R_RESERVED);
+    keywords.set("class",            Parser::TOK_R_RESERVED);
+    keywords.set("const_cast",       Parser::TOK_R_RESERVED);
+    keywords.set("delete",           Parser::TOK_R_RESERVED);
+    keywords.set("dynamic_cast",     Parser::TOK_R_RESERVED);
+    keywords.set("explicit",         Parser::TOK_R_RESERVED);
+    keywords.set("extern",           Parser::TOK_R_RESERVED);
+    keywords.set("foreach",          Parser::TOK_R_RESERVED);
+    keywords.set("friend",           Parser::TOK_R_RESERVED);
+    keywords.set("goto",             Parser::TOK_R_RESERVED);
+    keywords.set("graph",            Parser::TOK_R_RESERVED);
+    keywords.set("bool2x2",          Parser::TOK_R_RESERVED);
+    keywords.set("bool2x3",          Parser::TOK_R_RESERVED);
+    keywords.set("bool2x4",          Parser::TOK_R_RESERVED);
+    keywords.set("bool3x2",          Parser::TOK_R_RESERVED);
+    keywords.set("bool3x3",          Parser::TOK_R_RESERVED);
+    keywords.set("bool3x4",          Parser::TOK_R_RESERVED);
+    keywords.set("bool4x2",          Parser::TOK_R_RESERVED);
+    keywords.set("bool4x3",          Parser::TOK_R_RESERVED);
+    keywords.set("bool4x4",          Parser::TOK_R_RESERVED);
+    keywords.set("int2x2",           Parser::TOK_R_RESERVED);
+    keywords.set("int2x3",           Parser::TOK_R_RESERVED);
+    keywords.set("int2x4",           Parser::TOK_R_RESERVED);
+    keywords.set("int3x2",           Parser::TOK_R_RESERVED);
+    keywords.set("int3x3",           Parser::TOK_R_RESERVED);
+    keywords.set("int3x4",           Parser::TOK_R_RESERVED);
+    keywords.set("int4x2",           Parser::TOK_R_RESERVED);
+    keywords.set("int4x3",           Parser::TOK_R_RESERVED);
+    keywords.set("int4x4",           Parser::TOK_R_RESERVED);
+    keywords.set("half",             Parser::TOK_R_RESERVED);
+    keywords.set("half2",            Parser::TOK_R_RESERVED);
+    keywords.set("half2x2",          Parser::TOK_R_RESERVED);
+    keywords.set("half2x3",          Parser::TOK_R_RESERVED);
+    keywords.set("half2x4",          Parser::TOK_R_RESERVED);
+    keywords.set("half3",            Parser::TOK_R_RESERVED);
+    keywords.set("half3x2",          Parser::TOK_R_RESERVED);
+    keywords.set("half3x3",          Parser::TOK_R_RESERVED);
+    keywords.set("half3x4",          Parser::TOK_R_RESERVED);
+    keywords.set("half4",            Parser::TOK_R_RESERVED);
+    keywords.set("half4x2",          Parser::TOK_R_RESERVED);
+    keywords.set("half4x3",          Parser::TOK_R_RESERVED);
+    keywords.set("half4x4",          Parser::TOK_R_RESERVED);
+    keywords.set("inline",           Parser::TOK_R_RESERVED);
+    keywords.set("inout",            Parser::TOK_R_RESERVED);
+    keywords.set("long",             Parser::TOK_R_RESERVED);
+    keywords.set("module",           Parser::TOK_R_RESERVED);
+    keywords.set("mutable",          Parser::TOK_R_RESERVED);
+    keywords.set("namespace",        Parser::TOK_R_RESERVED);
+    keywords.set("native",           Parser::TOK_R_RESERVED);
+    keywords.set("new",              Parser::TOK_R_RESERVED);
+    keywords.set("operator",         Parser::TOK_R_RESERVED);
+    keywords.set("out",              Parser::TOK_R_RESERVED);
+    keywords.set("phenomenon",       Parser::TOK_R_RESERVED);
+    keywords.set("private",          Parser::TOK_R_RESERVED);
+    keywords.set("protected",        Parser::TOK_R_RESERVED);
+    keywords.set("public",           Parser::TOK_R_RESERVED);
+    keywords.set("reinterpret_cast", Parser::TOK_R_RESERVED);
+    keywords.set("sampler",          Parser::TOK_R_RESERVED);
+    keywords.set("shader",           Parser::TOK_R_RESERVED);
+    keywords.set("short",            Parser::TOK_R_RESERVED);
+    keywords.set("signed",           Parser::TOK_R_RESERVED);
+    keywords.set("sizeof",           Parser::TOK_R_RESERVED);
+    keywords.set("static",           Parser::TOK_R_RESERVED);
+    keywords.set("static_cast",      Parser::TOK_R_RESERVED);
+    keywords.set("technique",        Parser::TOK_R_RESERVED);
+    keywords.set("template",         Parser::TOK_R_RESERVED);
+    keywords.set("this",             Parser::TOK_R_RESERVED);
+    keywords.set("throw",            Parser::TOK_R_RESERVED);
+    keywords.set("try",              Parser::TOK_R_RESERVED);
+    keywords.set("typeid",           Parser::TOK_R_RESERVED);
+    keywords.set("typename",         Parser::TOK_R_RESERVED);
+    keywords.set("union",            Parser::TOK_R_RESERVED);
+    keywords.set("unsigned",         Parser::TOK_R_RESERVED);
+    keywords.set("virtual",          Parser::TOK_R_RESERVED);
+    keywords.set("void",             Parser::TOK_R_RESERVED);
+    keywords.set("volatile",         Parser::TOK_R_RESERVED);
+    keywords.set("wchar_t",          Parser::TOK_R_RESERVED);
 }
 
 void Scanner::enable_native_keyword(bool flag)
 {
-    keywords.set(L"native", flag ? Parser::TOK_IDENT : Parser::TOK_R_RESERVED);
+    keywords.set("native", flag ? Parser::TOK_IDENT : Parser::TOK_R_RESERVED);
 }
 
 void Scanner::set_mdl_version(int major, int minor)
@@ -310,23 +326,23 @@ void Scanner::set_mdl_version(int major, int minor)
 
     if (HAS_VERSION(1, 1)) {
         // enable MDL 1.1 keywords
-        keywords.set(L"bsdf_measurement", Parser::TOK_BSDF_MEASUREMENT);
-        keywords.set(L"intensity_mode", Parser::TOK_INTENSITY_MODE);
-        keywords.set(L"intensity_radiant_exitance", Parser::TOK_INTENSITY_RADIANT_EXITANCE);
-        keywords.set(L"intensity_power", Parser::TOK_INTENSITY_POWER);
+        keywords.set("bsdf_measurement", Parser::TOK_BSDF_MEASUREMENT);
+        keywords.set("intensity_mode", Parser::TOK_INTENSITY_MODE);
+        keywords.set("intensity_radiant_exitance", Parser::TOK_INTENSITY_RADIANT_EXITANCE);
+        keywords.set("intensity_power", Parser::TOK_INTENSITY_POWER);
     }
     if (HAS_VERSION(1, 3)) {
         // enable MDL 1.3 keywords
-        keywords.set(L"module", Parser::TOK_MODULE);
+        keywords.set("module", Parser::TOK_MODULE);
     }
     if (HAS_VERSION(1, 5)) {
         // enable MDL 1.5 keywords
-        keywords.set(L"cast", Parser::TOK_CAST);
-        keywords.set(L"hair_bsdf", Parser::TOK_HAIR_BSDF);
+        keywords.set("cast", Parser::TOK_CAST);
+        keywords.set("hair_bsdf", Parser::TOK_HAIR_BSDF);
     }
     if (HAS_VERSION(1, 7)) {
         // enable  MDL 1.7 keywords
-        keywords.set(L"auto", Parser::TOK_AUTO);
+        keywords.set("auto", Parser::TOK_AUTO);
     }
 }
 
@@ -542,7 +558,6 @@ MDL::MDL(IAllocator *alloc)
         // takes ownership
         register_builtin_module(base_mod);
     }
-
 }
 
 // Destructor.
@@ -848,6 +863,8 @@ void MDL::create_builtin_semantics()
     // df module
     m_builtin_semantics["::df::diffuse_reflection_bsdf"] =
         IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF;
+    m_builtin_semantics["::df::dusty_diffuse_reflection_bsdf"] =
+        IDefinition::DS_INTRINSIC_DF_DUSTY_DIFFUSE_REFLECTION_BSDF;
     m_builtin_semantics["::df::diffuse_transmission_bsdf"] =
         IDefinition::DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF;
     m_builtin_semantics["::df::specular_bsdf"] =
@@ -877,6 +894,8 @@ void MDL::create_builtin_semantics()
         IDefinition::DS_INTRINSIC_DF_SPOT_EDF;
     m_builtin_semantics["::df::anisotropic_vdf"] =
         IDefinition::DS_INTRINSIC_DF_ANISOTROPIC_VDF;
+    m_builtin_semantics["::df::fog_vdf"] =
+        IDefinition::DS_INTRINSIC_DF_FOG_VDF;
     m_builtin_semantics["::df::normalized_mix"] =
         IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX;
     m_builtin_semantics["::df::clamped_mix"] =
@@ -970,6 +989,10 @@ void MDL::create_builtin_semantics()
         IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4;
     m_builtin_semantics["::scene::data_lookup_uniform_color"] =
         IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR;
+    m_builtin_semantics["::scene::data_lookup_float4x4"] =
+        IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4X4;
+    m_builtin_semantics["::scene::data_lookup_uniform_float4x4"] =
+        IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4X4;
 
     // debug module
     m_builtin_semantics["::debug::breakpoint"] =
@@ -1026,6 +1049,8 @@ void MDL::create_builtin_semantics()
         IDefinition::DS_KEYWORDS_ANNOTATION;
     m_builtin_semantics["::anno::origin"] =
         IDefinition::DS_ORIGIN_ANNOTATION;
+    m_builtin_semantics["::anno::node_output_port_default"] =
+        IDefinition::DS_NODE_OUTPUT_PORT_DEFAULT_ANNOTATION;
 
     // nvidia::baking module
     m_builtin_semantics["::nvidia::baking::target_material_model"] =
@@ -1924,7 +1949,7 @@ bool MDL::valid_mdl_identifier(char const *ident)
     // now check for keywords
     p = ident;
 
-#define FORBIDDEN(name, n) if (strcmp(p + n, name + n) == 0) return false
+#define FORBIDDEN(name, n) if (strcmp(&p[n], &name[n]) == 0) return false
 
     switch (p[0]) {
     case 'a':
@@ -2307,10 +2332,6 @@ bool MDL::check_version(
             version = MDL_VERSION_1_7;
             return true;
         case 8:
-            if (!enable_mdl_next) {
-                return false;
-            }
-            // partly supported
             version = MDL_VERSION_1_8;
             return true;
         case 9:

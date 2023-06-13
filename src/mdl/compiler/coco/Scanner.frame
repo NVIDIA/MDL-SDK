@@ -39,7 +39,6 @@ Scanner.h Specification
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <wchar.h>
 
 // io.h and fcntl are used to ensure binary read from streams on windows
 #if _MSC_VER >= 1300
@@ -48,66 +47,61 @@ Scanner.h Specification
 #endif
 
 #if _MSC_VER >= 1400
-#define coco_swprintf swprintf_s
+#define coco_snprintf sprintf_s
 #elif _MSC_VER >= 1300
-#define coco_swprintf _snwprintf
+#define coco_snprintf _snprintf
 #elif defined __MINGW32__
-#define coco_swprintf _snwprintf
+#define coco_snprintf _snprintf
 #else
-// assume every other compiler knows swprintf
-#define coco_swprintf swprintf
+// assume every other compiler knows snprintf
+#define coco_snprintf snprintf
 #endif
 
-#define COCO_WCHAR_MAX 65535
+#define COCO_UNICODE_MAX 0x10FFFF
 #define COCO_MIN_BUFFER_LENGTH 1024
 #define COCO_MAX_BUFFER_LENGTH (64*COCO_MIN_BUFFER_LENGTH)
 #define COCO_HEAP_BLOCK_SIZE (64*1024)
-#define COCO_CPP_NAMESPACE_SEPARATOR L':'
+#define COCO_CPP_NAMESPACE_SEPARATOR ':'
 
 -->namespace_open
 
-// string handling, wide character
-wchar_t* coco_string_create(const wchar_t *value);
-wchar_t* coco_string_create(const wchar_t *value, int startIndex);
-wchar_t* coco_string_create(const wchar_t *value, int startIndex, int length);
-wchar_t* coco_string_create_upper(const wchar_t* data);
-wchar_t* coco_string_create_lower(const wchar_t* data);
-wchar_t* coco_string_create_lower(const wchar_t* data, int startIndex, int dataLen);
-wchar_t* coco_string_create_append(const wchar_t* data1, const wchar_t* data2);
-wchar_t* coco_string_create_append(const wchar_t* data, const wchar_t value);
-void  coco_string_delete(wchar_t* &data);
-int   coco_string_length(const wchar_t* data);
-bool  coco_string_endswith(const wchar_t* data, const wchar_t *value);
-int   coco_string_indexof(const wchar_t* data, const wchar_t value);
-int   coco_string_lastindexof(const wchar_t* data, const wchar_t value);
-void  coco_string_merge(wchar_t* &data, const wchar_t* value);
-bool  coco_string_equal(const wchar_t* data1, const wchar_t* data2);
-bool  coco_string_equal(const wchar_t* data1, const wchar_t* data2, int len);
-int   coco_string_compareto(const wchar_t* data1, const wchar_t* data2);
-int   coco_string_hash(const wchar_t* data);
-int   coco_string_hash(const wchar_t* data, int len);
-
-// string handling, ascii character
-wchar_t* coco_string_create(const char *value);
-char* coco_string_create_char(const wchar_t *value);
-void  coco_string_delete(char* &data);
-
+// string handling, utf-8 character
+char* coco_string_create(const char *value);
+char* coco_string_create(const char *value, int startIndex);
+char* coco_string_create(const char *value, int startIndex, int length);
+char* coco_string_create_upper(const char* data);
+char* coco_string_create_lower(const char* data);
+char* coco_string_create_lower(const char* data, int startIndex, int dataLen);
+char* coco_string_create_append(const char* data1, const char* data2);
+char* coco_string_create_append(const char* data, const char value);
+void  coco_string_delete(char const *&data);
+void  coco_string_delete(char *&data);
+int   coco_string_length(const char* data);
+bool  coco_string_endswith(const char* data, const char *value);
+int   coco_string_indexof(const char* data, const char value);
+int   coco_string_lastindexof(const char* data, const char value);
+void  coco_string_merge(char* &data, const char* value);
+bool  coco_string_equal(const char* data1, const char* data2);
+bool  coco_string_equal(const char* data1, const char* data2, int len);
+int   coco_string_compareto(const char* data1, const char* data2);
+int   coco_string_hash(const char* data);
+int   coco_string_hash(const char* data, int len);
 
 class Errors {
 public:
 	int count;			// number of errors detected
-	wchar_t const *srcName;		// source file name if set
+	char const *srcName;		// source file name if set
 
 	Errors();
 	void SynErr(int line, int col, int n);
-	void Error(int line, int col, const wchar_t *s);
-	void Warning(int line, int col, const wchar_t *s);
-	void Warning(const wchar_t *s);
-	void Exception(const wchar_t *s);
+	void Error(int line, int col, const char *s);
+	void Warning(int line, int col, const char *s);
+	void Warning(const char *s);
+	void Exception(const char *s);
 
 }; // Errors
 
-class Token  
+class Token
 {
 public:
 	int kind;     // token kind
@@ -115,7 +109,7 @@ public:
 	int charPos;  // token position in characters in the source text (starting at 0)
 	int col;      // token column (starting at 1)
 	int line;     // token line (starting at 1)
-	wchar_t* val; // token value
+	char *val;    // token value
 	Token *next;  // ML 2005-03-11 Peek tokens are kept in linked list
 
 	Token();
@@ -142,7 +136,7 @@ private:
 	bool CanSeek();     // true if stream can be seeked otherwise false
 	
 public:
-	static const int EoF = COCO_WCHAR_MAX + 1;
+	static const int EoF = COCO_UNICODE_MAX + 1;
 
 	Buffer(FILE* s, bool isUserStream);
 	Buffer(const unsigned char* buf, int len);
@@ -171,14 +165,15 @@ private:
 	public:
 		int key, val;
 		Elem *next;
-		Elem(int key, int val) { this->key = key; this->val = val; next = NULL; }
+
+		Elem(int key, int val) : key(key), val(val), next(NULL) {}
 	};
 
 	Elem **tab;
 
 public:
-	StartStates() { tab = new Elem*[128]; memset(tab, 0, 128 * sizeof(Elem*)); }
-	virtual ~StartStates() {
+	StartStates() : tab(new Elem*[128]) { memset(tab, 0, 128 * sizeof(Elem*)); }
+	~StartStates() {
 		for (int i = 0; i < 128; ++i) {
 			Elem *e = tab[i];
 			while (e != NULL) {
@@ -210,24 +205,25 @@ class KeywordMap {
 private:
 	class Elem {
 	public:
-		wchar_t *key;
+		char const *key;
 		int len;
 		int val;
 		Elem *next;
-		Elem(const wchar_t *key, int val) {
-			this->key = coco_string_create(key);
-			this->len = coco_string_length(key);
-			this->val = val;
-			next = NULL;
-		}
+
+		Elem(char const *key, int val)
+			: key(coco_string_create(key))
+			, len(coco_string_length(key))
+			, val(val)
+			, next(NULL)
+		{}
 		~Elem() { coco_string_delete(key); }
 	};
 
 	Elem **tab;
 
 public:
-	KeywordMap() { tab = new Elem*[128]; memset(tab, 0, 128 * sizeof(Elem*)); }
-	virtual ~KeywordMap() {
+	KeywordMap() : tab(new Elem*[128]) { memset(tab, 0, 128 * sizeof(Elem*)); }
+	~KeywordMap() {
 		for (int i = 0; i < 128; ++i) {
 			Elem *e = tab[i];
 			while (e != NULL) {
@@ -239,15 +235,17 @@ public:
 		delete [] tab;
 	}
 
-	void set(const wchar_t *key, int val) {
+	void set(char const *key, int val) {
 		Elem *e = new Elem(key, val);
 		int k = coco_string_hash(key) % 128;
 		e->next = tab[k]; tab[k] = e;
 	}
 
-	int get(int len, const wchar_t *key, int defaultVal) {
+	int get(int len, char const *key, int defaultVal) {
 		Elem *e = tab[coco_string_hash(key, len) % 128];
-		while (e != NULL && (len != e->len || !coco_string_equal(e->key, key, len))) e = e->next;
+		while (e != NULL && (len != e->len || !coco_string_equal(e->key, key, len))) {
+			e = e->next;
+		}
 		return e == NULL ? defaultVal : e->val;
 	}
 };
@@ -267,7 +265,7 @@ private:
 	KeywordMap keywords;
 
 	Token *t;         // current token
-	wchar_t *tval;    // text of current token
+	char *tval;       // text of current token
 	int tvalLength;   // length of text of current token
 	int tlen;         // length of current token
 
@@ -299,7 +297,7 @@ public:
 	Errors *errors;
 	
 	Scanner(const unsigned char* buf, int len);
-	Scanner(const wchar_t* fileName);
+	Scanner(const char* fileName);
 	Scanner(FILE* s);
 	~Scanner();
 	Token* Scan();
@@ -327,155 +325,159 @@ Scanner.cpp Specification
 -->namespace_open
 
 
-// string handling, wide character
+// string handling, utf-8 character
 
-
-wchar_t* coco_string_create(const wchar_t* value) {
+char *coco_string_create(const char *value) {
 	return coco_string_create(value, 0);
 }
 
-wchar_t* coco_string_create(const wchar_t *value, int startIndex) {
+char *coco_string_create(const char *value, int startIndex) {
 	int valueLen = 0;
 	int len = 0;
 
 	if (value) {
-		valueLen = wcslen(value);
+		valueLen = strlen(value);
 		len = valueLen - startIndex;
 	}
 
 	return coco_string_create(value, startIndex, len);
 }
 
-wchar_t* coco_string_create(const wchar_t *value, int startIndex, int length) {
+char *coco_string_create(const char *value, int startIndex, int length) {
 	int len = 0;
-	wchar_t* data;
+	char* data;
 
 	if (value) { len = length; }
-	data = new wchar_t[len + 1];
-	wcsncpy(data, &(value[startIndex]), len);
+	data = new char[len + 1];
+	strncpy(data, &(value[startIndex]), len);
 	data[len] = 0;
 
 	return data;
 }
 
-wchar_t* coco_string_create_upper(const wchar_t* data) {
+char *coco_string_create_upper(const char *data) {
 	if (!data) { return NULL; }
 
 	int dataLen = 0;
-	if (data) { dataLen = wcslen(data); }
+	if (data) { dataLen = strlen(data); }
 
-	wchar_t *newData = new wchar_t[dataLen + 1];
+	char *newData = new char[dataLen + 1];
 
 	for (int i = 0; i <= dataLen; i++) {
-		if ((L'a' <= data[i]) && (data[i] <= L'z')) {
-			newData[i] = data[i] + (L'A' - L'a');
+		if (('a' <= data[i]) && (data[i] <= 'z')) {
+			newData[i] = data[i] + ('A' - 'a');
 		}
 		else { newData[i] = data[i]; }
 	}
 
-	newData[dataLen] = L'\0';
+	newData[dataLen] = '\0';
 	return newData;
 }
 
-wchar_t* coco_string_create_lower(const wchar_t* data) {
+char *coco_string_create_lower(const char *data) {
 	if (!data) { return NULL; }
-	int dataLen = wcslen(data);
+	int dataLen = strlen(data);
 	return coco_string_create_lower(data, 0, dataLen);
 }
 
-wchar_t* coco_string_create_lower(const wchar_t* data, int startIndex, int dataLen) {
+char *coco_string_create_lower(const char *data, int startIndex, int dataLen) {
 	if (!data) { return NULL; }
 
-	wchar_t* newData = new wchar_t[dataLen + 1];
+	char *newData = new char[dataLen + 1];
 
 	for (int i = 0; i <= dataLen; i++) {
-		wchar_t ch = data[startIndex + i];
-		if ((L'A' <= ch) && (ch <= L'Z')) {
-			newData[i] = ch - (L'A' - L'a');
+		char ch = data[startIndex + i];
+		if (('A' <= ch) && (ch <= 'Z')) {
+			newData[i] = ch - ('A' - 'a');
 		}
 		else { newData[i] = ch; }
 	}
-	newData[dataLen] = L'\0';
+	newData[dataLen] = '\0';
 	return newData;
 }
 
-wchar_t* coco_string_create_append(const wchar_t* data1, const wchar_t* data2) {
-	wchar_t* data;
+char *coco_string_create_append(const char *data1, const char *data2) {
+	char *data;
 	int data1Len = 0;
 	int data2Len = 0;
 
-	if (data1) { data1Len = wcslen(data1); }
-	if (data2) {data2Len = wcslen(data2); }
+	if (data1) { data1Len = strlen(data1); }
+	if (data2) { data2Len = strlen(data2); }
 
-	data = new wchar_t[data1Len + data2Len + 1];
+	data = new char[data1Len + data2Len + 1];
 
-	if (data1) { wcscpy(data, data1); }
-	if (data2) { wcscpy(data + data1Len, data2); }
+	if (data1) { strcpy(data, data1); }
+	if (data2) { strcpy(data + data1Len, data2); }
 
-	data[data1Len + data2Len] = 0;
+	data[data1Len + data2Len] = '\0';
 
 	return data;
 }
 
-wchar_t* coco_string_create_append(const wchar_t *target, const wchar_t appendix) {
+char *coco_string_create_append(const char *target, const char appendix) {
 	int targetLen = coco_string_length(target);
-	wchar_t* data = new wchar_t[targetLen + 2];
-	wcsncpy(data, target, targetLen);
+	char *data = new char[targetLen + 2];
+	strncpy(data, target, targetLen);
 	data[targetLen] = appendix;
 	data[targetLen + 1] = 0;
 	return data;
 }
 
-void coco_string_delete(wchar_t* &data) {
+void coco_string_delete(char const *&data) {
 	delete [] data;
 	data = NULL;
 }
 
-int coco_string_length(const wchar_t* data) {
-	if (data) { return wcslen(data); }
+void coco_string_delete(char *&data) {
+	delete [] data;
+	data = NULL;
+}
+
+int coco_string_length(const char* data) {
+	if (data) { return strlen(data); }
 	return 0;
 }
 
-bool coco_string_endswith(const wchar_t* data, const wchar_t *end) {
-	int dataLen = wcslen(data);
-	int endLen = wcslen(end);
-	return (endLen <= dataLen) && (wcscmp(data + dataLen - endLen, end) == 0);
+bool coco_string_endswith(const char* data, const char *end) {
+	int dataLen = strlen(data);
+	int endLen = strlen(end);
+	return (endLen <= dataLen) && (strcmp(data + dataLen - endLen, end) == 0);
 }
 
-int coco_string_indexof(const wchar_t* data, const wchar_t value) {
-	const wchar_t* chr = wcschr(data, value);
+int coco_string_indexof(const char *data, const char value) {
+	const char *chr = strchr(data, value);
 
 	if (chr) { return (chr-data); }
 	return -1;
 }
 
-int coco_string_lastindexof(const wchar_t* data, const wchar_t value) {
-	const wchar_t* chr = wcsrchr(data, value);
+int coco_string_lastindexof(const char *data, const char value) {
+	const char* chr = strrchr(data, value);
 
 	if (chr) { return (chr-data); }
 	return -1;
 }
 
-void coco_string_merge(wchar_t* &target, const wchar_t* appendix) {
+void coco_string_merge(char *&target, const char* appendix) {
 	if (!appendix) { return; }
-	wchar_t* data = coco_string_create_append(target, appendix);
+	char *data = coco_string_create_append(target, appendix);
 	delete [] target;
 	target = data;
 }
 
-bool coco_string_equal(const wchar_t* data1, const wchar_t* data2) {
-	return wcscmp( data1, data2 ) == 0;
+bool coco_string_equal(const char *data1, const char *data2) {
+	return strcmp( data1, data2 ) == 0;
 }
 
-bool coco_string_equal(const wchar_t* data1, const wchar_t* data2, int len) {
-	return wcsncmp(data1, data2, len) == 0;
+bool coco_string_equal(const char *data1, const char *data2, int len) {
+	return strncmp(data1, data2, len) == 0;
 }
 
-int coco_string_compareto(const wchar_t* data1, const wchar_t* data2) {
-	return wcscmp(data1, data2);
+int coco_string_compareto(const char *data1, const char *data2) {
+	return strcmp(data1, data2);
 }
 
-int coco_string_hash(const wchar_t *data) {
+int coco_string_hash(const char *data) {
 	int h = 0;
 	if (!data) { return 0; }
 	while (*data != 0) {
@@ -486,7 +488,7 @@ int coco_string_hash(const wchar_t *data) {
 	return h;
 }
 
-int coco_string_hash(const wchar_t *data, int len) {
+int coco_string_hash(const char *data, int len) {
 	int h = 0;
 	if (!data) { return 0; }
 	for (int i = 0; i < len; ++i) {
@@ -494,30 +496,6 @@ int coco_string_hash(const wchar_t *data, int len) {
 	}
 	if (h < 0) { h = -h; }
 	return h;
-}
-
-// string handling, ascii character
-
-wchar_t* coco_string_create(const char* value) {
-	int len = 0;
-	if (value) { len = strlen(value); }
-	wchar_t* data = new wchar_t[len + 1];
-	for (int i = 0; i < len; ++i) { data[i] = (wchar_t) value[i]; }
-	data[len] = 0;
-	return data;
-}
-
-char* coco_string_create_char(const wchar_t *value) {
-	int len = coco_string_length(value);
-	char *res = new char[len + 1];
-	for (int i = 0; i < len; ++i) { res[i] = (char) value[i]; }
-	res[len] = 0;
-	return res;
-}
-
-void coco_string_delete(char* &data) {
-	delete [] data;
-	data = NULL;
 }
 
 
@@ -550,7 +528,7 @@ Buffer::Buffer(FILE* s, bool isUserStream) {
 		fileLen = bufLen = bufStart = 0;
 	}
 	bufCapacity = (bufLen>0) ? bufLen : COCO_MIN_BUFFER_LENGTH;
-	buf = new unsigned char[bufCapacity];	
+	buf = new unsigned char[bufCapacity];
 	if (fileLen > 0) SetPos(0);          // setup  buffer to position 0 (start)
 	else bufPos = 0; // index 0 is already after the file, thus Pos = 0 is invalid
 	if (bufLen == fileLen && CanSeek()) Close();
@@ -581,7 +559,7 @@ Buffer::Buffer(const unsigned char* buf, int len) {
 }
 
 Buffer::~Buffer() {
-	Close(); 
+	Close();
 	if (buf != NULL) {
 		delete [] buf;
 		buf = NULL;
@@ -629,7 +607,7 @@ void Buffer::SetPos(int value) {
 	}
 
 	if ((value < 0) || (value > fileLen)) {
-		wprintf(L"--- buffer out of bounds access, position: %d\n", value);
+		printf("--- buffer out of bounds access, position: %d\n", value);
 		exit(1);
 	}
 
@@ -710,14 +688,12 @@ Scanner::Scanner(const unsigned char* buf, int len) {
 	Init();
 }
 
-Scanner::Scanner(const wchar_t* fileName) {
+Scanner::Scanner(const char* fileName) {
 	FILE* stream;
-	char *chFileName = coco_string_create_char(fileName);
-	if ((stream = fopen(chFileName, "rb")) == NULL) {
-		wprintf(L"--- Cannot open file %ls\n", fileName);
+	if ((stream = fopen(fileName, "rb")) == NULL) {
+		printf("--- Cannot open file %s\n", fileName);
 		exit(1);
 	}
-	coco_string_delete(chFileName);
 	buffer = new Buffer(stream, false);
 	Init();
 }
@@ -745,7 +721,7 @@ void Scanner::Init() {
 -->declarations
 
 	tvalLength = 128;
-	tval = new wchar_t[tvalLength]; // text of current token
+	tval = new char[tvalLength]; // text of current token
 
 	// COCO_HEAP_BLOCK_SIZE byte heap + pointer to next heap block
 	heap = malloc(COCO_HEAP_BLOCK_SIZE + sizeof(void*));
@@ -754,7 +730,7 @@ void Scanner::Init() {
 	*heapEnd = 0;
 	heapTop = heap;
 	if (sizeof(Token) > COCO_HEAP_BLOCK_SIZE) {
-		wprintf(L"--- Too small COCO_HEAP_BLOCK_SIZE\n");
+		printf("--- Too small COCO_HEAP_BLOCK_SIZE\n");
 		exit(1);
 	}
 
@@ -765,7 +741,7 @@ void Scanner::Init() {
 		NextCh(); int ch1 = ch;
 		NextCh(); int ch2 = ch;
 		if (ch1 != 0xBB || ch2 != 0xBF) {
-			wprintf(L"Illegal byte order mark at start of file");
+			printf("Illegal byte order mark at start of file");
 			exit(1);
 		}
 		Buffer *oldBuf = buffer;
@@ -786,22 +762,62 @@ void Scanner::NextCh() {
 		ch = buffer->Read(); col++; charPos++;
 		// replace isolated '\r' by '\n' in order to make
 		// eol handling uniform across Windows, Unix and Mac
-		if (ch == L'\r' && buffer->Peek() != L'\n') ch = EOL;
+		if (ch == '\r' && buffer->Peek() != '\n') ch = EOL;
 		if (ch == EOL) { line++; col = 0; }
 	}
 -->casing1
 }
 
 void Scanner::AddCh() {
-	if (tlen >= tvalLength) {
+	if (tlen >= tvalLength - 3) {
 		tvalLength *= 2;
-		wchar_t *newBuf = new wchar_t[tvalLength];
-		memcpy(newBuf, tval, tlen*sizeof(wchar_t));
+		char *newBuf = new char[tvalLength];
+		memcpy(newBuf, tval, tlen*sizeof(char));
 		delete [] tval;
 		tval = newBuf;
 	}
 	if (ch != Buffer::EoF) {
 -->casing2
+		if (ch <= 0x7F) {
+			// 0xxxxxxx
+			tval[tlen++] = char(ch);
+		} else if (ch <= 0x7FF) {
+			// 110xxxxx 10xxxxxx
+			unsigned high = ch >> 6;
+			unsigned low = ch & 0x3F;
+			tval[tlen++] = char(0xC0 + high);
+			tval[tlen++] = char(0x80 + low);
+		} else if (ch <= 0xFFFF) {
+			if (ch < 0xD800 || ch > 0xDFFF) {
+				// 1110xxxx 10xxxxxx 10xxxxxx
+				unsigned high = ch >> 12;
+				unsigned middle = (ch >> 6) & 0x3F;
+				unsigned low = ch & 0x3F;
+				tval[tlen++] = char(0xE0 + high);
+				tval[tlen++] = char(0x80 + middle);
+				tval[tlen++] = char(0x80 + low);
+			} else {
+				// forbidden surrogate part, replace by (U+FFFD) (or EF BF BD in UTF-8)
+				tval[tlen++] = char(0xEF);
+				tval[tlen++] = char(0xBF);
+				tval[tlen++] = char(0xBD);
+			}
+		} else if (ch <= 0x10FFFF) {
+			// 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+			unsigned high = (ch >> 18) & 0x07;
+			unsigned mh = (ch >> 12) & 0x3F;
+			unsigned ml = (ch >> 6) & 0x3F;
+			unsigned low = ch & 0x3F;
+			tval[tlen++] = char(0xF0 + high);
+			tval[tlen++] = char(0x80 + mh);
+			tval[tlen++] = char(0x80 + ml);
+			tval[tlen++] = char(0x80 + low);
+		} else {
+			// error, replace by (U+FFFD) (or EF BF BD in UTF-8)
+			tval[tlen++] = char(0xEF);
+			tval[tlen++] = char(0xBF);
+			tval[tlen++] = char(0xBD);
+		}
 		NextCh();
 	}
 }
@@ -829,7 +845,7 @@ void Scanner::CreateHeapBlock() {
 
 Token* Scanner::CreateToken() {
 	Token *t;
-	if (((char*) heapTop + (int) sizeof(Token)) >= (char*) heapEnd) {
+	if (((char*) heapTop + sizeof(Token)) >= (char*) heapEnd) {
 		CreateHeapBlock();
 	}
 	t = (Token*) heapTop;
@@ -839,20 +855,42 @@ Token* Scanner::CreateToken() {
 	return t;
 }
 
+template<typename T>
+static inline size_t align_of() {
+	struct X {
+		char a;
+		T    align;
+	};
+	return size_t((char *)&(((struct X*)0)->align) - (char *)0);
+}
+
+// Alignment helper
+struct Struct_align {
+	union {
+		void *p;
+		int i;
+		long l;
+		long long ll;
+		double d;
+		long double ld;
+	} u;
+};
+
 void Scanner::AppendVal(Token *t) {
-	int reqMem = (tlen + 1) * sizeof(wchar_t);
+	size_t struct_align = align_of<Struct_align>();
+	size_t reqMem = ((tlen + 1) * sizeof(char) + struct_align - 1) & ~(struct_align - 1);
 	if (((char*) heapTop + reqMem) >= (char*) heapEnd) {
 		if (reqMem > COCO_HEAP_BLOCK_SIZE) {
-			wprintf(L"--- Too long token value\n");
+			printf("--- Too long token value\n");
 			exit(1);
 		}
 		CreateHeapBlock();
 	}
-	t->val = (wchar_t*) heapTop;
+	t->val = (char*) heapTop;
 	heapTop = (void*) ((char*) heapTop + reqMem);
 
-	wcsncpy(t->val, tval, tlen);
-	t->val[tlen] = L'\0';
+	strncpy(t->val, tval, tlen);
+	t->val[tlen] = '\0';
 }
 
 Token* Scanner::NextToken() {
@@ -891,7 +929,7 @@ void Scanner::SetScannerBehindT() {
 }
 
 void Scanner::UndeterminedComment(int line, int col) {
-	errors->Error(line, col, L"Undetermined comment");
+	errors->Error(line, col, "Undetermined comment");
 }
 
 // get the next token (possibly a token already seen during peeking)

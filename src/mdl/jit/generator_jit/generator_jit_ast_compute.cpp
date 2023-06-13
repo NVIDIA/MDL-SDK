@@ -953,7 +953,7 @@ static BasicBlock *getLoopUniqueExitTarget(Loop &loop, bool &more_then_one)
         Instruction *term = block->getTerminator();
         for (BasicBlock *succ : successors(term)) {
             if (loopBBs.find(succ) == loopBBs.end()) {
-                // found an exit target
+                // check for multiple different exit blocks
                 if (target == nullptr) {
                     target = succ;
                 } else if (target != succ) {
@@ -1817,6 +1817,65 @@ static void relocatePhis(BasicBlock *src_bb, BasicBlock *tgt_bb)
     }
 }
 
+// Fixes the PHI nodes in the given block, when the predecessor old_pred is replaced by new_pred.
+static void fixPhis(
+    BasicBlock *bb,
+    BasicBlock *old_pred,
+    BasicBlock *new_pred)
+{
+    for (PHINode &phi : bb->phis()) {
+        int idx = phi.getBasicBlockIndex(old_pred);
+        while (idx != -1) {
+            phi.setIncomingBlock(unsigned(idx), new_pred);
+            idx = phi.getBasicBlockIndex(old_pred);
+        }
+    }
+}
+
+// Given the new exit block, create an if cascade that jumps to the original exit blocks
+// and updates the loop info for the new blocks.
+static void createIfCascadeToTargets(
+    LoopInfo &li,
+    Loop *loop,
+    BasicBlock *new_exit_block,
+    Value *target_id,
+    SmallVector<std::pair<ConstantInt *, BasicBlock *>, 8> exit_targets)
+{
+    Function *function = new_exit_block->getParent();
+    LLVMContext &llvm_context = function->getContext();
+    BasicBlock *cur_bb = new_exit_block;
+
+    for (size_t i = 0, n = exit_targets.size(); i < n - 1; ++i) {
+        BasicBlock *cur_exit_target = exit_targets[i].second;
+        BasicBlock *next_bb;
+
+        if (i == n - 2) {
+            // for the pre-last switch case, create a branch to the pre-last and last target
+            next_bb = exit_targets[n - 1].second;
+        } else {
+            // we will need more conditions, so create block for next loop iteration
+            next_bb = BasicBlock::Create(llvm_context, "unswitch_case", function);
+            if (Loop *parent_loop = loop->getParentLoop()) {
+                parent_loop->addBasicBlockToLoop(next_bb, li);
+            }
+        }
+
+        Value *case_cond = CmpInst::Create(Instruction::ICmp, ICmpInst::ICMP_EQ,
+            target_id, exit_targets[i].first, "", cur_bb);
+        BranchInst::Create(cur_exit_target, next_bb, case_cond, cur_bb);
+
+        // did predecessor for the case successor change? -> fix PHIs
+        if (cur_bb != new_exit_block) {
+            fixPhis(cur_exit_target, new_exit_block, cur_bb);
+            // also fix last switch case
+            if (i == n - 2)
+                fixPhis(next_bb, new_exit_block, cur_bb);
+        }
+
+        cur_bb = next_bb;
+    }
+}
+
 bool LoopExitEnumerationPass::runOnFunction(Function &function)
 {
     bool changed = false;
@@ -1824,8 +1883,13 @@ bool LoopExitEnumerationPass::runOnFunction(Function &function)
     LLVMContext &llvm_context = function.getContext();
 
     // ensure that every loop only has one exit and this exit is part of the parent loop,
-    // if there is a parent loop
-    for (Loop *loop : loop_info.getLoopsInPreorder()) {
+    // if there is a parent loop.
+    // We visit the loops in postorder (=reverse preorder in this case), from inner loops to
+    // outer loops, so we can fix outer loops after having inserted a new exit block and potentially
+    // blocks from an if cascade there.
+    SmallVector<Loop *, 4> loopsInPreorder = loop_info.getLoopsInPreorder();
+    for (auto i = loopsInPreorder.rbegin(), e = loopsInPreorder.rend(); i != e; ++i) {
+        Loop *loop = *i;
         SmallVector<BasicBlock *, 8> exit_blocks;
         loop->getUniqueExitBlocks(exit_blocks);
 
@@ -1838,10 +1902,14 @@ bool LoopExitEnumerationPass::runOnFunction(Function &function)
             IntegerType *int_type = IntegerType::get(llvm_context, 32);
             BasicBlock *new_exit_block = BasicBlock::Create(
                 llvm_context, "new_exit_block", &function);
+            if (Loop *parent_loop = loop->getParentLoop()) {
+                parent_loop->addBasicBlockToLoop(new_exit_block, loop_info);
+            }
+
             PHINode *pred_id_phi = PHINode::Create(int_type, 0, "pred_id", new_exit_block);
             changed = true;
 
-            SmallVector<std::pair<ConstantInt *, BasicBlock *>, 8> switch_cases;
+            SmallVector<std::pair<ConstantInt *, BasicBlock *>, 8> exit_targets;
             int exit_pred_id = 0;
 
             for (BasicBlock *exit_block : exit_blocks) {
@@ -1854,6 +1922,10 @@ bool LoopExitEnumerationPass::runOnFunction(Function &function)
                     Instruction *term = cast<Instruction>(exit_user);
                     if (!term->isTerminator()) {
                         MDL_ASSERT(!"Unexpected exit block user");
+                        continue;
+                    }
+                    // only modify terminators inside the loop with multiple exit blocks
+                    if (!loop->contains(term)) {
                         continue;
                     }
                     pred_terms.push_back(term);
@@ -1878,7 +1950,7 @@ bool LoopExitEnumerationPass::runOnFunction(Function &function)
 
                             ConstantInt *case_id = ConstantInt::get(int_type, exit_pred_id);
                             pred_id_phi->addIncoming(case_id, pred_block);
-                            switch_cases.push_back(std::make_pair(case_id, exit_block));
+                            exit_targets.push_back(std::make_pair(case_id, exit_block));
                         }
                     }
 
@@ -1889,16 +1961,21 @@ bool LoopExitEnumerationPass::runOnFunction(Function &function)
                 relocatePhis(exit_block, new_exit_block);
             }
 
-            // create switch and use first case as default case
-            SwitchInst *new_switch = SwitchInst::Create(
-                pred_id_phi, switch_cases[0].second, exit_blocks.size(), new_exit_block);
-            for (size_t i = 1, n = switch_cases.size(); i < n; ++i) {
-                auto &switch_case = switch_cases[i];
-                new_switch->addCase(switch_case.first, switch_case.second);
-            }
+            // create a dummy terminator to be able to iterate over the block in fillUpPhis
+            Instruction *dummy_terminator = BranchInst::Create(new_exit_block, new_exit_block);
 
             // ensure, that all PHI nodes have the right number of operands, filling up with undef
             fillUpPhis(new_exit_block, pred_id_phi);
+
+            createIfCascadeToTargets(loop_info, loop, new_exit_block, pred_id_phi, exit_targets);
+
+            // remove the dummy terminator, now that proper terminators were added
+            dummy_terminator->eraseFromParent();
+
+            // ensure, we didn't break the loop info (real check only in debug mode)
+            if (Loop *ParentLoop = loop->getParentLoop()) {
+                ParentLoop->verifyLoop();
+            }
         }
     }
 
@@ -1947,6 +2024,7 @@ bool UnswitchPass::runOnFunction(Function &function)
     for (Function::iterator it = function.begin(), end = function.end(); it != end; ++it) {
         if (SwitchInst *switch_inst = dyn_cast<SwitchInst>(it->getTerminator())) {
             BasicBlock *cur_bb = &*it;
+            BasicBlock *orig_bb = cur_bb;
             Value *switch_cond = switch_inst->getCondition();
             for (auto cur_case : switch_inst->cases()) {
                 BasicBlock *next_bb = BasicBlock::Create(llvm_context, "unswitch_case", &function);
@@ -1954,15 +2032,15 @@ bool UnswitchPass::runOnFunction(Function &function)
                     switch_cond, cur_case.getCaseValue(), "", cur_bb);
                 BranchInst::Create(cur_case.getCaseSuccessor(), next_bb, case_cond, cur_bb);
                 // did predecessor for the case successor change? -> fix PHIs
-                if (cur_bb != &*it) {
-                    fixPhis(cur_case.getCaseSuccessor(), &*it, cur_bb);
+                if (cur_bb != orig_bb) {
+                    fixPhis(cur_case.getCaseSuccessor(), orig_bb, cur_bb);
                 }
                 cur_bb = next_bb;
             }
 
             // otherwise, unconditionally jump to default case
             BranchInst::Create(switch_inst->getDefaultDest(), cur_bb);
-            fixPhis(switch_inst->getDefaultDest(), &*it, cur_bb);
+            fixPhis(switch_inst->getDefaultDest(), orig_bb, cur_bb);
 
             changed = true;
             switch_inst->eraseFromParent();

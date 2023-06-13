@@ -123,16 +123,21 @@ public:
     /// \param flags              Flags to be used when interpreting the file data,
     ///                           see #mi::neuraylib::Lightprofile_flags for details.
     /// \return
-    ///                           -  0: Success.
-    ///                           - -1: Invalid parameters (\c NULL pointer).
-    ///                           - -2: Failure to resolve the given filename, e.g., the file does
-    ///                                 not exist.
-    ///                           - -3: \p degree or \p flags is invalid (exactly one of
-    ///                                 #mi::neuraylib::LIGHTPROFILE_CLOCKWISE or
-    ///                                 #mi::neuraylib::LIGHTPROFILE_COUNTER_CLOCKWISE must be set).
-    ///                           - -4: File format error.
-    ///                           - -5: \p resolution_phi or \p resolution_theta is invalid (must
-    ///                                 not be 1).
+    ///                           -   0: Success.
+    ///                           -  -1: Invalid parameters (\c NULL pointer).
+    ///                           -  -3: Invalid filename extension (only \c .ies is supported).
+    ///                           -  -4: Failure to resolve the given filename, e.g., the file does
+    ///                                  not exist.
+    ///                           -  -5: Failure to open the resolved file.
+    ///                           -  -7: File format error.
+    ///                           - -13: \p flags is invalid (exactly one of
+    ///                                  #mi::neuraylib::LIGHTPROFILE_CLOCKWISE or
+    ///                                  #mi::neuraylib::LIGHTPROFILE_COUNTER_CLOCKWISE must be
+    ///                                  set).
+    ///                           - -14: \p degree is invalid.
+    ///                                  set).
+    ///                           - -15: \p resolution_phi or \p resolution_theta is invalid (must
+    ///                                  not be 1).
     ///
     /// \see #mi::neuraylib::IMdl_factory::create_light_profile() for a way to create a light
     ///      profile based on an MDL file path instead of a filename.
@@ -171,14 +176,17 @@ public:
     /// \param flags              Flags to be used when interpreting the data,
     ///                           see #mi::neuraylib::Lightprofile_flags for details.
     /// \return
-    ///                           -  0: Success.
-    ///                           - -1: Invalid parameters (\c NULL pointer).
-    ///                           - -3: \p degree or \p flags is invalid (exactly one of
-    ///                                 #mi::neuraylib::LIGHTPROFILE_CLOCKWISE or
-    ///                                 #mi::neuraylib::LIGHTPROFILE_COUNTER_CLOCKWISE must be set).
-    ///                           - -4: File format error.
-    ///                           - -5: \p resolution_phi or \p resolution_theta is invalid (must
-    ///                                 not be 1).
+    ///                           -   0: Success.
+    ///                           -  -1: Invalid parameters (\c NULL pointer).
+    ///                           -  -7: File format error.
+    ///                           - -13: \p flags is invalid (exactly one of
+    ///                                  #mi::neuraylib::LIGHTPROFILE_CLOCKWISE or
+    ///                                  #mi::neuraylib::LIGHTPROFILE_COUNTER_CLOCKWISE must be
+    ///                                  set).
+    ///                           - -14: \p degree is invalid.
+    ///                                  set).
+    ///                           - -15: \p resolution_phi or \p resolution_theta is invalid (must
+    ///                                  not be 1).
     virtual Sint32 reset_reader(
         IReader* reader,
         Uint32 resolution_phi = 0,

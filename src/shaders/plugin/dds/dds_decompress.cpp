@@ -37,7 +37,7 @@ namespace MI {
 namespace DDS {
 
 Dxt_decompressor::Dxt_decompressor()
-  : m_decompress_block( 0),
+  : m_decompress_block( nullptr),
     m_source_format( DXTC_none),
     m_target_component_count( 3),
     m_target_width( 0),
@@ -65,7 +65,7 @@ void Dxt_decompressor::set_source_format(
             m_decompress_block = &Dxt_decompressor::decompress_dxtc5; break;
         default:
             assert(false);
-            m_decompress_block = 0; break;
+            m_decompress_block = nullptr; break;
     }
 }
 

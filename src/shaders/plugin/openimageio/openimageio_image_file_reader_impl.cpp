@@ -56,33 +56,38 @@ Image_file_reader_impl::Image_file_reader_impl(
     const std::string& oiio_format,
     const std::string& plugin_name,
     mi::neuraylib::IImage_api* image_api,
-    mi::neuraylib::IReader* reader)
+    mi::neuraylib::IReader* reader,
+    const char* selector)
   : m_oiio_format( oiio_format),
     m_plugin_name( plugin_name),
     m_image_api( image_api, mi::base::DUP_INTERFACE),
-    m_reader( reader, mi::base::DUP_INTERFACE),
-    m_resolution_x( 1),
-    m_resolution_y( 1),
-    m_resolution_z( 1),
-    m_pixel_type( IMAGE::PT_UNDEF),
-    m_nv_header_only( false)
+    m_reader( reader, mi::base::DUP_INTERFACE)
 {
     // Adapting IReader to IOProxy is faster than reading the data first into a local buffer, in
-    // particular if only the metadata is needed.
+    // particular if only the metadata is needed. Keep in sync with Image_plugin_impl::test().
     // - "oiio_jpg" does  not accept a generic IOProxy, but requires a IOMemReader (using m_buffer).
     bool use_buffer = plugin_name == "oiio_jpg";
     m_io_proxy = std::unique_ptr<OIIO::Filesystem::IOProxy>(
-        create_input_proxy( reader, use_buffer, m_buffer));
+        create_input_proxy( reader, use_buffer, &m_buffer));
 
     if( !setup_image_input( /*from_constructor*/ true))
         return;
 
-    const OIIO::ImageSpec& spec = m_image_input->spec();
-
-    m_resolution_x = spec.width;
-    m_resolution_y = spec.height;
-    m_resolution_z = spec.depth;
-    m_pixel_type   = get_pixel_type( spec);
+    bool success = compute_properties(
+        m_image_input.get(),
+        selector,
+        m_subimage,
+        m_resolution_x,
+        m_resolution_y,
+        m_resolution_z,
+        m_pixel_type,
+        m_channel_names,
+        m_channel_start,
+        m_channel_end);
+    if( !success || (m_resolution_z != 1)) {
+        m_image_input.reset();
+        return;
+    }
 
     assert( m_resolution_z == 1); // see comment in read()
 }
@@ -139,7 +144,7 @@ mi::neuraylib::ITile* Image_file_reader_impl::read( mi::Uint32 z, mi::Uint32 lev
     mi::base::Handle<mi::neuraylib::ITile> tile(
         m_image_api->create_tile( pixel_type, m_resolution_x, m_resolution_y));
 
-    int cpp = IMAGE::get_components_per_pixel( m_pixel_type);
+    int cpp = m_channel_end - m_channel_start;
     int bpc = IMAGE::get_bytes_per_component( m_pixel_type);
     int bytes_per_row = m_resolution_x * cpp * bpc;
 
@@ -154,10 +159,10 @@ mi::neuraylib::ITile* Image_file_reader_impl::read( mi::Uint32 z, mi::Uint32 lev
     if( m_resolution_z != 1)
         return nullptr;
     bool success = m_image_input->read_image(
-        /*subimage*/ 0,
+        m_subimage,
         /*miplevel*/ level,
-        /*chbegin*/ 0,
-        /*chend*/ cpp,
+        m_channel_start,
+        m_channel_end,
         format,
         data + (m_resolution_y - 1) * static_cast<size_t>( bytes_per_row),
         /*xstride*/ OIIO::AutoStride,
@@ -166,8 +171,7 @@ mi::neuraylib::ITile* Image_file_reader_impl::read( mi::Uint32 z, mi::Uint32 lev
     if( !success)
         return nullptr;
 
-    const OIIO::ImageSpec& spec = m_image_input->spec();
-    if( (spec.nchannels == 2) && (spec.channelnames[0] == "Y") && (spec.channelnames[1] == "A"))
+    if( (m_channel_names.size() == 2) && (m_channel_names[0] == "Y") && (m_channel_names[1] == "A"))
         expand_ya_to_rgba( bpc, m_resolution_x, m_resolution_y, data);
 
 #if defined(DUMP_PIXEL_X) && defined(DUMP_PIXEL_Y)
@@ -177,22 +181,19 @@ mi::neuraylib::ITile* Image_file_reader_impl::read( mi::Uint32 z, mi::Uint32 lev
               << c.r << " " << c.g << " " << c.b << " " << c.a << std::endl;
 #endif
 
-    if( spec.get_int_attribute( "oiio:UnassociatedAlpha") == 0) {
+    const OIIO::ImageSpec& spec = m_image_input->spec();
+    if( m_plugin_name == "oiio_bmp") {
+        // It is unclear whether BMP uses associated or unassociated alpha. We use unassociated
+        // alpha for historic reasons, in contrast to OIIO. Doing so without support from the
+        // OIIO handler for BMP is a misuse of the OIIO API.
+    } else if( spec.get_int_attribute( "oiio:UnassociatedAlpha") == 0) {
         // Use 1.0f instead of get_gamma().  Unclear what is correct here. OIIO itself uses the
         // actual gamma value, whereas FreeImage and GIMP seem to ignore gamma for this and always
         // assume gamma == 1.0f.
         // OIIO documentation mentions that alpha and depth should be assumed linear.
         tile = unassociate_alpha( m_image_api.get(), tile.get(), 1.0f);
-    } else if( m_plugin_name == "oiio_bmp") {
-        // It is unclear whether BMP uses associated or unassociated alpha. We use unassociated
-        // alpha for historic reasons, in contrast to OIIO. Doing so without support from the
-        // OIIO handler for BMP is a misuse of the OIIO API.
-        tile = unassociate_alpha( m_image_api.get(), tile.get(), 1.0f);
     } else {
         // Avoid redundant conversions and resulting quantization errors
-#if defined(DUMP_PIXEL_X) && defined(DUMP_PIXEL_Y)
-        std::cout << "OIIO plugin reader (skip unassociate_alpha())" << std::endl;
-#endif
     }
 
 #if defined(DUMP_PIXEL_X) && defined(DUMP_PIXEL_Y)
@@ -221,7 +222,7 @@ bool Image_file_reader_impl::setup_image_input( bool from_constructor) const
 {
     if( !from_constructor) {
 
-        // Nothing to do if the special header-only was not activated.
+        // Nothing to do if the special header-only mode was not activated.
         if( !m_nv_header_only)
             return true;
 
@@ -246,8 +247,8 @@ bool Image_file_reader_impl::setup_image_input( bool from_constructor) const
     }
 
     // Workaround for issue #3273: Set proxy also via config.
-    OIIO::Filesystem::IOProxy* io_proxy = m_io_proxy.get();
-    config.attribute( "oiio:ioproxy", OIIO::TypeDesc::PTR, &io_proxy);
+    OIIO::Filesystem::IOProxy* io_proxy_ptr = m_io_proxy.get();
+    config.attribute( "oiio:ioproxy", OIIO::TypeDesc::PTR, &io_proxy_ptr);
 
     m_image_input = OIIO::ImageInput::open( ext, &config, m_io_proxy.get());
     if( !m_image_input)

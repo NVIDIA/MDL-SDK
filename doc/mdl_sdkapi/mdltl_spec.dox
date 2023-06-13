@@ -1,0 +1,682 @@
+/******************************************************************************
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_mdltl_spec MDLTL Specification
+
+<div align="right">
+    [\link mi_neuray_mdltl_manual Previous: MDLTL User's Manual\endlink]
+    [\link mi_neuray_mdltl Up: MDL Transformation Language\endlink]
+    [\link mi_neuray_mdltl_grammar Next: MDLTL Grammar\endlink]
+</div>
+
+\section mi_neuray_mdltl_spec_file_example MDLTL File Example
+
+In the following sections, we will describe all the elements of an
+MDLTL source file. To start, we will have a look at an example file
+that can be found in the \neurayApiName distribution at
+`examples/mdl_sdk/distilling_target/distilling_target_plugin_rules.mdltl`:
+
+\include distilling_target/distilling_target_plugin_rules.mdltl
+
+The example file contains one rule set called
+`Make_simple_rules`. This rule set starts with an import statement for
+MDL module `math`, followed by a number of rules. Rules are defining
+transformations: the left-hand side of a rule determines to which
+nodes a rule applies, and the right-hand side defines what a matching
+node will be replaced with.
+
+All these elements are described in detail in the following sections.
+
+\section mi_neuray_mdltl_spec_compilation_units Compilation units
+
+An MDLTL file (usually a file with file name extension `.mdltl`) is a
+compilation unit. Each MDLTL file is compiled into a `.cpp` and a `.h`
+file, which declare and define one C++ class for each rule set in the
+input file. Each class is a subclass of the class
+`mi::mdl::IRule_matcher` from the MDL SDK, which enables the class to
+be used by the Distiller. The MDLTL compiler can process multiple
+MDLTL files when invoked, and will generate C++ source code files for
+each of them.
+
+The syntax for patterns and expressions in MDLTL is based
+on the syntax of MDL: basic elements have the same representation
+(identifiers, strings, numbers, punctuation, comments, function calls,
+arithmetic expressions). The MDLTL syntax defines a few additional
+syntactic categories, such as extra punctuation and keywords for
+describing rules and their application.
+
+\section mi_neuray_mdltl_spec_rule_sets Rule sets
+
+A rule set consists of a name, an evaluation strategy, import
+statements, a list of zero or more rule definitions and an optional
+postcondition expression.  A rule set name must be a valid
+identifier. Each rule set is compiled into a C++ class with a name
+corresponding to the rule set name. The generated C++ class inherits
+from the abstract `mi::mdl::IRuleMatcher` class.
+
+The following example shows a simple rule set with two rules, taken
+from the above example file.
+
+\code
+  rules Make_simple_rules topdown {
+
+    microfacet_beckmann_smith_bsdf(ru,rv,tint,_,t,mode)
+        --> simple_glossy_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
+    microfacet_beckmann_vcavities_bsdf(ru,rv,tint,_,t,mode)
+        --> simple_glossy_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
+  }
+\endcode
+
+The evaluation strategy is either `bottomup` or `topdown` (as in the
+example above). The strategy defines the order of application of all
+the rules defined in a rule set when the rule set is applied at
+runtime by the Distiller. For `topdown`, rules are first applied to
+the node at the root of the material graph, then to its children, and
+so on. When the strategy is `bottomup`, matching starts at the leaves
+of the graph, followed by the parents, until it reaches the root.
+
+Within a rule set, for each node, rules are applied from the first to
+the last in order, until the left-hand side of a rule matches the node
+that is currently being processed. The matched node is replaced by the
+right-hand side expression. If annotated with the return code
+`repeat_rules`, the whole rule set is applied again on the new node
+until either no rule matches or a rule without a `repeat_rules`
+annotation is matched. The annotation `skip_recursion` stops rule
+application on the current node so that child nodes will not be
+matched. `skip_recursion` is only applicable for `topdown` rules. See
+below in section \link mi_neuray_mdltl_spec_rules Rules\endlink for
+more details on these return codes.
+
+The order of rules in rule sets only defines the evaluation order of
+the rules within one set, not how multiple rule sets are combined. The
+order of applications of rule sets, the number of times they are
+applied and how the results of rule set applications are combined is
+implemented in Distiller plugins and varies depending on the Distiller
+target.
+
+At the beginning, a rule set can import MDL modules with an import
+statement to make their exported materials known to the MDLTL
+compiler.
+
+At the end of a rule set, a postcondition can be
+defined. Postconditions are assertions on the structure of a material
+after it has been processed by a rule set. A postcondition is a
+boolean expression containing only boolean operators and calls to the
+special predicate functions `nonode` and `match`. When a rule set has
+been fully applied to a material graph, the Distiller applies
+postcondition checks to verify that the Distilling results have the
+expected structure. If the postcondition check fails, the distilling
+process fails with an error code.
+
+When applying a `nonode` predicate, the Distiller traverses the whole
+graph to ensure that the node name does not appear anywhere. A `match`
+predicate is checked by verifying that the root node matches the
+pattern given.
+
+As an example, the following postcondition states that the resulting
+material does not contain any occurrences of the node
+`bsdf_color_mix1`, `bsdf_color_mix2` and
+`bsdf_color_mix3`:
+
+\code
+  postcond nonode(bsdf_color_mix_1)
+        && nonode(bsdf_color_mix_2)
+        && nonode(bsdf_color_mix_3);
+\endcode
+
+The following postcondition asserts that the resulting material
+matches the structure of a pattern. In this example, the postcondition
+states that the distilled material has both a surface and a backface
+with a simple `diffuse_reflection_bsdf`:
+
+\code
+  postcond match(material(_,
+                          material_surface(diffuse_reflection_bsdf(_,_),_),
+                          material_surface(diffuse_reflection_bsdf(_,_),_),
+                          _,_,_,_));
+\endcode
+
+\section mi_neuray_mdltl_spec_rules Rules
+
+Each rule definition consists of
+
+- a left-hand side pattern (LHS)
+- a right-hand side expression (RHS)
+- an optional return code (`skip_recursion` or `repeat_rules`)
+- an optional guard expression
+- a where clause with one or more variable bindings
+- an optional dead_rule declaration.
+
+The meaning of the return code is as follows:
+
+- No return code: after the rule was applied, the matching continues as defined by the strategy.
+- `skip_recursion`: after rule application, no further matching on the current node or its sub-expressions is done (for top-down evaluation)
+- `repeat_rules`: after rule application, all rules of the current rule set are matched again on the result node.
+
+A guard expression must be a boolean expression. On each rule
+application, after the pattern of the rule is matched, the guard
+expression is evaluated and if it is false, the rule is skipped. All
+variables used in guard expressions must be bound in the pattern or
+the where clause of the rule.
+
+Here is a rule that only is applied if the `w` parameter is the color
+black:
+
+\code
+  color_weighted_layer(w,layer,base,n) --> weighted_layer(0.0,layer,base,n)
+      if w == color(0.0);
+\endcode
+
+A where clause binds variable names to expressions. This may be useful
+if the same expression is used multiple times in the replacement
+expression, guard expression or other where clauses. The following
+example uses two where-bound variables to make the code more readable:
+
+\code
+  bsdf_color_mix_2(w1,df1,w2,df2) --> bsdf_mix_2( wp1,bsdf_tint(w1/wp1,df1),
+                                                  wp2,bsdf_tint(w2/wp2,df2))
+          where wp1 = math::clamp( math::luminance(w1), 0.001, 0.999)
+                wp2 = math::clamp( math::luminance(w2), 0.001, 0.999);
+\endcode
+
+\section mi_neuray_mdltl_spec_patterns Patterns
+
+A pattern is a limited form of an expression, restricted to variables,
+function applications, type annotations, node aliases and attribute
+patterns.
+
+A variable named _ (underscore) is allowed as a wildcard pattern. When
+such a wildcard variable is matched, it matches any expression and
+does not bind any variables.
+
+A wildcard variable can appear multiple times and each occurrence
+matches a different expression.  Other variables can only appear once
+in a pattern.
+
+Variables match any expression and bind a name to the matched
+expression, which can be referred to in the right-hand expression of a
+rule, guard expressions and where clauses. Variables can be annotated
+with types in \link mi_neuray_mdltl_spec_type_annotations type
+annotations\endlink.
+
+A pattern can be a \link mi_neuray_mdltl_spec_node_aliases node alias
+pattern\endlink.
+
+An pattern can be followed by an attribute pattern set. Variables
+bound in attribute patterns have the same scope as variables bound in
+other pattern variables. Attribute names are scoped over all rules in
+a rule set and must have the same types in all rules of the pattern
+set.
+
+All functions mentioned in a pattern must be
+
+- defined in the MDL specification,
+- defined in one of the standard library modules,
+- defined in the `nvidia::distilling_support` module, or
+- one of the special functions synthesized by the distiller (see \link mi_neuray_mdltl_spec_special_patterns Special patterns and expressions\endlink).
+
+Only functions with the following result types can appear in a pattern:
+
+- `material`
+- `material_surface`
+- `material_geometry`
+- `material_volume`
+- `material_emission`
+- `bsdf`
+- `edf`
+- `vdf`
+- `hair_bsdf`
+
+This includes constructor functions for the BSDF and material-related
+types like `bsdf()`, `edf()`, `material()`, `material_surface()` etc.
+
+\section mi_neuray_mdltl_spec_expressions Expressions
+
+Expressions are MDL expressions and appear on the RHS of rules. They
+consist of function calls, variables, \link
+mi_neuray_mdltl_spec_type_annotations type annotations\endlink, \link
+mi_neuray_mdltl_spec_node_aliases node alias expressions\endlink and
+operator expressions.
+
+Expressions can only call functions
+- defined in MDL,
+- defined in one of the standard library modules,
+- defined in the `nvidia::distilling_support` module,
+- custom target materials imported into a rule set, or
+- special functions synthesized by the distiller (see \link mi_neuray_mdltl_spec_special_patterns Special patterns and expressions\endlink).
+
+All variables used in expressions must be bound in the corresponding
+pattern or the where clause of the rule.
+
+An expression can be followed by an attribute expression set (see
+section \link mi_neuray_mdltl_spec_expressions Attribute expression
+sets\endlink). When the expression is evaluated, the attributes are
+attached to the resulting node as a side effect. A rule matched later
+in the Distilling process can than match against the attached attributes.
+
+\section mi_neuray_mdltl_spec_attributes Attributes
+
+Attributes are a mechanism for passing values up and down the material
+graph while performing transformations. Attributes are mapping nodes
+to sets of key-value pairs, where keys are strings and values are
+arbitrary expression nodes. The LHS of a rule can match on these
+attributes to select which rules are applied, and the RHS can attach
+attributes to newly constructed nodes. Attributes that are being
+matched on the LHS are defined by attribute pattern sets, and
+attributes on the RHS are defined by attribute expression sets.
+
+Attributes are retained between applications of different rule sets
+and can therefore be used to pass values from one rule set to another.
+
+\subsection mi_neuray_mdltl_spec_attribute_pattern_set Attribute pattern set
+
+An attribute pattern set consists of a comma-separated sequence of
+pairs of the form `variable ~ pattern` between delimiters
+`[[` and `]]`. As a shorthand, instead of writing
+`variable ~ _`, just writing `variable` is allowed.
+
+Attribute pattern set matching works as follows:
+
+First, the node pattern to which an attribute pattern set is attached
+is matched as usual against the current node.  For each pair in the
+attribute pattern set, the attribute name is looked up in the
+attribute mapping for the current node. If there is no such entry in
+the map, matching fails. Otherwise, the pattern of the pair is matched
+against the value in the mapping.
+
+When matching succeeds for the pattern itself and for all elements of
+the attribute pattern set, all free variables in the patterns are
+bound to the values they matched against.
+
+The following rule illustrates the use of an attribute pattern. The
+rule matches on material nodes where the `material_surface`
+field contains a `diffuse_reflection_bsdf` node. Also, the node
+that is being matched must have two attributes attached: (1) an
+attribute called `is_thin_walled` and (2) and attribute called
+`some_color`. When the rule is matched, the Distiller ensures
+that the matched node has the same shape and node types as the
+pattern. Additionally, it checks that all attributes named in the
+attribute pattern set are attached to the node and their patterns
+match the corresponding attribute values.
+
+On the RHS of the rule, the value of the `is_thin_walled`
+attribute is used when constructing the result value.
+
+\code
+  material(_,
+           material_surface(diffuse_reflection_bsdf(_, r)),
+           backface, ior, volume, geometry, hair)
+      [[ is_thin_walled, some_color ~ c]]
+  -->
+    material(is_thin_walled,
+             material_surface(diffuse_reflection_bsdf(c, r)),
+             backface, ior, volume, geometry, hair);
+\endcode
+
+\subsection mi_neuray_mdltl_spec_attribute_expression_sets Attribute expression sets
+
+An attribute expression set consists of a comma-separated sequence of
+pairs of the form `variable = expression` between delimiters
+`[[` and `]]`. The role of an attribute expression set
+is to attach the given attributes to the node which is created by the
+expression.
+
+In the following rule, the LHS matches any material node, binding all
+subexpressions to variables. The RHS constructs an identical material
+(since the subexpressions are taken directly from the input node) and
+an attribute set is attached to the result material. This attribute
+set binds the attribute name `is_thin_walled` to the value of
+the `thin_walled` field of the input material.
+
+\code
+  material(thin_walled, surface, backface, ior,
+           volume, geometry, hair)
+  -->
+    material(thin_walled, surface, backface, ior,
+             volume, geometry, hair)
+      [[ is_thin_walled = thin_walled ]];
+\endcode
+
+\section mi_neuray_mdltl_spec_node_aliases Node Aliases
+
+Patterns on the left-hand side of a rule can be given names using node
+aliases. The name given to a pattern can then be used on the
+right-hand side when constructing a replacement node. This allows the
+user to re-use parts of patterns (or whole patterns) on the right-hand
+side without having to writing out the full replacement expression.
+
+A node alias is denoted by prefixing a pattern with a variable name
+and a `~` (tilde) symbol, like this: `name ~ pattern`.
+
+In the following example, both patterns are given the name `b`, and
+this variable is used to construct the replacement node. This means
+that the rule does not change the material graph at all, but the use
+of attribute expression sets means that after the transformation is
+done, all `bsdf()` and `diffuse_reflection_bsdf()` nodes in the graph
+will have an attribute `a` attached, with either the values 1 or 2.
+
+\code
+    b ~ bsdf() --> b [[ a = 1 ]];
+    b ~ diffuse_reflection_bsdf(_,_) --> b [[ a = 2 ]];
+\endcode
+
+\section mi_neuray_mdltl_spec_type_annotations Type annotations
+
+The MDLTL compiler is usually able to determine the type of all
+variables by their use in function calls or arithmetic expressions. In
+some cases, a pattern or expression can be ambiguous and a type
+annotation is needed.
+
+A type annotation is denoted by a variable followed by the `@` (at)
+symbol, and the type of a built-in type, like this:
+
+\code
+rules Attr_Binding bottomup {
+    custom_curve_layer(w1,_,_,_w,
+                            bsdf() [[ diffuse_color ~ diffuse_color_layer ]],
+                            bsdf() [[ diffuse_color ~ diffuse_color_base  ]],
+                            _normal )
+        --> bsdf() [[   diffuse_color = math::lerp(diffuse_color_base@color, diffuse_color_layer, w1) ]]
+        ;
+}
+\endcode
+
+\section mi_neuray_mdltl_spec_special_patterns Special patterns and expressions
+
+The distiller handles some MDL constructs in a special way, by mapping
+them to other constructs before applying rules, and then mapping them
+back afterwards.
+
+\subsection mi_neuray_mdltl_spec_mixer_calls Mixer Calls
+
+Calls to the functions
+
+- `df::normalized_mix`
+- `df::clamped_mix`
+- `df::unbounded_mix`
+- `df::color_normalized_mix`
+- `df::color_clamped_mix`
+- `df::color_unbounded_mix`
+
+are transformed into calls to one of the functions:
+
+- `bsdf_mix_1, bsdf_mix_2, bsdf_mix_3`
+- `bsdf_clamped_mix_1, bsdf_clamped_mix2, bsdf_clamped_mix_3`
+- `bsdf_unbounded_mix_1, bsdf_unbounded_mix_2, bsdf_unbounded_mix_3`
+- `bsdf_color_mix_1, bsdf_color_mix_2, bsdf_color_mix_3`
+- `bsdf_color_clamped_mix_1, bsdf_color_clamped_mix_2, bsdf_color_clamped_mix_3`
+- `bsdf_color_unboudned_mix_1, bsdf_color_unbounded_mix_2, bsdf_color_unbounded_mix_3`
+- `edf_mix_1, edf_mix_2, edf_mix_3`
+- `edf_clamped_mix_1, edf_clamped_mix2, edf_clamped_mix_3`
+- `edf_unbounded_mix_1, edf_unbounded_mix_2, edf_unbounded_mix_3`
+- `edf_color_mix_1, edf_color_mix_2, edf_color_mix_3`
+- `edf_color_clamped_mix_1, edf_color_clamped_mix_2, edf_color_clamped_mix_3`
+- `edf_color_unboudned_mix_1, edf_color_unbounded_mix_2, edf_color_unbounded_mix_3`
+- `vdf_mix_1, vdf_mix_2, vdf_mix_3`
+- `df_clamped_mix_1, vdf_clamped_mix2, vdf_clamped_mix_3`
+- `vdf_unbounded_mix_1, vdf_unbounded_mix_2, vdf_unbounded_mix_3`
+- `vdf_color_mix_1, vdf_color_mix_2, vdf_color_mix_3`
+- `vdf_color_clamped_mix_1, vdf_color_clamped_mix_2, vdf_color_clamped_mix_3`
+- `vdf_color_unboudned_mix_1, vdf_color_unbounded_mix_2, vdf_color_unbounded_mix_3`
+
+depending of their number and types of parameters before rule
+application and back afterwards. That means that rules can only match
+on, and generate, calls to the transformed functions (...`_1`,
+...`_2`, ...`_3`). When a mixer call has more than 3 BSDFs, arguments
+after the third are ignored.
+
+> **Implementation note:** The special handling of mixer calls might be
+> subject to change in future versions of the \neurayApiName and may
+> be replaced with a different way of matching on nodes with struct,
+> enum and array parameters.
+
+\subsection mi_neuray_mdltl_spec_mixer_call_normalization Mixer call normalization
+
+The mixer call transformation in the rule engine also applies some
+normalization to the calls. Since the order of parameters for these
+functions does not matter, the pairs of weights and DFs are sorted by
+the semantics of the argument DFs.  DF semantics are represented by
+the `mi::mdl::IDefinition::Semantics` enumeration in the MDL-SDK and
+the calls in mixer calls are ordered according to the the numerical
+values of the C++ enum variants.
+
+Since the order of arguments for mixer calls must be consistent
+between the rule engine and the compiled patterns that are applied,
+the normalization must be implemented both in the compiler and in the
+rule engine. The MDLTL compiler normalizes patterns before translation
+into C++, whereas the normalization of the actual DAG calls that is
+matched against is done in the Distiller at run time.
+
+Mixer normalization in the compiler is switched on using the
+`--normalize-mixers` command line option.  Mixer call normalization in
+the Distiller is controlled by a flag in the rule engine. The call
+`Distiller_plugin_api::set_normalize_mixers(bool new_value)` can be
+used by the plugin implementation to switch it on and off before rule
+application.
+
+> Note that mixer normalization can be switched on and off in the
+> compiler (at compile time) and in the Distiller (at run time). Both
+> settings must be consistent, or rules might not match correctly.
+
+There are restrictions on the automatic normalization of mixer calls in the compiler:
+
+- If the BSDF arguments of a mixer calls in a pattern are fully determined (all arguments are call expressions), then normalization in the MDLTL compiler is performed.
+- If all BSDF arguments are variables, the order does not matter, so no normalization is done and the resulting matching code will be correct.
+- If the BSDF arguments are a mix of call expressions and variables, no normalization can be done and the resulting matching code may not work as intended. The compiler supports a flag `--warn=non-normalized-mixers` which can warn in that case.
+
+
+> **Implementation note:** Mixer normalization currently only works for
+> mixers with up to 3 BSDFs because of the general restriction on mixers (see above).
+
+\subsection mi_neuray_mdltl_function_spec_different_names Standard functions with different names
+
+Several MDL functions have different names in Distiller rules than
+their standard names. Additionally, conditional operators on BSDFs are
+represented as function calls and the Distiller introduces special
+functions for them.
+
+Some functions from the standard library have special names in MDLTL
+because overloaded functions and functions with multiple numbers of
+parameters cannot be distinguished.
+
+These functions from the `df` module in MDL have special names
+in the Distiller:
+
+<table border="1" cellpadding="3" cellspacing="3">
+  <tr valign="top"><th>Standard name</th><th>Distiller name</th><th>Notes</th></tr>
+  <tr valign="top">
+    <td class="indexkey">
+      `df::tint`
+    </td>
+    <td class="indexvalue">
+      `bsdf_tint`
+    </td>
+    <td>
+      2 parameter version of `df::tint`
+    </td>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey">
+      `df::tint`
+    </td>
+    <td class="indexvalue">
+      `bsdf_tint_ex`
+    </td>
+    <td>
+      3 parameter version of `df::tint`
+    </td>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey">
+      `df::tint`
+    </td>
+    <td class="indexvalue">
+      `edf_tint`
+    </td>
+    <td>
+      EDF version of `df::tint`
+    </td>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey">
+      `df::tint`
+    </td>
+    <td class="indexvalue">
+      `vdf_tint`
+    </td>
+    <td>
+      VDF version of `df::tint`
+    </td>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey">
+      `df::tint`
+    </td>
+    <td class="indexvalue">
+      `hair_bsdf_tint`
+    </td>
+    <td>
+      hair BSDF version of `df::tint`
+    </td>
+  </tr>
+  <tr valign="top">
+    <td class="indexkey">
+      `df::directional_factor`
+    </td>
+    <td class="indexvalue">
+      `edf_directional_factor`
+    </td>
+    <td>
+      EDF version of `df::directional_factor`
+    </td>
+  </tr>
+</table>
+
+
+\subsection mi_neuray_mdltl_spec_special_functions Special functions
+
+The following functions, which do not exist in MDL, are allowed in
+Distiller rules. They are defined for technical reasons and can be
+matched against and used to create rule results.
+
+- `material material_conditional_operator(bool cond, material true_exp, material false_exp)`
+- `bsdf bsdf_conditional_operator(bool cond, bsdf true_exp, bsdf false_exp)`
+- `edf edf_conditional_operator(bool cond, edf true_exp, edf false_exp)`
+- `vdf vdf_conditional_operator(bool cond, vdf true_exp, vdf false_exp)`
+
+These calls correspond to the `? :` conditional operator in MDL
+for materials and various forms of DFs. They allow transformations on
+conditional expressions. Other MDL operators can not be matched on.
+
+> **Implementation note:** Handling of overloaded functions and
+> conditional operators may change in future versions of the Distiller.
+
+\section mi_neuray_mdltl_spec_imports Imports
+
+MDLTL files can import MDL modules in order to make material functions
+available for creating function calls. For all imported modules in a
+rule set, all exported functions that return a material or BSDF are
+added to the set of visible function overloads and can be used for
+creating replacement expressions. When the imported module is not a
+standard library module, the imported functions can only be used on
+the RHS expressions of rules, LHS patterns are restricted to materials
+from standard modules.
+
+The MDLTL compiler supports the `--mdl-path` command line option to
+set search paths for MDL modules.
+
+\section mi_neuray_mdltl_spec_integration Distiller Plugin Integration
+
+The C++ code created by the MDLTL compiler is integrated into a
+Distiller plugin by including the generated header file and linking it
+with the object file created from the generated `.cpp`
+file. The plugin uses the generated classes in its `distill()`
+function, which is declared like this:
+
+\code{.cpp}
+const mi::mdl::IGenerated_code_dag::IMaterial_instance* Distilling_target_plugin::distill(
+    mi::mdl::IDistiller_plugin_api&                         api,
+    mi::mdl::IRule_matcher_event*                           event_handler,
+    const mi::mdl::IGenerated_code_dag::IMaterial_instance* material_instance,
+    mi::Size                                                target_index,
+    mi::mdl::Distiller_options*                             options,
+    mi::Sint32*                                             p_error) const;
+\endcode
+
+The function uses the distilling plugin API reference `api` in
+order to apply the generated rules as follows:
+
+\code{.cpp}
+    mi::base::Handle<mi::mdl::IGenerated_code_dag::IMaterial_instance const> res;
+
+    switch ( target_index) {
+    case 0:
+    {
+        res = mi::base::make_handle_dup(material_instance); // Initialize to input material.
+
+        // Overwrite `res` with distilled material.
+        Make_simple_rules make_simple;
+        res = api.apply_rules( res.get(), make_simple, event_handler, options, error);
+        break;
+    }
+
+    }
+
+    // Make sure the distilled material is not freed on return.
+    res->retain();
+    return res.get();
+\endcode
+
+First, a variable for the result material is created, then the index
+of the target is checked to see which transformations must be
+applied. In our example, only one target exists. An instance of the
+generated class `Make_simple_rules` is created and the Distiller API
+function `apply_rules()` is used to perform the transformation defined
+by the rules from the original MDLTL file.
+
+A more complex plugin will have multiple rule sets and therefore will
+declare more instances of matcher classes and apply them one by one.
+
+Error handling is not included in this code for readability, but can
+bee seen in the full example.
+
+See here for the complete example Distiller plugin from which the
+above code was extracted. It makes use of the rule set defined at the
+beginning of this page: \link mi_neuray_example_distilling_target
+Custom Distiller Plugin Example\endlink.
+
+The next page \link mi_neuray_mdltl_grammar MDLTL Grammar\endlink
+documents the formal grammar of mdltl files.
+
+<div align="right">
+    [\link mi_neuray_mdltl_manual Previous: MDLTL User's Manual\endlink]
+    [\link mi_neuray_mdltl Up: MDL Transformation Language\endlink]
+    [\link mi_neuray_mdltl_grammar Next: MDLTL Grammar\endlink]
+</div>
+
+*/

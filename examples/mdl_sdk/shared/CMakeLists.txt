@@ -33,12 +33,10 @@ set(PROJECT_NAME examples-mdl_sdk-shared)
 set(PROJECT_SOURCES
     "example_shared.cpp"
     "example_shared.h"
+    "example_shared_dump.cpp"
+    "example_shared_dump.h"
     "compiled_material_traverser_base.h"
     "compiled_material_traverser_base.cpp"
-    "gui/gui.h"
-    "gui/gui.cpp"
-    "gui/gui_material_properties.h"
-    "gui/gui_material_properties.cpp"
     "lpe.cpp"
     "lpe.h"
     "texture_support_native.h"
@@ -48,53 +46,64 @@ set(PROJECT_SOURCES
     "utils/os.h"
     "utils/strings.h"
     )
-    
-if(MDL_ENABLE_AXF_EXAMPLES)
-    set(PROJECT_SOURCES
-        ${PROJECT_SOURCES}
-        "utils/ospath.h"
-        "utils/ospath.cpp"
-        )
-endif()
-    
 
-if(MDL_ENABLE_CUDA_EXAMPLES)
-    set(PROJECT_SOURCES
-        ${PROJECT_SOURCES}
-        "example_cuda_shared.h"
-        "texture_support_cuda.h"
-        )
-endif()
+if (MDL_BUILD_SDK_EXAMPLES OR MDL_BUILD_CORE_EXAMPLES)
+    if (TARGET imgui)
+        set(PROJECT_SOURCES
+            ${PROJECT_SOURCES}
+            "gui/gui.h"
+            "gui/gui.cpp"
+            "gui/gui_material_properties.h"
+            "gui/gui_material_properties.cpp"
+            )
+    endif()
 
-if(MDL_ENABLE_OPENGL_EXAMPLES)
-    set(PROJECT_SOURCES
-        ${PROJECT_SOURCES}
-        "utils/gl_display.h"
-        "gui/gui_api_interface_glfw.h"
-        "example_glsl_shared.h"
-        )
-endif()
+    if(MDL_ENABLE_AXF_EXAMPLES)
+        set(PROJECT_SOURCES
+            ${PROJECT_SOURCES}
+            "utils/ospath.h"
+            "utils/ospath.cpp"
+            )
+    endif()
 
-if(MDL_ENABLE_VULKAN_EXAMPLES)
-    set(PROJECT_SOURCES
-        ${PROJECT_SOURCES}
-        "example_vulkan_shared.h"
-        "example_vulkan_shared.cpp"
-        )
-endif()
+    if(MDL_ENABLE_CUDA_EXAMPLES)
+        set(PROJECT_SOURCES
+            ${PROJECT_SOURCES}
+            "example_cuda_shared.h"
+            "texture_support_cuda.h"
+            )
+    endif()
 
-if(MDL_ENABLE_D3D11_EXAMPLES)
-    set(PROJECT_SOURCES
-        ${PROJECT_SOURCES}
-        "gui/gui_api_interface_dx11.h"
-        )
-endif()
+    if(MDL_ENABLE_OPENGL_EXAMPLES)
+        set(PROJECT_SOURCES
+            ${PROJECT_SOURCES}
+            "utils/gl_display.h"
+            "gui/gui_api_interface_glfw.h"
+            "example_glsl_shared.h"
+            )
+    endif()
 
-if(MDL_ENABLE_D3D12_EXAMPLES)
-    set(PROJECT_SOURCES
-        ${PROJECT_SOURCES}
-        "gui/gui_api_interface_dx12.h"
-        )
+    if(MDL_ENABLE_VULKAN_EXAMPLES)
+        set(PROJECT_SOURCES
+            ${PROJECT_SOURCES}
+            "example_vulkan_shared.h"
+            "example_vulkan_shared.cpp"
+            )
+    endif()
+
+    if(MDL_ENABLE_D3D11_EXAMPLES)
+        set(PROJECT_SOURCES
+            ${PROJECT_SOURCES}
+            "gui/gui_api_interface_dx11.h"
+            )
+    endif()
+
+    if(MDL_ENABLE_D3D12_EXAMPLES)
+        set(PROJECT_SOURCES
+            ${PROJECT_SOURCES}
+            "gui/gui_api_interface_dx12.h"
+            )
+    endif()
 endif()
 
 # create target from template
@@ -126,37 +135,53 @@ endif()
 target_add_dependencies(TARGET ${PROJECT_NAME}
     DEPENDS
         mdl::mdl_sdk
-        imgui
     NO_RUNTIME_COPY     # header only -> the consumer will also add this dependency
     )
-    
-if(MDL_ENABLE_OPENGL_EXAMPLES OR MDL_ENABLE_VULKAN_EXAMPLES)
-    target_add_dependencies(TARGET ${PROJECT_NAME}
-        DEPENDS
-            glfw
-        NO_RUNTIME_COPY
-        )
+
+if (MDL_BUILD_SDK_EXAMPLES OR MDL_BUILD_CORE_EXAMPLES)
+    if (TARGET imgui)
+        target_add_dependencies(TARGET ${PROJECT_NAME}
+            DEPENDS
+                imgui
+            NO_RUNTIME_COPY     # header only -> the consumer will also add this dependency
+            )
+        target_compile_definitions(${PROJECT_NAME}
+            PUBLIC
+                "USE_IMGUI"
+            )
+    endif()
+
+    if(MDL_ENABLE_OPENGL_EXAMPLES OR MDL_ENABLE_VULKAN_EXAMPLES)
+        target_add_dependencies(TARGET ${PROJECT_NAME}
+            DEPENDS
+                glfw
+            NO_RUNTIME_COPY
+            )
+    endif()
+
+    if(MDL_ENABLE_VULKAN_EXAMPLES)
+        target_add_dependencies(TARGET ${PROJECT_NAME}
+            DEPENDS
+                vulkan
+            NO_RUNTIME_COPY
+            )
+    endif()
 endif()
 
-if(MDL_ENABLE_VULKAN_EXAMPLES)
-    target_add_dependencies(TARGET ${PROJECT_NAME}
-        DEPENDS
-            vulkan
-        NO_RUNTIME_COPY
-        )
-endif()
-
-# make sure the plugins are build before samples are build
-if(TARGET shaders-plugin-dds)
-    add_dependencies(${PROJECT_NAME} shaders-plugin-dds)
-endif()
-
-if(TARGET shaders-plugin-freeimage)
-    add_dependencies(${PROJECT_NAME} shaders-plugin-freeimage)
-endif()
-
-if(TARGET shaders-plugin-openimageio)
-    add_dependencies(${PROJECT_NAME} shaders-plugin-openimageio)
+if(MDL_TREAT_RUNTIME_DEPS_AS_BUILD_DEPS)
+    # make sure the plugins are build before samples are build
+    if(TARGET shaders-plugin-dds)
+        add_dependencies(${PROJECT_NAME} shaders-plugin-dds)
+    endif()
+    if(TARGET shaders-plugin-freeimage)
+        add_dependencies(${PROJECT_NAME} shaders-plugin-freeimage)
+    endif()
+    if(TARGET shaders-plugin-openimageio)
+        add_dependencies(${PROJECT_NAME} shaders-plugin-openimageio)
+    endif()
+    if(TARGET shaders-plugin-mdl_distiller)
+        add_dependencies(${PROJECT_NAME} shaders-plugin-mdl_distiller)
+    endif()
 endif()
 
 # add include directories

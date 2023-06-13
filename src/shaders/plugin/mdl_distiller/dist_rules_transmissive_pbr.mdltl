@@ -1,0 +1,1070 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+// Rules that directly map individual expressions to other mdl expressions
+// functions.
+// difference to ue4:
+// all transmissions are first converted to simple_glossy_transmit, this allows easier check against ggx reflections at later stages.
+
+rules Make_simple_for_tpbr bottomup {
+    import nvidia::distilling_support;
+
+    // Fix wrong 0.0 initialization of the normal field in older materials.
+    material( tw,sf,bf,ior,vol,
+              material_geometry(dis,cutout,n))
+        --> material(tw,sf,bf,ior,vol,material_geometry(dis,cutout,state::normal()))
+        if n == 0.0;
+    microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t,mode) -->
+                simple_glossy_bsdf(ru,rv,tint,color(0.0),t,mode)
+        if mode == scatter_transmit;
+
+    microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t,mode) -->
+                custom_curve_layer( nvidia::distilling_support::refl_from_ior(option( global_float_ior)),
+                    1.0,5.0,1.0, microfacet_ggx_vcavities_bsdf(ru,rv,tint,color(0.0),t,scatter_reflect), simple_glossy_bsdf(ru,rv,tint,color(0.0),t,scatter_transmit))
+        if mode == scatter_reflect_transmit;
+
+    //fix all reflective glossy/specular to be ggx
+    microfacet_beckmann_smith_bsdf(ru,rv,tint,_,t,mode) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
+    specular_bsdf(tint,mode) --> microfacet_ggx_vcavities_bsdf( 0.0,0.0,tint,color(0.0),state::texture_tangent_u(0),mode) repeat_rules;
+    microfacet_beckmann_vcavities_bsdf(ru,rv,tint,_,t,mode)--> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
+    microfacet_ggx_smith_bsdf(ru,rv,tint,_,t,mode) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
+    simple_glossy_bsdf(ru,rv,tint,_,t,mode) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules if mode != scatter_transmit;
+    ward_geisler_moroder_bsdf(ru,rv,tint,_,t) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t) repeat_rules;
+    backscattering_glossy_reflection_bsdf(ru,rv,tint,_,t,handle) --> microfacet_ggx_vcavities_bsdf(ru,rv,tint,color(0.0),t,scatter_reflect,handle) repeat_rules;
+    sheen_bsdf(r,tint,tintt,_,handle) --> microfacet_ggx_vcavities_bsdf(r,r,tint,tintt,state::texture_tangent_u(0),scatter_reflect,handle) repeat_rules;
+
+    //some brutal removal of unsupported components: todo see if we can do better
+    measured_bsdf(_) --> bsdf();
+    thin_film(_,_,base) --> base repeat_rules;
+    measured_curve_factor(a,base) -->
+        bsdf_tint(a[0],base);
+    measured_factor(t,base) -->
+        bsdf_tint(nvidia::distilling_support::directional_coloring(
+            tex::lookup_color(t,float2(0.0),
+                              wrap_repeat,wrap_repeat,float2(0.0,1.0),float2(0.0,1.0),0.0),
+            tex::lookup_color(t,float2(1.0),
+                              wrap_repeat,wrap_repeat,float2(0.0,1.0),float2(0.0,1.0),0.0
+                      ),1.0),base);
+
+    bsdf_directional_factor(tint_n,tint_g,e,base) -->
+        custom_curve_layer( 0.0,1.0,e, 1.0, bsdf_tint(tint_g,base), bsdf_tint(tint_n,base));
+
+    bsdf_clamped_mix_1(w1,df1) --> bsdf_tint( color(w1), df1);
+    bsdf_unbounded_mix_1(w1,df1) --> bsdf_tint( color(w1), df1);
+    bsdf_mix_1(w1,df1) --> bsdf_tint( color(w1), df1);
+    //total review of mix handling necessary todo.
+    bsdf_clamped_mix_2(w1,df1,w2,df2) --> bsdf_mix_2(w1,df1,w2,df2);
+    bsdf_clamped_mix_3(w1,df1,w2,df2,w3,df3) --> bsdf_mix_2(w1,df1,w2+w3,bsdf_mix_2(w2/(w2+w3),df2,w3/(w2+w3),df3));
+    bsdf_unbounded_mix_2(w1,df1,w2,df2) --> bsdf_mix_2(w1,df1,w2,df2);
+    bsdf_unbounded_mix_3(w1,df1,w2,df2,w3,df3) --> bsdf_mix_2(w1,df1,w2+w3,bsdf_mix_2(w2/(w2+w3),df2,w3/(w2+w3),df3));
+    bsdf_mix_3(w1,df1,w2,df2,w3,df3)--> bsdf_mix_2(w1,df1,w2+w3,bsdf_mix_2(w2/(w2+w3),df2,w3/(w2+w3),df3));
+
+    diffuse_transmission_bsdf(tint) --> simple_glossy_bsdf(1.0,1.0,tint,color(0.0),state::texture_tangent_u(0),scatter_transmit);
+
+    //if a glossy is layered on top of a diffuse that's unbumped, bump the diffuse too to emphasize the glossy bump
+    weighted_layer(w,microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t,m),diffuse_reflection_bsdf(tint1,r),n) -->
+        weighted_layer(w,microfacet_ggx_vcavities_bsdf(ru,rv,tint,color(0.0),t,m),weighted_layer(1.0,diffuse_reflection_bsdf(tint1,r),bsdf(),n),n)
+        maybe n != state::normal();
+    fresnel_layer( ior, _, _, base, _) -->
+        base if ior ==1.0;
+    fresnel_layer( ior, w, layer, simple_glossy_bsdf(r1,r2,c,ms,m), n) -->
+        custom_curve_layer(nvidia::distilling_support::refl_from_ior(ior),1.0,5.0,w,layer,
+            bsdf_mix_2(1.0,simple_glossy_bsdf(r1,r2,c,ms,m),0.0,diffuse_reflection_bsdf(color(0.),0.)),n);
+    fresnel_layer( ior, w, layer, base, n) -->
+        custom_curve_layer(nvidia::distilling_support::refl_from_ior(ior),1.0,5.0,w,layer,base,n);
+
+    measured_curve_layer(a,w,layer,base,n) -->
+        weighted_layer( math::max_value(a[0])*w, bsdf_tint(a[0]/math::max_value(a[0]),layer), base, n);
+
+    dusty_diffuse_reflection_bsdf(tint) --> diffuse_reflection_bsdf(tint, 1.0);
+
+
+    postcond
+        nonode(diffuse_transmission_bsdf) &&
+        nonode(specular_bsdf) && //done testing
+//        nonode(simple_glossy_bsdf) &&
+        nonode(backscattering_glossy_reflection_bsdf) &&//done testing
+        nonode(sheen_bsdf) &&//done testing
+        nonode(measured_bsdf) &&
+        nonode(microfacet_beckmann_smith_bsdf) &&
+        nonode(microfacet_ggx_smith_bsdf) &&
+        nonode(microfacet_beckmann_vcavities_bsdf) &&
+        nonode(ward_geisler_moroder_bsdf) &&//done testing
+        nonode(thin_film) &&
+        nonode(bsdf_directional_factor) &&
+        nonode(measured_curve_factor) &&
+        nonode(measured_factor) &&
+        nonode(bsdf_mix_1) &&//done testing
+        nonode(bsdf_mix_3) &&//done testing
+        nonode(bsdf_clamped_mix_1) &&//done testing
+        nonode(bsdf_clamped_mix_2) &&//done testing
+        nonode(bsdf_clamped_mix_3) &&
+        nonode(bsdf_unbounded_mix_1) &&
+        nonode(bsdf_unbounded_mix_2) &&
+        nonode(bsdf_unbounded_mix_3) &&
+        nonode(bsdf_color_mix_1) &&
+        nonode(bsdf_color_mix_2) &&
+        nonode(bsdf_color_mix_3) &&
+        nonode(bsdf_color_clamped_mix_1) &&
+        nonode(bsdf_color_clamped_mix_2) &&
+        nonode(bsdf_color_clamped_mix_3) &&
+        nonode(bsdf_color_unbounded_mix_1) &&
+        nonode(bsdf_color_unbounded_mix_2) &&
+        nonode(bsdf_color_unbounded_mix_3) &&
+//        nonode(weighted_layer) &&//done testing
+//        nonode(color_weighted_layer) &&
+        nonode(fresnel_layer) &&//done testing
+        nonode(color_fresnel_layer) &&
+        nonode(measured_curve_layer) &&
+        nonode(fresnel_factor) &&
+        nonode(color_measured_curve_layer);
+//        custom_curve_layer
+//        bsdf_mix_2
+//        diffuse_reflection_bsdf
+//        microfacet_ggx_vcavities_bsdf
+//        bsdf_tint
+
+}
+
+rules Make_normal_for_tpbr bottomup {
+
+    material( tw,
+              material_surface(
+                  df @ bsdf [[ local_normal_n ~ nl ]]),
+              bf,ior,vol,
+              material_geometry(d,cutout,_n), hair)
+        --> material(tw,material_surface(df),bf,ior,vol,material_geometry(d,cutout,nl),hair);
+
+    b ~ bsdf() --> b [[ local_normal_w = 0.0, local_normal_n = state::normal() ]];
+    b ~ bsdf_tint(_, _bs [[ local_normal_w ~ nw, local_normal_n ~ n ]]) -->
+        b [[ local_normal_w = nw, local_normal_n = n ]];
+    b ~ bsdf_tint_ex(_,_, _bs [[ local_normal_w ~ nw, local_normal_n ~ n ]]) -->
+        b [[ local_normal_w = nw, local_normal_n = n ]];
+    b ~ diffuse_reflection_bsdf(_,_) --> b [[ local_normal_w = 0.0, local_normal_n = state::normal() ]];
+    b ~ simple_glossy_bsdf(_,_,_,_,_) --> b [[ local_normal_w = 0.0, local_normal_n = state::normal() ]];
+
+    b ~ microfacet_ggx_vcavities_bsdf(_,_,_,_,_) --> b [[ local_normal_w = 0.0, local_normal_n = state::normal() ]];
+
+    //mixes, make sure only expressions are generated if one of the components has a weight != 0
+    b ~ bsdf_mix_2(_, _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                   _, _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]])
+         --> b [[ local_normal_w = 0.0, local_normal_n = nl1 ]]
+        if (nl1 == nl2) && (nw1 == nw2) && (nw1 == 0.0) ;
+    b ~ bsdf_mix_2(_, _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                   _, _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]])
+         --> b [[ local_normal_w = 0.0, local_normal_n = nl2 ]]
+        if (nl1 == nl2) && (nw1 == nw2) && (nw2 == 0.0) deadrule;
+
+    b ~ bsdf_mix_2(w1, _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                   w2, _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]])
+         --> b [[ local_normal_w = w1 * nw1 + w2 * nw2, local_normal_n = nl1 ]]
+        if (nl1 == nl2);
+
+    b ~ bsdf_mix_2(w1, _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                   w2, _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]])
+        --> b [[ local_normal_w = w1 * nw1 + w2 * nw2,
+                 local_normal_n = nvidia::distilling_support::combine_normals( w1 , nl1, w2 , nl2) ]];
+
+    //layering will always generate a weight, i.e. subsequent layering will only partially affect the overall normal
+    //todo: what if layering contains transmission?
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                       _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                       n)
+        --> b [[ local_normal_w = w1, local_normal_n = n ]]
+        if (n == nl1) && (n == nl2) && (nw1 == 0.0) && (nw2 == 0.0);
+
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                       _bs2,
+                       _)
+        --> b [[ local_normal_w = w1, local_normal_n = nl1 ]]
+          if (nw1 == 1.0) && w1 == (1.0);
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1]],
+                       _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                       _)
+        --> b [[ local_normal_w = (1.0-w1) * nw2 + w1,
+                 local_normal_n = nvidia::distilling_support::combine_normals( 1.0-w1, nl2, w1, nl1) ]]
+          if nw1 == 1.0;
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_n ~ nw1 ]],
+                       _bs2,
+                       n)
+        --> b [[ local_normal_w = w1, local_normal_n = n ]]
+          if (nw1 == 0.0) && w1 == (1.0) deadrule;
+
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1 ]],
+                       _bs2 [[ local_normal_n ~ nl2 ]],
+                       n)
+       --> b [[ local_normal_w = w1, local_normal_n = n  ]]
+         if nw1 == 0.0 && nl2 == state::normal();
+
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1 ]],
+                       _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                       n)
+        --> b [[ local_normal_w = (1.0-w1) * nw2 + w1,
+                 local_normal_n = nvidia::distilling_support::combine_normals( 1.0-w1, nl2, w1, n) ]]
+          if nw1 == 0.0;
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                       _bs2,
+                       n)
+        --> b [[ local_normal_w = w1,
+                 local_normal_n = nvidia::distilling_support::combine_normals(1.0-nw1,n,nw1,nl1) ]]
+          if w1 == 1.0;
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                       _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                       n)
+        --> b [[ local_normal_w = (1.0-w1) * nw2 + w1,
+                 local_normal_n = nvidia::distilling_support::combine_normals( 1.0-w1, nl2, w1, 
+                                                                               nvidia::distilling_support::combine_normals(1.0-nw1,n,nw1,nl1)) ]];
+
+    //dont collect normals of custom curve layers top, these are for clearcoats
+    b ~ custom_curve_layer(_,_,_,_,
+                           _,
+                           _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                           _)
+        --> b [[ local_normal_w = nw2, local_normal_n = nl2 ]];
+}
+
+rules Fix_common_roughness_for_tpbr topdown {
+//align roughness if there are 2 glossy lobes mixed and color if we have metallic and dielectric
+    material(tw,material_surface(bsdf_mix_2(
+        w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1),
+        w2,custom_curve_layer(f0,f90,e,w,microfacet_ggx_vcavities_bsdf(ru2,rv2,tint2,_,_),base,n)),em),
+            bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(bsdf_mix_2(
+            w1,microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1,ru1,w2,ru2),
+                nvidia::distilling_support::average(w1,rv1,w2,rv2),
+                tint1,color(0.0),t1),
+            w2,custom_curve_layer(f0,f90,e,w,
+                microfacet_ggx_vcavities_bsdf(
+                    nvidia::distilling_support::average(w1,ru1,w2,ru2),
+                    nvidia::distilling_support::average(w1,rv1,w2,rv2),
+                    tint2,color(0.0),t1),base,n)),em),
+                bf,ior,vol,material_geometry(d,cutout,ng)) skip_recursion maybe ru2 != ru1
+                deadrule; //sorting triggers other rule
+
+    material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,_,t4),
+        bsdf_mix_2(
+            w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1),
+            w2,custom_curve_layer(f0,f90,e,w,microfacet_ggx_vcavities_bsdf(ru2,rv2,tint2,_,t2),base,n)
+            ),n3)
+            ,em),bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,color(0.0),t4),
+            bsdf_mix_2(
+                w1,microfacet_ggx_vcavities_bsdf(nvidia::distilling_support::average(w1,ru1,w2,ru2),nvidia::distilling_support::average(w1,rv1,w2,rv2),tint1,color(0.0),t1),
+                w2,custom_curve_layer(f0,f90,e,w,microfacet_ggx_vcavities_bsdf(nvidia::distilling_support::average(w1,ru1,w2,ru2),nvidia::distilling_support::average(w1,rv1,w2,rv2),tint2,color(0.0),t2),base,n))
+                ,n3),em),
+                    bf,ior,vol,material_geometry(d,cutout,ng)) skip_recursion maybe ru2 != ru1
+                deadrule; //sorting triggers other rule
+
+    material(tw,material_surface(bsdf_mix_2(
+        w2,custom_curve_layer(f0,f90,e,w,microfacet_ggx_vcavities_bsdf(ru2,rv2,tint2,_,t2),base,n),
+        w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,_)
+        ),em),
+            bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(bsdf_mix_2(
+            w2,custom_curve_layer(f0,f90,e,w,
+                microfacet_ggx_vcavities_bsdf(
+                    aniso.roughness_u,
+                    aniso.roughness_v,
+                    tint2,color(0.0),aniso.tangent),
+                base,n),
+            w1,microfacet_ggx_vcavities_bsdf(
+                    aniso.roughness_u,
+                    aniso.roughness_v,
+                    tint1,color(0.0),aniso.tangent)
+            ),em),
+                bf,ior,vol,material_geometry(d,cutout,ng))
+       skip_recursion
+       maybe (ru2 != ru1) && (t2 != state::texture_tangent_u(0))
+       where aniso = nvidia::distilling_support::transform_aniso_semantics(
+            nvidia::distilling_support::user_roughness_info(aniso1.roughness,aniso1.anisotropy, aniso1.rotation))
+            aniso1 = nvidia::distilling_support::transform_inverse_aniso_semantics(
+                nvidia::distilling_support::average(w1,ru1,w2,ru2),
+                nvidia::distilling_support::average(w1,rv1,w2,rv2),
+                t2);
+
+    material(tw,material_surface(bsdf_mix_2(
+        w2,custom_curve_layer(f0,f90,e,w,microfacet_ggx_vcavities_bsdf(ru2,rv2,tint2,_,_),base,n),
+        w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1)
+        ),em),
+            bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(bsdf_mix_2(
+            w2,custom_curve_layer(f0,f90,e,w,
+                microfacet_ggx_vcavities_bsdf(
+                    aniso.roughness_u,
+                    aniso.roughness_v,
+                    tint2,color(0.0),aniso.tangent),
+                base,n),
+            w1,microfacet_ggx_vcavities_bsdf(
+                    aniso.roughness_u,
+                    aniso.roughness_v,
+                    tint1,color(0.0),aniso.tangent)
+            ),em),
+                bf,ior,vol,material_geometry(d,cutout,ng))
+       skip_recursion
+       maybe ru2 != ru1
+       where aniso = nvidia::distilling_support::transform_aniso_semantics(
+                nvidia::distilling_support::user_roughness_info(aniso1.roughness,aniso1.anisotropy, aniso1.rotation))
+            aniso1 = nvidia::distilling_support::transform_inverse_aniso_semantics(
+                nvidia::distilling_support::average(w1,ru1,w2,ru2),
+                nvidia::distilling_support::average(w1,rv1,w2,rv2),
+                t1);
+
+    material(tw,material_surface(bsdf_mix_2(
+        w2,custom_curve_layer(f0,f90,e,w,microfacet_ggx_vcavities_bsdf(_,_,tint2,_,_),base,n),
+        w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1)
+        ),em),
+            bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(bsdf_mix_2(
+            w2,custom_curve_layer(f0,f90,e,w,
+                microfacet_ggx_vcavities_bsdf(
+                    aniso.roughness_u,
+                    aniso.roughness_v,
+                    tint2,color(0.0),aniso.tangent),
+                base,n),
+            w1,microfacet_ggx_vcavities_bsdf(
+                    aniso.roughness_u,
+                    aniso.roughness_v,
+                    tint1,color(0.0),aniso.tangent)
+            ),em),
+                bf,ior,vol,material_geometry(d,cutout,ng))
+       skip_recursion
+       where aniso = nvidia::distilling_support::transform_aniso_semantics(
+                nvidia::distilling_support::user_roughness_info(aniso1.roughness,aniso1.anisotropy, aniso1.rotation))
+            aniso1 = nvidia::distilling_support::transform_inverse_aniso_semantics(
+                ru1,
+                rv1,
+                t1);
+
+
+    material(tw,material_surface(
+        microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1)
+        ,em),
+            bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(
+            microfacet_ggx_vcavities_bsdf(
+                    aniso.roughness_u,
+                    aniso.roughness_v,
+                    tint1,color(0.0),aniso.tangent)
+            ,em),
+                bf,ior,vol,material_geometry(d,cutout,ng))
+       skip_recursion
+       where aniso = nvidia::distilling_support::transform_aniso_semantics(
+                nvidia::distilling_support::user_roughness_info(aniso1.roughness,aniso1.anisotropy, aniso1.rotation))
+            aniso1 = nvidia::distilling_support::transform_inverse_aniso_semantics(
+                ru1,
+                rv1,
+                t1);
+
+material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,_,t4),
+        bsdf_mix_2(
+            w2,custom_curve_layer(f0,f90,e,w,microfacet_ggx_vcavities_bsdf(ru2,rv2,tint2,_,t2),base,n),
+            w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,_)
+            ),n3)
+            ,em),bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,color(0.0),t4),
+            bsdf_mix_2(
+                w2,custom_curve_layer(f0,f90,e,w,
+                    microfacet_ggx_vcavities_bsdf(
+                        aniso.roughness_u,
+                        aniso.roughness_v,
+                        tint2,color(0.0),aniso.tangent),
+                    base,n),
+                w1,microfacet_ggx_vcavities_bsdf(
+                        aniso.roughness_u,
+                        aniso.roughness_v,
+                        tint1,color(0.0),aniso.tangent)
+                ),n3),em),
+                    bf,ior,vol,material_geometry(d,cutout,ng))
+        skip_recursion
+       maybe (ru2 != ru1) && (t2 != state::texture_tangent_u(0))
+        where aniso = nvidia::distilling_support::transform_aniso_semantics(
+                nvidia::distilling_support::user_roughness_info(aniso1.roughness,aniso1.anisotropy, aniso1.rotation))
+            aniso1 = nvidia::distilling_support::transform_inverse_aniso_semantics(
+                nvidia::distilling_support::average(w1,ru1,w2,ru2),
+                nvidia::distilling_support::average(w1,rv1,w2,rv2),
+                t2);
+
+    material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,_,t4),
+        bsdf_mix_2(
+            w2,custom_curve_layer(f0,f90,e,w,microfacet_ggx_vcavities_bsdf(ru2,rv2,tint2,_,_),base,n),
+            w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1)
+            ),n3)
+            ,em),bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,color(0.0),t4),
+            bsdf_mix_2(
+                w2,custom_curve_layer(f0,f90,e,w,
+                    microfacet_ggx_vcavities_bsdf(
+                        aniso.roughness_u,
+                        aniso.roughness_v,
+                        tint2,color(0.0),aniso.tangent),
+                    base,n),
+                w1,microfacet_ggx_vcavities_bsdf(
+                        aniso.roughness_u,
+                        aniso.roughness_v,
+                        tint1,color(0.0),aniso.tangent)
+                ),n3),em),
+                    bf,ior,vol,material_geometry(d,cutout,ng))
+        skip_recursion
+        maybe ru2 != ru1
+        where aniso = nvidia::distilling_support::transform_aniso_semantics(
+                nvidia::distilling_support::user_roughness_info(aniso1.roughness,aniso1.anisotropy, aniso1.rotation))
+            aniso1 = nvidia::distilling_support::transform_inverse_aniso_semantics(
+                nvidia::distilling_support::average(w1,ru1,w2,ru2),
+                nvidia::distilling_support::average(w1,rv1,w2,rv2),
+                t1);
+
+    material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,_,t4),
+        bsdf_mix_2(
+            w2,custom_curve_layer(f0,f90,e,w,microfacet_ggx_vcavities_bsdf(_,_,tint2,_,_),base,n),
+            w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1)
+            ),n3)
+            ,em),bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,color(0.0),t4),
+            bsdf_mix_2(
+                w2,custom_curve_layer(f0,f90,e,w,
+                    microfacet_ggx_vcavities_bsdf(
+                        aniso.roughness_u,
+                        aniso.roughness_v,
+                        tint2,color(0.0),aniso.tangent),
+                    base,n),
+                w1,microfacet_ggx_vcavities_bsdf(
+                        aniso.roughness_u,
+                        aniso.roughness_v,
+                        tint1,color(0.0),aniso.tangent)
+                ),n3),em),
+                    bf,ior,vol,material_geometry(d,cutout,ng))
+        skip_recursion
+        where aniso = nvidia::distilling_support::transform_aniso_semantics(
+                nvidia::distilling_support::user_roughness_info(aniso1.roughness,aniso1.anisotropy, aniso1.rotation))
+            aniso1 = nvidia::distilling_support::transform_inverse_aniso_semantics(
+                ru1,
+                rv1,
+                t1);
+
+    material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,_,t4),
+            custom_curve_layer(f0,f90,e,w,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint2,_,t1),base,n)
+            ,n3)
+            ,em),bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,color(0.0),t4),
+                custom_curve_layer(f0,f90,e,w,
+                    microfacet_ggx_vcavities_bsdf(
+                        aniso.roughness_u,
+                        aniso.roughness_v,
+                        tint2,color(0.0),aniso.tangent),
+                    base,n)
+                ,n3),em),
+                    bf,ior,vol,material_geometry(d,cutout,ng))
+        skip_recursion
+        where aniso = nvidia::distilling_support::transform_aniso_semantics(
+                nvidia::distilling_support::user_roughness_info(aniso1.roughness,aniso1.anisotropy, aniso1.rotation))
+            aniso1 = nvidia::distilling_support::transform_inverse_aniso_semantics(
+                ru1,
+                rv1,
+                t1);
+
+    material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,_,t4),
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1)
+            ,n3)
+            ,em),bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,color(0.0),t4),
+                microfacet_ggx_vcavities_bsdf(
+                        aniso.roughness_u,
+                        aniso.roughness_v,
+                        tint1,color(0.0),aniso.tangent)
+                ,n3),em),
+                    bf,ior,vol,material_geometry(d,cutout,ng))
+        skip_recursion
+        where aniso = nvidia::distilling_support::transform_aniso_semantics(
+                nvidia::distilling_support::user_roughness_info(aniso1.roughness,aniso1.anisotropy, aniso1.rotation))
+            aniso1 = nvidia::distilling_support::transform_inverse_aniso_semantics(
+                ru1,
+                rv1,
+                t1);
+    material(tw,material_surface(
+        custom_curve_layer(f0,f90,e,w,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint2,_,t1),base,n)
+        ,em),
+            bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(
+            custom_curve_layer(f0,f90,e,w,
+                microfacet_ggx_vcavities_bsdf(
+                    aniso.roughness_u,
+                    aniso.roughness_v,
+                    tint2,color(0.0),aniso.tangent),
+                base,n)
+            ,em),
+                bf,ior,vol,material_geometry(d,cutout,ng))
+       skip_recursion
+       where aniso = nvidia::distilling_support::transform_aniso_semantics(
+                nvidia::distilling_support::user_roughness_info(aniso1.roughness,aniso1.anisotropy, aniso1.rotation))
+            aniso1 = nvidia::distilling_support::transform_inverse_aniso_semantics(
+                ru1,
+                rv1,
+                t1);
+
+}
+
+// Removes all tint modifiers.
+rules Elide_tint_for_tpbr topdown {
+    bsdf_tint( _, bsdf()) --> bsdf() skip_recursion;//eliminatre earlier???
+    bsdf_tint( c, diffuse_reflection_bsdf(tint,r)) --> diffuse_reflection_bsdf( c * tint, r) skip_recursion;
+    bsdf_tint( c, microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t)) --> microfacet_ggx_vcavities_bsdf( ru,rv,c * tint,color(0.0),t) skip_recursion;
+    //glossy is transmission
+    //bsdf_tint( c, simple_glossy_bsdf(ru,rv,tint,_,t)) --> simple_glossy_bsdf( ru,rv,c * tint,color(0.0),t) skip_recursion;
+    bsdf_tint( c, bsdf_tint(tint,base)) --> bsdf_tint( c * tint, base) repeat_rules;
+    bsdf_tint( c, bsdf_tint_ex(tint,tintt,base)) --> bsdf_tint_ex( c * tint, c * tintt, base) repeat_rules;
+    bsdf_tint( c, bsdf_mix_2(w1,df1,w2,df2))
+        --> bsdf_mix_2( w1, bsdf_tint( c, df1), w2, bsdf_tint( c, df2));
+    bsdf_tint( c, custom_curve_layer(f0,f90,e,w,layer,base,n))
+        --> custom_curve_layer( f0,f90,e, w, bsdf_tint( c, layer), bsdf_tint( c, base), n);
+
+    bsdf_tint_ex( _, _, bsdf()) --> bsdf() skip_recursion;//eliminate earlier???
+    bsdf_tint_ex( c, _, diffuse_reflection_bsdf(tint,r)) --> diffuse_reflection_bsdf( c * tint, r) skip_recursion;
+    bsdf_tint_ex( c, _, microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t)) --> microfacet_ggx_vcavities_bsdf( ru,rv,c * tint,color(0.0),t) skip_recursion;
+    bsdf_tint_ex( c, ct, bsdf_tint(tint,base)) --> bsdf_tint_ex( c * tint, ct * tint, base) repeat_rules;
+    bsdf_tint_ex( c, ct, bsdf_tint_ex(tint,tintt,base)) --> bsdf_tint_ex( c * tint, ct * tintt, base) repeat_rules;
+    bsdf_tint_ex( c, ct, bsdf_mix_2(w1,df1,w2,df2))
+        --> bsdf_mix_2( w1, bsdf_tint_ex( c, ct, df1), w2, bsdf_tint_ex( c, ct, df2));
+    bsdf_tint_ex( c, ct, custom_curve_layer(f0,f90,e,w,layer,base,n))
+        --> custom_curve_layer( f0,f90,e, w, bsdf_tint_ex( c, ct, layer), bsdf_tint_ex( c, ct, base), n);
+    postcond nonode(bsdf_tint) && nonode(bsdf_tint_ex);
+}
+
+
+rules Collect_transmission_for_tpbr bottomup {
+//no transmission found
+//    material(tw,material_surface(_,em),bf,ior,vol,material_geometry(d,cutout,n))
+//        --> material(tw,material_surface(simple_glossy_bsdf(0.0,0.0,color(0.0),color(0.0)),em),bf,ior,vol,
+//                     material_geometry(d,cutout,n));
+//use rv to store the weight, ignore anisotropy
+    simple_glossy_bsdf(ru,_,tint,_,_) --> simple_glossy_bsdf(ru,1.0,tint,color(0.0));
+    bsdf_tint(tint1,simple_glossy_bsdf(ru,rv,tint,_,_))--> simple_glossy_bsdf(ru,rv,tint*tint1,color(0.0));
+    bsdf_tint_ex(_,tint1,simple_glossy_bsdf(ru,rv,tint,_,_))--> simple_glossy_bsdf(ru,rv,tint*tint1,color(0.0));
+    custom_curve_layer(w1,_,_,w2,
+            simple_glossy_bsdf(r1,weight1,tint1,_,_),
+            simple_glossy_bsdf(r2,weight2,tint2,_,_),_)
+        --> simple_glossy_bsdf(
+                w1*w2*r1 + (1.0-w1*w2) *r2,
+                w1*w2 *weight1 + (1.0-w1*w2) *weight2,
+                w1*w2 *tint1 + (1.0-w1*w2) *tint2,
+                color(0.0));
+    custom_curve_layer(_,_,_,_,
+            _,
+            simple_glossy_bsdf(r2,weight2,tint2,_,_),_)
+        --> simple_glossy_bsdf(r2,weight2,tint2,color(0.0));
+    custom_curve_layer(w1,_,_,w2,
+            simple_glossy_bsdf(r1,weight1,tint1,_,_),
+            _,_)
+        --> simple_glossy_bsdf(r1,w1*w2*weight1,tint1,color(0.0));
+    bsdf_mix_2(
+        w1, simple_glossy_bsdf(r1,weight1,tint1,_,_),
+        w2, simple_glossy_bsdf(r2,weight2,tint2,_,_))
+        --> simple_glossy_bsdf(
+            nvidia::distilling_support::average(w1,r1,w2,r2),
+            weight1*w1+weight2*w2,
+            nvidia::distilling_support::average(w1,tint1,w2,tint2),
+            color(0.0));
+    bsdf_mix_2(
+        _, _,
+        w2, simple_glossy_bsdf(r2,weight2,tint2,_,_))
+        --> simple_glossy_bsdf(r2,weight2*w2,tint2,color(0.0));
+    bsdf_mix_2(
+        w2, simple_glossy_bsdf(r2,weight2,tint2,_,_),
+        _, _)
+        --> simple_glossy_bsdf(r2,weight2*w2,tint2,color(0.0));
+}
+
+rules Elide_transmission_for_tpbr bottomup {
+    material(tw,material_surface(
+        simple_glossy_bsdf(_,_,_,_,_),em),
+            bf,ior,vol,material_geometry(d,cutout,ng))
+        -->  material(tw,material_surface(
+            diffuse_reflection_bsdf(color(0.0),0.0),em),
+                bf,ior,vol,material_geometry(d,cutout,ng));
+    bsdf_tint(_,simple_glossy_bsdf(c,d,a,b,e))
+        --> simple_glossy_bsdf(c,d,a,b,e);
+    bsdf_tint_ex(_,_,simple_glossy_bsdf(u,d,a,b,e))
+        --> simple_glossy_bsdf(u,d,a,b,e);
+    custom_curve_layer(_,_,_,_,
+            simple_glossy_bsdf(_,_,_,_,_),
+            simple_glossy_bsdf(c,d,a,b,e),_)
+        --> simple_glossy_bsdf(c,d,a,b,e);
+    custom_curve_layer(_,_,_,_,
+            simple_glossy_bsdf(_,_,_,_,_),
+            s,_)
+        --> s;
+    custom_curve_layer(f0,f90,e,w,
+            s,simple_glossy_bsdf(_,_,_,_,_),
+            n)
+        --> custom_curve_layer(f0,f90,e,w,
+            s,diffuse_reflection_bsdf(color(0.0),0.0),n);
+    bsdf_mix_2(
+        _, simple_glossy_bsdf(c,d,a,b,e),
+        _, simple_glossy_bsdf(_,_,_,_,_))
+        --> simple_glossy_bsdf(c,d,a,b,e);
+    bsdf_mix_2(
+        w1, s,
+        _, simple_glossy_bsdf(_,_,_,_,_))
+        --> bsdf_tint(color(w1),s);
+    bsdf_mix_2(
+        _, simple_glossy_bsdf(_,_,_,_,_),
+        w1, s)
+        --> bsdf_tint(color(w1),s);
+}
+
+
+
+rules Insert_transmission_for_tpbr topdown {
+//add transmissive brdf as necessary, also insert volume transformation
+    material(tw,//coated metal
+        material_surface(
+            custom_curve_layer(f0,f90,e,w2,
+                s3,
+                weighted_layer(w1,
+                    microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1),s1,n1),
+                n2),
+            em),
+        material_surface(
+            simple_glossy_bsdf(r,w,c,_,_),_),
+        ior,
+        material_volume(df,absorption_coeff,scattering_coeff),
+        material_geometry(d,cutout,ng))
+        -->  material(tw,material_surface(
+            custom_curve_layer(f0,f90,e,w2,
+                s3,
+                weighted_layer(w1,
+                    bsdf_mix_2(w,
+                        custom_curve_layer(0.04,1.0,5.0,0.0,
+                            microfacet_ggx_vcavities_bsdf(ru1,rv1,color(0.0),color(0.0),state::texture_tangent_u(0),scatter_reflect),
+                            bsdf_mix_2(1.0,microfacet_ggx_vcavities_bsdf(r,r,c,color(0.0),state::texture_tangent_u(0),scatter_transmit),
+                                0.0,diffuse_reflection_bsdf(color(0.0),0.0)),
+                            state::normal()),
+                        1.0-w,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,color(0.0),t1)),
+                    s1,n1),
+                n2),
+            em),
+            material_surface(),ior,
+            material_volume(df,vparam.absorption_coefficient,vparam.scattering_coefficient),
+            material_geometry(d,cutout,ng))
+            skip_recursion
+            where vparam = nvidia::distilling_support::transform_volume_semantics(
+                nvidia::distilling_support::user_volume_info(vparam1.attenuation,vparam1.subsurface,vparam1.distance))
+            vparam1 = nvidia::distilling_support::transform_inverse_volume_semantics(
+                absorption_coeff,
+                scattering_coeff);
+
+    material(tw,//metal
+        material_surface(
+                weighted_layer(w1,
+                    microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1),
+                s1,n1),
+            em),
+        material_surface(
+            simple_glossy_bsdf(r,w,c,_,_),_),
+        ior,
+        material_volume(df,absorption_coeff,scattering_coeff),
+        material_geometry(d,cutout,ng))
+        -->  material(tw,material_surface(
+            weighted_layer(w1,
+                bsdf_mix_2(w,
+                    custom_curve_layer(0.04,1.0,5.0,0.0,
+                        microfacet_ggx_vcavities_bsdf(ru1,rv1,color(0.0),color(0.0),state::texture_tangent_u(0),scatter_reflect),
+                        bsdf_mix_2(1.0,microfacet_ggx_vcavities_bsdf(r,r,c,color(0.0),state::texture_tangent_u(0),scatter_transmit),
+                            0.0,diffuse_reflection_bsdf(color(0.0),0.0)),
+                        state::normal()),
+                    1.0-w,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,color(0.0),t1)),
+                s1,n1),
+            em),
+            material_surface(),ior,
+            material_volume(df,vparam.absorption_coefficient,vparam.scattering_coefficient),
+            material_geometry(d,cutout,ng))
+            skip_recursion
+            where vparam = nvidia::distilling_support::transform_volume_semantics(
+                nvidia::distilling_support::user_volume_info(vparam1.attenuation,vparam1.subsurface,vparam1.distance))
+            vparam1 = nvidia::distilling_support::transform_inverse_volume_semantics(
+                absorption_coeff,
+                scattering_coeff);
+
+    material(tw,//dielectric
+        material_surface(
+                    custom_curve_layer(f0,f90,e,w2,s2,
+                        weighted_layer(w1,
+                            diffuse_reflection_bsdf(c1,r1),
+                        s1,n2),
+                    n1),
+            em),
+        material_surface(
+            simple_glossy_bsdf(r,w,c,_,_),_),
+        ior,
+        material_volume(df,absorption_coeff,scattering_coeff),
+        material_geometry(d,cutout,ng))
+        -->  material(tw,material_surface(
+                custom_curve_layer(f0,f90,e,w2,s2,
+                    weighted_layer(w1,
+                        custom_curve_layer(0.0,1.0,5.0,0.0,
+                            microfacet_ggx_vcavities_bsdf(aniso.roughness_u,aniso.roughness_v,color(0.0),color(0.0)),
+                            bsdf_mix_2(w,microfacet_ggx_vcavities_bsdf(r,r,c,color(0.0),state::texture_tangent_u(0),scatter_transmit),
+                                   1.0-w,diffuse_reflection_bsdf(c1,r1)),
+                            n2),
+                    s1,n2),
+                n1),
+            em),
+            material_surface(),ior,
+            material_volume(df,vparam.absorption_coefficient,vparam.scattering_coefficient),
+            material_geometry(d,cutout,ng))
+            skip_recursion
+            where vparam = nvidia::distilling_support::transform_volume_semantics(
+                nvidia::distilling_support::user_volume_info(vparam1.attenuation,vparam1.subsurface,vparam1.distance))
+            vparam1 = nvidia::distilling_support::transform_inverse_volume_semantics(
+                absorption_coeff,
+                scattering_coeff)
+            aniso = nvidia::distilling_support::transform_aniso_semantics(
+                nvidia::distilling_support::user_roughness_info(aniso1.roughness,aniso1.anisotropy, aniso1.rotation))
+            aniso1 = nvidia::distilling_support::transform_inverse_aniso_semantics(
+                r,
+                r,
+                state::texture_tangent_u(0));
+
+    material(tw,//coated dielectric
+        material_surface(
+            custom_curve_layer(f01,f901,e1,w3,
+                s3,
+                weighted_layer(w1,
+                    custom_curve_layer(f0,f90,e,w2,s2,diffuse_reflection_bsdf(c1,r1),_),
+                s1,n1),
+                n2),
+            em),
+        material_surface(
+            simple_glossy_bsdf(r,w,c,_,_),_),
+        ior,
+        material_volume(df,absorption_coeff,scattering_coeff),
+        material_geometry(d,cutout,ng))
+        -->  material(tw,material_surface(
+            custom_curve_layer(f01,f901,e1,w3,
+                s3,
+                weighted_layer(w1,
+                    custom_curve_layer(f0,f90,e,w2,s2,
+                        bsdf_mix_2(w,microfacet_ggx_vcavities_bsdf(r,r,c,color(0.0),state::texture_tangent_u(0),scatter_transmit),
+                               1.0-w,diffuse_reflection_bsdf(c1,r1)),n1),
+                    s1,n1),
+                n2),
+            em),
+            material_surface(),ior,
+            material_volume(df,vparam.absorption_coefficient,vparam.scattering_coefficient),
+            material_geometry(d,cutout,ng))
+            skip_recursion
+            where vparam = nvidia::distilling_support::transform_volume_semantics(
+                nvidia::distilling_support::user_volume_info(vparam1.attenuation,vparam1.subsurface,vparam1.distance))
+            vparam1 = nvidia::distilling_support::transform_inverse_volume_semantics(
+                absorption_coeff,
+                scattering_coeff);
+
+    material(tw,//diffuse
+        material_surface(
+                weighted_layer(w1,diffuse_reflection_bsdf(c1,r1),s1,n1),
+            em),
+        material_surface(
+            simple_glossy_bsdf(r,w,c,_,_),_),
+        ior,material_volume(df,absorption_coeff,scattering_coeff),material_geometry(d,cutout,ng))
+        -->  material(tw,material_surface(
+            weighted_layer(w1,
+                custom_curve_layer(0.0,1.0,5.0,0.0,microfacet_ggx_vcavities_bsdf(aniso.roughness_u,aniso.roughness_v,color(0.0),color(0.0)),
+                    bsdf_mix_2(w,microfacet_ggx_vcavities_bsdf(r,r,c,color(0.0),state::texture_tangent_u(0),scatter_transmit),
+                               1.0-w,diffuse_reflection_bsdf(c1,r1)),
+                    n1),
+                s1,n1),
+            em),
+            material_surface(),ior,
+            material_volume(df,vparam.absorption_coefficient,vparam.scattering_coefficient),
+            material_geometry(d,cutout,ng))
+            skip_recursion
+            where vparam = nvidia::distilling_support::transform_volume_semantics(
+                nvidia::distilling_support::user_volume_info(vparam1.attenuation,vparam1.subsurface,vparam1.distance))
+            vparam1 = nvidia::distilling_support::transform_inverse_volume_semantics(
+                absorption_coeff,
+                scattering_coeff)
+            aniso = nvidia::distilling_support::transform_aniso_semantics(
+                nvidia::distilling_support::user_roughness_info(aniso1.roughness,aniso1.anisotropy, aniso1.rotation))
+            aniso1 = nvidia::distilling_support::transform_inverse_aniso_semantics(
+                r,
+                r,
+                state::texture_tangent_u(0));
+
+    material(tw,//disney
+        material_surface(
+                weighted_layer(w1,
+                    bsdf_mix_2(w3,custom_curve_layer(f0,f90,e,w2,s2,diffuse_reflection_bsdf(c1,r1),_),
+                               w4,s3),
+                s1,n1),
+            em),
+        material_surface(
+            simple_glossy_bsdf(r,w,c,_,_),_),
+        ior,material_volume(df,absorption_coeff,scattering_coeff),material_geometry(d,cutout,ng))
+        -->  material(tw,material_surface(
+            weighted_layer(w1,
+                bsdf_mix_2(w3,
+                    custom_curve_layer(f0,f90,e,w2,s2,
+                        bsdf_mix_2(w,microfacet_ggx_vcavities_bsdf(r,r,c,color(0.0),state::texture_tangent_u(0),scatter_transmit),
+                            1.0-w,diffuse_reflection_bsdf(c1,r1)),
+                        n1),
+                    w4,s3),
+                s1,n1),
+            em),
+            material_surface(),ior,
+            material_volume(df,vparam.absorption_coefficient,vparam.scattering_coefficient),
+            material_geometry(d,cutout,ng))
+            skip_recursion
+            where vparam = nvidia::distilling_support::transform_volume_semantics(
+                nvidia::distilling_support::user_volume_info(vparam1.attenuation,vparam1.subsurface,vparam1.distance))
+            vparam1 = nvidia::distilling_support::transform_inverse_volume_semantics(
+                absorption_coeff,
+                scattering_coeff);
+
+    material(tw,//coated disney
+        material_surface(
+            custom_curve_layer(f01,f901,e1,w5,
+                s4,
+                weighted_layer(w1,
+                    bsdf_mix_2(w3,custom_curve_layer(f0,f90,e,w2,s2,diffuse_reflection_bsdf(c1,r1),_),
+                               w4,s3),
+                s1,n1),
+                n2),
+            em),
+        material_surface(
+            simple_glossy_bsdf(r,w,c,_,_),_),
+        ior,material_volume(df,absorption_coeff,scattering_coeff),material_geometry(d,cutout,ng))
+        -->  material(tw,material_surface(
+            custom_curve_layer(f01,f901,e1,w5,
+                s4,
+                weighted_layer(w1,
+                    bsdf_mix_2(w3,
+                        custom_curve_layer(f0,f90,e,w2,s2,
+                            bsdf_mix_2(w,microfacet_ggx_vcavities_bsdf(r,r,c,color(0.0),state::texture_tangent_u(0),scatter_transmit),
+                                1.0-w,diffuse_reflection_bsdf(c1,r1)),
+                            n1),
+                        w4,s3),
+                    s1,n1),
+                n2),
+            em),
+            material_surface(),ior,
+            material_volume(df,vparam.absorption_coefficient,vparam.scattering_coefficient),
+            material_geometry(d,cutout,ng))
+            skip_recursion
+            where vparam = nvidia::distilling_support::transform_volume_semantics(
+                nvidia::distilling_support::user_volume_info(vparam1.attenuation,vparam1.subsurface,vparam1.distance))
+            vparam1 = nvidia::distilling_support::transform_inverse_volume_semantics(
+                absorption_coeff,
+                scattering_coeff);
+
+   material(tw,//not transparent
+        material_surface(s,em),_,
+        ior,material_volume(df,absorption_coeff,scattering_coeff),material_geometry(d,cutout,ng))
+        -->  material(tw,material_surface(s,em),
+            material_surface(),ior,
+            material_volume(df,vparam.absorption_coefficient,vparam.scattering_coefficient),
+            material_geometry(d,cutout,ng))
+            skip_recursion
+            where vparam = nvidia::distilling_support::transform_volume_semantics(
+                nvidia::distilling_support::user_volume_info(vparam1.attenuation,vparam1.subsurface,vparam1.distance))
+            vparam1 = nvidia::distilling_support::transform_inverse_volume_semantics(
+                absorption_coeff,
+                scattering_coeff);
+}
+rules Fix_common_tint_for_tpbr topdown {
+//merge transmission color also into base color
+    material(tw,material_surface(
+            custom_curve_layer(f0,f90,e0,w0,s0,
+                weighted_layer(w1,
+                    bsdf_mix_2(wdielec,
+                        custom_curve_layer(f0_1,f90_1,e1,w4,s1,
+                            bsdf_mix_2(
+                                wbase,diffuse_reflection_bsdf(cbase,r2),
+                                wtrans,microfacet_ggx_vcavities_bsdf(ru2,rv2,ctrans,_,t2,m2)
+                                ),
+                            n3),
+                        w3,microfacet_ggx_vcavities_bsdf(ru1,rv1,_,_,t1)),
+                    s3,n1),
+                n2),
+            em),
+            material_surface(),ior,v,g)-->
+        material(tw,material_surface(
+            custom_curve_layer(f0,f90,e0,w0,s0,
+                weighted_layer(w1,
+                    bsdf_mix_2(wdielec,
+                        custom_curve_layer(f0_1,f90_1,e1,w4,s1,
+                            bsdf_mix_2(wtrans,microfacet_ggx_vcavities_bsdf(ru2,rv2,c_new_base,color(0.0),t2,m2),
+                                wbase,diffuse_reflection_bsdf(c_new_base,r2)),
+                            n3),
+                        w3,microfacet_ggx_vcavities_bsdf(ru1,rv1,c_new_base,color(0.0),t1)),
+                    s3,n1),
+                n2),
+            em),
+            material_surface(),ior,v,g)
+        skip_recursion
+        maybe ctrans != cbase
+        where
+            c_new_base = nvidia::distilling_support::average(1.0-wcompletetrans,cbase,wcompletetrans,ctrans)
+            wcompletetrans = wdielec*wtrans;
+
+    material(tw,material_surface(
+            weighted_layer(w1,
+                bsdf_mix_2(wdielec,
+                    custom_curve_layer(f0_1,f90_1,e1,w4,s1,
+                        bsdf_mix_2(
+                            wbase,diffuse_reflection_bsdf(cbase,r2),
+                            wtrans,microfacet_ggx_vcavities_bsdf(ru2,rv2,ctrans,_,t2,m2)
+                            ),
+                        n3),
+                    w3,microfacet_ggx_vcavities_bsdf(ru1,rv1,_,_,t1)),
+                s3,n1),
+            em),
+            material_surface(),ior,v,g)-->
+        material(tw,material_surface(
+            weighted_layer(w1,
+                bsdf_mix_2(wdielec,
+                    custom_curve_layer(f0_1,f90_1,e1,w4,s1,
+                        bsdf_mix_2(wtrans,microfacet_ggx_vcavities_bsdf(ru2,rv2,c_new_base,color(0.0),t2,m2),
+                            wbase,diffuse_reflection_bsdf(c_new_base,r2)),
+                        n3),
+                    w3,microfacet_ggx_vcavities_bsdf(ru1,rv1,c_new_base,color(0.0),t1)),
+                s3,n1),
+            em),
+            material_surface(),ior,v,g)
+        skip_recursion
+        maybe ctrans != cbase
+        where
+        c_new_base = nvidia::distilling_support::average(1.0-wcompletetrans,cbase,wcompletetrans,ctrans)
+        wcompletetrans = wdielec*wtrans;
+
+    material(tw,material_surface(
+            custom_curve_layer(f0,f90,e0,w0,s0,
+                weighted_layer(w1,
+                    custom_curve_layer(f0_1,f90_1,e1,w4,s1,
+                        bsdf_mix_2(
+                            wbase,diffuse_reflection_bsdf(cbase,r2),
+                            wtrans,microfacet_ggx_vcavities_bsdf(ru2,rv2,ctrans,_,t2,m2)
+                            ),
+                        n3),
+                    s3,n1),
+                n2),
+            em),
+            material_surface(),ior,v,g)-->
+        material(tw,material_surface(
+            custom_curve_layer(f0,f90,e0,w0,s0,
+                weighted_layer(w1,
+                    custom_curve_layer(f0_1,f90_1,e1,w4,s1,
+                        bsdf_mix_2(wtrans,microfacet_ggx_vcavities_bsdf(ru2,rv2,c_new_base,color(0.0),t2,m2),
+                            wbase,diffuse_reflection_bsdf(c_new_base,r2)),
+                        n3),
+                    s3,n1),
+                n2),
+            em),
+            material_surface(),ior,v,g)
+        skip_recursion
+        maybe ctrans != cbase
+        where
+        c_new_base = nvidia::distilling_support::average(1.0-wtrans,cbase,wtrans,ctrans);
+}
+rules Fix_common_tint_2_for_tpbr topdown {
+//merge transmission color also into base color
+    material(tw,material_surface(
+            custom_curve_layer(f0,f90,e0,w0,s0,
+                weighted_layer(w1,
+                    bsdf_mix_2(wdielec,
+                        custom_curve_layer(f0_1,f90_1,e1,w4,s1,
+                            bsdf_mix_2(
+                                wbase,diffuse_reflection_bsdf(cbase,r2),
+                                wtrans,microfacet_ggx_vcavities_bsdf(ru2,rv2,ctrans,_,t2,m2)
+                                ),
+                            n3),
+                        w3,s4),
+                    s3,n1),
+                n2),
+            em),
+            material_surface(),ior,v,g)-->
+        material(tw,material_surface(
+            custom_curve_layer(f0,f90,e0,w0,s0,
+                weighted_layer(w1,
+                    bsdf_mix_2(wdielec,
+                        custom_curve_layer(f0_1,f90_1,e1,w4,s1,
+                            bsdf_mix_2(wtrans,microfacet_ggx_vcavities_bsdf(ru2,rv2,c_new_base,color(0.0),t2,m2),
+                                wbase,diffuse_reflection_bsdf(c_new_base,r2)),
+                            n3),
+                        w3,s4),
+                    s3,n1),
+                n2),
+            em),
+            material_surface(),ior,v,g)
+        skip_recursion
+        maybe ctrans != cbase
+        where
+        c_new_base = nvidia::distilling_support::average(wbase,cbase,wtrans,ctrans);
+
+    material(tw,material_surface(
+            weighted_layer(w1,
+                bsdf_mix_2(wdielec,
+                    custom_curve_layer(f0_1,f90_1,e1,w4,s1,
+                        bsdf_mix_2(
+                            wbase,diffuse_reflection_bsdf(cbase,r2),
+                            wtrans,microfacet_ggx_vcavities_bsdf(ru2,rv2,ctrans,_,t2,m2)
+                            ),
+                        n3),
+                    w3,s4),
+                s3,n1),
+            em),
+            material_surface(),ior,v,g)-->
+        material(tw,material_surface(
+            weighted_layer(w1,
+                bsdf_mix_2(wdielec,
+                    custom_curve_layer(f0_1,f90_1,e1,w4,s1,
+                        bsdf_mix_2(wtrans,microfacet_ggx_vcavities_bsdf(ru2,rv2,c_new_base,color(0.0),t2,m2),
+                            wbase,diffuse_reflection_bsdf(c_new_base,r2)),
+                        n3),
+                    w3,s4),
+                s3,n1),
+            em),
+            material_surface(),ior,v,g)
+        skip_recursion
+        maybe ctrans != cbase
+        where
+        c_new_base = nvidia::distilling_support::average(wbase,cbase,wtrans,ctrans);
+
+    material(tw,material_surface(
+            custom_curve_layer(f0,f90,e0,w0,s0,
+                weighted_layer(w1,
+                    custom_curve_layer(f0_1,f90_1,e1,w4,s1,
+                        bsdf_mix_2(
+                            wbase,diffuse_reflection_bsdf(cbase,r2),
+                            wtrans,microfacet_ggx_vcavities_bsdf(ru2,rv2,ctrans,_,t2,m2)
+                            ),
+                        n3),
+                    s3,n1),
+                n2),
+            em),
+            material_surface(),ior,v,g)-->
+        material(tw,material_surface(
+            custom_curve_layer(f0,f90,e0,w0,s0,
+                weighted_layer(w1,
+                    custom_curve_layer(f0_1,f90_1,e1,w4,s1,
+                        bsdf_mix_2(wtrans,microfacet_ggx_vcavities_bsdf(ru2,rv2,c_new_base,color(0.0),t2,m2),
+                            wbase,diffuse_reflection_bsdf(c_new_base,r2)),
+                        n3),
+                    s3,n1),
+                n2),
+            em),
+            material_surface(),ior,v,g)
+        skip_recursion
+        maybe ctrans != cbase
+        where
+        c_new_base = nvidia::distilling_support::average(wbase,cbase,wtrans,ctrans);
+}
+

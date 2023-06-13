@@ -33,9 +33,7 @@
 #ifndef API_API_NEURAY_MATERIAL_INSTANCE_IMPL_H
 #define API_API_NEURAY_MATERIAL_INSTANCE_IMPL_H
 
-#define MI_NEURAYLIB_DEPRECATED_13_0
 #include <mi/neuraylib/imaterial_instance.h>
-#undef MI_NEURAYLIB_DEPRECATED_13_0
 
 #include <mi/base/handle.h>
 #include <mi/base/interface_implement.h>
@@ -94,45 +92,6 @@ public:
     mi::neuraylib::Element_type get_element_type() const final;
 
     // public API methods (IMaterial_instance)
-
-    const char* get_material_definition() const final;
-
-    const char* get_mdl_material_definition() const final;
-
-    const mi::neuraylib::IType* get_return_type() const final;
-
-    mi::Size get_parameter_count() const final;
-
-    const char* get_parameter_name( mi::Size index) const final;
-
-    mi::Size get_parameter_index( const char* name) const final;
-
-    const mi::neuraylib::IType_list* get_parameter_types() const final;
-
-    const mi::neuraylib::IExpression_list* get_arguments() const final;
-
-    mi::Sint32 set_arguments(
-        const mi::neuraylib::IExpression_list* arguments) final;
-
-    mi::Sint32 set_argument(
-        mi::Size index,
-        const mi::neuraylib::IExpression* argument) final;
-
-    mi::Sint32 set_argument(
-        const char* name,
-        const mi::neuraylib::IExpression* argument) final;
-
-    mi::Sint32 reset_argument( mi::Size index) final;
-
-    mi::Sint32 reset_argument( const char* name) final;
-
-    bool is_default() const final;
-
-    bool is_valid( mi::neuraylib::IMdl_execution_context* context) const final;
-
-    mi::Sint32 repair(
-        mi::Uint32 flags,
-        mi::neuraylib::IMdl_execution_context* context) final;
 
     mi::neuraylib::ICompiled_material* create_compiled_material(
         mi::Uint32 flags,

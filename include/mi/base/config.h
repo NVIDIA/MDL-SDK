@@ -44,7 +44,7 @@
  */
 
 // The current copyright year string.
-#define MI_COPYRIGHT_YEARS_STRING "2022"
+#define MI_COPYRIGHT_YEARS_STRING "2023"
 
 // The NVIDIA company name string for copyrights etc.
 #define MI_COPYRIGHT_COMPANY_STRING "NVIDIA Corporation"

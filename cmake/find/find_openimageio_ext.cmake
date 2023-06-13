@@ -28,64 +28,60 @@
 
 function(FIND_OPENIMAGEIO_EXT)
 
-    set(CMAKE_PREFIX_PATH "NOT-SPECIFIED" CACHE PATH
-        "Directory specifying installation prefixes to be searched by various cmake commands.")
-
-    # The find_package() calls below trigger nested find_package() calls with
-    # REQUIRED keyword. Failures in those calls do not result in failures of
-    # the top-level calls, but fatal errors. Allow users to disable the
-    # detection by disabling the build of the corresponding plugin.
-    if(MDL_BUILD_OPENIMAGEIO_PLUGIN)
-
-        if(${CMAKE_VERSION} VERSION_LESS "3.19.0")
-            find_package(OpenImageIO)
-            if(${OpenImageIO_FOUND})
-                if(${OpenImageIO_VERSION} VERSION_LESS "2.4")
-                    set(OpenImageIO_FOUND OFF)
-                    message(WARNING "Found OpenImageIO version ${OpenImageIO_VERSION} is too old.")
-                elseif(${OpenImageIO_VERSION} VERSION_GREATER_EQUAL "3.0")
-                    set(OpenImageIO_FOUND OFF)
-                    message(WARNING "Found OpenImageIO version ${OpenImageIO_VERSION} is too new.")
-                endif()
+    if(${CMAKE_VERSION} VERSION_LESS "3.19.0")
+        find_package(OpenImageIO)
+        if(${OpenImageIO_FOUND})
+            if(${OpenImageIO_VERSION} VERSION_LESS "2.4")
+                set(OpenImageIO_FOUND OFF)
+                message(WARNING "Found OpenImageIO version ${OpenImageIO_VERSION} is too old.")
+            elseif(${OpenImageIO_VERSION} VERSION_GREATER_EQUAL "3.0")
+                set(OpenImageIO_FOUND OFF)
+                message(WARNING "Found OpenImageIO version ${OpenImageIO_VERSION} is too new.")
             endif()
-        else()
-            find_package(OpenImageIO 2.4...<3.0)
         endif()
+    else()
+        find_package(OpenImageIO 2.4...<3.0)
+    endif()
 
-        # Needed by OpenImageIO::OpenImageIO target
-        find_package(OpenEXR)
+    # See https://github.com/microsoft/vcpkg/issues/29284
+    find_package(OpenEXR)
+
+    # Misuse OpenImageIO version to distinguish older vcpkg versions (e.g. 42f74e3db
+    # plus patch) from newer vcpkg versions (e.g. 3640e7cb1).
+    if(${OpenImageIO_FOUND} AND (${OpenImageIO_VERSION} VERSION_LESS "2.4.5.0"))
+        # Needed by OpenImageIO::OpenImageIO target in older vcpkg versions
         find_package(TIFF)
         find_package(liblzma CONFIG)
+    endif()
 
-        if(NOT ${OpenImageIO_FOUND} OR NOT ${OpenEXR_FOUND} OR NOT ${TIFF_FOUND} OR NOT ${liblzma_FOUND})
+    if(NOT ${OpenImageIO_FOUND} OR NOT ${OpenEXR_FOUND})
 
-            message(STATUS "OpenImageIO_FOUND: ${OpenImageIO_FOUND}")
-            message(STATUS "OpenImageIO_DIR: ${OpenImageIO_DIR}")
-            message(STATUS "OpenImageIO_INCLUDE_DIR: ${OpenImageIO_INCLUDE_DIR}")
-            message(STATUS "OpenImageIO_LIB_DIR: ${OpenImageIO_LIB_DIR}")
-            message(STATUS "OpenEXR_FOUND: ${OpenEXR_FOUND}")
-            message(STATUS "TIFF_FOUND: ${TIFF_FOUND}")
-            message(STATUS "liblzma_FOUND: ${liblzma_FOUND}")
-            message(WARNING "The dependency \"OpenImageIO\" could not be resolved. Please specify "
-                "'CMAKE_PREFIX_PATH' (or, alternatively, 'OpenImageIO_DIR', 'OpenEXR_DIR', "
-                "'libheif_DIR', 'unofficial-libsquish_DIR', 'TIFF_DIR', and 'liblzma_DIR'.")
-            set(MDL_OPENIMAGEIO_FOUND OFF CACHE INTERNAL "")
+        message(STATUS "OpenImageIO_FOUND: ${OpenImageIO_FOUND}")
+        message(STATUS "OpenImageIO_DIR: ${OpenImageIO_DIR}")
+        message(STATUS "OpenImageIO_INCLUDE_DIR: ${OpenImageIO_INCLUDE_DIR}")
+        message(STATUS "OpenImageIO_LIB_DIR: ${OpenImageIO_LIB_DIR}")
+        message(STATUS "OpenEXR_FOUND: ${OpenEXR_FOUND}")
+        message(WARNING "The dependency \"OpenImageIO\" could not be resolved. Please specify "
+            "'CMAKE_TOOLCHAIN_FILE'.")
+        set(MDL_OPENIMAGEIO_FOUND OFF CACHE INTERNAL "")
 
-        else()
+    else()
 
-            # store paths that are later used in the add_openimageio.cmake
-            set(MDL_DEPENDENCY_OPENIMAGEIO_INCLUDE ${_OPENIMAGEIO_INCLUDE_DIR} CACHE INTERNAL
-                "OpenImageIO header directory")
-            set(MDL_DEPENDENCY_OPENIMAGEIO_LIB ${_OPENIMAGEIO_LIB_DIR} CACHE INTERNAL
-                "OpenImageIO library directory")
-            set(MDL_OPENIMAGEIO_FOUND ON CACHE INTERNAL "")
+        # store paths that are later used in the add_openimageio.cmake
+        set(MDL_DEPENDENCY_OPENIMAGEIO_INCLUDE ${OpenImageIO_INCLUDE_DIR} CACHE INTERNAL
+            "OpenImageIO header directory")
+        set(MDL_DEPENDENCY_OPENIMAGEIO_LIB ${OpenImageIO_LIB_DIR} CACHE INTERNAL
+            "OpenImageIO library directory")
+        set(MDL_DEPENDENCY_OPENIMAGEIO_VERSION ${OpenImageIO_VERSION} CACHE INTERNAL
+            "OpenImageIO version")
+        set(MDL_OPENIMAGEIO_FOUND ON CACHE INTERNAL "")
 
-            if(MDL_LOG_DEPENDENCIES)
-                message(STATUS "[INFO] MDL_DEPENDENCY_OPENIMAGEIO_INCLUDE: ${MDL_DEPENDENCY_OPENIMAGEIO_INCLUDE}")
-                message(STATUS "[INFO] MDL_DEPENDENCY_OPENIMAGEIO_LIB:     ${MDL_DEPENDENCY_OPENIMAGEIO_LIB}")
-            endif()
-
+        if(MDL_LOG_DEPENDENCIES)
+            message(STATUS "[INFO] MDL_DEPENDENCY_OPENIMAGEIO_INCLUDE:   ${MDL_DEPENDENCY_OPENIMAGEIO_INCLUDE}")
+            message(STATUS "[INFO] MDL_DEPENDENCY_OPENIMAGEIO_LIB:       ${MDL_DEPENDENCY_OPENIMAGEIO_LIB}")
+            message(STATUS "[INFO] MDL_DEPENDENCY_OPENIMAGEIO_VERSION:   ${MDL_DEPENDENCY_OPENIMAGEIO_VERSION}")
         endif()
+
     endif()
 
 endfunction()

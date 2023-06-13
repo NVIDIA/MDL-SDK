@@ -87,7 +87,7 @@ public:
         mi::Uint32 layers,
         mi::Float32 gamma) const;
 
-    mi::IArray* create_mipmaps(
+    mi::IArray* create_mipmap(
         const mi::neuraylib::ICanvas* canvas, mi::Float32 gamma) const;
 
     mi::neuraylib::ITile* clone_tile( const mi::neuraylib::ITile* tile) const;
@@ -127,11 +127,13 @@ public:
 
     mi::neuraylib::ICanvas* create_canvas_from_buffer(
         const mi::neuraylib::IBuffer* buffer,
-        const char* image_format) const;
+        const char* image_format,
+        const char* selector) const;
 
     mi::neuraylib::ICanvas* create_canvas_from_reader(
         mi::neuraylib::IReader* reader,
-        const char* image_format) const;
+        const char* image_format,
+        const char* selector) const;
 
     bool supports_format_for_decoding(
         const char* image_format, mi::neuraylib::IReader* reader) const;

@@ -63,6 +63,13 @@ class IPrinter : public
     mi::mdl::ISyntax_coloring>
 {
 public:
+    /// How to handle the noinline attribute.
+    enum Attribute_noinline_mode {
+        ATTR_NOINLINE_IGNORE,   ///< Ignore the noinline attribute.
+        ATTR_NOINLINE_WRAP,     ///< Print the attribute as ATTR_NOINLINE define.
+        ATTR_NOINLINE_ENABLE,   ///< Print the attribute as [noinline].
+    };
+
     /// Indent output.
     ///  \param  depth      The depth to which to indent.
     virtual void indent(int depth) = 0;
@@ -172,6 +179,9 @@ public:
     ///
     /// \param  enable  if true, AST locations will be dumped as #line directives for statements
     virtual void enable_locations(bool enable = true) = 0;
+
+    /// Set the noinline attribute mode.
+    virtual void set_attr_noinline_mode(Attribute_noinline_mode mode) = 0;
 };
 
 /// Entries in the color table.
@@ -400,6 +410,9 @@ public:
     /// \param  enable  if true, AST locations will be dumped as #line directives for statements
     void enable_locations(bool enable = true) HLSL_FINAL;
 
+    /// Set the noinline attribute mode.
+    void set_attr_noinline_mode(Attribute_noinline_mode mode) HLSL_FINAL;
+
     // ---------------- non-interface ----------------
 
     /// Print a comment.
@@ -501,6 +514,9 @@ private:
 private:
     /// The current indentation depth;
     unsigned m_indent;
+
+    /// How the handle the noinline attribute.
+    Attribute_noinline_mode m_noinline_mode;
 
     /// The priority map
     int m_priority_map[Expr::OK_LAST + 1];

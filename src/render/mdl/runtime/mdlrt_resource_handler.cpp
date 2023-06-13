@@ -251,7 +251,7 @@ void Resource_handler::tex_lookup_float2_2d(
 {
     Texture_2d const *o = reinterpret_cast<Texture_2d const *>(tex_data);
 
-    *reinterpret_cast<mi::Float32_2*>(result) =
+    *reinterpret_cast<mi::Float32_2_struct*>(result) =
         o->lookup_float2(
             *reinterpret_cast<mi::Float32_2 const *>(coord),
             Texture::Wrap_mode(wrap_u),
@@ -303,7 +303,7 @@ void Resource_handler::tex_lookup_float2_3d(
 {
     Texture_3d const *o = reinterpret_cast<Texture_3d const *>(tex_data);
 
-    *reinterpret_cast<mi::Float32_2*>(result) =
+    *reinterpret_cast<mi::Float32_2_struct*>(result) =
         o->lookup_float2(
             *reinterpret_cast<mi::Float32_3 const *>(coord),
             Texture::Wrap_mode(wrap_u),
@@ -323,7 +323,7 @@ void Resource_handler::tex_lookup_float2_cube(
 {
     Texture_cube const *o = reinterpret_cast<Texture_cube const *>(tex_data);
 
-    *reinterpret_cast<mi::Float32_2*>(result) =
+    *reinterpret_cast<mi::Float32_2_struct*>(result) =
         o->lookup_float2(*reinterpret_cast<mi::Float32_3 const *>(coord));
 }
 
@@ -335,7 +335,7 @@ void Resource_handler::tex_lookup_float2_ptex(
 {
     Texture_ptex const *o = reinterpret_cast<Texture_ptex const *>(tex_data);
 
-    *reinterpret_cast<mi::Float32_2*>(result) = o->lookup_float2(channel);
+    *reinterpret_cast<mi::Float32_2_struct*>(result) = o->lookup_float2(channel);
 }
 
 void Resource_handler::tex_lookup_float3_2d(
@@ -351,7 +351,7 @@ void Resource_handler::tex_lookup_float3_2d(
 {
     Texture_2d const *o = reinterpret_cast<Texture_2d const *>(tex_data);
 
-    *reinterpret_cast<mi::Float32_3*>(result) =
+    *reinterpret_cast<mi::Float32_3_struct*>(result) =
         o->lookup_float3(
             *reinterpret_cast<mi::Float32_2 const *>(coord),
             Texture::Wrap_mode(wrap_u),
@@ -403,7 +403,7 @@ void Resource_handler::tex_lookup_float3_3d(
 {
     Texture_3d const *o = reinterpret_cast<Texture_3d const *>(tex_data);
 
-    *reinterpret_cast<mi::Float32_3*>(result) =
+    *reinterpret_cast<mi::Float32_3_struct*>(result) =
         o->lookup_float3(
             *reinterpret_cast<mi::Float32_3 const *>(coord),
             Texture::Wrap_mode(wrap_u),
@@ -423,7 +423,7 @@ void Resource_handler::tex_lookup_float3_cube(
 {
     Texture_cube const *o = reinterpret_cast<Texture_cube const *>(tex_data);
 
-    *reinterpret_cast<mi::Float32_3*>(result) =
+    *reinterpret_cast<mi::Float32_3_struct*>(result) =
         o->lookup_float3(*reinterpret_cast<mi::Float32_3 const *>(coord));
 }
 
@@ -435,7 +435,7 @@ void Resource_handler::tex_lookup_float3_ptex(
 {
     Texture_ptex const *o = reinterpret_cast<Texture_ptex const *>(tex_data);
 
-    *reinterpret_cast<mi::Float32_3*>(result) = o->lookup_float3(channel);
+    *reinterpret_cast<mi::Float32_3_struct*>(result) = o->lookup_float3(channel);
 }
 
 
@@ -452,7 +452,7 @@ void Resource_handler::tex_lookup_float4_2d(
 {
     Texture_2d const *o = reinterpret_cast<Texture_2d const *>(tex_data);
 
-    *reinterpret_cast<mi::Float32_4*>(result) =
+    *reinterpret_cast<mi::Float32_4_struct*>(result) =
         o->lookup_float4(
             *reinterpret_cast<mi::Float32_2 const *>(coord),
             wrap_u,
@@ -475,15 +475,15 @@ void Resource_handler::tex_lookup_deriv_float4_2d(
 {
     Texture_2d const *o = reinterpret_cast<Texture_2d const *>(tex_data);
 
-    *reinterpret_cast<mi::Float32_4*>(result) =
+    *reinterpret_cast<mi::Float32_4_struct*>(result) =
         o->lookup_deriv_float4(
-            *reinterpret_cast<mi::Float32_2 const *>(coord->val),
-            *reinterpret_cast<mi::Float32_2 const *>(coord->dx),
-            *reinterpret_cast<mi::Float32_2 const *>(coord->dy),
+            *reinterpret_cast<mi::Float32_2_struct const *>(coord->val),
+            *reinterpret_cast<mi::Float32_2_struct const *>(coord->dx),
+            *reinterpret_cast<mi::Float32_2_struct const *>(coord->dy),
             wrap_u,
             wrap_v,
-            *reinterpret_cast<mi::Float32_2 const *>(crop_u),
-            *reinterpret_cast<mi::Float32_2 const *>(crop_v),
+            *reinterpret_cast<mi::Float32_2_struct const *>(crop_u),
+            *reinterpret_cast<mi::Float32_2_struct const *>(crop_v),
             frame);
 }
 
@@ -502,7 +502,7 @@ void Resource_handler::tex_lookup_float4_3d(
 {
     Texture_3d const *o = reinterpret_cast<Texture_3d const *>(tex_data);
 
-    *reinterpret_cast<mi::Float32_4*>(result) =
+    *reinterpret_cast<mi::Float32_4_struct*>(result) =
         o->lookup_float4(
             *reinterpret_cast<mi::Float32_3 const *>(coord),
             wrap_u,
@@ -522,7 +522,7 @@ void Resource_handler::tex_lookup_float4_cube(
 {
     Texture_cube const *o = reinterpret_cast<Texture_cube const *>(tex_data);
 
-    *reinterpret_cast<mi::Float32_4*>(result) =
+    *reinterpret_cast<mi::Float32_4_struct*>(result) =
         o->lookup_float4(*reinterpret_cast<mi::Float32_3 const *>(coord));
 }
 
@@ -534,7 +534,7 @@ void Resource_handler::tex_lookup_float4_ptex(
 {
     Texture_ptex const *o = reinterpret_cast<Texture_ptex const *>(tex_data);
 
-    *reinterpret_cast<mi::Float32_4*>(result) = o->lookup_float4(channel);
+    *reinterpret_cast<mi::Float32_4_struct*>(result) = o->lookup_float4(channel);
 }
 
 void Resource_handler::tex_lookup_color_2d(
@@ -662,7 +662,7 @@ void Resource_handler::tex_texel_float2_2d(
 {
     Texture_2d const*o = reinterpret_cast<Texture_2d const *>(tex_data);
 
-    *reinterpret_cast<mi::Float32_2*>(result) =
+    *reinterpret_cast<mi::Float32_2_struct*>(result) =
         o->texel_float2(
             *reinterpret_cast<mi::Sint32_2 const *>(coord),
             *reinterpret_cast<mi::Sint32_2 const *>(uv_tile),
@@ -679,7 +679,7 @@ void Resource_handler::tex_texel_float3_2d(
 {
     Texture_2d const*o = reinterpret_cast<Texture_2d const *>(tex_data);
 
-    *reinterpret_cast<mi::Float32_3*>(result) =
+    *reinterpret_cast<mi::Float32_3_struct*>(result) =
         o->texel_float3(
             *reinterpret_cast<mi::Sint32_2 const *>(coord),
             *reinterpret_cast<mi::Sint32_2 const *>(uv_tile),
@@ -696,7 +696,7 @@ void Resource_handler::tex_texel_float4_2d(
 {
     Texture_2d const *o = reinterpret_cast<Texture_2d const *>(tex_data);
 
-    *reinterpret_cast<mi::Float32_4*>(result) =
+    *reinterpret_cast<mi::Float32_4_struct*>(result) =
         o->texel_float4(
             *reinterpret_cast<mi::Sint32_2 const *>(coord),
             *reinterpret_cast<mi::Sint32_2 const *>(uv_tile),
@@ -740,7 +740,7 @@ void Resource_handler::tex_texel_float2_3d(
 {
     Texture_3d const*o = reinterpret_cast<Texture_3d const *>(tex_data);
 
-    *reinterpret_cast<mi::Float32_2*>(result) =
+    *reinterpret_cast<mi::Float32_2_struct*>(result) =
         o->texel_float2(*reinterpret_cast<mi::Sint32_3 const *>(coord), frame);
 }
 
@@ -753,7 +753,7 @@ void Resource_handler::tex_texel_float3_3d(
 {
     Texture_3d const*o = reinterpret_cast<Texture_3d const *>(tex_data);
 
-    *reinterpret_cast<mi::Float32_3*>(result) =
+    *reinterpret_cast<mi::Float32_3_struct*>(result) =
         o->texel_float3(*reinterpret_cast<mi::Sint32_3 const *>(coord), frame);
 }
 
@@ -766,7 +766,7 @@ void Resource_handler::tex_texel_float4_3d(
 {
     Texture_3d const *o = reinterpret_cast<Texture_3d const *>(tex_data);
 
-    *reinterpret_cast<mi::Float32_4*>(result) =
+    *reinterpret_cast<mi::Float32_4_struct*>(result) =
         o->texel_float4(*reinterpret_cast<mi::Sint32_3 const *>(coord), frame);
 }
 
@@ -870,7 +870,7 @@ void Resource_handler::lp_sample(
     Light_profile const *o =
         reinterpret_cast<Light_profile const *>(lp_data);
 
-    *reinterpret_cast<mi::Float32_3*>(result) =
+    *reinterpret_cast<mi::Float32_3_struct*>(result) =
         o->sample(*reinterpret_cast<mi::Float32_3 const *>(xi));
 }
 
@@ -940,7 +940,7 @@ void Resource_handler::bm_evaluate(
     Bsdf_measurement const *o =
         reinterpret_cast<Bsdf_measurement const *>(bm_data);
 
-    *reinterpret_cast<mi::Float32_3*>(result) =
+    *reinterpret_cast<mi::Float32_3_struct*>(result) =
         o->evaluate(
             *reinterpret_cast<mi::Float32_2 const *>(theta_phi_in),
             *reinterpret_cast<mi::Float32_2 const *>(theta_phi_out),
@@ -960,7 +960,7 @@ void Resource_handler::bm_sample(
     Bsdf_measurement const *o =
         reinterpret_cast<Bsdf_measurement const *>(bm_data);
 
-    *reinterpret_cast<mi::Float32_3*>(result) =
+    *reinterpret_cast<mi::Float32_3_struct*>(result) =
         o->sample(
             *reinterpret_cast<mi::Float32_2 const *>(theta_phi_out),
             *reinterpret_cast<mi::Float32_3 const *>(xi),
@@ -993,7 +993,7 @@ void Resource_handler::bm_albedos(
     Bsdf_measurement const *o =
         reinterpret_cast<Bsdf_measurement const *>(bm_data);
 
-    *reinterpret_cast<mi::Float32_4*>(result) =
+    *reinterpret_cast<mi::Float32_4_struct*>(result) =
         o->albedos(*reinterpret_cast<mi::Float32_2 const *>(theta_phi));
 }
 

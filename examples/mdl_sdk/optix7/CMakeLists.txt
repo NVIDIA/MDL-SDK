@@ -88,8 +88,8 @@ if(LINUX)
     set(_CLANG_FLAGS --std=c++11)
 endif()
 
-# Clang 7 needs CUDA 8 to compile the closest hit shader
-set(CUDA8_PATH "NOT-SPECIFIED" CACHE PATH "Directory that contains the CUDA 8 include folder")
+# Clang 12.0.1 needs CUDA 8 to compile the closest hit shader
+set(CUDA8_PATH "NOT-SPECIFIED" CACHE PATH "Directory that contains the CUDA 8 include folder (version 8 is mandatory)")
 if(EXISTS ${CUDA8_PATH}/include/cuda.h)
     set(_CLANG_FLAGS ${_CLANG_FLAGS} --cuda-path=${CUDA8_PATH})
 else()
@@ -98,11 +98,11 @@ endif()
 
 # generate bytecode for closest hit radiance shader
 # Note: the _ALLOW_COMPILER_AND_STL_VERSION_MISMATCH define is needed to allow
-#       compilation with Clang 7 and VS2019 headers
+#       compilation with Clang 12.0.1 and VS2019 headers
 add_custom_command(
     OUTPUT
-        optix7_mdl_closest_hit_radiance.d
-        optix7_mdl_closest_hit_radiance.bc
+        ${CMAKE_CFG_INTDIR}/optix7_mdl_closest_hit_radiance.d
+        ${CMAKE_CFG_INTDIR}/optix7_mdl_closest_hit_radiance.bc
     COMMAND ${CMAKE_COMMAND} -E echo "Compile optix7_mdl_closest_hit_radiance bytecode using clang..."
     COMMAND ${clang_PATH}
         -I ${OPTIX7_DIR}/include -I ${MDL_INCLUDE_FOLDER}
@@ -121,6 +121,10 @@ add_custom_command(
         ${PROJECT_SOURCES}
     VERBATIM
 )
+add_custom_target(${PROJECT_NAME}_BC_COMPILE DEPENDS ${CMAKE_CFG_INTDIR}/optix7_mdl_closest_hit_radiance.bc)
+add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}_BC_COMPILE)
+set_target_properties(${PROJECT_NAME}_BC_COMPILE PROPERTIES FOLDER "_cmake/bc_compile")
+
 
 # -------------------------------------------------------------------------------------------------
 # PTX Target

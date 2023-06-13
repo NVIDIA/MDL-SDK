@@ -72,10 +72,10 @@ static __forceinline__ __device__ void traceRadiance(
 
 
 // simple Reinhard tonemapper + gamma + quantize
-__forceinline__ __device__ uchar4 make_color(float3 const &c)
+__forceinline__ __device__ uchar4 make_color(float3 c)
 {
     const float burn_out = 0.1f;
-    const float gamma = 2.2f;
+    const float invGamma = 1.0 / 2.2f;
 
     float3 val;
     val.x = c.x * (1.0f + c.x * burn_out) / (1.0f + c.x);
@@ -83,9 +83,9 @@ __forceinline__ __device__ uchar4 make_color(float3 const &c)
     val.z = c.z * (1.0f + c.z * burn_out) / (1.0f + c.z);
 
     return make_uchar4(
-        static_cast<uint8_t>(powf(saturate(val.x), 1.0 / gamma)*255.0f),
-        static_cast<uint8_t>(powf(saturate(val.y), 1.0 / gamma)*255.0f),
-        static_cast<uint8_t>(powf(saturate(val.z), 1.0 / gamma)*255.0f),
+        static_cast<uint8_t>(powf(__saturatef(val.x), invGamma) * 255.0f),
+        static_cast<uint8_t>(powf(__saturatef(val.y), invGamma) * 255.0f),
+        static_cast<uint8_t>(powf(__saturatef(val.z), invGamma) * 255.0f),
         255u
     );
 }
@@ -126,14 +126,14 @@ extern "C" __global__ void __raygen__rg()
 
         RadiancePRD prd;
 #ifndef CONTRIB_IN_PAYLOAD
-        prd.contribution = make_float3(0.f);
+        prd.contribution = make_float3(0.0f);
 #endif
-        prd.weight       = make_float3(1.f);
+        prd.weight       = make_float3(1.0f);
         prd.seed         = seed;
         prd.last_pdf     = -1.0f;
 
         RayFlags ray_flags = RAY_FLAGS_NONE;
-        for (;; )
+        for (;;)
         {
             traceRadiance(
                 params.handle,
@@ -163,16 +163,16 @@ extern "C" __global__ void __raygen__rg()
     } while (--i > 0);
 
     const uint3    launch_index = optixGetLaunchIndex();
-    const uint32_t image_index  = launch_index.y * params.width + launch_index.x;
+    const uint32_t image_index  = params.width * launch_index.y + launch_index.x;
     float3         accum_color  = result / static_cast<float>(params.samples_per_launch);
 
     if (subframe_index > 0)
     {
-        const float                 a = 1.0f / static_cast<float>(subframe_index + 1);
-        const float3 accum_color_prev = params.accum_buffer[image_index];
-        accum_color = lerp(accum_color_prev, accum_color, a);
+        const float4 accum_prev = params.accum_buffer[image_index];
+        const float a = 1.0f / static_cast<float>(subframe_index + 1);
+        accum_color = lerp(make_float3(accum_prev.x, accum_prev.y, accum_prev.z), accum_color, a);
     }
-    params.accum_buffer[image_index] = accum_color;
+    params.accum_buffer[image_index] = make_float4(accum_color.x, accum_color.y, accum_color.z, 1.0f);
     if (params.frame_buffer)
         params.frame_buffer[image_index] = make_color(accum_color);
 }

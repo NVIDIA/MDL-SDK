@@ -61,14 +61,6 @@ public:
         mi::Uint32 argc,
         const mi::base::IInterface* argv[]);
 
-    Function_definition_impl( bool materials_are_functions);
-
-    // public API methods (IInterface)
-
-    const mi::base::IInterface* get_interface( const mi::base::Uuid& interface_id) const;
-
-    mi::base::IInterface* get_interface( const mi::base::Uuid& interface_id);
-
     // public API methods (IScene_element)
 
     mi::neuraylib::Element_type get_element_type() const final;
@@ -138,9 +130,9 @@ public:
         const mi::neuraylib::IExpression_list* arguments,
         mi::Sint32* errors) const final;
 
+    const char* get_mdl_mangled_name() const final;
 private:
     mutable std::string m_cached_thumbnail;
-    bool m_materials_are_functions;
 };
 
 } // namespace NEURAY

@@ -63,12 +63,16 @@ public:
     bool m_fold_ternary_on_df = false;
     bool m_fold_all_bool_parameters = false;
     bool m_fold_all_enum_parameters = false;
+    bool m_single_init = false;
     bool m_ignore_noinline = true;
     bool m_warn_spectrum_conv = false;
     std::string m_backend = "hlsl";
     bool m_use_derivatives = false;
     std::string m_num_texture_results = "16";
     bool m_dump_metadata = false;
+    bool m_adapt_normal = false;
+    bool m_adapt_microfacet_roughness = false;
+    bool m_experimental = false;
 
     /// MDL qualified material name to generate code for.
     std::string m_qualified_material_name = "::nvidia::sdk_examples::tutorials::example_material";
@@ -77,6 +81,8 @@ public:
     std::vector<TD> m_descs;
     std::vector<std::unique_ptr<std::string> > m_desc_strs;  // collection for storing the strings
 
+    /// The target in case distilling is done before code generation
+    std::string m_distilling_target = "";
 };
 
 void dump_dag(
@@ -130,6 +136,33 @@ void dump_metadata(mi::base::Handle<const mi::neuraylib::ITarget_code> code, std
         out << "   " << i << ": \"" << c << "\"\n";
     }
     out << "*/\n\n";
+
+    out << "/* Texture table\n";
+    for (mi::Size i = 0, n = code->get_texture_count(); i < n; ++i)
+    {
+        const char* c = code->get_texture(i);
+        const char* b = code->get_texture_is_body_resource(i) ? "(body)" : "(non-body)";
+        out << "   " << i << ": \"" << c << "\" " << b << "\n";
+    }
+    out << "*/\n\n";
+
+    out << "/* Light Profile table\n";
+    for (mi::Size i = 0, n = code->get_light_profile_count(); i < n; ++i)
+    {
+        const char* c = code->get_light_profile(i);
+        const char* b = code->get_light_profile_is_body_resource(i) ? "(body)" : "(non-body)";
+        out << "   " << i << ": \"" << c << "\" " << b << "\n";
+    }
+    out << "*/\n\n";
+
+    out << "/* BSDF measurement table\n";
+    for (mi::Size i = 0, n = code->get_bsdf_measurement_count(); i < n; ++i)
+    {
+        const char* c = code->get_bsdf_measurement(i);
+        const char* b = code->get_bsdf_measurement_is_body_resource(i) ? "(body)" : "(non-body)";
+        out << "   " << i << ": \"" << c << "\" " << b << "\n";
+    }
+    out << "*/\n\n";
 }
 
 /// The main content of the example
@@ -154,6 +187,10 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
         // It also carries errors, warnings, and warnings produces by the operations.
         mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(
             mdl_factory->create_execution_context());
+
+        // Enable experimental features if requested
+        if (options.m_experimental)
+            context->set_option("experimental", true);
 
         // Split the material name passed on the command line into a module
         // and (unqualified) material name
@@ -180,7 +217,7 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
             trans->access<mi::neuraylib::IModule>(module_db_name->get_c_str()));
         if (!module)
             exit_failure("Failed to access the loaded module.");
-        
+
         // ----------------------------------------------------------------------------------------
 
         // Access the material definition of the selected material.
@@ -248,6 +285,39 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
         mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
             material_instance2->create_compiled_material(flags, context.get()));
 
+        // ----------------------------------------------------------------------------------------
+
+        // In case the material should be distilled before generating code,
+        // the compiled material will be transformed before going on.
+        // Usually distilling is used to simplify a material or to convert it to an uber-shader.
+
+        if (!options.m_distilling_target.empty()) {
+            mi::base::Handle<mi::neuraylib::IMdl_distiller_api> distiller(
+                neuray->get_api_component<mi::neuraylib::IMdl_distiller_api>());
+
+            // check if the selected target is known
+            bool target_supported = false;
+            for (mi::Size i = 0, n = distiller->get_target_count(); i < n; ++i) {
+                if (options.m_distilling_target == distiller->get_target_name(i)) {
+                    target_supported = true;
+                    break;
+                }
+            }
+            if (!target_supported)
+                exit_failure("Distilling target '%s' is unknown.",
+                    options.m_distilling_target.c_str());
+
+            // The compiled material is transformed to match a given target.
+            // Depending on the input and the selected target, the resulting material
+            // will match the original in appearance to some extend.
+            mi::Sint32 result = 0;
+            compiled_material = distiller->distill_material(
+                compiled_material.get(), options.m_distilling_target.c_str(), nullptr, &result);
+
+            if (result != 0)
+                exit_failure("Failed to distill a material instance of: %s::%s (%d)",
+                    module_name.c_str(), material_name.c_str(), result);
+        }
 
         // ----------------------------------------------------------------------------------------
 
@@ -294,6 +364,11 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
             backend->set_option("num_texture_spaces", "4");
             backend->set_option("jit_warn_spectrum_conversion",
                 options.m_warn_spectrum_conv ? "on" : "off");
+            backend->set_option("use_renderer_adapt_normal",
+                options.m_adapt_normal ? "on" : "off");
+            backend->set_option("use_renderer_adapt_microfacet_roughness",
+                options.m_adapt_microfacet_roughness ? "on" : "off");
+
 
             // ----------------------------------------------------------------------------------------
 
@@ -326,6 +401,9 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
                 descs.push_back(TD("geometry.cutout_opacity", "geometry_cutout_opacity"));
                 descs.push_back(TD("geometry.displacement", "geometry_displacement"));
             }
+
+            if (options.m_single_init)
+                options.m_descs.insert(options.m_descs.begin(), TD("init", "init"));
 
             link_unit->add_material(
                 compiled_material.get(), options.m_descs.data(), options.m_descs.size(), context.get());
@@ -445,6 +523,9 @@ int MAIN_UTF8(int argc, char* argv[])
     if (!mi::examples::mdl::configure(neuray.get(), configure_options))
         exit_failure("Failed to initialize the SDK.");
 
+    // Load the distilling plugin
+    if (mi::examples::mdl::load_plugin(neuray.get(), "mdl_distiller" MI_BASE_DLL_FILE_EXT) != 0)
+        exit_failure("Failed to load the mdl_distiller plugin.");
 
     // Start the MDL SDK
     mi::Sint32 ret = neuray->start();
@@ -494,9 +575,16 @@ options:
   --ft                          Fold ternary operators when used on distribution functions.
   --fb                          Fold boolean parameters.
   --fe                          Fold enum parameters.
+  --single-init                 Compile in single init mode.
   --dian                        Disable ignoring anno::noinline() annotations.
+  --adapt_normal                Enable renderer callback to adapt the normal.
+  --adapt_microfacet_roughness  Enable renderer callback to adapt the roughness for
+                                microfacet BSDFs.
+  --experimental                Enable experimental compiler features (for internal testing).
   --warn-spectrum-conv          Warn if a spectrum constructor is converted into RGB.)";
 
+    s << R"(
+  --distill <target>            Distill the material before running the code generation.)";
 
     s << std::endl;
 }
@@ -523,8 +611,16 @@ bool Options::parse(int argc, char* argv[])
                 m_fold_all_bool_parameters = true;
             else if (arg == "--fe")
                 m_fold_all_enum_parameters = true;
+            else if (arg == "--single-init")
+                m_single_init = true;
             else if (arg == "--dian")
                 m_ignore_noinline = false;
+            else if (arg == "--adapt_normal")
+                m_adapt_normal = true;
+            else if (arg == "--adapt_microfacet_roughness")
+                m_adapt_microfacet_roughness = true;
+            else if (arg == "--experimental")
+                m_experimental = true;
             else if (arg == "--warn-spectrum-conv")
                 m_warn_spectrum_conv = true;
             else if (arg == "-p" || arg == "--mdl_path")
@@ -584,6 +680,15 @@ bool Options::parse(int argc, char* argv[])
             }
             else if (arg == "-M" || arg == "--dump_meta_data")
                 m_dump_metadata = true;
+            else if (arg == "--distill")
+            {
+                if (i == argc - 1)
+                {
+                    std::cerr << "error: Argument for --distill missing." << std::endl;
+                    return false;
+                }
+                m_distilling_target = argv[++i];
+            }
             else
             {
                 std::cerr << "error: Unknown option \"" << arg << "\"." << std::endl;
@@ -618,4 +723,3 @@ bool Options::parse(int argc, char* argv[])
     }
     return true;
 }
-

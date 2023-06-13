@@ -98,16 +98,16 @@ std::string to_upper(
 
 /// Convert the given char input of UTF-8 format into a wchar.
 ///
-/// Code points beyong U+FFFF are replaced by '?', even if the underlying implementation of wchar
-/// (e.g. 4 byte on Linux) could handle that code point.
+/// Code points beyong U+FFFF are always encoded as surrogate pairs, even if the underlying
+/// implementation could handle that code point without surrogate pairs (sizeof(wchar_t) == 4).
 std::wstring utf8_to_wchar(
     const char* str);
 
-#ifdef WIN_NT
+#ifdef MI_PLATFORM_WINDOWS
 /// Convert the given wchar string input into a multibyte char string output.
 std::string wchar_to_mbs(
     const wchar_t* str);
-#endif
+#endif // MI_PLATFORM_WINDOWS
 
 /// Converts a wchar_t * string into an utf8 encoded string.
 std::string wchar_to_utf8(

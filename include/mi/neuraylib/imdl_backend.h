@@ -35,6 +35,7 @@
 #include <mi/neuraylib/imdl_backend_api.h>
 #include <mi/neuraylib/ivalue.h>
 #include <mi/neuraylib/target_code_types.h>
+#include <mi/neuraylib/version.h>
 
 namespace mi {
 
@@ -79,6 +80,8 @@ public:
     ///                          functions. For BSDFs, these compute albedo approximations and
     ///                          normals. For EDFs, the functions exist only as placeholder for
     ///                          future use. Possible values: \c "on", \c "off". Default: \c "off".
+    /// - \c "enable_pdf": Enable code generation of PDF method on distribution functions.
+    ///   Possible values: \c "on", \c "off". Default: \c "on".
     /// - \c "df_handle_slot_mode": When using light path expressions, individual parts of the
     ///                             distribution functions can be selected using "handles".
     ///                             The contribution of each of those parts has to be evaluated
@@ -117,7 +120,7 @@ public:
     ///   derivative parameters for the texture coordinates.
     ///   Possible values:
     ///   \c "on", \c "off". Default: \c "off".
-    /// - \c "visible_names": Comma-separated list of names functions which will be
+    /// - \c "visible_functions": Comma-separated list of function names which will be
     ///   visible in the generated code (empty string means no special restriction).
     ///   Can especially be used in combination with \c "llvm_renderer_module" binary option to
     ///   limit the number of functions for which target code will be generated.
@@ -169,7 +172,9 @@ public:
     /// - \c "df_handle_slot_mode": The option \c "pointer" is not available (see above).
     /// - \c "use_renderer_adapt_microfacet_roughness": If enabled, the generated code expects
     ///   the renderer to provide a function with the prototype
-    ///   \c "float2 mdl_adapt_microfacet_roughness(Shading_state_material state, float2 roughness_uv)"
+    ///   \code
+    ///   float2 mdl_adapt_microfacet_roughness(Shading_state_material state, float2 roughness_uv)
+    ///   \endcode
     ///   which can adapt the roughness of microfacet BSDFs. For sheen_bsdf, the same roughness will
     ///   be provided in both dimensions and only the \c x component of the result will be used.
     ///   Possible values:
@@ -875,14 +880,6 @@ public:
     /// Returns the number of texture resources used by the target code.
     virtual Size get_texture_count() const = 0;
 
-    /// Returns the number of texture resources coming from the body of expressions
-    /// (not solely from material arguments). These will be necessary regardless of the chosen
-    /// material arguments and start at index \c 0 (including the invalid texture).
-    ///
-    /// \return           The body texture count or \c ~0ull, if the value is invalid due to
-    ///                   more than one call to a link unit add function.
-    virtual Size get_body_texture_count() const = 0;
-
     /// Returns the name of a texture resource used by the target code.
     ///
     /// \param index      The index of the texture resource.
@@ -891,22 +888,30 @@ public:
     ///                   exist in the database.
     virtual const char* get_texture( Size index) const = 0;
 
-    /// Returns the MDL URL of a texture resource used by the target code if no database
+    /// Returns the MDL file path of a texture resource used by the target code if no database
     /// element is associated to the resource.
     ///
     /// \param index      The index of the texture resource.
-    /// \return           The MDL URL of the texture resource of the given
+    /// \return           The MDL file path of the texture resource of the given
     ///                   index, or \c NULL if \p index is out of range or the texture
     ///                   exists in the database.
     virtual const char* get_texture_url( Size index) const = 0;
 
-    /// Returns the owner module name of a relative texture url.
+    /// Returns the owner module name of a relative texture file path.
     ///
     /// \param index      The index of the texture resource.
     /// \return           The owner module name of the texture resource of the given
     ///                   index, or \c NULL if \p index is out of range or the owner
     ///                   module is not provided.
     virtual const char* get_texture_owner_module( Size index) const = 0;
+
+    /// Check whether the texture resource is coming from the body of expressions
+    /// (not solely from material arguments). It will be necessary regardless of the chosen
+    /// material arguments.
+    ///
+    /// \param index      The index of the texture resource.
+    /// \return           \c true if the texture is referenced from inside the material body.
+    virtual bool get_texture_is_body_resource( Size index) const = 0;
 
     /// Returns the gamma mode of a texture resource used by the target code.
     ///
@@ -962,37 +967,37 @@ public:
     /// Returns the number of light profile resources used by the target code.
     virtual Size get_light_profile_count() const = 0;
 
-    /// Returns the number of light profile resources coming from the body of expressions
-    /// (not solely from material arguments). These will be necessary regardless of the chosen
-    /// material arguments and start at index \c 0 (including the invalid light profile).
-    ///
-    /// \return           The body light profile count or \c ~0ull, if the value is invalid due to
-    ///                   more than one call to a link unit add function.
-    virtual Size get_body_light_profile_count() const = 0;
-
     /// Returns the name of a light profile resource used by the target code.
     ///
     /// \param index      The index of the texture resource.
     /// \return           The name of the DB element associated the light profile resource of the
     ///                   given index, or \c NULL if \p index is out of range.
-    virtual const char* get_light_profile(Size index) const = 0;
+    virtual const char* get_light_profile( Size index) const = 0;
 
-    /// Returns the MDL URL of a light profile resource used by the target code if no database
+    /// Returns the MDL file path of a light profile resource used by the target code if no database
     /// element is associated to the resource.
     ///
     /// \param index      The index of the light profile resource.
-    /// \return           The MDL URL of the light profile resource of the given
+    /// \return           The MDL file path of the light profile resource of the given
     ///                   index, or \c NULL if \p index is out of range or the light profile
     ///                   exists in the database.
     virtual const char* get_light_profile_url( Size index) const = 0;
 
-    /// Returns the owner module name of a relative light profile URL.
+    /// Returns the owner module name of a relative light profile file path.
     ///
     /// \param index      The index of the light profile resource.
     /// \return           The owner module name of the light profile resource of the given
     ///                   index, or \c NULL if \p index is out of range or the owner
     ///                   module is not provided.
     virtual const char* get_light_profile_owner_module( Size index) const = 0;
+
+    /// Check whether the light profile resource is coming from the body of expressions
+    /// (not solely from material arguments). It will be necessary regardless of the chosen
+    /// material arguments.
+    ///
+    /// \param index      The index of the light profile resource.
+    /// \return           \c true if the light profile is referenced from inside the material body.
+    virtual bool get_light_profile_is_body_resource( Size index) const = 0;
 
     //@}
     /// \name BSDF measurements
@@ -1001,37 +1006,38 @@ public:
     /// Returns the number of bsdf measurement resources used by the target code.
     virtual Size get_bsdf_measurement_count() const = 0;
 
-    /// Returns the number of BSDF measurement resources coming from the body of expressions
-    /// (not solely from material arguments). These will be necessary regardless of the chosen
-    /// material arguments and start at index \c 0 (including the invalid BSDF measurement).
-    ///
-    /// \return           The body BSDF measurement count or \c ~0ull, if the value is invalid due
-    ///                   to more than one call to a link unit add function.
-    virtual Size get_body_bsdf_measurement_count() const = 0;
-
     /// Returns the name of a bsdf measurement resource used by the target code.
     ///
-    /// \param index      The index of the texture resource.
+    /// \param index      The index of the BSDF measurement resource.
     /// \return           The name of the DB element associated the bsdf measurement resource of
     ///                   the given index, or \c NULL if \p index is out of range.
     virtual const char* get_bsdf_measurement(Size index) const = 0;
 
-    /// Returns the MDL URL of a BSDF measurement resource used by the target code if no database
-    /// element is associated to the resource.
+    /// Returns the MDL file path of a BSDF measurement resource used by the target code if no
+    /// database element is associated to the resource.
     ///
     /// \param index      The index of the BSDF measurement resource.
-    /// \return           The MDL URL of the BSDF measurement resource of the given
+    /// \return           The MDL file path of the BSDF measurement resource of the given
     ///                   index, or \c NULL if \p index is out of range or the BSDF measurement
     ///                   exists in the database.
     virtual const char* get_bsdf_measurement_url( Size index) const = 0;
 
-    /// Returns the owner module name of a relative BSDF measurement URL.
+    /// Returns the owner module name of a relative BSDF measurement file path.
     ///
     /// \param index      The index of the BSDF measurement resource.
     /// \return           The owner module name of the BSDF measurement resource of the given
     ///                   index, or \c NULL if \p index is out of range or the owner
     ///                   module is not provided.
     virtual const char* get_bsdf_measurement_owner_module( Size index) const = 0;
+
+    /// Check whether the BSDF measurement resource is coming from the body of expressions
+    /// (not solely from material arguments). It will be necessary regardless of the chosen
+    /// material arguments.
+    ///
+    /// \param index      The index of the BSDF measurement resource.
+    /// \return           \c true if the BSDF measurement is referenced from inside the material
+    ///                   body.
+    virtual bool get_bsdf_measurement_is_body_resource( Size index) const = 0;
 
     //@}
 
@@ -1145,7 +1151,7 @@ public:
     /// \param index   The index of the callable function.
     /// \param lang    The language to use for the prototype.
     ///
-    /// \return The prototype or NULL if \p index is out of bounds or \p lang cannot be used
+    /// \return The prototype or \c NULL if \p index is out of bounds or \p lang cannot be used
     ///         for this target code.
     virtual const char* get_callable_function_prototype( Size index, Prototype_language lang)
         const = 0;
@@ -1178,7 +1184,7 @@ public:
     /// \param[in]  index       The index of the callable function.
     /// \param[in]  state       The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c NULL if the built-in resource
     ///                         handler is used.
     /// \param[out] result      The result will be written to.
     ///
@@ -1200,7 +1206,7 @@ public:
     /// \param[in]  index       The index of the callable function.
     /// \param[in]  state       The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c NULL if the built-in resource
     ///                         handler is used.
     /// \param[in]  cap_args    The captured arguments to use for the execution.
     ///                         If \p cap_args is \c NULL, the captured arguments of this
@@ -1231,7 +1237,7 @@ public:
     /// \param[in]  index       The index of the callable function.
     /// \param[in]  state       The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c NULL if the built-in resource
     ///                         handler is used.
     /// \param[in]  cap_args    The captured arguments to use for the execution.
     ///                         If \p cap_args is \c NULL, the captured arguments of this
@@ -1254,7 +1260,7 @@ public:
     /// \param[inout] data      The input and output fields for the BSDF sampling.
     /// \param[in]    state     The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c NULL if the built-in resource
     ///                         handler is used.
     /// \param[in]    cap_args  The captured arguments to use for the execution.
     ///                         If \p cap_args is \c NULL, the captured arguments of this
@@ -1278,7 +1284,7 @@ public:
     /// \param[inout] data      The input and output fields for the BSDF evaluation.
     /// \param[in]    state     The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c NULL if the built-in resource
     ///                         handler is used.
     /// \param[in]    cap_args  The captured arguments to use for the execution.
     ///                         If \p cap_args is \c NULL, the captured arguments of this
@@ -1303,7 +1309,7 @@ public:
     /// \param[inout] data      The input and output fields for the BSDF PDF calculation.
     /// \param[in]    state     The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c NULL if the built-in resource
     ///                         handler is used.
     /// \param[in]    cap_args  The captured arguments to use for the execution.
     ///                         If \p cap_args is \c NULL, the captured arguments of this
@@ -1329,7 +1335,7 @@ public:
     /// \param[inout] data      The input and output fields for the BSDF auxiliary calculation.
     /// \param[in]    state     The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c NULL if the built-in resource
     ///                         handler is used.
     /// \param[in]    cap_args  The captured arguments to use for the execution.
     ///                         If \p cap_args is \c NULL, the captured arguments of this
@@ -1358,7 +1364,7 @@ public:
     /// \param[in]  index       The index of the callable function.
     /// \param[in]  state       The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c NULL if the built-in resource
     ///                         handler is used.
     /// \param[in]  cap_args    The captured arguments to use for the execution.
     ///                         If \p cap_args is \c NULL, the captured arguments of this
@@ -1381,7 +1387,7 @@ public:
     /// \param[inout] data      The input and output fields for the EDF sampling.
     /// \param[in]    state     The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c NULL if the built-in resource
     ///                         handler is used.
     /// \param[in]    cap_args  The captured arguments to use for the execution.
     ///                         If \p cap_args is \c NULL, the captured arguments of this
@@ -1405,7 +1411,7 @@ public:
     /// \param[inout] data      The input and output fields for the EDF evaluation.
     /// \param[in]    state     The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c NULL if the built-in resource
     ///                         handler is used.
     /// \param[in]    cap_args  The captured arguments to use for the execution.
     ///                         If \p cap_args is \c NULL, the captured arguments of this
@@ -1430,7 +1436,7 @@ public:
     /// \param[inout] data      The input and output fields for the EDF PDF calculation.
     /// \param[in]    state     The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c NULL if the built-in resource
     ///                         handler is used.
     /// \param[in]    cap_args  The captured arguments to use for the execution.
     ///                         If \p cap_args is \c NULL, the captured arguments of this
@@ -1456,7 +1462,7 @@ public:
     /// \param[inout] data      The input and output fields for the EDF auxiliary calculation.
     /// \param[in]    state     The core state.
     /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
-    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         texture lookup functions. Can be \c NULL if the built-in resource
     ///                         handler is used.
     /// \param[in]    cap_args  The captured arguments to use for the execution.
     ///                         If \p cap_args is \c NULL, the captured arguments of this
@@ -1524,6 +1530,39 @@ public:
     /// \return The potential render state usage of the callable function
     ///         or \c 0 if \p index was invalid.
     virtual State_usage get_callable_function_render_state_usage( Size index) const = 0;
+
+    /// Run the init function for this code on the native CPU (single-init mode).
+    ///
+    /// This function updates the normal field of the shading state with the result of
+    /// \c "geometry.normal" and, if the \c "num_texture_results" backend option has been set to
+    /// non-zero, fills the text_results fields of the state.
+    ///
+    /// \param[in]  index       The index of the callable function.
+    /// \param[in]  state       The core state.
+    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
+    ///                         texture lookup functions. Can be \c NULL if the built-in resource
+    ///                         handler is used.
+    /// \param[in]  cap_args    The captured arguments to use for the execution.
+    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         \c ITarget_code object for the given callable function will be used,
+    ///                         if any.
+    ///
+    /// \return
+    ///    -  0: on success
+    ///    - -1: if execution was aborted by runtime error
+    ///    - -2: cannot execute: not native code or the given function is not an init function
+    ///          for single-init mode
+    virtual Sint32 execute_init(
+        Size index,
+        Shading_state_material& state,
+        Texture_handler_base* tex_handler,
+        const ITarget_argument_block *cap_args) const = 0;
+
+    virtual Size MI_NEURAYLIB_DEPRECATED_METHOD_14_0(get_body_texture_count)() const = 0;
+
+    virtual Size MI_NEURAYLIB_DEPRECATED_METHOD_14_0(get_body_light_profile_count)() const = 0;
+
+    virtual Size MI_NEURAYLIB_DEPRECATED_METHOD_14_0(get_body_bsdf_measurement_count)() const = 0;
 };
 
 /// Represents a link-unit of an MDL backend.
@@ -1531,29 +1570,6 @@ class ILink_unit : public
     mi::base::Interface_declare<0x1df9bbb0,0x5d96,0x475f,0x9a,0xf4,0x07,0xed,0x8c,0x2d,0xfd,0xdb>
 {
 public:
-    /// Add an MDL environment function call as a function to this link unit.
-    ///
-    /// \param call                       The MDL function call for the environment.
-    /// \param fname                      The name of the function that is created.
-    /// \param[inout] context             An execution context which can be used
-    ///                                   to pass compilation options to the MDL compiler.
-    ///                                   Currently, no options are supported by this operation.
-    ///                                   During material compilation messages like errors and
-    ///                                   warnings will be passed to the context for
-    ///                                   later evaluation by the caller. Can be \c NULL.
-    ///                                   Possible error conditions:
-    ///                                    - Invalid parameters (\c NULL pointer).
-    ///                                    - Invalid expression.
-    ///                                    - The backend failed to compile the function.
-    /// \return           A return code. The return codes have the following meaning:
-    ///                   -  0: Success.
-    ///                   - -1: An error occurred. Please check the execution context for details
-    ///                         if it has been provided.
-    virtual Sint32 add_environment(
-        const IFunction_call    *call,
-        const char              *fname,
-        IMdl_execution_context  *context = 0) = 0;
-
     /// Add an expression that is part of an MDL material instance as a function to this
     /// link unit.
     ///
@@ -1666,10 +1682,68 @@ public:
         Size                            description_count,
         IMdl_execution_context*         context) = 0;
 
+     /// Execution context for functions.
+    enum Function_execution_context {
+        FEC_ENVIRONMENT  = 0,   ///< This function will be executed inside the environment.
+        FEC_CORE         = 1,   ///< This function will be executed in the renderer core.
+        FEC_DISPLACEMENT = 2,   ///< This function will be executed inside displacement.
+        FEC_FORCE_32_BIT = 0xFFFFFFFFu //   Undocumented, for alignment only
+    };
+
+    /// Add an MDL function call as a function to this link unit.
+    ///
+    /// \param call                       The MDL function call.
+    /// \param fexc                       The context from which this function will be called.
+    /// \param fname                      The name of the function that is created.
+    /// \param[inout] context             An execution context which can be used
+    ///                                   to pass compilation options to the MDL compiler.
+    ///                                   Currently, no options are supported by this operation.
+    ///                                   During material compilation messages like errors and
+    ///                                   warnings will be passed to the context for
+    ///                                   later evaluation by the caller. Can be \c NULL.
+    ///                                   Possible error conditions:
+    ///                                    - Invalid parameters (\c NULL pointer).
+    ///                                    - Invalid expression.
+    ///                                    - The backend failed to compile the function.
+    /// \return           A return code. The return codes have the following meaning:
+    ///                   -  0: Success.
+    ///                   - -1: An error occurred. Please check the execution context for details
+    ///                         if it has been provided.
     virtual Sint32 add_function(
-        const IFunction_definition* function,
-        char const*                 name,
-        IMdl_execution_context* context) = 0;
+        const IFunction_call       *call,
+        Function_execution_context fexc,
+        const char                 *fname,
+        IMdl_execution_context     *context = 0) = 0;
+
+    /// Add an MDL function definition as a function to this link unit.
+    ///
+    /// \param function                   The MDL function definition.
+    /// \param fexc                       The context from which this function will be called.
+    /// \param fname                      The name of the function that is created.
+    /// \param[inout] context             An execution context which can be used
+    ///                                   to pass compilation options to the MDL compiler.
+    ///                                   Currently, no options are supported by this operation.
+    ///                                   During material compilation messages like errors and
+    ///                                   warnings will be passed to the context for
+    ///                                   later evaluation by the caller. Can be \c NULL.
+    ///                                   Possible error conditions:
+    ///                                    - Invalid parameters (\c NULL pointer).
+    ///                                    - Invalid expression.
+    ///                                    - The backend failed to compile the function.
+    /// \return           A return code. The return codes have the following meaning:
+    ///                   -  0: Success.
+    ///                   - -1: An error occurred. Please check the execution context for details
+    ///                         if it has been provided.
+    virtual Sint32 add_function(
+        const IFunction_definition *function,
+        Function_execution_context fexc,
+        const char                 *fname,
+        IMdl_execution_context     *context) = 0;
+
+    virtual Sint32 MI_NEURAYLIB_DEPRECATED_METHOD_14_0(add_environment)(
+        const IFunction_call    *call,
+        const char              *fname,
+        IMdl_execution_context  *context = 0) = 0;
 };
 
 /// Description of target function
@@ -1717,34 +1791,37 @@ struct Target_function_description
     /// an output parameter which is available after adding the function to the link unit.
     ITarget_code::Distribution_kind distribution_kind;
 
-    /// A return code. For the meaning of the error codes correspond to the codes
-    /// \c add_material_expression (code * 10) and \c add_material_df (code * 100).
-    ///      0:  Success.
-    ///     ~0:  The function has not yet been processed
-    ///     -1:  Invalid parameters (\c NULL pointer).
-    ///     -2:  Invalid path (non-existing).
-    ///     -7:  The backend does not implement this function, yet.
+    /// A return code.
     ///
-    ///  codes for expressions, i.e., distribution_kind == DK_NONE
-    ///    -10:  The JIT backend is not available.
-    ///    -20:  Invalid field name (non-existing).
-    ///    -30:  invalid function name.
-    ///    -40:  The JIT backend failed to compile the function.
-    ///    -50:  The requested expression is a constant.
-    ///    -60:  Neither BSDFs, EDFs, VDFs, nor resource type expressions can be compiled.
+    /// The error codes correspond to the codes returned by
+    /// #mi::neuraylib::ILink_unit::add_material_expression() (multiplied by 10) and
+    /// #mi::neuraylib::ILink_unit::add_material_df (multiplied by 100).
+    ///  -     0:  Success.
+    ///  -    ~0:  The function has not yet been processed
+    ///  -    -1:  Invalid parameters (\c NULL pointer).
+    ///  -    -2:  Invalid path (non-existing).
+    ///  -    -7:  The backend does not implement this function, yet.
     ///
-    ///  codes for distribution functions, i.e., distribution_kind == DK_BSDF, DK_EDF, ...
-    ///   -100:  Invalid parameters (\c NULL pointer).
-    ///   -200:  Invalid path (non-existing).
-    ///   -300:  The backend failed to generate target code for the material.
-    ///   -400:  The requested expression is a constant.
-    ///   -500:  Only distribution functions are allowed.
-    ///   -600:  The backend does not support compiled MDL materials obtained from
-    ///          class compilation mode.
-    ///   -700:  The backend does not implement this function, yet.
-    ///   -800:  EDFs are not supported. (deprecated, will not occur anymore)
-    ///   -900:  VDFs are not supported.
-    ///  -1000:  The requested DF is not supported, yet.
+    ///  Codes for expressions, i.e., distribution_kind == DK_NONE
+    ///  -   -10:  The JIT backend is not available.
+    ///  -   -20:  Invalid field name (non-existing).
+    ///  -   -30:  invalid function name.
+    ///  -   -40:  The JIT backend failed to compile the function.
+    ///  -   -50:  The requested expression is a constant.
+    ///  -   -60:  Neither BSDFs, EDFs, VDFs, nor resource type expressions can be compiled.
+    ///
+    ///  Codes for distribution functions, i.e., distribution_kind == DK_BSDF, DK_EDF, ...
+    ///  -  -100:  Invalid parameters (\c NULL pointer).
+    ///  -  -200:  Invalid path (non-existing).
+    ///  -  -300:  The backend failed to generate target code for the material.
+    ///  -  -400:  The requested expression is a constant.
+    ///  -  -500:  Only distribution functions are allowed.
+    ///  -  -600:  The backend does not support compiled MDL materials obtained from
+    ///            class compilation mode.
+    ///  -  -700:  The backend does not implement this function, yet.
+    ///  -  -800:  EDFs are not supported. (deprecated, will not occur anymore)
+    ///  -  -900:  VDFs are not supported.
+    ///  - -1000:  The requested DF is not supported, yet.
     Sint32 return_code;
 };
 
@@ -1754,6 +1831,7 @@ mi_static_assert( sizeof( ITarget_code::Prototype_language) == sizeof( mi::Uint3
 mi_static_assert( sizeof( ITarget_code::Distribution_kind) == sizeof( mi::Uint32));
 mi_static_assert( sizeof( ITarget_code::Function_kind) == sizeof( mi::Uint32));
 mi_static_assert( sizeof( ITarget_code::Gamma_mode) == sizeof( mi::Uint32));
+mi_static_assert( sizeof( ILink_unit::Function_execution_context) == sizeof( mi::Uint32));
 
 } // namespace neuraylib
 

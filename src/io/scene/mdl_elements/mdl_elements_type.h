@@ -188,6 +188,12 @@ public:
 
     IType_list* deserialize_list( SERIAL::Deserializer* deserializer) override;
 
+    std::string get_type_name( const IType* type, bool include_aliased_type) override;
+
+    std::string get_serialization_type_name( const IType* type) override;
+
+    const IType* create_type( const char* serialization_type_name) const  override;
+
     // internal methods
 
     static mi::Sint32 compare_static( const IType* lhs, const IType* rhs);
@@ -195,12 +201,6 @@ public:
     static mi::Sint32 compare_static( const IType_list* lhs, const IType_list* rhs);
 
     static std::string get_type_name_static( const IType* type, bool include_aliased_type = true);
-
-    std::string get_type_name( const IType* type, bool include_aliased_type) override;
-
-    std::string get_serialization_type_name( const IType* type) override;
-
-    const IType* create_type( const char* serialization_type_name) const  override;
 
     /// Acquires the mutex.
     void lock() const { m_mutex.lock(); }

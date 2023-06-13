@@ -55,8 +55,7 @@ class IMdl_execution_context;
 /// definition.
 ///
 /// \note This interface also supports materials, which are considered as a special kind of
-///       functions, namely functions with the return type \c "material". See
-///       \ref mi_mdl_materials_are_functions for details.
+///       functions, namely functions with the return type \c "material".
 ///
 /// \note See \ref mi_neuray_mdl_template_like_function_definitions for function definitions
 ///       with special semantics.
@@ -143,8 +142,7 @@ public:
         DS_BITWISE_OR_ASSIGN,                     ///< The bitwise or-assign operator.
         DS_BITWISE_XOR_ASSIGN,                    ///< The bitwise xor-assign operator.
         DS_BITWISE_AND_ASSIGN,                    ///< The bitwise and-assign operator.
-        DS_SEQUENCE,                              ///< The comma operator.
-        DS_BINARY_LAST = DS_SEQUENCE,
+        DS_BINARY_LAST = DS_BITWISE_AND_ASSIGN,
 
         // Ternary operator
 
@@ -154,8 +152,8 @@ public:
 
         // ::math module intrinsics
 
-        DS_INTRINSIC_MATH_FIRST = 0x0300,         ///< The %math::abs() intrinsic function.
-        DS_INTRINSIC_MATH_ABS = DS_INTRINSIC_MATH_FIRST,
+        DS_INTRINSIC_MATH_ABS = 0x0300,           ///< The %math::abs() intrinsic function.
+        DS_INTRINSIC_MATH_FIRST = DS_INTRINSIC_MATH_ABS,
         DS_INTRINSIC_MATH_ACOS,                   ///< The %math::acos() intrinsic function.
         DS_INTRINSIC_MATH_ALL,                    ///< The %math::all() intrinsic function.
         DS_INTRINSIC_MATH_ANY,                    ///< The %math::any() intrinsic function.
@@ -282,6 +280,8 @@ public:
         /// The df::diffuse_reflection_bsdf() function.
         DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF = 0x0600,
         DS_INTRINSIC_DF_FIRST = DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF,
+        /// The df::dusty_diffuse_reflection_bsdf() function.
+        DS_INTRINSIC_DF_DUSTY_DIFFUSE_REFLECTION_BSDF,
         DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF,///< The df::diffuse_transmission_bsdf() function.
         DS_INTRINSIC_DF_SPECULAR_BSDF,            ///< The df::specular_bsdf() function.
         DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF,       ///< The df::simple_glossy_bsdf() function.
@@ -292,6 +292,7 @@ public:
         DS_INTRINSIC_DF_MEASURED_EDF,             ///< The df::measured_edf() function.
         DS_INTRINSIC_DF_SPOT_EDF,                 ///< The df::spot_edf() function.
         DS_INTRINSIC_DF_ANISOTROPIC_VDF,          ///< The df::anisotropic_vdf() function.
+        DS_INTRINSIC_DF_FOG_VDF,                  ///< The df::fog_vdf() function.
         DS_INTRINSIC_DF_NORMALIZED_MIX,           ///< The df::normalized_mix() function.
         DS_INTRINSIC_DF_CLAMPED_MIX,              ///< The df::clamped_mix() function.
         DS_INTRINSIC_DF_WEIGHTED_LAYER,           ///< The df::weighted_layer() function.
@@ -373,7 +374,11 @@ public:
         DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4,
         /// The scene::data_lookup_uniform_color() function.
         DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR,
-        DS_INTRINSIC_SCENE_LAST = DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR,
+        /// The scene::data_lookup_float4x4() function.
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4X4,
+        /// The scene::data_lookup_uniform_float4x4() function.
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4X4,
+        DS_INTRINSIC_SCENE_LAST = DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4X4,
 
         // ::debug module intrinsics
 
@@ -468,9 +473,6 @@ public:
     virtual bool is_uniform() const = 0;
 
     /// Indicates whether the definition represents a material.
-    ///
-    /// If \ref mi_mdl_materials_are_functions is disabled, then this method returns always
-    /// \c false.
     virtual bool is_material() const = 0;
 
     /// Returns the return type.
@@ -678,6 +680,14 @@ public:
     /// \return             The created function call, or \c NULL in case of errors.
     virtual IFunction_call* create_function_call(
         const IExpression_list* arguments, Sint32* errors = 0) const = 0;
+
+    /// Returns the mangled name of the function.
+    ///
+    /// \note: The mangled name is computed for real MDL functions only, for materials it is
+    /// equal to #get_mdl_simple_name()
+    ///
+    /// \return         The mangled MDL name of the function definition.
+    virtual const char *get_mdl_mangled_name() const = 0;
 };
 
 mi_static_assert(sizeof(IFunction_definition::Semantics) == sizeof(Uint32));

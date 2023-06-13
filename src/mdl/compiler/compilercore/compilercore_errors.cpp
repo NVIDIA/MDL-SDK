@@ -120,15 +120,21 @@ char const *get_error_template(
             return "                $0";
         case POSSIBLE_ABSOLUTE_IMPORT:
             return "did you mean '$0'?";
+        case PARAMETERS_ARE_RVALUES_HERE:
+            return "parameter '$0' is a rvalue inside let-expressions and declarative functions";
+        case SIDE_EFFECT_EXPRESSION_IN_RETURN:
+            return "'$0' expression with side effect used in return expression";
+        case ASSIGNMENT_EXPRESSION_IN_RETURN:
+            return "'$0' assignment expression used in return expression";
 
         case SYNTAX_ERROR:
             return "syntax error: $0";
         case ILLEGAL_BOM_IGNORED:
-            return "Illegal byte order mark at start of file ignored";
+            return "illegal byte order mark at start of file ignored";
         case UNDETERMINED_COMMENT:
             return "unexpected end of file found in comment";
         case INTEGER_OVERFLOW:
-            return "Integer constant overflow";
+            return "integer constant overflow";
         case ENT_REDECLARATION:
             return "redeclaration of '$0'";
         case TYPE_REDECLARATION:
@@ -164,7 +170,7 @@ char const *get_error_template(
         case MODULE_NOT_FOUND:
             return "could not find module '$0' in module path";
         case ERRONEOUS_IMPORT:
-            return "Imported module '$0' contains errors";
+            return "imported module '$0' contains errors";
         case CONSTRUCTOR_SHADOWED:
             return "field '$0 $1::$2' with same name as $3";
         case PARAMETER_SHADOWED:
@@ -206,7 +212,7 @@ char const *get_error_template(
         case REEXPORTING_QUALIFIED_NAMES_FORBIDDEN:
             return "re-exporting qualified names is forbidden";
         case FORBIDDED_GLOBAL_STAR:
-            return "Missing module name before star import '*'";
+            return "missing module name before star import '*'";
         case MODULE_NAME_GIVEN_NOT_ENTITY:
             return "'$0' names a module, not an entity, use '$0::*' to import a whole module";
         case FORBIDDEN_RETURN_TYPE:
@@ -276,7 +282,7 @@ char const *get_error_template(
         case RECURSION_CALL_NOT_ALLOWED:
             return "recursive function '$0' not allowed";
         case CALL_OF_UNDEFINED_FUNCTION:
-            return "Called function '$0' is not defined";
+            return "called function '$0' is not defined";
         case ABSTRACT_ARRAY_RETURN_TYPE:
             return "abstract arrays cannot be defined in a functions return type";
         case ABSTRACT_ARRAY_INSIDE_STRUCT:
@@ -368,11 +374,11 @@ char const *get_error_template(
             return "'$0' : cannot convert argument '$1' from '$2' to '$3': "
                 "depends on parameter type";
         case CONSTANT_TOO_BIG:
-            return "Constant too big";
+            return "constant too big";
         case UNSUPPORTED_MDL_VERSION:
-            return "Unsupported MDL version $0.$1";
+            return "unsupported MDL version $0.$1";
         case FUNCTION_ANNOTATIONS_NOT_AT_PROTOTYPE:
-            return "Function annotations must be placed at the first function prototype";
+            return "function annotations must be placed at the first function prototype";
         case EXPORTED_FUNCTION_NOT_DEFINED:
             return "exported function '$0' not defined";
         case UNREFERENCED_FUNCTION_REMOVED:
@@ -382,7 +388,7 @@ char const *get_error_template(
         case USED_TYPE_NOT_EXPORTED:
             return "exported '$0' uses non-exported type '$1'";
         case OPERATOR_EQUAL_WITHOUT_EFFECT:
-            return "operator '$0' has no effect, maybe '=' was indented?";
+            return "operator '$0' has no effect, maybe '=' was intended?";
         case OPERATOR_WITHOUT_EFFECT:
             return "operator '$0' has no effect";
         case IDENTICAL_SUBEXPRESSION:
@@ -451,7 +457,7 @@ char const *get_error_template(
         case SOFT_RANGE_OUTSIDE_HARD_RANGE:
             return "soft_range($0, $1) is outside the specified hard_range($2, $3)";
         case FUNCTION_PTR_USED:
-            return "Missing parentheses on function call";
+            return "missing parentheses on function call";
         case USED_VARIABLE_MARKED_UNUSED:
             return "used variable '$0' marked with anno::unused() annotation";
         case USED_CONSTANT_MARKED_UNUSED:
@@ -499,7 +505,7 @@ char const *get_error_template(
         case EXPORTED_PRESET_OF_UNEXPORTED_ORIGIN:
             return "cannot export variant '$0' of unexported '$1'";
         case NON_EXISTANT_DEPENDENCY:
-            return "This module does not depend on the module '$0' at all.";
+            return "this module does not depend on the module '$0' at all";
         case DEPENDENCY_VERSION_MISSING:
             return "this module requires version '$1.$2.$3$4' of module '$0'";
         case DEPENDENCY_VERSION_REQUIRED:
@@ -514,30 +520,30 @@ char const *get_error_template(
         case INVALID_DIRECTORY_NAME_NESTING:
             return "$0 file path contains too many directory names '..'";
         case STRICT_RELATIVE_PATH_IN_STRING_MODULE:
-            return "Strict relative file paths like '$0' are not supported in string-based modules";
+            return "strict relative file paths like '$0' are not supported in string-based modules";
         case FILE_PATH_CONSISTENCY:
-            return "The file path '$0' is resolved to '$1' which is not in the $2 '$3'";
+            return "the file path '$0' is resolved to '$1' which is not in the $2 '$3'";
         case DEPRECATED_RESOURCE_PATH_USED:
-            return "The file path '$0' is only found via the resource search paths, "
+            return "the file path '$0' is only found via the resource search paths, "
                 "not via the module search paths. This is deprecated.";
         case AMBIGUOUS_FILE_LOCATION:
-            return "The $0 '$1' is found at several places, this is ambiguous";
+            return "the $0 '$1' is found at several places, this is ambiguous";
         case IMPORT_FROM_OLD_ARCHIVE_VERSION:
-            return "Import from an old archive: version $0 required, but $1 found";
+            return "import from an old archive: version $0 required, but $1 found";
         case UNABLE_TO_RESOLVE:
-            return "Unable to resolve file path '$0'$1";
+            return "unable to resolve file path '$0'$1";
         case INVALID_MDL_ARCHIVE_DETECTED:
             return "'$0' is an invalid MDL archive";
         case ARCHIVE_DEPENDENCY_MISSING:
             return "'$0' is imported from archive '$1', but has no dependency in archive '$2'";
         case FORBIDDEN_MDL_VERSION_IN_ARCHIVE:
-            return "This module uses MDL version $0, but its owning archive is restricted to $1";
+            return "this module uses MDL version $0, but its owning archive is restricted to $1";
         case TYPE_CONVERSION_MUST_BE_EXPLICIT:
             return "conversion from '$0' to '$1' must be explicit";
         case MISSING_RESOURCE:
-            return "Missing resource '$0' referenced";
+            return "missing resource '$0' referenced";
         case RESOURCE_OUTSIDE_ARCHIVE:
-            return "Referenced resource '$0' located outside the current archive";
+            return "referenced resource '$0' located outside the current archive";
         case IGNORED_ON_NON_PARAMETER:
             return "annotation '$0' will be ignored because '$1' is not a parameter";
         case INVALID_THUMBNAIL_EXTENSION:
@@ -564,41 +570,41 @@ char const *get_error_template(
         case ENABLE_IF_CONDITION_HAS_WARNINGS:
             return "enable_if condition contains warnings";
         case FUNC_VARIANT_WITH_DEFERRED_ARRAY_RET_TYPE:
-            return "Cannot create function variant from function with deferred array type return";
+            return "cannot create function variant from function with deferred array type return";
         case ARCHIVE_CONFLICT:
             return "inside search path '$0': "
                    "archive '$1' conflicts with $2 '$3', both locations are ignored";
         case MATERIAL_PTR_USED:
-            return "Missing parentheses on material instance";
+            return "missing parentheses on material instance";
         case CAST_TYPES_UNRELATED:
-            return "Cannot cast '$0' into '$1$2', different type kinds";
+            return "cannot cast '$0' into '$1$2', different type kinds";
         case CAST_MISSING_ENUM_VALUE_SRC:
-            return "Cannot cast '$0' into '$1', missing enum value '$2 = $3' in source type";
+            return "cannot cast '$0' into '$1', missing enum value '$2 = $3' in source type";
         case CAST_MISSING_ENUM_VALUE_DST:
-            return "Cannot cast '$0' into '$1', missing enum value '$2 = $3' in destination type";
+            return "cannot cast '$0' into '$1', missing enum value '$2 = $3' in destination type";
         case CAST_STRUCT_FIELD_COUNT:
-            return "Cannot cast '$0' into '$1', different number of fields";
+            return "cannot cast '$0' into '$1', different number of fields";
         case CAST_STRUCT_FIELD_INCOMPATIBLE:
-            return "Cannot cast '$0' into '$1', fields '$2' and '$3' are incompatible";
+            return "cannot cast '$0' into '$1', fields '$2' and '$3' are incompatible";
         case CAST_ARRAY_ELEMENT_INCOMPATIBLE:
-            return "Cannot cast '$0' into '$1$2', element types are incompatible";
+            return "cannot cast '$0' into '$1$2', element types are incompatible";
         case CAST_ARRAY_DEFERRED_TO_IMM:
-            return "Cannot cast '$0' into '$1', deferred sized array cannot be casted to immediate";
+            return "cannot cast '$0' into '$1', deferred sized array cannot be casted to immediate";
         case CAST_ARRAY_IMM_TO_DEFERRED:
-            return "Cannot cast '$0' into '$1', immediate sized array cannot be casted to deferred";
+            return "cannot cast '$0' into '$1', immediate sized array cannot be casted to deferred";
         case CAST_ARRAY_DIFFERENT_LENGTH:
-            return "Cannot cast '$0' into '$1', different array size";
+            return "cannot cast '$0' into '$1', different array size";
         case FORBIDDEN_ANNOTATION_PARAMETER_TYPE:
             return "annotation parameters of type '$0' are forbidden";
         case ANNOS_ON_ANNO_DECL_NOT_SUPPORTED:
-            return "Annotations on annotation declarations are forbidden in MDL $0.$1 "
+            return "annotations on annotation declarations are forbidden in MDL $0.$1 "
                 "and will be ignored";
         case CONST_EXPR_ARGUMENT_REQUIRED:
             return "'$0' requires a const expression as $1 argument";
         case USING_ALIAS_REDECLARATION:
             return "redeclaration of using alias '$0'";
         case USING_ALIAS_DECL_FORBIDDEN:
-            return "using alias declaration require MDL version 1.6 or later";
+            return "using alias declaration require MDL version 1.6 or 1.7";
         case PACKAGE_NAME_CONTAINS_FORBIDDEN_CHAR:
             return "package name contains forbidden character '$0'";
         case ABSOLUTE_ALIAS_NOT_AT_BEGINNING:
@@ -632,6 +638,18 @@ char const *get_error_template(
             return "'$0' does not name a type and can not be used in a cast expression";
         case CAST_REQUIRES_TYPE_ARGUMENT:
             return "cast expression requires a type argument";
+        case UNUSED_LET_TEMPORARY:
+            return "unused let temporary '$0'";
+        case ESCAPE_USED_WITHOUT_HEX_DIDITS:
+            return "'\\$0' used with no following hex digits";
+        case ESCAPE_SEQUENCE_OUT_OF_RANGE:
+            return "'\\$0$1' escape sequence out of range";
+        case INCOMPLETE_UNIVERSAL_CHARACTER_NAME:
+            return "incomplete universal character name '\\$0$1'";
+        case INVALID_UNIVERSAL_CHARACTER_ENCODING:
+            return "invalid universal character name '\\$0$1'";
+        case UTF8_DECODER_ERROR:
+            return "invalid UTF-8 encoding";
 
         // ------------------------------------------------------------- //
         case EXTERNAL_APPLICATION_ERROR:
@@ -645,48 +663,48 @@ char const *get_error_template(
         case MANIFEST_MISSING:
             return "MANIFEST is missing from the archive";
         case PACKAGE_NAME_INVALID:
-            return "The package name '$0' is not a valid MDL identifier";
+            return "the package name '$0' is not a valid MDL identifier";
         case EXTRA_FILES_FOUND:
-            return "Directory '$0' contains extra file/directory '$1'";
+            return "directory '$0' contains extra file/directory '$1'";
         case DIRECTORY_MISSING:
-            return "Directory '$0' is missing";
+            return "directory '$0' is missing";
         case ARCHIVE_ALREADY_EXIST:
-            return "Archive '$0' already exist";
+            return "archive '$0' already exist";
         case ARCHIVE_DOES_NOT_EXIST:
-            return "Archive '$0' does not exist";
+            return "archive '$0' does not exist";
         case CANT_OPEN_ARCHIVE:
-            return "Cannot open archive '$0'";
+            return "cannot open archive '$0'";
         case MEMORY_ALLOCATION:
-            return "Required memory could not be allocated";
+            return "required memory could not be allocated";
         case RENAME_FAILED:
-            return "Renaming temporary file failed";
+            return "renaming temporary file failed";
         case IO_ERROR:
-            return "Input/Output error accessing archive '$0'";
+            return "input/output error accessing archive '$0'";
         case CRC_ERROR:
-            return "Broken archive '$0': CRC error";
+            return "broken archive '$0': CRC error";
         case CREATE_FILE_FAILED:
-            return "Cannot create file '$0'";
+            return "cannot create file '$0'";
         case MANIFEST_BROKEN:
-            return "Invalid MDL archive";
+            return "invalid MDL archive";
         case KEY_NULL_PARAMETERS:
-            return "Manifest keys and values must be non-NULL";
+            return "manifest keys and values must be non-NULL";
         case VALUE_MUST_BE_IN_TIME_FORMAT:
-            return "The value of key '$0' must be in TIME format";
+            return "the value of key '$0' must be in TIME format";
         case VALUE_MUST_BE_IN_SEMA_VERSION_FORMAT:
-            return "The value of key '$0' must be in SEMANTIC VERSION format";
+            return "the value of key '$0' must be in SEMANTIC VERSION format";
         case FORBIDDEN_KEY:
-            return "Changing the value of key '$0' is forbidden";
+            return "changing the value of key '$0' is forbidden";
         case SINGLE_VALUED_KEY:
-            return "Key '$0' cannot have multiple values";
+            return "key '$0' cannot have multiple values";
         case INACCESSIBLE_MDL_FILE:
-            return "The directory '$0' does not form a valid MDL package, "
+            return "the directory '$0' does not form a valid MDL package, "
                    "MDL file '$1' cannot be compiled";
         case MDL_FILENAME_NOT_IDENTIFIER:
-            return "Invalid MDL identifier for file '$1' in directory '$0'";
+            return "invalid MDL identifier for file '$1' in directory '$0'";
         case FAILED_TO_OPEN_TEMPFILE:
-            return "Failure to create temporary file";
+            return "failure to create temporary file";
         case FAILED_TO_REMOVE:
-            return "Failure to remove file";
+            return "failure to remove file";
         case INVALID_MDL_ARCHIVE:
             return "'$0' is an invalid MDL archive";
         case INVALID_PASSWORD:
@@ -696,23 +714,23 @@ char const *get_error_template(
         case ARCHIVE_DOES_NOT_CONTAIN_ENTRY:
             return "MDL archive '$0' does not contain '$1'";
         case INVALID_MDL_ARCHIVE_NAME:
-            return "Invalid MDL archive name '$0'";
+            return "invalid MDL archive name '$0'";
         case EMPTY_ARCHIVE_CONTENT:
-            return "Archive '$0' would be empty";
+            return "archive '$0' would be empty";
         case EXTRA_FILES_IGNORED:
-            return "File/directory '$1' in directory '$0' will be ignored";
+            return "file/directory '$1' in directory '$0' will be ignored";
         case MDR_INVALID_HEADER:
-            return "Header of MDL archive '$0' is invalid";
+            return "header of MDL archive '$0' is invalid";
         case MDR_PRE_RELEASE_VERSION:
-            return "Header of MDL archive '$0' contains a pre-release version";
+            return "header of MDL archive '$0' contains a pre-release version";
         case MDR_INVALID_HEADER_VERSION:
-            return "Header version of MDL archive '$0' is invalid";
+            return "header version of MDL archive '$0' is invalid";
         case ARCHIVE_HAS_BROKEN_MANIFEST:
             return "MDL archive '$0' has broken/missing MANIFEST";
         case ARCHIVE_MANIFEST_PARSE_ERROR:
             return "MDL archive '$0' has invalid key, value pair in MANIFEST";
         case INVALID_KEY_IDENT:
-            return "Key '$0' is not a valid identifier";
+            return "key '$0' is not a valid identifier";
 
         // ------------------------------------------------------------- //
         case INTERNAL_ARCHIVER_ERROR:
@@ -726,17 +744,17 @@ char const *get_error_template(
         case MDLE_FILE_DOES_NOT_EXIST:
             return "MDLE '$0' does not exist";
         case MDLE_CANT_OPEN_FILE:
-            return "Cannot open MDLE '$0'";
+            return "cannot open MDLE '$0'";
         case MDLE_MEMORY_ALLOCATION:
-            return "Required memory could not be allocated";
+            return "required memory could not be allocated";
         case MDLE_RENAME_FAILED:
-            return "Renaming temporary file failed";
+            return "renaming temporary file failed";
         case MDLE_IO_ERROR:
-            return "Input/Output error accessing MDLE '$0'";
+            return "input/output error accessing MDLE '$0'";
         case MDLE_CRC_ERROR:
-            return "Broken MDLE '$0': CRC error";
+            return "broken MDLE '$0': CRC error";
         case MDLE_FAILED_TO_OPEN_TEMPFILE:
-            return "Failure to create temporary file";
+            return "failure to create temporary file";
         case MDLE_INVALID_MDLE:
             return "'$0' is an invalid MDLE";
         case MDLE_INVALID_PASSWORD:
@@ -744,23 +762,23 @@ char const *get_error_template(
         case MDLE_DOES_NOT_CONTAIN_ENTRY:
             return "MDLE '$0' does not contain '$1'";
         case MDLE_INVALID_NAME:
-            return "Invalid MDLE name '$0'";
+            return "invalid MDLE name '$0'";
         case MDLE_INVALID_USER_FILE:
-            return "User defined file '$1' for MDLE '$0' is invalid";
+            return "user defined file '$1' for MDLE '$0' is invalid";
         case MDLE_INVALID_RESOURCE:
-            return "Resource file defined file '$0' is invalid";
+            return "resource file defined file '$0' is invalid";
         case MDLE_CONTENT_FILE_INTEGRITY_FAIL:
-            return "File '$1' in MDLE '$0' failed the MD5 check";
+            return "file '$1' in MDLE '$0' failed the MD5 check";
         case MDLE_INVALID_HEADER:
-            return "Header of MDLE file '$0' is invalid";
+            return "header of MDLE file '$0' is invalid";
         case MDLE_INVALID_HEADER_VERSION:
-            return "Header version of MDLE file '$0' is invalid";
+            return "header version of MDLE file '$0' is invalid";
         case MDLE_PRE_RELEASE_VERSION:
-            return "Header of MDLE file '$0' contains a pre-release version";
+            return "header of MDLE file '$0' contains a pre-release version";
         case MDLE_FAILED_TO_ADD_ZIP_COMMENT:
-            return "Filed to add zip comment to MDLE file '$0'";
+            return "failed to add zip comment to MDLE file '$0'";
         case MDLE_MANIFEST_ERROR:
-            return "Missing or broken manifest of MDLE file '$0'";
+            return "missing or broken manifest of MDLE file '$0'";
         case MDLE_MANIFEST_PARSE_ERROR:
             return "MDLE '$0' has invalid key, value pair in MANIFEST";
 
@@ -809,6 +827,18 @@ char const *get_error_template(
             return "Shader shared buffer objects are not available in the current GLSL context";
         case SPECTRUM_CONVERTED_TO_RGB:
             return "a color spectrum is converted to RGB";
+        case INTERNAL_JIT_UNSUPPORTED_PTR_TYPE:
+            return "internal JIT backend error: Unsupported pointer type";
+        case INTERNAL_JIT_UNSUPPORTED_VECTOR_TYPE:
+            return "internal JIT backend error: Unsupported vector type";
+        case INTERNAL_JIT_UNSUPPORTED_INTEGER_TYPE:
+            return "internal JIT backend error: Unsupported integer type";
+        case INTERNAL_JIT_UNSUPPORTED_FP_TYPE:
+            return "internal JIT backend error: Unsupported floating point type";
+        case INTERNAL_JIT_UNSUPPORTED_TYPE:
+            return "internal JIT backend error: Unsupported type";
+        case INTERNAL_JIT_UNSUPPORTED_EXPR:
+            return "internal JIT backend error: Unsupported expression";
 
         // ------------------------------------------------------------- //
         case INTERNAL_JIT_BACKEND_ERROR:
@@ -820,7 +850,7 @@ char const *get_error_template(
         case SOURCE_MODULE_INVALID:
             return "invalid source modules cannot be inlined";
         case INLINING_MODULE_FAILED:
-            return "The module $0 could not be inlined.";
+            return "the module $0 could not be inlined";
 
         // ------------------------------------------------------------- //
         case INTERNAL_TRANSFORMER_ERROR:
@@ -845,9 +875,9 @@ char const *get_error_template(
             return "enum value '$0' was added";
 
         case TYPE_DOES_NOT_EXISTS:
-            return "Type '$0' does not exists in $1";
+            return "type '$0' does not exists in $1";
         case TYPES_DIFFERENT:
-            return "Types '$0' are of different kind";
+            return "types '$0' are of different kind";
         case INCOMPATIBLE_STRUCT:
             return "incompatible struct type $0";
         case INCOMPATIBLE_ENUM:
@@ -857,33 +887,33 @@ char const *get_error_template(
         case DIFFERENT_DEFAULT_ARGUMENT:
             return "different default arguments on '$0'";
         case CONSTANT_DOES_NOT_EXISTS:
-            return "Constant '$0' does not exists in $1";
+            return "constant '$0' does not exists in $1";
         case CONSTANT_OF_DIFFERENT_TYPE:
-            return "Constants '$0' are of different type, $1 != $2";
+            return "constants '$0' are of different type, $1 != $2";
         case CONSTANT_OF_DIFFERENT_VALUE:
-            return "Constants '$0' are of different values, $1 != $2";
+            return "constants '$0' are of different values, $1 != $2";
         case FUNCTION_DOES_NOT_EXISTS:
-            return "Function '$0' does not exists in $1";
+            return "function '$0' does not exists in $1";
         case FUNCTION_RET_TYPE_DIFFERENT:
-            return "Functions '$0' have different return types, $1 != $2";
+            return "functions '$0' have different return types, $1 != $2";
         case FUNCTION_PARAM_DELETED:
-            return "Function '$0' has fewer parameters in $1";
+            return "function '$0' has fewer parameters in $1";
         case FUNCTION_PARAM_DEF_ARG_DELETED:
-            return "Parameter '$0' of function '$1' has no default argument in $2";
+            return "parameter '$0' of function '$1' has no default argument in $2";
         case FUNCTION_PARAM_DEF_ARG_CHANGED:
-            return "Parameter '$0' of function '$1' has a different default argument in $2";
+            return "parameter '$0' of function '$1' has a different default argument in $2";
         case ANNOTATION_DOES_NOT_EXISTS:
             return "'$0' does not exists in $1";
         case ANNOTATION_PARAM_DELETED:
-            return "Annotation '$0' has fewer parameters in $1";
+            return "annotation '$0' has fewer parameters in $1";
         case ANNOTATION_PARAM_DEF_ARG_DELETED:
-            return "Parameter '$0' of '$1' has no default argument in $2";
+            return "parameter '$0' of '$1' has no default argument in $2";
         case ANNOTATION_PARAM_DEF_ARG_CHANGED:
-            return "Parameter '$0' of '$1' has a different default argument in $2";
+            return "parameter '$0' of '$1' has a different default argument in $2";
         case SEMA_VERSION_IS_HIGHER:
-            return "The archive version of '$0' is higher then of '$1'";
+            return "the archive version of '$0' is higher then of '$1'";
         case ARCHIVE_DOES_NOT_CONTAIN_MODULE:
-            return "Module '$0' was removed from archive";
+            return "module '$0' was removed from archive";
 
         // ------------------------------------------------------------- //
         case INTERNAL_COMPARATOR_ERROR:

@@ -18,12 +18,31 @@
 }
 
 .private_right {
-
 }
-
-
 
 .imagecode {
    padding: 0;
    margin: 0 0 0 1em;
 }	  
+
+.left {
+    margin-left: 1em;
+}
+
+.impressum {
+    margin:2em 1em; 
+    line-height: 1.4; 
+    font-family: "NVIDIA Sans", sans-serif;
+    font-size: 1.1em;
+    
+}
+
+.impressum p {
+    margin: .5em 0;
+}
+
+.impressum #fonts {
+    margin-top: 3em;
+    font-size: .8em;
+    line-height: 1.4;
+}

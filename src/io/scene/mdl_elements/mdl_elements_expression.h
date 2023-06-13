@@ -521,7 +521,8 @@ public:
     void serialize_annotation_definition(
         SERIAL::Serializer* serializer, const IAnnotation_definition* anno_def) const;
 
-    IAnnotation_definition* deserialize_annotation_definition(SERIAL::Deserializer* deserializer) const;
+    IAnnotation_definition* deserialize_annotation_definition(
+        SERIAL::Deserializer* deserializer) const;
 
     void serialize_annotation_block(
         SERIAL::Serializer* serializer, const IAnnotation_block* block) const;

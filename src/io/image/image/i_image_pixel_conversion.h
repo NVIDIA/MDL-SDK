@@ -398,7 +398,7 @@ MI_HOST_DEVICE_INLINE void to_rgbe(const mi::Float32 src, mi::Uint8 dest[3])
 }
 
 MI_HOST_DEVICE_INLINE void adjust_gamma(
-    mi::Float32* const data,
+    mi::Float32* const __restrict data,
     const mi::Size count,
     const mi::Uint32 components,
     const mi::Float32 exponent)
@@ -598,20 +598,13 @@ MI_HOST_DEVICE_INLINE bool copy(
 }
 
 inline void extract_channel(
-    const char* __restrict source, char* __restrict dest, mi::Size count, Pixel_type Type, mi::Size channel_index)
+    const char* __restrict source,
+    char* __restrict dest,
+    mi::Size count,
+    Pixel_type Type,
+    mi::Size channel_index)
 {
-    if( (channel_index == 3) && !has_alpha( Type)) {
-        if( Type == PT_RGB) {
-            memset( dest, 0xff, count);
-        } else if( Type == PT_RGBE || Type == PT_RGB_16 || Type == PT_RGB_FP) {
-            float* const __restrict p = static_cast<float*>( static_cast<void*>( dest));
-            for( mi::Size i = 0; i < count; ++i)
-                p[i] = 1.0f;
-        } else {
-            ASSERT( M_IMAGE, false);
-        }
-        return;
-    }
+    ASSERT( M_IMAGE, channel_index < static_cast<mi::Size>( get_components_per_pixel( Type)));
 
     const int bytes_per_component = get_bytes_per_component( Type);
     const int bytes_per_pixel     = get_bytes_per_pixel( Type);

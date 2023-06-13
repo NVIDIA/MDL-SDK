@@ -43,7 +43,7 @@ MDL materials using the following expressions:
   - scattering.backface
   - scattering.emission
   - thin_walled
-  - volume.absorbtion
+  - volume.absorption
   - geometry.cutout_opacity
 
 \section example_df_vulkan_new New Topics
@@ -64,7 +64,7 @@ Generating GLSL code for distribution functions involves the following steps:
 
 The first two steps have been covered in previous examples, so let's focus on generating the target code.
 
-Before generating GLSL code the backend has to be optained and configured using #mi::neuraylib::IMdl_backend::set_option().
+Before generating GLSL code the backend has to be obtained and configured using #mi::neuraylib::IMdl_backend::set_option().
 For a list of possible options (e.g. enabling auxiliary outputs) see the documentation of the \c set_option method.
 For a more in depth guide on how to configure the backend for Vulkan please refer to \ref example_execution_glsl_vk_descr.
 
@@ -86,7 +86,7 @@ to use a link unit so no duplicate code is generated and the compiler can employ
 #mi::neuraylib::ILink_unit::add_material() provides the most information on success, such as argument block and
 function indices which are, however, not needed here, so either of the link unit's functions are fine in this example.
 
-GLSL does not support function pointers, so instead of keeping track of different BSDF functions with indicies
+GLSL does not support function pointers, so instead of keeping track of different BSDF functions with indices
 as in previous examples, we must choose unique names for each subexpression that will be used in the renderer's
 GLSL code to call the generated functions. By default these function base names are "lambda0", "lambda1", and so on.
 We will choose more descriptive names to make the renderer's code more readable by specifying \c base_fname. 

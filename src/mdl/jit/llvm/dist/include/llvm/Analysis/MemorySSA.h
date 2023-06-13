@@ -328,7 +328,8 @@ public:
                        /*NumOperands=*/1) {}
 
   // allocate space for exactly one operand
-  void *operator new(size_t s) { return User::operator new(s, 1); }
+  void *operator new(size_t S) { return User::operator new(S, 1); }
+  void operator delete(void *Ptr) { User::operator delete(Ptr); }
 
   static bool classof(const Value *MA) {
     return MA->getValueID() == MemoryUseVal;
@@ -388,7 +389,8 @@ public:
         ID(Ver) {}
 
   // allocate space for exactly two operands
-  void *operator new(size_t s) { return User::operator new(s, 2); }
+  void *operator new(size_t S) { return User::operator new(S, 2); }
+  void operator delete(void *Ptr) { User::operator delete(Ptr); }
 
   static bool classof(const Value *MA) {
     return MA->getValueID() == MemoryDefVal;
@@ -483,9 +485,11 @@ DEFINE_TRANSPARENT_OPERAND_ACCESSORS(MemoryUseOrDef, MemoryAccess)
 /// issue.
 class MemoryPhi final : public MemoryAccess {
   // allocate space for exactly zero operands
-  void *operator new(size_t s) { return User::operator new(s); }
+  void *operator new(size_t S) { return User::operator new(S); }
 
 public:
+  void operator delete(void *Ptr) { User::operator delete(Ptr); }
+
   /// Provide fast operand accessors
   DECLARE_TRANSPARENT_OPERAND_ACCESSORS(MemoryAccess);
 

@@ -96,6 +96,9 @@ index.
   - \ref mi_neuray_example_distilling_unity "Baking material to Unity texture channel layout"
 
   - \ref mi_neuray_example_distilling_glsl "Mapping distilled materials to a GLSL shader"
+
+  - \ref mi_neuray_example_distilling_target "Custom Distiller target loading"
+  - \ref mi_neuray_example_distilling_target "Custom Distiller plugin implementation"
 \endif
 
   - \ref mi_neuray_example_traversal "Traversal of a compiled material"

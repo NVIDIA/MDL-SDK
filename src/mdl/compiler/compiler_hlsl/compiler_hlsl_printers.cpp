@@ -86,6 +86,7 @@ bool is_encoded_value(float value)
 Printer::Printer(IAllocator *alloc, IOutput_stream *ostr)
 : Base(alloc)
 , m_indent(0)
+, m_noinline_mode(ATTR_NOINLINE_IGNORE)
 , m_color_output(false)
 , m_enable_loc(false)
 , m_last_file_id(~0u)
@@ -1337,21 +1338,23 @@ void Printer::print_decl(
     Declaration const *decl,
     bool              embedded)
 {
-    if (!embedded)
+    if (!embedded) {
         print_location(decl->get_location());
+    }
 
     switch (decl->get_kind()) {
     case Declaration::DK_INVALID:
         push_color(C_ERROR);
         print("<ERROR>");
         pop_color();
-        if (!embedded)
+        if (!embedded) {
             print(';');
+        }
         break;
     case Declaration::DK_VARIABLE:
         {
             Declaration_variable const *vdecl = cast<Declaration_variable>(decl);
-            
+
             Type_name const *tn = vdecl->get_type_name();
             push_color(C_TYPE);
             print(tn);
@@ -1373,8 +1376,9 @@ void Printer::print_decl(
                     print(init);
                 }
             }
-            if (!embedded)
+            if (!embedded) {
                 print(';');
+            }
         }
         break;
     case Declaration::DK_PARAM:
@@ -1416,6 +1420,12 @@ void Printer::print_decl(
         {
             Declaration_function const *fdecl = cast<Declaration_function>(decl);
 
+            if (m_noinline_mode != ATTR_NOINLINE_IGNORE && fdecl->has_attr_noinline()) {
+                push_color(C_ANNOTATION);
+                print(m_noinline_mode == ATTR_NOINLINE_WRAP ? "ATTR_NOINLINE" : "[noinline]");
+                pop_color();
+                nl();
+            }
             Type_name const *tn = fdecl->get_ret_type();
             push_color(C_TYPE);
             print(tn);
@@ -1938,6 +1948,12 @@ void Printer::enable_color(bool enable)
 void Printer::enable_locations(bool enable)
 {
     m_enable_loc = enable;
+}
+
+// Set the noinline attribute mode.
+void Printer::set_attr_noinline_mode(Attribute_noinline_mode mode)
+{
+    m_noinline_mode = mode;
 }
 
 // Print a comment.

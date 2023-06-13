@@ -173,7 +173,7 @@ Descriptor_heap_handle Descriptor_heap::reserve_views(size_t count)
             m_entries.push_back(e);
         }
     }
-    return std::move(first_handle);
+    return first_handle;
 }
 
 // ------------------------------------------------------------------------------------------------

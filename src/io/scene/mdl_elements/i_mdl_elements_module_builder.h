@@ -73,7 +73,6 @@ class IType;
 class IType_factory;
 class IType_list;
 class IValue;
-class Mdl_data;
 class Mdl_function_definition;
 class Name_mangler;
 class Symbol_importer;
@@ -200,17 +199,6 @@ public:
         IType::Modifier frequency_qualifier,
         Execution_context* context);
 
-    /// Adds a call-based function or material to the module.
-    ///
-    /// This method is used to implement the deprecated, non-documented
-    /// IMdl_factory::create_materials().
-    ///
-    /// Converts the input and invokes the expression-based overload of add_function().
-    mi::Sint32 deprecated_add_function(
-        const Mdl_data* mdl_data,
-        bool is_exported,
-        Execution_context* context);
-
     /// Returns the current module (or \c NULL if there is no valid module).
     const mi::mdl::IModule* get_module() const;
 
@@ -272,14 +260,6 @@ private:
         bool is_variant,
         bool is_exported,
         bool for_mdle,
-        Execution_context* context);
-
-    /// Adds a call-based material/function to the module.
-    ///
-    /// Used by deprecated_add_function().
-    mi::Sint32 deprecated_add_call_based(
-        const Mdl_data* mdl_data,
-        bool is_exported,
         Execution_context* context);
 
     /// Upgrades the module to \p version, but not beyond \c m_max_mdl_version.

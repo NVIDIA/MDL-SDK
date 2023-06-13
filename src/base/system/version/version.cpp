@@ -42,9 +42,9 @@ namespace VERSION {
 
 // MI_PLATFORM comes from, DEFS+= in the Makefile, the rest from version.h
 
-static const char *g_version  = "==@@== " MI_VERSION_STRING + 7;
-static const char *g_date     = "==@@== " MI_DATE_STRING + 7;
-static const char *g_platform = "==@@== " MI_PLATFORM + 7;
+static const char *g_version  = &("==@@== " MI_VERSION_STRING)[7];
+static const char *g_date     = &("==@@== " MI_DATE_STRING)[7];
+static const char *g_platform = &("==@@== " MI_PLATFORM)[7];
 
 const char *get_platform_version()
 {

@@ -1,0 +1,76 @@
+//*****************************************************************************
+// Copyright 2023 NVIDIA Corporation. All rights reserved.
+//*****************************************************************************
+/// \file distilling_target_plugin_rules.mdltl
+/// \brief Rule sets for the distilling custom target rules example.
+///
+//*****************************************************************************
+
+// Rules to reduce an MDL expression to a 'simple' subset of
+// distribution functions called 'mini_glossy'.
+rules Make_simple_rules topdown { // bottomup would work too
+    import math;
+
+    // Alternative BSDFs for glossy interactions are replaced by a
+    // simple glossy BSDF.
+    microfacet_beckmann_smith_bsdf(ru,rv,tint,_,t,mode) -->
+        simple_glossy_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
+    microfacet_beckmann_vcavities_bsdf(ru,rv,tint,_,t,mode) -->
+        simple_glossy_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
+    microfacet_ggx_smith_bsdf(ru,rv,tint,_,t,mode) -->
+        simple_glossy_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
+    microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t,mode) -->
+        simple_glossy_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
+    ward_geisler_moroder_bsdf(ru,rv,tint,_,t) -->
+        simple_glossy_bsdf( ru,rv,tint,color(0.0),t) repeat_rules;
+    backscattering_glossy_reflection_bsdf(ru,rv,tint,_,t,handle) -->
+        simple_glossy_bsdf(ru,rv,tint,color(0.0),t,scatter_reflect,handle);
+    sheen_bsdf(r,tint,tintt,_,handle) -->
+        simple_glossy_bsdf(r,r,tint,tintt,state::texture_tangent_u(0),scatter_reflect,handle);
+
+    // Measured BSDF nodes are replaced by an invalid bsdf()
+    measured_bsdf(_) --> bsdf();
+
+    // Thin-film modifier is simply removed.
+    thin_film(_,_,base) --> base repeat_rules;
+
+    // Directional factor BSDFs are replaced by a fresnel layer (or
+    // just the base BSDF), using a helper function from the
+    // ::nvidia::distilling_support module for the IOR.
+    bsdf_directional_factor(tint_n,tint_g,_,base) -->
+        fresnel_layer( nvidia::distilling_support::float_ior_from_refl(tint_n), 1.0,
+                            bsdf_tint( tint_g, base), bsdf());
+    fresnel_factor(ior,k,base) -->
+        bsdf_tint(nvidia::distilling_support::refl_from_ior_k(ior,k),base);
+
+    // Measured curve factor and measured factor BSDFs are removed.
+    measured_curve_factor(_,base) --> base repeat_rules;
+    measured_factor(_,base) --> base repeat_rules;
+
+    // Mixers are simplified to normalized mixers.
+    bsdf_clamped_mix_1(w1,df1) --> bsdf_mix_1(w1,df1);
+    bsdf_clamped_mix_2(w1,df1,w2,df2) --> bsdf_mix_2(w1,df1,w2,df2);
+    bsdf_clamped_mix_3(w1,df1,w2,df2,w3,df3) --> bsdf_mix_3(w1,df1,w2,df2,w3,df3);
+    bsdf_unbounded_mix_1(w1,df1) --> bsdf_mix_1(w1,df1);
+    bsdf_unbounded_mix_2(w1,df1,w2,df2) --> bsdf_mix_2(w1,df1,w2,df2);
+    bsdf_unbounded_mix_3(w1,df1,w2,df2,w3,df3) --> bsdf_mix_3(w1,df1,w2,df2,w3,df3);
+    bsdf_color_clamped_mix_1(w1,df1) --> bsdf_color_mix_1(w1,df1);
+    bsdf_color_clamped_mix_2(w1,df1,w2,df2) --> bsdf_color_mix_2(w1,df1,w2,df2);
+    bsdf_color_clamped_mix_3(w1,df1,w2,df2,w3,df3) --> bsdf_color_mix_3(w1,df1,w2,df2,w3,df3);
+    bsdf_color_unbounded_mix_1(w1,df1) --> bsdf_color_mix_1(w1,df1);
+    bsdf_color_unbounded_mix_2(w1,df1,w2,df2) --> bsdf_color_mix_2(w1,df1,w2,df2);
+    bsdf_color_unbounded_mix_3(w1,df1,w2,df2,w3,df3) --> bsdf_color_mix_3(w1,df1,w2,df2,w3,df3);
+
+    // Curve layers are also reduced to more simple constructions
+    // using tint BSDFs, fresnel layers and calls to helper functions.
+    custom_curve_layer(refl_n,refl_g,_,w,layer,base,n) -->
+        fresnel_layer( nvidia::distilling_support::float_ior_from_refl(refl_n), w,
+                            bsdf_tint( color(refl_g), layer), base, n);
+    color_custom_curve_layer(refl_n,refl_g,_,w,layer,base,n) -->
+        color_fresnel_layer( nvidia::distilling_support::ior_from_refl(refl_n), w,
+                                  bsdf_tint( refl_g, layer), base, n);
+    measured_curve_layer(_,w,layer,base,n) -->
+        fresnel_layer( 1.5, w, layer, base, n);
+    color_measured_curve_layer(_,w,layer,base,n) -->
+        color_fresnel_layer( color(1.5), w, layer, base, n);
+}

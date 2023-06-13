@@ -235,12 +235,12 @@ private:
         m_opacity;                                    ///< Material opacity.
 
     mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity
-        m_surface_opacity;                                    ///< Material surface opacity.
+        m_surface_opacity;                            ///< Material surface opacity.
 
     mi::Float32 m_cutout_opacity;                     ///< Material cutout opacity.
     bool m_has_cutout_opacity;                        ///< True if the cutout opacity is known.
 
-    std::set<Mdl_tag_ident> m_module_idents;           ///< module identifiers of all used expressions.
+    std::set<Mdl_tag_ident> m_module_idents;        ///< Module identifiers of all used expressions.
 };
 
 } // namespace MDL

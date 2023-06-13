@@ -39,10 +39,169 @@ import ::anno::*;
 export using ::base import texture_return;
 export using ::base import mono_mode;
 export using ::base import color_layer_mode;
+//import support_definitions::*;
 module [[
-    anno::version( 2, 0, 1),
+    anno::version( 2, 0, 2),
     anno::display_name("NVIDIA core definitions")
 ]];
+
+const string COPYRIGHT = "Copyright 2023 NVIDIA Corporation. All rights reserved.";
+
+//some local functions, dont document
+// blend two normals, similar to
+// http://blog.selfshadow.com/publications/blending-in-detail/
+export float3 blend_normals(
+    float3 base_normal = state::normal()
+    [[
+        anno::description("The base normal")
+    ]],
+    float base_normal_weight = 1.0f
+    [[
+        anno::description("Specifies the strength of the base normal using a linear blend between state::normal and \"base_normal\""),
+        anno::soft_range(0.0,1.0)
+    ]],
+    float3 detail_normal = state::normal()
+    [[
+        anno::description("The detail normal")
+    ]],
+    float detail_normal_weight = 1.0f
+    [[
+        anno::description("Specifies the strength of the detail normal using a linear blend between state::normal and \"detail_normal\""),
+        anno::soft_range(0.0,1.0)
+    ]]
+)
+[[
+    anno::description("Blend two normals or apply a detail normal map"),
+    anno::display_name("Blend normals"),
+    anno::thumbnail(".thumbs/blend_normals.png"),
+    anno::in_group("Texturing, high level"),
+    anno::ui_order(33),
+    anno::author("NVIDIA Corporation"),
+    anno::copyright_notice(COPYRIGHT)]]
+{
+    return base::blend_normals(base_normal,base_normal_weight,detail_normal,detail_normal_weight);
+}
+// blend 3 normals, similar to
+// http://blog.selfshadow.com/publications/blending-in-detail/
+//TODO: make public?
+float3 blend_3_normals(
+    float3 base_normal = state::normal()
+        [[
+            anno::description("The base normal")
+        ]],
+    float base_normal_weight = 1.0f
+        [[
+            anno::description("Specifies the strength of the base normal using a linear blend between state::normal and \"base_normal\"")
+        ]],
+    float3 detail_normal = state::normal()
+        [[
+            anno::description("The detail normal")
+        ]],
+    float detail_normal_weight = 1.0f
+        [[
+            anno::description("Specifies the strength of the detail normal using a linear blend between state::normal and \"detail_normal\"")
+        ]],
+    float3 detail_normal2 = state::normal()
+        [[
+            anno::description("The detail normal2")
+        ]],
+    float detail_normal_weight2 = 1.0f
+        [[
+            anno::description("Specifies the strength of the detail normal using a linear blend between state::normal and \"detail_normal\"")
+        ]]
+)
+[[
+    anno::description("Blend three normals for sticker-like situations where a detail normal map is applied to a base normal map"),
+    anno::noinline()
+]]
+{
+    float3 tu = state::texture_tangent_u(0);
+    float3 tv = state::texture_tangent_v(0);
+    float3 n = state::normal();
+
+    float w1 = math::saturate(base_normal_weight);
+    float w2 = math::saturate(detail_normal_weight);
+    float w3 = math::saturate(detail_normal_weight2);
+
+    float3 n1_t = math::normalize(
+        float3(math::dot(tu, base_normal) * w1,
+               math::dot(tv, base_normal) * w1,
+               math::dot(n, base_normal) * w1 + 1.0f - w1));
+    float3 n2_t = math::normalize(
+        float3(math::dot(tu, detail_normal) * w2,
+               math::dot(tv, detail_normal) * w2,
+               math::dot(n, detail_normal) * w2 + 1.0f - w2));
+    float3 n3_t = math::normalize(
+        float3(math::dot(tu, detail_normal2) * w3,
+               math::dot(tv, detail_normal2) * w3,
+               math::dot(n, detail_normal2) * w3 + 1.0f - w3));
+
+    n1_t.z += 1.0f;
+    n2_t.x = -n2_t.x;
+    n2_t.y = -n2_t.y;
+
+    float3 n12_t = n1_t * math::dot(n1_t, n2_t) / n1_t.z - n2_t;
+
+    n12_t.z+= 1.0f;
+    n3_t.x = -n3_t.x;
+    n3_t.y = -n3_t.y;
+    float3 n_t = n12_t * math::dot(n12_t, n3_t) / n12_t.z - n3_t;
+
+    return math::normalize(
+        tu * n_t.x +
+        tv * n_t.y +
+        n * n_t.z);
+}
+
+float3 transform_rotate(float3 p, float3 r)
+{
+    // Euler rotation matrix  xyz order to stay compatible with ::base
+    float3 s = math::sin(r);
+    float3 c = math::cos(r);
+    float3x3 rotate =
+        float3x3(  c.y*c.z ,  -c.x*s.z + s.x*s.y*c.z ,  s.x*s.z + c.x*s.y*c.z ,
+                   c.y*s.z ,   c.x*c.z + s.x*s.y*s.z , -s.x*c.z + c.x*s.y*s.z ,
+                  -s.y     ,   s.x*c.y               ,  c.x*c.y               );
+    return p*rotate;
+
+}
+float3 transform_rotate_inv(float3 p, float3 r)
+{
+    // Euler rotation matrix  xyz order to stay compatible with ::base
+    float3 s = math::sin(r);
+    float3 c = math::cos(r);
+    float3x3 rotate =
+        float3x3(  c.y*c.z ,  -c.x*s.z + s.x*s.y*c.z ,  s.x*s.z + c.x*s.y*c.z ,
+                   c.y*s.z ,   c.x*c.z + s.x*s.y*s.z , -s.x*c.z + c.x*s.y*s.z ,
+                  -s.y     ,   s.x*c.y               ,  c.x*c.y               );
+    return rotate*p;
+
+}
+float2 transform_st(float rotation = 0.0, float2 translation = float2(0.0), float2 scale = float2(1.0), float2 st = float2(0.0))
+[[
+    anno::display_name("Transform 2D"),
+    anno::description("Rotate/translate/scale a 2D coordinate"),
+    anno::author("NVIDIA Corporation")
+]]{
+    float s = math::sin(rotation);
+	float c = math::cos(rotation);
+	float2 st_t=st;
+	st_t = float2(s*st_t.x+c*st_t.y,s*st_t.y-c*st_t.x);
+	return st_t*scale+ translation;
+}
+
+color biased_color_blend(float w1 = 0.0, color c1 = color(0.0), float w2 = 0.0, color c2 = color(0.0), float w3 = 0.0, color c3 = color(0.0), color mean = color(0.5))
+[[
+    anno::display_name("Biased color blend"),
+    anno::description("Blend up to 3 colors. Set mean to the average color to preserve contrast when blending textures"),
+    anno::author("NVIDIA Corporation")
+]]
+{
+	color o=w1*c1+w2*c2+w3*c3;
+	float s=w1+w2+w3;
+	float s2=w1*w1+w2*w2+w3*w3;
+return mean + (o-s*mean)/   math::sqrt(s2);
+}	
 
 
 //group Enumerations
@@ -111,12 +270,12 @@ export enum cell_base
 
 //endgroup
 
-uniform float4x4 rotation_translation_scale(
-    uniform float3 rotation = float3(0.)
+float4x4 rotation_translation_scale(
+    float3 rotation = float3(0.)
         [[ anno::description("Rotation applied to every UVW coordinate") ]],
-    uniform float3 translation = float3(0.)
+    float3 translation = float3(0.)
         [[ anno::description("Offset applied to every UVW coordinate") ]],
-    uniform float3 scaling = float3(1.)
+    float3 scaling = float3(1.)
         [[ anno::description("Scale applied to every UVW coordinate") ]]
 )
 [[
@@ -147,7 +306,6 @@ export annotation dimension(float dimension);
 export annotation dimension(float2 dimension);
 export annotation dimension(float3 dimension);
 
-const string COPYRIGHT = "Copyright 2022 NVIDIA Corporation. All rights reserved.";
 
 //group Texturing functions
 
@@ -226,21 +384,21 @@ export texture_return file_texture(
         anno::ui_order(3),
         anno::soft_range(0.0,1.0)
     ]],
-    uniform float2 scaling = float2(1.)
+    float2 scaling = float2(1.)
     [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
         anno::in_group("Placement"),
         anno::ui_order(8)
     ]],
-    uniform float2 translation = float2(0.)
+    float2 translation = float2(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
         anno::in_group("Placement"),
         anno::ui_order(7)
     ]],
-    uniform float rotation = 0.
+    float rotation = 0.
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
@@ -289,7 +447,7 @@ export texture_return file_texture(
         uvw: base::transform_coordinate(
             transform: rotation_translation_scale(
                 scaling: float3(scaling.x, scaling.y, 1.0),
-                rotation: float3(0.0, 0.0, rotation/180.*math::PI ),
+                rotation: float3(0.0, 0.0, math::radians(rotation) ),
                 translation: float3(translation.x, translation.y, 0.0)
             ),
             coordinate: base::coordinate_source(texture_space: texture_space)
@@ -304,7 +462,7 @@ export texture_return file_texture(
         uvw: base::transform_coordinate(
             transform: rotation_translation_scale(
                 scaling: float3(scaling.x, scaling.y, 1.0),
-                rotation: float3(0.0, 0.0, rotation/180.*math::PI ),
+                rotation: float3(0.0, 0.0, math::radians(rotation) ),
                 translation: float3(translation.x, translation.y, 0.0)
             ),
             coordinate: base::coordinate_source(texture_space: texture_space)
@@ -312,6 +470,186 @@ export texture_return file_texture(
         wrap_u: clip?tex::wrap_clip:tex::wrap_repeat,
         wrap_v: clip?tex::wrap_clip:tex::wrap_repeat
     );
+}
+export color triplanar_file_texture(
+    uniform texture_2d texture_1
+    [[
+        anno::display_name("Bitmap file"),
+        anno::in_group("1st Bitmap parameters"),
+        anno::ui_order(0)
+    ]],
+    float2 scaling_1 = float2(1.)
+    [[
+        anno::description("Controls the scale of the texture on the object"),
+        anno::display_name("Tiling"),
+        anno::in_group("1st Bitmap parameters"),
+        anno::ui_order(1)
+    ]],
+    float2 translation_1 = float2(0.)
+    [[
+        anno::description("Controls position of the texture on the object"),
+        anno::display_name("Offset"),
+        anno::in_group("1st Bitmap parameters"),
+        anno::ui_order(2)
+    ]],
+    float rotation_1 = 0.
+    [[
+        anno::description("Rotation angle of the texture in degrees"),
+        anno::display_name("Rotation"),
+        anno::in_group("1st Bitmap parameters"),
+        anno::ui_order(3),
+        anno::soft_range(0.0,360.0)
+    ]],
+    uniform texture_2d texture_2 = texture_2d()
+    [[
+        anno::display_name("Bitmap file"),
+        anno::in_group("2nd Bitmap parameters"),
+        anno::ui_order(4)
+    ]],
+    float2 scaling_2 = float2(1.)
+    [[
+        anno::description("Controls the scale of the texture on the object"),
+        anno::display_name("Tiling"),
+        anno::in_group("2nd Bitmap parameters"),
+        anno::enable_if( "tex::texture_isvalid(texture_2)" ),
+        anno::ui_order(5)
+    ]],
+    float2 translation_2 = float2(0.)
+    [[
+        anno::description("Controls position of the texture on the object"),
+        anno::display_name("Offset"),
+        anno::in_group("2nd Bitmap parameters"),
+        anno::enable_if( "tex::texture_isvalid(texture_2)" ),
+        anno::ui_order(6)
+    ]],
+    float rotation_2 = 0.
+    [[
+        anno::description("Rotation angle of the texture in degrees"),
+        anno::display_name("Rotation"),
+        anno::in_group("2nd Bitmap parameters"),
+        anno::ui_order(7),
+        anno::enable_if( "tex::texture_isvalid(texture_2)" ),
+        anno::soft_range(0.0,360.0)
+    ]],
+    uniform texture_2d texture_3 = texture_2d()
+    [[
+        anno::display_name("Bitmap file"),
+        anno::in_group("3rd Bitmap parameters"),
+        anno::ui_order(8)
+    ]],
+    float2 scaling_3 = float2(1.)
+    [[
+        anno::description("Controls the scale of the texture on the object"),
+        anno::display_name("Tiling"),
+        anno::in_group("3rd Bitmap parameters"),
+        anno::enable_if( "tex::texture_isvalid(texture_3)" ),
+        anno::ui_order(9)
+    ]],
+    float2 translation_3 = float2(0.)
+    [[
+        anno::description("Controls position of the texture on the object"),
+        anno::display_name("Offset"),
+        anno::in_group("3rd Bitmap parameters"),
+        anno::enable_if( "tex::texture_isvalid(texture_3)" ),
+        anno::ui_order(10)
+    ]],
+    float rotation_3 = 0.
+    [[
+        anno::description("Rotation angle of the texture in degrees"),
+        anno::display_name("Rotation"),
+        anno::in_group("3rd Bitmap parameters"),
+        anno::ui_order(11),
+        anno::enable_if( "tex::texture_isvalid(texture_3)" ),
+        anno::soft_range(0.0,360.0)
+    ]],
+    float blend_range = 0.5
+    [[
+        anno::description("Defines the size of the transition area. 0 means hard transition, 1 means blending happens very softly."),
+        anno::display_name("Blend range"),
+        anno::in_group("Common parameters"),
+        anno::ui_order(14),
+        anno::hard_range(0.0,1.0)
+    ]],
+    uniform color mean = color(0.0)
+    [[
+        anno::description("Allows tweaking of the blend function. A value of 0 disables the function."),
+        anno::display_name("Mean color"),
+        anno::in_group("Common parameters"),
+        anno::ui_order(15),
+        anno::hard_range(color(0.0),color(1.0))
+    ]],
+    uniform float3 rotate_origin = float3(0.0)
+    [[
+        anno::description("Allows manual alignment of the projection with an object"),
+        anno::display_name("Rotation of origin"),
+        anno::in_group("Placement"),
+        anno::ui_order(13),
+        anno::soft_range(float3(0.0),float3(360.0))
+    ]],
+    uniform bool object_space = true
+    [[
+        anno::description("If off, world space will be used for generating texture coordinates. If on, object space will apply."),
+        anno::display_name("Use object space"),
+        anno::in_group("Placement"),
+        anno::ui_order(12)
+    ]]
+)
+[[
+    anno::display_name("Triplanar Bitmap texture"),
+    anno::description("Allows texturing using image files of various file formats"),
+    anno::thumbnail(".thumbs/file_texture.png"),
+    anno::in_group("Texturing, high level"),
+    anno::ui_order(30),
+    anno::author("NVIDIA Corporation"),
+    anno::copyright_notice(COPYRIGHT)
+]]
+{
+    state::coordinate_space space = object_space?state::coordinate_object:state::coordinate_world;
+
+    float3 normal = state::transform_normal(state::coordinate_internal, space, state::normal());
+    float3 position = state::transform_point(state::coordinate_internal, space, state::position());
+    //TODO: pretransform the space?  At least rotating the original space seems desireable and more is not feasible without dedicated ui (gizmo)
+    normal = transform_rotate(normal, math::radians(rotate_origin));
+    position = transform_rotate(position, math::radians(rotate_origin));
+
+    float3 weights = math::abs(normal);
+
+    //TODO: blendrange through pow or is there something better? pow has the drawback of needing 3 lookups nearly always
+    weights /=math::max_value(weights);
+    weights = math::pow(weights,1./math::max(blend_range, 0.001));
+    //weights = math::saturate(weights-float3(1.-blend_range));
+
+    weights /=float3(weights.x+weights.y+weights.z);
+
+
+    float2 st1 = normal.x>0?float2(-position.z,position.y):float2(-position.z,-position.y);
+    float2 st2 = normal.y>0?float2(-position.z,-position.x):float2(-position.z,position.x);
+    float2 st3 = normal.z>0?float2(-position.y,position.x):float2(-position.y,-position.x);
+
+    color c1 = weights.x>0?
+        tex::lookup_color(
+            texture_1,
+            transform_st(math::radians(rotation_1),translation_1,scaling_1,st1))
+        :color(0.);
+    color c2 = weights.y>0? tex::texture_isvalid(texture_2)?
+        tex::lookup_color(
+            texture_2,
+            transform_st(math::radians(rotation_2),translation_2,scaling_2,st2))
+        :tex::lookup_color(
+            texture_1,
+            transform_st(math::radians(rotation_1),translation_1,scaling_1,st2))
+        :color(0.);
+    color c3 = weights.z>0? tex::texture_isvalid(texture_3)?
+        tex::lookup_color(
+            texture_3,
+            transform_st(math::radians(rotation_3),translation_3,scaling_3,st3))
+        :tex::lookup_color(
+            texture_1,
+            transform_st(math::radians(rotation_1),translation_1,scaling_1,st3))
+        :color(0.);
+    return mean == color(0.0)?
+                c1*weights.x + c2*weights.y+ c3*weights.z:
+                biased_color_blend(weights.x,c1,weights.y,c2,weights.z,c3,mean);
 }
 
 export texture_return perlin_noise_texture(
@@ -364,21 +702,21 @@ export texture_return perlin_noise_texture(
         anno::in_group("Noise parameters"),
         anno::ui_order(5)
     ]],
-    uniform float3 scaling = float3(10.)
+    float3 scaling = float3(10.)
     [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
         anno::in_group("Placement"),
         anno::ui_order(11)
     ]],
-    uniform float3 translation = float3(0.)
+    float3 translation = float3(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
         anno::in_group("Placement"),
         anno::ui_order(10)
     ]],
-    uniform float3 rotation = float3(0.)
+    float3 rotation = float3(0.)
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
@@ -416,7 +754,7 @@ export texture_return perlin_noise_texture(
                 scaling: object_space?scaling*state::meters_per_scene_unit() :scaling,
 
                 translation: translation,
-                rotation: float3(rotation.x/180.*math::PI,rotation.y/180.*math::PI,rotation.z/180.*math::PI)
+                rotation: math::radians(rotation)
             ),
             coordinate: object_space?
                 base::coordinate_source(coordinate_system: base::texture_coordinate_object):
@@ -433,7 +771,7 @@ export float3 perlin_noise_bump_texture(
         anno::ui_order(0),
         anno::soft_range(0.0,5.0)
     ]],
-    uniform float3 scaling = float3(10.)
+    float3 scaling = float3(10.)
     [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
@@ -477,14 +815,14 @@ export float3 perlin_noise_bump_texture(
         anno::in_group("Noise parameters"),
         anno::ui_order(3)
     ]],
-    uniform float3 translation = float3(0.)
+    float3 translation = float3(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
         anno::in_group("Placement"),
         anno::ui_order(8)
     ]],
-    uniform float3 rotation = float3(0.)
+    float3 rotation = float3(0.)
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
@@ -520,7 +858,7 @@ export float3 perlin_noise_bump_texture(
             transform: rotation_translation_scale(
                 scaling: scaling,
                 translation: translation,
-                rotation: float3(rotation.x/180.*math::PI,rotation.y/180.*math::PI,rotation.z/180.*math::PI)
+                rotation: math::radians(rotation)
             ),
             coordinate: object_space?
                 base::coordinate_source(coordinate_system: base::texture_coordinate_object):
@@ -587,21 +925,21 @@ export texture_return worley_noise_texture(
         anno::in_group("Noise parameters"),
         anno::ui_order(4)
     ]],
-    uniform float3 scaling = float3(10.)
+    float3 scaling = float3(10.)
     [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
         anno::in_group("Placement"),
         anno::ui_order(10)
     ]],
-    uniform float3 translation = float3(0.)
+    float3 translation = float3(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
         anno::in_group("Placement"),
         anno::ui_order(9)
     ]],
-    uniform float3 rotation = float3(0.)
+    float3 rotation = float3(0.)
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
@@ -629,7 +967,7 @@ export texture_return worley_noise_texture(
             transform: rotation_translation_scale(
                 scaling: object_space?scaling*state::meters_per_scene_unit() :scaling,
                 translation: translation,
-                rotation: float3(rotation.x/180.*math::PI,rotation.y/180.*math::PI,rotation.z/180.*math::PI)
+                rotation: math::radians(rotation)
             ),
             coordinate: object_space?
                 base::coordinate_source(coordinate_system: base::texture_coordinate_object):
@@ -684,21 +1022,21 @@ export float3 worley_noise_bump_texture(
         anno::in_group("Noise parameters"),
         anno::ui_order(2)
     ]],
-    uniform float3 scaling = float3(10.)
+    float3 scaling = float3(10.)
     [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
         anno::in_group("Placement"),
         anno::ui_order(8)
     ]],
-    uniform float3 translation = float3(0.)
+    float3 translation = float3(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
         anno::in_group("Placement"),
         anno::ui_order(7)
     ]],
-    uniform float3 rotation = float3(0.)
+    float3 rotation = float3(0.)
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
@@ -724,7 +1062,7 @@ export float3 worley_noise_bump_texture(
             transform: rotation_translation_scale(
                 scaling: object_space?scaling*state::meters_per_scene_unit() :scaling,
                 translation: translation,
-                rotation: float3(rotation.x/180.*math::PI,rotation.y/180.*math::PI,rotation.z/180.*math::PI)
+                rotation: math::radians(rotation)
             ),
             coordinate: object_space?
                 base::coordinate_source(coordinate_system: base::texture_coordinate_object):
@@ -782,7 +1120,6 @@ export texture_return flow_noise_texture(
         anno::display_name("Phase offset"),
         anno::description("Controls the third dimension of the function"),
         anno::in_group("Noise parameters"),
-
         anno::ui_order(5),
         anno::soft_range(0.0,1.0)
     ]],
@@ -818,21 +1155,21 @@ export texture_return flow_noise_texture(
         anno::ui_order(9),
         anno::soft_range(0.0,1.0)
     ]],
-    uniform float3 scaling = float3(10.)
+    float3 scaling = float3(10.)
     [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
         anno::in_group("Placement"),
         anno::ui_order(15)
     ]],
-    uniform float3 translation = float3(0.)
+    float3 translation = float3(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
         anno::in_group("Placement"),
         anno::ui_order(14)
     ]],
-    uniform float3 rotation = float3(0.)
+    float3 rotation = float3(0.)
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
@@ -863,7 +1200,7 @@ export texture_return flow_noise_texture(
             transform: rotation_translation_scale(
                 scaling: object_space?scaling*state::meters_per_scene_unit() :scaling,
                 translation: translation,
-                rotation: float3(rotation.x/180.*math::PI,rotation.y/180.*math::PI,rotation.z/180.*math::PI)
+                rotation: math::radians(rotation)
             ),
             coordinate: object_space?
                 base::coordinate_source(coordinate_system: base::texture_coordinate_object):
@@ -880,7 +1217,7 @@ export float3 flow_noise_bump_texture(
         anno::ui_order(0),
         anno::soft_range(0.0,1.0)
     ]],
-    uniform float3 scaling = float3(10.)
+    float3 scaling = float3(10.)
     [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
@@ -956,14 +1293,14 @@ export float3 flow_noise_bump_texture(
         anno::ui_order(7),
         anno::soft_range(0.0,1.0)
     ]],
-    uniform float3 translation = float3(0.)
+    float3 translation = float3(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
         anno::in_group("Placement"),
         anno::ui_order(11)
     ]],
-    uniform float3 rotation = float3(0.)
+    float3 rotation = float3(0.)
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
@@ -993,7 +1330,7 @@ export float3 flow_noise_bump_texture(
             transform: rotation_translation_scale(
                 scaling: object_space?scaling*state::meters_per_scene_unit() :scaling,
                 translation: translation,
-                rotation: float3(rotation.x/180.*math::PI,rotation.y/180.*math::PI,rotation.z/180.*math::PI)
+                rotation: math::radians(rotation)
             ),
             coordinate: object_space?
                 base::coordinate_source(coordinate_system: base::texture_coordinate_object):
@@ -1015,14 +1352,14 @@ export texture_return checker_texture(
         anno::in_group("Checker parameters"),
         anno::ui_order(1)
     ]],
-    uniform float3 scaling = float3(10.)
+    float3 scaling = float3(10.)
      [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
         anno::in_group("Placement"),
         anno::ui_order(7)
     ]],
-    uniform float3 translation = float3(0.)
+    float3 translation = float3(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
@@ -1043,7 +1380,7 @@ export texture_return checker_texture(
         anno::in_group("Checker parameters"),
         anno::ui_order(2)
     ]],
-    uniform float3 rotation = float3(0.)
+    float3 rotation = float3(0.)
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
@@ -1077,7 +1414,7 @@ export texture_return checker_texture(
             transform: rotation_translation_scale(
                 scaling: object_space?scaling*state::meters_per_scene_unit() :scaling,
                 translation: translation,
-                rotation: float3(rotation.x/180.*math::PI,rotation.y/180.*math::PI,rotation.z/180.*math::PI)
+                rotation: math::radians(rotation)
             ),
             coordinate: object_space?
                 base::coordinate_source(coordinate_system: base::texture_coordinate_object):
@@ -1108,21 +1445,21 @@ export float3 checker_bump_texture(
         anno::in_group("Placement"),
         anno::ui_order(2)
     ]],
-    uniform float3 scaling = float3(10.)
+    float3 scaling = float3(10.)
     [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
         anno::in_group("Placement"),
         anno::ui_order(6)
     ]],
-    uniform float3 translation = float3(0.)
+    float3 translation = float3(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
         anno::in_group("Placement"),
         anno::ui_order(5)
     ]],
-    uniform float3 rotation = float3(0.)
+    float3 rotation = float3(0.)
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
@@ -1155,7 +1492,7 @@ export float3 checker_bump_texture(
             transform: rotation_translation_scale(
                 scaling: object_space?scaling*state::meters_per_scene_unit() :scaling,
                 translation: translation,
-                rotation: float3(rotation.x/180.*math::PI,rotation.y/180.*math::PI,rotation.z/180.*math::PI)
+                rotation: math::radians(rotation)
             ),
             coordinate: object_space?
                 base::coordinate_source(coordinate_system: base::texture_coordinate_object):
@@ -1169,6 +1506,7 @@ export float3 file_bump_texture(
     [[
         anno::display_name("Bitmap file"),
         anno::in_group("Bitmap parameters"),
+        anno::usage("normal"),
         anno::ui_order(1)
     ]],
     uniform mono_mode bump_source = mono_average
@@ -1178,21 +1516,21 @@ export float3 file_bump_texture(
         anno::in_group("Bitmap parameters"),
         anno::ui_order(2)
     ]],
-    uniform float2 scaling = float2(1.)
+    float2 scaling = float2(1.)
     [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
         anno::in_group("Placement"),
         anno::ui_order(8)
     ]],
-    uniform float2 translation = float2(0.)
+    float2 translation = float2(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
         anno::in_group("Placement"),
         anno::ui_order(7)
     ]],
-    uniform float rotation = 0.
+    float rotation = 0.
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
@@ -1241,7 +1579,7 @@ export float3 file_bump_texture(
         uvw: base::transform_coordinate(
             transform: rotation_translation_scale(
                 scaling: float3(scaling.x, scaling.y, 1.0),
-                rotation: float3(0.0, 0.0, rotation/180.*math::PI ),
+                rotation: float3(0.0, 0.0, math::radians(rotation) ),
                 translation: float3(translation.x, translation.y, 0.0)
             ),
             coordinate: base::coordinate_source(texture_space: texture_space)
@@ -1257,23 +1595,24 @@ export float3 normalmap_texture(
     [[
         anno::display_name("Normalmap file"),
         anno::in_group("Normalmap parameters"),
+        anno::usage("normal"),
         anno::ui_order(1)
     ]],
-    uniform float2 scaling = float2(1.)
+    float2 scaling = float2(1.)
     [[
         anno::description("Controls the scale of the texture on the object"),
         anno::display_name("Tiling"),
         anno::in_group("Placement"),
         anno::ui_order(8)
     ]],
-    uniform float2 translation = float2(0.)
+    float2 translation = float2(0.)
     [[
         anno::description("Controls position of the texture on the object"),
         anno::display_name("Offset"),
         anno::in_group("Placement"),
         anno::ui_order(7)
     ]],
-    uniform float rotation = 0.
+    float rotation = 0.
     [[
         anno::description("Rotation angle of the texture in degrees"),
         anno::display_name("Rotation"),
@@ -1328,7 +1667,7 @@ export float3 normalmap_texture(
         uvw: base::transform_coordinate(
             transform: rotation_translation_scale(
                 scaling: float3(scaling.x, scaling.y, 1.0),
-                rotation: float3(0.0, 0.0, rotation/180.*math::PI ),
+                rotation: float3(0.0, 0.0, math::radians(rotation) ),
                 translation: float3(translation.x, translation.y, 0.0)
             ),
             coordinate: base::coordinate_source(texture_space: texture_space)
@@ -1339,38 +1678,236 @@ export float3 normalmap_texture(
         clip: clip
     );
 }
-// blend two normals, similar to
-// http://blog.selfshadow.com/publications/blending-in-detail/
-export float3 blend_normals(
-    float3 base_normal = state::normal()
+export float3 triplanar_normalmap_texture(
+    uniform texture_2d texture_1
     [[
-        anno::description("The base normal")
+        anno::usage("normal"),
+        anno::display_name("Bitmap file"),
+        anno::in_group("1st Bitmap parameters"),
+        anno::ui_order(0)
     ]],
-    float base_normal_weight = 1.0f
+    float2 scaling_1 = float2(1.)
     [[
-        anno::description("Specifies the strength of the base normal using a linear blend between state::normal and \"base_normal\""),
-        anno::soft_range(0.0,1.0)
+        anno::description("Controls the scale of the texture on the object"),
+        anno::display_name("Tiling"),
+        anno::in_group("1st Bitmap parameters"),
+        anno::ui_order(1)
     ]],
-    float3 detail_normal = state::normal()
+    float2 translation_1 = float2(0.)
     [[
-        anno::description("The detail normal")
+        anno::description("Controls position of the texture on the object"),
+        anno::display_name("Offset"),
+        anno::in_group("1st Bitmap parameters"),
+        anno::ui_order(2)
     ]],
-    float detail_normal_weight = 1.0f
+    float rotation_1 = 0.
     [[
-        anno::description("Specifies the strength of the detail normal using a linear blend between state::normal and \"detail_normal\""),
-        anno::soft_range(0.0,1.0)
+        anno::description("Rotation angle of the texture in degrees"),
+        anno::display_name("Rotation"),
+        anno::in_group("1st Bitmap parameters"),
+        anno::ui_order(3),
+        anno::soft_range(0.0,360.0)
+    ]],
+    uniform bool flip_1 = false
+    [[
+        anno::description("Flip handedness of the tangent space"),
+        anno::display_name("Flip V"),
+        anno::in_group("1st Bitmap parameters"),
+        anno::ui_order(4)
+    ]],
+    uniform texture_2d texture_2 = texture_2d()
+    [[
+        anno::display_name("Bitmap file"),
+        anno::in_group("2nd Bitmap parameters"),
+        anno::usage("normal"),
+        anno::ui_order(4)
+    ]],
+    float2 scaling_2 = float2(1.)
+    [[
+        anno::description("Controls the scale of the texture on the object"),
+        anno::display_name("Tiling"),
+        anno::in_group("2nd Bitmap parameters"),
+        anno::enable_if( "tex::texture_isvalid(texture_2)" ),
+        anno::ui_order(5)
+    ]],
+    float2 translation_2 = float2(0.)
+    [[
+        anno::description("Controls position of the texture on the object"),
+        anno::display_name("Offset"),
+        anno::in_group("2nd Bitmap parameters"),
+        anno::enable_if( "tex::texture_isvalid(texture_2)" ),
+        anno::ui_order(6)
+    ]],
+    float rotation_2 = 0.
+    [[
+        anno::description("Rotation angle of the texture in degrees"),
+        anno::display_name("Rotation"),
+        anno::in_group("2nd Bitmap parameters"),
+        anno::ui_order(7),
+        anno::enable_if( "tex::texture_isvalid(texture_2)" ),
+        anno::soft_range(0.0,360.0)
+    ]],
+    uniform bool flip_2 = false
+    [[
+        anno::description("Flip handedness of the tangent space"),
+        anno::display_name("Flip V"),
+        anno::in_group("2nd Bitmap parameters"),
+        anno::ui_order(8)
+    ]],
+    uniform texture_2d texture_3 = texture_2d()
+    [[
+        anno::display_name("Bitmap file"),
+        anno::in_group("3rd Bitmap parameters"),
+        anno::ui_order(8),
+        anno::usage("normal")
+    ]],
+    float2 scaling_3 = float2(1.)
+    [[
+        anno::description("Controls the scale of the texture on the object"),
+        anno::display_name("Tiling"),
+        anno::in_group("3rd Bitmap parameters"),
+        anno::enable_if( "tex::texture_isvalid(texture_3)" ),
+        anno::ui_order(9)
+    ]],
+    float2 translation_3 = float2(0.)
+    [[
+        anno::description("Controls position of the texture on the object"),
+        anno::display_name("Offset"),
+        anno::in_group("3rd Bitmap parameters"),
+        anno::enable_if( "tex::texture_isvalid(texture_3)" ),
+        anno::ui_order(10)
+    ]],
+    float rotation_3 = 0.
+    [[
+        anno::description("Rotation angle of the texture in degrees"),
+        anno::display_name("Rotation"),
+        anno::in_group("3rd Bitmap parameters"),
+        anno::ui_order(11),
+        anno::enable_if( "tex::texture_isvalid(texture_3)" ),
+        anno::soft_range(0.0,360.0)
+    ]],
+    uniform bool flip_3 = false
+    [[
+        anno::description("Flip handedness of the tangent space"),
+        anno::display_name("Flip V"),
+        anno::in_group("3rd Bitmap parameters"),
+        anno::ui_order(12)
+    ]],
+    float blend_range = 0.5
+    [[
+        anno::description("Defines the size of the transition area. 0 means hard transition, 1 means blending happens very softly."),
+        anno::display_name("Blend range"),
+        anno::in_group("Common parameters"),
+        anno::ui_order(13),
+        anno::hard_range(0.0,1.0)
+    ]],
+    float strength = 1.0
+    [[
+        anno::description("Overall strength of the normalmap"),
+        anno::display_name("Strength"),
+        anno::in_group("Common parameters"),
+        anno::ui_order(14),
+        anno::soft_range(0.0,10.0)
+    ]],
+    uniform float3 rotate_origin = float3(0.0)
+    [[
+        anno::description("Allows manual alignment of the projection with an object"),
+        anno::display_name("Rotation of origin"),
+        anno::in_group("Placement"),
+        anno::ui_order(16),
+        anno::soft_range(float3(0.0),float3(360.0))
+    ]],
+    uniform bool object_space = true
+    [[
+        anno::description("If off, world space will be used for generating texture coordinates. If on, object space will apply."),
+        anno::display_name("Use object space"),
+        anno::in_group("Placement"),
+        anno::ui_order(15)
     ]]
 )
 [[
-    anno::description("Blend two normals or apply a detail normal map"),
-    anno::display_name("Blend normals"),
-    anno::thumbnail(".thumbs/blend_normals.png"),
+    anno::display_name("Triplanar Normalmap texture"),
+    anno::description("Allows texturing using image files of various file formats"),
+    anno::thumbnail(".thumbs/file_texture.png"),
     anno::in_group("Texturing, high level"),
-    anno::ui_order(33),
+    anno::ui_order(32),
     anno::author("NVIDIA Corporation"),
-    anno::copyright_notice(COPYRIGHT)]]
+    anno::copyright_notice(COPYRIGHT)
+]]
 {
-    return base::blend_normals(base_normal,base_normal_weight,detail_normal,detail_normal_weight);
+    state::coordinate_space space = object_space?state::coordinate_object:state::coordinate_world;
+
+    float3 normal = state::transform_normal(state::coordinate_internal, space, state::normal());
+    float3 position_original = state::transform_point(state::coordinate_internal, space, state::position());
+    float3 rotation_origin_rad = math::radians(rotate_origin);
+    normal = transform_rotate(normal, rotation_origin_rad);
+    float3 position = transform_rotate(position_original, rotation_origin_rad);
+    float3 ty =
+        math::normalize(
+            transform_rotate_inv(state::transform_vector(space,state::coordinate_internal,float3(0.,-1.,0.)),rotation_origin_rad));
+    float3 tz =
+        math::normalize(
+            transform_rotate_inv(state::transform_vector(space,state::coordinate_internal,float3(0.,0.,-1.)),rotation_origin_rad));
+
+    float3 weights = math::abs(normal);
+
+    //TODO: blendrange through pow or is there something better? Pow means relatively little area where only 1 texture is looked up
+    weights /=math::max_value(weights);
+    weights = math::pow(weights,1./math::max(blend_range, 0.001));
+
+
+
+    float2 st1 = normal.x>0.0?float2(-position.z,position.y):float2(-position.z,-position.y);
+    float3 ts = math::normalize(math::cross(state::normal(),tz));
+    float3 tt1 = math::normalize(math::cross(state::normal(),ts));
+    
+    float2 st2 = normal.y>0?float2(-position.z,-position.x):float2(-position.z,position.x);
+
+    float2 st3 = normal.z>0?float2(-position.y,position.x):float2(-position.y,-position.x);
+    float3 ts3 = math::normalize(math::cross(state::normal(),ty));
+    float3 tt3 = math::normalize(math::cross(state::normal(),ts3));
+
+    tt3 = ( (tex::texture_isvalid(texture_3) && flip_3) || flip_1)? -tt3: tt3;
+    float3 tt2 = ( (tex::texture_isvalid(texture_2) && flip_2) || flip_1)? -tt1: tt1;
+    tt1 = flip_1? -tt1: tt1;
+    
+    float3 n1 = weights.x>0 && tex::texture_isvalid(texture_1)?
+        (tex::lookup_float3(
+            texture_1,
+            transform_st(math::radians(rotation_1),translation_1,scaling_1,st1))- float3(0.5)) * (2.0 * strength)
+        :float3(0.,0.,1.);
+    n1 = math::normalize(
+        ts * n1.x +
+        tt1 * n1.y +
+        state::normal() * (n1.z + (1.0 - strength)));
+
+    float3 n2 = weights.y>0? tex::texture_isvalid(texture_2)?
+        (tex::lookup_float3(
+            texture_2,
+            transform_st(math::radians(rotation_2),translation_2,scaling_2,st2))- float3(0.5)) * (2.0 * strength)
+        :tex::texture_isvalid(texture_1)?(tex::lookup_float3(
+            texture_1,
+            transform_st(math::radians(rotation_1),translation_1,scaling_1,st2))- float3(0.5)) * (2.0 * strength)
+        :float3(0.,0.,1.):float3(0.,0.,1.);
+    n2 = math::normalize(
+        ts * n2.x +
+        tt2 * n2.y +
+        state::normal() * (n2.z + (1.0 - strength)));
+
+    float3 n3 = weights.z>0? tex::texture_isvalid(texture_3)?
+        (tex::lookup_float3(
+            texture_3,
+            transform_st(math::radians(rotation_3),translation_3,scaling_3,st3))- float3(0.5)) * (2.0 * strength)
+        :tex::texture_isvalid(texture_1)?(tex::lookup_float3(
+            texture_1,
+            transform_st(math::radians(rotation_1),translation_1,scaling_1,st3))- float3(0.5)) * (2.0 * strength)
+        :float3(0.,0.,1.):float3(0.,0.,1.);
+    n3 = math::normalize(
+        ts3 * n3.x +
+        tt3 * n3.y +
+        state::normal() * (n3.z + (1.0 - strength)));
+
+    return  blend_3_normals(n1,weights.x,n2,weights.y,n3,weights.z);
 }
 
 //endgroup

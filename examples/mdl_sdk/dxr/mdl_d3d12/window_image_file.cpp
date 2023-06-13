@@ -89,6 +89,11 @@ int Window_image_file::show(int nCmdShow)
 
     log_info("iterations to run: " + std::to_string(m_iteration_count));
     size_t message_step = m_iteration_count / 10;
+
+    // if there's no console, don't bother showing rendering progress (and don't mess up timings)
+    if (m_app->get_options()->no_console_window)
+        message_step = 0;
+
     {
         Timing t("rendering");
         for (size_t i = 0; i < m_iteration_count; ++i)
@@ -96,8 +101,9 @@ int Window_image_file::show(int nCmdShow)
             m_message_pump_interface.paint();
             command_queue->flush();
 
-            if ((i + 1) % message_step == 0)
-                log_info("rendering completed to " + std::to_string((i + 1) / message_step * 10));
+            if (message_step > 10 && (i + 1) % message_step == 0)
+                log_info("rendering completed to " +
+                    std::to_string((i + 1) * 100 / m_iteration_count) + '%');
 
             if (m_close)
                 return 0;

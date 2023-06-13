@@ -83,7 +83,6 @@ def inspect_definition(neuray, transaction, function_db_name):
     if not function_def.is_valid_interface():
         return
 
-    # since we set 'materials_are_functions', we can treat them the same way
     print("\nThe Functions is a material: %s" % ("true" if function_def.is_material() else "false"))
 
     # get some factories that allow to dump values and types as strings to the console
@@ -246,7 +245,7 @@ def inspect_module(neuray, transaction, module_db_name):
         print("\nThe module contains the following %d material definitions:" % module.get_material_count())
         for i in range(module.get_material_count()):
             matdbname = module.get_material(i)
-            material_def = transaction.access_as(pymdlsdk.IMaterial_definition, matdbname)
+            material_def = transaction.access_as(pymdlsdk.IFunction_definition, matdbname)
             simple_name = material_def.get_mdl_simple_name()
             print("*   {}: {}".format(simple_name, matdbname))
 
@@ -379,12 +378,11 @@ def main():
             example_sp = get_examples_search_path()
             cfg.add_mdl_path(example_sp)
 
-            # unify the handling of materials and functions
-            cfg.set_materials_are_functions(True)
-
-        # Load the 'nv_freeimage' plug-in
-        if not pymdlsdk.load_plugin(neuray, 'nv_freeimage'):
-            raise Exception('Failed to load the \'nv_freeimage\' plugin.')
+        # Load the 'nv_openimageio' and 'dds' plug-ins
+        if not pymdlsdk.load_plugin(neuray, 'nv_openimageio'):
+            raise Exception('Failed to load the \'nv_openimageio\' plugin.')
+        if not pymdlsdk.load_plugin(neuray, 'dds'):
+            raise Exception('Failed to load the \'dds\' plugin.')
 
         # after the configuration is done, start neuray.
         resultCode = neuray.start()

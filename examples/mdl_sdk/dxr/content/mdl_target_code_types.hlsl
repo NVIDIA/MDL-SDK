@@ -274,7 +274,7 @@ struct Bsdf_sample_data {
     float3 k1;                      ///< mutual input: outgoing direction
 
     float3 k2;                      ///< output: incoming direction
-    float4 xi;                      ///< input: pseudo-random sample numbers
+    float4 xi;                      ///< input: pseudo-random sample numbers in range [0, 1)
     float pdf;                      ///< output: pdf (non-projected hemisphere)
     float3 bsdf_over_pdf;           ///< output: bsdf * dot(normal, k2) / pdf
     Bsdf_event_type event_type;     ///< output: the type of event for the generated sample
@@ -334,7 +334,7 @@ struct Bsdf_auxiliary_data {
 /// Input and output structure for EDF sampling data.
 struct Edf_sample_data
 {
-    float4 xi;                      ///< input: pseudo-random sample numbers
+    float4 xi;                      ///< input: pseudo-random sample numbers in range [0, 1)
     float3 k1;                      ///< output: outgoing direction
     float pdf;                      ///< output: pdf (non-projected hemisphere)
     float3 edf_over_pdf;            ///< output: edf * dot(normal,k1) / pdf

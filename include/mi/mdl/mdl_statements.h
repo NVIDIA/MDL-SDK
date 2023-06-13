@@ -141,7 +141,7 @@ public:
 
     /// Set the expression.
     ///
-    /// \param expr  teh expression to set, might be NULL
+    /// \param expr  the expression to set, might be NULL
     virtual void set_expression(IExpression const *expr) = 0;
 };
 
@@ -180,7 +180,7 @@ public:
 
 /// A switch case inside the MDL AST.
 ///
-/// \note In constrast to C-like languages switch cases in MDL must always
+/// \note In contrast to C-like languages switch cases in MDL must always
 ///       be sub-statements of a switch statement.
 class IStatement_case : public IStatement_compound
 {
@@ -219,7 +219,7 @@ public:
 
     /// Get the case statement at index, either an IStatement_invalid or an IStatement_case.
     ///
-    /// \param index  the index of the requested case staement
+    /// \param index  the index of the requested case statement
     virtual IStatement const *get_case(int index) const = 0;
 
     /// Add a case (at the end of the case statement list).

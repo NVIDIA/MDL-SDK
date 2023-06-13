@@ -37,15 +37,22 @@ class PassRegistry;
 /// Initialize the DeleteUnusedLibDevice pass.
 void initializeDeleteUnusedLibDevicePass(PassRegistry &);
 
+/// Initialize the FunctionInstCount pass.
+void initializeFunctionInstCounterPass(PassRegistry &);
+
 /// Creates the DeleteUnusedLibDevice pass.
 ///
 /// A very simple pass that removes unused function from libdevice.
 /// All functions starting with "__nv_" and marked with AlwaysInline
-/// will be removed.
+/// will be removed. Used functions will be marked as internal to avoid exporting them,
+/// if AlwaysInline fails for some reason.
 ModulePass *createDeleteUnusedLibDevicePass();
 
 /// Creates the NVVM reflect pass.
 FunctionPass *createNVVMReflectPass(unsigned int SmVersion);
+
+/// Creates the FunctionInstCount pass.
+FunctionPass *createFunctionInstCounterPass();
 
 }  // llvm
 

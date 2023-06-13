@@ -285,6 +285,7 @@ Declaration_function::Declaration_function(
 , m_name(name)
 , m_params()
 , m_body(NULL)
+, m_attr_no_inline(false)
 {
 }
 

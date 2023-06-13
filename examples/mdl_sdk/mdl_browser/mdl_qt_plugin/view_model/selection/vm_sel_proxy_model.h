@@ -71,7 +71,7 @@ public:
     explicit VM_sel_proxy_model(QObject* parent = nullptr);
     virtual ~VM_sel_proxy_model();
 
-    // sets the underlaying VM_sel_model.
+    // sets the underlying VM_sel_model.
     // called by the View_model class on startup.
     void setSourceModel(QAbstractItemModel* sourceModel) override;
 

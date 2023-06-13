@@ -36,6 +36,7 @@
 #include <sstream>
 #include <iomanip>
 #include <cmath>
+#include <chrono>
 
 #include <base/lib/mem/i_mem_size.h>
 
@@ -365,6 +366,34 @@ inline std::string get_readable_amount(const size_t num)
     str << Large_number(num);
     return str.str();
 }
+
+
+inline std::ostream& operator<<(std::ostream& str, const Seconds& value)
+{
+    if (value.value >= 60) {
+        std::chrono::duration<Seconds::base_type> rest{value.value};
+        const auto h = std::chrono::duration_cast<std::chrono::hours>(rest);
+        const auto min = std::chrono::duration_cast<std::chrono::minutes>(rest -= h);
+        const auto s = std::chrono::duration_cast<std::chrono::seconds>(rest -= min);
+        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(rest -= s);
+
+        if (h.count()) str << h.count() << ':';
+        if (h.count() || min.count()) str << std::setw(2) << std::setfill('0') << min.count() << ':';
+        str << std::setw(2) << std::setfill('0') << s.count();
+        if (ms.count()) str << '.' << std::setw(3) << std::setfill('0') << ms.count();
+        return str;
+    }
+    else {
+        int i = 0;
+        const char* units[] = {" s", " ms", " us", " ns"};
+        double scaled = value.value;
+        for (; i+1 < sizeof(units)/sizeof(units[0]) && scaled < 1.; ++i) {
+            scaled *= 1000.;
+        }
+        return str << std::fixed << std::setprecision(3) << scaled << units[i];
+    }
+}
+
 
 
 } // namespace LOG

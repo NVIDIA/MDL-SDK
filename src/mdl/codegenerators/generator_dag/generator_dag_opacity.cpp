@@ -285,6 +285,7 @@ private:
     {
         switch (bsdf->get_semantic()) {
         case IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF:
+        case IDefinition::DS_INTRINSIC_DF_DUSTY_DIFFUSE_REFLECTION_BSDF:
             // MaterialLayerBSDF_DiffuseRefl
             return IGenerated_code_dag::IMaterial_instance::OPACITY_OPAQUE;
 
@@ -369,6 +370,7 @@ private:
             return analyze_bsdf_modifier(bsdf);
 
         case IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF:
+        case IDefinition::DS_INTRINSIC_DF_DUSTY_DIFFUSE_REFLECTION_BSDF:
         case IDefinition::DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF:
         case IDefinition::DS_INTRINSIC_DF_SPECULAR_BSDF:
         case IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF:

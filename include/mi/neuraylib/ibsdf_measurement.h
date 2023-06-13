@@ -67,10 +67,11 @@ public:
     /// \return
     ///                   -  0: Success.
     ///                   - -1: Invalid parameters (\c NULL pointer).
-    ///                   - -2: Failure to resolve the given filename, e.g., the file does not
+    ///                   - -3: Invalid filename extension (only \c .mbsdf is supported).
+    ///                   - -4: Failure to resolve the given filename, e.g., the file does not
     ///                         exist.
-    ///                   - -3: Invalid file format or invalid filename extension (only \c .mbsdf is
-    ///                         supported).
+    ///                   - -5: Failure to open the resolved file.
+    ///                   - -7: Invalid file format.
     ///
     /// \see #mi::neuraylib::IMdl_factory::create_bsdf_measurement() for a way to create a BSDF
     ///      measurement based on an MDL file path instead of a filename.
@@ -83,7 +84,7 @@ public:
     /// \return
     ///                    -  0: Success.
     ///                    - -1: Invalid parameters (\c NULL pointer).
-    ///                    - -3: Invalid file format.
+    ///                    - -7: Invalid file format.
     virtual Sint32 reset_reader( IReader* reader) = 0;
 
     /// Returns the resolved file name of the file containing the BSDF measurement.
@@ -105,7 +106,7 @@ public:
 
     /// Sets the BSDF data for the reflection.
     ///
-    /// \param bsdf_data   The BSDF data to be used by this BSDF measurement. The value \p NULL
+    /// \param bsdf_data   The BSDF data to be used by this BSDF measurement. The value \c NULL
     ///                    can be used to remove the BSDF data for reflection.
     /// \return
     ///                    -  0: Success.
@@ -116,7 +117,7 @@ public:
     ///
     /// Note that it is not possible to manipulate the BSDF data.
     ///
-    /// \return            The BSDF data for reflection, or \p NULL if there is none.
+    /// \return            The BSDF data for reflection, or \c NULL if there is none.
     virtual const base::IInterface* get_reflection() const = 0;
 
     /// Returns the BSDF data for reflection.
@@ -145,7 +146,7 @@ public:
 
     /// Sets the BSDF data for transmission.
     ///
-    /// \param bsdf_data   The BSDF data to be used by this BSDF measurement. The value \p NULL
+    /// \param bsdf_data   The BSDF data to be used by this BSDF measurement. The value \c NULL
     ///                    can be used to remove the BSDF data for transmission.
     /// \return
     ///                    -  0: Success.
@@ -156,7 +157,7 @@ public:
     ///
     /// Note that it is not possible to manipulate the BSDF data.
     ///
-    /// \return            The BSDF data for transmission, or \p NULL if there is none.
+    /// \return            The BSDF data for transmission, or \c NULL if there is none.
     virtual const base::IInterface* get_transmission() const = 0;
 
     /// Returns the BSDF data for transmission.

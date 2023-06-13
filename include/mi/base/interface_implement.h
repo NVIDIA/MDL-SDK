@@ -64,6 +64,8 @@ template <class I>
 class Interface_implement : public I
 {
 public:
+    typedef I Interface;
+
     /// Constructor.
     ///
     /// \param initial   The initial reference count (defaults to 1).
@@ -92,6 +94,21 @@ public:
         (void) other;
         return *this;
     }
+
+#if (__cplusplus >= 201103L)
+    /// Move constructor.
+    Interface_implement(Interface_implement&& other)
+    : m_refcnt{other.m_refcnt.swap(0)}
+    {
+    }
+
+    /// Move assignment.
+    Interface_implement& operator=(Interface_implement&& other)
+    {
+    	other.m_refcnt = m_refcnt.swap(other.m_refcnt);
+    	return *this;
+    }
+#endif
 
     /// Increments the reference count.
     ///

@@ -60,8 +60,9 @@ class Base_image_set : public DBIMAGE::Image_set
 {
 public:
 
-    Base_image_set( const mi::IArray* array)
-      : m_array( mi::base::make_handle_dup( array))
+    Base_image_set( const mi::IArray* array, const char* selector)
+      : m_array( mi::base::make_handle_dup( array)),
+        m_selector( selector ? selector : "")
     {
         mi::Size n = array->get_length();
         ASSERT( M_NEURAY_API, n > 0);
@@ -117,7 +118,7 @@ public:
 
     const char* get_mdl_file_path() const { return ""; }
 
-    const char* get_selector() const { return nullptr; }
+    const char* get_selector() const { return !m_selector.empty() ? m_selector.c_str() : nullptr; }
 
     const char* get_image_format() const { return ""; }
 
@@ -183,6 +184,8 @@ private:
     bool m_is_animated;
     /// Indicates whether any frame has uvtiles.
     bool m_is_uvtile;
+    /// The selector.
+    std::string m_selector;
 };
 
 // Adapts array of "Uvtile_reader" structs to DBIMAGE::Image_set.
@@ -191,13 +194,10 @@ class Reader_image_set : public Base_image_set
 public:
 
     Reader_image_set( mi::IArray* array, const char* image_format, const char* selector)
-      : Base_image_set( array),
+      : Base_image_set( array, selector),
         m_readers( mi::base::make_handle_dup( array)),
-        m_image_format( image_format),
-        m_selector( selector ? selector : "")
+        m_image_format( image_format)
     { }
-
-    const char* get_selector() const { return !m_selector.empty() ? m_selector.c_str() : nullptr; }
 
     const char* get_image_format() const { return m_image_format.c_str(); }
 
@@ -219,7 +219,6 @@ private:
 
     mi::base::Handle<mi::IArray> m_readers;
     std::string m_image_format;
-    std::string m_selector;
 };
 
 // Adapts array of "Uvtile" structs to DBIMAGE::Image_set.
@@ -227,14 +226,14 @@ class Canvas_image_set : public Base_image_set
 {
 public:
 
-    Canvas_image_set( mi::IArray* canvases)
-      : Base_image_set( canvases),
+    Canvas_image_set( mi::IArray* canvases, const char* selector)
+      : Base_image_set( canvases, selector),
         m_mutable_canvases( mi::base::make_handle_dup( canvases)),
         m_const_canvases( mi::base::make_handle_dup( canvases))
     { }
 
-    Canvas_image_set( const mi::IArray* canvases)
-      : Base_image_set( canvases),
+    Canvas_image_set( const mi::IArray* canvases, const char* selector)
+      : Base_image_set( canvases, selector),
         m_mutable_canvases( {}),
         m_const_canvases( mi::base::make_handle_dup( canvases))
     { }
@@ -343,27 +342,30 @@ mi::Sint32 Image_impl::reset_reader(
 
     mi::Size n = reader_array->get_length();
     if( n == 0)
-        return false;
+        return -10;
 
     for( mi::Size i = 0; i < n; ++i) {
         mi::base::Handle<const mi::IStructure> uvtile(
             reader_array->get_value<const mi::IStructure>( i));
         if( !uvtile)
-            return false;
+            return -10;
         if( strcmp( uvtile->get_type_name(), "Uvtile_reader") != 0)
-            return false;
+            return -10;
     }
 
     Reader_image_set reader_set( reader_array, image_format, selector);
     mi::base::Uuid impl_hash{0,0,0,0};
-    if( get_db_element()->reset_image_set( get_db_transaction(), &reader_set, impl_hash) < 0)
-        return -3;
+    mi::Sint32 result
+        = get_db_element()->reset_image_set( get_db_transaction(), &reader_set, impl_hash);
+    if( result == -99)
+        result = -10;
 
-    add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
-    return 0;
+    if( result == 0)
+        add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
+    return result;
 }
 
-bool Image_impl::set_from_canvas( const mi::neuraylib::ICanvas* canvas)
+bool Image_impl::set_from_canvas( const mi::neuraylib::ICanvas* canvas, const char* selector)
 {
     if( !canvas)
         return false;
@@ -375,15 +377,16 @@ bool Image_impl::set_from_canvas( const mi::neuraylib::ICanvas* canvas)
     canvases[0] = image_module->copy_canvas( canvas);
     mi::base::Handle<IMAGE::IMipmap> mipmap( image_module->create_mipmap( canvases));
     mi::base::Uuid impl_hash{0,0,0,0};
-    get_db_element()->set_mipmap( get_db_transaction(), mipmap.get(), impl_hash);
+    get_db_element()->set_mipmap( get_db_transaction(), mipmap.get(), selector, impl_hash);
     add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
     return true;
 }
 
-bool Image_impl::set_from_canvas( mi::neuraylib::ICanvas* canvas, bool shared)
+bool Image_impl::set_from_canvas(
+    mi::neuraylib::ICanvas* canvas, const char* selector, bool shared)
 {
     if( !shared)
-        return set_from_canvas( const_cast<const mi::neuraylib::ICanvas*>( canvas));
+        return set_from_canvas( const_cast<const mi::neuraylib::ICanvas*>( canvas), selector);
 
     if( !canvas)
         return false;
@@ -395,12 +398,12 @@ bool Image_impl::set_from_canvas( mi::neuraylib::ICanvas* canvas, bool shared)
     canvases[0] = make_handle_dup( canvas);
     mi::base::Handle<IMAGE::IMipmap> mipmap( image_module->create_mipmap( canvases));
     mi::base::Uuid impl_hash{0,0,0,0};
-    get_db_element()->set_mipmap( get_db_transaction(), mipmap.get(), impl_hash);
+    get_db_element()->set_mipmap( get_db_transaction(), mipmap.get(), selector, impl_hash);
     add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
     return true;
 }
 
-bool Image_impl::set_from_canvas( const mi::IArray* canvas_array)
+bool Image_impl::set_from_canvas( const mi::IArray* canvas_array, const char* selector)
 {
     if( !canvas_array)
         return false;
@@ -418,19 +421,21 @@ bool Image_impl::set_from_canvas( const mi::IArray* canvas_array)
             return false;
     }
 
-    Canvas_image_set canvas_set( canvas_array);
+    Canvas_image_set canvas_set( canvas_array, selector);
     mi::base::Uuid impl_hash{0,0,0,0};
-    if( get_db_element()->reset_image_set( get_db_transaction(), &canvas_set, impl_hash) != 0)
+    mi::Sint32 result
+        = get_db_element()->reset_image_set( get_db_transaction(), &canvas_set, impl_hash);
+    if( result != 0)
         return false;
 
     add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
     return true;
 }
 
-bool Image_impl::set_from_canvas( mi::IArray* canvas_array, bool shared)
+bool Image_impl::set_from_canvas( mi::IArray* canvas_array, const char* selector, bool shared)
 {
     if( !shared)
-        return set_from_canvas( canvas_array);
+        return set_from_canvas( canvas_array, selector);
 
     if( !canvas_array)
         return false;
@@ -448,9 +453,11 @@ bool Image_impl::set_from_canvas( mi::IArray* canvas_array, bool shared)
             return false;
     }
 
-    Canvas_image_set canvas_set( canvas_array);
+    Canvas_image_set canvas_set( canvas_array, selector);
     mi::base::Uuid impl_hash{0,0,0,0};
-    if( get_db_element()->reset_image_set( get_db_transaction(), &canvas_set, impl_hash) != 0)
+    mi::Sint32 result
+        = get_db_element()->reset_image_set( get_db_transaction(), &canvas_set, impl_hash);
+    if( result != 0)
         return false;
 
     add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);

@@ -69,6 +69,7 @@ set(PROJECT_HEADERS
     "../neuray/neuray_mdl_compatibility_api_impl.h"
     "../neuray/neuray_mdl_configuration_impl.h"
     "../neuray/neuray_mdl_discovery_api_impl.h"
+    "../neuray/neuray_mdl_distiller_api_impl.h"
     "../neuray/neuray_mdl_entity_resolver_impl.h"
     "../neuray/neuray_mdl_evaluator_api_impl.h"
     "../neuray/neuray_mdl_execution_context_impl.h"
@@ -101,7 +102,6 @@ set(PROJECT_HEADERS
     "../neuray/neuray_void_impl.h"
     "../neuray/neuray_attribute_set_impl.h"
     "../neuray/neuray_db_element_impl.h"
-    "../neuray/neuray_material_definition_impl.h"
 )
 
 set(PROJECT_SOURCES 
@@ -133,7 +133,6 @@ set(PROJECT_SOURCES
     "../neuray/neuray_impexp_utilities.cpp"
     "../neuray/neuray_lightprofile_impl.cpp"
     "../neuray/neuray_map_impl.cpp"
-    "../neuray/neuray_material_definition_impl.cpp"
     "../neuray/neuray_material_instance_impl.cpp"
     "../neuray/neuray_mdl_archive_api_impl.cpp"
     "../neuray/neuray_mdl_backend_api_impl.cpp"
@@ -141,6 +140,7 @@ set(PROJECT_SOURCES
     "../neuray/neuray_mdl_compatibility_api_impl.cpp"
     "../neuray/neuray_mdl_configuration_impl.cpp"
     "../neuray/neuray_mdl_discovery_api_impl.cpp"
+    "../neuray/neuray_mdl_distiller_api_impl.cpp"
     "../neuray/neuray_mdl_entity_resolver_impl.cpp"
     "../neuray/neuray_mdl_evaluator_api_impl.cpp"
     "../neuray/neuray_mdl_execution_context_impl.cpp"
@@ -183,7 +183,7 @@ create_from_base_preset(
     )
 
 # add dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME} 
-    DEPENDS 
+target_add_dependencies(TARGET ${PROJECT_NAME}
+    DEPENDS
         boost
         )

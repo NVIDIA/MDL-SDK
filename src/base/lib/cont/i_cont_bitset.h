@@ -37,6 +37,8 @@
 #include "i_cont_number.h"
 #include <base/lib/math/i_math.h>
 
+#include <type_traits>
+
 
 namespace MI {
 namespace CONT {
@@ -64,7 +66,7 @@ struct Data_count
 
  This class stores an array of \c count integral elements of type \p T.
  */
-template <typename T, std::size_t count>
+template <typename T, std::size_t count, typename=std::enable_if_t<std::is_unsigned_v<T>>>
 class Bitset_storage_base
 {
 public:

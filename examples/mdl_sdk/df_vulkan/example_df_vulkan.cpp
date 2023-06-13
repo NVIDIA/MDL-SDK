@@ -561,6 +561,11 @@ void Df_vulkan_app::init_resources()
                 material_textures_indices.push_back(static_cast<uint32_t>(m_material_textures_3d.size()));
                 m_material_textures_3d.push_back(texture);
                 break;
+
+            default:
+                std::cerr << "Unsupported texture shape!" << std::endl;
+                terminate();
+                break;
             }
         }
     }
@@ -2110,9 +2115,9 @@ void print_usage(char const* prog_name)
         << "  --numimg <n>              swapchain image count (default: 3)\n"
         << "  -o|--output <outputfile>  image file to write result in nowin mode (default: output.exr)\n"
         << "  --spp <num>               samples per pixel, only used for --nowin (default: 4096)\n"
-        << "  --spi <num>               samples per render loop interation (default: 8)\n"
+        << "  --spi <num>               samples per render loop iteration (default: 8)\n"
         << "  --max_path_length <num>   maximum path length (default: 4)\n"
-        << "  -f|--fov <fov>            the camera field of view in degress (default: 96.0)\n"
+        << "  -f|--fov <fov>            the camera field of view in degrees (default: 96.0)\n"
         << "  -p|--pos <x> <y> <z>      set the camera position (default: 0 0 3).\n"
         << "                            The camera will always look towards (0, 0, 0)\n"
         << "  -l|--light <x> <y> <z>    adds an omnidirectional light with the given position"
@@ -2239,7 +2244,7 @@ int MAIN_UTF8(int argc, char* argv[])
         exit_failure("Failed to initialize the SDK. Result code: %d", result);
 
     {
-        // Create a transation
+        // Create a transaction
         mi::base::Handle<mi::neuraylib::IDatabase> database(
             neuray->get_api_component<mi::neuraylib::IDatabase>());
         mi::base::Handle<mi::neuraylib::IScope> scope(database->get_global_scope());

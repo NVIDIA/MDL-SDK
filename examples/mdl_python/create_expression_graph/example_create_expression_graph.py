@@ -240,12 +240,11 @@ def main():
             example_sp = get_examples_search_path()
             cfg.add_mdl_path(example_sp)
 
-            # unify the handling of materials and functions
-            cfg.set_materials_are_functions(True)
-
-        # Load the 'nv_freeimage' plug-in
-        if not pymdlsdk.load_plugin(neuray, 'nv_freeimage'):
-            raise Exception('Failed to load the \'nv_freeimage\' plugin.')
+        # Load the 'nv_openimageio' and 'dds' plug-ins
+        if not pymdlsdk.load_plugin(neuray, 'nv_openimageio'):
+            raise Exception('Failed to load the \'nv_openimageio\' plugin.')
+        if not pymdlsdk.load_plugin(neuray, 'dds'):
+            raise Exception('Failed to load the \'dds\' plugin.')
 
         # after the configuration is done, start neuray.
         resultCode = neuray.start()

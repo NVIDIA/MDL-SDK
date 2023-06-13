@@ -49,7 +49,7 @@ with textures in please refer to the \link mi_neuray_example_execution_glsl Exam
 <dl>
 <dt><b>Configuration of the GLSL backend for Vulkan</b></dt>
 <dd><br>
-Before generating GLSL code the backend has to be optained and configured using #mi::neuraylib::IMdl_backend::set_option().
+Before generating GLSL code the backend has to be obtained and configured using #mi::neuraylib::IMdl_backend::set_option().
 For a list of possible options see the documentation of the \c set_option method.
 It is important to set the correct GLSL version and enable placing read-only data into a storage buffer (SSBO)
 instead of global uniforms since, at the time of writing, GLSL for Vulkan does not support global uniforms.

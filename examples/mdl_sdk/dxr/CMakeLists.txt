@@ -46,7 +46,7 @@ set(PROJECT_HEADERS
     "mdl_d3d12/common.h"
     "mdl_d3d12/descriptor_heap.h"
     "mdl_d3d12/gltf.h"
-    "mdl_d3d12/gltf_nv_materials_mdl.h"
+    "mdl_d3d12/gltf_extensions.h"
     "mdl_d3d12/light_profile.h"
     "mdl_d3d12/mdl_d3d12.h"
     "mdl_d3d12/mdl_material.h"
@@ -218,6 +218,19 @@ if(MDL_ENABLE_MATERIALX)
             "mdl/materialx/swizzle.mdl"
         )
 
+endif()
+
+if(MDL_ENABLE_SLANG)
+# add slang support
+    target_add_dependencies(TARGET ${PROJECT_NAME}
+        DEPENDS
+            slang
+        )
+
+    target_compile_definitions(${PROJECT_NAME}
+        PRIVATE
+            "MDL_ENABLE_SLANG"
+        )
 endif()
 
 # creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)

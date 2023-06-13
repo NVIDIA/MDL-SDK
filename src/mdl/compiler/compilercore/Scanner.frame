@@ -39,46 +39,46 @@ Scanner.h Specification
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <wchar.h>
 
 #include <mi/mdl/mdl_streams.h>
+#include <mdl/compiler/compilercore/compilercore_cc_conf.h>
 #include <mdl/compiler/compilercore/compilercore_errors.h>
 #include <mdl/compiler/compilercore/compilercore_memory_arena.h>
 
 #if _MSC_VER >= 1400
-#define coco_swprintf swprintf_s
+#define coco_snprintf sprintf_s
 #elif _MSC_VER >= 1300
-#define coco_swprintf _snwprintf
+#define coco_snprintf _snprintf
 #elif defined __MINGW32__
-#define coco_swprintf _snwprintf
+#define coco_snprintf _snprintf
 #else
-// assume every other compiler knows swprintf
-#define coco_swprintf swprintf
+// assume every other compiler knows snprintf
+#define coco_snprintf snprintf
 #endif
 
-#define COCO_WCHAR_MAX 65535
+#define COCO_UNICODE_MAX 0x10FFFF
 #define COCO_MIN_BUFFER_LENGTH 1024
 #define COCO_MAX_BUFFER_LENGTH (64*COCO_MIN_BUFFER_LENGTH)
 #define COCO_HEAP_BLOCK_SIZE (64*1024)
-#define COCO_CPP_NAMESPACE_SEPARATOR L':'
+#define COCO_CPP_NAMESPACE_SEPARATOR ':'
 
 -->namespace_open
 
 // string handling, wide character
-unsigned coco_string_hash(const wchar_t* data, size_t len);
+unsigned coco_string_hash(char const *data, size_t len);
 
 // forward
 class Error_params;
+class Scanner;
 
-class Token  
-{
+class Token {
 public:
 	int kind;     // token kind
 	int pos;      // token position in bytes in the source text (starting at 0)
 	int charPos;  // token position in characters in the source text (starting at 0)
 	int col;      // token column (starting at 1)
 	int line;     // token line (starting at 1)
-	const wchar_t* val; // token value
+	char const *val; // token value
 	Token *next;  // ML 2005-03-11 Peek tokens are kept in linked list
 
 	Token();
@@ -90,14 +90,14 @@ public:
 
 	Errors();
 	void SynErr(Token const *la, int n);
-	virtual void Error(Token const *t, const wchar_t *s);
-	virtual void Warning(int line, int col, const wchar_t *s);
+	virtual void Error(Token const *t, char const *s);
+	virtual void Warning(int line, int col, char const *s);
 	virtual void Error(int line, int col, int code, Error_params const &params);
-
+	virtual void Warning(int line, int col, int code, Error_params const &params);
 }; // Errors
 
 class Buffer {
-private:
+protected:
 	Allocator_builder builder;
 
 	int bufCapacity;    // capacity of buf
@@ -108,16 +108,19 @@ private:
 	bool isUserStream;  // was the stream opened by the user?
 	IInput_stream *istream; // input stream (non-seekable)
 	unsigned char *buf; // input buffer
+	Scanner *owner;     // the owner of this buffer
 	
 	int ReadNextStreamChunk();
 	
 public:
-	static const int EoF = COCO_WCHAR_MAX + 1;
+	static const int EoF = COCO_UNICODE_MAX + 1;
 
-	Buffer(IAllocator *alloc, IInput_stream* s, bool isUserStream);
+	Buffer(Scanner *owner, IAllocator *alloc, IInput_stream *s, bool isUserStream);
 	Buffer(Buffer *b);
 	virtual ~Buffer();
 	
+	IAllocator *get_allocator() const { return builder.get_allocator(); }
+
 	void Close();
 	virtual int Read();
 	int Peek();
@@ -128,7 +131,7 @@ public:
 class UTF8Buffer : public Buffer {
 public:
 	UTF8Buffer(Buffer *b) : Buffer(b) {};
-	virtual int Read();
+	int Read() MDL_FINAL;
 };
 
 //-----------------------------------------------------------------------------------
@@ -174,12 +177,12 @@ class KeywordMap {
 private:
 	class Elem {
 	public:
-		const wchar_t *key;
+		char const *key;
 		size_t len;
 		int val;
 		Elem *next;
 		
-		Elem(const wchar_t *key, size_t len, int val)
+		Elem(const char *key, size_t len, int val)
 			: key(key)
 			, len(len)
 			, val(val)
@@ -197,27 +200,30 @@ public:
 		memset(tab, 0, 128 * sizeof(Elem*));
 	}
 
-	void set(const wchar_t *key, int val) {
-		size_t len = wcslen(key);
+	void set(char const *key, int val) {
+		size_t len = strlen(key);  // byte length here
 		Elem *e = builder.create<Elem>(key, len, val);
 		unsigned k = coco_string_hash(key, len) & 127;
 		e->next = tab[k]; tab[k] = e;
 	}
 
-	int get(int len, const wchar_t *key, int defaultVal) {
+	int get(int len, char const *key, int defaultVal) {
 		const Elem *e = tab[coco_string_hash(key, len) & 127];
-		while (e != NULL && (len != e->len || wcsncmp(e->key, key, len) != 0))
+		while (e != NULL && (len != e->len || strncmp(e->key, key, len) != 0)) {
 			e = e->next;
+		}
 		return e == NULL ? defaultVal : e->val;
 	}
 
-	void change_keyword(const wchar_t *key, int val) {
-		size_t len = wcslen(key);
+	void change_keyword(char const *key, int val) {
+		size_t len = strlen(key);  // byte length here
 		Elem *e = tab[coco_string_hash(key, len) & 127];
-		while (e != NULL && (len != e->len || wcsncmp(e->key, key, len) != 0))
+		while (e != NULL && (len != e->len || strncmp(e->key, key, len) != 0)) {
 			e = e->next;
-		if (e != NULL)
+		}
+		if (e != NULL) {
 			e->val = val;
+		}
 	}
 };
 
@@ -235,7 +241,7 @@ protected:
 	KeywordMap keywords;
 
 	Token *t;         // current token
-	wchar_t *tval;    // text of current token
+	char *tval;    // text of current token
 	int tvalLength;   // length of text of current token
 	int tlen;         // length of current token
 
@@ -266,18 +272,19 @@ public:
 	Buffer *buffer;   // scanner buffer
 	
 	Scanner(
-		IAllocator *alloc,
-		Errors *err,
-		mi::mdl::IInput_stream* s,
-		int start_line = 1,
-		int start_col = 1);
+		IAllocator             *alloc,
+		Errors                 *err,
+		mi::mdl::IInput_stream *s,
+		int start_line         = 1,
+		int start_col          = 1);
 	~Scanner();
-	Token* Scan();
-	Token* Peek();
+	Token *Scan();
+	Token *Peek();
 	void ResetPeek();
-	Token* CreateToken();
+	Token *CreateToken();
 	void set_mdl_version(int major, int minor);
 	void enable_native_keyword(bool flag);
+	void ReportBufferDecoderError();
 
 }; // end Scanner
 
@@ -301,7 +308,7 @@ Scanner.cpp Specification
 
 
 // string handling, wide character
-unsigned coco_string_hash(const wchar_t *data, size_t len) {
+unsigned coco_string_hash(char const *data, size_t len) {
 	unsigned h = 0;
 	if (!data) { return 0; }
 	for (size_t i = 0; i < len; ++i) {
@@ -322,7 +329,7 @@ Token::Token()
 {
 }
 
-Buffer::Buffer(IAllocator *alloc, IInput_stream *s, bool isUserStream)
+Buffer::Buffer(Scanner *owner, IAllocator *alloc, IInput_stream *s, bool isUserStream)
 	: builder(alloc)
 	, bufCapacity(COCO_MIN_BUFFER_LENGTH)
 	, bufStart(0)
@@ -332,6 +339,7 @@ Buffer::Buffer(IAllocator *alloc, IInput_stream *s, bool isUserStream)
 	, isUserStream(isUserStream)
 	, istream(s)
 	, buf(builder.alloc<unsigned char>(bufCapacity))
+	, owner(owner)
 {
 }
 
@@ -345,8 +353,9 @@ Buffer::Buffer(Buffer *b)
 	, isUserStream(b->isUserStream)
 	, istream(b->istream)
 	, buf(b->buf)
+	, owner(b->owner)
 {
-	b->buf = NULL;
+	b->buf     = NULL;
 	b->istream = NULL;
 }
 
@@ -439,88 +448,12 @@ int Buffer::ReadNextStreamChunk() {
 	return 0;
 }
 
-int UTF8Buffer::Read() {
-	int ch;
-	do {
-		ch = Buffer::Read();
-		// until we find a utf8 start (0xxxxxxx or 11xxxxxx)
-	} while ((ch >= 0x80) && ((ch & 0xC0) != 0xC0) && (ch != EoF));
-
-	if (ch <= 0x7F || ch == EoF) {
-		// nothing to do, first 127 chars are the same in ascii and utf8
-		// 0xxxxxxx or end of file character
-	} else if ((ch & 0xF8) == 0xF0) {
-		// 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
-		bool error = false;
-		int pos = Buffer::GetPos();
-
-		int c1 = ch & 0x07; ch = Buffer::Read(); error |= (ch & 0xC0) != 0x80;
-		int c2 = ch & 0x3F; ch = Buffer::Read(); error |= (ch & 0xC0) != 0x80;
-		int c3 = ch & 0x3F; ch = Buffer::Read(); error |= (ch & 0xC0) != 0x80;
-		int c4 = ch & 0x3F;
-		ch = (c1 << 18) | (c2 << 12) | (c3 << 6) | c4;
-
-		// must be U+10000 .. U+10FFFF
-		error |= (ch < 0x1000) || (ch > 0x10FFFF);
-
-		// Because surrogate code points are not Unicode scalar values, any UTF-8 byte
-		// sequence that would otherwise map to code points U+D800..U+DFFF is illformed
-		error |= (0xD800 <= ch) && (ch <= 0xDFFF);
-
-		if (error) {
-			ch = 0xFFFD;  // replacement character
-			Buffer::SetPos(pos);
-		}
-	} else if ((ch & 0xF0) == 0xE0) {
-		// 1110xxxx 10xxxxxx 10xxxxxx
-		bool error = false;
-		int pos = Buffer::GetPos();
-
-		int c1 = ch & 0x0F; ch = Buffer::Read(); error |= (ch & 0xC0) != 0x80;
-		int c2 = ch & 0x3F; ch = Buffer::Read(); error |= (ch & 0xC0) != 0x80;
-		int c3 = ch & 0x3F;
-		ch = (c1 << 12) | (c2 << 6) | c3;
-
-		// must be U+0800 .. U+FFFF
-		error |= ch < 0x0800;
-
-		// Because surrogate code points are not Unicode scalar values, any UTF-8 byte
-		// sequence that would otherwise map to code points U+D800..U+DFFF is illformed
-		error |= (0xD800 <= ch) && (ch <= 0xDFFF);
-
-		if (error) {
-			ch = 0xFFFD;  // replacement character
-			Buffer::SetPos(pos);
-		}
-	} else if ((ch & 0xE0) == 0xC0) {
-		// 110xxxxx 10xxxxxx
-		bool error = false;
-		int pos = Buffer::GetPos();
-
-		int c1 = ch & 0x1F; ch = Buffer::Read(); error |= (ch & 0xC0) != 0x80;
-		int c2 = ch & 0x3F;
-		ch = (c1 << 6) | c2;
-
-		// must be U+0080 .. U+07FF
-		error |= ch < 0x80;
-
-		if (error) {
-			ch = 0xFFFD;  // replacement character
-			Buffer::SetPos(pos);
-		}
-	} else {
-		// error
-		ch = 0xFFFD;  // replacement character
-	}
-	return ch;
-}
-
 Scanner::Scanner(
-		IAllocator *alloc,
-		Errors *err,
-		mi::mdl::IInput_stream* s,
-		int start_line,
-		int start_col)
+		IAllocator             *alloc,
+		Errors                 *err,
+		mi::mdl::IInput_stream *s,
+		int                    start_line,
+		int                    start_col)
 	: arena(alloc, COCO_HEAP_BLOCK_SIZE)
 	, arena_builder(arena)
 	, alloc_builder(alloc)
@@ -530,7 +463,7 @@ Scanner::Scanner(
 	, tlen(0)
 	, errors(err)
 {
-	buffer = alloc_builder.create<Buffer>(alloc, s, true);
+	buffer = alloc_builder.create<Buffer>(this, alloc, s, true);
 	Init(start_line, start_col);
 }
 
@@ -548,7 +481,7 @@ void Scanner::Init(int start_line, int start_col) {
 -->declarations
 
 	tvalLength = 128;
-	tval = alloc_builder.alloc<wchar_t>(tvalLength); // text of current token
+	tval = alloc_builder.alloc<char>(tvalLength); // text of current token
 
 	pos = -1; line = start_line; col = start_col - 1; charPos = -1;
 	oldEols = 0;
@@ -563,7 +496,7 @@ void Scanner::Init(int start_line, int start_col) {
 			alloc_builder.destroy(oldBuf);
 			NextCh();
 		} else {
-			errors->Warning(1, 1, L"Illegal byte order mark at start of file ignored");
+			errors->Warning(1, 1, "Illegal byte order mark at start of file ignored");
 			buffer->SetPos(0);
 		}
 	} else {
@@ -596,15 +529,55 @@ void Scanner::NextCh() {
 }
 
 void Scanner::AddCh() {
-	if (tlen >= tvalLength) {
+	if (tlen >= tvalLength - 3) {
 		tvalLength *= 2;
-		wchar_t *newBuf = alloc_builder.alloc<wchar_t>(tvalLength);
-		memcpy(newBuf, tval, tlen*sizeof(wchar_t));
+		char *newBuf = alloc_builder.alloc<char>(tvalLength);
+		memcpy(newBuf, tval, tlen*sizeof(char));
 		alloc_builder.free(tval);
 		tval = newBuf;
 	}
 	if (ch != Buffer::EoF) {
 -->casing2
+		if (ch <= 0x7F) {
+			// 0xxxxxxx
+			tval[tlen++] = char(ch);
+		} else if (ch <= 0x7FF) {
+			// 110xxxxx 10xxxxxx
+			unsigned high = ch >> 6;
+			unsigned low = ch & 0x3F;
+			tval[tlen++] = char(0xC0 + high);
+			tval[tlen++] = char(0x80 + low);
+		} else if (ch <= 0xFFFF) {
+			if (ch < 0xD800 || ch > 0xDFFF) {
+				// 1110xxxx 10xxxxxx 10xxxxxx
+				unsigned high = ch >> 12;
+				unsigned middle = (ch >> 6) & 0x3F;
+				unsigned low = ch & 0x3F;
+				tval[tlen++] = char(0xE0 + high);
+				tval[tlen++] = char(0x80 + middle);
+				tval[tlen++] = char(0x80 + low);
+			} else {
+				// forbidden surrogate part, replace by (U+FFFD) (or EF BF BD in UTF-8)
+				tval[tlen++] = char(0xEF);
+				tval[tlen++] = char(0xBF);
+				tval[tlen++] = char(0xBD);
+			}
+		} else if (ch <= 0x10FFFF) {
+			// 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+			unsigned high = (ch >> 18) & 0x07;
+			unsigned mh = (ch >> 12) & 0x3F;
+			unsigned ml = (ch >> 6) & 0x3F;
+			unsigned low = ch & 0x3F;
+			tval[tlen++] = char(0xF0 + high);
+			tval[tlen++] = char(0x80 + mh);
+			tval[tlen++] = char(0x80 + ml);
+			tval[tlen++] = char(0x80 + low);
+		} else {
+			// error, replace by (U+FFFD) (or EF BF BD in UTF-8)
+			tval[tlen++] = char(0xEF);
+			tval[tlen++] = char(0xBF);
+			tval[tlen++] = char(0xBD);
+		}
 		NextCh();
 	}
 }
@@ -616,9 +589,9 @@ Token* Scanner::CreateToken() {
 }
 
 void Scanner::AppendVal(Token *t) {
-	wchar_t *val = arena_builder.alloc<wchar_t>(tlen + 1);
+	char *val = arena_builder.alloc<char>(tlen + 1);
 
-	wcsncpy(val, tval, tlen);
+	strncpy(val, tval, tlen);
 	val[tlen] = L'\0';
 	t->val = val;
 }

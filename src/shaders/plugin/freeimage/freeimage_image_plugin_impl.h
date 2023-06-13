@@ -101,9 +101,11 @@ public:
 
     const char* get_supported_type( mi::Uint32 index) const;
 
-    bool test( const mi::Uint8* buffer, mi::Uint32 file_size) const;
-
     mi::neuraylib::Impexp_priority get_priority() const;
+
+    bool supports_selectors() const { return false; }
+
+    bool test( mi::neuraylib::IReader* reader) const;
 
     mi::neuraylib::IImage_file* open_for_writing(
         mi::neuraylib::IWriter* writer,
@@ -116,7 +118,8 @@ public:
         mi::Float32 gamma,
         mi::Uint32 quality) const;
 
-    mi::neuraylib::IImage_file* open_for_reading( mi::neuraylib::IReader* reader) const;
+    mi::neuraylib::IImage_file* open_for_reading(
+        mi::neuraylib::IReader* reader, const char* selector) const;
 
 private:
 

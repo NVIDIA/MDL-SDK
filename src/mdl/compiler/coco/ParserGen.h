@@ -61,8 +61,8 @@ public:
 	Symbol *curSy;    // symbol whose production is currently generated
 	FILE* fram;       // parser frame file
 	FILE* gen; // generated parser source file
-	wchar_t* err; // generated parser error messages
-	ArrayList *symSet;
+	char* err; // generated parser error messages
+	ArrayList symSet;
 
 	Tab *tab;         // other Coco objects
 	FILE* trace;
@@ -71,22 +71,22 @@ public:
 
 	void Indent(int n);
 	bool UseSwitch(Node *p);
-	void CopyFramePart(const wchar_t* stop);
+	void CopyFramePart(const char *stop);
 	void CopySourcePart(Position *pos, int indent);
-	int GenNamespaceOpen(const wchar_t* nsName);
+	int GenNamespaceOpen(const char* nsName);
 	void GenNamespaceClose(int nrOfNs);
 	void GenErrorMsg(ErrorType errTyp, Symbol *sym);
 	int  NewCondSet(const BitArray *s);
 	void GenCond(const BitArray *s, Node *p);
 	void PutCaseLabels(const BitArray *s);
-	void GenCode(Node *p, int indent, BitArray *isChecked);
+	void GenCode(Node *p, int indent, BitArray &isChecked);
 	void GenTokensHeader();
 	void GenPragmas();
 	void GenCodePragmas();
 	void GenProductions();
 	void GenProductionsHeader();
 	void InitSets();
-	void OpenGen(const wchar_t* genName, bool backUp);
+	void OpenGen(const char *genName, bool backUp);
 	void WriteParser();
 	void WriteStatistics();
 	void WriteSymbolOrCode(FILE *gen, const Symbol *sym);

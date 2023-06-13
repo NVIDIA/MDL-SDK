@@ -156,11 +156,13 @@ namespace multiscatter
         if (data->xi.w <= w) {
 
             // incorporate multi-scatter part to pdf
-            data->pdf *= rho1;
+            if (BSDF::calc_pdf_in_sample()) {
+                data->pdf *= rho1;
 
-            // currently, no transmission
-            if(data->event_type != BSDF_EVENT_GLOSSY_TRANSMISSION)
-                data->pdf += (1.0f - rho1) * (float)(1.0 / M_PI);
+                // currently, no transmission
+                if(data->event_type != BSDF_EVENT_GLOSSY_TRANSMISSION)
+                    data->pdf += (1.0f - rho1) * (float)(1.0 / M_PI) + math::dot(data->k2, g.n.shading_normal);
+            }
 
             data->bsdf_over_pdf *= tint / w;
             return -1.0f;
@@ -193,7 +195,7 @@ namespace multiscatter
             const float nrm =
                 state->tex_lookup_float3_3d(texture_id, coord, 0, 0, 0, clamp, clamp, clamp, 0.0f).x;
 
-            w = (1.0f - rho2) / nrm * (float)M_PI;
+            w = (1.0f - rho2) / nrm * (float)M_PI * nk2;
 
             data->bsdf_over_pdf = multiscatter_tint * make<float3>(w);
             return rho1; // for updating the pdf after recomputing the single scatter probability
@@ -205,10 +207,11 @@ namespace multiscatter
     BSDF_INLINE void sample_update_single_scatter_probability(
         BSDF_sample_data *data,
         const float pdf,  // updated pdf after sample has returned a non-negative rho1 
-        const float rho1)  // the value returned by sample
+        const float rho1, // the value returned by sample
+        const float nk2)
     {
         // incorporate multi-scatter part to pdf
-        data->pdf = rho1 * pdf + (1.0f - rho1) * (float)(1.0 / M_PI);
+        data->pdf = rho1 * pdf + (1.0f - rho1) * (float)(1.0 / M_PI) * nk2;
     }
 
     BSDF_INLINE float2 evaluate(

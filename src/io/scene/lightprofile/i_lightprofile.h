@@ -81,16 +81,19 @@ public:
     /// \param flags                 Flags to be used when interpreting the file data,
     ///                              see #mi::neuraylib::Lightprofile_flags for details.
     /// \return
-    ///                              -  0: Success.
-    ///                              - -2: Failure to resolve the given filename, e.g., the file
-    ///                                    does not exist.
-    ///                              - -3: \p degree or \p flags is invalid (exactly one of
-    ///                                    #mi::neuraylib::LIGHTPROFILE_CLOCKWISE or
-    ///                                    #mi::neuraylib::LIGHTPROFILE_COUNTER_CLOCKWISE must be
-    ///                                    #set).
-    ///                              - -4: File format error.
-    ///                              - -5: \p resolution_phi or \p resolution_theta is invalid
-    ///                                    (must not be 1).
+    ///                              -   0: Success.
+    ///                              -  -3: Invalid filename extension (only \c .ies is supported).
+    ///                              -  -4: Failure to resolve the given filename, e.g., the file
+    ///                                     does not exist.
+    ///                              -  -5: Failure to open the file.
+    ///                              -  -7: File format error.
+    ///                              - -13: \p flags is invalid (exactly one of
+    ///                                     #mi::neuraylib::LIGHTPROFILE_CLOCKWISE or
+    ///                                     #mi::neuraylib::LIGHTPROFILE_COUNTER_CLOCKWISE must be
+    ///                                     set).
+    ///                              - -14: \p degree is invalid.
+    ///                              - -15: \p resolution_phi or \p resolution_theta is invalid
+    ///                                     (must not be 1).
     mi::Sint32 reset_file(
         DB::Transaction* transaction,
         const std::string& original_filename,
@@ -108,7 +111,16 @@ public:
     /// \param resolution_theta      See #reset_file().
     /// \param degree                See #reset_file().
     /// \param flags                 See #reset_file().
-    /// \return                      See #reset_file() (-2 not possible here).
+    /// \return
+    ///                              -   0: Success.
+    ///                              -  -7: File format error.
+    ///                              - -13: \p flags is invalid (exactly one of
+    ///                                     #mi::neuraylib::LIGHTPROFILE_CLOCKWISE or
+    ///                                     #mi::neuraylib::LIGHTPROFILE_COUNTER_CLOCKWISE must be
+    ///                                     set).
+    ///                              - -14: \p degree is invalid.
+    ///                              - -15: \p resolution_phi or \p resolution_theta is invalid
+    ///                                     (must not be 1).
     mi::Sint32 reset_reader(
         DB::Transaction* transaction,
         mi::neuraylib::IReader* reader,
@@ -117,7 +129,7 @@ public:
         mi::neuraylib::Lightprofile_degree degree = mi::neuraylib::LIGHTPROFILE_HERMITE_BASE_1,
         mi::Uint32 flags = mi::neuraylib::LIGHTPROFILE_COUNTER_CLOCKWISE);
 
-    /// Imports a light profile from an container (used by MDL integration).
+    /// Imports a light profile from a reader (used by MDL integration).
     ///
     /// \param transaction             The DB transaction to be used (to create the implementation
     ///                                class in the DB).
@@ -127,14 +139,14 @@ public:
     ///                                based light profiles).
     /// \param container_membername    The relative filename of the light profile in the container
     ///                                (for container-based light profiles).
-    /// \param impl_hash               Hash of the data in the implementation class. Use {0,0,0,0} if
-    ///                                hash is not known.
+    /// \param impl_hash               Hash of the data in the implementation class. Use {0,0,0,0}
+    ///                                if hash is not known.
     /// \param mdl_file_path           The MDL file path.
-    /// \param resolution_phi          See #reset_file().
-    /// \param resolution_theta        See #reset_file().
-    /// \param degree                  See #reset_file().
-    /// \param flags                   See #reset_file().
-    /// \return                        See #reset_file() (-2 not possible here).
+    /// \param resolution_phi          See #reset_reader().
+    /// \param resolution_theta        See #reset_reader().
+    /// \param degree                  See #reset_reader().
+    /// \param flags                   See #reset_reader().
+    /// \return                        See #reset_reader().
     mi::Sint32 reset_mdl(
         DB::Transaction* transaction,
         mi::neuraylib::IReader* reader,
@@ -463,9 +475,14 @@ mi::neuraylib::IBuffer* create_buffer_from_lightprofile(
 ///                              hash is not known.
 /// \param shared_proxy          Indicates whether a possibly already existing proxy DB element for
 ///                              that resource should simply be reused (the decision is based on
-///                              \c container_filename and \c container_membername, not on
-///                              \c impl_hash). Otherwise, an independent proxy DB element is
-///                              created, even if the resource has already been loaded.
+///                              \p filename, \c container_filename and \c container_membername, not
+///                              on \c impl_hash which is relevant for the impl class). Otherwise,
+///                              an independent proxy DB element is created, even if the resource
+///                              has already been loaded.
+/// \param[out] result
+///                              -  0: Success.
+///                              - -1: Invalid parameters (\c NULL pointer).
+///                              - -7: Invalid file format.
 /// \return                      The tag of that light profile (invalid in case of failures).
 DB::Tag load_mdl_lightprofile(
     DB::Transaction* transaction,
@@ -475,7 +492,8 @@ DB::Tag load_mdl_lightprofile(
     const std::string& container_membername,
     const std::string& mdl_file_path,
     const mi::base::Uuid& impl_hash,
-    bool shared_proxy);
+    bool shared_proxy,
+    mi::Sint32& result);
 
 } // namespace LIGHTPROFILE
 

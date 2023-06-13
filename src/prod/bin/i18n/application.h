@@ -110,7 +110,7 @@ namespace i18n
         const std::string & name() { return m_name; }
 
         /// Utility routines for logging messages
-        /// This can be disbaled using option quiet mode
+        /// This can be disabled using option quiet mode
         void report(const std::string & msg) const;
     };
 

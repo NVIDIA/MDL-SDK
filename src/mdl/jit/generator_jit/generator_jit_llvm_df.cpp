@@ -47,6 +47,7 @@
 #include "generator_jit.h"
 #include "generator_jit_llvm.h"
 
+#define DEBUG_TYPE "df_instantiation"
 
 namespace mi {
 namespace mdl {
@@ -757,7 +758,9 @@ public:
     }
 
     /// Get the BSDF function for the given state.
-    llvm::Function *get_df_function(LLVM_code_generator::Distribution_function_state state)
+    llvm::Function *get_df_function(
+        Function_context                                 &caller_ctx,
+        LLVM_code_generator::Distribution_function_state state)
     {
         // no components registered -> black_bsdf()
         if (m_component_dfs.empty()) {
@@ -807,7 +810,7 @@ public:
 
         llvm::SmallVector<llvm::Function *, 8> comp_funcs;
         for (DAG_node const *node : m_component_dfs) {
-            comp_funcs.push_back(m_code_gen.instantiate_df(node));
+            comp_funcs.push_back(m_code_gen.instantiate_df(caller_ctx, node));
         }
 
         m_code_gen.m_dist_func_state = old_state;
@@ -847,7 +850,7 @@ public:
             llvm::GlobalValue::InternalLinkage,
             "switch_func",
             m_code_gen.get_llvm_module());
-        m_code_gen.set_llvm_function_attributes(switch_func);
+        m_code_gen.set_llvm_function_attributes(switch_func, /*mark_noinline=*/false);
 
         llvm::BasicBlock *start_block =
             llvm::BasicBlock::Create(llvm_context, "start", switch_func);
@@ -1594,6 +1597,8 @@ llvm::Function *LLVM_code_generator::get_libbsdf_function(
     switch (sema) {
     SEMA_CASE(DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF,
                 "diffuse_reflection_bsdf")
+    SEMA_CASE(DS_INTRINSIC_DF_DUSTY_DIFFUSE_REFLECTION_BSDF,
+                "dusty_diffuse_reflection_bsdf")
     SEMA_CASE(DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF,
                 "diffuse_transmission_bsdf")
     SEMA_CASE(DS_INTRINSIC_DF_SPECULAR_BSDF,
@@ -1615,6 +1620,7 @@ llvm::Function *LLVM_code_generator::get_libbsdf_function(
                 "spot_edf")
 
     // Unsupported: DS_INTRINSIC_DF_ANISOTROPIC_VDF
+    // Unsupported: DS_INTRINSIC_DF_FOG_VDF
 
     SEMA_CASE(DS_INTRINSIC_DF_NORMALIZED_MIX,
                 "normalized_mix" + suffix)
@@ -2520,7 +2526,7 @@ bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
                         llvm::GlobalValue::InternalLinkage,
                         "",
                         m_module);
-                    set_llvm_function_attributes(new_func);
+                    set_llvm_function_attributes(new_func, /*mark_noinline=*/false);
                     new_func->takeName(func);
                     new_func->getBasicBlockList().splice(
                         new_func->begin(), func->getBasicBlockList());
@@ -2578,10 +2584,19 @@ bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
                         llvm::GlobalValue::InternalLinkage,
                         "",
                         m_module);
-                    set_llvm_function_attributes(new_func);
+                    set_llvm_function_attributes(new_func, /*mark_noinline=*/false);
                     new_func->setName("gen_" + func->getName());
                     new_func->getBasicBlockList().splice(
                         new_func->begin(), old_func->getBasicBlockList());
+
+                    // the exec_ctx parameter (or state parameter if lambda results are not
+                    // supported) does not alias and is not captured
+                    new_func->addParamAttr(1, llvm::Attribute::NoAlias);
+                    new_func->addParamAttr(1, llvm::Attribute::NoCapture);
+
+                    // the inherited normal does not alias and is not captured
+                    new_func->addParamAttr(2, llvm::Attribute::NoAlias);
+                    new_func->addParamAttr(2, llvm::Attribute::NoCapture);
 
                     m_libbsdf_template_funcs.push_back(new_func);
 
@@ -3251,7 +3266,7 @@ void LLVM_code_generator::rewrite_df_component_usages(
                         "bsdfs in bsdf_component currently don't support is_black()");
 
                     Distribution_function_state call_state = get_dist_func_state_from_call(call);
-                    llvm::Function *df_func = comp_info.get_df_function(call_state);
+                    llvm::Function *df_func = comp_info.get_df_function(ctx, call_state);
 
                     // convert 64-bit index to 32-bit index
                     llvm::Value *idx_val = component_idx_val;
@@ -3563,10 +3578,6 @@ DAG_node const *LLVM_code_generator::get_factor_base_bsdf(DAG_node const *node)
 
     // return the base BSDF for factor BSDFs
     switch (call->get_semantic()) {
-
-    case IDefinition::DS_INTRINSIC_DF_THIN_FILM:
-        // FIXME: we cannot factor out new then_film handling yet
-        return NULL;
     case IDefinition::DS_INTRINSIC_DF_TINT:
     case IDefinition::DS_INTRINSIC_DF_DIRECTIONAL_FACTOR:
     case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR:
@@ -3610,8 +3621,45 @@ DAG_node const *LLVM_code_generator::matches_factor_pattern(
 
 /// Recursively instantiate a ternary operator of type BSDF.
 llvm::Function *LLVM_code_generator::instantiate_ternary_df(
+    Function_context &caller_ctx,
     DAG_call const *dag_call)
 {
+    // Optimize thin_film special case:
+    //      cond ? thin_film(ior, thickness, base) : base
+    //   -> thin_film(ior, cond ? thickness : 0, base)
+    //
+    //      cond ? base : thin_film(ior, thickness, base)
+    //   -> thin_film(ior, cond ? 0 : thickness, base)
+    if (dag_call->get_semantic() == operator_to_semantic(IExpression::OK_TERNARY) &&
+        dag_call->get_type()->get_kind() == IType::TK_BSDF) {
+        DAG_call const *true_node  = as<DAG_call>(dag_call->get_argument(1));
+        DAG_call const *false_node = as<DAG_call>(dag_call->get_argument(2));
+        if (true_node && false_node) {
+            if (true_node->get_semantic() == IDefinition::DS_INTRINSIC_DF_THIN_FILM) {
+                DAG_node const *base = true_node->get_argument("base");
+                if (false_node == base) {
+                    return instantiate_df(
+                        caller_ctx,
+                        true_node,
+                        Instantiate_opt_context::opt_ternary_thin_film(
+                            dag_call->get_argument(0),
+                            /*thin_film_if_true=*/ true));
+                }
+            }
+            if (false_node->get_semantic() == IDefinition::DS_INTRINSIC_DF_THIN_FILM) {
+                DAG_node const *base = true_node->get_argument("base");
+                if (true_node == base) {
+                    return instantiate_df(
+                        caller_ctx,
+                        false_node,
+                        Instantiate_opt_context::opt_ternary_thin_film(
+                            dag_call->get_argument(0),
+                            /*thin_film_if_true=*/ false));
+                }
+            }
+        }
+    }
+
     // Create a new function with the type for current distribution function state
     IType::Kind kind = dag_call->get_type()->get_kind();
     llvm::FunctionType *func_type;
@@ -3662,7 +3710,7 @@ llvm::Function *LLVM_code_generator::instantiate_ternary_df(
         llvm::GlobalValue::InternalLinkage,
         operator_name,
         m_module);
-    set_llvm_function_attributes(func);
+    set_llvm_function_attributes(func, /*mark_noinline=*/false);
 
     {
         // Context needs a non-empty start block, so create a jump to a second block
@@ -3754,7 +3802,7 @@ llvm::Function *LLVM_code_generator::instantiate_ternary_df(
                     inherited_normal,
                     NULL,
                     true_term,
-                    /*skip_bsdf_call=*/ true);
+                    Instantiate_opt_context::skip_bsdf_call_ctx());
             }
 
             // handle false_bsdf, if it is a factor BSDF
@@ -3767,7 +3815,7 @@ llvm::Function *LLVM_code_generator::instantiate_ternary_df(
                     inherited_normal,
                     NULL,
                     false_term,
-                    /*skip_bsdf_call=*/ true);
+                    Instantiate_opt_context::skip_bsdf_call_ctx());
             }
         }
         // for evaluate with factor pattern, execute evaluate on common node after the if
@@ -3793,7 +3841,7 @@ llvm::Function *LLVM_code_generator::instantiate_ternary_df(
                     inherited_normal,
                     NULL,
                     true_term,
-                    /*skip_bsdf_call=*/ true);
+                    Instantiate_opt_context::skip_bsdf_call_ctx());
 
                 // true_inherited_weight_val = factor_val * inherited_weight_val
                 ctx->SetInsertPoint(true_term);
@@ -3821,7 +3869,7 @@ llvm::Function *LLVM_code_generator::instantiate_ternary_df(
                     inherited_normal,
                     NULL,
                     false_term,
-                    /*skip_bsdf_call=*/ true);
+                    Instantiate_opt_context::skip_bsdf_call_ctx());
 
                 // false_inherited_weight_val = factor_val * inherited_weight_val
                 ctx->SetInsertPoint(false_term);
@@ -3935,7 +3983,7 @@ bool LLVM_code_generator::is_default_diffuse_reflection(DAG_node const *node)
 }
 
 // Instantiate a DF from the given DAG node and call the resulting function.
-llvm::Value *LLVM_code_generator::instantiate_and_call_df(
+llvm::CallInst *LLVM_code_generator::instantiate_and_call_df(
     Function_context            &ctx,
     DAG_node const              *node,
     Distribution_function_state df_state,
@@ -3943,23 +3991,23 @@ llvm::Value *LLVM_code_generator::instantiate_and_call_df(
     llvm::Value                 *inherited_normal,
     llvm::Value                 *opt_inherited_weight,
     llvm::Instruction           *insertBefore,
-    bool                        skip_bsdf_call)
+    Instantiate_opt_context     opt_ctx)
 {
     Distribution_function_state old_state = m_dist_func_state;
     m_dist_func_state = df_state;
 
-    llvm::Function *param_bsdf_func = instantiate_df(node, skip_bsdf_call);
+    llvm::Function *param_bsdf_func = instantiate_df(ctx, node, opt_ctx);
 
     // call it with state parameters added
     llvm::SmallVector<llvm::Value *, 4> llvm_args;
     llvm_args.push_back(res_pointer);
     llvm_args.push_back(ctx.has_exec_ctx_parameter()
         ? ctx.get_exec_ctx_parameter() : ctx.get_state_parameter());
-    llvm_args.push_back(inherited_normal);  // inherited_normal
+    llvm_args.push_back(inherited_normal);
     if (df_state == DFSTATE_EVALUATE || df_state == DFSTATE_AUXILIARY) {
         llvm_args.push_back(opt_inherited_weight);
     }
-    llvm::Value *call = llvm::CallInst::Create(param_bsdf_func, llvm_args, "", insertBefore);
+    llvm::CallInst *call = llvm::CallInst::Create(param_bsdf_func, llvm_args, "", insertBefore);
 
     m_dist_func_state = old_state;
 
@@ -3969,8 +4017,9 @@ llvm::Value *LLVM_code_generator::instantiate_and_call_df(
 // Recursively instantiate a BSDF specified by the given DAG node from code in the BSDF library
 // according to the current distribution function state.
 llvm::Function *LLVM_code_generator::instantiate_df(
-    DAG_node const *node,
-    bool           skip_bsdf_call)
+    Function_context        &caller_ctx,
+    DAG_node const          *node,
+    Instantiate_opt_context opt_ctx)
 {
     // handle ugly thin_film semantic
     DAG_call const *thin_film_node = NULL;
@@ -3978,7 +4027,7 @@ llvm::Function *LLVM_code_generator::instantiate_df(
     DAG_node const *arg            = NULL;
     llvm::Function *df_lib_func    = NULL;
 
-    while (inner != NULL && inner->get_semantic() == IDefinition::DS_INTRINSIC_DF_THIN_FILM) {
+    while (inner !=  NULL && inner->get_semantic() == IDefinition::DS_INTRINSIC_DF_THIN_FILM) {
         thin_film_node = inner;
         arg            = thin_film_node->get_argument(2);
         inner          = cast<DAG_call>(arg);
@@ -4053,25 +4102,37 @@ llvm::Function *LLVM_code_generator::instantiate_df(
         return NULL;
     }
 
+    llvm::OptimizationRemarkEmitter ORE(caller_ctx.get_function());
+
     DAG_call const *dag_call =
         cast<DAG_call>(thin_film_node != NULL ? thin_film_node->get_argument(2) : node);
 
-    // check if we always created code for this node and state
+    // check if we already created code for this node and state
     Instantiated_df instantiated_df(
         thin_film_node != NULL ? cast<DAG_call>(thin_film_node) : dag_call,
-        skip_bsdf_call);
+        opt_ctx);
 
     Instantiated_dfs::const_iterator it =
         m_instantiated_dfs[m_dist_func_state].find(instantiated_df);
     if (it != m_instantiated_dfs[m_dist_func_state].end()) {
+        ORE.emit([&]() {
+            return llvm::OptimizationRemark(DEBUG_TYPE, "NoInstNeeded", it->second)
+                << "BSDF " << dag_call->get_name() << " already instantiated: "
+                << it->second->getName();
+        });
         return it->second;
     }
 
     IDefinition::Semantics sema = dag_call->get_semantic();
     if (sema == operator_to_semantic(IExpression::OK_TERNARY)) {
         // handle ternary operators
-        llvm::Function *res_func = instantiate_ternary_df(dag_call);
+        llvm::Function *res_func = instantiate_ternary_df(caller_ctx, dag_call);
         m_instantiated_dfs[m_dist_func_state][instantiated_df] = res_func;
+        ORE.emit([&]() {
+            return llvm::OptimizationRemark(DEBUG_TYPE, "Instantiation", res_func)
+                << "BSDF " << dag_call->get_name() << " instantiated: " << res_func->getName();
+        });
+
         return res_func;
     }
 
@@ -4112,6 +4173,14 @@ llvm::Function *LLVM_code_generator::instantiate_df(
     llvm::ValueToValueMapTy ValueMap;
     llvm::Function *bsdf_func = llvm::CloneFunction(df_lib_func, ValueMap);
     add_generated_attributes(bsdf_func);
+    if (m_enable_noinline && !is_always_inline_enabled()) {
+        bsdf_func->addFnAttr(llvm::Attribute::NoInline);
+    }
+
+    ORE.emit([&]() {
+        return llvm::OptimizationRemark(DEBUG_TYPE, "Instantiation", bsdf_func)
+            << "BSDF " << dag_call->get_name() << " instantiated: " << bsdf_func->getName();
+    });
 
     Function_context ctx(
         get_allocator(),
@@ -4193,6 +4262,25 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                 }
 
                 Expression_result res = translate_call_arg(ctx, arg, elem_type);
+
+                // in "ternary operator with thin_film" optimization mode and current parameter
+                // is the coating_thickness?
+                if (opt_ctx.m_ternary_cond != NULL && param_idx == n_args) {
+                    // set thickness to 0, if condition says thin_film should be skipped
+                    Expression_result cond_res = translate_call_arg(
+                        ctx, opt_ctx.m_ternary_cond, m_type_mapper.get_bool_type());
+                    llvm::Value *cond_res_val = cond_res.as_value(ctx);
+                    if (cond_res_val->getType() != m_type_mapper.get_predicate_type()) {
+                        // map to predicate type
+                        cond_res_val = ctx->CreateICmpNE(cond_res_val, ctx.get_constant(false));
+                    }
+
+                    res = Expression_result::value(ctx->CreateSelect(
+                        cond_res_val,
+                        opt_ctx.m_thin_film_if_true ? res.as_value(ctx) : ctx.get_constant(0.f),
+                        opt_ctx.m_thin_film_if_true ? ctx.get_constant(0.f) : res.as_value(ctx)));
+                }
+
                 inst->replaceAllUsesWith(res.as_ptr(ctx));
                 continue;
             }
@@ -4312,7 +4400,7 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                                             param_true_inherited_normal,
                                             nullptr,
                                             then_term,
-                                            /*skip_bsdf_call=*/ true);
+                                            Instantiate_opt_context::skip_bsdf_call_ctx());
                                     }
 
                                     // handle false case if false_arg is a factor BSDF
@@ -4325,7 +4413,7 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                                             param_false_inherited_normal,
                                             nullptr,
                                             else_term,
-                                            /*skip_bsdf_call=*/ true);
+                                            Instantiate_opt_context::skip_bsdf_call_ctx());
                                     }
 
                                     // fix iterators
@@ -4401,7 +4489,7 @@ llvm::Function *LLVM_code_generator::instantiate_df(
                             llvm::ConstantInt::get(
                                 bool_type,
                                 is_default_diffuse_reflection(arg) ? 1 : 0));
-                    } else if (!skip_bsdf_call) {
+                    } else if (!opt_ctx.m_skip_bsdf_call) {
                         Distribution_function_state new_state;
 
                         switch (df_func_kind) {
@@ -4493,7 +4581,7 @@ llvm::Function *LLVM_code_generator::instantiate_df(
 
 
 // Translate a DAG node pointing to a DF to LLVM IR.
-Expression_result LLVM_code_generator::translate_distribution_function(
+void LLVM_code_generator::translate_distribution_function(
     Function_context                     &ctx,
     DAG_node const                       *df_node,
     llvm::SmallVector<unsigned, 8> const &lambda_result_exprs,
@@ -4534,14 +4622,17 @@ Expression_result LLVM_code_generator::translate_distribution_function(
     }
 
     // get the current normal
-    IDefinition const *def = m_compiler->find_stdlib_signature("::state", "normal()");
-    llvm::Function *func = get_intrinsic_function(def, /*return_derivs=*/ false);
-    llvm::Value *args[] = { ctx.get_state_parameter() };
-    llvm::Value *normal = call_rt_func(ctx, func, args);
+    llvm::Value *normal_buf;
+    {
+        IDefinition const *def = m_compiler->find_stdlib_signature("::state", "normal()");
+        llvm::Function *func = get_intrinsic_function(def, /*return_derivs=*/ false);
+        llvm::Value *args[] = { ctx.get_state_parameter() };
+        llvm::Value *normal = call_rt_func(ctx, func, args);
 
-    // convert to type used in libbsdf
-    llvm::Value *normal_buf = ctx.create_local(m_float3_struct_type, "normal_buf");
-    ctx.convert_and_store(normal, normal_buf);
+        // convert to type used in libbsdf
+        normal_buf = ctx.create_local(m_float3_struct_type, "normal_buf");
+        ctx.convert_and_store(normal, normal_buf);
+    }
 
     // initialize evaluate and auxiliary data
     mi::mdl::IType::Kind df_kind = df_node->get_type()->get_kind();
@@ -4725,15 +4816,16 @@ Expression_result LLVM_code_generator::translate_distribution_function(
             ctx.create_simple_gep_in_bounds(exec_ctx, 4u));
     }
     // recursively instantiate the DF
-    llvm::Function *df_func = instantiate_df(df_node);
+    llvm::Function *df_func = instantiate_df(ctx, df_node);
     if (df_func == NULL) {
         MDL_ASSERT(!"BSDF instantiation failed");
-        return Expression_result::undef(lookup_type(df_node->get_type()));
+        return;
     }
 
     // call the instantiated distribution function
+    llvm::Value *result_pointer = ctx.get_function()->arg_begin();
     llvm::SmallVector<llvm::Value *, 4> df_args;
-    df_args.push_back(ctx.get_function()->arg_begin());  // result pointer
+    df_args.push_back(result_pointer);
     df_args.push_back(exec_ctx ? exec_ctx : ctx.get_state_parameter());
     df_args.push_back(normal_buf);
     if (m_dist_func_state == DFSTATE_EVALUATE || m_dist_func_state == DFSTATE_AUXILIARY) {
@@ -4743,7 +4835,51 @@ Expression_result LLVM_code_generator::translate_distribution_function(
         ctx->CreateStore(llvm::ConstantStruct::get(m_float3_struct_type, elems), weight_buf);
         df_args.push_back(weight_buf);
     }
-    llvm::CallInst *callinst = ctx->CreateCall(df_func, df_args);
+    ctx->CreateCall(df_func, df_args);
+
+    // at the end of the sample function, call the pdf function to calculate the pdf result
+    if (m_dist_func_state == DFSTATE_SAMPLE) {
+        bool is_edf = df_kind == mi::mdl::IType::TK_EDF;
+        llvm::Value *pdf_data = ctx.create_local(
+            is_edf ? m_type_edf_pdf_data : m_type_bsdf_pdf_data, "pdf_data");
+        llvm::Value *sample_data = result_pointer;
+
+        // copy over the values from the sample data to a pdf data struct
+        if (is_edf) {
+            // only k1 needs to be copied
+            llvm::Value *k1_val =
+                ctx->CreateLoad(ctx->CreateStructGEP(sample_data, 1));
+            ctx->CreateStore(k1_val, ctx->CreateStructGEP(pdf_data, 0));
+        } else {
+            // copy first 4 struct fields
+            for (unsigned i = 0; i < 4; ++i) {
+                llvm::Value *data =
+                    ctx->CreateLoad(ctx->CreateStructGEP(sample_data, i));
+                ctx->CreateStore(data, ctx->CreateStructGEP(pdf_data, i));
+            }
+        }
+
+        // instantiate pdf function
+        Distribution_function_state old_state = m_dist_func_state;
+        m_dist_func_state = DFSTATE_PDF;
+        llvm::Function *param_bsdf_func = instantiate_df(ctx, df_node);
+        m_dist_func_state = old_state;
+
+        // call it
+        llvm::SmallVector<llvm::Value *, 4> llvm_args;
+        llvm_args.push_back(pdf_data);
+        llvm_args.push_back(exec_ctx ? exec_ctx : ctx.get_state_parameter());
+        llvm_args.push_back(normal_buf);  // inherited_normal
+        llvm::CallInst *pdf_call = llvm::CallInst::Create(param_bsdf_func, llvm_args);
+
+        ctx->Insert(pdf_call);
+
+        // write pdf value from pdf data to sample data
+        llvm::Value *pdf_val = ctx->CreateLoad(
+            ctx->CreateStructGEP(pdf_data, is_edf ? 1 : 4));
+        ctx->CreateStore(
+            pdf_val, ctx->CreateStructGEP(sample_data, is_edf ? 2 : 5));
+    }
 
     if ((df_kind == mi::mdl::IType::TK_BSDF || df_kind == mi::mdl::IType::TK_HAIR_BSDF) &&
         m_dist_func_state == DFSTATE_AUXILIARY)
@@ -4783,7 +4919,7 @@ Expression_result LLVM_code_generator::translate_distribution_function(
 
             ctx->SetInsertPoint(if_non_zero_block_end);
 
-            return Expression_result::value(callinst);
+            return;
         }
 
         // number of elements in the buffer/array
@@ -4852,7 +4988,6 @@ Expression_result LLVM_code_generator::translate_distribution_function(
         ctx->CreateCondBr(cond, loop_block, loop_block_end);
         ctx->SetInsertPoint(loop_block_end);
     }
-    return Expression_result::value(callinst);
 }
 
 // Translate the init function of a distribution function to LLVM IR.

@@ -4282,6 +4282,18 @@ int Module::promote_call_arguments(
             return param_index + 1;
         }
     }
+    if (rules & PR_IN_GROUP_ADD_COLAPSED) {
+        if (param_index == call->get_argument_count() - 1) {
+            // add false as additional argument
+            IValue_bool const *v = m_value_factory.create_bool(false);
+            IExpression const *e = m_expr_factory.create_literal(v);
+
+            IArgument const *narg = m_expr_factory.create_positional_argument(e);
+            call->add_argument(narg);
+            return param_index + 1;
+        }
+    }
+
     return param_index;
 }
 

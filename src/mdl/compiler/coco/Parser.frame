@@ -66,7 +66,7 @@ public:
 
 	Parser(Scanner *scanner);
 	~Parser();
-	void SemErr(const wchar_t* msg);
+	void SemErr(const char* msg);
 
 -->productionsheader
 	void Parse();
@@ -97,7 +97,7 @@ void Parser::SynErr(int n) {
 	errDist = 0;
 }
 
-void Parser::SemErr(const wchar_t* msg) {
+void Parser::SemErr(const char* msg) {
 	if (errDist >= minErrDist) errors->Error(t->line, t->col, msg);
 	errDist = 0;
 }
@@ -240,7 +240,7 @@ struct ParserDestroyCaller<T, true> {
 void Parser::Parse() {
 	t = NULL;
 	la = dummyToken = new Token();
-	la->val = coco_string_create(L"Dummy Token");
+	la->val = coco_string_create("Dummy Token");
 	Get();
 -->parseRoot
 }
@@ -278,33 +278,33 @@ Errors::Errors() {
 }
 
 void Errors::SynErr(int line, int col, int n) {
-	wchar_t format[20];
-	const wchar_t* s = format;
+	char format[20];
+	char const *s = format;
 	switch (n) {
 -->errors
 		default:
-			coco_swprintf(format, 20, L"error %d", n);
+			coco_snprintf(format, sizeof(format), "error %d", n);
 			break;
 	}
-	wprintf(L"%ls(%d,%d): %ls\n", srcName == NULL ? L"<unknown>" : srcName, line, col, s);
+	printf("%s(%d,%d): %s\n", srcName == NULL ? "<unknown>" : srcName, line, col, s);
 	count++;
 }
 
-void Errors::Error(int line, int col, const wchar_t *s) {
-	wprintf(L"%ls(%d,%d): %ls\n", srcName == NULL ? L"<unknown>" : srcName, line, col, s);
+void Errors::Error(int line, int col, const char *s) {
+	printf("%s(%d,%d): %s\n", srcName == NULL ? "<unknown>" : srcName, line, col, s);
 	count++;
 }
 
-void Errors::Warning(int line, int col, const wchar_t *s) {
-	wprintf(L"%ls(%d,%d): %ls\n", srcName == NULL ? L"<unknown>" : srcName, line, col, s);
+void Errors::Warning(int line, int col, const char *s) {
+	printf("%s(%d,%d): %s\n", srcName == NULL ? "<unknown>" : srcName, line, col, s);
 }
 
-void Errors::Warning(const wchar_t *s) {
-	wprintf(L"%ls\n", s);
+void Errors::Warning(const char *s) {
+	printf("%s\n", s);
 }
 
-void Errors::Exception(const wchar_t* s) {
-	wprintf(L"%ls", s); 
+void Errors::Exception(const char *s) {
+	printf("%s", s);
 	exit(1);
 }
 

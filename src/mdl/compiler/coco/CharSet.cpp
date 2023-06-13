@@ -29,16 +29,19 @@ Coco/R itself) does not fall under the GNU General Public License.
 #include <memory.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <wchar.h>
 #include "CharSet.h"
 #include "Scanner.h"
 
 namespace Coco {
 
 bool CharSet::Get(int i) const {
-	for (CharSet::Range *p = head; p != NULL; p = p->next)
-		if (i < p->from) return false;
-		else if (i <= p->to) return true; // p.from <= i <= p.to
+	for (CharSet::Range *p = head; p != NULL; p = p->next) {
+		if (i < p->from) {
+			return false;
+		} else if (i <= p->to) {
+			return true; // p.from <= i <= p.to
+		}
+	}
 	return false;
 }
 
@@ -62,7 +65,11 @@ void CharSet::Set(int i) {
 	}
 	Range *n = new Range(i, i);
 	n->next = cur;
-	if (prev == NULL) head = n; else prev->next = n;
+	if (prev == NULL) {
+		head = n;
+	} else {
+		prev->next = n;
+	}
 }
 
 CharSet* CharSet::Clone() const {
@@ -70,7 +77,11 @@ CharSet* CharSet::Clone() const {
 	Range *prev = NULL;
 	for (Range *cur = head; cur != NULL; cur = cur->next) {
 		Range *r = new Range(cur->from, cur->to);
-		if (prev == NULL) s->head = r; else prev->next = r;
+		if (prev == NULL) {
+			s->head = r;
+		} else {
+			prev->next = r;
+		}
 		prev = r;
 	}
 	return s;
@@ -79,7 +90,9 @@ CharSet* CharSet::Clone() const {
 bool CharSet::Equals(CharSet *s) const {
 	Range *p = head, *q = s->head;
 	while (p != NULL && q != NULL) {
-		if (p->from != q->from || p->to != q->to) return false;
+		if (p->from != q->from || p->to != q->to) {
+			return false;
+		}
 		p = p->next; q = q->next;
 	}
 	return p == q;
@@ -87,7 +100,9 @@ bool CharSet::Equals(CharSet *s) const {
 
 int CharSet::Elements() const {
 	int n = 0;
-	for (Range *p = head; p != NULL; p = p->next) n += p->to - p->from + 1;
+	for (Range *p = head; p != NULL; p = p->next) {
+		n += p->to - p->from + 1;
+	}
 	return n;
 }
 
@@ -120,8 +135,11 @@ void CharSet::Subtract(CharSet *s) {
 	CharSet *x = new CharSet();
 	Range *p = head;
 	while (p != NULL) {
-		for (int i = p->from; i <= p->to; i++)
-			if (!s->Get(i)) x->Set(i);
+		for (int i = p->from; i <= p->to; ++i) {
+			if (!s->Get(i)) {
+				x->Set(i);
+			}
+		}
 		Range *del = p;
 		p = p->next;
 		delete del;
@@ -133,15 +151,21 @@ void CharSet::Subtract(CharSet *s) {
 
 bool CharSet::Includes(CharSet *s) const {
 	for (Range *p = s->head; p != NULL; p = p->next)
-		for (int i = p->from; i <= p->to; i++)
-			if (!Get(i)) return false;
+		for (int i = p->from; i <= p->to; ++i) {
+			if (!Get(i)) {
+				return false;
+			}
+		}
 	return true;
 }
 
 bool CharSet::Intersects(CharSet *s) const {
 	for (Range *p = s->head; p != NULL; p = p->next)
-		for (int i = p->from; i <= p->to; i++)
-			if (Get(i)) return true;
+		for (int i = p->from; i <= p->to; ++i) {
+			if (Get(i)) {
+				return true;
+			}
+		}
 	return false;
 }
 
@@ -155,7 +179,7 @@ void CharSet::Clear() {
 
 void CharSet::Fill() {
 	Clear();
-	head = new Range(0, COCO_WCHAR_MAX);
+	head = new Range(0, COCO_UNICODE_MAX);
 }
 
 CharSet::~CharSet() {

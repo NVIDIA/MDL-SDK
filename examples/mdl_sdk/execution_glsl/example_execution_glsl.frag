@@ -40,7 +40,7 @@ uniform float animation_time;
 // Mapping from material index to start index in material_texture_samplers_2d.
 uniform int material_texture_starts[MAX_MATERIALS];
 
-// Array containg all 2D texture samplers of all used materials.
+// Array containing all 2D texture samplers of all used materials.
 uniform sampler2D material_texture_samplers_2d[MAX_TEXTURES];
 
 

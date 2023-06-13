@@ -3,4 +3,4 @@
 		<None Include="..\..\..\mdl\compiler\coco\Copyright.frame" />
 		<None Include="..\..\..\mdl\compiler\coco\Parser.frame" />
 		<None Include="..\..\..\mdl\compiler\coco\Scanner.frame" />
-	</ItemGroup>
+</ItemGroup>

@@ -113,9 +113,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// samplers used for mdl texture lookups
         static std::vector<D3D12_STATIC_SAMPLER_DESC> get_sampler_descriptions();
 
-        /// get the id of the target code that contains this material.
-        /// can be used with the material library for instance.
-        size_t get_target_code_id() const override;
+        /// get the identifier of the target code for this material.
+        virtual const std::string& get_hash() const {
+            return get_target_code()->get_compiled_material_hash(); }
 
         /// register scene data names that appear on the geometry data at the material for
         /// making them accessible in the shader.

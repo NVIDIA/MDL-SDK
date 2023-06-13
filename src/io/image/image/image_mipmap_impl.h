@@ -49,16 +49,16 @@ namespace IMAGE {
 
 /// A simple implementation of the IMipmap interface.
 ///
-/// The canvas is either file-based (constructed from a file name), or archive-based (constructed
-/// from a reader and archive file/member name), or memory-based (constructed from parameters like
-/// pixel type, width, height, etc., or from a given canvas or reader). File-based or archive-based
-/// mipmaps load the tile data of the base level lazily when needed. Memory-based mipmaps create all
-/// tiles for the base level right in the constructor.
+/// The canvas is either file-based (constructed from a file name), or container-based (constructed
+/// from a reader and container file/member name), or memory-based (constructed from parameters like
+/// pixel type, width, height, etc., or from a given canvas or reader). File-based or
+/// container-based mipmaps load the tile data of the base level lazily when needed. Memory-based
+/// mipmaps create all tiles for the base level right in the constructor.
 ///
 /// Construction for higher-level mipmaps is done lazily, but when a certain level is requested
 /// all tiles of it are computed (and hence all tiles from the previous level are needed).
 ///
-/// File-based or archive-based mipmaps could flush unused tiles if memory gets tight (not yet
+/// File-based or container-based mipmaps could flush unused tiles if memory gets tight (not yet
 /// implemented).
 class Mipmap_impl
   : public mi::base::Interface_implement<IMipmap>,
@@ -101,42 +101,45 @@ public:
     ///                           read from the file.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
     ///                           be written. The error codes have the following meaning:
-    ///                           -  0: Success.
-    ///                           - -3: Failure to open the file.
-    ///                           - -4: No image plugin found to handle the file.
-    ///                           - -5: The image plugin failed to import the file.
+    ///                           -   0: Success.
+    ///                           -  -3: No image plugin found to handle the file.
+    ///                           -  -5: Failure to open the file.
+    ///                           -  -7: The image plugin failed to import the file.
+    ///                           - -10: Failure to apply the given selector.
     Mipmap_impl(
+        File_based,
         const std::string& filename,
         const char* selector,
         bool only_first_level,
-        mi::Sint32* errors = 0);
+        mi::Sint32* errors = nullptr);
 
     /// Constructor.
     ///
-    /// Creates an archive-based mipmap obtained from a reader.
+    /// Creates an container-based mipmap obtained from a reader.
     ///
     /// \param reader             The reader to be used to obtain the mipmap. Needs to support
     ///                           absolute access.
-    /// \param archive_filename   The resolved filename of the archive itself.
-    /// \param member_filename    The relative filename of the mipmap in the archive.
+    /// \param container_filename The resolved filename of the container itself.
+    /// \param member_filename    The relative filename of the mipmap in the container.
     /// \param selector           The selector, or \c NULL.
     /// \param only_first_level   Indicates whether only the first (or all) miplevels should be
     ///                           read from the reader.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
     ///                           be written. The error codes have the following meaning:
-    ///                           -  0: Success.
-    ///                           - -3: Invalid reader, or the reader does not support absolute
-    ///                                 access.
-    ///                           - -4: No image plugin found to handle the data.
-    ///                           - -5: The image plugin failed to import the data.
+    ///                           -   0: Success.
+    ///                           -  -1: Invalid reader.
+    ///                           -  -3: No image plugin found to handle the data.
+    ///                           -  -6: The reader does not support absolute access.
+    ///                           -  -7: The image plugin failed to import the data.
+    ///                           - -10: Failure to apply the given selector.
     Mipmap_impl(
         Container_based,
         mi::neuraylib::IReader* reader,
-        const std::string& archive_filename,
+        const std::string& container_filename,
         const std::string& member_filename,
         const char* selector,
         bool only_first_level,
-        mi::Sint32* errors = 0);
+        mi::Sint32* errors = nullptr);
 
     /// Constructor.
     ///
@@ -152,11 +155,12 @@ public:
     ///                           read from the reader.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
     ///                           be written. The error codes have the following meaning:
-    ///                           -  0: Success.
-    ///                           - -3: Invalid reader, or the reader does not support absolute
-    ///                                 access.
-    ///                           - -4: No image plugin found to handle the data.
-    ///                           - -5: The image plugin failed to import the data.
+    ///                           -   0: Success.
+    ///                           -  -1: Invalid reader.
+    ///                           -  -3: No image plugin found to handle the data.
+    ///                           -  -6: The reader does not support absolute access.
+    ///                           -  -7: The image plugin failed to import the data.
+    ///                           - -10: Failure to apply the given selector.
     Mipmap_impl(
         Memory_based,
         mi::neuraylib::IReader* reader,
@@ -164,7 +168,7 @@ public:
         const char* selector,
         const char* mdl_file_path,
         bool only_first_level,
-        mi::Sint32* errors = 0);
+        mi::Sint32* errors = nullptr);
 
     /// Constructor.
     ///

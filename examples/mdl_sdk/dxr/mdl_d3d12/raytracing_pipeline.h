@@ -42,6 +42,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
     template<typename TVertex>
     class Vertex_buffer;
     class Index_buffer;
+    class Shader_library;
 
     // --------------------------------------------------------------------------------------------
 
@@ -52,23 +53,6 @@ namespace mi { namespace examples { namespace mdl_d3d12
         // --------------------------------------------------------------------
 
     private:
-        /// helper to store added libraries
-        struct Library
-        {
-        public:
-            explicit Library(
-                const IDxcBlob* dxil_library,
-                bool owns_dxil_library,
-                const std::vector<std::string>& exported_symbols);
-
-            const IDxcBlob* m_dxil_library;
-            bool m_owns_dxil_library;
-            std::vector<std::wstring> m_exported_symbols;
-            std::vector<D3D12_EXPORT_DESC> m_exports;
-            D3D12_DXIL_LIBRARY_DESC m_desc;
-        };
-
-        // --------------------------------------------------------------------
 
         /// helper to store added hit groups
         struct Hitgroup
@@ -114,15 +98,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// Add a DXIL library to the pipeline.
         ///
         /// \param dxil_library         A library compiled using a \c Shader_compiler.
-        /// \param take_ownership       If true, the pipeline will own the library and delete it
-        ///                             when destructed.
-        /// \param exported_symbols     Exact names of functions defined in the library sources.
-        ///                             Unused ones can be omitted.
         /// \return                     True in case of success.
-        bool add_library(
-            const IDxcBlob* dxil_library,
-            bool take_ownership,
-            const std::vector<std::string>& exported_symbols);
+        bool add_library(const Shader_library& dxil_library);
 
         /// Add a hit group to the pipeline.
         ///
@@ -193,7 +170,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         size_t m_max_attribute_size_in_byte;
         size_t m_max_recursion_depth;
 
-        std::vector<Library> m_libraries;
+        std::vector<Shader_library> m_libraries;
         std::vector<Hitgroup> m_hitgroups;
         std::vector<Root_signature_association> m_signature_associations;
         std::unordered_map<std::string, Root_signature*> m_signature_map;

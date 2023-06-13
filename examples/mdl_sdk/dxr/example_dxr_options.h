@@ -51,6 +51,9 @@ namespace mi { namespace examples { namespace dxr
             , point_light_position{ 10.0f, 0.0f, 5.0f }
             , point_light_intensity{ 1.0f, 0.95f, 0.9f }
             , hdr_scale(1.0f)
+            , hdr_rotate(0.0f)
+            , background_color_enabled(false)
+            , background_color{ 0.25f, 0.5f, 0.75f }
             , firefly_clamp(true)
             , tone_mapping_burn_out(1.0f)
         {
@@ -67,6 +70,10 @@ namespace mi { namespace examples { namespace dxr
         DirectX::XMFLOAT3 point_light_intensity;
 
         float hdr_scale;
+        float hdr_rotate;
+        bool background_color_enabled;
+        DirectX::XMFLOAT3 background_color;
+
         bool firefly_clamp;
         float tone_mapping_burn_out;
     };
@@ -86,6 +93,11 @@ namespace mi { namespace examples { namespace dxr
         << "-o|--output <outputfile>  Image file to write result to (default: "
                                       << defaults.output_file << ")\n"
 
+        << "-g|--generated <path>     File path to write generated MDL (e.g. from MaterialX) to.\n"
+        << "                          If the specified path is a folder, the filename will be \n"
+        << "                          generated with names defined by the loader.\n"
+        << "                          If empty, no files are written (default: <empty>).\n"
+
         << "--res <res_x> <res_y>     Resolution (default: " << defaults.window_width
                                       << "x" << defaults.window_height << ")\n"
 
@@ -100,6 +112,7 @@ namespace mi { namespace examples { namespace dxr
                                       << (defaults.hide_gui ? "hidden" : "visible") << ")\n"
 
         << "--nocc                    Don't use class-compilation\n"
+        << "--fold_all_bool_params    Fold all boolean material parameters in class-compilation\n"
         << "--noaux                   Don't generate code for albedo and normal buffers\n"
         << "--nothreads               Disable parallel loading, e.g. of textures.\n"
 
@@ -109,6 +122,17 @@ namespace mi { namespace examples { namespace dxr
 
         << "--hdr_scale <factor>      Environment intensity scale factor\n"
         << "                          (default: " << defaults.hdr_scale << ")\n"
+
+        << "--hdr_rotate <angle>      Environment rotation in degree\n"
+        << "                          (default: " << defaults.hdr_rotate << ")\n"
+
+        << "--background <r> <g> <b>  Constant background color to replace the environment only \n"
+        << "                          if directly visible to the camera. (default: <empty>).\n"
+
+        << "--camera <px> <py> <pz> <fx> <fy> <fz>  Overrides the camera pose defined in the\n"
+        << "                                        scene as well as the computed one if the scene\n"
+        << "                                        has no camera. Parameters specify position and\n"
+        << "                                        focus point.\n"
 
         << "--mdl_path <path>         MDL search path, can occur multiple times.\n"
 
@@ -135,9 +159,20 @@ namespace mi { namespace examples { namespace dxr
         << "-l <x> <y> <z> <r> <g> <b>      Add an isotropic point light with given coordinates\n"
         << "                                and intensity (flux) (default: none)\n"
 
-        << "--mat <qualified_name>    override all materials using a qualified material name.\n"
+        << "--mat <qualified_name>    Override all materials using a qualified material name.\n"
 
-        << "--z_axis_up               flip coordinate axis while loading the scene to (x, -z, y).\n"
+        << "--z_axis_up               Flip coordinate axis while loading the scene to (x, -z, y).\n"
+
+        << "--uv_flip                 Flip texture coordinates from (u, 1-v) to (u, v).\n"
+        << "                          (u, 1-v) is default in order to work with tiled textures\n"
+
+        << "--uv_scale <x> <y>        Scale texture coordinates. (default: (1, 1)).\n"
+
+        << "--uv_offset <x> <y>       Offset the scaled texture coordinates. (default: (0, 0)).\n"
+
+        << "--uv_saturate             Clamps the texture coordinates to (0, 1). (default: false).\n"
+        
+        << "--uv_repeat               Wraps the texture coordinates to (0, 1). (default: false).\n"
 
         << "--upm <value>             units per meter. the inverse is applied while loading the\n"
            "                          the scene. (default: " << defaults.units_per_meter << ")\n"
@@ -158,6 +193,10 @@ namespace mi { namespace examples { namespace dxr
         << "--warning                 Set log level to 'warning' (default is 'info').\n"
         << "--verbose                 Set log level to 'verbose' (default is 'info').\n"
 
+        << "--shader_opt Od|O0|O1|O2|O3  Set optimization level of the shader compiler (DXC or Slang). (default: O3)\n"
+
+        << "--use_slang               Use the Slang shader compiler instead of DXC.\n"
+
         #if MDL_ENABLE_MATERIALX
         << "--mtlx_path <path>        Specify an additional absolute search path location\n"
            "                          (e.g. '/projects/MaterialX'). This path will be queried when\n"
@@ -168,6 +207,7 @@ namespace mi { namespace examples { namespace dxr
            "                          library folder (e.g. 'libraries/custom'). MaterialX files\n"
            "                          at the root of this folder will be included in all content\n"
            "                          documents. Can occur multiple times.\n"
+
         #endif
         ;
 
@@ -187,12 +227,17 @@ namespace mi { namespace examples { namespace dxr
             LPWSTR opt = argv[i];
             if (opt[0] == '-')
             {
-                if (wcscmp(opt, L"--no_console_window") == 0)   // handled outside this parser
-                    continue;
-
-                if (wcscmp(opt, L"--nocc") == 0)
+                if (wcscmp(opt, L"--no_console_window") == 0)
+                {
+                    options.no_console_window = true;
+                }
+                else if (wcscmp(opt, L"--nocc") == 0)
                 {
                     options.use_class_compilation = false;
+                }
+                else if (wcscmp(opt, L"--fold_all_bool_params") == 0)
+                {
+                    options.fold_all_bool_parameters = true;
                 }
                 else if (wcscmp(opt, L"--noaux") == 0)
                 {
@@ -243,6 +288,18 @@ namespace mi { namespace examples { namespace dxr
                         return false;
                     }
                 }
+                else if ((wcscmp(opt, L"-g") == 0 || wcscmp(opt, L"--generated") == 0) && i < argc - 1)
+                {
+                    options.generated_mdl_path =
+                        mi::examples::io::normalize(mi::examples::strings::wstr_to_str(argv[++i]));
+
+                    if (!mi::examples::strings::remove_quotes(options.generated_mdl_path))
+                    {
+                        log_error("Unexpected quotes in: '" + options.generated_mdl_path + "'.", SRC);
+                        return_code = EXIT_FAILURE;
+                        return false;
+                    }
+                }
                 else if (wcscmp(opt, L"--log_file") == 0 && i < argc - 1)
                 {
                     log_path = mi::examples::io::normalize(mi::examples::strings::wstr_to_str(argv[++i]));
@@ -282,6 +339,40 @@ namespace mi { namespace examples { namespace dxr
                 else if (wcscmp(opt, L"--hdr_scale") == 0 && i < argc - 1)
                 {
                     options.hdr_scale = std::max(0.0f, static_cast<float>(_wtof(argv[++i])));
+                }
+                else if (wcscmp(opt, L"--hdr_rotate") == 0 && i < argc - 1)
+                {
+                    options.hdr_rotate =
+                        std::max(0.0f, std::min(static_cast<float>(_wtof(argv[++i])), 360.0f)) / 360.0f;
+                }
+                else if (wcscmp(opt, L"--background") == 0 && i < argc - 3)
+                {
+                    options.background_color_enabled = true;
+                    options.background_color = {
+                        static_cast<float>(_wtof(argv[++i])),
+                        static_cast<float>(_wtof(argv[++i])),
+                        static_cast<float>(_wtof(argv[++i]))
+                    };
+                }
+                else if (wcscmp(opt, L"--camera") == 0 && i < argc - 6)
+                {
+                    options.camera_pose_override = true;
+                    options.camera_position = {
+                        static_cast<float>(_wtof(argv[++i])),
+                        static_cast<float>(_wtof(argv[++i])),
+                        static_cast<float>(_wtof(argv[++i]))
+                    };
+                    options.camera_focus = {
+                        static_cast<float>(_wtof(argv[++i])),
+                        static_cast<float>(_wtof(argv[++i])),
+                        static_cast<float>(_wtof(argv[++i]))
+                    };
+                }
+                else if (wcscmp(opt, L"--fov") == 0 && i < argc - 1)
+                {
+                    options.camera_fov = 
+                        std::max(0.0f, 
+                            std::min(static_cast<float>(_wtof(argv[++i])), 90.0f)) * float(M_PI) / 180.0f;
                 }
                 else if (wcscmp(opt, L"--mat") == 0 && i < argc - 1)
                 {
@@ -374,10 +465,35 @@ namespace mi { namespace examples { namespace dxr
                 {
                     options.units_per_meter = static_cast<float>(_wtof(argv[++i]));
                 }
+                else if (wcscmp(opt, L"--uv_flip") == 0)
+                {
+                    options.uv_flip = true;
+                }
+                else if (wcscmp(opt, L"--uv_scale") == 0 && i < argc - 2)
+                {
+                    options.uv_scale = {
+                        static_cast<float>(_wtof(argv[++i])),
+                        static_cast<float>(_wtof(argv[++i]))
+                    };
+                }
+                else if (wcscmp(opt, L"--uv_offset") == 0 && i < argc - 2)
+                {
+                    options.uv_offset = {
+                        static_cast<float>(_wtof(argv[++i])),
+                        static_cast<float>(_wtof(argv[++i]))
+                    };
+                }
+                else if (wcscmp(opt, L"--uv_saturate") == 0)
+                {
+                    options.uv_saturate = true;
+                }
+                else if (wcscmp(opt, L"--uv_repeat") == 0)
+                {
+                    options.uv_repeat = true;
+                }
                 else if (wcscmp(opt, L"--enable_shader_cache") == 0)
                 {
                     options.enable_shader_cache = true;
-                    mi::examples::io::mkdir(mi::examples::io::get_executable_folder() + "/shader_cache");
                 }
                 else if (wcscmp(opt, L"--error") == 0)
                 {
@@ -390,6 +506,25 @@ namespace mi { namespace examples { namespace dxr
                 else if (wcscmp(opt, L"--verbose") == 0)
                 {
                     set_log_level(Log_level::Verbose);
+                }
+                else if (wcscmp(opt, L"--shader_opt") == 0 && i < argc - 1)
+                {
+                    std::string opt = mi::examples::strings::wstr_to_str(argv[++i]);
+                    if (opt != "Od" && opt != "O0" && opt != "O1" && opt != "O2" && opt != "O3")
+                    {
+                        log_error("Unexpected shader optimization level: '" + opt + "'.", SRC);
+                        return_code = EXIT_FAILURE;
+                        return false;
+                    }
+                    options.shader_opt = opt;
+                }
+                else if (wcscmp(opt, L"--use_slang") == 0)
+                {
+                    #if MDL_ENABLE_SLANG
+                        options.use_slang = true;
+                    #else
+                        log_error("Application not built with slang support. '--use_slang' will be ignored.");
+                    #endif
                 }
                 #if MDL_ENABLE_MATERIALX
                     else if (wcscmp(opt, L"--mtlx_path") == 0 && i < argc - 1)
@@ -446,9 +581,22 @@ namespace mi { namespace examples { namespace dxr
         }
         log_set_file_path(log_path == "0" ? nullptr : log_path.c_str());
 
+        // print time and command line options used to run the example
+        std::wstring cmdLine = L"";
+        for (int i = 0; i < argc; ++i)
+        {
+            cmdLine += argv[i];
+            cmdLine += L" ";
+        }
+        mi::examples::mdl_d3d12::log_info("Command line arguments passed: " +
+            mi::examples::strings::wstr_to_str(cmdLine));
+        mi::examples::mdl_d3d12::log_info("Time local: " +
+            mi::examples::strings::current_date_time_local());
+        mi::examples::mdl_d3d12::log_info("Time UTC:   " +
+            mi::examples::strings::current_date_time_UTC());
+
         std::string cwd = mi::examples::io::get_working_directory();
         log_info("Current working directory: " + cwd);
-
 
         if (!mi::examples::io::is_absolute_path(options.initial_scene))
             options.initial_scene = cwd + "/" + options.initial_scene;

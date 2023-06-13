@@ -74,19 +74,23 @@ licenses, and/or restrictions:
 * nlohmann/json: [examples/thirdparty/gltf/nlohmann/license.txt](examples/thirdparty/gltf/nlohmann/license.txt) (2)
 * Google Noto Fonts: [examples/thirdparty/content/fonts/LICENSE.txt](examples/thirdparty/content/fonts/LICENSE.txt) (2)
 
-The documentation uses the following web fonts, CSS, and JavaScript frameworks with 
+The documentation uses the following fonts, CSS, and JavaScript frameworks with 
 additional or alternate copyrights, licenses, and/or restrictions:
 
-* jQuery v3.2.1: [doc/js/jquery/jquery-3.2.1.min.js](doc/js/jquery/jquery-3.2.1.min.js), see https://jquery.org/license
-* jQuery UI v1.12.1: [doc/core_definitions/ext/jquery/jquery-ui-1.12.1/LICENSE.txt](doc/core_definitions/ext/jquery/jquery-ui-1.12.1/LICENSE.txt),
-  [doc/base_module/ext/jquery/jquery-ui-1.12.1/LICENSE.txt](doc/base_module/ext/jquery/jquery-ui-1.12.1/LICENSE.txt)
-* Google Roboto Mono Fonts: [doc/core_definitions/ext/fonts/roboto-mono/LICENSE.txt](doc/core_definitions/ext/fonts/roboto-mono/LICENSE.txt),
-  [doc/base_module/ext/fonts/roboto-mono/LICENSE.txt](doc/base_module/ext/fonts/roboto-mono/LICENSE.txt)
-* normalize.css v1.1.3: [doc/core_definitions/kt_css/normalize.css](doc/core_definitions/kt_css/normalize.css),
-  [doc/base_module/kt_css/normalize.css](doc/base_module/kt_css/normalize.css)
-* Libre Baskerville: [doc/css/librebaskerville/LICENSE-LibreBaskerville.txt](doc/css/librebaskerville/LICENSE-LibreBaskerville.txt)
-* Source Sans Pro: [doc/css/sourcesanspro/LICENSE-SourceSansPro.txt](doc/css/sourcesanspro/LICENSE-SourceSansPro.txt)
-* Source Code Pro: [doc/css/sourcecodepro/LICENSE-SourceCodePro.txt](doc/css/sourcecodepro/LICENSE-SourceCodePro.txt)
+* jQuery v3.6.4: [doc/js/jquery/jquery-3.6.4.min.js](doc/js/jquery/jquery-3.6.4.min.js), see https://jquery.org/license
+* jQuery v3.2.1: [doc/base_module/ext/jquery/jquery-3.2.1.min.js](doc/base_module/ext/jquery/jquery-3.2.1.min.js),
+  [doc/core_definitions/ext/jquery/jquery-3.2.1.min.js](doc/core_definitions/ext/jquery/jquery-3.2.1.min.js), see https://jquery.org/license
+* jQuery UI v1.12.1: [doc/base_module/ext/jquery/jquery-ui-1.12.1.custom/LICENSE.txt](doc/base_module/ext/jquery/jquery-ui-1.12.1.custom/LICENSE.txt),
+  [doc/core_definitions/ext/jquery/jquery-ui-1.12.1.custom/LICENSE.txt](doc/core_definitions/ext/jquery/jquery-ui-1.12.1.custom/LICENSE.txt)
+* Linux Libertine font: [doc/css/linux-libertine/SIL Open Font License.txt](doc/css/linux-libertine/SIL Open Font License.txt),
+  [doc/base_module/ext/fonts/linux-libertine/SIL Open Font License.txt](doc/base_module/ext/fonts/linux-libertine/SIL Open Font License.txt),
+  [doc/core_definitions/ext/fonts/linux-libertine/SIL Open Font License.txt](doc/core_definitions/ext/fonts/linux-libertine/SIL Open Font License.txt)
+* Noto Sans font: [doc/css/noto-sans/OFL.txt](doc/css/noto-sans/OFL.txt),
+  [doc/base_module/ext/fonts/noto-sans/OFL.txt](doc/base_module/ext/fonts/noto-sans/OFL.txt),
+  [doc/core_definitions/ext/fonts/noto-sans/OFL.txt](doc/core_definitions/ext/fonts/noto-sans/OFL.txt)
+* Roboto Mono font: [doc/css/roboto-mono/LICENSE.txt](doc/css/roboto-mono/LICENSE.txt),
+  [doc/base_module/ext/fonts/roboto-mono/LICENSE.txt](doc/base_module/ext/fonts/roboto-mono/LICENSE.txt),
+  [doc/core_definitions/ext/fonts/roboto-mono/LICENSE.txt](doc/core_definitions/ext/fonts/roboto-mono/LICENSE.txt)
 
 **Notes**
 

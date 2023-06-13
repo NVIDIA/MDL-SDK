@@ -26,8 +26,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #*****************************************************************************
 
-# name of the target and the resulting library
-set(PROJECT_NAME imgui)
 set(PROJECT_VERSION 1.75) # 58b3e02b95b4c7c5bb9128a28c6d55546501bf93
 
 # collect sources
@@ -84,6 +82,11 @@ if(MDL_ENABLE_OPENGL_EXAMPLES)
     )
 endif()
 
+# name of the target and the resulting library
+#
+# This variant is used by almost all examples which use a dynamic MSVC runtime.
+set(PROJECT_NAME imgui)
+
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
@@ -91,6 +94,43 @@ create_from_base_preset(
     VERSION ${PROJECT_VERSION}
     SOURCES ${PROJECT_SOURCES}
     EXAMPLE
+)
+
+if(MDL_ENABLE_OPENGL_EXAMPLES)
+    # add dependencies
+    target_add_dependencies(TARGET ${PROJECT_NAME} 
+        DEPENDS 
+            opengl
+            glfw
+        )
+
+    # additional definitions
+    target_compile_definitions(${PROJECT_NAME} 
+        PRIVATE 
+            "IMGUI_IMPL_OPENGL_LOADER_GLEW" 
+        )
+endif()
+
+# add include directories
+target_include_directories(${PROJECT_NAME} 
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    )
+
+# name of the target and the resulting library
+#
+# This variant is used by the mdl_core/df_cuda example which needs to use a
+# static MSVC runtime.
+set(PROJECT_NAME imgui_static)
+
+# create target from template
+create_from_base_preset(
+    TARGET ${PROJECT_NAME}
+    NAMESPACE ${PROJECT_NAME}
+    VERSION ${PROJECT_VERSION}
+    SOURCES ${PROJECT_SOURCES}
+    EXAMPLE
+    STATIC_MSVC_RUNTIME
 )
 
 if(MDL_ENABLE_OPENGL_EXAMPLES)

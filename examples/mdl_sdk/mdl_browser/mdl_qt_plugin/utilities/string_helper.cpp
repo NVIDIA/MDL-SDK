@@ -35,19 +35,19 @@ std::string String_helper::replace(const std::string& input,
 {
     if (input.empty()) return input;
 
-    std::string sentance(input);
+    std::string sentence(input);
     size_t offset(0);
     size_t pos(0);
     while (pos != std::string::npos)
     {
-        pos = sentance.find(old, offset);
+        pos = sentence.find(old, offset);
         if (pos == std::string::npos)
             break;
 
-        sentance.replace(pos, old.length(), with);
+        sentence.replace(pos, old.length(), with);
         offset = pos + with.length();
     }
-    return sentance;
+    return sentence;
 }
 
 std::string String_helper::replace(const std::string& input,

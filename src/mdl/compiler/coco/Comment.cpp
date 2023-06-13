@@ -31,10 +31,12 @@ Coco/R itself) does not fall under the GNU General Public License.
 
 namespace Coco {
 
-Comment::Comment(wchar_t* start, wchar_t* stop, bool nested) {
-	this->start = coco_string_create(start);
-	this->stop = coco_string_create(stop);
-	this->nested = nested;
+Comment::Comment(char const *start, char const *stop, bool nested)
+: start(coco_string_create(start))
+, stop(coco_string_create(stop))
+, nested(nested)
+, next(NULL)
+{
 }
 
 Comment::~Comment() {

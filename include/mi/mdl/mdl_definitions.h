@@ -155,8 +155,10 @@ public:
         DS_MODIFIED_ANNOTATION,                  ///< This is the modified() annotation.
         DS_KEYWORDS_ANNOTATION,                  ///< This is the key_words() annotation.
         DS_ORIGIN_ANNOTATION,                    ///< This is the origin() annotation.
+        DS_NODE_OUTPUT_PORT_DEFAULT_ANNOTATION,  ///< This is the node_output_port_default()
+                                                 ///  annotation.
 
-        DS_ANNOTATION_LAST = DS_ORIGIN_ANNOTATION,
+        DS_ANNOTATION_LAST = DS_NODE_OUTPUT_PORT_DEFAULT_ANNOTATION,
 
         // operator semantics
         DS_OP_BASE = 0x0200,                     ///< Base offset for operator semantics.
@@ -295,6 +297,7 @@ public:
         DS_INTRINSIC_DF_FIRST = 0x0600,
 
         DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF = DS_INTRINSIC_DF_FIRST,
+        DS_INTRINSIC_DF_DUSTY_DIFFUSE_REFLECTION_BSDF,
         DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF,
         DS_INTRINSIC_DF_SPECULAR_BSDF,
         DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF,
@@ -304,6 +307,7 @@ public:
         DS_INTRINSIC_DF_MEASURED_EDF,
         DS_INTRINSIC_DF_SPOT_EDF,
         DS_INTRINSIC_DF_ANISOTROPIC_VDF,
+        DS_INTRINSIC_DF_FOG_VDF,
         DS_INTRINSIC_DF_NORMALIZED_MIX,
         DS_INTRINSIC_DF_CLAMPED_MIX,
         DS_INTRINSIC_DF_WEIGHTED_LAYER,
@@ -360,7 +364,9 @@ public:
         DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3,
         DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4,
         DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR,
-        DS_INTRINSIC_SCENE_LAST = DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4X4,
+        DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4X4,
+        DS_INTRINSIC_SCENE_LAST = DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4X4,
 
         // debug module
         DS_INTRINSIC_DEBUG_FIRST = 0x0900,
@@ -628,6 +634,7 @@ inline bool is_elemental_df_semantics(IDefinition::Semantics sema)
 
     switch (sema) {
     case IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_DUSTY_DIFFUSE_REFLECTION_BSDF:
     case IDefinition::DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF:
     case IDefinition::DS_INTRINSIC_DF_SPECULAR_BSDF:
     case IDefinition::DS_INTRINSIC_DF_SIMPLE_GLOSSY_BSDF:
@@ -637,6 +644,7 @@ inline bool is_elemental_df_semantics(IDefinition::Semantics sema)
     case IDefinition::DS_INTRINSIC_DF_MEASURED_EDF:
     case IDefinition::DS_INTRINSIC_DF_SPOT_EDF:
     case IDefinition::DS_INTRINSIC_DF_ANISOTROPIC_VDF:
+    case IDefinition::DS_INTRINSIC_DF_FOG_VDF:
     case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_SMITH_BSDF:
     case IDefinition::DS_INTRINSIC_DF_MICROFACET_GGX_SMITH_BSDF:
     case IDefinition::DS_INTRINSIC_DF_MICROFACET_BECKMANN_VCAVITIES_BSDF:

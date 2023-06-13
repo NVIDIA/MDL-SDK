@@ -38,25 +38,30 @@ if(NOT clang_PATH)
     MESSAGE(FATAL_ERROR "The tool dependency \"${TARGET_ADD_TOOL_DEPENDENCY_TOOL}\" for target \"${TARGET_ADD_TOOL_DEPENDENCY_TARGET}\" could not be resolved.")
 endif()
 
-# call --version
+# check existence
 get_filename_component(clang_PATH_ABS ${clang_PATH} REALPATH)
-set(clang_PATH ${clang_PATH_ABS} CACHE FILEPATH "Path of the Clang 12.0 binary." FORCE)
-execute_process(COMMAND "${clang_PATH}" "--version" 
+set(clang_PATH ${clang_PATH_ABS} CACHE FILEPATH "Path of the Clang binary." FORCE)
+
+if(NOT EXISTS ${clang_PATH})
+    message(STATUS "clang_PATH: ${clang_PATH}")
+    message(FATAL_ERROR "Clang executable not found.")
+endif()
+
+# check version
+execute_process(COMMAND "${clang_PATH}" "--version"
     OUTPUT_VARIABLE 
         _CLANG_VERSION_STRING 
     ERROR_VARIABLE 
         _CLANG_VERSION_STRING
     )
 
-# check version
 if(NOT _CLANG_VERSION_STRING)
     message(STATUS "clang_PATH: ${clang_PATH}")
     message(FATAL_ERROR "Clang version could not be determined.")
 else()
     # parse version number
     STRING(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" _CLANG_VERSION_STRING ${_CLANG_VERSION_STRING})
-    if(${_CLANG_VERSION_STRING} VERSION_GREATER "12.0.1" OR ${_CLANG_VERSION_STRING} VERSION_LESS "12.0.0")
-        # TODO enable this check
-        #message(FATAL_ERROR "Clang 12.0 is required but Clang ${_CLANG_VERSION_STRING} was found instead. Please set the CMake option 'clang_PATH' that needs to point to a clang 12.0.x compiler.")
+    if(${_CLANG_VERSION_STRING} VERSION_LESS "7.0.0")
+        message(WARNING "Clang version >= 7.0.0 is required but Clang ${_CLANG_VERSION_STRING} was found instead.")
     endif()
 endif()

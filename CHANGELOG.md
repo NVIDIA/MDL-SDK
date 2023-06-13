@@ -1,5 +1,360 @@
 Change Log
 ==========
+MDL SDK 2023.0.0 (367100.2992): 03 Jun 2023
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2023.0.0 (367100.2992) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- MDL 1.8 Language Specification
+    - Updated version to 1.8.2.
+    - Removed meaningless references to a preprocessor.
+    - Reduced the requirement on thin-walled materials that they *should*
+      have equal transmission from both sides.
+    - Added part to supported selector string components for OpenEXR.
+    - Clarified that MDL comments can be nested.
+    - Extend list of separators in MDL and clarify their purpose.
+    - Clarified that *unicode identifiers* cannot be empty.
+    - Added the operator function call to the precedence table of all operators.
+    - Added the cast operator to the precedence table of all operators.
+    - Moved `operator` from the set of words reserved for future use
+      to the reserved words in use.
+    - Added section for *unicode identifiers*.
+    - Clarified that the use of variables in let-expressions is read-only.
+    - Clarified that binary logical operators may or may not use
+      short-circuit evaluation.
+    - Added definition of lvalues and rvalues.
+    - Removed redundant subsections that `light_profile` and
+      `bsdf_measurement` have no members.
+    - Added requirement to check for array out-of-bounds access and
+      to return default-constructed values in this case.
+    - Clarified that function parameters are lvalues in their procedural
+      implementation bodies.
+    - Added that function parameters can only be used as read-only rvalues
+      in functions defined by an expression.
+    - Added that function parameters can only be used as read-only rvalues
+      in let-expression.
+    - Changed the grammar for the let-expression from *unary_expression*
+      to *assignment_expressions* for the expression affected by
+      the variables. This ensures the right scope precedence, e.g., the
+      let-expression ends at a sequence operator.
+    - Removed using alias declarations. They are replaced by Unicode
+      identifiers directly supported as package and module names.
+    - Added operator function call syntax for all applicable operators.
+    - Clarified that material parameters can only be used as read-only rvalues
+      in material definitions.
+    - Clarified that material parameters can only be used as read-only rvalues
+      in let-expression.
+    - Clarified that let-bound variables cannot be used in their own initializer expressions.
+    - Fixed the accidentally dropped grammar production rule for the
+      import statements in MDL files.
+    - Removed the support for annotations on packages with the `package.pkg` file.
+    - Added Unicode identifiers for package and module names.
+    - Changed productions for *import_path*, *qualified_import* to allow
+      Unicode identifiers in package and module names.
+    - Added a `collapsed` parameter to the `anno::in_group`
+      standard annotation to control the UI presentation of groups.
+    - Added the standard annotation `node_output_port_default` and the
+      respective enumeration type `node_port_mode` to control the
+      default initialization of output ports for external shade graph
+      nodes when they are created for MDL functions.
+    - Added the standard annotation `native` to hint that a function or material
+      might have a native implementation in the integration.
+    - Added the standard annotation `noinline` to hint that a function or material
+      should not be inlined by the compiler.
+    - Added that texture spaces and their respective tangents return in
+      volume shading their respective values at the surface entry point
+      of the current light-transport path.
+    - Added that `state::texture_space` and the related tangent
+      state functions return the zero vector in case the index is out of
+      the range of available texture spaces.
+    - Clarified the exact interpolation curve for `math::smoothstep` and that
+      it is undefined for a zero or reversed interpolation range.
+    - Added `float4x4` as supported data type for scene data lookup.
+    - Removed the requirement on the scene data lookup functions to
+      provide literal strings as arguments for the scene data names. They
+      are now uniform strings and can be connected to uniform string
+      parameters of a material of function definition.
+    - Added a diffuse reflection BSDF modeling spherical Lambertian scatterers.
+    - Added an approximative Mie VDF model for fog and cloud-like media.
+    - Added a reference to the approximation used for the Mie scattering model of `fog_vdf`.
+    - Clarified that the `particle_size` parameter of the new
+      `fog_vdf` approximative Mie VDF model refers to the particle diameter.
+    - Added `custom_curve_layer` and `directional_factor` as
+      eligible base BSDF for the `thin_film` BSDF modifier.
+    - Clarified that the `measured_factor` modifier BSDF allows
+      reflectivities above one and it is in the responsibility of a material
+      author to ensure energy conservation.
+    - Added optional trailing commas to the productions of
+      *parameter_list*, *argument_list*,
+      *enum_type_declaration* and *annotation_block*.
+    - Added a new Appendix G on external bindings and a section for the recommended
+      binding of MDL functions to nodes with multiple output ports.
+
+- General
+    - `base.mdl`: Added an implementation of `base::abbe_number_ior`.
+    - Improved precision of conversion of spectra to color, in particular for spectra
+      with narrow peaks.
+    - Refactored `base::coordinate_projection()` to reduce size of generated GPU code.
+    - Added `mi::neuraylib::IMdl_backend::execute_init()` method to allow calling init functions
+      in single-init mode for the native backend.
+    - i18n translation:
+        - Added support for the new boolean parameter to the `in_group annotation` (collapsed).
+        - Added support for legacy "`in_group$1.7`" annotation.
+        - i18n.exe tool:
+            - Issue warning when annotation is not supported.
+            - Added support for the new added boolean parameter in the `in_group annotation`
+              (collapsed).
+            - Added support for legacy "`in_group$1.7`" annotation.
+    - The parameters of the MDL array constructor have been changed from "0",
+      "1", etc. to "value0", "value1", etc. to match the MDL specification. This
+      also affects paths to fields in the compiled material. Such paths are e.g.
+      used by `ICompiled_material::lookup_sub_expression()`,
+      `IMdl_distiller_api::create_baker()`, various methods on
+      `IMdl_backend` and the `Target_function_description` struct.
+      Hardcoded paths need to be adapted. A frequently occurring pattern is
+      `".components.<number>."` which needs to be changed to
+      `".components.value<numner>."`.
+    - Removed unused enumerator value `DS_SEQUENCE` from
+      `mi::neuraylib::IFunction_definition::Semantics`.
+    - Changed BMP import of alpha channels with OpenImageIO. While the correct
+      behavior is debatable, it restores the historical behavior of FreeImage.
+    - A `selector` parameter has been added to the methods
+      `IImage::set_from_canvas()`, and
+      `IImage_api::create_canvas_from_buffer()`, and
+      `IImage_api::create_canvas_from_reader()`. The old signatures are
+      deprecated. They are still available if `MI_NEURAYLIB_DEPRECATED_14_0` is defined.
+    - The signatures of `create_texture()`, `create_light_profile()`,
+      and `create_bsdf_measurement()` on `IMdl_factory` have been
+      changed: These methods take now a `IMdl_execution_context` pointer
+      as last argument instead of the optional `mi::Sint32` pointer. The old
+      signatures are deprecated. They are still available if
+      `MI_NEURAYLIB_DEPRECATED_14_0` is defined.
+    - The method `IImage::create_mipmaps()` has been renamed to
+      `IImage::create_mipmap()`. The old name is deprecated. It is still
+      available if `MI_NEURAYLIB_DEPRECATED_14_0` is defined.
+    - It is now considered an error to apply the "A" selector to pixel types
+      without alpha channel (instead of assuming a fake alpha channel with values
+      1.0f or 255).
+    - The interface `IImage_plugin` has been changed to allow selector
+      support and better plugin selection (See the API reference documentation for details):
+        - The method `supports_selectors()` has been added.
+        - The method `open_for_reading()` has an additional parameter for the
+          selector string.
+        - The `test()` method takes now a reader instead of a buffer and the
+          file size.
+    - The OpenImageIO plugin supports now also non-RGBA selectors. Right now this
+      works only for OpenEXR textures, including OpenEXR multipart images (use
+      the part name as selector or first selector component).
+    - Full Unicode support (including code points outside of the basic
+      multilingual planes) for MDL source code and filenames.
+    - Enabled distiller support for the open source build and in various examples.
+    - The minimum CMake version has been increased to 3.21 (Windows only).
+    - The OpenImageIO plugin replaces the previously used FreeImage plugin. See
+      INSTALL.md for details about the installation of OpenImageIO. All examples
+      have been converted to use the OpenImageIO plugin instead of the FreeImage plugin.
+    - The API reference documentation is now built as part of the build process if
+      doxygen is available. This can be disabled via the option
+      `MDL_BUILD_DOCUMENTATION`. GraphViz/dot (optional) is used to generate nicer
+      inheritance diagrams.
+    - Deprecated `ILink_unit::add_environment()`. Use `ILink_unit::add_function()`
+      with `ILink_unit::FEC_ENVIRONMENT` as second parameter instead. The old method is still
+      available if `MI_NEURAYLIB_DEPRECATED_14_0` is defined.
+    - Improved documentation for the various subclasses of `IExpression`,
+      in particular `IExpression_temporary` and `Expression_parameter`.
+    - The module builder supports now upgrades to MDL version 1.8, i.e., it expands
+      namespace aliases to the corresponding Unicode identifiers, and finally
+      removes the namespace aliases themselves.
+    - Added array support to the argument editor. New overloads of
+      `Argument_editor::set_value()` and `get_value()` allow now to set or get entire
+      arrays in one call.
+    - The OpenImageIO plugin for TIFF has been changed such that unassociated alpha
+      mode is used for export. This avoids rounding errors and information loss
+      for small alpha values.
+    - The MDL exporter now uses TIFF instead of EXR when exporting textures with an
+      alpha channel. This avoids rounding errors and information loss for small alpha values.
+    - Various API methods related to resource loading have been fixed to properly
+      report all error conditions. This required changing the existing error codes
+      for those methods. The affected API methods are:
+        - `mi::neuraylib::IImage::reset_file()`
+        - `mi::neuraylib::IImage::reset_reader(IReader*,...)`
+        - `mi::neuraylib::IImage::reset_reader(IArray*,...)`
+        - `mi::neuraylib::ILightprofile::reset_file()`
+        - `mi::neuraylib::ILightprofile::reset_reader()`
+        - `mi::neuraylib::IBsdf_measurement::reset_file()`
+        - `mi::neuraylib::IBsdf_measurement::reset_reader()`
+        - `mi::neuraylib::IVolume_data::reset_file()`
+        - `mi::neuraylib::IVolume_data::reset_reader()`
+        - `mi::neuraylib::IMdl_factory::create_texture()`
+        - `mi::neuraylib::IMdl_factory::create_light_profile()`
+        - `mi::neuraylib::IMdl_factory::create_bsdf_measurement()`
+        - `mi::neuraylib::IImport_api::import_bsdf_data()`
+    - Updated jquery to version 3.6.4 and/or applied workarounds to fix a potential
+      XSS vulnerability.
+    - Replaced `ITarget_code::get_body_texture_count()` by
+      `ITarget_code::get_texture_is_body_resource(mi::Size)` to query the information for the
+      individual resources; same for light profiles and BSDF measurements.
+    - Allow to disable all example dependencies if the SDK and core examples are disabled.
+    - The finding python CMake script now falls back to the system installation if no path is
+      specified and emits a warning in that case.
+    - Changed the Clang version and existence checks so that 12.0.1 is no longer
+      a hard requirement.
+    - Disable LLVM CMake warning about `host=x64`.
+    - `IFunction_definition::get_mangled_name()` was added. For definitions representing
+       real MDL functions this returns the Itanium ABI inspired mangled name used by backends
+       when MDL code is compiled to target code.
+    - `IUnit::add_function()` was added, `IUnit::add_environment()` is now deprecated.
+    - `IUnit::add_function()` for function definitions added by 3ds.
+    - `nvidia::core_definitions`
+        - Texture transformations changed from uniform to varying.
+        - Added triplanar texturing and blending of normals.
+
+- MDL Compiler and Backends
+    - libbsdf: Added support for `df::dusty_diffuse_reflection_bsdf`.
+    - Optimized ternary operators on `df::thin_film()` where the base BSDF is identical
+      to the BSDF of the other case of the ternary.
+    - Added "enable_pdf" backend option to allow disabling code generation of PDF methods
+      for distribution functions.
+    - MDL Core language support:
+        - MDL 1.8 support is now complete and always enabled, no need for `"mdl_next"` option.
+          Especially the following features were added:
+            - `scene::lookup_data_float4x4()`.
+            - `anno::native()`, `anno::node_output_port_default()`.
+            - No lvalues inside let expressions and single expression functions are allowed.
+            - Removed alias declarations.
+        - `"mdl_next"` option is currently a no-op.
+        - Improved some error messages.
+    - Implemented normalization of `df::thin_film()` on the DAG.
+    - libbsdf: Avoid PDF code duplication caused by nested layerer DFs.
+    - Handle `\u`, `\U`, `\x`, and `\X` escapes more like C++
+        - `\u` takes exactly 4 digits, it's an error if less are given.
+        - `\U` takes exactly 8 digits, it's an error if less are given.
+        - `\x` or `\X` without a digit is an error.
+        - `\x` or `\X` with an overflow is a warning.
+        - Illegal Unicode codepoints generated using `\u` or `\U` are now an error.
+    - Wrong UTF-8 encodings in MDL files are now an error.
+
+- MDL SDK examples
+    - i18n, mdlx and the Python examples load now also the DDS plugin.
+    - Enabled fast-math for all CUDA examples and avoid calculations on doubles.
+    - Examples Shared
+        - Added file IO utility to get the basename and file extension of a given path.
+        - Added file IO utility to allow recursive folder creations.
+        - Added file IO utility to normalize paths by removing `"/../"`.
+    - Example Code Generation
+        - Added options to adapt normal and microfacet roughness.
+        - Added option to compile in single-init mode.
+    - Example DF CUDA
+        - Switched to another random number generator to provide numbers in the range `[0, 1)`
+          as expected by the generated code.
+    - Example DF Native
+        - Use texture results to improve performance.
+        - Use single-init mode for code generation to avoid costly reevaluations of expressions.
+    - Example DXR
+        - Added partial support for `EXT_lights_ies` glTF extension.
+        - Added support for MDL modules, BSDF measurements, and light profiles embedded in gltf
+          and glb files.
+        - Use single-init mode for code generation to avoid costly reevaluations of expressions.
+        - Added support for the Slang shader compiler and added options to control HLSL
+          compilation.
+        - Updated DXC compiler dependency to July 2022 and made it non-optional to be able to use
+          a new compiler interface.
+        - Fixed a minor HLSL issue when compiling without `"WITH_ENUM_SUPPORT"`.
+        - Allow to use `"*"` as placeholder for the first material inside a given MDL module
+          on CLI or within glTF.
+        - MaterialX support improvements:
+            - Allow to specify a MaterialX node to be rendered directly on CLI or within a glTF
+              file.
+            - Application side handling of resource paths defined in MaterialX.
+            - Added CLI option `-g` to write the generated MDL module to a given path.
+            - Added CLI options to match the MaterialX test renderings: constant background color,
+              uv transformations, camera setup, and environment rotation.
+        - Switched MaterialX SDK to 1.38.7.
+        - MaterialX resource resolution is now handled by the example code to better reflect
+          MDL search paths.
+    - Example OptiX 7
+        - Default to one sample per launch to improve experience on low-end GPUs.
+        - Use real transforms instead of identity matrices.
+        - Improved documentation about the required dependencies.
+
+**Fixed Bugs**
+
+- General
+    - Mark BSDF and EDF data structures as 16-byte aligned to avoid a crash due to misaligned
+      stores in generated CPU code.
+    - Fixed IES parser for files with IES:LM-63-2019 standard.
+    - The GLSL/HLSL backends now generate "Internal backend error" messages if some code could
+      not be translated into the target language.
+    - Added support for some previously unsupported constructs in GLSL/HLSL.
+
+- MDL Compiler and Backends
+    - MDL Core: Due to an inconsistence in the MDL Specification the MDL compiler
+      was parsing erroneously some types of expressions after the keyword
+      `'in'` in the `'let'` expressions, leading to a compiler error and
+      resulting in that only unary type of expressions could be parsed correctly.
+    - libbsdf:
+        - Fixed the handling of total internal reflection for microfacet BSDFs evalation
+          in `df::scatter_transmit mode`.
+        - Correctly handle `df::thin_film` with a thickness of zero, independent of the
+          IOR value.
+    - Fixed rare crash in HLSL code generator regarding translation of load instructions.
+    - Fixed missing module cache usage for non-inlined functions for link units.
+    - Fixed special `df::thin_film()` handling for PTX backend.
+    - Fixed crash for zero sized arrays in argument block layout builder.
+    - Fixed inlining of functions with deferred-size arrays as parameters.
+    - Fixed several bugs in the MDL compiler when compiling syntactically invalid MDL code.
+    - Fixed bug in the attribute handling of the Distiller.
+    - Fixed endless loop in the MDL compiler that could happen if a preset is defined with some
+      literals under care conditions.
+    - Fixed potential crash that could occur when an if and its else branch contain
+      identical expressions.
+    - Fixed garbage issued in the "called object is not a function" error message.
+    - Fixed a crash when a single expression body function references an array length identifier.
+    - Fixed a crash in code generation when a MDL `cast<>` operator was used as an argument
+      for an select instruction.
+    - Fixed non-working `cast<T>(cast<S>(x)) ==> cast<T>(x)` optimization.
+    - Fixed missing support for {\tt rvalues} of constants in the JIT Backend.
+    - Fixed optimizer does not replace constants by literal values in loop initializers.
+    - Fixed DAG BE generating wrong signatures when struct insert operations are necessary.
+    - Fixed handling of global scope operator, `::x` may now distinct from `x`.
+    - Printing now `\U` escape codes with 8 digits instead of 6 when exporting MDL.
+    - Fixed a race-condition in the JIT for the native backend leading to some error messages
+      in cases with many CPU cores.
+    - Fixed opt_level 0 code generation for the PTX backend.
+    - Fixed alignment of vector, matrix, array, color and struct types in argument blocks
+      for GLSL/HLSL.
+    - Improved error message when default constructing a struct which has unresolved field types.
+    - Fixed auto-generated name for single init function if none was provided.
+      Previously duplicate symbol names were generated causing linker errors when using multiple
+      materials with the PTX backend.
+    - libbsdf:
+        - Fixed PDF of `df::backscattering_glossy_reflection_bsdf()`.
+        - Fixed wrong multiscatter texture for `df::ward_geisler_moroder_bsdf()`.
+        - Fixed importance sampling of `df::ward_geisler_moroder_bsdf` if `multiscatter` is on.
+        - Fixed computation of diffuse part of pdf for all BSDFs with `multiscatter_tint`.
+        - Fixed behavior of `df::thin_film` film with thickness `0.0`.
+        - Improved color correctness of `df::thin_film`.
+    - Fixed computation of pdf in measured BSDF in native runtime.
+    - Fixed handling of loops with multiple exits for GLSL/HLSL.
+
+- MDL SDK examples
+    - Fixed compilation error with Vulkan SDK 1.3.239.0 and newer.
+    - Fixed pdf computation in measured BSDF for HLSL and CUDA example runtimes.
+    - Examples Shared
+        - Fixed out-of-bounds errors in renderer runtime.
+    - Example DF Native
+        - Removed memory allocations in render function to improve performance.
+    - Example DXR
+        - Fixed a minor HLSL issue when compiling without `"WITH_ENUM_SUPPORT"`.
+        - Fixed a crash when reloading a module after changing a MDL function signature.
+        - Fixed a crash when a function that is not a material was selected for rendering.
+        - Fixed a crash when having arrays of structs as material parameter.
+    - Example OptiX 7
+        - Fixed wrong origin used for shadow ray.
+        - Fixed missing normalization and transformation of normals and tangents.
+
 MDL SDK 2022.1.7 (363600.4887): 18 Apr 2023
 -----------------------------------------------
 
@@ -24,15 +379,15 @@ ABI compatible with the MDL SDK 2022.1.6 (363600.3938) binary release
 - General
     - Improved performance of texture import via the OpenImageIO plugin, in particular when only
       the metadata is needed.
-      
+
 - MDL Compiler and Backends
     - Improved output messages for errors in annotations.
-      
+
 **Fixed Bugs**
 
 - General
     - Fixed usability and layout problems in API reference documentation.
-    - Added missing images in the documentation for `nvidia::core\_definitions`.
+    - Added missing images in the documentation for `nvidia::core_definitions`.
     - Fixed layout of API reference documentation for types using the `__align__(x)` macro.
     - Fixed `ITargetCode` serialization for cases when there are multiple materials in the
       link unit.
@@ -41,7 +396,7 @@ ABI compatible with the MDL SDK 2022.1.6 (363600.3938) binary release
     - Fixed potential crashes in the code generator when a module name contains a '.'.
     - Fixed crash in the MDL compiler caused by invalid constant declarations.
     - Fixed compiling error in LLVM for VS2017.
-    - Fixed some cases where invalid MDL source code can lead to compiler crashes.    
+    - Fixed some cases where invalid MDL source code can lead to compiler crashes.
 
 MDL SDK 2022.1.4 (363600.2768): 14 Feb 2023
 -----------------------------------------------
@@ -106,7 +461,7 @@ ABI compatible with the MDL SDK 2022.1 (3636300.1420) binary release
       It is intended to replace the FreeImage plugin in the future. As of now,
       the new image plugin is disabled by default and not yet supported.
     - Improved Windows implementations of `mi::base::Lock` and `MI::THREAD::Lock` to use
-      `SRWLOCK instead` of `CRITICAL_SECTION` primitives.      
+      `SRWLOCK instead` of `CRITICAL_SECTION` primitives.
     - In order to start the examples, it is no longer necessary to explicitly set the
       `LD_LIBRARY_PATH` (on Linux) or `DYLD_LIBRARY_PATH` (on MacOS X).
     - Allowed varying values on parameters of `base::rotation_translation_scale()`.
@@ -118,13 +473,13 @@ ABI compatible with the MDL SDK 2022.1 (3636300.1420) binary release
         - Added high-level Python binding module pymdl.py.
         - Generated .sh and .bat scripts to run Python examples without manually setting
           PATH and PYTHONPATH.
-          
+
 - MDL Compiler and Backends
     - Added support for Unicode identifiers to the MDL compiler (for MDL version >= 1.8).
     - Added implementations for `state::geometry_tangent_u()` and
       `state_geometry_tangent_v()` functions in JIT generated code.
       Before they were returning `0`.
-    
+
 - MDL SDK examples
     - Example Code Generation
         - Added command line option `--warn-spectrum-conv`. It warns if a spectrum constructor
@@ -141,7 +496,7 @@ ABI compatible with the MDL SDK 2022.1 (3636300.1420) binary release
         - Enabled the encoded names option.
     - Example Python Bindings
         - Added an example to illustrate the use of pymdl.py for inspection.
-        
+
 **Fixed Bugs**
 
 - General
@@ -159,15 +514,15 @@ ABI compatible with the MDL SDK 2022.1 (3636300.1420) binary release
       to be equal, not just one a subset of the other).
     - MDL plugin for Arnold
         - Added checks on shutdown to prevent crashes when the plugin is not initialized properly.
-        
+
 - MDL Compiler and Backends
     - Fixed crash inside the MDL core compiler when an enum value is used as the right hand side
       of a select expression.
     - Fixed crash in the MDL core compiler when the qualified name of an import declaration
       is ill formed.
     - Changed the behavior of state functions when used with an invalid texture space.
-      Now they return always zero.      
-        
+      Now they return always zero.
+
 - MDL SDK examples
     - Example DXR
         - Fixed two memory leaks and added diagnostics to check for leaks in the future.
@@ -177,7 +532,7 @@ ABI compatible with the MDL SDK 2022.1 (3636300.1420) binary release
     - Example Python Bindings
         - Fixed the debug build of the MDL Python Bindings in VS when linking against a
           release built of the Python interpreter.
-        
+
 MDL SDK 2022.0.1 (359000.3383): 21 Sept 2022
 -----------------------------------------------
 
@@ -193,18 +548,18 @@ ABI compatible with the MDL SDK 2022.0.1 (359000.3383) binary release
         - Updated the SWIG file in order to support pymdlsdk.
           `IFunction_definition.get_mdl_version()` in Python.
         - Handle Mdl_version as output parameter. `(since, removed) = mdl_func.get_mdl_version()`.
-        
+
 - MDL Compiler and Backends
     - Added compiler context option "mdl_next": Setting this option will enable preliminary
       features from the upcoming MDL 1.8 Version, especially:
         - Full utf8 identifiers in MDL.
         - Lifted restriction on scene access functions: The name of a scene data can be now any
           expression of type uniform string.
-          
+
 - MDL SDK examples
     - MDL Example df_vulkan
         - Added dummy implementations for unsupported runtime functions.
-        
+
 **Fixed Bugs**
 
 - MDL Compiler and Backends
@@ -219,7 +574,7 @@ ABI compatible with the MDL SDK 2022.0.1 (359000.3383) binary release
         - Fixed edf init call (in rare cases it was accessing undefined data).
     - MDL Example df_vulkan
         - Removed alpha channel before exporting images.
- 
+
 MDL SDK 2022 (359000.2512): 06 Aug 2022
 -----------------------------------------------
 
@@ -892,7 +1247,7 @@ ABI compatible with the MDL SDK 2021 (344800.2052) binary release
       transmissive materials to reduce energy loss for some cases of modelling glass with these
       components.
     - The import of the `::std` module in modules of lower MDL version has been fixed.
-    - Avoid optimizations while adding to link units, making it impossible to select expression 
+    - Avoid optimizations while adding to link units, making it impossible to select expression
       paths from certain distilled materials.
     - Handle correctly auto-import of types that are used only inside struct types.
     - In some rare cases array constructors of kind `T[](e_1, e_2, ...)` were handled incorrectly
@@ -1075,7 +1430,7 @@ ABI compatible with the MDL SDK 2020.1 (334300.2228) binary release
     - Added methods to retrieve the MDL system and user paths.
     - The legacy behavior of `df::simple_glossy_bsdf` can now be controlled via the interface
       `IMdl_configuration`.
-    - The return type of `IFunction_definition::get_body()` has been changed from 
+    - The return type of `IFunction_definition::get_body()` has been changed from
       `const IExpression_direct_call*` to `const IExpression*`.
 
 - MDL Compiler and Backends
@@ -1318,7 +1673,7 @@ ABI compatible with the MDL SDK 2020 (327300.2022) binary release
       This representation had several drawbacks:
       - there might be one definition for the same operator in every module
       - if the operator was not used inside the source of a module, it was not created
-      
+
       Especially the second point lead to several problems in the editing application. Hence, starting
       with the 2020.0.0 release, the internal representation was changed and operators are now
       represented by 'global' template-like definitions:
@@ -1332,7 +1687,7 @@ ABI compatible with the MDL SDK 2020 (327300.2022) binary release
       Drawback: When inspecting the types of the operators definition, 'int' is returned for the
       template types, but this might be changed in the future by expanding the type system.
 
-    - Support for HLSL scene data renderer runtime functions has been added. See the 
+    - Support for HLSL scene data renderer runtime functions has been added. See the
      `scene_data_*` functions in `mdl_renderer_runtime.hlsl` MDL SDK DXR example for an
       example implementation.
 
@@ -1852,7 +2207,7 @@ ABI compatible with the MDL SDK 2018.1.2 (312200.1281) binary release
         - `mi::neuraylib::ILink_unit::add_material_expression()`
         - `mi::neuraylib::ILink_unit::add_material_df()`
         - `mi::neuraylib::ILink_unit::add_material()`
-      
+
       have been changed to use the new class `mi::neuraylib::IMdl_execution_context`.
       The old versions have been deprecated and prefixed with `deprecated_`. They can
       be restored to their original names by setting the preprocessor define
@@ -1860,13 +2215,13 @@ ABI compatible with the MDL SDK 2018.1.2 (312200.1281) binary release
     - The API functions
         - `mi::neuraylib::IMdl_backend::translate_material_expression_uniform_state()`
         - `mi::neuraylib::IMdl_backend::translate_material_expressions()`
-      
+
       have been deprecated and prefixed with `deprecated_`. They can be restored to
       their original names by setting the preprocessor define `MI_NEURAYLIB_DEPRECATED_9_1`.
     - The utility classes
         - `mi::neuraylib::Definition_wrapper` and
         - `mi::neuraylib::Argument_editor`
-      
+
       have been extended to provide member access functions.
 
 - MDL Compiler and Backends

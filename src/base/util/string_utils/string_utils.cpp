@@ -179,105 +179,8 @@ string to_upper(
     return result;
 }
 
-
-// utility to convert from UTF8 to wide chars
-#define BOM8A ((unsigned char)0xEF)
-#define BOM8B ((unsigned char)0xBB)
-#define BOM8C ((unsigned char)0xBF)
-
-// Convert the given char input of UTF-8 format into a wchar.
-wstring utf8_to_wchar(
-    const char* str)
-{
-    long b=0, c=0;
-    if ((unsigned char)str[0]==BOM8A && (unsigned char)str[1]==BOM8B &&(unsigned char)str[2]==BOM8C)
-        str+=3;
-    for (const unsigned char *a=(unsigned char *)str;*a;a++)
-        if (((unsigned char)*a)<128 || (*a&192)==192)
-            c++;
-    wchar_t *buf= new wchar_t[c+1];
-    buf[c]=0;
-    for (unsigned char *a=(unsigned char*)str;*a;a++){
-        if (!(*a&128))
-            //Byte represents an ASCII character. Direct copy will do.
-            buf[b]=*a;
-        else if ((*a&192)==128)
-            //Byte is the middle of an encoded character. Ignore.
-            continue;
-        else if ((*a&224) == 192)
-            //Byte represents the start of an encoded character in the range U+0080 to U+07FF
-            buf[b]=((*a&31)<<6) | (a[1]&63);
-        else if ((*a&240) == 224)
-            //Byte represents the start of an encoded character in the range U+07FF to U+FFFF
-            buf[b]=((*a&15)<<12) | ((a[1]&63)<<6) | (a[2]&63);
-        else if ((*a&248) == 240){
-            //Byte represents the start of an encoded character beyond U+FFFF limit of 16-bit ints
-            buf[b]='?';
-        }
-        b++;
-    }
-
-    wstring wstr(buf, c);
-    delete[] buf;
-
-    return wstr;
-}
-
-#ifdef WIN_NT
-// Convert the given wchar string input into a multibyte char string output.
-string wchar_to_mbs(
-    const wchar_t* str)
-{
-    string result;
-    if (!str)
-        return result;
-
-    wstring wstr(str);
-    // to be on the safe side, simply use twice the size
-    char* buffer = new char[wstr.size()*2 + 1];
-    size_t count;
-    errno_t err = wcstombs_s(&count, buffer, wstr.size()*2+1, str, wstr.size());
-    if (!err)
-        result = string(buffer, count-1);
-    delete[] buffer;
-
-    return result;
-}
-
-#if 0 // uses windows.h functionality instead of "manual" en/decoding
-// from UTF8
-std::wstring string_to_wide_string(const std::string& str)
-{
-    if (str.empty())
-        return std::wstring();
-
-    const int size_needed = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.length(), nullptr, 0);
-    if (size_needed <= 0)
-        return std::wstring();
-
-    std::vector<wchar_t> result(size_needed+10); // MSDN has this +10, for whatever reason
-    MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, result.data(), size_needed+10);
-    return result.data();
-}
-
-// to UTF8
-std::string wide_string_to_string(const std::wstring& wide_str)
-{
-    if (wide_str.empty())
-        return std::string();
-
-    const int size_needed = WideCharToMultiByte(CP_UTF8, 0, wide_str.c_str(), (int)wide_str.length(), nullptr, 0, nullptr, nullptr);
-    if (size_needed <= 0)
-        return std::string();
-
-    std::vector<char> result(size_needed);
-    WideCharToMultiByte(CP_UTF8, 0, wide_str.c_str(), -1, result.data(), size_needed, nullptr, nullptr);
-    return result.data();
-}
-#endif
-#endif
-
-// Converts a wchar_t * string into an utf8 encoded string.
+// Note further code copies in mdl/compiler/compilercore/compilercore_wchar_support.cpp and in
+// prod/mdl_examples/mdl_sdk/shared/utils/strings.h
 string wchar_to_utf8(const wchar_t *src)
 {
     string res;
@@ -316,6 +219,7 @@ string wchar_to_utf8(const wchar_t *src)
                 res += char(0xBF);
                 res += char(0xBD);
             }
+            ++p;
         } else if (code <= 0xFFFF) {
             if (code < 0xD800 || code > 0xDFFF) {
                 // 1110xxxx 10xxxxxx 10xxxxxx
@@ -350,6 +254,151 @@ string wchar_to_utf8(const wchar_t *src)
     }
     return res;
 }
+
+namespace {
+
+// Converts one utf8 character to a utf32 encoded unicode character.
+//
+// Note further code copies in mdl/compiler/compilercore/compilercore_wchar_support.cpp and in
+// prod/mdl_examples/mdl_sdk/shared/utils/strings.h
+char const *utf8_to_unicode_char(char const *up, unsigned &res)
+{
+    bool error = false;
+    unsigned char ch = up[0];
+
+    // find start code: either 0xxxxxxx or 11xxxxxx
+    while ((ch >= 0x80) && ((ch & 0xC0) != 0xC0)) {
+        ++up;
+        ch = up[0];
+    }
+
+    if (ch <= 0x7F) {
+        // 0xxxxxxx
+        res = ch;
+        up += 1;
+    } else if ((ch & 0xF8) == 0xF0) {
+        // 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+        unsigned c1 = ch & 0x07; ch = up[1]; error |= (ch & 0xC0) != 0x80;
+        unsigned c2 = ch & 0x3F; ch = up[2]; error |= (ch & 0xC0) != 0x80;
+        unsigned c3 = ch & 0x3F; ch = up[3]; error |= (ch & 0xC0) != 0x80;
+        unsigned c4 = ch & 0x3F;
+        res = (c1 << 18) | (c2 << 12) | (c3 << 6) | c4;
+
+        // must be U+10000 .. U+10FFFF
+        error |= (res < 0x1000) || (res > 0x10FFFF);
+
+        // Because surrogate code points are not Unicode scalar values, any UTF-8 byte
+        // sequence that would otherwise map to code points U+D800..U+DFFF is illformed
+        error |= (0xD800 <= res) && (res <= 0xDFFF);
+
+        if (!error) {
+            up += 4;
+        } else {
+            res = 0xFFFD;  // replacement character
+            up += 1;
+        }
+    } else if ((ch & 0xF0) == 0xE0) {
+        // 1110xxxx 10xxxxxx 10xxxxxx
+        unsigned c1 = ch & 0x0F; ch = up[1]; error |= (ch & 0xC0) != 0x80;
+        unsigned c2 = ch & 0x3F; ch = up[2]; error |= (ch & 0xC0) != 0x80;
+        unsigned c3 = ch & 0x3F;
+        res = (c1 << 12) | (c2 << 6) | c3;
+
+        // must be U+0800 .. U+FFFF
+        error |= res < 0x0800;
+
+        // Because surrogate code points are not Unicode scalar values, any UTF-8 byte
+        // sequence that would otherwise map to code points U+D800..U+DFFF is illformed
+        error |= (0xD800 <= res) && (res <= 0xDFFF);
+
+        if (!error) {
+            up += 3;
+        } else {
+            res = 0xFFFD;  // replacement character
+            up += 1;
+        }
+    } else if ((ch & 0xE0) == 0xC0) {
+        // 110xxxxx 10xxxxxx
+        unsigned c1 = ch & 0x1F; ch = up[1]; error |= (ch & 0xC0) != 0x80;
+        unsigned c2 = ch & 0x3F;
+        res = (c1 << 6) | c2;
+
+        // must be U+0080 .. U+07FF
+        error |= res < 0x80;
+
+        if (!error) {
+            up += 2;
+        } else {
+            res = 0xFFFD;  // replacement character
+            up += 1;
+        }
+    } else {
+        // error
+        res = 0xFFFD;  // replacement character
+        up += 1;
+    }
+    return up;
+}
+
+} // namespace
+
+void utf16_append(wstring &s, unsigned c);
+
+wstring utf8_to_wchar(char const *src)
+{
+    wstring res;
+
+    // skip BOM
+    if (    (static_cast<unsigned char>(src[0]) == 0xEFu)
+        &&  (static_cast<unsigned char>(src[1]) == 0xBBu)
+        &&  (static_cast<unsigned char>(src[2]) == 0xBFu))
+        src += 3;
+
+    while (*src != '\0') {
+        unsigned unicode_char;
+
+        src = utf8_to_unicode_char(src, unicode_char);
+        utf16_append(res, unicode_char);
+    }
+    return res;
+}
+
+// Add an unicode utf32 character to an utf16 string.
+void utf16_append(wstring &s, unsigned c)
+{
+    // assume only valid utf32 characters added
+    if (c < 0x10000) {
+        s += static_cast<wchar_t>(c);
+    } else {
+            // encode as surrogate pair
+        c -= 0x10000;
+        s += static_cast<wchar_t>((c >> 10) + 0xD800);
+        s += static_cast<wchar_t>((c & 0x3FF) + 0xDC00);
+    }
+}
+
+#ifdef MI_PLATFORM_WINDOWS
+
+string wchar_to_mbs(
+    const wchar_t* str)
+{
+    string result;
+    if (!str)
+        return result;
+
+    wstring wstr(str);
+    // to be on the safe side, simply use twice the size
+    char* buffer = new char[wstr.size()*2 + 1];
+    size_t count;
+    errno_t err = wcstombs_s(&count, buffer, wstr.size()*2+1, str, wstr.size());
+    if (!err)
+        result = string(buffer, count-1);
+    delete[] buffer;
+
+    return result;
+}
+
+#endif // MI_PLATFORM_WINDOWS
 
 // Parse and split a string to get a token list.
 void split(

@@ -75,8 +75,8 @@ bool Image_plugin_impl::init( mi::neuraylib::IPlugin_api* plugin_api)
 
 bool Image_plugin_impl::exit( mi::neuraylib::IPlugin_api* plugin_api)
 {
-    m_image_api = 0;
-    g_logger = 0;
+    m_image_api = nullptr;
+    g_logger = nullptr;
     return true;
 }
 
@@ -84,21 +84,28 @@ const char* Image_plugin_impl::get_file_extension( mi::Uint32 index) const
 {
     if( index == 0)
         return "dds";
-    return 0;
+    return nullptr;
 }
 
 const char* Image_plugin_impl::get_supported_type( mi::Uint32 index) const
 {
     if( index == 0) return "Rgba";
     if( index == 1) return "Rgb";
-    return 0;
+    return nullptr;
 }
 
-bool Image_plugin_impl::test( const mi::Uint8* buffer, mi::Uint32 file_size) const
+bool Image_plugin_impl::test( mi::neuraylib::IReader* reader) const
 {
-    if( file_size < 4)
+    const mi::Sint64 N = 4;
+    char buffer[N];
+    mi::Sint64 bytes_read = reader->read( buffer, sizeof( buffer));
+    if( bytes_read != N)
         return false;
-    return strncmp( reinterpret_cast<const char*>( buffer), "DDS ", 4) == 0;
+
+    return buffer[0] == 'D'
+        && buffer[1] == 'D'
+        && buffer[2] == 'S'
+        && buffer[3] == ' ';
 }
 
 mi::neuraylib::Impexp_priority Image_plugin_impl::get_priority() const
@@ -118,35 +125,35 @@ mi::neuraylib::IImage_file* Image_plugin_impl::open_for_writing(
     mi::Uint32 quality) const
 {
     if( !writer || !pixel_type)
-        return 0;
+        return nullptr;
 
     if( !writer->supports_absolute_access())
-        return 0;
+        return nullptr;
 
     // Invalid canvas properties
     if( resolution_x == 0 || resolution_y == 0 || nr_of_layers == 0 || miplevels == 0
         || gamma <= 0.0f)
-        return 0;
+        return nullptr;
 
     if( is_cubemap && nr_of_layers != 6)
-        return 0;
+        return nullptr;
 
     // DDS cannot handle the combination of these features
     if( nr_of_layers > 1 && miplevels > 1)
-        return 0;
+        return nullptr;
 
     return new Image_file_writer_impl(
         writer, pixel_type, resolution_x, resolution_y, nr_of_layers, miplevels, is_cubemap, gamma);
 }
 
 mi::neuraylib::IImage_file* Image_plugin_impl::open_for_reading(
-    mi::neuraylib::IReader* reader) const
+    mi::neuraylib::IReader* reader, const char* selector) const
 {
     if( !reader)
-        return 0;
+        return nullptr;
 
     if( !reader->supports_absolute_access())
-        return 0;
+        return nullptr;
 
     return new Image_file_reader_impl( m_image_api.get(), reader);
 }
@@ -159,7 +166,7 @@ mi::base::Plugin* mi_plugin_factory(
     void* context)            // context given to the library, ignore
 {
     if( index >= 1)
-        return 0;
+        return nullptr;
     return new Image_plugin_impl();
 }
 

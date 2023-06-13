@@ -101,12 +101,14 @@ std::string lookup_thumbnail(
 ///                                separators), or \c NULL for string-based modules.
 /// \param module_name             The MDL module name, or \c NULL for import of resources (absolute
 ///                                file paths only) without module context.
+/// \param errors_are_warnings     Report errors only as warnings.
 /// \return                        The tag for the MDL resource (invalid in case of failures).
 DB::Tag mdl_resource_to_tag(
     DB::Transaction* transaction,
     const mi::mdl::IValue_resource* value,
     const char* module_filename,
     const char* module_name,
+    bool errors_are_warnings,
     Execution_context* context);
 
 /// Returns the DB tag corresponding to an MDL texture.
@@ -117,6 +119,7 @@ DB::Tag mdl_texture_to_tag(
     const mi::mdl::IValue_texture* value,
     const char* module_filename,
     const char* module_name,
+    bool errors_are_warnings,
     Execution_context* context);
 
 /// Returns the DB tag corresponding to an MDL texture.
@@ -127,6 +130,8 @@ DB::Tag mdl_texture_to_tag(
     const char* file_path,
     const char* module_filename,
     const char* module_name,
+    bool errors_are_warnings,
+    mi::mdl::IType_texture::Shape shape,
     mi::Float32 gamma,
     const char* selector,
     bool shared,
@@ -140,6 +145,7 @@ DB::Tag mdl_volume_texture_to_tag(
     const char* file_path,
     const char* module_filename,
     const char* module_name,
+    bool errors_are_warnings,
     const char* selector,
     bool shared,
     Execution_context* context);
@@ -152,6 +158,7 @@ DB::Tag mdl_light_profile_to_tag(
     const mi::mdl::IValue_light_profile* value,
     const char* module_filename,
     const char* module_name,
+    bool errors_are_warnings,
     Execution_context* context);
 
 /// Returns the DB tag corresponding to an MDL light profile.
@@ -163,6 +170,7 @@ DB::Tag mdl_light_profile_to_tag(
     const char* module_filename,
     const char* module_name,
     bool shared,
+    bool errors_are_warnings,
     Execution_context* context);
 
 /// Returns the DB tag corresponding to an MDL BSDF measurement.
@@ -173,6 +181,7 @@ DB::Tag mdl_bsdf_measurement_to_tag(
     const mi::mdl::IValue_bsdf_measurement* value,
     const char* module_filename,
     const char* module_name,
+    bool errors_are_warnings,
     Execution_context* context);
 
 /// Returns the DB tag corresponding to an MDL BSDF measurement.
@@ -184,6 +193,7 @@ DB::Tag mdl_bsdf_measurement_to_tag(
     const char* module_filename,
     const char* module_name,
     bool shared,
+    bool errors_are_warnings,
     Execution_context* context);
 
 /// Generates a name that is unique in the DB (at least from the given transaction's point of view).
@@ -331,7 +341,7 @@ struct Hash_ptr
 {
     size_t operator()(const T* p) const
     {
-        size_t t = p - (T const *)0;
+        size_t t = reinterpret_cast<size_t>(p);
         return ((t) / (sizeof(size_t) * 2)) ^ (t >> 16);
     }
 };
@@ -608,7 +618,8 @@ private:
 class Mdl_container_callback : public mi::base::Interface_implement<IMAGE::IMdl_container_callback>
 {
 public:
-    mi::neuraylib::IReader* get_reader( const char* container_filename, const char* member_filename);
+    mi::neuraylib::IReader* get_reader(
+        const char* container_filename, const char* member_filename);
 };
 
 /// The implementation of Image_set used by the MDL integration
@@ -705,7 +716,8 @@ private:
 };
 
 
-/// An implementation of mi::mdl::IMDL_resource_set that copies all data of its constructor argument.
+/// An implementation of mi::mdl::IMDL_resource_set that copies all data of its constructor
+/// argument.
 ///
 /// Can be used to enforce reading all data from \c other once upfront in situations where later
 /// calls are not feasible.

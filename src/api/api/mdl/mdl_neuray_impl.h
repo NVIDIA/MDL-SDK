@@ -68,6 +68,7 @@ class Mdl_backend_api_impl;
 class Mdl_compatibility_api_impl;
 class Mdl_configuration_impl;
 class Mdl_discovery_api_impl;
+class Mdl_distiller_api_impl;
 class Mdl_evaluator_api_impl;
 class Mdl_factory_impl;
 class Mdl_i18n_configuration_impl;
@@ -160,6 +161,7 @@ private:
     NEURAY::Mdl_compatibility_api_impl* m_mdl_compatibility_api_impl;
     NEURAY::Mdl_configuration_impl* m_mdl_configuration_impl;
     NEURAY::Mdl_discovery_api_impl* m_mdl_discovery_api_impl;
+    NEURAY::Mdl_distiller_api_impl* m_mdl_distiller_api_impl;
     NEURAY::Mdl_evaluator_api_impl* m_mdl_evaluator_api_impl;
     NEURAY::Mdl_factory_impl* m_mdl_factory_impl;
     NEURAY::Mdl_i18n_configuration_impl* m_mdl_i18n_configuration_impl;
@@ -189,4 +191,3 @@ private:
 } // namespace MI
 
 #endif // API_API_MDL_NEURAY_IMPL_H
-

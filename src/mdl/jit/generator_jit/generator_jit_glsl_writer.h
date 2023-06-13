@@ -183,13 +183,15 @@ protected:
     /// \param options              the backend options
     /// \param messages             the backend messages
     /// \param enable_debug         true, if debug info should be generated
+    /// \param enable_opt_remarks   true, if OptimizationRemarks should be enabled
     GLSLWriterBasePass(
         char                        &pid,
         mi::mdl::IAllocator         *alloc,
         Type_mapper const           &type_mapper,
         mi::mdl::Options_impl const &options,
         mi::mdl::Messages_impl      &messages,
-        bool                        enable_debug);
+        bool                        enable_debug,
+        bool                        enable_opt_remarks);
 
     /// Return the name for this pass.
     llvm::StringRef getPassName() const final;
@@ -611,6 +613,11 @@ protected:
     /// \param code    the code of the error message
     void warning(int code);
 
+    /// Add a JIT backend error message to the messages.
+    ///
+    /// \param code    the code of the error message
+    void error(int code);
+
     /// Called for every function that is just a prototype in the original LLVM module.
     ///
     /// \param func        the LLVM function (declaration)
@@ -639,9 +646,11 @@ protected:
 
     /// Finalize the compilation unit and write it to the given output stream.
     ///
+    /// \param M       the LLVM module
     /// \param code    the generated source code
     /// \param remaps  list of remapped entities
     void finalize(
+        llvm::Module                     &M,
         Generated_code_source            *code,
         list<glsl::Symbol *>::Type const &remaps);
 
@@ -671,6 +680,13 @@ protected:
     /// Generates a new global static const variable to hold an LLVM value.
     glsl::Definition *create_global_const(
         llvm::StringRef name, glsl::Expr *c_expr);
+
+    /// Mark the function with the noinline attribute.
+    static void add_noinline_attribute(
+        glsl::Declaration_function *func)
+    {
+        // unsupported yet
+    }
 
     /// Dump the current AST.
     void dump_ast();
@@ -722,7 +738,7 @@ protected:
 
     typedef hash_map<string, unsigned, string_hash<string> >::Type Ref_fname_id_map;
 
-    /// References source files.
+    /// Referenced source files.
     Ref_fname_id_map m_ref_fnames;
 
     /// Backend messages.

@@ -147,46 +147,48 @@ public:
     /// \param selector           The selector (or \c NULL).
     /// \param only_first_level   Indicates whether only the first (or all) miplevels should be
     ///                           read from the file.
-    /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
+    /// \param[out] errors        An optional pointer to an #mi::Sint32 to which an error code will
     ///                           be written. The error codes have the following meaning:
-    ///                           -  0: Success.
-    ///                           - -3: Failure to open the file.
-    ///                           - -4: No image plugin found to handle the file.
-    ///                           - -5: The image plugin failed to import the file.
+    ///                           -   0: Success.
+    ///                           -  -3: No image plugin found to handle the file.
+    ///                           -  -5: Failure to open the file.
+    ///                           -  -7: The image plugin failed to import the file.
     /// \return                   The requested mipmap, or a dummy mipmap with a 1x1 pink pixel in
     ///                           case of errors.
     virtual IMipmap* create_mipmap(
+        File_based,
         const std::string& filename,
         const char* selector,
         bool only_first_level = true,
-        mi::Sint32* errors = 0) const = 0;
+        mi::Sint32* errors = nullptr) const = 0;
 
-    /// Creates an archive-based mipmap obtained from a reader.
+    /// Creates an container-based mipmap obtained from a reader.
     ///
     /// \param reader             The reader to be used to obtain the mipmap. Needs to support
     ///                           absolute access.
-    /// \param archive_filename   The resolved filename of the archive itself.
-    /// \param member_filename    The relative filename of the mipmap in the archive.
+    /// \param container_filename The resolved filename of the container itself.
+    /// \param member_filename    The relative filename of the mipmap in the container.
     /// \param selector           The selector (or \c NULL).
     /// \param only_first_level   Indicates whether only the first (or all) miplevels should be
     ///                           read from the reader.
-    /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
+    /// \param[out] errors        An optional pointer to an #mi::Sint32 to which an error code will
     ///                           be written. The error codes have the following meaning:
-    ///                           -  0: Success.
-    ///                           - -3: Invalid reader, or the reader does not support absolute
-    ///                                 access.
-    ///                           - -4: No image plugin found to handle the data.
-    ///                           - -5: The image plugin failed to import the data.
+    ///                           -   0: Success.
+    ///                           -  -1: Invalid reader.
+    ///                           -  -3: No image plugin found to handle the data.
+    ///                           -  -6: The reader does not support absolute access.
+    ///                           -  -7: The image plugin failed to import the data.
+    ///                           - -10: Failure to apply the given selector.
     /// \return                   The requested mipmap, or a dummy mipmap with a 1x1 pink pixel in
     ///                           case of errors.
     virtual IMipmap* create_mipmap(
         Container_based,
         mi::neuraylib::IReader* reader,
-        const std::string& archive_filename,
+        const std::string& container_filename,
         const std::string& member_filename,
         const char* selector,
         bool only_first_level = true,
-        mi::Sint32* errors = 0) const = 0;
+        mi::Sint32* errors = nullptr) const = 0;
 
     /// Creates a memory-based mipmap obtained from a reader.
     ///
@@ -198,13 +200,14 @@ public:
     ///                           or \c NULL in other contexts.
     /// \param only_first_level   Indicates whether only the first (or all) miplevels should be
     ///                           read from the reader.
-    /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
+    /// \param[out] errors        An optional pointer to an #mi::Sint32 to which an error code will
     ///                           be written. The error codes have the following meaning:
-    ///                           -  0: Success.
-    ///                           - -3: Invalid reader, or the reader does not support absolute
-    ///                                 access.
-    ///                           - -4: No image plugin found to handle the data.
-    ///                           - -5: The image plugin failed to import the data.
+    ///                           -   0: Success.
+    ///                           -  -1: Invalid reader.
+    ///                           -  -3: No image plugin found to handle the data.
+    ///                           -  -6: The reader does not support absolute access.
+    ///                           -  -7: The image plugin failed to import the data.
+    ///                           - -10: Failure to apply the given selector.
     /// \return                   The requested mipmap, or a dummy mipmap with a 1x1 pink pixel in
     ///                           case of errors.
     virtual IMipmap* create_mipmap(
@@ -214,9 +217,25 @@ public:
         const char* selector,
         const char* mdl_file_path = nullptr,
         bool only_first_level = true,
-        mi::Sint32* errors = 0) const = 0;
+        mi::Sint32* errors = nullptr) const = 0;
 
-    /// Creates a memory-based mipmap with a given canvas as base level.
+    /// Creates a mipmap from the given canvas.
+    ///
+    /// This method creates the actual miplevels. See method below for wrapping them into an
+    /// instance of IMipmap. Note that the \p base_canvas is \em not included in \p mipmaps.
+    ///
+    /// \param mipmaps            A vector to which the created miplevels are written.
+    /// \param base_canvas        The canvas to create the miplevels from.
+    /// \param gamma              An optional gamma value. If this value is different from
+    ///                           zero it is used instead of the canvas gamma.
+    virtual void create_mipmap(
+        std::vector<mi::base::Handle<mi::neuraylib::ICanvas> >& mipmaps,
+        const mi::neuraylib::ICanvas* base_canvas,
+        mi::Float32 gamma = 0.0f) const = 0;
+
+    /// Creates a mipmap from the given canvases.
+    ///
+    /// This method wraps the given canvases into a mipmap. See the method above for creating them.
     ///
     /// Note that the canvases are not copied, but shared. See copy_canvas() below if sharing is not
     /// desired.
@@ -230,19 +249,11 @@ public:
         std::vector<mi::base::Handle<mi::neuraylib::ICanvas> >& canvases,
         bool is_cubemap = false) const = 0;
 
-    /// Creates an array of mipmaps from the given canvas.
-    ///
-    /// \param mipmaps            A vector to which the created mipmaps are written.
-    /// \param base_canvas        The canvas to create the mipmaps from.
-    /// \param gamma              An optional gamma value. If this value is different from
-    ///                           zero it is used instead of the canvas gamma.
-    virtual void create_mipmaps(
-        std::vector<mi::base::Handle<mi::neuraylib::ICanvas> >& mipmaps,
-        const mi::neuraylib::ICanvas* base_canvas,
-        mi::Float32 gamma = 0.0f) const = 0;
-
     /// Creates a dummy mipmap (1x1 pink pixel).
     virtual IMipmap* create_dummy_mipmap() = 0;
+
+    /// Checks whether the mipmap is a dummy (1x1 pink pixel).
+    virtual bool is_dummy_mipmap( const IMipmap* mipmap) const = 0;
 
     /// Creates a memory-based canvas with given pixel type, width, height, and layers.
     ///
@@ -270,46 +281,49 @@ public:
     /// \param filename           The file that shall be represented by this canvas.
     /// \param selector           The selector (or \c NULL).
     /// \param miplevel           The miplevel in the file that shall be represented by this canvas.
-    /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
+    /// \param[out] errors        An optional pointer to an #mi::Sint32 to which an error code will
     ///                           be written. The error codes have the following meaning:
-    ///                           -  0: Success.
-    ///                           - -3: Failure to open the file.
-    ///                           - -4: No image plugin found to handle the file.
-    ///                           - -5: The image plugin failed to import the file.
+    ///                           -   0: Success.
+    ///                           -  -3: No image plugin found to handle the file.
+    ///                           -  -5: Failure to open the file.
+    ///                           -  -7: The image plugin failed to import the file.
+    ///                           - -10: Failure to apply the given selector.
     /// \return                   The requested canvas, or a dummy canvas with a 1x1 pink pixel in
     ///                           case of errors.
     virtual mi::neuraylib::ICanvas* create_canvas(
+        File_based,
         const std::string& filename,
         const char* selector,
         mi::Uint32 miplevel = 0,
-        mi::Sint32* errors = 0) const = 0;
+        mi::Sint32* errors = nullptr) const = 0;
 
     /// Creates a memory-based canvas obtained from a reader.
     ///
     /// \param reader             The reader to be used to obtain the canvas. Needs to support
     ///                           absolute access.
-    /// \param archive_filename   The resolved filename of the archive itself.
-    /// \param member_filename    The relative filename of the canvas in the archive.
+    /// \param container_filename The resolved filename of the container itself.
+    /// \param member_filename    The relative filename of the canvas in the container.
     /// \param selector           The selector (or \c NULL).
     /// \param miplevel           The miplevel in the reader that shall be represented by this
     ///                           canvas.
-    /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
+    /// \param[out] errors        An optional pointer to an #mi::Sint32 to which an error code will
     ///                           be written. The error codes have the following meaning:
-    ///                           -  0: Success.
-    ///                           - -3: Invalid reader, or the reader does not support absolute
-    ///                                 access.
-    ///                           - -4: No image plugin found to handle the data.
-    ///                           - -5: The image plugin failed to import the data.
+    ///                           -   0: Success.
+    ///                           -  -1: Invalid reader.
+    ///                           -  -3: No image plugin found to handle the data.
+    ///                           -  -6: The reader does not support absolute access.
+    ///                           -  -7: The image plugin failed to import the data.
+    ///                           - -10: Failure to apply the given selector.
     /// \return                   The requested canvas, or a dummy canvas with a 1x1 pink pixel in
     ///                           case of errors.
     virtual mi::neuraylib::ICanvas* create_canvas(
         Container_based,
         mi::neuraylib::IReader* reader,
-        const std::string& archive_filename,
+        const std::string& container_filename,
         const std::string& member_filename,
         const char* selector,
         mi::Uint32 miplevel = 0,
-        mi::Sint32* errors = 0) const = 0;
+        mi::Sint32* errors = nullptr) const = 0;
 
     /// Creates a memory-based canvas that represents encoded pixel data (as buffer in memory).
     ///
@@ -325,13 +339,14 @@ public:
     ///                           or \c NULL in other contexts.
     /// \param miplevel           The miplevel in the buffer that shall be represented by this
     ///                           canvas.
-    /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
+    /// \param[out] errors        An optional pointer to an #mi::Sint32 to which an error code will
     ///                           be written. The error codes have the following meaning:
-    ///                           -  0: Success.
-    ///                           - -3: Invalid reader, or the reader does not support absolute
-    ///                                 access.
-    ///                           - -4: No image plugin found to handle the data.
-    ///                           - -5: The image plugin failed to import the data.
+    ///                           -   0: Success.
+    ///                           -  -1: Invalid reader.
+    ///                           -  -3: No image plugin found to handle the data.
+    ///                           -  -6: The reader does not support absolute access.
+    ///                           -  -7: The image plugin failed to import the data.
+    ///                           - -10: Failure to apply the given selector.
     /// \return                   The requested canvas, or a dummy canvas with a 1x1 pink pixel in
     ///                           case of errors.
     virtual mi::neuraylib::ICanvas* create_canvas(
@@ -341,7 +356,7 @@ public:
         const char* selector,
         const char* mdl_file_path = nullptr,
         mi::Uint32 miplevel = 0,
-        mi::Sint32* errors = 0) const = 0;
+        mi::Sint32* errors = nullptr) const = 0;
 
     /// Creates a memory-based canvas with given array of tiles.
     ///
@@ -676,13 +691,13 @@ public:
     ///                    \p extension, or \c NULL in case of failure.
     virtual mi::neuraylib::IImage_plugin* find_plugin_for_export( const char* extension) const = 0;
 
-    /// Sets the callback to support lazy loading of images in MDL archives and MDLE.
+    /// Sets the callback to support lazy loading of images in MDL containers and MDLE.
     ///
     /// Pass \c NULL to clear the callback. Not thread-safe. Resetting during runtime causes errors
     /// for not yet loaded tiles.
     virtual void set_mdl_container_callback( IMdl_container_callback* mdl_container_callback) = 0;
 
-    /// Returns the callback to support lazy loading of images in MDL archives and MDLE.
+    /// Returns the callback to support lazy loading of images in MDL containers and MDLE.
     ///
     /// ... or \c NULL if no callback is set.
     virtual IMdl_container_callback* get_mdl_container_callback() const = 0;
@@ -706,14 +721,14 @@ public:
 
 };
 
-/// Callback to support lazy loading of images in MDL archives and MDLE
+/// Callback to support lazy loading of images in MDL containers and MDLE
 class IMdl_container_callback : public
     mi::base::Interface_declare<0x039d55cf,0xd57f,0x4ef8,0x8e,0xb4,0xc7,0x2b,0x9e,0x77,0x02,0x96>
 {
 public:
-    /// Returns a reader for a file in an MDL archive, MDLE, or \c NULL in case of failure.
+    /// Returns a reader for a file in an MDL container, MDLE, or \c NULL in case of failure.
     virtual mi::neuraylib::IReader* get_reader(
-        const char* archive_filename, const char* member_filename) = 0;
+        const char* container_filename, const char* member_filename) = 0;
 };
 
 } // namespace IMAGE

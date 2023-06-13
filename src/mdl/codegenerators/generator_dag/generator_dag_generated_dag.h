@@ -784,17 +784,49 @@ public:
         struct Dependence_result {
             /// Constructor.
             Dependence_result(
-                bool        depends_on_transform,
-                bool        depends_on_object_id,
-                bool        edf_global_distribution,
-                bool        depends_on_uniform_scene_data,
-                String_set  referenced_scene_data)
+                bool             depends_on_transform,
+                bool             depends_on_object_id,
+                bool             edf_global_distribution,
+                bool             depends_on_uniform_scene_data,
+                bool             scene_name_is_non_const,
+                String_set       &&referenced_scene_data,
+                String_set       &&referenced_strings)
             : m_depends_on_transform(depends_on_transform)
             , m_depends_on_object_id(depends_on_object_id)
             , m_edf_global_distribution(edf_global_distribution)
             , m_depends_on_uniform_scene_data(depends_on_uniform_scene_data)
+            , m_scene_name_is_non_const(scene_name_is_non_const)
             , m_referenced_scene_data(referenced_scene_data)
+            , m_referenced_strings(referenced_strings)
             {
+            }
+
+            /// Empty constructor.
+            explicit Dependence_result(IAllocator *alloc)
+            : m_depends_on_transform(false)
+            , m_depends_on_object_id(false)
+            , m_edf_global_distribution(false)
+            , m_depends_on_uniform_scene_data(false)
+            , m_scene_name_is_non_const(false)
+            , m_referenced_scene_data(alloc)
+            , m_referenced_strings(alloc)
+            {
+            }
+
+            /// Update by another result.
+            void update(Dependence_result const &other)
+            {
+                m_depends_on_transform          |= other.m_depends_on_transform;
+                m_depends_on_object_id          |= other.m_depends_on_object_id;
+                m_edf_global_distribution       |= other.m_edf_global_distribution;
+                m_depends_on_uniform_scene_data |= other.m_depends_on_uniform_scene_data;
+                m_scene_name_is_non_const       |= other.m_scene_name_is_non_const;
+                m_referenced_scene_data.insert(
+                    other.m_referenced_scene_data.begin(),
+                    other.m_referenced_scene_data.end());
+                m_referenced_strings.insert(
+                    other.m_referenced_strings.begin(),
+                    other.m_referenced_strings.end());
             }
 
             /// True if this instance depends on the object transforms.
@@ -809,8 +841,14 @@ public:
             /// True, if this instance depends on uniform scene data.
             bool m_depends_on_uniform_scene_data;
 
+            /// True, if not all scene::data_lookup() functions operate on a literal.
+            bool m_scene_name_is_non_const;
+
             /// Set of scene data names referenced by this instance.
             String_set m_referenced_scene_data;
+
+            /// Set of string literals referenced by this instance.
+            String_set m_referenced_strings;
         };
 
         typedef ptr_hash_map<IDefinition const, Dependence_result>::Type Dep_analysis_cache;
@@ -1291,6 +1329,12 @@ public:
             /// Get the set of scene data names referenced by this instance.
             String_set const &get_referenced_scene_data() const { return m_referenced_scene_data; }
 
+            /// Get the set of referenced strings by this instance.
+            String_set const &get_referenced_strings() const { return m_referenced_strings; }
+
+            /// Returns true if this instance uses non-const scene data.
+            bool uses_non_const_scene_data() const { return m_scene_name_is_non_const; }
+
         private:
             /// Get the allocator.
             IAllocator *get_allocator() const { return m_arena.get_allocator(); }
@@ -1422,6 +1466,9 @@ public:
             /// qualified.
             bool is_layer_qualified(DAG_node const *expr);
 
+            /// Process string constants.
+            void process_string_constants(IValue const *v);
+
         private:
             /// The call name resolver to be used.
             ICall_name_resolver &m_resolver;
@@ -1493,6 +1540,15 @@ public:
 
             /// Set of scene data names referenced by this instance.
             String_set m_referenced_scene_data;
+
+            /// Set of referenced strings by this instance.
+            String_set m_referenced_strings;
+
+            /// True, if referenced strings should be ignored .
+            bool m_ignore_referenced_strings;
+
+            /// True, if not all scene::data_lookup() functions operate on a literal.
+            bool m_scene_name_is_non_const;
 
             /// If true, instantiate arguments.
             bool m_instantiate_args;

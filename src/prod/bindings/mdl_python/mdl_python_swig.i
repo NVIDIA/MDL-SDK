@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright 2022 NVIDIA Corporation. All rights reserved.
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
  *****************************************************************************/
 
 /* File : example.i */
@@ -46,7 +46,7 @@
 
 %{
 /***************************************************************************************************
- * Copyright 2022 NVIDIA Corporation. All rights reserved.
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
  **************************************************************************************************/
 
 #ifdef IRAY_SDK
@@ -108,7 +108,7 @@ extern bool unload();
     }
 
     // release function exposed to python.
-    // decrements the ref count internally and makes the python proxy invalid (holds nullptr). 
+    // decrements the ref count internally and makes the python proxy invalid (holds nullptr).
     void release() {
         $self->drop(false);
     }
@@ -116,7 +116,7 @@ extern bool unload();
 
 // Workaround for some issues with template arguments that contain 'enum' or 'struct' in their names
 %{
-namespace mi 
+namespace mi
 {
     namespace neuraylib
     {
@@ -192,7 +192,7 @@ namespace mi
                 return typed_interface
         }
 
-        // TODO create a string representation 
+        // TODO create a string representation
         //const char* __repr__()
         //{
         //    return (*$self).get_debug_str();
@@ -242,7 +242,7 @@ namespace mi
         {
             // get the base ptr for type infos
             res = SWIG_ConvertPtr($input, (void**)&arg_ptr, SWIG_TypeQuery("SmartPtrBase*"), 0);
-            if (SWIG_IsOK(res)) 
+            if (SWIG_IsOK(res))
             {
                 if (!arg_ptr)
                 {
@@ -290,7 +290,7 @@ namespace mi
 
 // Instantiate Handle template for Neuray IInterfaces
 %define NEURAY_CREATE_HANDLE_TEMPLATE(ORG_NAMESPACE, IINTERFACE_TYPE)
-    //#warning Instanciated: IINTERFACE_TYPE
+    //#warning Instantiated: IINTERFACE_TYPE
     %template(IINTERFACE_TYPE) SmartPtr<ORG_NAMESPACE::IINTERFACE_TYPE>;
 %enddef
 
@@ -545,6 +545,7 @@ NEURAY_CREATE_HANDLE_TEMPLATE(mi, IEnum)
 // block we have alphabetical sorting
 
 DICE_INTERFACE(IAttribute_set);
+DICE_INTERFACE(IBaker)
 DICE_INTERFACE(IBsdf_measurement)
 DICE_INTERFACE(ICanvas)
 DICE_INTERFACE(ICanvas_base)
@@ -556,6 +557,7 @@ DICE_INTERFACE(IImage_api);
 DICE_INTERFACE(IMdl_configuration);
 DICE_INTERFACE(IMdl_evaluator_api);
 DICE_INTERFACE(IMessage);
+DICE_INTERFACE(IMdl_distiller_api);
 DICE_INTERFACE(IMdl_execution_context);
 DICE_INTERFACE(IMdl_factory);
 DICE_INTERFACE(IMdl_impexp_api);
@@ -581,9 +583,6 @@ DICE_INTERFACE(IExpression_list)
 DICE_INTERFACE(IExpression_parameter)
 DICE_INTERFACE(IExpression_temporary)
 DICE_INTERFACE(IFunction_call)
-#ifdef MI_NEURAYLIB_DEPRECATED_13_0
-DICE_INTERFACE(IMaterial_definition)
-#endif // MI_NEURAYLIB_DEPRECATED_13_0
 DICE_INTERFACE(IFunction_definition)
 DICE_INTERFACE(IImage)
 DICE_INTERFACE(ILightprofile)
@@ -826,7 +825,6 @@ WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::neuraylib::IExpression_list, get_expression
             DS_BITWISE_OR_ASSIGN = _pymdlsdk._IFunction_definition_DS_BITWISE_OR_ASSIGN
             DS_BITWISE_XOR_ASSIGN = _pymdlsdk._IFunction_definition_DS_BITWISE_XOR_ASSIGN
             DS_BITWISE_AND_ASSIGN = _pymdlsdk._IFunction_definition_DS_BITWISE_AND_ASSIGN
-            DS_SEQUENCE = _pymdlsdk._IFunction_definition_DS_SEQUENCE
             DS_BINARY_LAST = _pymdlsdk._IFunction_definition_DS_BINARY_LAST
 
             DS_TERNARY = _pymdlsdk._IFunction_definition_DS_TERNARY
@@ -946,6 +944,7 @@ WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::neuraylib::IExpression_list, get_expression
             DS_INTRINSIC_TEX_LAST = _pymdlsdk._IFunction_definition_DS_INTRINSIC_TEX_LAST
 
             DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF
+            DS_INTRINSIC_DF_DUSTY_DIFFUSE_REFLECTION_BSDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_DUSTY_DIFFUSE_REFLECTION_BSDF
             DS_INTRINSIC_DF_FIRST = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_FIRST
             DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF
             DS_INTRINSIC_DF_SPECULAR_BSDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_SPECULAR_BSDF
@@ -956,6 +955,7 @@ WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::neuraylib::IExpression_list, get_expression
             DS_INTRINSIC_DF_MEASURED_EDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_MEASURED_EDF
             DS_INTRINSIC_DF_SPOT_EDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_SPOT_EDF
             DS_INTRINSIC_DF_ANISOTROPIC_VDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_ANISOTROPIC_VDF
+            DS_INTRINSIC_DF_FOG_VDF = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_FOG_VDF
             DS_INTRINSIC_DF_NORMALIZED_MIX = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_NORMALIZED_MIX
             DS_INTRINSIC_DF_CLAMPED_MIX = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_CLAMPED_MIX
             DS_INTRINSIC_DF_WEIGHTED_LAYER = _pymdlsdk._IFunction_definition_DS_INTRINSIC_DF_WEIGHTED_LAYER
@@ -1030,18 +1030,17 @@ WRAP_RETURN_IN_FUNCTION(mi::neuraylib::IFunction_definition, get_semantic, IFunc
 
 // special handling for: mi::neuraylib::IMdl_factory
 // ----------------------------------------------------------------------------
-%rename(create_texture_with_ret) mi::neuraylib::IMdl_factory::create_texture(ITransaction*, char const*, IType_texture::Shape, Float32, char const*, bool, Sint32*);
-%rename(create_light_profile_with_ret) mi::neuraylib::IMdl_factory::create_light_profile(ITransaction*, char const*, bool, Sint32*);
-%rename(create_bsdf_measurement_with_ret) mi::neuraylib::IMdl_factory::create_bsdf_measurement(ITransaction*, char const*, bool, Sint32*);
+%rename(create_texture_with_ret) mi::neuraylib::IMdl_factory::create_texture(ITransaction*, char const*, IType_texture::Shape, Float32, char const*, bool, IMdl_execution_context*);
+%rename(create_light_profile_with_ret) mi::neuraylib::IMdl_factory::create_light_profile(ITransaction*, char const*, bool, IMdl_execution_context*);
+%rename(create_bsdf_measurement_with_ret) mi::neuraylib::IMdl_factory::create_bsdf_measurement(ITransaction*, char const*, bool, IMdl_execution_context*);
+
+// special handling for: mi::neuraylib::IMdl_distiller_api
+// ----------------------------------------------------------------------------
+%rename(distill_material_with_ret) mi::neuraylib::IMdl_distiller_api::distill_material(ICompiled_material const*, char const*, IMap const*, Sint32*) const;
 
 // special handling for: mi::neuraylib::ICompiled_material
 // ----------------------------------------------------------------------------
 %rename(get_connected_function_db_name_with_ret) mi::neuraylib::ICompiled_material::get_connected_function_db_name(char const*, Size, Sint32*) const;
-
-#ifdef MI_NEURAYLIB_DEPRECATED_13_0
-// special handling for: mi::neuraylib::IMaterial_definition
-%rename(create_material_instance_with_ret) mi::neuraylib::IMaterial_definition::create_material_instance(const IExpression_list*, Sint32*) const;
-#endif // MI_NEURAYLIB_DEPRECATED_13_0
 
 // special handling for: mi::neuraylib::IType
 // ----------------------------------------------------------------------------
@@ -1174,6 +1173,10 @@ WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::neuraylib::ITransaction, edit)
 %ignore mi::neuraylib::IImage::set_from_canvas(ICanvas*);
 %ignore mi::neuraylib::IImage::set_from_canvas(IArray const*);
 %ignore mi::neuraylib::IImage::set_from_canvas(IArray*);
+%ignore mi::neuraylib::IImage::set_from_canvas(ICanvas const*,char const *);
+%ignore mi::neuraylib::IImage::set_from_canvas(ICanvas*,char const *);
+%ignore mi::neuraylib::IImage::set_from_canvas(IArray const*,char const *);
+%ignore mi::neuraylib::IImage::set_from_canvas(IArray*,char const *);
 
 // ----------------------------------------------------------------------------
 
@@ -1198,14 +1201,12 @@ WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::neuraylib::ITransaction, edit)
 %include "mi/neuraylib/ivalue.h"
 %include "mi/neuraylib/iexpression.h"
 %include "mi/neuraylib/ifunction_call.h"
-#ifdef MI_NEURAYLIB_DEPRECATED_13_0
-%include "mi/neuraylib/imaterial_definition.h"
-#endif // MI_NEURAYLIB_DEPRECATED_13_0
 %include "mi/neuraylib/ifunction_definition.h"
 %include "mi/neuraylib/iimage.h"
 %include "mi/neuraylib/imaterial_instance.h"
 %include "mi/neuraylib/iimage_api.h"
 %include "mi/neuraylib/imdl_configuration.h"
+%include "mi/neuraylib/imdl_distiller_api.h"
 %include "mi/neuraylib/imdl_evaluator_api.h"
 %include "mi/neuraylib/imdl_execution_context.h"
 %include "mi/neuraylib/imdl_factory.h"
@@ -1227,6 +1228,7 @@ WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::neuraylib::ITransaction, edit)
 
 
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IAttribute_set)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IBaker)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IBsdf_measurement)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::ICanvas)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::ICanvas_base)
@@ -1236,6 +1238,7 @@ NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IDeserialized_function_name)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IDeserialized_module_name)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IImage_api)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_configuration)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_distiller_api)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_evaluator_api)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_execution_context)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_factory)
@@ -1262,9 +1265,6 @@ NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IExpression_list)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IExpression_parameter)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IExpression_temporary)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IFunction_call)
-#ifdef MI_NEURAYLIB_DEPRECATED_13_0
-NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMaterial_definition)
-#endif // MI_NEURAYLIB_DEPRECATED_13_0
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IFunction_definition)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IImage)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::ILightprofile)
@@ -1325,6 +1325,7 @@ NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IValue_vector)
 
 
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IAttribute_set)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IBaker)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IBsdf_measurement)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, ICanvas)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, ICanvas_base)
@@ -1334,6 +1335,7 @@ NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IDeserialized_function_name)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IDeserialized_module_name)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IImage_api)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_configuration)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_distiller_api)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_evaluator_api)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_execution_context)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdle_deserialization_callback)
@@ -1362,9 +1364,6 @@ NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IExpression_list)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IExpression_parameter)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IExpression_temporary)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IFunction_call)
-#ifdef MI_NEURAYLIB_DEPRECATED_13_0
-NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMaterial_definition)
-#endif // MI_NEURAYLIB_DEPRECATED_13_0
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IFunction_definition)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IImage)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, ILightprofile)
@@ -1452,4 +1451,3 @@ extern mi::neuraylib::INeuray* load_and_get_ineuray(const char*);
 extern bool load_plugin(mi::neuraylib::INeuray*, const char*);
 extern int unload();
 #endif
-

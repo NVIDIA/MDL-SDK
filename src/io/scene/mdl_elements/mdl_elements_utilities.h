@@ -107,7 +107,8 @@ bool is_deprecated( const std::string& name);
 /// Also works if both parameters are core names.
 bool is_in_module( const std::string& name, const std::string& module_name);
 
-/// Removes all qualifiers if the MDL entity \p name is from module \p module_name (but not from a submodule).
+/// Removes all qualifiers if the MDL entity \p name is from module \p module_name (but not from a
+/// submodule).
 ///
 /// Note that the check is done by string comparison, not by checking the actual module contents.
 std::string remove_qualifiers_if_from_module(
@@ -358,9 +359,10 @@ public:
 
     /// Converts mi::mdl::IValue to MI::MDL::IValue.
     ///
-    /// \param type_int               The expected type of the return value. Used to control whether
-    ///                               array arguments are converted to immediate-sized or deferred-sized
-    ///                               arrays. If \c NULL, the type of \p value is used.
+    /// \param type_int               The expected type of the return value. Used to control
+    ///                               whether array arguments are converted to immediate-sized or
+    ///                               deferred-sized arrays. If \c NULL, the type of \p value is
+    ///                               used.
     /// \param value                  The value to convert.
     /// \return                       The converted value, or \c NULL in case of failures.
     IValue* mdl_value_to_int_value(
@@ -679,13 +681,6 @@ void load_neuray_module( DB::Transaction* transaction);
 
 // **********  Traversal of types, values, and expressions *****************************************
 
-/// Returns the type of a struct field identified by name (needs linear time).
-///
-/// \param type        An MDL struct type
-/// \param field_name  The name of a field
-/// \return            The MDL type of the requested field or \c NULL if the field does not exist.
-const mi::mdl::IType* get_field_type( const mi::mdl::IType_struct* type, const char* field_name);
-
 /// Looks up a sub value according to path.
 ///
 /// \param value           The value.
@@ -741,6 +736,8 @@ const mi::mdl::IExpression_reference* signature_to_reference(
     mi::mdl::IModule* module, const char* signature, Name_mangler* name_mangler);
 
 /// Creates an MDL AST expression reference for a given MDL type.
+///
+/// TODO merge with Mdl_ast_builder::create_type_name()
 ///
 /// \param module                 The module on which the qualified name is created.
 /// \param type                   The type.
@@ -811,17 +808,23 @@ class Name_mangler
 public:
     Name_mangler( mi::mdl::IMDL* mdl, mi::mdl::IModule* module);
 
-    /// Returns the mangled name for symbol.
+    /// Checks that no aliases have been created that have not yet been added to the module (see
+    /// #add_namespace_aliases()).
+    ~Name_mangler();
+
+    /// Returns the mangled name for a symbol.
     ///
-    /// Returns the symbol itself if no mangling is necessary. Otherwise, returns the previously
-    /// created mangled name for this symbol, of creates a new one if this symbol is seen the first
+    /// For MDL >= 1.8 no mangling takes places, and the symbol itself returned. For MDL < 1.8
+    /// returns the symbol itself if no mangling is necessary. Otherwise, returns the previously
+    /// created mangled name for this symbol, or creates a new one if this symbol is seen the first
     /// time. A newly mangled name is recoded as alias, and needs to be added to the module later
     /// using #add_namespace_aliases().
     const char* mangle( const char* symbol);
 
     /// Returns the mangled name for a scoped name.
     ///
-    /// Calls mangle() on each component of the name.
+    /// For MDL >= 1.8 no mangling takes places, and the name itself is returned. For MDL < 1.8
+    /// calls mangle() on each component of the name.
     std::string mangle_scoped_name( const std::string& name);
 
     /// Adds the recorded aliases in \c m_to_add to the module and clears the vector.
@@ -835,6 +838,9 @@ private:
     ///
     /// TODO This method does not check for name collisions with other identifiers in the module.
     std::string make_unique( const std::string& ident) const;
+
+    /// Indicates whether namespace aliases are legal (up to MDL 1.7).
+    bool m_namespace_aliases_legal;
 
     mi::base::Handle<mi::mdl::IMDL> m_mdl;
 

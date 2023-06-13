@@ -73,19 +73,19 @@ public:
 
 /// A simple implementation of the ICanvas interface.
 ///
-/// The canvas is either file-based (constructed from a file name), or archive-based (constructed
-/// from a reader and archive file/member name), or memory-based (constructed from parameters like
-/// pixel type, width, height, etc.). File-based or archive-based canvases load the tile data lazily
-/// when needed. Memory-based canvases create all tiles right in the constructor.
+/// The canvas is either file-based (constructed from a file name), or container-based (constructed
+/// from a reader and container file/member name), or memory-based (constructed from parameters like
+/// pixel type, width, height, etc.). File-based or container-based canvases load the tile data
+/// lazily when needed. Memory-based canvases create all tiles right in the constructor.
 ///
-/// File-based or archive-based canvases could flush unused tiles if memory gets tight (not yet
+/// File-based or container-based canvases could flush unused tiles if memory gets tight (not yet
 /// implemented).
 class Canvas_impl final // constructor invokes virtual method calls
   : public mi::base::Interface_implement<ICanvas>,
     public boost::noncopyable
 {
 public:
-    /// Constructor.
+    /// Constructor (plain canvas).
     ///
     /// Creates a memory-based canvas with given pixel type, width, height, and layers.
     ///
@@ -105,14 +105,14 @@ public:
         bool is_cubemap,
         mi::Float32 gamma);
 
-    /// Constructor.
+    /// Constructor (cloning another canvas).
     ///
     /// Creates a memory-based copy of another canvas.
     ///
     /// \param other              The canvas to copy from.
     Canvas_impl( const mi::neuraylib::ICanvas* other);
 
-    /// Constructor.
+    /// Constructor (file-based).
     ///
     /// Creates a file-based canvas that represents the given file on disk (or a pink dummy 1x1
     /// canvas in case of errors).
@@ -120,54 +120,88 @@ public:
     /// \param filename           The file that shall be represented by this canvas.
     /// \param selector           The selector, or \c NULL.
     /// \param miplevel           The miplevel in the file that shall be represented by this canvas.
-    /// \param image_file         An optional pointer to the file \p filename. If the calling code
-    ///                           has such a pointer, it can be passed to avoid opening the file
-    ///                           once again.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
     ///                           be written. The error codes have the following meaning:
-    ///                           -  0: Success.
-    ///                           - -3: Failure to open the file.
-    ///                           - -4: No image plugin found to handle the file.
-    ///                           - -5: The image plugin failed to import the file.
+    ///                           -   0: Success.
+    ///                           -  -3: No image plugin found to handle the file.
+    ///                           -  -5: Failure to open the file.
+    ///                           -  -7: The image plugin failed to import the file.
+    ///                           - -10: Failure to apply the given selector.
     Canvas_impl(
+        File_based,
         const std::string& filename,
         const char* selector,
         mi::Uint32 miplevel,
-        mi::neuraylib::IImage_file* image_file = 0,
-        mi::Sint32* errors = 0);
+        mi::Sint32* errors = nullptr);
 
-    /// Constructor.
+    /// Constructor (file-based with image file).
     ///
-    /// Creates an archive-based mipmap obtained from a reader (or a pink dummy 1x1 canvas in case
+    /// Creates a file-based canvas that represents the given file on disk (or a pink dummy 1x1
+    /// canvas in case of errors). Same as above, but with two additional parameters for performance
+    /// reasons.
+    ///
+    /// \param image_file                   The image file for \p filename. If the calling code has
+    ///                                     such a pointer, it can be passed to avoid opening the
+    ///                                     file once again.
+    /// \param plugin_supports_selectors    Flag that indicates whether the image plugin that
+    ///                                     generated \p image_file supports selectors.
+    Canvas_impl(
+        File_based,
+        const std::string& filename,
+        const char* selector,
+        mi::Uint32 miplevel,
+        mi::neuraylib::IImage_file* image_file,
+        bool plugin_supports_selectors,
+        mi::Sint32* errors = nullptr);
+
+    /// Constructor (container-based).
+    ///
+    /// Creates an container-based mipmap obtained from a reader (or a pink dummy 1x1 canvas in case
     /// of errors).
     ///
     /// \param reader             The reader to be used to obtain the canvas. Needs to support
     ///                           absolute access.
-    /// \param archive_filename   The resolved filename of the archive itself.
-    /// \param member_filename    The relative filename of the canvas in the archive.
+    /// \param container_filename The resolved filename of the container itself.
+    /// \param member_filename    The relative filename of the canvas in the container.
     /// \param selector           The selector, or \c NULL.
     /// \param miplevel           The miplevel in the file that shall be represented by this canvas.
-    /// \param image_file         An optional pointer to the file represented by \p reader. If the
-    ///                           calling code has such a pointer, it can be passed to avoid opening
-    ///                           the file once again.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
     ///                           be written. The error codes have the following meaning:
-    ///                           -  0: Success.
-    ///                           - -3: Invalid reader, or the reader does not support absolute
-    ///                                 access.
-    ///                           - -4: No image plugin found to handle the data.
-    ///                           - -5: The image plugin failed to import the data.
+    ///                           -   0: Success.
+    ///                           -  -1: Invalid reader.
+    ///                           -  -3: No image plugin found to handle the data.
+    ///                           -  -6: The reader does not support absolute access.
+    ///                           -  -7: The image plugin failed to import the data.
+    ///                           - -10: Failure to apply the given selector.
     Canvas_impl(
         Container_based,
         mi::neuraylib::IReader* reader,
-        const std::string& archive_filename,
+        const std::string& container_filename,
         const std::string& member_filename,
         const char* selector,
         mi::Uint32 miplevel,
-        mi::neuraylib::IImage_file* image_file = 0,
-        mi::Sint32* errors = 0);
+        mi::Sint32* errors = nullptr);
 
-    /// Constructor.
+    /// Constructor (container-based with image file).
+    ///
+    /// Creates an container-based mipmap obtained from a reader (or a pink dummy 1x1 canvas in case
+    /// of errors). Same as above, but with two additional parameters for performance reasons.
+    ///
+    /// \param image_file                   The image file for \p reader.
+    /// \param plugin_supports_selectors    Flag that indicates whether the image plugin that
+    ///                                     generated \p image_file supports selectors.
+    Canvas_impl(
+        Container_based,
+        mi::neuraylib::IReader* reader,
+        const std::string& container_filename,
+        const std::string& member_filename,
+        const char* selector,
+        mi::Uint32 miplevel,
+        mi::neuraylib::IImage_file* image_file,
+        bool plugin_supports_selectors,
+        mi::Sint32* errors = nullptr);
+
+    /// Constructor (memory-based).
     ///
     /// Creates a memory-based canvas that represents the given file in memory (or a pink dummy 1x1
     /// canvas in case of errors).
@@ -180,16 +214,14 @@ public:
     ///                           or \c NULL in other contexts.
     /// \param miplevel           The miplevel in the buffer that shall be represented by this
     ///                           canvas.
-    /// \param image_file         An optional pointer to the file represented by \p reader. If the
-    ///                           calling code has such a pointer, it can be passed to avoid opening
-    ///                           the file once again.
     /// \param errors[out]        An optional pointer to an #mi::Sint32 to which an error code will
     ///                           be written. The error codes have the following meaning:
-    ///                           -  0: Success.
-    ///                           - -3: Invalid reader, or the reader does not support absolute
-    ///                                 access.
-    ///                           - -4: No image plugin found to handle the data.
-    ///                           - -5: The image plugin failed to import the data.
+    ///                           -   0: Success.
+    ///                           -  -1: Invalid reader.
+    ///                           -  -3: No image plugin found to handle the data.
+    ///                           -  -6: The reader does not support absolute access.
+    ///                           -  -7: The image plugin failed to import the data.
+    ///                           - -10: Failure to apply the given selector.
     Canvas_impl(
         Memory_based,
         mi::neuraylib::IReader* reader,
@@ -197,10 +229,29 @@ public:
         const char* selector,
         const char* mdl_file_path,
         mi::Uint32 miplevel,
-        mi::neuraylib::IImage_file* image_file = 0,
-        mi::Sint32* errors = 0);
+        mi::Sint32* errors = nullptr);
 
-    /// Constructor.
+    /// Constructor (memory-based with image file).
+    ///
+    /// Creates a memory-based canvas that represents the given file in memory (or a pink dummy 1x1
+    /// canvas in case of errors). Same as above, but with two additional parameters for performance
+    /// reasons.
+    ///
+    /// \param image_file                   The image file for \p reader.
+    /// \param plugin_supports_selectors    Flag that indicates whether the image plugin that
+    ///                                     generated \p image_file supports selectors.
+    Canvas_impl(
+        Memory_based,
+        mi::neuraylib::IReader* reader,
+        const char* image_format,
+        const char* selector,
+        const char* mdl_file_path,
+        mi::Uint32 miplevel,
+        mi::neuraylib::IImage_file* image_file,
+        bool plugin_supports_selectors,
+        mi::Sint32* errors = nullptr);
+
+    /// Constructor (from tiles).
     ///
     /// Creates a memory-based canvas with a given array of tile.
     ///
@@ -211,7 +262,8 @@ public:
     ///                     gamma which is 1.0 for HDR pixel types and 2.2 for LDR pixel types.
     ///                     Note that the pixel data itself is not changed.
     Canvas_impl(
-        const std::vector<mi::base::Handle<mi::neuraylib::ITile>>& tiles, mi::Float32 gamma = 0.0f);
+        const std::vector<mi::base::Handle<mi::neuraylib::ITile>>& tiles,
+        mi::Float32 gamma = 0.0f);
 
     // methods of mi::neuraylib::ICanvas_base
 
@@ -242,6 +294,40 @@ public:
     bool release_tiles() const;
 
 private:
+    /// See constructors #Canvas_impl(File_based,...),
+    void do_init(
+        File_based,
+        const std::string& filename,
+        const char* selector,
+        mi::Uint32 miplevel,
+        mi::neuraylib::IImage_file* image_file,
+        bool plugin_supports_selectors,
+        mi::Sint32* errors);
+
+    /// See constructors #Canvas_impl(Container_based,...),
+    void do_init(
+        Container_based,
+        mi::neuraylib::IReader* reader,
+        const std::string& container_filename,
+        const std::string& member_filename,
+        const char* selector,
+        mi::Uint32 miplevel,
+        mi::neuraylib::IImage_file* image_file,
+        bool plugin_supports_selectors,
+        mi::Sint32* errors);
+
+    /// See constructors #Canvas_impl(Memory_based,...),
+    void do_init(
+        Memory_based,
+        mi::neuraylib::IReader* reader,
+        const char* image_format,
+        const char* selector,
+        const char* mdl_file_path,
+        mi::Uint32 miplevel,
+        mi::neuraylib::IImage_file* image_file,
+        bool plugin_supports_selectors,
+        mi::Sint32* errors);
+
     /// Indicates whether this canvas supports lazy loading.
     bool supports_lazy_loading() const;
 
@@ -297,18 +383,18 @@ private:
 
     /// The file used to load this canvas.
     ///
-    /// Non-empty for file-based canvases, empty for memory-based canvases (including archives).
+    /// Non-empty for file-based canvases, empty for memory-based canvases (including containers).
     std::string m_filename;
 
-    /// The archive file used to load this canvas.
+    /// The container file used to load this canvas.
     ///
-    /// Non-empty for memory-based canvases from archives, empty for other memory-based canvases
+    /// Non-empty for memory-based canvases from containers, empty for other memory-based canvases
     /// and file-based canvases.
-    std::string m_archive_filename;
+    std::string m_container_filename;
 
-    /// The archive member file used to load this canvas.
+    /// The container member file used to load this canvas.
     ///
-    /// Non-empty for memory-based canvases from archives, empty for other memory-based canvases
+    /// Non-empty for memory-based canvases from containers, empty for other memory-based canvases
     /// and file-based canvases.
     std::string m_member_filename;
 

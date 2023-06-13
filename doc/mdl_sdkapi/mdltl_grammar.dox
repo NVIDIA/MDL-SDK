@@ -1,0 +1,384 @@
+/******************************************************************************
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_mdltl_grammar MDLTL Grammar
+
+<div align="right">
+    [\link mi_neuray_mdltl_spec Previous: MDLTL Specification\endlink]
+    [\link mi_neuray_mdltl Up: MDL Transformation Language\endlink]
+</div>
+
+The following is the grammar of the MDL Transformation Language
+(MDLTL) in EBNF notation, as used in the [CoCo compiler construction
+framework](https://ssw.jku.at/Research/Projects/Coco/
+"CoCo web site").
+
+<pre>
+  TOKENS
+
+    IDENT = (LETTER | '_' | ':' ':') { LETTER | DIGIT | '_' | ':'} .
+
+    INTEGER_LITERAL
+        = (NONZERODIGIT { DIGIT })
+        | ( '0' ( ('x'|'X') HEXDIGIT { HEXDIGIT } | { OCTDIGIT } ) ).
+
+    FLOATING_LITERAL
+        =
+        ( (   DIGIT { DIGIT } '.'
+            | '.' DIGIT { DIGIT }
+            | DIGIT { DIGIT } ['.' { DIGIT }] ('e'|'E') ['+'|'-'] DIGIT { DIGIT }
+            | '.' DIGIT { DIGIT } ('e'|'E') ['+'|'-'] DIGIT { DIGIT }
+          ) ['f'|'F'|'d'|'D']
+        )
+        | ( DIGIT { DIGIT } '.' DIGIT { DIGIT } ['f'|'F'|'d'|'D'] ) .
+
+    STRING_LITERAL = '"' { CHARACTER | '\\' ESCAPE | '\\' CHARACTER } '"' .
+
+    IMPORT = "import" .
+
+    TRUE = "true" .
+    FALSE = "false" .
+
+    INC_OP = "++" .
+    DEC_OP = "--" .
+    MAPSTO = "-->" .
+    AT_OP = "@" .
+
+    ATTR_BEGIN = "[[" .
+    ATTR_END   = "]]" .
+
+    BOTTOMUP = "bottomup" .
+    TOPDOWN = "topdown" .
+
+    REPEAT_RULES = "repeat_rules" .
+    SKIP_RECURSION = "skip_recursion" .
+
+    RULES = "rules" .
+    RULE = "rule" .
+    DEADRULE = "deadrule" .
+    POSTCOND = "postcond" .
+    IF_KW = "if" .
+    MAYBE = "maybe" .
+    WHERE = "where" .
+    OPTION = "option" .
+
+    NONODE = "nonode" .
+    MATCH = "match" .
+
+  COMMENTS FROM "/*" TO "*/" NESTED
+  COMMENTS FROM "//" TO '\\n'
+
+  IGNORE '\\r' + '\\n' + '\\t'
+
+  PRODUCTIONS
+
+  mdltl
+      = {
+          rules
+        } .
+
+  rules =
+      RULES IDENT
+      strategy<strat>
+      '{'
+      imports<ruleset>
+      rule_sequence<ruleset>
+      postconds_opt<ruleset>
+      '}' .
+
+  strategy<Ruleset::Strategy &strat>
+      = BOTTOMUP
+      | TOPDOWN .
+
+  imports<Ruleset *&ruleset> = { import<ruleset> } .
+
+  import<Ruleset *&ruleset>
+      = IMPORT IDENT
+        ';' .
+
+  rule_sequence<Ruleset *&ruleset>
+      = { rule<ruleset> } .
+
+  rule<Ruleset *&ruleset>
+      = node<expr_left>
+        MAPSTO
+         expression<expr_right>
+        [ result_code<res_code> ]
+        [ guard<expr_guard> ]
+        [ where<bindings> ]
+        [ DEADRULE ]
+        ';' .
+
+  attribute_expr<Expr_attribute::Expr_attribute_vector &attrs, mi::mdl::string &node_name >
+      =
+        attr_entry<entry>
+        {
+          ','
+          attr_entry<entry>
+        } .
+
+  attr_entry<Expr_attribute::Expr_attribute_entry &pair >
+      =
+        IDENT
+        [
+          ( '='| '~' ) expression<pair.expr>
+        ] .
+
+  postconds_opt<Ruleset *&ruleset>
+      =
+      [
+        POSTCOND postcond_or_expr<expr> ';'
+      ].
+
+  result_code<Rule::Result_code &res_code>
+      = REPEAT_RULES
+      | SKIP_RECURSION .
+
+  node<Expr *&expr>
+      = IDENT
+      ( AT_OP IDENT
+      | '~' node<expr>
+      | [ ternary_node_continuation<ref, expr> | call_node_continuation<ref, expr> ]
+      )
+      [
+        ATTR_BEGIN attribute_expr<attrs, node_name> ATTR_END
+      ] .
+
+  ternary_node_continuation<Expr *expr_cond, Expr *&expr>
+      =
+        '?' node<expr_then> ':' node<expr_else> .
+
+  call_node_continuation<Expr *expr_callee, Expr *&expr>
+      =
+        '(' [ paramlist<call_expr> ] ')' .
+
+  paramlist<Expr_call *call_expr>
+      =
+        node<expr>
+        { ','
+          node<expr>
+        } .
+
+  guard<Expr *&guard_expr>
+      = IF_KW expression<expr>
+      | MAYBE expression<expr> .
+
+  where<Argument_list &bindings>
+      = WHERE binding_list<bindings> .
+
+  binding_list<Argument_list &bindings>
+      =
+        binding<expr>
+        {
+          binding<expr>
+        } .
+
+  binding<Expr *&expr>
+      = IDENT
+        '=' expression<expr_right> .
+
+  reference_or_call<Expr *&expr>
+      = IDENT
+        [
+          '(' [ arglist<call_expr> ] ')'
+        ] .
+
+  arglist<Expr_call *call_expr>
+      =
+        expression<expr1>
+        {
+          ',' expression<exprn>
+        } .
+
+  primary_expr<Expr *&expr>
+      =
+      (
+        literal<expr>
+        | reference_or_call<expr>
+        | '(' expression<expr> ')'
+        | OPTION '('
+          IDENT
+          [ AT_OP
+            IDENT
+          ]
+          ')'
+      )
+      [
+        ATTR_BEGIN attribute_expr<attrs, node_name> ATTR_END
+      ] .
+
+  postfix_expr<Expr *&expr>
+      = primary_expr<expr>
+        {
+          postfix<expr>
+        } .
+
+  postfix<Expr *&expr>
+      =
+      '[' expression<expr> ']'
+      | '.' IDENT
+      | INC_OP
+      | DEC_OP
+      | AT_OP IDENT .
+
+  unary_expr<Expr *&expr>
+      = INC_OP unary_expr<expr_sub>
+      | DEC_OP unary_expr<expr_sub>
+      | unary_operator<op> unary_expr<expr_sub>
+      | postfix_expr<expr> .
+
+  unary_operator<Expr_unary::Operator &op>
+      = '+'
+      | '-'
+      | '~'
+      | '!' .
+
+  multiplicative_expr<Expr *&expr>
+      = unary_expr<expr>
+        {
+          multiplicative_operator<op> unary_expr<expr_right>
+        } .
+
+  multiplicative_operator<Expr_binary::Operator &op>
+      = '*'
+      | '/'
+      | '%' .
+
+  additive_expr<Expr *&expr>
+      = multiplicative_expr<expr>
+        {
+          additive_operator<op> multiplicative_expr<expr_right>
+        } .
+
+  additive_operator<Expr_binary::Operator &op>
+      = '+'
+      | '-' .
+
+  shift_expr<Expr *&expr>
+      = additive_expr<expr>
+        {
+          shift_operator<op> additive_expr<expr_right>
+        } .
+
+  shift_operator<Expr_binary::Operator &op>
+      = "<<"
+      | ">>"
+      | ">>>" .
+
+  relational_expr<Expr *&expr>
+      = shift_expr<expr>
+        {
+          relational_operator<op> shift_expr<expr_right>
+        } .
+
+  relational_operator<Expr_binary::Operator &op>
+      = "<="
+      | ">="
+      | '<'
+      | '>' .
+
+  equality_expr<Expr *&expr>
+      = relational_expr<expr>
+        {
+          equality_operator<op> relational_expr<expr_right>
+        } .
+
+  equality_operator<Expr_binary::Operator &op>
+      = "=="
+      | "!="  .
+
+  and_expr<Expr *&expr>
+      = equality_expr<expr>
+        {
+          '&' equality_expr<expr_right>
+        } .
+
+  exclusive_or_expr<Expr *&expr>
+      = and_expr<expr>
+        {
+          '^' and_expr<expr_right>
+        } .
+
+  inclusive_or_expr<Expr *&expr>
+      = exclusive_or_expr<expr>
+        {
+          '|' exclusive_or_expr<expr_right>
+        } .
+
+  logical_and_expr<Expr *&expr>
+      = inclusive_or_expr<expr>
+        {
+          "&&" inclusive_or_expr<expr_right>
+        } .
+
+  logical_or_expr<Expr *&expr>
+      = logical_and_expr<expr>
+        {
+          "||" logical_and_expr<expr_right>
+        } .
+
+  expression<Expr *&expr>
+      = logical_or_expr<expr>
+        [
+          '?' expression<expr_then> ':' expression<expr_else>
+        ] .
+
+  postcond_primary_expr<Expr *&expr>
+      = NONODE
+        '('
+         IDENT
+        ')'
+      | MATCH '(' node<expr> ')'
+      | '(' postcond_or_expr<expr> ')' .
+
+  postcond_and_expr<Expr *&expr>
+      = postcond_primary_expr<expr>
+        {
+          "&&" postcond_primary_expr<expr_right>
+        } .
+
+  postcond_or_expr<Expr *&expr>
+      = postcond_and_expr<expr>
+        {
+          "||" postcond_and_expr<expr_right>
+        } .
+
+  literal<Expr *&expr>
+      = INTEGER_LITERAL
+      | FLOATING_LITERAL
+      | TRUE
+      | FALSE
+      | STRING_LITERAL .
+</pre>
+
+<div align="right">
+    [\link mi_neuray_mdltl_spec Previous: MDLTL Specification\endlink]
+    [\link mi_neuray_mdltl Up: MDL Transformation Language\endlink]
+</div>
+
+*/

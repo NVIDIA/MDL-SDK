@@ -69,7 +69,6 @@ namespace NEURAY {
 Class_factory* s_class_factory;
 
 Class_factory::Class_factory()
-  : m_materials_are_functions( false)
 {
 }
 
@@ -79,16 +78,6 @@ Class_factory::~Class_factory()
     ASSERT( M_NEURAY_API, m_map_uuid_user_class_factory.empty());
     ASSERT( M_NEURAY_API, m_map_name_structure_decl.empty());
     ASSERT( M_NEURAY_API, m_map_name_enum_decl.empty());
-}
-
-void Class_factory::set_materials_are_functions( bool value)
-{
-    m_materials_are_functions = value;
-}
-
-bool Class_factory::get_materials_are_functions() const
-{
-    return m_materials_are_functions;
 }
 
 mi::Sint32 Class_factory::register_class(
@@ -773,18 +762,6 @@ mi::base::IInterface* Class_factory::invoke_api_class_factory(
     auto it = m_map_id_api_class_factory.find( class_id);
     if( it == m_map_id_api_class_factory.end())
         return nullptr;
-
-    // create API class instance: special case for MDL functions
-    if( (class_id == MDL::ID_MDL_FUNCTION_DEFINITION) || (class_id == MDL::ID_MDL_FUNCTION_CALL)) {
-        mi::base::Handle<mi::IBoolean> materials_are_functions(
-            create_class_instance<mi::IBoolean>( transaction, "Boolean"));
-        materials_are_functions->set_value( m_materials_are_functions);
-        const mi::base::IInterface* argv[1];
-        argv[0] = materials_are_functions.get();
-
-        Api_class_factory api_class_factory = it->second;
-        return api_class_factory( transaction, 1, argv);
-    }
 
     // create API class instance: general case
     Api_class_factory api_class_factory = it->second;

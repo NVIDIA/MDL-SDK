@@ -44,6 +44,9 @@
 
 #include "serial.h"
 
+#include <vector>
+
+
 namespace MI
 {
 
@@ -58,9 +61,6 @@ public:
     // Constructor
     Buffer_serializer();
 
-    // Destructor
-    ~Buffer_serializer();
-
     // Reset it so that it can be reused
     void reset();
 
@@ -68,7 +68,7 @@ public:
     Uint8* get_buffer();
 
     // Get the buffer, detaching it from the serializer
-    Uint8* takeover_buffer();
+    std::vector<Uint8> takeover_buffer();
 
     // Get the size of the buffer holding the serialized data
     size_t get_buffer_size();
@@ -87,8 +87,7 @@ protected:
 	size_t size);					// write this amount of data
 
 private:
-    Uint8* m_buffer;					// the buffer where to write data to
-    size_t m_buffer_size;				// the size of the buffer
+    std::vector<Uint8> m_buffer;			// the buffer which receives the data
     size_t m_written_size;				// which part of buffer is already used
 
     // ensure that the buffer has the needed number of bytes free
@@ -108,9 +107,6 @@ public:
     // Mod_data::get_deserialization_manager().
     explicit Buffer_deserializer(
 	Deserialization_manager* manager = NULL);	// the set of registered classes
-
-    // Destructor
-    ~Buffer_deserializer();
 
     // Set the deserializer to use the given buffer for input
     void reset(

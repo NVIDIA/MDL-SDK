@@ -65,9 +65,9 @@ mi_static_assert( sizeof( Mdl_repair_options) == sizeof( Uint32));
 /// function definitions using #mi::neuraylib::IFunction_definition::create_function_call().
 ///
 /// \note This interface also supports material instances, which are considered as a special kind
-///       of function calls, namely function calls with the return type \c "material". See \ref
-///       mi_mdl_materials_are_functions for details. The interface
-///       #mi::neuraylib::IMaterial_instance should only be used to create compiled materials.
+///       of function calls, namely function calls with the return type \c "material". The
+///       interface #mi::neuraylib::IMaterial_instance should only be used to create compiled
+///       materials.
 ///
 /// \see #mi::neuraylib::IFunction_definition, #mi::neuraylib::Argument_editor
 class IFunction_call : public
@@ -90,9 +90,6 @@ public:
     virtual const char* get_mdl_function_definition() const = 0;
 
     /// Indicates whether the call represents a material instance.
-    ///
-    /// If \ref mi_mdl_materials_are_functions is disabled, then this method returns always
-    /// \c false.
     virtual bool is_material() const = 0;
 
     /// Indicates whether this call is an instance of the array constructor.

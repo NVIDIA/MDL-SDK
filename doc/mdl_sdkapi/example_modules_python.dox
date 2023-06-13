@@ -54,16 +54,11 @@ This example loads an MDL module and inspects it contents.
         In order to allow the \neurayProductName to locate MDL modules and its resources
         in the file system it is necessary to configure the MDL module search path.
         This is done by calling #mi::neuraylib::IMdl_configuration::add_mdl_path().
-        There are more options to control the behavior of the SDK globally, 
-        like \c materials_are_functions, which is enabled by default.
 
         \code
 # get the component using a context manager
 with neuray.get_api_component(pymdlsdk.IMdl_configuration) as cfg:
     cfg.add_mdl_path('/home/user/mdl')
-
-    # unify the handling of materials and functions
-    cfg.set_materials_are_functions(True)
         \endcode
 
         Our example module \c \::nvidia::sdk_examples::tutorials makes use of textures. 
@@ -74,9 +69,9 @@ with neuray.get_api_component(pymdlsdk.IMdl_configuration) as cfg:
         The file extension can be omitted to platform dependent code.
 
         \code
-# Load the 'nv_freeimage' plug-in
-if not pymdlsdk.load_plugin(neuray, 'nv_freeimage'):
-    raise Exception('Failed to load the \'nv_freeimage\' plugin.')
+# Load the 'nv_openimageio' plug-in
+if not pymdlsdk.load_plugin(neuray, 'nv_openimageio'):
+    raise Exception('Failed to load the \'nv_openimageio\' plugin.')
         \endcode
         <!-- Workaround to prevent a layout problem after dd tags. -->
     </dd>

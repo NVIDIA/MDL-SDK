@@ -1,0 +1,131 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+mdl 1.4;
+
+import ::base::*;
+import ::df::*;
+import ::tex::*;
+import ::anno::*;
+
+export material example_distilling1(
+    float base_roughtness = float(0.1),
+    color tint = color(0.1, 0.4, 0.8)
+)
+= let
+{
+    color base_tint = ::base::checker_texture(
+        color1: tint,
+        uvw: 
+            ::base::transform_coordinate(
+                transform: 
+                    ::base::rotation_translation_scale(scaling: float3(4., 4., 1.)))).tint;
+            
+    float base_mix_weight = ::base::flow_noise_texture(size: 0.1).mono;
+    
+    df::bsdf_component diffuse_base = df::bsdf_component(
+        weight: base_mix_weight,
+        component: df::diffuse_reflection_bsdf(roughness: 0.0, tint: base_tint));
+
+    df::bsdf_component glossy_base = df::bsdf_component(
+        weight: 1.0-base_mix_weight,
+        component: df::simple_glossy_bsdf(tint: base_tint, roughness_u: base_roughtness));
+    
+    bsdf base_bsdf = df::normalized_mix(
+        components: df::bsdf_component[](glossy_base, diffuse_base));
+}
+in material(
+    surface: 
+        material_surface(
+            scattering: df::custom_curve_layer(
+                normal_reflectivity: 0.02,
+                grazing_reflectivity: 1.0,
+                base: base_bsdf,
+                layer: df::simple_glossy_bsdf(tint: color(0.96, 0.96, 0.96), roughness_u: 0.01)
+            )
+        ),
+    geometry: 
+        material_geometry(
+            normal: ::base::flow_noise_bump_texture(size: 0.05)
+               )
+);
+
+export material example_distilling2(
+    float base_roughtness = float(0.1),
+    color base_tint = color(0.974f , 0.908f , 0.908f)
+)
+= let
+{
+    color metal_color = ::base::blend_color_layers(
+        base: base_tint,
+        layers: base::color_layer[] ( 
+            base::color_layer(
+                layer_color: color(0.005f , 0.005f , 0.005f ),
+                mode: base::color_layer_blend,
+                weight: base::file_texture(
+                    texture: texture_2d("resources/metal_cast_iron_mask.png" , ::tex::gamma_default),
+                    mono_source:  ::base::mono_average
+                ).mono
+            )
+        )
+    ).tint;
+    
+    float metal_roughness = ::base::blend_color_layers(
+        base: color(base_roughtness),
+        layers: base::color_layer[] (
+            base::color_layer(
+                layer_color: color(0.145),
+                mode: base::color_layer_blend,
+                weight: base::file_texture(texture_2d("resources/metal_cast_iron_roughness.png" , ::tex::gamma_default),
+                    mono_source:  ::base::mono_average
+                ).mono
+            )
+        )
+    ).mono;
+}
+in material(
+    surface: 
+        material_surface(
+            scattering: df::weighted_layer(
+                layer: df::simple_glossy_bsdf(tint: metal_color, roughness_u: metal_roughness),
+                weight: 1.0,
+                normal: ::base::tangent_space_normal_texture(texture: texture_2d("resources/metal_cast_iron_normal.png" , ::tex::gamma_linear))
+            )
+        )
+);
+
+export material example_distilling3(
+    float base_roughness = float(0.1),
+    color base_tint = color(0.974f , 0.908f , 0.908f)
+) =
+material(
+    surface:
+        material_surface(
+            scattering: df::microfacet_beckmann_smith_bsdf(base_roughness,base_roughness,base_tint)
+        )
+);

@@ -331,7 +331,7 @@ mi::Size Target_code::get_texture_count() const
     return m_texture_table.size();
 }
 
-mi::Size Target_code::get_body_texture_count() const
+mi::Size Target_code::deprecated_get_body_texture_count() const
 {
     return m_body_texture_count;
 }
@@ -390,6 +390,14 @@ Target_code::Texture_shape Target_code::get_texture_shape( mi::Size index) const
     return Target_code::Texture_shape_invalid;
 }
 
+bool Target_code::get_texture_is_body_resource(Size index) const
+{
+    if (index < m_texture_table.size()) {
+        return m_texture_table[index].is_body_resource();
+    }
+    return false;
+}
+
 const mi::Float32* Target_code::get_texture_df_data(
     mi::Size index,
     mi::Size &rx,
@@ -446,7 +454,7 @@ mi::Size Target_code::get_light_profile_count() const
     return m_light_profile_table.size();
 }
 
-mi::Size Target_code::get_body_light_profile_count() const
+mi::Size Target_code::deprecated_get_body_light_profile_count() const
 {
     return m_body_light_profile_count;
 }
@@ -467,6 +475,14 @@ const char* Target_code::get_light_profile_url(mi::Size index) const
     return NULL;
 }
 
+bool Target_code::get_light_profile_is_body_resource(Size index) const
+{
+    if (index < m_light_profile_table.size()) {
+        return m_light_profile_table[index].is_body_resource();
+    }
+    return false;
+}
+
 const char* Target_code::get_light_profile_owner_module(mi::Size index) const
 {
     if (index < m_light_profile_table.size()) {
@@ -480,7 +496,7 @@ Size Target_code::get_bsdf_measurement_count() const
     return m_bsdf_measurement_table.size();
 }
 
-Size Target_code::get_body_bsdf_measurement_count() const
+Size Target_code::deprecated_get_body_bsdf_measurement_count() const
 {
     return m_body_bsdf_measurement_count;
 }
@@ -499,6 +515,14 @@ const char* Target_code::get_bsdf_measurement_url(mi::Size index) const
         return m_bsdf_measurement_table[index].get_mdl_url();
     }
     return NULL;
+}
+
+bool Target_code::get_bsdf_measurement_is_body_resource(Size index) const
+{
+    if (index < m_bsdf_measurement_table.size()) {
+        return m_bsdf_measurement_table[index].is_body_resource();
+    }
+    return false;
 }
 
 const char* Target_code::get_bsdf_measurement_owner_module(mi::Size index) const
@@ -564,8 +588,9 @@ mi::Sint32 Target_code::execute_df_init_function(
 {
     if (!m_native_code.is_valid_interface()) return -2;
     if (index >= m_callable_function_infos.size()) return -2;
-    // for single-init mode, don't care, which dist_kind was provided
-    if (m_callable_function_infos[index].m_dist_kind != mi::neuraylib::ITarget_code::DK_NONE &&
+    // in single-init mode, the dist kind of the init function is still set, if there was only
+    // one main function requested, so the dist kind must be ignored then
+    if (dist_kind != mi::neuraylib::ITarget_code::DK_NONE &&
         m_callable_function_infos[index].m_dist_kind != dist_kind) return -2;
     if (m_callable_function_infos[index].m_kind != mi::neuraylib::ITarget_code::FK_DF_INIT)
         return -2;
@@ -769,6 +794,16 @@ mi::Sint32 Target_code::execute_edf_auxiliary(
         mi::neuraylib::ITarget_code::FK_DF_AUXILIARY, index, data, state, tex_handler, cap_args);
 }
 
+mi::Sint32 Target_code::execute_init(
+    mi::Size index,
+    mi::neuraylib::Shading_state_material& state,
+    mi::neuraylib::Texture_handler_base* tex_handler,
+    const mi::neuraylib::ITarget_argument_block *cap_args) const
+{
+    return execute_df_init_function(mi::neuraylib::ITarget_code::DK_NONE,
+        index, state, tex_handler, cap_args);
+}
+
 mi::neuraylib::ITarget_code::State_usage Target_code::get_render_state_usage() const
 {
     return m_render_state_usage;
@@ -807,7 +842,8 @@ void Target_code::add_texture_index(
     float gamma,
     const std::string& selector,
     Texture_shape shape,
-    mi::mdl::IValue_texture::Bsdf_data_kind df_data_kind)
+    mi::mdl::IValue_texture::Bsdf_data_kind df_data_kind,
+    bool is_body_resource)
 {
     if( index >= m_texture_table.size()) {
         m_texture_table.resize(index + 1, Target_code::Texture_info(
@@ -817,51 +853,57 @@ void Target_code::add_texture_index(
             /*gamma=*/0.0f,
             /*selector=*/selector,
             /*texture_shape=*/Texture_shape_invalid,
-            /*df_data_kind=*/ mi::mdl::IValue_texture::BDK_NONE));
+            /*df_data_kind=*/mi::mdl::IValue_texture::BDK_NONE,
+            /*is_body_resource=*/false));
     }
 
     std::string owner = MDL::get_resource_owner_prefix( mdl_url);
     std::string url   = MDL::strip_resource_owner_prefix( mdl_url);
     m_texture_table[index] = Target_code::Texture_info(
-        name, url, owner, gamma, selector, shape, df_data_kind);
+        name, url, owner, gamma, selector, shape, df_data_kind, is_body_resource);
 }
 
 // Registers a used light profile index.
 void Target_code::add_light_profile_index(
     size_t index,
     const std::string& name,
-    const std::string& mdl_url)
+    const std::string& mdl_url,
+    bool is_body_resource)
 {
     if( index >= m_light_profile_table.size()) {
         m_light_profile_table.resize( index + 1,
             Target_code::Resource_info(
             /*db_name=*/"",
             /*mdl_url=*/"",
-            /*owner=*/""));
+            /*owner=*/"",
+            /*is_body_resource=*/false));
     }
 
     std::string owner = MDL::get_resource_owner_prefix( mdl_url);
     std::string url   = MDL::strip_resource_owner_prefix( mdl_url);
     m_light_profile_table[index] = Target_code::Resource_info(
-        name, url, owner);
+        name, url, owner, is_body_resource);
 }
 
 // Registers a used bsdf measurement index.
 void Target_code::add_bsdf_measurement_index(
     size_t index,
     const std::string& name,
-    const std::string& mdl_url)
+    const std::string& mdl_url,
+    bool is_body_resource)
 {
     if( index >= m_bsdf_measurement_table.size()) {
         m_bsdf_measurement_table.resize(index + 1, Target_code::Resource_info(
             /*db_name=*/"",
             /*mdl_url=*/"",
-            /*owner=*/""));
+            /*owner=*/"",
+            /*is_body_resource=*/false));
     }
 
     std::string owner = MDL::get_resource_owner_prefix( mdl_url);
     std::string url   = MDL::strip_resource_owner_prefix( mdl_url);
-    m_bsdf_measurement_table[index] = Target_code::Resource_info( name, url, owner);
+    m_bsdf_measurement_table[index] =
+        Target_code::Resource_info( name, url, owner, is_body_resource);
 }
 
 // Registers a used string constant index.
@@ -1111,7 +1153,7 @@ mi::Uint32 Target_code::get_known_resource_index(
     char const *db_name = transaction->tag_to_name(tag);
     char const *mdl_url = NULL, *owner_module = NULL;
     if (db_name == NULL) {
-        mdl_url = resource->get_unresolved_mdl_url();
+        mdl_url = resource->get_unresolved_file_path();
         if (!mdl_url || mdl_url[0] == '\0') // none given
             return 0;
         is_resolved = false;
@@ -1158,10 +1200,32 @@ mi::Uint32 Target_code::get_known_resource_index(
     {
         // skip first light profile, which is always the invalid resource
         for (mi::Size i = 1, n = get_light_profile_count(); i < n; ++i) {
-            const char *lp_db_name = get_light_profile(i);
-            if (lp_db_name)
-                if (strcmp(lp_db_name, db_name) == 0)
-                    return mi::Uint32(i);
+
+            if (is_resolved) {
+
+                const char *lp_db_name = get_light_profile(i);
+                if (lp_db_name)
+                    if (strcmp(lp_db_name, db_name) == 0)
+                        return mi::Uint32(i);
+
+            } else {
+                // handle unresolved resources
+
+                const char *light_profile_mdl_url = get_light_profile_url(i);
+                if (!light_profile_mdl_url || light_profile_mdl_url[0] == '\0')
+                    continue;
+
+                if (strcmp(mdl_url, light_profile_mdl_url) == 0) {
+
+                    // also compare owner modules
+                    const char *light_profile_owner_module = get_light_profile_owner_module(i);
+                    if (!light_profile_owner_module)
+                        light_profile_owner_module = "";
+
+                    if (strcmp(owner_module, light_profile_owner_module) == 0)
+                        return mi::Uint32(i);
+                }
+            }
         }
         return 0;
     }
@@ -1170,10 +1234,32 @@ mi::Uint32 Target_code::get_known_resource_index(
     {
         // skip first bsdf measurement, which is always the invalid resource
         for (mi::Size i = 1, n = get_bsdf_measurement_count(); i < n; ++i) {
-            const char *bm_db_name = get_bsdf_measurement(i);
-            if (bm_db_name)
-                if (strcmp(bm_db_name, db_name) == 0)
-                    return mi::Uint32(i);
+
+            if (is_resolved) {
+
+                const char *bm_db_name = get_bsdf_measurement(i);
+                if (bm_db_name)
+                    if (strcmp(bm_db_name, db_name) == 0)
+                        return mi::Uint32(i);
+
+            } else {
+                // handle unresolved resources
+
+                const char *bsdf_measurement_mdl_url = get_bsdf_measurement_url(i);
+                if (!bsdf_measurement_mdl_url || bsdf_measurement_mdl_url[0] == '\0')
+                    continue;
+
+                if (strcmp(mdl_url, bsdf_measurement_mdl_url) == 0) {
+
+                    // also compare owner modules
+                    const char *bsdf_measurement_owner_module = get_bsdf_measurement_owner_module(i);
+                    if (!bsdf_measurement_owner_module)
+                        bsdf_measurement_owner_module = "";
+
+                    if (strcmp(owner_module, bsdf_measurement_owner_module) == 0)
+                        return mi::Uint32(i);
+                }
+            }
         }
 
         return 0;
@@ -1232,6 +1318,7 @@ const SERIAL::Serializable* Target_code::Resource_info::serialize(SERIAL::Serial
     SERIAL::write(serializer, m_db_name);
     SERIAL::write(serializer, m_mdl_url);
     SERIAL::write(serializer, m_owner_module);
+    SERIAL::write(serializer, m_is_body_resource);
     return this + 1;
 }
 
@@ -1240,6 +1327,7 @@ SERIAL::Serializable* Target_code::Resource_info::deserialize(SERIAL::Deserializ
     SERIAL::read(deserializer, &m_db_name);
     SERIAL::read(deserializer, &m_mdl_url);
     SERIAL::read(deserializer, &m_owner_module);
+    SERIAL::read(deserializer, &m_is_body_resource);
     return this + 1;
 }
 
@@ -1386,33 +1474,9 @@ const mi::neuraylib::IBuffer* Target_code::serialize(mi::neuraylib::IMdl_executi
     SERIAL::write(&serializer, m_body_light_profile_count);
     SERIAL::write(&serializer, m_body_bsdf_measurement_count);
 
-    if (serialize_instance_data)
-    {
-        BACKENDS::write(&serializer, m_texture_table);
-        SERIAL::write(&serializer, m_light_profile_table);
-        SERIAL::write(&serializer, m_bsdf_measurement_table);
-    }
-    else
-    {
-        size_t texture_count = m_body_texture_count == static_cast<size_t>(-1)
-            ? 0 : m_body_texture_count;
-        size_t lp_count = m_body_light_profile_count == static_cast<size_t>(-1)
-            ? 0 : m_body_light_profile_count;
-        size_t mbsdf_count = m_body_bsdf_measurement_count == static_cast<size_t>(-1)
-            ? 0 : m_body_bsdf_measurement_count;
-
-        auto copy_texture_table = m_texture_table;
-        copy_texture_table.resize(texture_count);
-        SERIAL::write(&serializer, copy_texture_table);
-
-        auto copy_light_profile_table = m_light_profile_table;
-        copy_light_profile_table.resize(lp_count);
-        SERIAL::write(&serializer, copy_light_profile_table);
-
-        auto copy_bsdf_measurement_table = m_bsdf_measurement_table;
-        copy_bsdf_measurement_table.resize(mbsdf_count);
-        SERIAL::write(&serializer, copy_bsdf_measurement_table);
-    }
+    BACKENDS::write(&serializer, m_texture_table);
+    SERIAL::write(&serializer, m_light_profile_table);
+    SERIAL::write(&serializer, m_bsdf_measurement_table);
 
     SERIAL::write(&serializer, m_string_constant_table);
     SERIAL::write(&serializer, m_render_state_usage);

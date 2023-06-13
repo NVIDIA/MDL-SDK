@@ -142,14 +142,14 @@ At the end, we write the texture to disk.
 
 <dt><b>Loading textures (PTX)</b></dt>
 <dd>
-As described in \ref mi_mdl_core_example_cuda_shared, the \c Resource_collection helper class loads the used textures on the host side using FreeImage into \c Texture_data objects.
+As described in \ref mi_mdl_core_example_cuda_shared, the \c Resource_collection helper class loads the used textures on the host side using OpenImageIO into \c Texture_data objects.
 These can be retrieved via \c Ptx_code::get_texture().
 Note, that like in the MDL SDK, the \c Resource_collection helper class always adds an invalid texture as the first texture, if any textures are available.
 So only if there is more than just one texture, there will be real referenced textures available.
 
 The textures still have to be copied to the GPU and possibly they have to be gamma corrected and converted to a format understood by the texture access functions you provide.
 In this example, we use the \c Material_gpu_context helper class to prepare all data for the GPU and manage the resources on the device.
-Due to limitations of FreeImage, it currently only supports 2D textures.
+Due to limitations of OpenImageIO, it currently only supports 2D textures.
 The \c Material_gpu_context::prepare_texture() function does the gamma correction, if necessary, copies the image data to a CUDA array and makes the texture available on the device via a CUDA texture object.
 </dd>
 

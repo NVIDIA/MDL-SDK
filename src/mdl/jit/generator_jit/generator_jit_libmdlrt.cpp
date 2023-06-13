@@ -111,18 +111,8 @@ bool LLVM_code_generator::load_and_link_libmdlrt(llvm::Module *llvm_module)
         // for non-PTX backends
         f.removeFnAttr("target-features");
 
-        if (!target_supports_pointers()) {
-            // mark all functions WITH pointer parameters as force-inline
-            for (llvm::Argument const &arg : f.args()) {
-                llvm::Type *tp = arg.getType();
-
-                if (tp->isPointerTy()) {
-                    // has at least one pointer argument, mark as always inline
-                    f.addFnAttr(llvm::Attribute::AlwaysInline);
-                    break;
-                }
-            }
-        }
+        // mark all functions WITH pointer parameters as force-inline
+        always_inline_if_pointer_parameters(f);
 
         // make all functions from libmdlrt internal to allow global dead code elimination
         f.setLinkage(llvm::GlobalValue::InternalLinkage);

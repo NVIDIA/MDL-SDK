@@ -28,7 +28,6 @@
 
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
-#include <curand_kernel.h>
 #define _USE_MATH_DEFINES
 #include <math.h>
 
@@ -320,14 +319,43 @@ __device__ inline float3 cross(const float3 &u, const float3 &v)
         u.x * v.y - u.y * v.x);
 }
 
-typedef curandStatePhilox4_32_10_t Rand_state;
+// Random number generator based on the OptiX SDK
+template<uint32_t N>
+static __forceinline__ __device__ uint32_t tea(uint32_t v0, uint32_t v1)
+{
+    uint32_t s0 = 0;
+
+    for (uint32_t n = 0; n < N; n++)
+    {
+        s0 += 0x9e3779b9;
+        v0 += ((v1 << 4) + 0xa341316c) ^ (v1 + s0) ^ ((v1 >> 5) + 0xc8013ea4);
+        v1 += ((v0 << 4) + 0xad90777d) ^ (v0 + s0) ^ ((v0 >> 5) + 0x7e95761e);
+    }
+
+    return v0;
+}
+
+// Generate random uint32_t in [0, 2^24)
+static __forceinline__ __device__ uint32_t lcg(uint32_t& prev)
+{
+    const uint32_t LCG_A = 1664525u;
+    const uint32_t LCG_C = 1013904223u;
+    prev = (LCG_A * prev + LCG_C);
+    return prev & 0x00FFFFFF;
+}
+
+// Generate random float in [0, 1)
+static __forceinline__ __device__ float rnd(uint32_t& prev)
+{
+    return ((float)lcg(prev) / (float)0x01000000);
+}
 
 // direction to environment map texture coordinates
 __device__ inline float2 environment_coords(const float3 &dir, const Kernel_params& params)
 {
     const float u = atan2f(dir.z, dir.x) * (float)(0.5 / M_PI) + 0.5f;
     const float v = acosf(fmax(fminf(-dir.y, 1.0f), -1.0f)) * (float)(1.0 / M_PI);
-    return make_float2(fmodf(u + params.env_rotation * 0.5f * M_1_PI, 1.0f), v);
+    return make_float2(fmodf(u + params.env_rotation * (float)(0.5 * M_1_PI), 1.0f), v);
 }
 
 // importance sample the environment
@@ -826,11 +854,11 @@ __device__ inline void accumulate_next_event_contribution(
 
 // evaluate if certain shading point (pos) is visible to a light direction by casting a shadow ray.
 __device__ inline bool trace_shadow(
-    const float3& pos,
-    const float3& to_light,
-    Rand_state& rand_state,
-    Ray_state& ray_state,
-    const Kernel_params& params)
+    const float3 &pos,
+    const float3 &to_light,
+    uint32_t &seed,
+    Ray_state &ray_state,
+    const Kernel_params &params)
 {
     Ray_state ray_shadow = ray_state;
     ray_shadow.pos = pos;
@@ -880,11 +908,11 @@ __device__ inline bool trace_shadow(
         // handle cutouts be treating the opacity as chance to hit the surface
         // if we don't hit it, the ray will continue with the same direction
         func_idx = get_mdl_function_index(material.cutout_opacity);
-        const float x_anyhit = curand_uniform(&rand_state);
         if (is_valid(func_idx))
         {
             float opacity = 1.f;
             as_expression(func_idx)(&opacity, &state, &mdl_resources.data, NULL, arg_block);
+            const float x_anyhit = rnd(seed);
             in_shadow = (x_anyhit <= opacity);
         }
     }
@@ -895,7 +923,7 @@ __device__ inline bool trace_shadow(
 //-------------------------------------------------------------------------------------------------
 
 __device__ inline bool trace_scene(
-    Rand_state &rand_state,
+    uint32_t &seed,
     Ray_state &ray_state,
     const Kernel_params &params)
 {
@@ -960,11 +988,11 @@ __device__ inline bool trace_scene(
     // handle cutouts be treating the opacity as chance to hit the surface
     // if we don't hit it, the ray will continue with the same direction
     func_idx = get_mdl_function_index(material.cutout_opacity);
-    const float x_anyhit = curand_uniform(&rand_state);
     if (is_valid(func_idx))
     {
         float opacity = 1.f;
         as_expression(func_idx)(&opacity, &state, &mdl_resources.data, NULL, arg_block);
+        const float x_anyhit = rnd(seed);
         if (x_anyhit > opacity)
         {
             // decrease to see the environment though front and back face cutouts
@@ -1166,7 +1194,7 @@ __device__ inline bool trace_scene(
             if (ray_state.inside_cutout && !culled_light)
             {
                 const float3 pos = ray_state.pos - hit.normal * 0.001f;
-                culled_light = trace_shadow(pos, to_light, rand_state, ray_state, params);
+                culled_light = trace_shadow(pos, to_light, seed, ray_state, params);
             }
 
             if(!culled_light)
@@ -1245,9 +1273,9 @@ __device__ inline bool trace_scene(
         // importance sample environment light
         if (params.mdl_test_type != MDL_TEST_SAMPLE && params.mdl_test_type != MDL_TEST_NO_ENV)
         {
-            const float xi0 = curand_uniform(&rand_state);
-            const float xi1 = curand_uniform(&rand_state);
-            const float xi2 = curand_uniform(&rand_state);
+            const float xi0 = rnd(seed);
+            const float xi1 = rnd(seed);
+            const float xi2 = rnd(seed);
 
             float3 light_dir;
             float pdf;
@@ -1258,7 +1286,7 @@ __device__ inline bool trace_scene(
             if(ray_state.inside_cutout && !culled_env_light)
             {
                 const float3 pos = ray_state.pos - hit.normal * 0.001f;
-                culled_env_light = trace_shadow(pos, light_dir, rand_state, ray_state, params);
+                culled_env_light = trace_shadow(pos, light_dir, seed, ray_state, params);
             }
 
             if (!culled_env_light)
@@ -1336,10 +1364,10 @@ __device__ inline bool trace_scene(
 
         // importance sample BSDF
         {
-            sample_data.xi.x = curand_uniform(&rand_state);
-            sample_data.xi.y = curand_uniform(&rand_state);
-            sample_data.xi.z = curand_uniform(&rand_state);
-            sample_data.xi.w = curand_uniform(&rand_state);
+            sample_data.xi.x = rnd(seed);
+            sample_data.xi.y = rnd(seed);
+            sample_data.xi.z = rnd(seed);
+            sample_data.xi.w = rnd(seed);
 
 
             // sample the materials BSDF
@@ -1436,7 +1464,7 @@ struct render_result
 };
 
 __device__ inline render_result render_scene(
-    Rand_state &rand_state,
+    uint32_t &seed,
     const Kernel_params &params,
     const unsigned x,
     const unsigned y)
@@ -1444,8 +1472,8 @@ __device__ inline render_result render_scene(
     const float inv_res_x = 1.0f / (float)params.resolution.x;
     const float inv_res_y = 1.0f / (float)params.resolution.y;
 
-    const float dx = params.disable_aa ? 0.5f : curand_uniform(&rand_state);
-    const float dy = params.disable_aa ? 0.5f : curand_uniform(&rand_state);
+    const float dx = params.disable_aa ? 0.5f : rnd(seed);
+    const float dy = params.disable_aa ? 0.5f : rnd(seed);
 
     const float2 screen_pos = make_float2(
         ((float)x + dx) * inv_res_x,
@@ -1478,7 +1506,7 @@ __device__ inline render_result render_scene(
     const unsigned int max_inters = params.max_path_length - 1;
     for (ray_state.intersection = 0; ray_state.intersection < max_inters; ++ray_state.intersection)
     {
-        if (!trace_scene(rand_state, ray_state, params))
+        if (!trace_scene(seed, ray_state, params))
             break;
     }
 
@@ -1494,9 +1522,9 @@ __device__ inline render_result render_scene(
 // quantize + gamma
 __device__ inline unsigned int float3_to_rgba8(float3 val)
 {
-    const unsigned int r = (unsigned int) (255.0 * powf(__saturatef(val.x), 1.0f / 2.2f));
-    const unsigned int g = (unsigned int) (255.0 * powf(__saturatef(val.y), 1.0f / 2.2f));
-    const unsigned int b = (unsigned int) (255.0 * powf(__saturatef(val.z), 1.0f / 2.2f));
+    const unsigned int r = (unsigned int) (255.0f * powf(__saturatef(val.x), 1.0f / 2.2f));
+    const unsigned int g = (unsigned int) (255.0f * powf(__saturatef(val.y), 1.0f / 2.2f));
+    const unsigned int b = (unsigned int) (255.0f * powf(__saturatef(val.z), 1.0f / 2.2f));
     return 0xff000000 | (b << 16) | (g << 8) | r;
 }
 
@@ -1522,9 +1550,7 @@ extern "C" __global__ void render_scene_kernel(
         return;
 
     const unsigned int idx = y * kernel_params.resolution.x + x;
-    Rand_state rand_state;
-    const unsigned int num_dim = kernel_params.disable_aa ? 6 : 8; // 2 camera, 3 BSDF, 3 environment
-    curand_init(idx, /*subsequence=*/0, kernel_params.iteration_start * num_dim, &rand_state);
+    uint32_t seed = tea<4>(idx, kernel_params.iteration_start);
 
     render_result res;
     float3 beauty = make_float3(0.0f, 0.0f, 0.0f);
@@ -1533,7 +1559,7 @@ extern "C" __global__ void render_scene_kernel(
     for (unsigned int s = 0; s < kernel_params.iteration_num; ++s)
     {
         res = render_scene(
-            rand_state,
+            seed,
             kernel_params,
             x, y);
 
@@ -1606,6 +1632,4 @@ extern "C" __global__ void render_scene_kernel(
             break;
         }
     }
-
-
 }

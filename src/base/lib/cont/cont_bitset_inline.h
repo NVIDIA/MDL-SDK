@@ -44,16 +44,16 @@ namespace CONT {
 namespace DETAIL {
 
 
-template <typename T, std::size_t count>
-constexpr Bitset_storage_base<T,count>::Bitset_storage_base(T data)
+template <typename T, std::size_t count, typename E>
+constexpr Bitset_storage_base<T,count,E>::Bitset_storage_base(T data)
 : m_data{}
 {
     m_data[0] = data;
 }
 
 
-template <typename T, std::size_t count>
-constexpr bool Bitset_storage_base<T,count>::equals(const Bitset_storage_base& rhs) const
+template <typename T, std::size_t count, typename E>
+constexpr bool Bitset_storage_base<T,count,E>::equals(const Bitset_storage_base& rhs) const
 {
     for (std::size_t i=0; i<count; ++i)
         if (m_data[i] != rhs.m_data[i])
@@ -62,8 +62,8 @@ constexpr bool Bitset_storage_base<T,count>::equals(const Bitset_storage_base& r
 }
 
 
-template <typename T, std::size_t count>
-constexpr bool Bitset_storage_base<T,count>::is_less_than(const Bitset_storage_base& rhs) const
+template <typename T, std::size_t count, typename E>
+constexpr bool Bitset_storage_base<T,count,E>::is_less_than(const Bitset_storage_base& rhs) const
 {
     return std::lexicographical_compare(
             std::begin(m_data),std::end(m_data),
@@ -71,29 +71,29 @@ constexpr bool Bitset_storage_base<T,count>::is_less_than(const Bitset_storage_b
 }
 
 
-template <typename T, std::size_t count>
-inline void Bitset_storage_base<T,count>::set(std::size_t bit)
+template <typename T, std::size_t count, typename E>
+inline void Bitset_storage_base<T,count,E>::set(std::size_t bit)
 {
-    m_data[index(bit)] |= (T(1) << subbit(bit));
+    m_data[index(bit)] |= (T(1u) << subbit(bit));
 }
 
 
-template <typename T, std::size_t count>
-inline void Bitset_storage_base<T,count>::unset(std::size_t bit)
+template <typename T, std::size_t count, typename E>
+inline void Bitset_storage_base<T,count,E>::unset(std::size_t bit)
 {
-    m_data[index(bit)] &= ~(T(1) << subbit(bit));
+    m_data[index(bit)] &= ~(T(1u) << subbit(bit));
 }
 
 
-template <typename T, std::size_t count>
-constexpr bool Bitset_storage_base<T,count>::is_set(std::size_t bit) const
+template <typename T, std::size_t count, typename E>
+constexpr bool Bitset_storage_base<T,count,E>::is_set(std::size_t bit) const
 {
-    return 0 != (m_data[index(bit)] & (T(1) << subbit(bit)));
+    return 0 != (m_data[index(bit)] & (T(1u) << subbit(bit)));
 }
 
 
-template <typename T, std::size_t count>
-constexpr bool Bitset_storage_base<T,count>::any(const Bitset_storage_base& data) const
+template <typename T, std::size_t count, typename E>
+constexpr bool Bitset_storage_base<T,count,E>::any(const Bitset_storage_base& data) const
 {
     for (std::size_t i=0; i<count; ++i)
         if (0 != (data.m_data[i] & m_data[i]))
@@ -102,8 +102,8 @@ constexpr bool Bitset_storage_base<T,count>::any(const Bitset_storage_base& data
 }
 
 
-template <typename T, std::size_t count>
-constexpr bool Bitset_storage_base<T,count>::any() const
+template <typename T, std::size_t count, typename E>
+constexpr bool Bitset_storage_base<T,count,E>::any() const
 {
     for (std::size_t i=0; i<count; ++i)
         if (0 != m_data[i])
@@ -112,8 +112,8 @@ constexpr bool Bitset_storage_base<T,count>::any() const
 }
 
 
-template <typename T, std::size_t count>
-constexpr bool Bitset_storage_base<T,count>::all(const Bitset_storage_base& data) const
+template <typename T, std::size_t count, typename E>
+constexpr bool Bitset_storage_base<T,count,E>::all(const Bitset_storage_base& data) const
 {
     for (std::size_t i=0; i<count; ++i)
         if (data.m_data[i] != (data.m_data[i] & m_data[i]))
@@ -122,89 +122,89 @@ constexpr bool Bitset_storage_base<T,count>::all(const Bitset_storage_base& data
 }
 
 
-template <typename T, std::size_t count>
-void Bitset_storage_base<T,count>::do_and(const Bitset_storage_base& rhs)
+template <typename T, std::size_t count, typename E>
+void Bitset_storage_base<T,count,E>::do_and(const Bitset_storage_base& rhs)
 {
     for (std::size_t i=0; i<count; ++i)
         m_data[i] &= rhs.m_data[i];
 }
 
 
-template <typename T, std::size_t count>
-void Bitset_storage_base<T,count>::do_or(const Bitset_storage_base& rhs)
+template <typename T, std::size_t count, typename E>
+void Bitset_storage_base<T,count,E>::do_or(const Bitset_storage_base& rhs)
 {
     for (std::size_t i=0; i<count; ++i)
         m_data[i] |= rhs.m_data[i];
 }
 
 
-template <typename T, std::size_t count>
-void Bitset_storage_base<T,count>::do_xor(const Bitset_storage_base& rhs)
+template <typename T, std::size_t count, typename E>
+void Bitset_storage_base<T,count,E>::do_xor(const Bitset_storage_base& rhs)
 {
     for (std::size_t i=0; i<count; ++i)
         m_data[i] ^= rhs.m_data[i];
 }
 
 
-template <typename T, std::size_t count>
-constexpr void Bitset_storage_base<T,count>::flip()
+template <typename T, std::size_t count, typename E>
+constexpr void Bitset_storage_base<T,count,E>::flip()
 {
     for (std::size_t i=0; i<count; ++i)
         m_data[i] = ~m_data[i];
 }
 
 
-template <typename T, std::size_t count>
-constexpr T& Bitset_storage_base<T,count>::data(std::size_t bit)
+template <typename T, std::size_t count, typename E>
+constexpr T& Bitset_storage_base<T,count,E>::data(std::size_t bit)
 {
     return m_data[index(bit)];
 }
 
 
-template <typename T, std::size_t count>
-constexpr const T* Bitset_storage_base<T,count>::begin() const
+template <typename T, std::size_t count, typename E>
+constexpr const T* Bitset_storage_base<T,count,E>::begin() const
 {
     return m_data;
 }
 
 
-template <typename T, std::size_t count>
-constexpr const T* Bitset_storage_base<T,count>::end() const
+template <typename T, std::size_t count, typename E>
+constexpr const T* Bitset_storage_base<T,count,E>::end() const
 {
     return m_data+count;
 }
 
 
-template <typename T, std::size_t count>
-inline T* Bitset_storage_base<T,count>::begin()
+template <typename T, std::size_t count, typename E>
+inline T* Bitset_storage_base<T,count,E>::begin()
 {
     return m_data;
 }
 
 
-template <typename T, std::size_t count>
-inline T* Bitset_storage_base<T,count>::end()
+template <typename T, std::size_t count, typename E>
+inline T* Bitset_storage_base<T,count,E>::end()
 {
     return m_data+count;
 }
 
 
-template <typename T, std::size_t count>
-inline T Bitset_storage_base<T,count>::mask(std::size_t bit)
+template <typename T, std::size_t count, typename E>
+inline T Bitset_storage_base<T,count,E>::mask(std::size_t bit)
 {
-    return T(1) << subbit(bit);
+    return T(1u) << subbit(bit);
 }
 
 
-template <typename T, std::size_t count>
-inline std::size_t Bitset_storage_base<T,count>::index(std::size_t bit)
+template <typename T, std::size_t count, typename E>
+inline std::size_t Bitset_storage_base<T,count,E>::index(std::size_t bit)
 {
     return bit / Bit_sizeof<T>::value;
 }
 
 
-template <typename T, std::size_t count>
-inline std::size_t Bitset_storage_base<T,count>::subbit(std::size_t bit)
+template <typename T, std::size_t count, typename E>
+inline std::size_t Bitset_storage_base<T,count,E>::subbit(std::size_t bit)
 {
     return bit % Bit_sizeof<T>::value;
 }
@@ -237,21 +237,21 @@ constexpr bool Bitset_storage_base<T,1>::is_less_than(const Bitset_storage_base&
 template <typename T>
 inline void Bitset_storage_base<T,1>::set(std::size_t bit)
 {
-    m_data |= (T(1) << bit);
+    m_data |= (T(1u) << bit);
 }
 
 
 template <typename T>
 inline void Bitset_storage_base<T,1>::unset(std::size_t bit)
 {
-    m_data &= ~(T(1) << bit);
+    m_data &= ~(T(1u) << bit);
 }
 
 
 template <typename T>
 constexpr bool Bitset_storage_base<T,1>::is_set(std::size_t bit) const
 {
-    return 0 != (m_data & (T(1) << bit));
+    return 0 != (m_data & (T(1u) << bit));
 }
 
 
@@ -314,7 +314,7 @@ constexpr T& Bitset_storage_base<T,1>::data(std::size_t)
 template <typename T>
 inline T Bitset_storage_base<T,1>::mask(std::size_t bit)
 {
-    return T(1) << bit;
+    return T(1u) << bit;
 }
 
 
@@ -366,7 +366,7 @@ inline Bitset_storage_base<T,1>::operator T&()
 template <typename T, std::size_t used_bit_count>
 struct Bit_cleaner
 {
-    static constexpr void clean(T& bits) { bits &= ~(T(~T(0)) << used_bit_count); }
+    static constexpr void clean(T& bits) { bits &= ~(T(~T(0u)) << used_bit_count); }
 };
 
 

@@ -37,6 +37,7 @@
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/PassManager.h>
+#include <llvm/Analysis/OptimizationRemarkEmitter.h>
 #include <llvm/PassRegistry.h>
 
 #include <mdl/compiler/compilercore/compilercore_memory_arena.h>
@@ -63,10 +64,15 @@ public:
             // intrinsics are not in the call graph, do not try to remove them neither remove
             // address taken or used functions, which might occur if optimizations are set to
             // a lower level.
-            if (!F->isIntrinsic() && !F->hasAddressTaken() && F->use_empty() && isLibDeviceFunc(F))
+            if (!F->isIntrinsic() && !F->hasAddressTaken() && isLibDeviceFunc(F))
             {
-                M.getFunctionList().remove(F);
-                delete F;
+                if (F->use_empty()) {
+                    M.getFunctionList().remove(F);
+                    delete F;
+                } else {
+                    // still used? mark as internal to avoid causing duplicate symbol error in OptiX
+                    F->setLinkage(llvm::GlobalValue::InternalLinkage);
+                }
                 changed = true;
             }
         }
@@ -95,16 +101,50 @@ public:
 char DeleteUnusedLibDevice::ID = 0;
 char &DeleteUnusedLibDeviceID = DeleteUnusedLibDevice::ID;
 
+class FunctionInstCounter : public FunctionPass
+{
+public:
+    static char ID;
+
+    FunctionInstCounter()
+    : FunctionPass(ID)
+    {
+        initializeFunctionInstCounterPass(*PassRegistry::getPassRegistry());
+    }
+
+    bool runOnFunction(Function &F) override
+    {
+        llvm::OptimizationRemarkEmitter ORE(&F);
+
+        ORE.emit([&]() {
+            return llvm::OptimizationRemark("funccount", "FunctionCount", &F)
+                << "Function " << F.getName() << " "<< ore::NV("count", F.getInstructionCount());
+        });
+
+        return false;
+    }
+};
+
+char FunctionInstCounter::ID = 0;
+
 }  // anonymous
 
 namespace llvm {
 
 /// Creates our pass.
-llvm::ModulePass *createDeleteUnusedLibDevicePass() {
+ModulePass *createDeleteUnusedLibDevicePass() {
     return new DeleteUnusedLibDevice();
+}
+
+FunctionPass *createFunctionInstCounterPass()
+{
+    return new FunctionInstCounter();
 }
 
 }  // llvm
 
 INITIALIZE_PASS(DeleteUnusedLibDevice, "delete-unused-libdevice",
               "Delete unused LibDevice functions from a module", false, false)
+
+INITIALIZE_PASS(FunctionInstCounter, "func-inst-count",
+              "Function instruction counter", false, true)

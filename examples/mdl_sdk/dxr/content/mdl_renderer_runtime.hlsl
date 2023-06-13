@@ -203,6 +203,15 @@ Texture3D mdl_textures_3d[] : register(MDL_MATERIAL_TEXTURE_SLOT_BEGIN, MDL_MATE
 // - buffer views, unbound. contains sampling and albedo buffers for MBSDFs and sampling buffers for light profiles
 StructuredBuffer<float> mdl_buffers[] : register(MDL_MATERIAL_BUFFER_SLOT_BEGIN, MDL_MATERIAL_BUFFER_REGISTER_SPACE);
 
+// mesh data, includes the per mesh scene data
+ByteAddressBuffer vertices : register(t1, space0);
+
+// instance data
+// - scene data buffer for object/instance data
+ByteAddressBuffer scene_data : register(t3, space0);
+// - mapping between scene_data_id and scene data buffer layout
+StructuredBuffer<SceneDataInfo> scene_data_infos: register(t4, space0);
+
 // global samplers
 SamplerState mdl_sampler_tex : register(MDL_TEXTURE_SAMPLER_SLOT);
 SamplerState mdl_sampler_light_profile : register(MDL_LIGHT_PROFILE_SAMPLER_SLOT);
@@ -984,7 +993,7 @@ float df_light_profile_pdf(
     const int idx_phi = int(phi * lp.theta_phi_inv_delta.y);
 
     // wrap_mode: border black would be an alternative (but it produces artifacts at low res)
-    if (idx_theta < 0 || idx_theta >(res.x - 2) || idx_phi < 0 || idx_phi > (res.x - 2))
+    if (idx_theta < 0 || idx_theta > res.x - 2 || idx_phi < 0 || idx_phi > res.x - 2)
         return 0;
 
     // get probability for theta
@@ -1256,7 +1265,7 @@ bool scene_data_isvalid_internal(
         return false;
 
     // get scene data buffer layout and access infos
-    SceneDataInfo info = state.renderer_state.scene_data_infos[
+    SceneDataInfo info = scene_data_infos[
         state.renderer_state.scene_data_info_offset + scene_data_id];
 
     SceneDataKind kind = info.GetKind();
@@ -1291,7 +1300,7 @@ float4 scene_data_lookup_floatX(
         return default_value;
 
     // get scene data buffer layout and access infos
-    SceneDataInfo info = state.renderer_state.scene_data_infos[
+    SceneDataInfo info = scene_data_infos[
         state.renderer_state.scene_data_info_offset + scene_data_id];
 
     if (uniform_lookup && !info.GetUniform())
@@ -1315,70 +1324,64 @@ float4 scene_data_lookup_floatX(
         uint4 value_a_raw = uint4(0, 0, 0, 0);
         uint4 value_b_raw = uint4(0, 0, 0, 0);
         uint4 value_c_raw = uint4(0, 0, 0, 0);
-        switch (number_of_components)
+        if (number_of_components == 1)
         {
-            case 1:
-                value_a_raw.x = state.renderer_state.scene_data_vertex.Load(addresses.x);
-                value_b_raw.x = state.renderer_state.scene_data_vertex.Load(addresses.y);
-                value_c_raw.x = state.renderer_state.scene_data_vertex.Load(addresses.z);
-                break;
-            case 2:
-                value_a_raw.xy = state.renderer_state.scene_data_vertex.Load2(addresses.x);
-                value_b_raw.xy = state.renderer_state.scene_data_vertex.Load2(addresses.y);
-                value_c_raw.xy = state.renderer_state.scene_data_vertex.Load2(addresses.z);
-                break;
-            case 3:
-                value_a_raw.xyz = state.renderer_state.scene_data_vertex.Load3(addresses.x);
-                value_b_raw.xyz = state.renderer_state.scene_data_vertex.Load3(addresses.y);
-                value_c_raw.xyz = state.renderer_state.scene_data_vertex.Load3(addresses.z);
-                break;
-            case 4:
-                value_a_raw = state.renderer_state.scene_data_vertex.Load4(addresses.x);
-                value_b_raw = state.renderer_state.scene_data_vertex.Load4(addresses.y);
-                value_c_raw = state.renderer_state.scene_data_vertex.Load4(addresses.z);
-                break;
+            value_a_raw.x = vertices.Load(addresses.x);
+            value_b_raw.x = vertices.Load(addresses.y);
+            value_c_raw.x = vertices.Load(addresses.z);
+        }
+        else if (number_of_components == 2)
+        {
+            value_a_raw.xy = vertices.Load2(addresses.x);
+            value_b_raw.xy = vertices.Load2(addresses.y);
+            value_c_raw.xy = vertices.Load2(addresses.z);
+        }
+        else if (number_of_components == 3)
+        {
+            value_a_raw.xyz = vertices.Load3(addresses.x);
+            value_b_raw.xyz = vertices.Load3(addresses.y);
+            value_c_raw.xyz = vertices.Load3(addresses.z);
+        }
+        else if (number_of_components == 4)
+        {
+            value_a_raw = vertices.Load4(addresses.x);
+            value_b_raw = vertices.Load4(addresses.y);
+            value_c_raw = vertices.Load4(addresses.z);
         }
 
         // convert to float, int or color data
         float4 value_a = float4(0, 0, 0, 0);
         float4 value_b = float4(0, 0, 0, 0);
         float4 value_c = float4(0, 0, 0, 0);
-        switch (info.GetElementType())
+        if (info.GetElementType() == SCENE_DATA_ELEMENT_TYPE_FLOAT     // reinterpret as float
+            || info.GetElementType() == SCENE_DATA_ELEMENT_TYPE_COLOR) // (handled as float3, no spectral support)
         {
-            case SCENE_DATA_ELEMENT_TYPE_FLOAT: // reinterpret as float
-            case SCENE_DATA_ELEMENT_TYPE_COLOR: // (handled as float3, no spectral support)
-                value_a = asfloat(value_a_raw);
-                value_b = asfloat(value_b_raw);
-                value_c = asfloat(value_c_raw);
-                break;
-
-            case SCENE_DATA_ELEMENT_TYPE_INT:
-                // reinterpret as signed int and convert from integer to float
-                value_a = float4(asint(value_a_raw));
-                value_b = float4(asint(value_b_raw));
-                value_c = float4(asint(value_c_raw));
-                break;
+            value_a = asfloat(value_a_raw);
+            value_b = asfloat(value_b_raw);
+            value_c = asfloat(value_c_raw);
+        }
+        else if (info.GetElementType() == SCENE_DATA_ELEMENT_TYPE_INT)
+        {
+            // reinterpret as signed int and convert from integer to float
+            value_a = float4(asint(value_a_raw));
+            value_b = float4(asint(value_b_raw));
+            value_c = float4(asint(value_c_raw));
         }
 
         // interpolate across the triangle
         const float3 barycentric = state.renderer_state.barycentric;
-        switch (mode)
-        {
-            case SCENE_DATA_INTERPOLATION_MODE_LINEAR:
-                return value_a * barycentric.x +
-                    value_b * barycentric.y +
-                    value_c * barycentric.z;
-
-            case SCENE_DATA_INTERPOLATION_MODE_NEAREST:
-                if (barycentric.x > barycentric.y)
-                    return barycentric.x > barycentric.z ? value_a : value_c;
-                else
-                    return barycentric.y > barycentric.z ? value_b : value_c;
-
-            case SCENE_DATA_INTERPOLATION_MODE_NONE:
-            default: // unsupported interpolation mode
-                return default_value;
-        }
+        if (mode == SCENE_DATA_INTERPOLATION_MODE_LINEAR)
+            return value_a * barycentric.x +
+                value_b * barycentric.y +
+                value_c * barycentric.z;
+        else if (mode == SCENE_DATA_INTERPOLATION_MODE_NEAREST)
+            if (barycentric.x > barycentric.y)
+                return barycentric.x > barycentric.z ? value_a : value_c;
+            else
+                return barycentric.y > barycentric.z ? value_b : value_c;
+        else // SCENE_DATA_INTERPOLATION_MODE_NONE
+             // or unsupported interpolation mode
+            return default_value;
     }
 
     case SCENE_DATA_KIND_INSTANCE:
@@ -1386,24 +1389,22 @@ float4 scene_data_lookup_floatX(
         // raw data read from the buffer
         uint address = info.GetByteOffset();
         uint4 value_raw = uint4(0, 0, 0, 0);
-        switch (number_of_components)
-        {
-            case 1: value_raw.x = state.renderer_state.scene_data_instance.Load(address); break;
-            case 2: value_raw.xy = state.renderer_state.scene_data_instance.Load2(address); break;
-            case 3: value_raw.xyz = state.renderer_state.scene_data_instance.Load3(address); break;
-            case 4: value_raw = state.renderer_state.scene_data_instance.Load4(address); break;
-        }
+        if (number_of_components == 1)      value_raw.x = scene_data.Load(address);
+        else if (number_of_components == 2) value_raw.xy = scene_data.Load2(address);
+        else if (number_of_components == 3) value_raw.xyz = scene_data.Load3(address);
+        else if (number_of_components == 4) value_raw = scene_data.Load4(address);
 
         // convert to float, int or color data
         // do not interpolate as all currently available modes would result in the same value
-        switch (info.GetElementType())
+        if (info.GetElementType() == SCENE_DATA_ELEMENT_TYPE_FLOAT     // reinterpret as float
+            || info.GetElementType() == SCENE_DATA_ELEMENT_TYPE_COLOR) // (handled as float3, no spectral support)
         {
-            case SCENE_DATA_ELEMENT_TYPE_FLOAT: // reinterpret as float
-            case SCENE_DATA_ELEMENT_TYPE_COLOR: // (handled as float3, no spectral support)
-                return asfloat(value_raw);
-
-            case SCENE_DATA_ELEMENT_TYPE_INT:   // reinterpret as signed int and convert to float
-                return float4(asint(value_raw));
+            return asfloat(value_raw);
+        }
+        else if (info.GetElementType() == SCENE_DATA_ELEMENT_TYPE_INT)
+        {
+            // reinterpret as signed int and convert to float
+            return float4(asint(value_raw));
         }
     }
 
@@ -1458,6 +1459,16 @@ float scene_data_lookup_float(
     return scene_data_lookup_floatX(state, scene_data_id, default_value.xxxx, uniform_lookup, 1).x;
 }
 
+float4x4 scene_data_lookup_float4x4(
+    Shading_state_material state,
+    uint scene_data_id,
+    float4x4 default_value,
+    bool uniform_lookup)
+{
+    // dummy implementation
+    return default_value;
+}
+
 
 int4 scene_data_lookup_intX(
     Shading_state_material state,
@@ -1471,7 +1482,7 @@ int4 scene_data_lookup_intX(
         return default_value;
 
     // get scene data buffer layout and access infos
-    SceneDataInfo info = state.renderer_state.scene_data_infos[
+    SceneDataInfo info = scene_data_infos[
         state.renderer_state.scene_data_info_offset + scene_data_id];
 
     if (uniform_lookup && !info.GetUniform())
@@ -1495,70 +1506,63 @@ int4 scene_data_lookup_intX(
         uint4 value_a_raw = uint4(0, 0, 0, 0);
         uint4 value_b_raw = uint4(0, 0, 0, 0);
         uint4 value_c_raw = uint4(0, 0, 0, 0);
-        switch (number_of_components)
+        if (number_of_components == 1)
         {
-            case 1:
-                value_a_raw.x = state.renderer_state.scene_data_vertex.Load(addresses.x);
-                value_b_raw.x = state.renderer_state.scene_data_vertex.Load(addresses.y);
-                value_c_raw.x = state.renderer_state.scene_data_vertex.Load(addresses.z);
-                break;
-            case 2:
-                value_a_raw.xy = state.renderer_state.scene_data_vertex.Load2(addresses.x);
-                value_b_raw.xy = state.renderer_state.scene_data_vertex.Load2(addresses.y);
-                value_c_raw.xy = state.renderer_state.scene_data_vertex.Load2(addresses.z);
-                break;
-            case 3:
-                value_a_raw.xyz = state.renderer_state.scene_data_vertex.Load3(addresses.x);
-                value_b_raw.xyz = state.renderer_state.scene_data_vertex.Load3(addresses.y);
-                value_c_raw.xyz = state.renderer_state.scene_data_vertex.Load3(addresses.z);
-                break;
-            case 4:
-                value_a_raw = state.renderer_state.scene_data_vertex.Load4(addresses.x);
-                value_b_raw = state.renderer_state.scene_data_vertex.Load4(addresses.y);
-                value_c_raw = state.renderer_state.scene_data_vertex.Load4(addresses.z);
-                break;
+            value_a_raw.x = vertices.Load(addresses.x);
+            value_b_raw.x = vertices.Load(addresses.y);
+            value_c_raw.x = vertices.Load(addresses.z);
+        }
+        else if (number_of_components == 2)
+        {
+            value_a_raw.xy = vertices.Load2(addresses.x);
+            value_b_raw.xy = vertices.Load2(addresses.y);
+            value_c_raw.xy = vertices.Load2(addresses.z);
+        }
+        else if (number_of_components == 3)
+        {
+            value_a_raw.xyz = vertices.Load3(addresses.x);
+            value_b_raw.xyz = vertices.Load3(addresses.y);
+            value_c_raw.xyz = vertices.Load3(addresses.z);
+        }
+        else if (number_of_components == 4)
+        {
+            value_a_raw = vertices.Load4(addresses.x);
+            value_b_raw = vertices.Load4(addresses.y);
+            value_c_raw = vertices.Load4(addresses.z);
         }
 
         // convert to float, int or color data
         int4 value_a = int4(0, 0, 0, 0);
         int4 value_b = int4(0, 0, 0, 0);
         int4 value_c = int4(0, 0, 0, 0);
-        switch (info.GetElementType())
+        if (info.GetElementType() == SCENE_DATA_ELEMENT_TYPE_FLOAT     // reinterpret as float and convert to int
+            || info.GetElementType() == SCENE_DATA_ELEMENT_TYPE_COLOR) // (handled as float3, no spectral support)
         {
-            case SCENE_DATA_ELEMENT_TYPE_FLOAT: // reinterpret as float and convert to int
-            case SCENE_DATA_ELEMENT_TYPE_COLOR: // (handled as float3, no spectral support)
-                value_a = int4(asfloat(value_a_raw));
-                value_b = int4(asfloat(value_b_raw));
-                value_c = int4(asfloat(value_c_raw));
-                break;
-
-            case SCENE_DATA_ELEMENT_TYPE_INT:
-                // reinterpret as signed int
-                value_a = asint(value_a_raw);
-                value_b = asint(value_b_raw);
-                value_c = asint(value_c_raw);
-                break;
+            value_a = int4(asfloat(value_a_raw));
+            value_b = int4(asfloat(value_b_raw));
+            value_c = int4(asfloat(value_c_raw));
+        }
+        else if (info.GetElementType() == SCENE_DATA_ELEMENT_TYPE_INT)
+        {
+            value_a = asint(value_a_raw);
+            value_b = asint(value_b_raw);
+            value_c = asint(value_c_raw);
         }
 
         // interpolate across the triangle
         const float3 barycentric = state.renderer_state.barycentric;
-        switch (mode)
-        {
-            case SCENE_DATA_INTERPOLATION_MODE_LINEAR:
-                return int4(float4(value_a) * barycentric.x +
-                            float4(value_b) * barycentric.y +
-                            float4(value_c) * barycentric.z);
-
-            case SCENE_DATA_INTERPOLATION_MODE_NEAREST:
-                if (barycentric.x > barycentric.y)
-                    return barycentric.x > barycentric.z ? value_a : value_c;
-                else
-                    return barycentric.y > barycentric.z ? value_b : value_c;
-
-            case SCENE_DATA_INTERPOLATION_MODE_NONE:
-            default: // unsupported interpolation mode
-                return default_value;
-        }
+        if (mode == SCENE_DATA_INTERPOLATION_MODE_LINEAR)
+            return int4(float4(value_a)*barycentric.x +
+                float4(value_b)*barycentric.y +
+                float4(value_c)*barycentric.z);
+        else if (mode == SCENE_DATA_INTERPOLATION_MODE_NEAREST)
+            if (barycentric.x > barycentric.y)
+                return barycentric.x > barycentric.z ? value_a : value_c;
+            else
+                return barycentric.y > barycentric.z ? value_b : value_c;
+        else // SCENE_DATA_INTERPOLATION_MODE_NONE:
+             // or unsupported interpolation mode
+            return default_value;
     }
 
     case SCENE_DATA_KIND_INSTANCE:
@@ -1566,24 +1570,22 @@ int4 scene_data_lookup_intX(
         // raw data read from the buffer
         uint address = info.GetByteOffset();
         uint4 value_raw = uint4(0, 0, 0, 0);
-        switch (number_of_components)
-        {
-            case 1: value_raw.x = state.renderer_state.scene_data_instance.Load(address); break;
-            case 2: value_raw.xy = state.renderer_state.scene_data_instance.Load2(address); break;
-            case 3: value_raw.xyz = state.renderer_state.scene_data_instance.Load3(address); break;
-            case 4: value_raw = state.renderer_state.scene_data_instance.Load4(address); break;
-        }
+        if (number_of_components == 1)      value_raw.x = scene_data.Load(address);
+        else if (number_of_components == 2) value_raw.xy = scene_data.Load2(address);
+        else if (number_of_components == 3) value_raw.xyz = scene_data.Load3(address);
+        else if (number_of_components == 4) value_raw = scene_data.Load4(address);
 
         // convert to float, int or color data
         // do not interpolate as all currently available modes would result in the same value
-        switch (info.GetElementType())
+        if (info.GetElementType() == SCENE_DATA_ELEMENT_TYPE_FLOAT     // reinterpret as float and convert to int
+            || info.GetElementType() == SCENE_DATA_ELEMENT_TYPE_COLOR) // (handled as float3, no spectral support)
         {
-            case SCENE_DATA_ELEMENT_TYPE_FLOAT: // reinterpret as float and convert to int
-            case SCENE_DATA_ELEMENT_TYPE_COLOR: // (handled as float3, no spectral support)
-                return int4(asfloat(value_raw));
-
-            case SCENE_DATA_ELEMENT_TYPE_INT: // reinterpret as signed int
-                return asint(value_raw);
+            return int4(asfloat(value_raw));
+        }
+        else if (info.GetElementType() == SCENE_DATA_ELEMENT_TYPE_INT)
+        {
+            // reinterpret as signed int
+            return asint(value_raw);
         }
     }
 

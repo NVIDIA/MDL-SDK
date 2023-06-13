@@ -52,7 +52,7 @@ public:
     // name of the criteria, used for identification (UI and Settings)
     const std::string get_name() { return m_name; }
 
-    // oder of sorting
+    // order of sorting
     bool get_ascending() const { return m_ascending; }
     void set_ascending(bool value) { m_ascending = value; }
 

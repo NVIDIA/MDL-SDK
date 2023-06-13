@@ -71,8 +71,6 @@ create_from_base_preset(
         ${_GENERATOR_FILES}
     )
 
-target_compile_definitions(${PROJECT_NAME} PUBLIC "MI_NEURAYLIB_DEPRECATED_13_0")
-
 # customize name
 set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "")
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "_pymdlsdk")
@@ -95,10 +93,15 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
     )
 
 # disable some warnings in generated code
-if(UNIX AND NOT APPLE)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(${PROJECT_NAME}
         PUBLIC
             -Wno-delete-non-virtual-dtor
+    )
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+    target_compile_options(${PROJECT_NAME}
+        PUBLIC
+            -Wno-delete-abstract-non-virtual-dtor
     )
 endif()
 
@@ -157,7 +160,6 @@ add_custom_command(
         -c++ -python -doxygen
         -w564
         -DSWIGWORDSIZE64
-        -DMI_NEURAYLIB_DEPRECATED_13_0
         ${_SWIG_MDL_SOURCE_RELEASE_OPTIONS}
         -I-
         -I${CMAKE_CURRENT_SOURCE_DIR}

@@ -259,6 +259,7 @@ private:
 
         switch (bsdf->get_semantic()) {
         case IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF:
+        case IDefinition::DS_INTRINSIC_DF_DUSTY_DIFFUSE_REFLECTION_BSDF:
         case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
             // no transmission at all
             return true;
@@ -795,6 +796,7 @@ private:
         // same call: check for equal structure
         switch (sema) {
         case IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF:
+        case IDefinition::DS_INTRINSIC_DF_DUSTY_DIFFUSE_REFLECTION_BSDF:
         case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
             // no transmission at all
             return true;

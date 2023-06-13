@@ -508,7 +508,7 @@ class IType_bsdf_measurement : public
 {
 public:
     /// The kind of this subclass.
-    static Kind const s_kind = TK_BSDF_MEASUREMENT;
+    static const Kind s_kind = TK_BSDF_MEASUREMENT;
 };
 
 /// The type of distribution functions.
@@ -767,13 +767,15 @@ public:
     /// \p src is compatible with and therefore can be casted to \p dst, if
     /// - \p src and \p dst are of identical type (see #mi::neuraylib::IType_factory::compare()).
     /// - \p src and \p dst are of type #mi::neuraylib::IType_struct, have the same number of
-    ///   fields and all fields are compatible.
+    ///   fields and all fields are pairwise compatible. The names of the fields do not matter,
+    ///   only their order.
     /// - \p src and \p dst are of type #mi::neuraylib::IType_enum and both enumeration types have
-    ///   the same set of numerical enumeration values. The name of the enumeration values, their
+    ///   the same set of numerical enumeration values. The names of the enumeration values, their
     ///   order, or whether multiple enumeration value names share the same numerical value
     ///   do not matter.
-    /// - \p src and \p dst are of type #mi::neuraylib::IType_array, both arrays have the same size
-    ///   and their element types are compatible.
+    /// - \p src and \p dst are of type #mi::neuraylib::IType_array, both arrays are either
+    ///   immediated-sized or deferred-sized arrays, have the same size, and their element types
+    ///   are compatible.
     ///
     /// \param src The source type.
     /// \param dst the target type to which src is intended to be compatible.
@@ -782,7 +784,7 @@ public:
     ///                type.
     ///           -  1 if \p src and \p dst are of identical type.
     ///           - -1 if \p src cannot be casted to \p dst.
-    virtual Sint32 is_compatible(const IType* src, const IType* dst) const = 0;
+    virtual Sint32 is_compatible( const IType* src, const IType* dst) const = 0;
 
     /// Returns a textual representation of a type.
     ///

@@ -50,7 +50,7 @@ enum class EMdl_sdk_state
     undefined = 0,
     loaded = 1,
     error_libmdl_not_found = -1,
-    error_freeimage_not_found = -2,
+    error_openimageio_not_found = -2,
     error_dds_not_found = -3,
     error_default_module_invalid = -4,
 };

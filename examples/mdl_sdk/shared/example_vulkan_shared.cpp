@@ -104,15 +104,15 @@ void Glsl_compiler::add_shader(std::string_view source)
     shader->setPreamble(m_shader_preamble.c_str());
 
     bool success = shader->parse(
-        /*builtInResource=*/ &mi::examples::vk::g_default_built_in_resource,
-        /*defaultVersion=*/ 100, // Will be overriden by #version in shader source
+        /*builtInResource=*/ mi::examples::vk::get_default_resource_limits(),
+        /*defaultVersion=*/ 100, // Will be overridden by #version in shader source
         /*forwardCompatible=*/ true,
         /*messages =*/ s_messages,
         /*includer =*/ m_file_includer);
 
     if (!success)
     {
-        std::cerr << "Compiliation for shader "
+        std::cerr << "Compilation for shader "
             << (m_shaders.size() - 1) << " failed:\n"
             << shader->getInfoLog()
             << shader->getInfoDebugLog();
@@ -320,7 +320,7 @@ void Vulkan_example_app::init(const Config& config)
         std::vector<VkLayerProperties> available_layers(layer_count);
         VK_CHECK(vkEnumerateInstanceLayerProperties(&layer_count, available_layers.data()));
 
-        // Copy all unsupported layers into a seperate vector and remove them from the original
+        // Copy all unsupported layers into a separate vector and remove them from the original
         std::vector<const char*> unsupported_layers;
         auto it = splice_if(validation_layers.begin(), validation_layers.end(),
             std::back_inserter(unsupported_layers),
@@ -1448,7 +1448,7 @@ VkShaderModule create_shader_module_from_sources(
 
 // NOTE: A more sophisticated should be used in a real application.
 //       This example simply allocates dedicated memory for each resource.
-//       For best practices on Vulkan memory managment see:
+//       For best practices on Vulkan memory management see:
 //       https://developer.nvidia.com/blog/vulkan-dos-donts/
 //       https://developer.nvidia.com/vulkan-memory-management
 //       https://developer.nvidia.com/what%E2%80%99s-your-vulkan-memory-type
@@ -1474,7 +1474,7 @@ VkDeviceMemory allocate_and_bind_buffer_memory(
 
 // NOTE: A more sophisticated should be used in a real application.
 //       This example simply allocates dedicated memory for each resource.
-//       For best practices on Vulkan memory managment see:
+//       For best practices on Vulkan memory management see:
 //       https://developer.nvidia.com/blog/vulkan-dos-donts/
 //       https://developer.nvidia.com/vulkan-memory-management
 //       https://developer.nvidia.com/what%E2%80%99s-your-vulkan-memory-type
@@ -2337,115 +2337,111 @@ const char* vkformat_to_str(VkFormat format)
     }
 }
 
+static TBuiltInResource create_default_resource_limits()
+{
+    TBuiltInResource limits = {};
+    limits.maxLights = 32;
+    limits.maxClipPlanes = 6;
+    limits.maxTextureUnits = 32;
+    limits.maxTextureCoords = 32;
+    limits.maxVertexAttribs = 64;
+    limits.maxVertexUniformComponents = 4096;
+    limits.maxVaryingFloats = 64;
+    limits.maxVertexTextureImageUnits = 32;
+    limits.maxCombinedTextureImageUnits = 80;
+    limits.maxTextureImageUnits = 32;
+    limits.maxFragmentUniformComponents = 4096;
+    limits.maxDrawBuffers = 32;
+    limits.maxVertexUniformVectors = 128;
+    limits.maxVaryingVectors = 8;
+    limits.maxFragmentUniformVectors = 16;
+    limits.maxVertexOutputVectors = 16;
+    limits.maxFragmentInputVectors = 15;
+    limits.minProgramTexelOffset = -8;
+    limits.maxProgramTexelOffset = 7;
+    limits.maxClipDistances = 8;
+    limits.maxComputeWorkGroupCountX = 65535;
+    limits.maxComputeWorkGroupCountY = 65535;
+    limits.maxComputeWorkGroupCountZ = 65535;
+    limits.maxComputeWorkGroupSizeX = 1024;
+    limits.maxComputeWorkGroupSizeY = 1024;
+    limits.maxComputeWorkGroupSizeZ = 64;
+    limits.maxComputeUniformComponents = 1024;
+    limits.maxComputeTextureImageUnits = 16;
+    limits.maxComputeImageUniforms = 8;
+    limits.maxComputeAtomicCounters = 8;
+    limits.maxComputeAtomicCounterBuffers = 1;
+    limits.maxVaryingComponents = 60;
+    limits.maxVertexOutputComponents = 64;
+    limits.maxGeometryInputComponents = 64;
+    limits.maxGeometryOutputComponents = 128;
+    limits.maxFragmentInputComponents = 128;
+    limits.maxImageUnits = 8;
+    limits.maxCombinedImageUnitsAndFragmentOutputs = 8;
+    limits.maxCombinedShaderOutputResources = 8;
+    limits.maxImageSamples = 0;
+    limits.maxVertexImageUniforms = 0;
+    limits.maxTessControlImageUniforms = 0;
+    limits.maxTessEvaluationImageUniforms = 0;
+    limits.maxGeometryImageUniforms = 0;
+    limits.maxFragmentImageUniforms = 8;
+    limits.maxCombinedImageUniforms = 8;
+    limits.maxGeometryTextureImageUnits = 16;
+    limits.maxGeometryOutputVertices = 256;
+    limits.maxGeometryTotalOutputComponents = 1024;
+    limits.maxGeometryUniformComponents = 1024;
+    limits.maxGeometryVaryingComponents = 64;
+    limits.maxTessControlInputComponents = 128;
+    limits.maxTessControlOutputComponents = 128;
+    limits.maxTessControlTextureImageUnits = 16;
+    limits.maxTessControlUniformComponents = 1024;
+    limits.maxTessControlTotalOutputComponents = 4096;
+    limits.maxTessEvaluationInputComponents = 128;
+    limits.maxTessEvaluationOutputComponents = 128;
+    limits.maxTessEvaluationTextureImageUnits = 16;
+    limits.maxTessEvaluationUniformComponents = 1024;
+    limits.maxTessPatchComponents = 120;
+    limits.maxPatchVertices = 32;
+    limits.maxTessGenLevel = 64;
+    limits.maxViewports = 16;
+    limits.maxVertexAtomicCounters = 0;
+    limits.maxTessControlAtomicCounters = 0;
+    limits.maxTessEvaluationAtomicCounters = 0;
+    limits.maxGeometryAtomicCounters = 0;
+    limits.maxFragmentAtomicCounters = 8;
+    limits.maxCombinedAtomicCounters = 8;
+    limits.maxAtomicCounterBindings = 1;
+    limits.maxVertexAtomicCounterBuffers = 0;
+    limits.maxTessControlAtomicCounterBuffers = 0;
+    limits.maxTessEvaluationAtomicCounterBuffers = 0;
+    limits.maxGeometryAtomicCounterBuffers = 0;
+    limits.maxFragmentAtomicCounterBuffers = 1;
+    limits.maxCombinedAtomicCounterBuffers = 1;
+    limits.maxAtomicCounterBufferSize = 16384;
+    limits.maxTransformFeedbackBuffers = 4;
+    limits.maxTransformFeedbackInterleavedComponents = 64;
+    limits.maxCullDistances = 8;
+    limits.maxCombinedClipAndCullDistances = 8;
+    limits.maxSamples = 4;
 
-// Default resource values for glslang
-// See: https://github.com/KhronosGroup/glslang/StandAlone/ResourceLimits.cpp
-const TBuiltInResource g_default_built_in_resource = {
-    /* .MaxLights = */ 32,
-    /* .MaxClipPlanes = */ 6,
-    /* .MaxTextureUnits = */ 32,
-    /* .MaxTextureCoords = */ 32,
-    /* .MaxVertexAttribs = */ 64,
-    /* .MaxVertexUniformComponents = */ 4096,
-    /* .MaxVaryingFloats = */ 64,
-    /* .MaxVertexTextureImageUnits = */ 32,
-    /* .MaxCombinedTextureImageUnits = */ 80,
-    /* .MaxTextureImageUnits = */ 32,
-    /* .MaxFragmentUniformComponents = */ 4096,
-    /* .MaxDrawBuffers = */ 32,
-    /* .MaxVertexUniformVectors = */ 128,
-    /* .MaxVaryingVectors = */ 8,
-    /* .MaxFragmentUniformVectors = */ 16,
-    /* .MaxVertexOutputVectors = */ 16,
-    /* .MaxFragmentInputVectors = */ 15,
-    /* .MinProgramTexelOffset = */ -8,
-    /* .MaxProgramTexelOffset = */ 7,
-    /* .MaxClipDistances = */ 8,
-    /* .MaxComputeWorkGroupCountX = */ 65535,
-    /* .MaxComputeWorkGroupCountY = */ 65535,
-    /* .MaxComputeWorkGroupCountZ = */ 65535,
-    /* .MaxComputeWorkGroupSizeX = */ 1024,
-    /* .MaxComputeWorkGroupSizeY = */ 1024,
-    /* .MaxComputeWorkGroupSizeZ = */ 64,
-    /* .MaxComputeUniformComponents = */ 1024,
-    /* .MaxComputeTextureImageUnits = */ 16,
-    /* .MaxComputeImageUniforms = */ 8,
-    /* .MaxComputeAtomicCounters = */ 8,
-    /* .MaxComputeAtomicCounterBuffers = */ 1,
-    /* .MaxVaryingComponents = */ 60,
-    /* .MaxVertexOutputComponents = */ 64,
-    /* .MaxGeometryInputComponents = */ 64,
-    /* .MaxGeometryOutputComponents = */ 128,
-    /* .MaxFragmentInputComponents = */ 128,
-    /* .MaxImageUnits = */ 8,
-    /* .MaxCombinedImageUnitsAndFragmentOutputs = */ 8,
-    /* .MaxCombinedShaderOutputResources = */ 8,
-    /* .MaxImageSamples = */ 0,
-    /* .MaxVertexImageUniforms = */ 0,
-    /* .MaxTessControlImageUniforms = */ 0,
-    /* .MaxTessEvaluationImageUniforms = */ 0,
-    /* .MaxGeometryImageUniforms = */ 0,
-    /* .MaxFragmentImageUniforms = */ 8,
-    /* .MaxCombinedImageUniforms = */ 8,
-    /* .MaxGeometryTextureImageUnits = */ 16,
-    /* .MaxGeometryOutputVertices = */ 256,
-    /* .MaxGeometryTotalOutputComponents = */ 1024,
-    /* .MaxGeometryUniformComponents = */ 1024,
-    /* .MaxGeometryVaryingComponents = */ 64,
-    /* .MaxTessControlInputComponents = */ 128,
-    /* .MaxTessControlOutputComponents = */ 128,
-    /* .MaxTessControlTextureImageUnits = */ 16,
-    /* .MaxTessControlUniformComponents = */ 1024,
-    /* .MaxTessControlTotalOutputComponents = */ 4096,
-    /* .MaxTessEvaluationInputComponents = */ 128,
-    /* .MaxTessEvaluationOutputComponents = */ 128,
-    /* .MaxTessEvaluationTextureImageUnits = */ 16,
-    /* .MaxTessEvaluationUniformComponents = */ 1024,
-    /* .MaxTessPatchComponents = */ 120,
-    /* .MaxPatchVertices = */ 32,
-    /* .MaxTessGenLevel = */ 64,
-    /* .MaxViewports = */ 16,
-    /* .MaxVertexAtomicCounters = */ 0,
-    /* .MaxTessControlAtomicCounters = */ 0,
-    /* .MaxTessEvaluationAtomicCounters = */ 0,
-    /* .MaxGeometryAtomicCounters = */ 0,
-    /* .MaxFragmentAtomicCounters = */ 8,
-    /* .MaxCombinedAtomicCounters = */ 8,
-    /* .MaxAtomicCounterBindings = */ 1,
-    /* .MaxVertexAtomicCounterBuffers = */ 0,
-    /* .MaxTessControlAtomicCounterBuffers = */ 0,
-    /* .MaxTessEvaluationAtomicCounterBuffers = */ 0,
-    /* .MaxGeometryAtomicCounterBuffers = */ 0,
-    /* .MaxFragmentAtomicCounterBuffers = */ 1,
-    /* .MaxCombinedAtomicCounterBuffers = */ 1,
-    /* .MaxAtomicCounterBufferSize = */ 16384,
-    /* .MaxTransformFeedbackBuffers = */ 4,
-    /* .MaxTransformFeedbackInterleavedComponents = */ 64,
-    /* .MaxCullDistances = */ 8,
-    /* .MaxCombinedClipAndCullDistances = */ 8,
-    /* .MaxSamples = */ 4,
-    /* .maxMeshOutputVerticesNV = */ 256,
-    /* .maxMeshOutputPrimitivesNV = */ 512,
-    /* .maxMeshWorkGroupSizeX_NV = */ 32,
-    /* .maxMeshWorkGroupSizeY_NV = */ 1,
-    /* .maxMeshWorkGroupSizeZ_NV = */ 1,
-    /* .maxTaskWorkGroupSizeX_NV = */ 32,
-    /* .maxTaskWorkGroupSizeY_NV = */ 1,
-    /* .maxTaskWorkGroupSizeZ_NV = */ 1,
-    /* .maxMeshViewCountNV = */ 4,
-    /* .maxDualSourceDrawBuffersEXT = */ 1,
+    limits.limits.nonInductiveForLoops = 1;
+    limits.limits.whileLoops = 1;
+    limits.limits.doWhileLoops = 1;
+    limits.limits.generalUniformIndexing = 1;
+    limits.limits.generalAttributeMatrixVectorIndexing = 1;
+    limits.limits.generalVaryingIndexing = 1;
+    limits.limits.generalSamplerIndexing = 1;
+    limits.limits.generalVariableIndexing = 1;
+    limits.limits.generalConstantMatrixVectorIndexing = 1;
 
-    /* .limits = */ {
-        /* .nonInductiveForLoops = */ 1,
-        /* .whileLoops = */ 1,
-        /* .doWhileLoops = */ 1,
-        /* .generalUniformIndexing = */ 1,
-        /* .generalAttributeMatrixVectorIndexing = */ 1,
-        /* .generalVaryingIndexing = */ 1,
-        /* .generalSamplerIndexing = */ 1,
-        /* .generalVariableIndexing = */ 1,
-        /* .generalConstantMatrixVectorIndexing = */ 1,
-    }
-};
+    return limits;
+}
+
+// Default resource values for glslang.
+const TBuiltInResource* get_default_resource_limits()
+{
+    static const TBuiltInResource default_resource_limits = create_default_resource_limits();
+    return &default_resource_limits;
+}
 
 } // namespace mi::examples::vk

@@ -884,15 +884,30 @@ public:
         Section_material_update_state change = Section_material_update_state::No_change;
         for (mi::Size i = 0, n = m_compound_value->get_size(); i < n; ++i)
         {
-            Parameter_node_constant* child =
-                static_cast<Parameter_node_constant*>(get_childeren()[i]);
+            Parameter_node_base* base = get_childeren()[i];
+            if (base->get_kind() <= Parameter_node_base::Kind::LAST_DIRECT)
+            {
+                Parameter_node_constant* child =
+                    static_cast<Parameter_node_constant*>(get_childeren()[i]);
 
-            change = max(change, child->get_is_light_weight()
-                ? Section_material_update_state::Argument_block_change
-                : Section_material_update_state::Unknown_change);
+                change = max(change, child->get_is_light_weight()
+                    ? Section_material_update_state::Argument_block_change
+                    : Section_material_update_state::Unknown_change);
 
-            mi::base::Handle<mi::neuraylib::IValue> child_value(child->get_value());
-            m_compound_value->set_value(i, child_value.get());
+                mi::base::Handle<mi::neuraylib::IValue> child_value(child->get_value());
+                m_compound_value->set_value(i, child_value.get());
+            }
+            else  if (base->get_kind() <= Parameter_node_base::Kind::LAST_COMPOUND)
+            {
+                Parameter_node_stacked_compound* child =
+                    static_cast<Parameter_node_stacked_compound*>(get_childeren()[i]);
+
+                change = max(change, child->store_updated_value());
+
+                mi::base::Handle<mi::neuraylib::IValue> child_value(child->get_value());
+                m_compound_value->set_value(i, child_value.get());
+            }
+
         }
         return change;
     }
@@ -1926,8 +1941,8 @@ bool Parameter_node_constant_color::update_value()
                     ivalue_c->get_interface<mi::neuraylib::IValue_float>());
                 ivalue_float_c->set_value((*value)[c]);
             }
+            return true;
         }
-        return true;
     }
     return false;
 }
@@ -2711,7 +2726,7 @@ Section_material::IParameter_node* Section_material::create(
         s->initialize(array_value.get(), annos, arg_info);
         created = s;
 
-        // possible extension: check if the IType_array size. If thats a deferred size
+        // possible extension: check if the IType_array size. If that's a deferred size
         // array, adding and removing items could be possible
         for (mi::Size i = 0; i < array_value->get_size(); ++i)
         {

@@ -40,7 +40,7 @@ layout(push_constant) uniform User_data
     float animation_time;
 } user_data;
 
-// Array containg all 2D texture samplers of all used materials.
+// Array containing all 2D texture samplers of all used materials.
 layout(set = 0, binding = 0) uniform sampler2D material_texture_samplers_2d[NUM_TEXTURES];
 
 

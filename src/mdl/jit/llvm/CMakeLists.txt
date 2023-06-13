@@ -97,6 +97,7 @@ set(_LLVM_LIB_NAMES
     LLVMOption
     LLVMOrcJIT
     LLVMOrcShared
+    LLVMOrcTargetProcess
     LLVMProfileData
     LLVMRemarks
     LLVMRuntimeDyld
@@ -188,7 +189,7 @@ if(WINDOWS)
 elseif(MACOSX)
     # For MacOS build we must set the lowest supported OS version by the default triple.
     # This is baked into LLVM und later used to decide which runtime functions are
-    # use the same version as for the 'mmacosx-version-min' flag
+    # used. This should match the CMAKE_OSX_DEPLOYMENT_TARGET option.
     if(ARCH_ARM)
         set(LLVM_DEFAULT_TARGET_TRIPLE arm64-apple-darwin10.13.0 CACHE STRING "")
         set(LLVM_TARGETS_TO_BUILD "AArch64;NVPTX" CACHE INTERNAL "")
@@ -252,6 +253,7 @@ function(LLVM_TARGET_SETUP)
             PRIVATE
                 "-fPIC"
                 "-w"
+                "-Wno-misleading-indentation"
             )
     endif()
 
@@ -261,26 +263,27 @@ function(LLVM_TARGET_SETUP)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
         target_compile_options(${LLVM_TARGET_SETUP_TARGET}
             PRIVATE
-                "-mmacosx-version-min=10.13"
                 "-fPIC"
                 "-m64"
                 "-stdlib=libc++"
                 "$<$<COMPILE_LANGUAGE:CXX>:-std=c++11>"
                 "-fvisibility-inlines-hidden"
-                "-fdiagnostics-fixit-info"
-                "-fdiagnostics-parseable-fixits"
-                "-Wno-unused-parameter"
+                "-Wno-deprecated-declarations"
                 "-Wno-inconsistent-missing-override"
-                "-Wno-unnamed-type-template-args"
                 "-Wno-invalid-offsetof"
                 "-Wno-long-long"
-                "-Wwrite-strings"
-                "-Wmissing-field-initializers"
-                "-Wcovered-switch-default"
-                "-Wnon-virtual-dtor"
-                "-fdiagnostics-fixit-info"
-                "-fdiagnostics-parseable-fixits"
+                "-Wno-unnamed-type-template-args"
+                "-Wno-unused-parameter"
+                "-Wno-unused-const-variable"
+                "-Wno-unused-function"
             )
+        if(${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER_EQUAL "14.0")
+            target_compile_options(${LLVM_TARGET_SETUP_TARGET}
+                PRIVATE
+                    "-Wno-unused-but-set-variable"
+                    "-Wno-unused-but-set-parameter"
+                )
+        endif()
     endif()
 
 endfunction()
@@ -364,6 +367,7 @@ set(_LLVM_EXCLUDE
     LLVMXRay
     # loadable modules
     LLVMHello
+    LLVMHelloNew
     # misc
     llvm-headers
     ocaml_all

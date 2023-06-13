@@ -72,10 +72,10 @@ namespace mdlm
         return Application::theApp().report(msg);
     }
 
-    // Check if freeimage is available
-    bool freeimage_available()
+    // Check if openimageio is available
+    bool openimageio_available()
     { 
-        return Application::theApp().freeimage_available(); 
+        return Application::theApp().openimageio_available(); 
     }
 }
 
@@ -173,7 +173,7 @@ Application & Application::theApp()
 }
 
 Application::Application()
-    : m_command(NULL), m_factory(NULL), m_freeimage_loaded(false)
+    : m_command(NULL), m_factory(NULL), m_openimageio_loaded(false)
 {
 }
 
@@ -291,8 +291,8 @@ mi::Sint32 Application::initialize(int argc, char *argv[])
 
     mi::base::Handle<IPlugin_configuration> plug_config(neuray()->get_api_component<IPlugin_configuration>());
 
-    // Load the FreeImage plugin.
-    m_freeimage_loaded = plug_config->load_plugin_library("nv_freeimage" MI_BASE_DLL_FILE_EXT) == 0;
+    // Load the OpenImageIO plugin.
+    m_openimageio_loaded = plug_config->load_plugin_library("nv_openimageio" MI_BASE_DLL_FILE_EXT) == 0;
 
     // Start the MDL SDK
     return neuray()->start();

@@ -84,14 +84,14 @@ public:
     /// Returns the image format, or the empty string if not available.
     virtual const char* get_image_format() const = 0;
 
-    /// Indicates wether the image set results from a sequence marker in the MDL file path/original
+    /// Indicates whether the image set results from a sequence marker in the MDL file path/original
     /// filename, or (if there is no MDL file path/original filename) whether it has more than one
     /// frame.
     ///
     /// The return value \c false implies that there is a single frame with frame number 0.
     virtual bool is_animated() const = 0;
 
-    /// Indicates wether the image set results from a uv-tile marker in the MDL file path/original
+    /// Indicates whether the image set results from a uv-tile marker in the MDL file path/original
     /// filename, or (if there is no MDL file path/original filename) whether it has a frame with
     /// more than one uv-tile.
     ///
@@ -104,7 +104,7 @@ public:
 
     /// Returns the frame number for an element of the image set.
     ///
-    /// This function is stricly monotonically increasing.
+    /// This function is strictly monotonically increasing.
     ///
     /// \param    Returns -1 if \p f is out of bounds.
     virtual mi::Size get_frame_number( mi::Size f) const = 0;
@@ -140,10 +140,21 @@ public:
     /// Returns \c NULL if not supported.
     virtual mi::neuraylib::ICanvas* get_canvas( mi::Size f, mi::Size i) const = 0;
 
-    /// Creates a mipmap for  for frame \p f, uvtile \p i.
+    /// Creates a mipmap for frame \p f, uvtile \p i.
     ///
-    /// Never returns \c NULL.
-    IMAGE::IMipmap* create_mipmap( mi::Size f, mi::Size i) const;
+    /// \param      f             The frame ID.
+    /// \param      i             The uv-tile ID.
+    /// \param[out] errors        The error codes have the following meaning:
+    ///                           -   0: Success.
+    ///                           -  -1: Invalid reader.
+    ///                           -  -3: No image plugin found to handle the data.
+    ///                           -  -5: Failure to open the file.
+    ///                           -  -6: The reader does not support absolute access.
+    ///                           -  -7: The image plugin failed to import the data.
+    ///                           - -10: Failure to apply the given selector.
+    /// \return                   The requested mipmap, or a dummy mipmap with a 1x1 pink pixel in
+    ///                           case of errors.
+    IMAGE::IMipmap* create_mipmap( mi::Size f, mi::Size i, mi::Sint32& errors) const;
 };
 
 /// Represents the pixel data of an uv-tile plus the corresponding coordinates.
@@ -191,7 +202,7 @@ struct Uv_to_id
 
     /// Sets the ID for the uv-tile at position (u,v)
     ///
-    /// Intented to be used with the non-trivial constructor above. Does not allow to change an
+    /// Intended to be used with the non-trivial constructor above. Does not allow to change an
     /// already set ID.
     ///
     /// Returns \c true in case of success, \c false if \p u or \p v are out of bounds, or if the
@@ -294,12 +305,13 @@ public:
     /// \param impl_hash             Hash of the data in the implementation class. Use {0,0,0,0} if
     ///                              hash is not known.
     /// \return
-    ///                              -  0: Success.
-    ///                              - -2: Failure to resolve the given filename, e.g., the file
-    ///                                    does not exist.
-    ///                              - -3: Failure to open the file.
-    ///                              - -4: No image plugin found to handle the file.
-    ///                              - -5: The image plugin failed to import the file.
+    ///                              -   0: Success.
+    ///                              -  -3: No image plugin found to handle the file.
+    ///                              -  -4: Failure to resolve the given filename, e.g., the file
+    ///                                     does not exist.
+    ///                              -  -5: Failure to open the file.
+    ///                              -  -7: The image plugin failed to import the file.
+    ///                              - -10: Failure to apply the given selector.
     Sint32 reset_file(
         DB::Transaction* transaction,
         const std::string& original_filename,
@@ -314,11 +326,12 @@ public:
     /// \param impl_hash             Hash of the data in the implementation class. Use {0,0,0,0} if
     ///                              hash is not known.
     /// \return
-    ///                              -  0: Success.
-    ///                              - -3: Invalid reader, or the reader does not support absolute
-    ///                                    access.
-    ///                              - -4: No image plugin found to handle the data.
-    ///                              - -5: The image plugin failed to import the data.
+    ///                              -   0: Success.
+    ///                              -  -1: Invalid reader.
+    ///                              -  -3: No image plugin found to handle the data.
+    ///                              -  -6: The reader does not support absolute access.
+    ///                              -  -7: The image plugin failed to import the data.
+    ///                              - -10: Failure to apply the given selector.
     Sint32 reset_reader(
         DB::Transaction* transaction,
         mi::neuraylib::IReader* reader,
@@ -332,11 +345,16 @@ public:
     /// \param impl_hash             Hash of the data in the implementation class. Use {0,0,0,0} if
     ///                              hash is not known.
     /// \return
-    ///                              -  0: Success.
-    ///                              - -1: The image set is \c NULL or empty.
-    ///                              - -3: Failure to obtain mipmap from the image set.
-    ///                              - -6: Frame numbers are not strictly monotonically increasing.
-    ///                              - -7: Repeated u/v coordinates (per frame).
+    ///                              -   0: Success.
+    ///                              -  -1: Invalid image set.
+    ///                              -  -3: No image plugin found to handle the data.
+    ///                              -  -5: Failure to open the file.
+    ///                              -  -6: The reader does not support absolute access.
+    ///                              -  -7: The image plugin failed to import the data.
+    ///                              - -10: Failure to apply the given selector.
+    ///                              - -12: Repeated u/v coordinates (per frame).
+    ///                              - -99: Inconsistent image set (neither file-, nor container-,
+    ///                                     nor reader-, nor canvas-based).
     Sint32 reset_image_set(
         DB::Transaction* transaction,
         const Image_set* image_set,
@@ -349,11 +367,14 @@ public:
     ///
     /// A \c NULL pointer can be passed to restore the state after default construction.
     ///
+    /// \param selector              The selector (or \c NULL). Not applied to \p mipmap, only for
+    ///                              information.
     /// \param impl_hash             Hash of the data in the implementation class. Use {0,0,0,0} if
     ///                              hash is not known.
     void set_mipmap(
         DB::Transaction* transaction,
         IMAGE::IMipmap* mipmap,
+        const char* selector,
         const mi::base::Uuid& impl_hash);
 
     /// Returns the mipmap referenced by the given uv-tile.
@@ -399,14 +420,14 @@ public:
     /// image references a dummy mipmap with a 1x1 canvas with a pink pixel.
     bool is_valid() const { return m_cached_is_valid; }
 
-    /// Indicates wether the image set results from a sequence marker in the MDL file path/original
+    /// Indicates whether the image set results from a sequence marker in the MDL file path/original
     /// filename, or (if there is no MDL file path/original filename) whether it has more than one
     /// frame.
     ///
     /// The return value \c false implies that there is a single frame with frame number 0.
     bool is_animated() const { return m_cached_is_animated; }
 
-    /// Indicates wether the image set results from a uv-tile marker in the MDL file path/original
+    /// Indicates whether the image set results from a uv-tile marker in the MDL file path/original
     /// filename, or (if there is no MDL file path/original filename) whether it has a frame with
     /// more than one uv-tile.
     ///
@@ -419,7 +440,7 @@ public:
 
     /// Returns the frame number for a given frame ID, or -1 if \p frame_id is out of bounds.
     ///
-    /// This function is stricly monotonically increasing.
+    /// This function is strictly monotonically increasing.
     mi::Size get_frame_number( mi::Size frame_id) const;
 
     /// Returns the frame ID for a given frame number, or -1 if \p frame_number is not a valid
@@ -655,14 +676,14 @@ public:
     /// deserialized from such a state). In all other situations it references a valid mipmap.
     bool is_valid() const { return m_is_valid; }
 
-    /// Indicates wether the image set results from a sequence marker in the MDL file path/original
+    /// Indicates whether the image set results from a sequence marker in the MDL file path/original
     /// filename, or (if there is no MDL file path/original filename) whether it has more than one
     /// frame.
     ///
     /// The return value \c false implies that there is a single frame with frame number 0.
     bool is_animated() const { return m_is_animated; }
 
-    /// Indicates wether the image set results from a uv-tile marker in the MDL file path/original
+    /// Indicates whether the image set results from a uv-tile marker in the MDL file path/original
     /// filename, or (if there is no MDL file path/original filename) whether it has a frame with
     /// more than one uv-tile.
     ///
@@ -675,7 +696,7 @@ public:
 
     /// Returns the frame number for a given frame ID, or -1 if \p frame_id is out of bounds.
     ///
-    /// This function is stricly monotonically increasing.
+    /// This function is strictly monotonically increasing.
     mi::Size get_frame_number( mi::Size frame_id) const;
 
     /// Returns the frame ID for a given frame number, or -1 if \p frame_number is not a valid
@@ -756,12 +777,12 @@ private:
     /// from such a state).
     bool m_is_valid;
 
-    /// Indicates wether the image set results from a sequence marker in the MDL file path/original
+    /// Indicates whether the image set results from a sequence marker in the MDL file path/original
     /// filename, or (if there is no MDL file path/original filename) whether it has more than one
     /// frame.
     bool m_is_animated;
 
-    /// Indicates wether the image set results from a uv-tile marker in the MDL file path/original
+    /// Indicates whether the image set results from a uv-tile marker in the MDL file path/original
     /// filename, or (if there is no MDL file path/original filename) whether it has a frame with
     /// more than one uv-tile.
     bool m_is_uvtile;

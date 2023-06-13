@@ -1,0 +1,622 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ ******************************************************************************/
+
+mdl 1.2;
+
+// import all modules that shall be available in distilling rules
+import ::limits::*;
+import ::anno::*;
+import ::state::*;
+import ::math::*;
+import ::tex::*;
+import ::df::*;
+import ::base::*;
+
+// --------------------------------------------------------------------------------------------
+// Distiller support functions, added to Release 2017.1 (296300) unless noted otherwise
+
+// functions for helping with color arrays in curve df
+//ADDED 2022.1
+export int size( color[<L>] a)
+{
+    return L;
+}
+export color last( color[<L>] a)
+{
+    return a[L-1];
+}
+
+
+// Returns a color IOR value to match a given normal incidence direction reflectivity value R_0.
+export color ior_from_refl(float R_0)
+{
+    // ior = (1+sqrt(R_0))/(1-sqrt(R_0))
+    float root_r = math::sqrt(R_0);
+    float i = ((root_r > 0.98) ? 100 : (1+root_r)/(1-root_r)); // clamp ior to 100
+    return color(i);
+}
+
+// Returns a color IOR value to match a given normal incidence direction reflectivity value R_0.
+export color ior_from_refl(color R_0)
+{
+    // ior = (1+sqrt(R_0))/(1-sqrt(R_0))
+    color root_r = math::sqrt( R_0 );
+    root_r = math::clamp(root_r,color(0.0),color(.98));
+    color i = (1+root_r)/(1-root_r);
+    return i;
+}
+
+//access last element of an array, workaround for distiller rules not having context
+export float last_element(float[<count>] values)
+{
+    return values[count-1];
+}
+
+export color last_element(color[<count>] values)
+{
+    return values[count-1];
+}
+
+// Returns a scalar IOR value to match a given normal incidence direction reflectivity value R_0.
+// ADDED for Release 2018.0
+export float float_ior_from_refl(float R_0)
+{
+    // ior = (1+sqrt(R_0))/(1-sqrt(R_0))
+    float root_r = math::sqrt(R_0);
+    float i = ((root_r > 0.98) ? 100 : (1+root_r)/(1-root_r)); // clamp ior to 100
+    return i;
+}
+
+// Returns a scalar IOR value to match a given normal incidence direction reflectivity value R_0.
+// ADDED for Release 2018.0
+export float float_ior_from_refl(color R_0)
+{
+    // ior = (1+sqrt(R_0))/(1-sqrt(R_0))
+    float root_r = math::sqrt( math::luminance( R_0));
+    root_r = math::clamp(root_r, 0.0, .98);
+    float i = (1+root_r)/(1-root_r);
+    return i;
+}
+
+// Returns a normal incidence direction reflectivity value for a given IOR.
+// ADDED for Release 2018.0
+export float refl_from_ior(float ior)
+{
+    // R_0=((ior-1)/(ior+1))^2
+    float root_r = (ior-1)/(ior+1);
+    return root_r*root_r;
+}
+
+// Returns a normal incidence direction reflectivity value for a given IOR.
+export color refl_from_ior(color ior)
+{
+    // R_0=((ior-1)/(ior+1))^2
+    color root_r = (ior-1)/(ior+1);
+    return root_r*root_r;
+}
+
+// Returns a normal incidence direction reflectivity value for a given complex IOR.
+// For incident direction, both polarization cases give the same result
+export color refl_from_ior_k(color ior, color k)
+{
+    color k2=k*k;
+    color ior2 = ior*ior;
+    color rs_num = ior2 + k2 - 2*ior + 1;
+    color rs_den = ior2 + k2 + 2*ior + 1;
+    color rs = rs_num/rs_den ;
+
+    return math::clamp(rs, 0.0, 1.0);
+}
+
+// Returns a Gulbrandsen edge color for a given complex IOR.
+//ADDED 2022.0
+export color g_from_ior_k(color ior, color k)
+{
+//edge_tint = ((1+sqrt(r))/(1-sqrt(r)) -ior )
+//          /
+//          ((1+sqrt(r))/(1-sqrt(r)) - (1-r)/(1+r) )
+    color r = refl_from_ior_k(ior,k);
+    color sr = math::sqrt(r);
+    color t1 = (1.+sr)/(1.-sr);
+    color t2 = (1.-r)/(1.+r);
+
+    return (t1-ior)/(t1-t2);
+}
+
+// A helper function, marked as "noinline", to communicate directional dependent coloring
+// information to be picked up by later passes and integration code. Note: this cannot
+// be expressed fully functional in MDL itself, it targets a different model.
+export color directional_coloring(color C_0, color C_90 [[anno::unused()]], float e [[anno::unused()]])
+[[
+    anno::noinline()
+]]
+{
+    return (C_0);
+}
+
+// A helper function, marked as "noinline", to communicate directional dependent coloring
+// information to be picked up by later passes and integration code. Note: this cannot
+// be expressed fully functional in MDL itself, it targets a different model.
+export float directional_weighting(float W_0, float W_90 [[anno::unused()]], float e [[anno::unused()]])
+[[
+    anno::noinline()
+]]
+{
+    return (W_0);
+}
+
+// Combines the two anisotropic roughness values into one. The current heuristic
+// chooses the lower roughness. Just averaging leads to too dull looking materials.
+export float combine_anisotropic_roughness(float r1, float r2)
+{
+    return (r1>r2)?r2:r1;
+}
+
+// Returns the weighted and re-normalized average of r1 and r2. Returns 0 if w1 + w2 is too small.
+export float average(float w1, float r1, float w2, float r2)
+{
+      w1=math::saturate(w1);
+      w2=math::saturate(w2);
+      return math::abs(w1+w2)>.00001 ? (w1*r1+w2*r2)/(w1+w2) : 0.0;
+}
+
+// Returns the weighted and re-normalized average of r1 and r2. Returns 0 if w1 + w2 is too small.
+export color average(float w1, color r1, float w2, color r2)
+{
+      w1=math::saturate(w1);
+      w2=math::saturate(w2);
+      return math::abs(w1+w2)>.00001 ? (w1*r1+w2*r2)/(w1+w2) : color(0.0);
+}
+
+// prevent  dull looking materials when combining 2 custom curve layered bsdf into one
+// take weight and roughness into account
+export float combine_glossy(float w1, float r1, float v1, float w2, float r2, float v2)
+{
+    float g1 = 1.-r1;
+    float g2 = 1.-r2;
+    return average(w1*g1*g1*g1,v1,w2*g2*g2*g2,v2);
+}
+export color combine_glossy(float w1, float r1, color v1, float w2, float r2, color v2)
+{
+    float g1 = 1.-r1;
+    float g2 = 1.-r2;
+    return average(w1*g1*g1*g1,v1,w2*g2*g2*g2,v2);
+}
+
+// Returns the weighted and re-normalized average of r1, r2, and r3.
+// Returns 0 if w1 + w2 + w3 is too small.
+export float average(float w1, float r1, float w2, float r2, float w3, float r3)
+{
+      return math::abs(w1+w2+w3)>.00001 ? (w1*r1+w2*r2+w3*r3)/(w1+w2+w3) : 0.0;
+}
+
+// Returns the weighted and re-normalized average of r1, r2, and r3.
+// Returns 0 if w1 + w2 + w3 is too small.
+export color average(float w1, color r1, float w2, color r2, float w3, color r3)
+{
+      return math::abs(w1+w2+w3)>.00001 ? (w1*r1+w2*r2+w3*r3)/(w1+w2+w3) : color(0.0);
+}
+
+// Returns the weighted and re-normalized average of r1 and r2. Returns 0 if w1 + w2 is too small.
+// ADDED for Release 2018.0
+export float color_average(color cw1, float r1, color cw2, float r2)
+{
+    float w1 = math::luminance( cw1);
+    float w2 = math::luminance( cw2);
+    return math::abs(w1+w2)>.00001 ? (w1*r1+w2*r2)/(w1+w2) : 0.0;
+}
+
+// Returns the weighted and re-normalized average of r1, r2, and r3.
+// Returns 0 if w1 + w2 + w3 is too small.
+// ADDED for Release 2018.0
+export float color_average(color cw1, float r1, color cw2, float r2, color cw3, float r3)
+{
+    float w1 = math::luminance( cw1);
+    float w2 = math::luminance( cw2);
+    float w3 = math::luminance( cw3);
+    return math::abs(w1+w2+w3)>.00001 ? (w1*r1+w2*r2+w3*r3)/(w1+w2+w3) : 0.0;
+}
+
+// Returns a normalized against w1 + w2, or 0 if w1 + w2 is too small.
+export float part_normalized(float a,float w1,float w2)
+{
+    return math::abs(w1+w2)>.00001?a/(w1+w2):0.0;
+}
+
+// Returns the normal n in tangent space, given n is in internal space.
+export float3 transform_internal_to_tangent(float3 n)
+{
+    return
+        n.x* float3(state::texture_tangent_u(0).x,state::texture_tangent_v(0).x,state::normal().x)+
+        n.y* float3(state::texture_tangent_u(0).y,state::texture_tangent_v(0).y,state::normal().y)+
+        n.z* float3(state::texture_tangent_u(0).z,state::texture_tangent_v(0).z,state::normal().z);
+}
+
+// Returns the normal n in internal space, given n is in tangent space.
+export float3 transform_tangent_to_internal(float3 n)
+{
+    return  state::texture_tangent_u(0) * n.x +
+            state::texture_tangent_v(0) * n.y +
+            state::normal() * n.z ;
+}
+
+// Returns a normal as a weighted combination of two normals.
+//a blended normal will usually not be satisfactory, works mostly for "sticker" type situations
+export float3 combine_normals(
+    float w1 = 1.0, float3 n1 = state::normal(),
+    float w2 = 1.0, float3 n2 = state::normal())
+{
+    // http://blog.selfshadow.com/publications/blending-in-detail/
+    float3 n1_t =   transform_internal_to_tangent(n1);
+    float3 n2_t =   transform_internal_to_tangent(n2);
+
+    n1_t = math::normalize(math::lerp(float3(0,0,1.),n1_t,w1));
+    n2_t = math::normalize(math::lerp(float3(0,0,1.),n2_t,w2));
+    n1_t = n1_t + float3(0.,0.,1.);
+    n2_t = n2_t *  float3(-1.,-1.,1.);
+
+    float3 n = n1_t*math::dot(n1_t, n2_t)/n1_t.z - n2_t;
+
+    return math::normalize(transform_tangent_to_internal(n));
+}
+
+// Returns a normal as a weighted combination of two normals.
+//a blended normal will usually not be satisfactory, works mostly for "sticker" type situations
+export float3 combine_tangent_normals(
+    float w1 = 1.0, float3 n1 = float3(0.,0.,1.),
+    float w2 = 1.0, float3 n2 = float3(0.,0.,1.))
+{
+    // http://blog.selfshadow.com/publications/blending-in-detail/
+
+    float3 n1_t = math::normalize(math::lerp(float3(0,0,1.),n1,w1));
+    float3 n2_t = math::normalize(math::lerp(float3(0,0,1.),n2,w2));
+    n1_t = n1_t + float3(0.,0.,1.);
+    n2_t = n2_t *  float3(-1.,-1.,1.);
+
+    float3 n = n1_t*math::dot(n1_t, n2_t)/n1_t.z - n2_t;
+
+    return math::normalize(n);
+}
+
+// this is a compromise. a blended normal will usually not be satisfactory,.
+// we would often want the visualy predominant normal unaltered, like the flake normal
+// for carpaints. still
+export float3 layer_normals(
+    float w1 = 1.0, float3 n1 = state::normal(),
+    float3 n2 = state::normal())
+{
+    // http://blog.selfshadow.com/publications/blending-in-detail/
+    float3 n1_t =   transform_internal_to_tangent(n1);
+    float3 n2_t =   transform_internal_to_tangent(n2);
+
+    float v = math::smoothstep( 0.4,0.6,w1 );
+    n1_t = math::normalize(math::lerp(float3(0,0,1.),n1_t,v));
+    n2_t = math::normalize(math::lerp(float3(0,0,1.),n2_t,1.0-v));
+    n1_t = n1_t + float3(0.,0.,1.);
+    n2_t = n2_t *  float3(-1.,-1.,1.);
+
+    float3 n = n1_t*math::dot(n1_t, n2_t)/n1_t.z - n2_t;
+
+    return math::normalize(transform_tangent_to_internal(n));
+}
+
+// Returns a normal by adding a detail normal to a global normal.
+export float3 add_detail_normal(float3 nd = state::normal(), float3 n = state::normal())
+{
+    // http://blog.selfshadow.com/publications/blending-in-detail/
+    float3 n_t = transform_internal_to_tangent(n);
+    float3 nd_t = transform_internal_to_tangent(nd);
+
+    n_t=n_t + float3(0.,0.,1.);
+    nd_t = nd_t *  float3(-1.,-1.,1.);
+
+    n = n_t*math::dot(n_t, nd_t)/n_t.z - nd_t;
+    return math::normalize(transform_tangent_to_internal(n));
+}
+
+// Used in dist_rules.mdltl
+// ------------------------
+
+// Returns a normal for a weighted normal map.
+export float3 affine_normal_sum(float w1, float3 n1)
+{
+    // f_n in the techreport
+    float3 n = state::normal();
+    return math::normalize( n + w1 * (n1 - n));
+}
+
+// Returns a normal for a weighted combination of two normal maps.
+export float3 affine_normal_sum( float w1, float3 n1, float w2, float3 n2)
+{
+    float3 n = state::normal();
+    return math::normalize( n + w1 * (n1 - n) + w2 * (n2 - n));
+}
+
+// Returns a normal for a weighted combination of three normal maps.
+export float3 affine_normal_sum( float w1, float3 n1, float w2, float3 n2, float w3, float3 n3)
+{
+    float3 n = state::normal();
+    return math::normalize( n + w1 * (n1 - n) + w2 * (n2 - n) + w3 * (n3 - n));
+}
+
+// Returns the combined roughness of two diffuse BSDFs.
+// Chooses the maximum roughness as the current heuristic.
+export float combine_diffuse_roughness(float w1 [[anno::unused()]], float r1,
+                                       float w2 [[anno::unused()]], float r2)
+{
+    return math::max(r1,r2);
+}
+
+// Returns the combined roughness of three diffuse BSDFs.
+// Chooses the maximum roughness as the current heuristic.
+export float combine_diffuse_roughness(float w1 [[anno::unused()]], float r1,
+                                       float w2 [[anno::unused()]], float r2,
+                                       float w3 [[anno::unused()]], float r3)
+{
+    return math::max(r1,math::max(r2,r3));
+}
+
+// Returns the combined roughness of two diffuse BSDFs.
+// Chooses the maximum roughness as the current heuristic.
+// ADDED for Release 2018.0
+export float combine_diffuse_roughness(color w1 [[anno::unused()]], float r1,
+                                       color w2 [[anno::unused()]], float r2)
+{
+    return math::max(r1,r2);
+}
+
+// Returns the combined roughness of three diffuse BSDFs.
+// Chooses the maximum roughness as the current heuristic.
+// ADDED for Release 2018.0
+export float combine_diffuse_roughness(color w1 [[anno::unused()]], float r1,
+                                       color w2 [[anno::unused()]], float r2,
+                                       color w3 [[anno::unused()]], float r3)
+{
+    return math::max(r1,math::max(r2,r3));
+}
+
+// Used in dist_rules_dg.mdltl
+// ---------------------------
+
+// Returns the normalized weighted sum of normal vectors.
+export float3 affine_sum_normalized(float w1, float3 t1, float w2, float3 t2)
+{
+    return math::normalize(w1*t1+w2*t2);
+}
+
+// Returns the normalized weighted sum of normal vectors.
+export float3 affine_sum_normalized(float w1, float3 t1, float w2, float3 t2, float w3, float3 t3)
+{
+    // f_tangent in the techreport
+    return math::normalize(w1*t1+w2*t2+w3*t3);
+}
+
+// Returns the normalized weighted sum of normal vectors.
+// ADDED for Release 2018.0
+export float3 affine_sum_normalized(color w1, float3 t1, color w2, float3 t2)
+{
+    return math::normalize(math::luminance(w1)*t1+math::luminance(w2)*t2);
+}
+
+// Returns the normalized weighted sum of normal vectors.
+// ADDED for Release 2018.0
+export float3 affine_sum_normalized(color w1, float3 t1, color w2, float3 t2, color w3, float3 t3)
+{
+    // f_tangent in the techreport
+    return math::normalize(math::luminance(w1)*t1+math::luminance(w2)*t2+math::luminance(w3)*t3);
+}
+
+// Helper struct for the combined results of combining two Fresnel layers into one.
+export struct combined_fresnel_result
+{
+    color ior;
+    float w1;
+    float w2;
+};
+
+// Returns the new IOR and two helper weights for combining two Fresnel layerers into one.
+export combined_fresnel_result combined_fresnel(color ior1, color ior2, float w)
+{
+    // f_ii in the techreport
+    float r1 = w * float3(refl_from_ior(ior1)).y;
+    float r2 = float3(refl_from_ior(ior2)).y;
+    float new_r = r1 * (1 + r2);
+    color ior = ior_from_refl(new_r);
+    float w1 = w/(1.0+r2);
+    float w2 = w*r2/(1.0+r2) + 1.0 - w;
+    return combined_fresnel_result(ior,w1,w2);
+}
+
+// Helper struct for the combined results of combining two Fresnel layers into one.
+// ADDED for Release 2018.0
+export struct combined_fresnel_result_2
+{
+    float ior;
+    float w1;
+    float w2;
+};
+
+// Returns the new IOR and two helper weights for combining two Fresnel layerers into one.
+// ADDED for Release 2018.0
+export combined_fresnel_result_2 combined_fresnel_diffuse(
+    float ior1, float w1, float ior2, float w2)
+{
+    // fresnel(ior1,w1,diffuse1,fresnel(ior2,w2,glossy2,diffuse2))
+    //    --> fresnel(ior,1,glossy2,w_d1*diffuse1+w_d2*diffuse2)
+    float r1 = w1 * refl_from_ior(ior1);
+    float r2 = (1-r1)* w2 * refl_from_ior(ior2);
+    float ior = float_ior_from_refl(r2);
+    float r3 = (1-r1-r2);
+    float f = 1.0/(r1+r3);
+    float w_d1 = r1*f;
+    float w_d2 = r3*f;
+    return combined_fresnel_result_2(ior,w_d1,w_d2);
+}
+
+export combined_fresnel_result_2 combined_fresnel_glossy(
+    float ior1, float w1, float ior2, float w2)
+{
+    // fresnel(ior1,w1,glossy1,fresnel(ior2,w2,glossy2,diffuse2))
+    //    --> fresnel(ior,1,wg1*glossy1+wg2*glossy2,diffuse2)
+    float r1 = w1 * refl_from_ior(ior1);
+    float r2 = (1-r1)* w2 * refl_from_ior(ior2);
+    float sum_refl = r1 + r2;
+    float ior = float_ior_from_refl(sum_refl);
+    float f = 1.0/(r1+r2);
+    float wg1 = r1*f;
+    float wg2 = r2*f;
+    return combined_fresnel_result_2(ior,wg1,wg2);
+}
+
+// Helper struct for the combined results of combining three Fresnel layers into one.
+// ADDED for Release 2018.0
+export struct combined_fresnel_result_4
+{
+    float ior;
+    float w;
+    float g1;
+    float g2;
+    float d1;
+    float d2;
+};
+
+// Returns the new IOR and four helper weights for combining three Fresnel layerers into one.
+// ADDED for Release 2018.0
+export combined_fresnel_result_4 combined_fresnel_4(
+    float ior, float w, float ior1, float w1, float ior2, float w2)
+{
+    // fresnel(ior,w,fresnel1(ior1,w1,glossy1,diffuse1),fresnel2(ior2,w2,glossy2,diffuse2))
+    //    --> fresnel(ior',w',g1*glossy1+g2*glossy2,d1*diffuse1+d2*diffuse2)
+    float r1 = w * refl_from_ior(ior);
+    float r2 = (1-r1);
+    float r11 = w1 * refl_from_ior(ior1);
+    float r22 = w2 * refl_from_ior(ior2);
+    float rG1 = r1 * r11;
+    float rD1 = r1 * (1-r11);
+    float rG2 = r2 * r22;
+    float rD2 = r2 * (1-r22);
+    float rG = rG1 + rG2;
+    float i_rG = 1.0/rG;
+    float i_rD = 1.0/(rD1 + rD2);
+    float w_p = w*w1 + (1-w)*w2;
+    float ior_p = float_ior_from_refl(rG/w_p);
+    float g1 = rG1*i_rG;
+    float g2 = rG2*i_rG;
+    float d1 = rD1*i_rD;
+    float d2 = rD2*i_rD;
+    return combined_fresnel_result_4(ior_p,w_p,g1,g2,d1,d2);
+}
+
+// Returns an IOR for a Fresnel layerer to match a normal incident reflectivity of a Fresnel
+// layerer with given ior weighted by w.
+export color ior_from_weighted_refl_from_ior(float w, color ior)
+{
+    // f_i in the techreport
+    return ior_from_refl( w * refl_from_ior( ior));
+}
+
+// Returns an IOR for a Fresnel layerer to match a normal incident reflectivity of a Fresnel
+// layerer with given ior weighted by w.
+// ADDED for Release 2018.0
+export float ior_from_weighted_refl_from_ior(float w, float ior)
+{
+    // f_i in the techreport
+    return float_ior_from_refl( w * refl_from_ior( ior));
+}
+
+// Internal helper function to aggregate local normal maps in a separate pass to combine
+// them with the global normal map. Will be completely removed after the distillation pass,
+// i.e., it will never show up in a distilled result.
+export color local_normal(float weight [[ anno::unused() ]], float3 normal [[ anno::unused() ]])
+[[
+    anno::noinline()
+]]
+{
+    return color(0.0); // dummy code, never executed
+}
+
+// Returns the corresponding roughness value for simple_glossy_bsdf given a
+// shininess value n from a Phong or Ashikhmin - Shirley model.
+export float roughness_from_n(float n)
+{
+    return math::sqrt(2.0 / n);
+}
+
+// --------------------------------------------------------------------------------------------
+// transformations from one set of parameters into a different one. used for transmissive_pbr
+
+export struct roughness_info{
+    float roughness_u;
+    float roughness_v;
+    float3 tangent;
+};
+export struct user_roughness_info{
+    float roughness;
+    float anisotropy;
+    float rotation;
+};
+float3 rotated_tangent(float rotation)
+{
+    return(math::cos(2*math::PI*rotation)*state::texture_tangent_u(0)+ math::sin(2*math::PI*rotation)*state::texture_tangent_v(0));
+}
+export roughness_info transform_aniso_semantics(user_roughness_info r)
+{
+    float r_v = r.roughness*(1.0-r.anisotropy);
+    return roughness_info(r.roughness,r_v, rotated_tangent(r.rotation));
+}
+export user_roughness_info transform_inverse_aniso_semantics(float roughness_u, float roughness_v, float3 tangent)
+{
+    float roughness = roughness_u;
+    float rotation_offset = 0.0;
+    float anisotropy=roughness_u > 0.0? 1.0 - roughness_v/roughness_u:0.0;
+    if(roughness_v>roughness_u)
+    {
+        anisotropy = roughness_v > 0.0?1.0 - roughness_u/roughness_v:0.0;
+        rotation_offset = .25;
+        roughness = roughness_v;
+    }
+    float rotation = rotation_offset - math::atan2(math::length(math::cross(tangent, state::texture_tangent_u(0))),math::dot(tangent, state::texture_tangent_u(0)))/(2.0*math::PI);
+    if(rotation < 0) rotation +=1.0;
+    if(rotation >1.0) rotation -=1.0;
+    return user_roughness_info(roughness,math::saturate(anisotropy),rotation);
+}
+
+export struct volume_info{
+    color absorption_coefficient;
+    color scattering_coefficient;
+};
+export struct user_volume_info{
+    color attenuation;
+    color subsurface;
+    float distance;
+};
+
+//see https://blog.selfshadow.com/publications/s2017-shading-course/imageworks/s2017_pbs_imageworks_slides_v2.pdf p44
+//valid for eccentricity/anisotropy = 0. anisotropy will result in darkening but imho that's positive
+//since artists dont deal with semiinfinite volumes
+export volume_info transform_volume_semantics(user_volume_info v)
+{
+    color extinction_coefficient=math::log(v.attenuation) / -v.distance;
+    color s = color(4.09712)+4.20863*v.subsurface-math::sqrt(9.59217+41.6808*v.subsurface+17.7126*v.subsurface*v.subsurface);
+    color ss_albedo = color(1.0)-s*s;
+    color absorption_coefficient = extinction_coefficient*(color(1.0)-ss_albedo);
+    return volume_info( absorption_coefficient , extinction_coefficient- absorption_coefficient);
+}
+export user_volume_info transform_inverse_volume_semantics(color absorption_coefficient, color scattering_coefficient)
+{
+    //some user functions might create coefficients containing inf. take care:
+    color absorption_coefficient2 =math::min(absorption_coefficient,color(10000.));
+    color scattering_coefficient2 =math::min(scattering_coefficient,color(10000.));
+    color extinction_coefficient = absorption_coefficient2+scattering_coefficient2;
+    //prevent /0.0. if extinction is 0, absorption is also 0. we can force divisor to any non zero value
+    //and get an sss _albedo of 1. This won't hurt because extinction will still lead to scattering coefficient of 0
+    color ss_albedo = color(1.0)-absorption_coefficient2/math::max(extinction_coefficient, color(limits::FLOAT_MIN));
+    color s = math::sqrt(color(1.0)-ss_albedo);
+    color subsurface =(color(1.0)-s)*(color(1.0)-0.139*s)/(color(1.0)+1.17*s);
+    float max = math::max_value(extinction_coefficient);
+    //if extinction_coefficient is 0, distance does not really matter anymore
+    float distance = max != 0.0? 1.0/math::max_value(extinction_coefficient):1.0;
+    return user_volume_info( math::exp(-extinction_coefficient*distance) , subsurface , distance);
+}
+

@@ -52,7 +52,7 @@ typedef Store<mi::base::Handle<Module const> > Module_scope;
 static bool need_type_import(IType const *t)
 {
     if (IType_enum const *te = as<IType_enum>(t)) {
-        // i,port all user defined enums AND tex:gamma_mode
+        // import all user defined enums AND tex:gamma_mode
         IType_enum::Predefined_id id = te->get_predefined_id();
         return id == IType_enum::EID_USER || id == IType_enum::EID_TEX_GAMMA_MODE;
     } else if (IType_struct const *ts = as<IType_struct>(t)) {
@@ -296,6 +296,15 @@ IExpression_reference const *Module_inliner::promote_call_reference(
                             rules |= Module::PR_TEXEL_3D_ADD_FRAME;
                         }
                     }
+                    break;
+                default:
+                    break;
+                }
+            }
+            if (mod_minor >= 8 && minor < 8) {
+                switch (sema) {
+                case Definition::DS_IN_GROUP_ANNOTATION:
+                    rules |= Module::PR_IN_GROUP_ADD_COLAPSED;
                     break;
                 default:
                     break;
@@ -1714,6 +1723,7 @@ void Exports_collector::post_visit(IAnnotation *anno)
         if (mod_ori->is_builtins() || mod_ori->is_stdlib()) {
             return;
         }
+        // found an imported annotation that is not defined in the stdlib
         m_def_set.insert(m_module->get_original_definition(d));
     }
 }
@@ -1833,8 +1843,7 @@ static bool is_mdle(char const *module_name)
     {
         return true;
     }
-
-    return false;
+        return false;
 }
 
 class Inline_import_callback : public IInline_import_callback
@@ -1842,7 +1851,7 @@ class Inline_import_callback : public IInline_import_callback
 public:
     Inline_import_callback(bool inline_mdle) : m_inline_mdle(inline_mdle) { }
 
-    bool inline_import(IModule const *module)
+    bool inline_import(IModule const *module) MDL_FINAL
     {
         if (m_inline_mdle) {
             return is_mdle(module->get_name());

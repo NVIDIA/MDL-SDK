@@ -624,7 +624,7 @@ IStatement const *Optimizer::local_opt(IStatement const *c_stmt)
                 return NULL;
             }
 
-            VLA <IStatement const *> n_stmts(m_module.get_allocator(), n);
+            Small_VLA <IStatement const *, 8> n_stmts(m_module.get_allocator(), n);
 
             size_t j = 0;
             bool changed = false;
@@ -773,6 +773,12 @@ IStatement const *Optimizer::local_opt(IStatement const *c_stmt)
             IStatement_for    *for_stmt = cast<IStatement_for>(stmt);
             IExpression const *cond     = for_stmt->get_condition();
 
+            IStatement const *init = for_stmt->get_init();
+            if (init != NULL) {
+                IStatement const *n_init = local_opt(init);
+                for_stmt->set_init(n_init);
+            }
+
             if (cond != NULL) {
                 cond = local_opt(cond);
                 for_stmt->set_condition(cond);
@@ -795,7 +801,8 @@ IStatement const *Optimizer::local_opt(IStatement const *c_stmt)
                             init = n_init;
                         }
 
-                        return init != NULL ? local_opt(init) : NULL;
+                        // already optimized
+                        return init;
                     }
                 }
             }
@@ -1487,7 +1494,7 @@ IExpression const *Optimizer::do_inline(IExpression_call *call)
     }
 
     Definition const *def = impl_cast<Definition>(ref->get_definition());
-    if (def->has_flag(Definition::DEF_NO_INLINE)) {
+    if (def->has_flag(Definition::DEF_NO_INLINE) || def->has_flag(Definition::DEF_IS_NATIVE)) {
         // inlining forbidden
         return NULL;
     }

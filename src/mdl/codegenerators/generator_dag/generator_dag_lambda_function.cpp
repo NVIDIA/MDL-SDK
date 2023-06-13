@@ -1703,7 +1703,8 @@ DAG_hash const *Lambda_function::get_hash() const
 
 namespace {
 
-class Ast_analysis : public Module_visitor
+/// Helper class to analyze the state usage on an AST.
+class State_usage_ast_analysis : public Module_visitor
 {
 public:
     /// Constructor.
@@ -1711,7 +1712,8 @@ public:
     /// \param alloc    the allocator
     /// \param owner    the owner module of the analyzed function
     /// \param result   the analysis result
-    Ast_analysis(
+    /// \param args     top level constant arguments of the call (might be NULL)
+    State_usage_ast_analysis(
         IAllocator                        *alloc,
         IModule const                     *owner,
         ILambda_function::Analysis_result &result,
@@ -1817,7 +1819,7 @@ public:
 
 private:
     /// A constructor from parent.
-    Ast_analysis(Ast_analysis &parent, IModule const *owner)
+    State_usage_ast_analysis(State_usage_ast_analysis &parent, IModule const *owner)
     : m_owner(owner)
     , m_function_depth(parent.m_function_depth)
     , m_top_level_args(parent.m_top_level_args)
@@ -1905,7 +1907,7 @@ private:
             return false;
         }
 
-        Ast_analysis analysis(*this, owner.get());
+        State_usage_ast_analysis analysis(*this, owner.get());
         analysis.visit(func);
 
         m_error |= analysis.found_error();
@@ -1930,7 +1932,7 @@ private:
     bool                              m_error;
 };
 
-/// Helper class to analyze the state usage.
+/// Helper class to analyze the state usage on a DAG.
 class State_usage_analysis : public IDAG_ir_visitor {
 public:
     /// Constructor.
@@ -2076,8 +2078,9 @@ private:
 
     /// Analyze the AST of a function.
     ///
-    /// \param owner  the owner module of the function to analyze
-    /// \param func   the declaration of the function
+    /// \param owner       the owner module of the function to analyze
+    /// \param func        the declaration of the function
+    /// \param const_args  constant arguments of the function call (NULL if non-const)
     ///
     /// \return true on success, false if analysis failed
     bool analyze_function_ast(
@@ -2085,7 +2088,7 @@ private:
         IDeclaration_function const     *func,
         Array_ref<IValue const *> const &const_args)
     {
-        Ast_analysis analysis(m_alloc, owner, m_result, const_args);
+        State_usage_ast_analysis analysis(m_alloc, owner, m_result, const_args);
 
         analysis.visit(func);
 

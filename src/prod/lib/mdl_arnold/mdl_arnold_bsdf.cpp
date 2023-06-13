@@ -75,13 +75,15 @@ void setup_mdl_state(const AtShaderGlobals* sg, Mdl_extended_state& ext_state)
 
     // only one set of texture coordinates and tangents
 #ifdef ENABLE_DERIVATIVES
+    // use projected derivatives 
+    const float pd = AiV3Dot(sg->Rd, Nsf);
     ext_state.uvw.val = { sg->u, sg->v, 0.0f };
-    ext_state.uvw.dx.x = sg->dudx;
-    ext_state.uvw.dx.y = sg->dudy;
-    ext_state.uvw.dx.z = 0;
-    ext_state.uvw.dy.x = sg->dvdx;
-    ext_state.uvw.dy.y = sg->dvdy;
-    ext_state.uvw.dy.z = 0;
+    ext_state.uvw.dx.x = sg->dudx*pd;
+    ext_state.uvw.dx.y = sg->dudy*pd;
+    ext_state.uvw.dx.z = 0.f;
+    ext_state.uvw.dy.x = sg->dvdx*pd;
+    ext_state.uvw.dy.y = sg->dvdy*pd;
+    ext_state.uvw.dy.z = 0.f;
 #else
     ext_state.uvw = { sg->u, sg->v, 0.0f };
 #endif
@@ -158,6 +160,7 @@ bsdf_init
     Mdl_extended_state* ext_state = &bsdf_data;
     setup_mdl_state(sg, *ext_state);
     mi::Sint32 res;
+    (void) res;
 
     // for thin-walled materials, there is no 'inside', so the thin_walled property has to be
     // evaluated to set the IORs correctly. As an optimization, we check if the property
@@ -263,6 +266,7 @@ bsdf_sample
             /*texture_handler=*/ nullptr,
             /*arg_block_data=*/ nullptr);
         assert(res == 0 && "execute_bsdf_sample failed");
+        (void) res;
         
         if (sample_data.event_type == mi::neuraylib::BSDF_EVENT_ABSORB)
             return AI_BSDF_LOBE_MASK_NONE;  // no valid sample
@@ -357,6 +361,7 @@ bsdf_eval
             /*texture_handler=*/ nullptr,
             /*arg_block_data=*/ nullptr);
         assert(res == 0 && "execute_bsdf_evaluate failed");
+        (void) res;
 
         // ensure, we got a valid result.
         // it may be invalid when samples below the surface are evaluated ...
@@ -445,6 +450,7 @@ bsdf_albedo
             /*texture_handler=*/ nullptr,
             /*arg_block_data=*/ nullptr);
         assert(res == 0 && "execute_bsdf_auxiliary failed");
+        (void) res;
 
         return AtRGB(aux_data.albedo.x, aux_data.albedo.y, aux_data.albedo.z);
     }

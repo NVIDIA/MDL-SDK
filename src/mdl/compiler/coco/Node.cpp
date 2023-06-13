@@ -30,20 +30,21 @@ Coco/R itself) does not fall under the GNU General Public License.
 
 namespace Coco {
 
-Node::Node(Kind typ, Symbol *sym, int line) {
-	this->n     = 0;
-	this->next  = NULL;
-	this->down  = NULL;
-	this->sub   = NULL;
-	this->up    = false;
-	this->val   = 0;
-	this->code  = normalTrans;
-	this->set   = NULL;
-	this->pos   = NULL;
-	this->state = NULL;
-	this->state = 0;
-
-	this->typ = typ; this->sym = sym; this->line = line;
+Node::Node(Kind typ, Symbol *sym, int line)
+: n(0)
+, typ(typ)
+, next(NULL)
+, down(NULL)
+, sub(NULL)
+, up(false)
+, sym(sym)
+, val(0)
+, code(normalTrans)
+, set(NULL)
+, pos(NULL)
+, line(line)
+, state(NULL)
+{
 }
 
 }; // namespace

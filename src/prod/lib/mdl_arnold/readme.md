@@ -21,7 +21,7 @@ Point the environment variable `%ARNOLD_PLUGIN_PATH%` to the `lib` directory of 
 
     - lib/mdl_arnold.dll
     - lib/libmdl_sdk_ai.dll
-    - lib/nv_freeimage_ai.dll
+    - lib/nv_openimageio_ai.dll
     - lib/dds_ai.dll
 
 into the Arnold plugin directory `%MTOA_PATH%/plugins` or to any other directory that is included in the environment variable `%ARNOLD_PLUGIN_PATH%`.
@@ -50,7 +50,7 @@ Copy the libraries in the `lib` directory, namely the files:
 
     - lib/mdl_arnold.dll
     - lib/libmdl_sdk_ai.dll
-    - lib/nv_freeimage_ai.dll
+    - lib/nv_openimageio_ai.dll
     - lib/dds_ai.dll
 
 into the Arnold plugin directory. The default for 3ds Max 2020 is `C:\ProgramData\Autodesk\ApplicationPlugins\MAXtoA_2020`

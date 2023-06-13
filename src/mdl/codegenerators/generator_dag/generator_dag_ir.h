@@ -321,6 +321,9 @@ public:
     /// Return a shallow copy of the top-level node with CSE disabled.
     DAG_node const *shallow_copy(DAG_node const *node);
 
+    /// Get the allocator of this factory.
+    IAllocator *get_allocator() const { return m_builder.get_arena()->get_allocator(); }
+
 private:
     /// Build a call to a conversion from a ::tex::gamma value to int.
     ///
@@ -467,9 +470,6 @@ private:
     /// Returns node or an identical IR node.
     DAG_node *identify_remember(DAG_node *node);
 
-    /// Get the allocator of this factory.
-    IAllocator *get_allocator() const { return m_builder.get_arena()->get_allocator(); }
-
     /// Get the field index from a getter function call name.
     ///
     /// \param type       a compound type
@@ -489,6 +489,21 @@ private:
     /// Unwrap a float to color cast, i.e. return a node computing a float from
     /// a node computing a color.
     DAG_node const *unwrap_float_to_color(DAG_node const *n);
+
+    /// Normalize a df::thin_film() call according to the spec rules.
+    ///
+    /// \param name            The name of the called function.
+    /// \param sema            The semantics of the called function.
+    /// \param call_args       The call arguments of the called function.
+    /// \param num_call_args   The number of call arguments.
+    /// \param ret_type        The return type of the function.
+    /// \returns               The created call or an equivalent IR node.
+    DAG_node const *normalize_thin_film(
+        char const                    *name,
+        IDefinition::Semantics        sema,
+        DAG_call::Call_argument const call_args[],
+        int                           num_call_args,
+        IType const                   *ret_type);
 
 private:
     /// The arena builder.
@@ -696,6 +711,9 @@ private:
 
 /// Set the index of an parameter.
 void set_parameter_index(DAG_parameter *param, Uint32 param_idx);
+
+/// Skip DAG temporaries if necessary.
+DAG_node const *skip_temporaries(DAG_node const *node);
 
 } // mdl
 } // mi

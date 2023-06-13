@@ -62,7 +62,7 @@ Image_file_reader_impl::Image_file_reader_impl(
     m_resolution_y( 1),
     m_format( format),
     m_bitmap( nullptr),
-    m_bitmap_pixel_type( 0)
+    m_bitmap_pixel_type( nullptr)
 {
     FreeImageIO io = construct_io_for_reading();
     m_format = FreeImage_GetFileTypeFromHandle( &io, static_cast<fi_handle>( reader));
@@ -225,7 +225,7 @@ mi::neuraylib::ITile* Image_file_reader_impl::read( mi::Uint32 z, mi::Uint32 lev
 #if defined(DUMP_PIXEL_X) && defined(DUMP_PIXEL_Y)
     mi::math::Color c;
     tile->get_pixel( DUMP_PIXEL_X, DUMP_PIXEL_Y, &c.r);
-    std::cout << "FreeImage plugin reader: " 
+    std::cout << "FreeImage plugin reader: "
               << c.r << ' ' << c.g << ' ' << c.b << ' ' << c.a << std::endl;
 #endif
 

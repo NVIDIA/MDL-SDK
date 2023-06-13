@@ -42,6 +42,25 @@
 namespace mi { namespace examples { namespace mdl_d3d12
 {
 
+std::string compute_shader_cache_filename(
+    const Base_options& options,
+    const std::string& material_hash,
+    bool create_parent_folders = false)
+{
+    std::string compiler = "dxc";
+#ifdef MDL_ENABLE_SLANG
+    if(options.use_slang)
+        compiler = "slang";
+#endif
+
+    std::string folder = mi::examples::io::get_executable_folder() +"/shader_cache/" + compiler;
+    if (create_parent_folders)
+        mi::examples::io::mkdir(folder);
+    return folder + "/" + material_hash + ".bin";
+}
+
+// ------------------------------------------------------------------------------------------------
+
 Mdl_material_target::Resource_callback::Resource_callback(
     Mdl_sdk* sdk, Mdl_material_target* target, Mdl_material* material)
     : m_sdk(sdk)
@@ -58,9 +77,9 @@ mi::Uint32 Mdl_material_target::Resource_callback::get_resource_index(
     mi::base::Handle<const mi::neuraylib::ITarget_code> target_code(
         m_target->get_target_code());
 
-    // resource available in the target code.
+    // resource available in the target code?
     // this is the case for resources that are in the material body and for
-    // resources in contained in the parameters of the first appearance of a material
+    // resources contained in the parameters of the first appearance of a material
     mi::Uint32 index = m_sdk->get_transaction().execute<mi::Uint32>(
         [&](mi::neuraylib::ITransaction* t)
     {
@@ -73,17 +92,22 @@ mi::Uint32 Mdl_material_target::Resource_callback::get_resource_index(
         // we loaded only the body resources so far so we only accept those as is
         switch (resource->get_kind())
         {
-            case mi::neuraylib::IValue::VK_TEXTURE:
-                if (index < target_code->get_body_texture_count())
-                    return index;
+        case mi::neuraylib::IValue::VK_TEXTURE:
+            if (target_code->get_texture_is_body_resource(index))
+                return index;
+            break;
 
-            case mi::neuraylib::IValue::VK_LIGHT_PROFILE:
-                if (index < target_code->get_body_light_profile_count())
-                    return index;
+        case mi::neuraylib::IValue::VK_LIGHT_PROFILE:
+            if (target_code->get_light_profile_is_body_resource(index))
+                return index;
+            break;
 
-            case mi::neuraylib::IValue::VK_BSDF_MEASUREMENT:
-                if (index < target_code->get_body_bsdf_measurement_count())
-                    return index;
+        case mi::neuraylib::IValue::VK_BSDF_MEASUREMENT:
+            if (target_code->get_bsdf_measurement_is_body_resource(index))
+                return index;
+            break;
+        default:
+            break;
         }
     }
 
@@ -134,7 +158,7 @@ mi::Uint32 Mdl_material_target::Resource_callback::get_resource_index(
         case mi::neuraylib::IValue::VK_LIGHT_PROFILE:
             kind = Mdl_resource_kind::Light_profile;
             break;
-        
+
         case mi::neuraylib::IValue::VK_BSDF_MEASUREMENT:
             kind = Mdl_resource_kind::Bsdf_measurement;
             break;
@@ -149,7 +173,7 @@ mi::Uint32 Mdl_material_target::Resource_callback::get_resource_index(
 
     // log these manually defined indices
     log_info(
-        "target code id: " + std::to_string(m_target->get_id()) +
+        "target code: " + m_target->get_compiled_material_hash() +
         " - texture id: " + std::to_string(mat_resource_index) +
         " (material id: " + std::to_string(m_material->get_id()) + ")" +
         " - resource: " + std::string(name) + " (reused material)");
@@ -188,24 +212,18 @@ mi::Uint32 Mdl_material_target::Resource_callback::get_string_index(
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 
-namespace
-{
-    std::atomic<size_t> sa_target_code_id(1);
-}
 Mdl_material_target::Mdl_material_target(
     Base_application* app,
     Mdl_sdk* sdk,
     const std::string& compiled_material_hash)
     : m_app(app)
     , m_sdk(sdk)
-    , m_id(sa_target_code_id.fetch_add(1))
     , m_compiled_material_hash(compiled_material_hash)
     , m_target_code(nullptr)
     , m_generation_required(true)
     , m_hlsl_source_code("")
     , m_compilation_required(true)
-    , m_dxil_compiled_library(nullptr)
-    , m_shader_cache_name("")
+    , m_dxil_compiled_libraries()
     , m_read_only_data_segment(nullptr)
     , m_target_resources()
     , m_target_string_constants()
@@ -216,6 +234,11 @@ Mdl_material_target::Mdl_material_target(
         Mdl_resource_kind kind_i = static_cast<Mdl_resource_kind>(i);
         m_target_resources[kind_i] = std::vector<Mdl_resource_assignment>();
     }
+
+    // will be used in the shaders and when setting up the rt pipeline
+    m_radiance_closest_hit_name = "MdlRadianceClosestHitProgram_" + get_shader_name_suffix();
+    m_radiance_any_hit_name = "MdlRadianceAnyHitProgram_" + get_shader_name_suffix();
+    m_shadow_any_hit_name = "MdlShadowAnyHitProgram_" + get_shader_name_suffix();
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -223,7 +246,7 @@ Mdl_material_target::Mdl_material_target(
 Mdl_material_target::~Mdl_material_target()
 {
     m_target_code = nullptr;
-    m_dxil_compiled_library = nullptr;
+    m_dxil_compiled_libraries.clear();
 
     if (m_read_only_data_segment) delete m_read_only_data_segment;
 
@@ -258,21 +281,22 @@ bool Mdl_material_target::add_material_to_link_unit(
     mi::neuraylib::ILink_unit* link_unit,
     mi::neuraylib::IMdl_execution_context* context)
 {
-    // since all expression will be in the same link unit, the need to be identified
-    std::string scattering_name = "mdl_df_scattering_" + std::to_string(material->get_id());
-    std::string opacity_name = "mdl_opacity_" + std::to_string(material->get_id());
-
-    std::string emission_name = "mdl_df_emission_" + std::to_string(material->get_id());
-    std::string emission_intensity_name =
-        "mdl_emission_intensity_" + std::to_string(material->get_id());
-
-    std::string thin_walled_name = "mdl_thin_walled_" + std::to_string(material->get_id());
-
-    std::string volume_absorption_coefficient =
-        "mdl_absorption_coefficient_" + std::to_string(material->get_id());
+    // since all expressions will be in the same link unit, they need to be identified
+    std::string id_str = std::to_string(material->get_id());
+    std::string init_name = "mdl_init_" + id_str;
+    std::string scattering_name = "mdl_df_scattering_" + id_str;
+    std::string opacity_name = "mdl_opacity_" + id_str;
+    std::string emission_name = "mdl_df_emission_" + id_str;
+    std::string emission_intensity_name = "mdl_emission_intensity_" + id_str;
+    std::string thin_walled_name = "mdl_thin_walled_" + id_str;
+    std::string volume_absorption_coefficient = "mdl_absorption_coefficient_" + id_str;
+    std::string standalone_opacity_name = "mdl_standalone_opacity_" + id_str;
 
     // select expressions to generate HLSL code for
     std::vector<mi::neuraylib::Target_function_description> selected_functions;
+
+    selected_functions.push_back(mi::neuraylib::Target_function_description(
+        "init", init_name.c_str()));
 
     selected_functions.push_back(mi::neuraylib::Target_function_description(
         "surface.scattering", scattering_name.c_str()));
@@ -305,43 +329,68 @@ bool Mdl_material_target::add_material_to_link_unit(
     if (!m_sdk->log_messages("Failed to select functions for code generation.", context, SRC))
         return false;
 
+    // compile cutout_opacity also as standalone version to be used in the anyhit programs,
+    // to avoid costly precalculation of expressions only used by other expressions
+    mi::neuraylib::Target_function_description standalone_opacity(
+        "geometry.cutout_opacity", standalone_opacity_name.c_str());
+
+    link_unit->add_material(
+        compiled_material.get(),
+        &standalone_opacity, 1,
+        context);
+
+    if (!m_sdk->log_messages("Failed to add cutout_opacity for code generation.", context, SRC))
+        return false;
+
     // get the resulting target code information
 
-    // function index for "surface.scattering"
-    interface_data.indices.scattering_function_index =
+    // function index for "init"
+    interface_data.indices.init_index =
         selected_functions[0].function_index == static_cast<mi::Size>(-1)
         ? -1
         : static_cast<int32_t>(selected_functions[0].function_index);
 
-    // function index for "geometry.cutout_opacity"
-    interface_data.indices.opacity_function_index =
+    // function index for "surface.scattering"
+    interface_data.indices.scattering_function_index =
         selected_functions[1].function_index == static_cast<mi::Size>(-1)
         ? -1
         : static_cast<int32_t>(selected_functions[1].function_index);
 
-    // function index for "surface.emission.emission"
-    interface_data.indices.emission_function_index =
+    // function index for "geometry.cutout_opacity"
+    interface_data.indices.opacity_function_index =
         selected_functions[2].function_index == static_cast<mi::Size>(-1)
         ? -1
         : static_cast<int32_t>(selected_functions[2].function_index);
 
-    // function index for "surface.emission.intensity"
-    interface_data.indices.emission_intensity_function_index =
+    // function index for "surface.emission.emission"
+    interface_data.indices.emission_function_index =
         selected_functions[3].function_index == static_cast<mi::Size>(-1)
         ? -1
         : static_cast<int32_t>(selected_functions[3].function_index);
 
-    // function index for "thin_walled"
-    interface_data.indices.thin_walled_function_index =
+    // function index for "surface.emission.intensity"
+    interface_data.indices.emission_intensity_function_index =
         selected_functions[4].function_index == static_cast<mi::Size>(-1)
         ? -1
         : static_cast<int32_t>(selected_functions[4].function_index);
 
-    // function index for "volume.absorption_coefficient"
-    interface_data.indices.volume_absorption_coefficient_function_index =
+    // function index for "thin_walled"
+    interface_data.indices.thin_walled_function_index =
         selected_functions[5].function_index == static_cast<mi::Size>(-1)
         ? -1
         : static_cast<int32_t>(selected_functions[5].function_index);
+
+    // function index for "volume.absorption_coefficient"
+    interface_data.indices.volume_absorption_coefficient_function_index =
+        selected_functions[6].function_index == static_cast<mi::Size>(-1)
+        ? -1
+        : static_cast<int32_t>(selected_functions[6].function_index);
+
+    // function index for standalone version of "geometry.cutout_opacity"
+    interface_data.indices.standalone_opacity_function_index =
+        standalone_opacity.function_index == static_cast<mi::Size>(-1)
+        ? -1
+        : static_cast<int32_t>(standalone_opacity.function_index);
 
     // also constant for the entire material
     interface_data.argument_layout_index = selected_functions[0].argument_block_index;
@@ -369,7 +418,7 @@ void Mdl_material_target::register_material(Mdl_material* material)
 
 bool Mdl_material_target::unregister_material(Mdl_material* material)
 {
-    if (material->get_target_code_id() != m_id)
+    if (material->get_target_code() != this)
     {
         log_error("Tried to remove a material from the wrong target: " + material->get_name(), SRC);
         return false;
@@ -437,7 +486,7 @@ bool Mdl_material_target::generate()
 {
     if (!m_generation_required)
     {
-        log_info("Target code does not need generation. ID: " + std::to_string(m_id), SRC);
+        log_info("Target code does not need generation. Hash: " + m_compiled_material_hash, SRC);
         return true;
     }
 
@@ -460,9 +509,8 @@ bool Mdl_material_target::generate()
     {
         auto p = m_app->get_profiling().measure("loading from shader cache");
 
-        m_shader_cache_name = hash;
-        const std::string filename = mi::examples::io::get_executable_folder() +
-            "/shader_cache/" + hash + ".bin";
+        const std::string filename = compute_shader_cache_filename(
+            *m_app->get_options(), m_compiled_material_hash);
 
         // read the cache if it exists
         if (mi::examples::io::file_exists(filename))
@@ -510,12 +558,38 @@ bool Mdl_material_target::generate()
                 // also get the compiles shader
                 if (cache_buffer_size < (offset + sizeof(size_t)))
                     break;
-                size_t dxil_blob_size = *(reinterpret_cast<size_t*>(cache_buffer + offset));
+
+                // number of dxil libraries
+                size_t num_libraries = *(reinterpret_cast<size_t*>(cache_buffer + offset));
                 offset += sizeof(size_t);
-                if (cache_buffer_size < (offset + dxil_blob_size))
-                    break;
-                m_dxil_compiled_library =
-                    new DxcBlobFromMemory(cache_buffer + offset, dxil_blob_size);
+                m_dxil_compiled_libraries.clear();
+                m_dxil_compiled_libraries.reserve(num_libraries);
+
+                for (size_t l = 0; l < num_libraries; ++l)
+                {
+                    // first, the symbols, starting with the number of symbols ...
+                    size_t num_exp_symbols = *(reinterpret_cast<size_t*>(cache_buffer + offset));
+                    offset += sizeof(size_t);
+
+                    std::vector<std::string> exports;
+                    for (size_t s = 0; s < num_exp_symbols; ++s)
+                    {
+                        // ... and then for each, string length and string data
+                        size_t symbol_size = *(reinterpret_cast<size_t*>(cache_buffer + offset));
+                        offset += sizeof(size_t);
+
+                        std::string symbol_name(cache_buffer + offset, cache_buffer + offset + symbol_size);
+                        offset += symbol_size;
+                        exports.push_back(symbol_name);
+                    }
+
+                    // the dxil blob
+                    size_t dxil_blob_size = *(reinterpret_cast<size_t*>(cache_buffer + offset));
+                    offset += sizeof(size_t);
+                    auto dxil_compiled_library = new DxcBlobFromMemory(cache_buffer + offset, dxil_blob_size);
+                    m_dxil_compiled_libraries.push_back(Shader_library(dxil_compiled_library, exports));
+                    offset += dxil_blob_size;
+                }
 
                 loaded_from_shader_cache = true;
                 break;
@@ -579,15 +653,17 @@ bool Mdl_material_target::generate()
     Command_queue* command_queue = m_app->get_command_queue(D3D12_COMMAND_LIST_TYPE_DIRECT);
     D3DCommandList* command_list = command_queue->get_command_list();
 
-
-    // add all textures known to the link unit
-    for (size_t t = 1, n = m_target_code->get_body_texture_count(); t < n; ++t)
+    // add all body textures, the ones that are required independent of the parameter set
+    for (size_t i = 1, n = m_target_code->get_texture_count(); i < n; ++i)
     {
-        Mdl_resource_assignment assignment(Mdl_resource_kind::Texture);
-        assignment.resource_name = m_target_code->get_texture(t);
-        assignment.runtime_resource_id = t;
+        if (!m_target_code->get_texture_is_body_resource(i))
+            continue;
 
-        switch (m_target_code->get_texture_shape(t))
+        Mdl_resource_assignment assignment(Mdl_resource_kind::Texture);
+        assignment.resource_name = m_target_code->get_texture(i);
+        assignment.runtime_resource_id = i;
+
+        switch (m_target_code->get_texture_shape(i))
         {
             case mi::neuraylib::ITarget_code::Texture_shape_2d:
                 assignment.dimension = Texture_dimension::Texture_2D;
@@ -606,18 +682,24 @@ bool Mdl_material_target::generate()
         m_target_resources[Mdl_resource_kind::Texture].emplace_back(assignment);
     }
 
-    // add all light profiles known to the link unit
-    for (size_t i = 1, n = m_target_code->get_body_light_profile_count(); i < n; ++i)
+    // add all body light profiles
+    for (size_t i = 1, n = m_target_code->get_light_profile_count(); i < n; ++i)
     {
+        if (!m_target_code->get_light_profile_is_body_resource(i))
+            continue;
+
         Mdl_resource_assignment assignment(Mdl_resource_kind::Light_profile);
         assignment.resource_name = m_target_code->get_light_profile(i);
         assignment.runtime_resource_id = i;
         m_target_resources[Mdl_resource_kind::Light_profile].emplace_back(assignment);
     }
 
-    // add all bsdf measurements known to the link unit
-    for (size_t i = 1, n = m_target_code->get_body_bsdf_measurement_count(); i < n; ++i)
+    // add all body bsdf measurements
+    for (size_t i = 1, n = m_target_code->get_bsdf_measurement_count(); i < n; ++i)
     {
+        if (!m_target_code->get_bsdf_measurement_is_body_resource(i))
+            continue;
+
         Mdl_resource_assignment assignment(Mdl_resource_kind::Bsdf_measurement);
         assignment.resource_name = m_target_code->get_bsdf_measurement(i);
         assignment.runtime_resource_id = i;
@@ -832,15 +914,9 @@ bool Mdl_material_target::generate()
     // assuming multiple materials that have been compiled to this target/link unit
     // it has to be possible to select the individual functions based on the hit object
 
-    std::string init_switch_function[2] = {
-    {
-        "void mdl_bsdf_init(in uint function_index, inout Shading_state_material state) {\n"
-        "   switch(function_index) {\n"
-    },
-    {
-        "void mdl_edf_init(in uint function_index, inout Shading_state_material state) {\n"
-        "   switch(function_index) {\n"
-    }};
+    std::string init_switch_function =
+        "void mdl_init(in uint function_index, inout Shading_state_material state) {\n"
+        "   switch(function_index) {\n";
 
     std::string sample_switch_function[2] = {
         "void mdl_bsdf_sample(in uint function_index, inout Bsdf_sample_data sret_ptr, "
@@ -902,6 +978,11 @@ bool Mdl_material_target::generate()
         "in Shading_state_material state) {\n"
         "   switch(function_index) {\n";
 
+    std::string standalone_opacity_switch_function =
+        "float mdl_standalone_geometry_cutout_opacity(in uint function_index, "
+        "in Shading_state_material state) {\n"
+        "   switch(function_index) {\n";
+
     for (size_t f = 0, n = m_target_code->get_callable_function_count(); f < n; ++f)
     {
         mi::neuraylib::ITarget_code::Function_kind func_kind =
@@ -915,7 +996,13 @@ bool Mdl_material_target::generate()
 
         if (dist_kind == mi::neuraylib::ITarget_code::DK_NONE)
         {
-            if (mi::examples::strings::starts_with(name, "mdl_opacity_"))
+            if (func_kind == mi::neuraylib::ITarget_code::FK_DF_INIT)
+            {
+                init_switch_function +=
+                    "       case " + std::to_string(f) + ": " +
+                    name + "(state); return;\n";
+            }
+            else if (mi::examples::strings::starts_with(name, "mdl_opacity_"))
             {
                 opacity_switch_function += "       case " + std::to_string(f) + ": " +
                     "return " + name + "(state);\n";
@@ -935,6 +1022,11 @@ bool Mdl_material_target::generate()
                 abs_coefficient_switch_function += "       case " + std::to_string(f) + ": " +
                     "return " + name + "(state);\n";
             }
+            else if (mi::examples::strings::starts_with(name, "mdl_standalone_opacity_"))
+            {
+                standalone_opacity_switch_function += "       case " + std::to_string(f) + ": " +
+                    "return " + name + "(state);\n";
+            }
         }
         else if (dist_kind == mi::neuraylib::ITarget_code::DK_BSDF ||
                     dist_kind == mi::neuraylib::ITarget_code::DK_HAIR_BSDF ||
@@ -945,33 +1037,27 @@ bool Mdl_material_target::generate()
 
             switch (func_kind)
             {
-            case mi::neuraylib::ITarget_code::FK_DF_INIT:
-                init_switch_function[index] +=
-                    "       case " + std::to_string(f) + ": " +
-                    name + "(state); return;\n";
-                break;
-
             case mi::neuraylib::ITarget_code::FK_DF_SAMPLE:
                 sample_switch_function[index] +=
-                    "       case " + std::to_string(f - 1) + ": " +
+                    "       case " + std::to_string(f) + ": " +
                     name + "(sret_ptr, state); return;\n";
                 break;
 
             case mi::neuraylib::ITarget_code::FK_DF_EVALUATE:
                 evaluate_switch_function[index] +=
-                    "       case " + std::to_string(f - 2) + ": " +
+                    "       case " + std::to_string(f - 1) + ": " +
                     name + "(sret_ptr, state); return;\n";
                 break;
 
             case mi::neuraylib::ITarget_code::FK_DF_PDF:
                 pdf_switch_function[index] +=
-                    "       case " + std::to_string(f - 3) + ": " +
+                    "       case " + std::to_string(f - 2) + ": " +
                     name + "(sret_ptr, state); return;\n";
                 break;
 
             case mi::neuraylib::ITarget_code::FK_DF_AUXILIARY:
                 auxiliary_switch_function[index] +=
-                    "       case " + std::to_string(f - 4) + ": " +
+                    "       case " + std::to_string(f - 3) + ": " +
                     name + "(sret_ptr, state); return;\n";
                 break;
             }
@@ -979,14 +1065,14 @@ bool Mdl_material_target::generate()
 
     }
 
+    init_switch_function +=
+        "       default: break;\n"
+        "   }\n"
+        "}\n\n";
+    m_hlsl_source_code += init_switch_function;
+
     for (size_t i = 0; i < 2; ++i)
     {
-        init_switch_function[i] +=
-            "       default: break;\n"
-            "   }\n"
-            "}\n\n";
-        m_hlsl_source_code += init_switch_function[i];
-
         sample_switch_function[i] +=
             "       default: break;\n"
             "   }\n"
@@ -1040,6 +1126,13 @@ bool Mdl_material_target::generate()
         "}\n\n";
     m_hlsl_source_code += abs_coefficient_switch_function;
 
+    standalone_opacity_switch_function +=
+        "       default: break;\n"
+        "   }\n"
+        "   return 1.0f;\n"
+        "}\n\n";
+    m_hlsl_source_code += standalone_opacity_switch_function;
+
 
     // this last snipped contains the actual hit shader and the renderer logic
     // ideally, this is the only part that is handwritten
@@ -1079,15 +1172,15 @@ bool Mdl_material_target::compile()
 {
     if (!m_compilation_required)
     {
-        log_info("Target code does not need compilation. ID: " + std::to_string(m_id), SRC);
+        log_info("Target code does not need compilation. Hash: " + m_compiled_material_hash, SRC);
         return true;
     }
 
     // generate has be called first
     if (m_generation_required)
     {
-        log_error("Compiling HLSL target code not possible before generation. Target ID: "
-                    + std::to_string(m_id), SRC);
+        log_error("Compiling HLSL target code not possible before generation. Hash: " +
+            m_compiled_material_hash, SRC);
         return false;
     }
 
@@ -1097,17 +1190,38 @@ bool Mdl_material_target::compile()
         std::map<std::string, std::string> defines;
         defines["TARGET_CODE_ID"] = get_shader_name_suffix();
 
-        Shader_compiler compiler;
-        m_dxil_compiled_library = compiler.compile_shader_library_from_string(
-            get_hlsl_source_code(), "link_unit_code_" + get_shader_name_suffix(),
-            &defines);
+        // use the material name of the first material
+        std::string pseudo_file_name = "link_unit_code";
+        if (m_materials.size() > 0)
+        {
+            for (const auto& it : m_materials)
+            {
+                if (!it.second)
+                    continue;
+                std::string mat_name = it.second->get_material_desciption().get_scene_name();
+                std::replace(mat_name.begin(), mat_name.end(), ' ', '_');
+                mat_name.erase(std::remove_if(mat_name.begin(), mat_name.end(),
+                    [](auto const& c) { return !std::isalnum(c) && c != '_'; }), mat_name.end());
+                if (!mat_name.empty())
+                    pseudo_file_name = mat_name;
+                break;
+            }
+        }
+
+        // run the shader compiler to produce one or multiple dxil libraries
+        Shader_compiler compiler(m_app);
+        m_dxil_compiled_libraries = compiler.compile_shader_library_from_string(
+            m_app->get_options(),
+            get_hlsl_source_code(), pseudo_file_name + "_" + get_shader_name_suffix(),
+            &defines,
+            { m_radiance_closest_hit_name, m_radiance_any_hit_name, m_shadow_any_hit_name });
     }
 
-    bool success = m_dxil_compiled_library != nullptr;
+    bool success = !m_dxil_compiled_libraries.empty();
     m_compilation_required = !success;
 
     // write the shader cache if enabled
-    while (success && !m_shader_cache_name.empty())
+    while (success && m_sdk->get_options().enable_shader_cache)
     {
         auto p = m_app->get_profiling().measure("writing to shader cache");
 
@@ -1125,11 +1239,23 @@ bool Mdl_material_target::compile()
             return false;
 
         // open cache file
-        const std::string filename = mi::examples::io::get_executable_folder() +
-            "/shader_cache/" + m_shader_cache_name + ".bin";
+        const std::string filename = compute_shader_cache_filename(
+            *m_app->get_options(), m_compiled_material_hash, true);
+
+        // create the parent folder if required
+        const std::string folder = mi::examples::io::dirname(filename);
+        if (!mi::examples::io::mkdir(folder, true))
+        {
+            log_warning("Failed to create shader cache folder: " + folder);
+            break;
+        }
+
         std::ofstream file(filename, std::ios::out | std::ios::binary);
         if (!file.is_open())
+        {
+            log_warning("Failed to write shader cache: " + filename);
             break;
+        }
 
         // write target code information
         const size_t tci_buffer_size = tci_buffer->get_data_size();
@@ -1143,11 +1269,34 @@ bool Mdl_material_target::compile()
         file.write(reinterpret_cast<const char*>(
             &interface_data), sizeof(Mdl_material_target_interface));
 
-        // write dxil blob
-        const size_t dxil_blob_buffer_size = m_dxil_compiled_library->GetBufferSize();
-        LPVOID dxil_blob_buffer = m_dxil_compiled_library->GetBufferPointer();
-        file.write(reinterpret_cast<const char*>(&dxil_blob_buffer_size), sizeof(size_t));
-        file.write(reinterpret_cast<const char*>(dxil_blob_buffer), dxil_blob_buffer_size);
+        // write dxil libraries
+        // with support for slang the we can have multiple libraries per material, i.e., one
+        // per entry point. To get a mapping between entry point and library we also need the
+        // exported symbol name which makes the de/serialization a bit more elaborate.
+
+        size_t num_libraries = m_dxil_compiled_libraries.size();
+        file.write(reinterpret_cast<const char*>(&num_libraries), sizeof(size_t));
+
+        for (size_t l = 0; l < num_libraries; ++l)
+        {
+            // first, the symbols, starting with the number of symbols ...
+            const std::vector<std::string>& exports = m_dxil_compiled_libraries[l].get_exports();
+            size_t num_exp_symbols = exports.size();
+            file.write(reinterpret_cast<const char*>(&num_exp_symbols), sizeof(size_t));
+            for (size_t s = 0; s < num_exp_symbols; ++s)
+            {
+                // ... and then for each, string length and string data
+                size_t symbol_size = exports[s].size();
+                file.write(reinterpret_cast<const char*>(&symbol_size), sizeof(size_t));
+                file.write(exports[s].data(), symbol_size);
+            }
+
+            // the dxil blob
+            const size_t dxil_blob_buffer_size = m_dxil_compiled_libraries[l].get_dxil_library()->GetBufferSize();
+            const LPVOID dxil_blob_buffer = m_dxil_compiled_libraries[l].get_dxil_library()->GetBufferPointer();
+            file.write(reinterpret_cast<const char*>(&dxil_blob_buffer_size), sizeof(size_t));
+            file.write(reinterpret_cast<const char*>(dxil_blob_buffer), dxil_blob_buffer_size);
+        }
 
         file.close();
         break;

@@ -63,8 +63,6 @@ public:
         mi::Uint32 argc,
         const mi::base::IInterface* argv[]);
 
-    Function_call_impl( bool materials_are_functions);
-
     // public API methods (IInterface)
 
     const mi::base::IInterface* get_interface( const mi::base::Uuid& interface_id) const;
@@ -121,9 +119,6 @@ public:
 
     mi::neuraylib::ICompiled_material* create_compiled_material(
         mi::Uint32 flags, mi::neuraylib::IMdl_execution_context* context) const;
-
-private:
-    bool m_materials_are_functions;
 };
 
 } // namespace NEURAY

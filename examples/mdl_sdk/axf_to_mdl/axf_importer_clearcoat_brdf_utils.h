@@ -251,7 +251,7 @@ static inline float sample(const unsigned int dim, unsigned int i, const float s
 // the domain of non-refracted directions
 // (note: this is approximate as there's no 1:1 relation of the two domains, however,
 //  renderings of various AxF carpaints didn't show any difference so far)
-static void recode_brdf_colors(
+inline void recode_brdf_colors(
     std::vector<float> &brdf_colors,
     const unsigned int rx,
     const unsigned int ry,
@@ -427,7 +427,7 @@ static void compute_clearcoat_brdf(
 }
 
 // bake sub-clearcoat BRDF model of AxF CPA2 into a measured BRDF data block
-static void create_measured_subclearcoat(
+inline void create_measured_subclearcoat(
     float *bsdf_data,
     const unsigned int res_theta,
     const unsigned int res_phi,

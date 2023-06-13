@@ -128,8 +128,9 @@ public:
 
     /// Get the only instance.
     ///
-    /// \param alloc    the allocator
-    static Jitted_code *get_instance(mi::mdl::IAllocator *alloc);
+    /// \param alloc  the allocator
+    static Jitted_code *get_instance(
+        mi::mdl::IAllocator *alloc);
 
     /// Registers a native function for symbol resolving by the JIT.
     ///
@@ -140,11 +141,17 @@ public:
     /// Get the layout data for the current JITer target.
     llvm::DataLayout get_layout_data() const;
 
+    /// Returns true if optimization remarks are enabled.
+    bool opt_remarks_enabled() const { return m_enable_opt_remarks; }
+
 private:
     /// Constructor.
     ///
-    /// \param alloc    the allocator
-    explicit Jitted_code(mi::mdl::IAllocator *alloc);
+    /// \param alloc               the allocator
+    /// \param enable_opt_remarks  True, if optimization remarks are enabled
+    explicit Jitted_code(
+        mi::mdl::IAllocator *alloc,
+        bool                enable_opt_remarks);
 
     /// Destructor.
     ///
@@ -152,7 +159,10 @@ private:
     ~Jitted_code();
 
     /// One time LLVM initialization.
-    static void init_llvm();
+    ///
+    /// \param enable_opt_remarks  True, if optimization remarks are enabled.
+    static void init_llvm(
+        bool enable_opt_remarks);
 
 private:
     // NOT implemented
@@ -174,6 +184,9 @@ private:
 
     /// The LLVM JIT for MDL.
     MDL_JIT *m_mdl_jit;
+
+    /// True if optimization remarks are enabled.
+    bool m_enable_opt_remarks;
 };
 
 ///
@@ -346,8 +359,8 @@ private:
 ///
 /// LLVM backend context data.
 ///
-/// Note: this is a thin wrapper around a union. Object of this type are allocated
-/// on a memory arena, hence to destructor.
+/// Note: this is a thin wrapper around a union. Objects of this type are allocated
+/// on a memory arena, hence no destructor.
 ///
 class LLVM_context_data
 {
@@ -630,6 +643,28 @@ public:
         }
     }
 
+    /// Strip the derivative part of a value (if any), if it not wanted
+    ///
+    /// \param context            the function context
+    /// \param wants_deriv_value  if false, any derivative information will be stripped
+    void strip_deriv_if_not_wanted(Function_context &context, bool wants_deriv_value) {
+        // nothing to do?
+        if (wants_deriv_value || !is_deriv_value(context))
+            return;
+
+        if (m_res_kind == RK_OFFSET) {
+            m_content = as_value(context);
+            m_res_kind = RK_VALUE;
+        }
+
+        if (m_res_kind == RK_VALUE) {
+            m_content = context.get_dual_val(m_content);
+        } else {
+            // change pointer to dual into pointer to value component of dual
+            m_content = context.get_dual_val_ptr(m_content);
+        }
+    }
+
     /// Returns true, if the expression result is a derivative value or a pointer to such value.
     bool is_deriv_value(Function_context &context) {
         return context.is_deriv_type(get_value_type());
@@ -751,33 +786,33 @@ public:
     /// \param code_gen       the LLVM code generator
     /// \param ctx            the current function context
     /// \param i              the argument index
-    /// \param return_derivs  true, iff the user of the argument expects a derivative value
+    /// \param wants_derivs   if true, the result should have derivatives, if available
     virtual Expression_result translate_argument(
         LLVM_code_generator &code_gen,
         Function_context    &ctx,
         size_t              i,
-        bool                return_derivs) const = 0;
+        bool                wants_derivs) const = 0;
 
     /// Translate the i'th argument.
     ///
     /// \param code_gen       the LLVM code generator
     /// \param ctx            the current function context
     /// \param i              the argument index
-    /// \param return_derivs  true, iff the user of the argument expects a derivative value
+    /// \param wants_derivs   if true, the result should have derivatives, if available
     llvm::Value *translate_argument_value(
         LLVM_code_generator &code_gen,
         Function_context    &ctx,
         size_t              i,
-        bool                return_derivs) const
+        bool                wants_derivs) const
     {
-        return translate_argument(code_gen, ctx, i, return_derivs).as_value(ctx);
+        return translate_argument(code_gen, ctx, i, wants_derivs).as_value(ctx);
     }
 
     /// Get the LLVM context data of the callee.
     ///
     /// \param code_gen       the LLVM code generator
     /// \param args           the argument mappings for this function call
-    /// \param return_derivs  if true, the function should return derivatives
+    /// \param return_derivs  if true, the function returns derivatives
     virtual LLVM_context_data *get_callee_context(
         LLVM_code_generator                      &code_gen,
         Function_instance::Array_instances const &arg,
@@ -978,11 +1013,13 @@ struct SL_api_functions
     , m_scene_data_lookup_float3(nullptr)
     , m_scene_data_lookup_float4(nullptr)
     , m_scene_data_lookup_color(nullptr)
+    , m_scene_data_lookup_float4x4(nullptr)
     , m_scene_data_lookup_deriv_float(nullptr)
     , m_scene_data_lookup_deriv_float2(nullptr)
     , m_scene_data_lookup_deriv_float3(nullptr)
     , m_scene_data_lookup_deriv_float4(nullptr)
     , m_scene_data_lookup_deriv_color(nullptr)
+    , m_scene_data_lookup_deriv_float4x4(nullptr)
     {
     }
 
@@ -1043,6 +1080,9 @@ struct SL_api_functions
     /// The SL renderer runtime function for scene::data_lookup_color.
     llvm::Function *m_scene_data_lookup_color;
 
+    /// The SL renderer runtime function for scene::data_lookup_float4x4.
+    llvm::Function *m_scene_data_lookup_float4x4;
+
     /// The SL renderer runtime function for scene::data_lookup_float with derivatives.
     llvm::Function *m_scene_data_lookup_deriv_float;
 
@@ -1057,6 +1097,9 @@ struct SL_api_functions
 
     /// The SL renderer runtime function for scene::data_lookup_color with derivatives.
     llvm::Function *m_scene_data_lookup_deriv_color;
+
+    /// The SL renderer runtime function for scene::data_lookup_float4x4 with derivatives.
+    llvm::Function *m_scene_data_lookup_deriv_float4x4;
 };
 
 ///
@@ -1067,6 +1110,7 @@ class LLVM_code_generator
     friend class Allocator_builder;
     friend class MDL_runtime_creator;
     friend class Code_generator_jit;
+    friend class Link_unit_jit;
     friend class Function_context;
     friend class Df_component_info;
     friend class Derivative_infos;
@@ -1435,8 +1479,11 @@ public:
     /// Set LLVM function attributes which need to be consistent to avoid loosing
     /// them during inlining (e.g. for fast math).
     ///
-    /// \param func  LLVM function which should get the attributes
-    void set_llvm_function_attributes(llvm::Function *func);
+    /// \param func           LLVM function which should get the attributes
+    /// \param mark_noinline  if true, mark the function as noinline
+    void set_llvm_function_attributes(
+        llvm::Function *func,
+        bool           mark_noinline);
 
     /// Return true, if the state parameter was used inside the generated code.
     ///
@@ -1483,21 +1530,21 @@ public:
     ///
     /// \param ctx            the function context
     /// \param expr           the expression to translate
-    /// \param return_derivs  true, iff the user of the expression expects a derivative value
+    /// \param wants_derivs   if true, the result should have derivatives, if available
     llvm::Value *translate_expression_value(
         Function_context           &ctx,
         mi::mdl::IExpression const *expr,
-        bool                       return_derivs);
+        bool                       wants_derivs);
 
     /// Translate an (r-value) expression to LLVM IR.
     ///
     /// \param ctx            the function context
     /// \param expr           the expression to translate
-    /// \param return_derivs  true, iff the user of the expression expects a derivative value
+    /// \param wants_derivs   if true, the result should have derivatives, if available
     Expression_result translate_expression(
         Function_context           &ctx,
         mi::mdl::IExpression const *expr,
-        bool                       return_derivs);
+        bool                       wants_derivs);
 
     /// Translate a DAG node into LLVM IR.
     ///
@@ -1646,6 +1693,9 @@ public:
 
     /// Retrieve the div-by-zero reporting routine.
     llvm::Function *get_div_by_zero() const;
+
+    /// Retrieve the enter_func routine.
+    llvm::Function *get_enter_func() const;
 
     /// Retrieve the target specific compare function if any.
     ///
@@ -2115,8 +2165,11 @@ private:
 
     /// Create extra instructions at function start for debugging.
     ///
+    /// \param ctx   the function context
     /// \param func  the LLVM function that is entered
-    void enter_function(llvm::Function *func);
+    void enter_function(
+        Function_context &ctx,
+        llvm::Function  *func);
 
     /// Translate a statement to LLVM IR.
     ///
@@ -2368,11 +2421,11 @@ private:
     ///
     /// \param ctx            the function context
     /// \param un_expr        the unary expression to translate
-    /// \param return_derivs  true, iff the user of the expression expects a derivative value
+    /// \param wants_derivs   if true, the result should have derivatives, if available
     Expression_result translate_unary(
         Function_context                 &ctx,
         mi::mdl::IExpression_unary const *un_expr,
-        bool                             return_derivs);
+        bool                             wants_derivs);
 
     /// Helper for pre/post inc/decrement.
     ///
@@ -2412,31 +2465,31 @@ private:
     ///
     /// \param ctx            the function context
     /// \param un_expr        the expression to translate
-    /// \param return_derivs  true, iff the user of the expression expects a derivative value
+    /// \param wants_derivs   if true, the result should have derivatives, if available
     Expression_result translate_cast_expression(
         Function_context                 &ctx,
         mi::mdl::IExpression_unary const *un_expr,
-        bool                             return_derivs);
+        bool                             wants_derivs);
 
     /// Translate a binary expression to LLVM IR.
     ///
-    /// \param ctx       the function context
-    /// \param bin_expr  the binary expression to translate
-    /// \param return_derivs  true, iff the user of the expression expects a derivative value
+    /// \param ctx           the function context
+    /// \param bin_expr      the binary expression to translate
+    /// \param wants_derivs  if true, the result should have derivatives, if available
     Expression_result translate_binary(
         Function_context                  &ctx,
         mi::mdl::IExpression_binary const *bin_expr,
-        bool                              return_derivs);
+        bool                              wants_derivs);
 
     /// Translate a side effect free binary expression to LLVM IR.
     ///
-    /// \param ctx       the function context
-    /// \param bin_expr  the binary expression to translate
-    /// \param return_derivs  true, iff the user of the expression expects a derivative value
+    /// \param ctx           the function context
+    /// \param bin_expr      the binary expression to translate
+    /// \param wants_derivs  if true, the result should have derivatives, if available
     llvm::Value *translate_binary_no_side_effect(
         Function_context                  &ctx,
         mi::mdl::IExpression_binary const *bin_expr,
-        bool                              return_derivs);
+        bool                              wants_derivs);
 
     /// Translate a side effect free binary expression to LLVM IR.
     ///
@@ -2483,23 +2536,23 @@ private:
     /// \param res_llvm_type  the LLVM result type of the expression
     /// \param lhs            the left hand side expression
     /// \param rhs            the right hand side expression
-    /// \param return_derivs  true, iff the user of the expression expects a derivative value
+    /// \param wants_derivs   if true, the result should have derivatives, if available
     llvm::Value *translate_multiply(
         Function_context           &ctx,
         llvm::Type                 *res_llvm_type,
         mi::mdl::IExpression const *lhs,
         mi::mdl::IExpression const *rhs,
-        bool                       return_derivs);
+        bool                       wants_derivs);
 
     /// Translate an assign expression to LLVM IR.
     ///
     /// \param ctx            the function context
     /// \param bin_expr       the assign expression to translate
-    /// \param return_derivs  true, iff the user of the expression expects a derivative value
+    /// \param wants_derivs   if true, the result should have derivatives, if available
     Expression_result translate_assign(
         Function_context                  &ctx,
         mi::mdl::IExpression_binary const *bin_expr,
-        bool                              return_derivs);
+        bool                              wants_derivs);
 
     /// Translate a binary compare expression to LLVM IR.
     ///
@@ -2519,13 +2572,13 @@ private:
 
     /// Translate a conditional expression to LLVM IR.
     ///
-    /// \param ctx        the function context
-    /// \param cond_expr  the conditional expression to translate
-    /// \param return_derivs  true, iff the user of the expression expects a derivative value
+    /// \param ctx           the function context
+    /// \param cond_expr     the conditional expression to translate
+    /// \param wants_derivs  if true, the result should have derivatives, if available
     Expression_result translate_conditional(
         Function_context                       &ctx,
         mi::mdl::IExpression_conditional const *cond_expr,
-        bool                                   return_derivs);
+        bool                                   wants_derivs);
 
     /// Create the float4x4 identity matrix.
     ///
@@ -2722,8 +2775,56 @@ private:
     /// Returns true, if the given DAG node is a call to diffuse_reflection_bsdf(color(1), 0).
     bool is_default_diffuse_reflection(DAG_node const *node);
 
+    // An optimization context for DF instantiation.
+    class Instantiate_opt_context
+    {
+    public:
+        Instantiate_opt_context()
+        : m_skip_bsdf_call(false)
+        , m_ternary_cond(NULL)
+        , m_thin_film_if_true(false)
+        {
+        }
+
+        Instantiate_opt_context(
+            bool skip_bsdf_call,
+            DAG_node const *ternary_cond,
+            bool thin_film_if_true)
+        : m_skip_bsdf_call(skip_bsdf_call)
+        , m_ternary_cond(ternary_cond)
+        , m_thin_film_if_true(thin_film_if_true)
+        {
+        }
+
+        /// Returns a context, where any calls to BSDF functions are ignored
+        static Instantiate_opt_context skip_bsdf_call_ctx()
+        {
+            return Instantiate_opt_context(true, NULL, false);
+        }
+
+        /// Returns a context, where the thickness argument of a thin_film node is replaced
+        static Instantiate_opt_context opt_ternary_thin_film(
+            DAG_node const *cond_node,
+            bool thin_film_if_true)
+        {
+            return Instantiate_opt_context(
+                false,
+                cond_node,
+                thin_film_if_true);
+        }
+
+        /// If true, any calls to BSDF functions are ignored.
+        bool m_skip_bsdf_call;
+
+        /// The condition during a ternary operator optimization.
+        DAG_node const *m_ternary_cond;
+
+        /// When the condition is true, the thin_film node should be used, otherwise the base.
+        bool m_thin_film_if_true;
+    } ;
+
     /// Instantiate a DF from the given DAG node and call the resulting function.
-    llvm::Value *instantiate_and_call_df(
+    llvm::CallInst *instantiate_and_call_df(
         Function_context &ctx,
         DAG_node const *node,
         Distribution_function_state df_state,
@@ -2731,31 +2832,38 @@ private:
         llvm::Value *inherited_normal,
         llvm::Value *opt_inherited_weight,
         llvm::Instruction *insertBefore,
-        bool skip_bsdf_call = false);
+        Instantiate_opt_context opt_ctx = Instantiate_opt_context());
 
-    // Returns the base BSDF of the given node, if the node is a factor BSDF, otherwise NULL.
-    static DAG_node const *get_factor_base_bsdf(DAG_node const *node);
+    /// Returns the base BSDF of the given node, if the node is a factor BSDF, otherwise NULL.
+    static DAG_node const *get_factor_base_bsdf(
+        DAG_node const *node);
 
     /// Returns the common node, if both nodes are either the common node or a factor
     /// BSDF of the common node, otherwise NULL.
-    static DAG_node const *matches_factor_pattern(DAG_node const *left, DAG_node const *right);
+    static DAG_node const *matches_factor_pattern(
+        DAG_node const *left,
+        DAG_node const *right);
 
     /// Recursively instantiate a DF from the given DAG node from code in the DF library
     /// according to current distribution function state.
     ///
-    /// \param node  the DAG call with DF semantics or a DF constant node.
-    ///              For a DAG call, the arguments will be used to instantiate the DF.
-    /// \param skip_bsdf_call  if true, any calls to BSDF functions are ignored
+    /// \param caller_ctx   the context of the caller
+    /// \param node         the DAG call with DF semantics or a DF constant node.
+    ///                     For a DAG call, the arguments will be used to instantiate the DF.
+    /// \param opt_ctx      the optimization context
     llvm::Function *instantiate_df(
-        DAG_node const *node,
-        bool skip_bsdf_call = false);
+        Function_context &caller_ctx,
+        DAG_node const   *node,
+        Instantiate_opt_context opt_ctx = Instantiate_opt_context());
 
     /// Recursively instantiate a ternary operator of type DF.
     ///
-    /// \param node  the DAG call of the ternary operator
+    /// \param caller_ctx   the context of the caller
+    /// \param node         the DAG call of the ternary operator
     ///
     /// \returns a function implementing the ternary operator.
     llvm::Function *instantiate_ternary_df(
+        Function_context &caller_ctx,
         DAG_call const *dag_call);
 
 
@@ -2766,7 +2874,7 @@ private:
     /// \param lambda_result_exprs  the list of expression lambda indices for the lambda results
     /// \param mat_data_global      if non-null, the global variable containing the material data
     ///                             for the interpreter for the current distribution function
-    Expression_result translate_distribution_function(
+    void translate_distribution_function(
         Function_context                     &ctx,
         DAG_node const                       *df_node,
         llvm::SmallVector<unsigned, 8> const &lambda_result_exprs,
@@ -2989,11 +3097,11 @@ private:
     ///
     /// \param ctx            the function context
     /// \param let_expr       the let expression to translate
-    /// \param return_derivs  true, iff the user of the expression expects a derivative value
+    /// \param wants_derivs   if true, the result should have derivatives, if available
     Expression_result translate_let(
         Function_context               &ctx,
         mi::mdl::IExpression_let const *let_expr,
-        bool                           return_derivs);
+        bool                           wants_derivs);
 
     /// Create a matrix by matrix multiplication.
     ///
@@ -3183,6 +3291,7 @@ private:
     /// \param target_lang          the language that will be targeted
     /// \param fast_math            True, if fast-math is enabled
     /// \param has_texture_handler  True, if a texture handler interface is available
+    /// \param always_inline_rt      True, if small runtime functions should always be inlined
     /// \param internal_space       the internal space
     static MDL_runtime_creator *create_mdl_runtime(
         mi::mdl::Arena_builder &arena_builder,
@@ -3190,6 +3299,7 @@ private:
         Target_language        target_lang,
         bool                   fast_math,
         bool                   has_texture_handler,
+        bool                   always_inline_rt,
         char const             *internal_space);
 
     /// Terminate the runtime.
@@ -3354,6 +3464,12 @@ private:
     bool target_has_sincos() const {
         return m_target_lang == ICode_generator::TL_PTX;
     }
+
+    /// Mark a function as AlwaysInline if it has pointer typed parameters and the current
+    /// target does not support pointer.
+    ///
+    /// \param f  the LLVM function
+    void always_inline_if_pointer_parameters(llvm::Function &f) const;
 
     /// Find the definition of a signature of a standard library function.
     ///
@@ -3887,6 +4003,9 @@ private:
     /// If true, generate debug info for types only.
     bool m_enable_type_debug;
 
+    /// Mark some generated functions as noinline.
+    bool m_enable_noinline;
+
     /// If true, all exported functions are entry points.
     bool m_exported_funcs_are_entries;
 
@@ -3960,28 +4079,34 @@ private:
     /// Helper struct used as key for cached instantiated df functions.
     struct Instantiated_df {
         /// Constructor
-        /// \param node             the instantiated df call
-        /// \param skip_bsdf_calls  the mode
-        Instantiated_df(DAG_node const *node, bool skip_bsdf_calls)
-            : node(node), skip_bsdf_calls(skip_bsdf_calls)
+        /// \param node     the instantiated df call
+        /// \param opt_ctx  the optimization context
+        Instantiated_df(DAG_node const *node, Instantiate_opt_context opt_ctx)
+            : node(node), opt_ctx(opt_ctx)
         {}
 
         DAG_node const *node;
-        bool skip_bsdf_calls;
+        Instantiate_opt_context opt_ctx;
     };
 
     /// Hash operator for Instantiated_df keys.
     struct Instantiated_df_hash {
         size_t operator()(Instantiated_df const &id) const {
             Hash_ptr<DAG_node const> hasher;
-            return hasher(id.node) ^ (id.skip_bsdf_calls ? 1103 : 0);
+            return hasher(id.node)
+                ^ (id.opt_ctx.m_skip_bsdf_call ? 1103 : 0)
+                ^ hasher(id.opt_ctx.m_ternary_cond)
+                ^ (id.opt_ctx.m_thin_film_if_true ? 2237 : 0);
         }
     };
 
     /// Equal operator for Instantiated_df keys.
     struct Instantiated_df_equal {
         inline unsigned operator()(Instantiated_df const &a, Instantiated_df const &b) const {
-            return a.node == b.node && a.skip_bsdf_calls == b.skip_bsdf_calls;
+            return a.node == b.node &&
+                a.opt_ctx.m_skip_bsdf_call == b.opt_ctx.m_skip_bsdf_call &&
+                a.opt_ctx.m_ternary_cond == b.opt_ctx.m_ternary_cond &&
+                a.opt_ctx.m_thin_film_if_true == b.opt_ctx.m_thin_film_if_true;
         }
     };
 

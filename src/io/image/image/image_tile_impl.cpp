@@ -57,7 +57,8 @@ template <Pixel_type T>
 Tile_impl<T>::Tile_impl( const mi::neuraylib::ITile* other)
   : m_data( reinterpret_cast<const typename Pixel_type_traits<T>::Base_type*>( other->get_data()),
             reinterpret_cast<const typename Pixel_type_traits<T>::Base_type*>( other->get_data())
-                + static_cast<mi::Size>( other->get_resolution_x()) * other->get_resolution_y() * s_components_per_pixel)
+                + static_cast<mi::Size>(
+                    other->get_resolution_x()) * other->get_resolution_y() * s_components_per_pixel)
 {
     m_width = other->get_resolution_x();
     m_height = other->get_resolution_y();

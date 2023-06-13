@@ -451,6 +451,18 @@ BSDF_INLINE float ior_fresnel(
     return math::saturate(fres);
 }
 
+BSDF_INLINE float3 ior_fresnel(
+    const float3 &eta,	// refracted / reflected ior
+    const float kh)     // cosine between of angle normal/half-vector and direction
+{
+    float3 result;
+    result.x = ior_fresnel(eta.x, kh);
+    result.y = (eta.y == eta.x) ? result.x : ior_fresnel(eta.y, kh);
+    result.z = (eta.z == eta.x) ? result.x : ior_fresnel(eta.z, kh);
+    return result;
+}
+
+
 // Fresnel equation for an equal mix of polarization, with complex ior on transmitted side
 // https://seblagarde.wordpress.com/2013/04/29/memo-on-fresnel-equations
 BSDF_INLINE float complex_ior_fresnel(
@@ -1196,22 +1208,24 @@ BSDF_INLINE float2 fresnel_dielectric(const float n_a, const float n_b, const fl
 // for reference, see Born/Wolf - "Principles of Optics", section 13.4.2, equation 30
 BSDF_INLINE float3 thin_film_factor(
     float coating_thickness,
-          float3 coating_ior3,
+    const float3 &coating_ior3,
     const float3 &base_ior3,
     const float3 &base_k3,
     const float3 &incoming_ior3,
     const float kh)
 {
     if (coating_thickness <= 0.0f) {
-        coating_thickness = 0.0f;
-        coating_ior3 = incoming_ior3;
+        // for no coating just do the RGB math to ensure match with uncoated variant
+        // (as using the spectral computation below will yield differences)
+        const float3 inv_incoming_ior3 = make_float3(1.0f, 1.0f, 1.0f) / incoming_ior3;
+        return complex_ior_fresnel(base_ior3 * inv_incoming_ior3, base_k3 * inv_incoming_ior3, kh);
     }
 
     float3 xyz = make_float3(0.0f, 0.0f, 0.0f);
 
     //!! using low res color matching functions here
-    const float lambda_min = 400.0f;
-    const float lambda_step = (float)((700.0 - 400.0) / 16.0);
+    constexpr float lambda_min = 400.0f;
+    constexpr float lambda_step = (float)((700.0 - 400.0) / 16.0);
     const float3 cie_xyz[16] = {
         {0.02986f, 0.00310f, 0.13609f}, {0.20715f, 0.02304f, 0.99584f},
         {0.36717f, 0.06469f, 1.89550f}, {0.28549f, 0.13661f, 1.67236f},
@@ -1224,12 +1238,12 @@ BSDF_INLINE float3 thin_film_factor(
 
     const float sin0_sqr = math::max(1.0f - kh * kh, 0.0f);
 
-    //!! poor handling of color data here... just using "closest" color component of color IOR
+    //!! poor handling of color data here... just using piecewise constant spectrum from RGB IORs
     float coating_ior = coating_ior3.z;
     float base_ior = base_ior3.z;
     float base_k = base_k3.z;
     float incoming_ior = incoming_ior3.z;
-    float lambda = lambda_min;
+    float lambda = lambda_min + 0.5f * lambda_step;
 
     unsigned int i = 0;
     while (i < 16)
@@ -1247,34 +1261,26 @@ BSDF_INLINE float3 thin_film_factor(
                 lambda += lambda_step;
                 ++i;
 
-                //!! poor handling of color data here... just using "closest" color component of color IOR
-                const float d_x = math::abs(lambda - 700.0f);
-                const float d_y = math::abs(lambda - 546.1f);
-                const float d_z = math::abs(lambda - 435.8f);
                 float coating_ior_next;
-                float base_ior_next;
-                float base_k_next;
                 float incoming_ior_next;
-                if (d_x < d_y && d_x < d_z) {
+                if (i >= 10) {
                     coating_ior_next = coating_ior3.x;
-                    base_ior_next = base_ior3.x;
-                    base_k_next = base_k3.x;
+                    base_ior = base_ior3.x;
+                    base_k = base_k3.x;
                     incoming_ior_next = incoming_ior3.x;
-                } else if (d_y < d_z) {
+                } else if (i >= 5) {
                     coating_ior_next = coating_ior3.y;
-                    base_ior_next = base_ior3.y;
-                    base_k_next = base_k3.y;
+                    base_ior = base_ior3.y;
+                    base_k = base_k3.y;
                     incoming_ior_next = incoming_ior3.y;
                 } else {
                     coating_ior_next = coating_ior3.z;
-                    base_ior_next = base_ior3.z;
-                    base_k_next = base_k3.z;
+                    base_ior = base_ior3.z;
+                    base_k = base_k3.z;
                     incoming_ior_next = incoming_ior3.z;
                 }
-                if (coating_ior_next != coating_ior || base_ior_next != base_ior || base_k_next != base_k || incoming_ior_next != incoming_ior) {
+                if (coating_ior_next != coating_ior || incoming_ior_next != incoming_ior) {
                     coating_ior = coating_ior_next;
-                    base_ior = base_ior_next;
-                    base_k = base_k_next;
                     incoming_ior = incoming_ior_next;
                     break;
                 }
@@ -1315,20 +1321,16 @@ BSDF_INLINE float3 thin_film_factor(
                 lambda += lambda_step;
                 ++i;
 
-                //!! poor handling of color data here... just using "closest" color component of color IOR
-                const float d_x = math::abs(lambda - 700.0f);
-                const float d_y = math::abs(lambda - 546.1f);
-                const float d_z = math::abs(lambda - 435.8f);
                 float coating_ior_next;
                 float base_ior_next;
                 float base_k_next;
                 float incoming_ior_next;
-                if (d_x < d_y && d_x < d_z) {
+                if (i >= 10) {
                     coating_ior_next = coating_ior3.x;
                     base_ior_next = base_ior3.x;
                     base_k_next = base_k3.x;
                     incoming_ior_next = incoming_ior3.x;
-                } else if (d_y < d_z) {
+                } else if (i >= 5) {
                     coating_ior_next = coating_ior3.y;
                     base_ior_next = base_ior3.y;
                     base_k_next = base_k3.y;
@@ -1416,8 +1418,8 @@ BSDF_INLINE float3 thin_film_factor(
     float3 xyz = make_float3(0.0f, 0.0f, 0.0f);
 
     //!! using low res color matching functions here
-    const float lambda_min = 400.0f;
-    const float lambda_step = (float)((700.0 - 400.0) / 16.0);
+    constexpr float lambda_min = 400.0f;
+    constexpr float lambda_step = (float)((700.0 - 400.0) / 16.0);
     const float3 cie_xyz[16] = {
         {0.02986f, 0.00310f, 0.13609f}, {0.20715f, 0.02304f, 0.99584f},
         {0.36717f, 0.06469f, 1.89550f}, {0.28549f, 0.13661f, 1.67236f},
@@ -1428,7 +1430,7 @@ BSDF_INLINE float3 thin_film_factor(
         {0.38751f, 0.16135f, 0.00000f}, {0.13401f, 0.05298f, 0.00000f},
         {0.03531f, 0.01375f, 0.00000f}, {0.00817f, 0.00317f, 0.00000f}};
 
-    float lambda = lambda_min;
+    float lambda = lambda_min + 0.5f * lambda_step;
     for (unsigned int i = 0; i < 16; ++i) {
         const float phi = tmp / lambda;
 
@@ -1548,6 +1550,86 @@ BSDF_INLINE float color_measured_curve_factor_estimate(
         return math::luminance(
             math::saturate(weight) *
             math::saturate(measured_curve_factor(cosine, values, num_values)));
+}
+
+// approximate complex IOR from normal and grazing reflectivity
+// Gulbrandsen - "Artist Friendly Metallic Fresnel"
+struct Complex_ior {
+    float3 n;
+    float3 k;
+};
+BSDF_INLINE Complex_ior schlick_to_conductor_fresnel(
+    float3 r, const float3 &g)
+{
+    constexpr float eps = 1.e-2f;
+    r.x = (1.0f - r.x) * eps + r.x * (1.0f - eps);
+    r.y = (1.0f - r.y) * eps + r.y * (1.0f - eps);
+    r.z = (1.0f - r.z) * eps + r.z * (1.0f - eps);
+    
+    const float3 r_sqrt = math::sqrt(r);
+    const float3 tmp = make_float3(1.0f - r.x, 1.0f - r.y, 1.0f - r.z);
+
+    Complex_ior ret;
+    ret.n.x = g.x * tmp.x / (1.0f + r.x) + (1.0f - g.x) * (1.0f + r_sqrt.x) / (1.0f - r_sqrt.x);
+    ret.n.y = g.y * tmp.y / (1.0f + r.y) + (1.0f - g.y) * (1.0f + r_sqrt.y) / (1.0f - r_sqrt.y);
+    ret.n.z = g.z * tmp.z / (1.0f + r.z) + (1.0f - g.z) * (1.0f + r_sqrt.z) / (1.0f - r_sqrt.z);
+
+    ret.k.x = math::sqrt(math::max((r.x * (ret.n.x + 1.0f) * (ret.n.x + 1.0f) - (ret.n.x - 1.0f) * (ret.n.x - 1.0f)) / tmp.x, 0.0f));
+    ret.k.y = math::sqrt(math::max((r.y * (ret.n.y + 1.0f) * (ret.n.y + 1.0f) - (ret.n.y - 1.0f) * (ret.n.y - 1.0f)) / tmp.y, 0.0f));
+    ret.k.z = math::sqrt(math::max((r.z * (ret.n.z + 1.0f) * (ret.n.z + 1.0f) - (ret.n.z - 1.0f) * (ret.n.z - 1.0f)) / tmp.z, 0.0f));
+    return ret;
+}
+
+// compute IOR producing given normal incidence reflectivity
+BSDF_INLINE float3 schlick_to_dielectric_fresnel(
+    const float3 &r)
+{
+    const float3 tmp = math::sqrt(math::clamp(r, make_float3(0.0f, 0.0f, 0.0f), make_float3(0.98f, 0.98f, 0.98f)));
+
+    return make_float3(
+        (1.0f + tmp.x) / (1.0f - tmp.x),
+        (1.0f + tmp.y) / (1.0f - tmp.y),
+        (1.0f + tmp.z) / (1.0f - tmp.z));
+}
+
+BSDF_INLINE float3 apply_coating_color_shift(
+    const float3 &input,
+    const float3 &coated_fresnel,
+    const float3 &uncoated_fresnel)
+{
+    const float3 result = input * (coated_fresnel / uncoated_fresnel);
+    return math::saturate(result);
+}
+
+
+template<typename Data>
+BSDF_INLINE float3 thin_film_custom_curve_factor_conductor(
+    Data *data,
+    State *state,
+    const float kh,
+    const float exponent,
+    const float3 &normal_reflectivity,
+    const float3 &grazing_reflectivity,
+    const float coating_thickness,
+    const float3 coating_ior)
+{
+    float3 result = custom_curve_factor(kh, exponent, normal_reflectivity, grazing_reflectivity);
+    if (coating_thickness > 0.0f) {
+
+        const Complex_ior c = schlick_to_conductor_fresnel(normal_reflectivity, grazing_reflectivity);
+
+        const float3 incoming_ior = process_incoming_ior(data, state);
+        const float3 inv_eta_i = make<float3>(1.0f) / incoming_ior;
+        const float3 eta = c.n * inv_eta_i;
+        const float3 eta_k = c.k * inv_eta_i;
+        const float3 uncoated_fresnel = complex_ior_fresnel(eta, eta_k, kh);
+
+        const float3 coated_fresnel = thin_film_factor(
+            coating_thickness, coating_ior, c.n, c.k, incoming_ior, kh);
+
+        result = apply_coating_color_shift(result, coated_fresnel, uncoated_fresnel);
+    }
+    return result;
 }
 
 #endif // MDL_LIBBSDF_UTILITIES_H

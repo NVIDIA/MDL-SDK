@@ -107,7 +107,7 @@ struct EnvironmentLight
 
 struct Params
 {
-    float3*      accum_buffer;
+    float4*      accum_buffer;
     uchar4*      frame_buffer;
     uint32_t     subframe_index;
     uint32_t     width;
@@ -434,18 +434,18 @@ static __forceinline__ __device__ void set_radiance_payload_depth(int depth)
 static __forceinline__ __device__ float3 get_radiance_payload_contrib()
 {
     return make_float3(
-        int_as_float(optixGetPayload_3()),
-        int_as_float(optixGetPayload_4()),
-        int_as_float(optixGetPayload_5())
+        __uint_as_float(optixGetPayload_3()),
+        __uint_as_float(optixGetPayload_4()),
+        __uint_as_float(optixGetPayload_5())
     );
 }
 
 
 static __forceinline__ __device__ void set_radiance_payload_contrib(float3 val)
 {
-    optixSetPayload_3(float_as_int(val.x));
-    optixSetPayload_4(float_as_int(val.y));
-    optixSetPayload_5(float_as_int(val.z));
+    optixSetPayload_3(__float_as_uint(val.x));
+    optixSetPayload_4(__float_as_uint(val.y));
+    optixSetPayload_5(__float_as_uint(val.z));
 }
 #endif
 
@@ -468,9 +468,10 @@ static __device__ float3 offset_ray(const float3 &p, const float3 &n)
 
     const int3 of_i = make_int3(int_scale * n.x, int_scale * n.y, int_scale * n.z);
 
-    float3 p_i = make_float3(int_as_float(float_as_int(p.x) + ((p.x < 0.0f) ? -of_i.x : of_i.x)),
-        int_as_float(float_as_int(p.y) + ((p.y < 0.0f) ? -of_i.y : of_i.y)),
-        int_as_float(float_as_int(p.z) + ((p.z < 0.0f) ? -of_i.z : of_i.z)));
+    float3 p_i = make_float3(
+        __int_as_float(__float_as_int(p.x) + ((p.x < 0.0f) ? -of_i.x : of_i.x)),
+        __int_as_float(__float_as_int(p.y) + ((p.y < 0.0f) ? -of_i.y : of_i.y)),
+        __int_as_float(__float_as_int(p.z) + ((p.z < 0.0f) ? -of_i.z : of_i.z)));
 
     return make_float3(abs(p.x) < origin ? p.x + float_scale * n.x : p_i.x,
         abs(p.y) < origin ? p.y + float_scale * n.y : p_i.y,

@@ -163,6 +163,15 @@ public: // From Traversal_context
                 m_group.m_count++;
             }
         }
+        else
+        {
+            if (name)
+            {
+                std::string str("Unknown annotation ignored: ");
+                str += name;
+                Util::log_warning(str.c_str());
+            }
+        }
     }
 
     void push_qualified_name(const char* name) override
@@ -291,9 +300,9 @@ private:
         static std::set<std::string> translation =
         {
             "::anno::display_name(string)"
-            , "::anno::in_group(string)"
-            , "::anno::in_group(string,string)"
-            , "::anno::in_group(string,string,string)"
+            , "::anno::in_group(string,bool)"
+            , "::anno::in_group(string,string,bool)"
+            , "::anno::in_group(string,string,string,bool)"
             , "::anno::key_words(string[N])"
             , "::anno::copyright_notice(string)"
             , "::anno::description(string)"
@@ -365,7 +374,12 @@ bool load_module(const std::string & qualified_name)
     Handle<mi::neuraylib::IScope> scope(database->get_global_scope());
     Handle<mi::neuraylib::ITransaction> transaction(scope->create_transaction());
     Handle<IMdl_impexp_api> mdl_impexp_api(nr->get_api_component<IMdl_impexp_api>());
-    const mi::Sint32 rtn = mdl_impexp_api->load_module(transaction.get(), qualified_name.c_str());
+    
+    mi::base::Handle<mi::neuraylib::IMdl_factory> mdl_factory(nr->get_api_component<mi::neuraylib::IMdl_factory>());
+    mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(mdl_factory->create_execution_context());
+    // mi::Sint32 rtn2 = context->set_option("mdl_next", true);
+
+    const mi::Sint32 rtn = mdl_impexp_api->load_module(transaction.get(), qualified_name.c_str(), context.get());
     transaction->commit();
     return (0 == rtn);
 }
@@ -775,7 +789,7 @@ int Create_xliff_command::handle_modules(
         if (!m_dry_run && load_module(m))
         {
             // The module was loaded properly
-            Util::log_info("Succesfully loaded module: " + m);
+            Util::log_info("Successfully loaded module: " + m);
 
             Module_annotations ma(m);
             rtn |= ma.traverse_module(context);
@@ -790,7 +804,7 @@ int Create_xliff_command::handle_modules(
         }
         else
         { 
-            Util::log_info("Succesfully created XLIFF file: " + filename);
+            Util::log_info("Successfully created XLIFF file: " + filename);
         }
     }
     else

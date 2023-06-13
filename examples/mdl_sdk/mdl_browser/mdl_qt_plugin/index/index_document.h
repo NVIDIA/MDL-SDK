@@ -64,7 +64,7 @@ protected:
 private:
     // As we build up the index on startup, we can use a simple running index
     // to identify documents. In case the index should be saved to disk, you
-    // need to something more sophisticated or swtich to a real data base.
+    // need to something more sophisticated or switch to a real data base.
     static uint32_t s_id_counter;
 
     const uint32_t m_id;

@@ -72,7 +72,7 @@ bool is_rgba( const OIIO::ImageSpec& spec)
 
     assert( spec.channelnames.size() >= 4);
     // Do not check whether spec.channelnames[3] == "A". There are files where the alpha channel
-    // has a generic name, e.g., "channel3". See test_pt_color.tif.
+    // has a generic name, e.g., "channel3".
     return spec.channelnames[0] == "R"
         && spec.channelnames[1] == "G"
         && spec.channelnames[2] == "B";
@@ -496,18 +496,19 @@ size_t Input_proxy::pwrite( const void* buf, size_t size, int64_t offset)
 }
 
 OIIO::Filesystem::IOProxy* create_input_proxy(
-    mi::neuraylib::IReader* reader, bool use_buffer, std::vector<char>& buffer)
+    mi::neuraylib::IReader* reader, bool use_buffer, std::vector<char>* buffer)
 {
     if( use_buffer) {
+        assert( buffer);
         constexpr size_t chunk = 65536;
         size_t size = 0;
         do {
-            buffer.resize( size + chunk);
-            size_t result = reader->read( &buffer[size], chunk);
+            buffer->resize( size + chunk);
+            size_t result = reader->read( &(*buffer)[size], chunk);
             size += result;
         } while( !reader->eof());
-        buffer.resize( size);
-        return new OIIO::Filesystem::IOMemReader( &buffer[0], buffer.size());
+        buffer->resize( size);
+        return new OIIO::Filesystem::IOMemReader( &(*buffer)[0], buffer->size());
     }
 
     return new Input_proxy( reader);
@@ -620,6 +621,186 @@ void expand_ya_to_rgba(
     }
 
     assert( false);
+}
+
+namespace {
+
+/// Returns the channel index for which the concatention of \p part_prefix and the channel name
+/// equals \p selector.
+int get_channel_index(
+    const OIIO::ImageSpec& spec, const std::string& part_prefix, const char* selector)
+{
+    for( int i = 0; i < spec.nchannels;  ++i)
+        if( part_prefix + spec.channelnames[i] == selector)
+            return i;
+    return -1;
+}
+
+/// Returns the range of channel indices for which the concatention of \p part_prefix and the
+/// channel name is a prefix of selector_prefix, or (-1,-1) in case of failure.
+std::pair<int,int> get_selector_channel_range(
+    const OIIO::ImageSpec& spec, const std::string& part_prefix, const std::string& selector_prefix)
+{
+    int begin = -1;
+    int end   = -1;
+
+    size_t n = selector_prefix.size();
+
+    for( int i = 0; i < spec.nchannels;  ++i) {
+        if( (part_prefix + spec.channelnames[i]).substr( 0, n) == selector_prefix) {
+            // Reject layers with non-contiguous channels.
+            if( end != -1)
+                return std::pair<int,int>( -1, -1);
+            // Reject layers that contain nested layers.
+            if( spec.channelnames[i].find( '.', n) != std::string::npos)
+                return std::pair<int,int>( -1, -1);
+            if( begin == -1)
+                begin = i;
+        } else {
+            if( (begin != -1) && (end == -1))
+                end = i;
+        }
+    }
+
+    if( (begin != -1) && (end == -1))
+        end = spec.channelnames.size();
+
+    assert( !((begin == -1) ^ (end == -1)));
+    return std::pair<int,int>( begin, end);
+}
+
+/// Computes an image spec with only the given channel range.
+///
+/// \note The compute image spec does \em not match the input image, do \em not pass it to any OIIO
+///       functions. It is used as input for get_pixel_type() and to transport the modified channel
+///       names.
+///
+/// \param input           The input spec with all channels.
+/// \param channel_begin   The first channel index to import.
+/// \param channel_end     The last channel index+1 to import.
+/// \param prefix          The prefix to strip from all channel names.
+/// \return                The computed image spec.
+OIIO::ImageSpec extract_channels(
+    const OIIO::ImageSpec& input,
+    int channel_begin,
+    int channel_end,
+    const std::string& prefix)
+{
+    OIIO::ImageSpec output = input;
+
+    output.nchannels = channel_end - channel_begin;
+
+    if( !input.channelformats.empty())
+        output.channelformats = std::vector<OIIO::TypeDesc>(
+            input.channelformats.begin() + channel_begin,
+            input.channelformats.begin() + channel_end);
+
+    output.channelnames = std::vector<std::string>(
+        input.channelnames.begin() + channel_begin,
+        input.channelnames.begin() + channel_end);
+    size_t n = prefix.size();
+    for( auto& s: output.channelnames) {
+        assert( s.substr( 0, n) == prefix);
+        s = s.substr( n);
+    }
+
+    output.alpha_channel = get_channel_index( output, std::string(), "A");
+    output.z_channel     = get_channel_index( output, std::string(), "Z");
+
+    return output;
+}
+
+} // namespace
+
+bool compute_properties(
+    OIIO::ImageInput* input,
+    const char* selector,
+    mi::Uint32& subimage,
+    mi::Uint32& resolution_x,
+    mi::Uint32& resolution_y,
+    mi::Uint32& resolution_z,
+    IMAGE::Pixel_type& pixel_type,
+    std::vector<std::string>& channel_names,
+    mi::Sint32& channel_start,
+    mi::Sint32& channel_end)
+{
+    // No selector, use first subimage.
+    if( !selector) {
+        subimage      = 0;
+        const OIIO::ImageSpec& spec = input->spec();
+        resolution_x  = spec.width;
+        resolution_y  = spec.height;
+        resolution_z  = spec.depth;
+        pixel_type    = get_pixel_type( spec);
+        channel_names = spec.channelnames;
+        channel_start = 0;
+        channel_end   = IMAGE::get_components_per_pixel( pixel_type);
+        return pixel_type != IMAGE::PT_UNDEF;
+    }
+
+    std::string selector_prefix = std::string( selector) + ".";
+
+    // Loop over subimages.
+    subimage = 0;
+    while( true) {
+
+        const OIIO::ImageSpec& spec = input->spec();
+
+        // Check whether the part name (if available) is a prefix of the selector.
+        std::string part_prefix = spec.get_string_attribute( "oiio:subimagename");
+        if( !part_prefix.empty())
+            part_prefix += ".";
+        if( selector_prefix.substr( 0, part_prefix.size()) == part_prefix) {
+
+            // Check whether selector matches exactly one particular channel name
+            int channel = get_channel_index( spec, part_prefix, selector);
+            if( channel != -1) {
+                resolution_x  = spec.width;
+                resolution_y  = spec.height;
+                resolution_z  = spec.depth;
+                std::string strip_prefix = selector + part_prefix.size();
+                OIIO::ImageSpec modified_spec
+                    = extract_channels( spec, channel, channel+1, strip_prefix);
+                pixel_type = get_pixel_type( modified_spec);
+                channel_names = modified_spec.channelnames;
+                channel_start = channel;
+                channel_end   = channel+1;
+                return pixel_type != IMAGE::PT_UNDEF;
+            }
+
+            // Check whether selector matches a layer
+            std::pair<int,int> range
+                = get_selector_channel_range( spec, part_prefix, selector_prefix);
+            if( range.first != -1) {
+                resolution_x  = spec.width;
+                resolution_y  = spec.height;
+                resolution_z  = spec.depth;
+                std::string strip_prefix = selector_prefix.substr( part_prefix.size());
+                OIIO::ImageSpec modified_spec
+                    = extract_channels( spec, range.first, range.second, strip_prefix);
+                pixel_type = get_pixel_type( modified_spec);
+                channel_names = modified_spec.channelnames;
+                channel_start = range.first;
+                channel_end   = range.second;
+                return pixel_type != IMAGE::PT_UNDEF;
+            }
+
+        }
+
+        if( !input->seek_subimage( ++subimage, /*miplevel*/ 0))
+            break;
+    }
+
+    // No channel/layer matches the selector
+    subimage      = 0;
+    resolution_x  = 1;
+    resolution_y  = 1;
+    resolution_z  = 1;
+    pixel_type    = IMAGE::PT_UNDEF;
+    channel_names.clear();
+    channel_start = -1;
+    channel_end   = -1;
+    return false;
 }
 
 } // namespace MI_OIIO

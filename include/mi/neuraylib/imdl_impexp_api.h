@@ -281,8 +281,8 @@ public:
     /// Exports BSDF data to a file on disk.
     ///
     /// \param filename          The file name of the resource to export the BSDF measurement to.
-    /// \param reflection        The BSDF data for reflection to export. Can be \p NULL.
-    /// \param transmission      The BSDF data for transmission to export. Can be \p NULL.
+    /// \param reflection        The BSDF data for reflection to export. Can be \c NULL.
+    /// \param transmission      The BSDF data for transmission to export. Can be \c NULL.
     /// \return
     ///                          -  0: Success.
     ///                          - -1: Invalid file name.
@@ -362,8 +362,7 @@ public:
     ///                          implementing the identity transformation).
     /// \param context           The execution context can be used to pass options and to retrieve
     ///                          error and/or warning messages. Can be \c NULL.
-    /// \return                  The serialized function name, or \c NULL in case of errors, or if
-    ///                          encoded names are disabled.
+    /// \return                  The serialized function name, or \c NULL in case of errors.
     virtual const ISerialized_function_name* serialize_function_name(
         const char* definition_name,
         const IType_list* argument_types,
@@ -382,8 +381,7 @@ public:
     ///                          implementing the identity transformation).
     /// \param context           The execution context can be used to pass options and to retrieve
     ///                          error and/or warning messages. Can be \c NULL.
-    /// \return                  The deserialized function name, or \c NULL in case of errors, or
-    ///                          if encoded names are disabled.
+    /// \return                  The deserialized function name, or \c NULL in case of errors.
     virtual const IDeserialized_function_name* deserialize_function_name(
         ITransaction* transaction,
         const char* function_name,
@@ -410,8 +408,7 @@ public:
     ///                          implementing the identity transformation).
     /// \param context           The execution context can be used to pass options and to retrieve
     ///                          error and/or warning messages. Can be \c NULL.
-    /// \return                  The deserialized function name, or \c NULL in case of errors, or
-    ///                          if encoded names are disabled.
+    /// \return                  The deserialized function name, or \c NULL in case of errors.
     virtual const IDeserialized_function_name* deserialize_function_name(
         ITransaction* transaction,
         const char* module_name,
@@ -434,8 +431,7 @@ public:
     ///                          implementing the identity transformation).
     /// \param context           The execution context can be used to pass options and to retrieve
     ///                          error and/or warning messages. Can be \c NULL.
-    /// \return                  The deserialized module name, or \c NULL in case of errors, or
-    ///                          if encoded names are disabled.
+    /// \return                  The deserialized module name, or \c NULL in case of errors.
     virtual const IDeserialized_module_name* deserialize_module_name(
         const char* module_name,
         IMdle_deserialization_callback* mdle_callback,

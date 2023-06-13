@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright 2022 NVIDIA Corporation. All rights reserved.
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -112,7 +112,7 @@ export material carbon_composite (
     ]]
 ) [[ 
     anno::copyright_notice (
-    "Copyright 2022 NVIDIA Corporation. All rights reserved."),
+    "Copyright 2023 NVIDIA Corporation. All rights reserved."),
     anno::author("NVIDIA Corporation"),
     anno::display_name("Carbon fibre composite")
 ]] = let{

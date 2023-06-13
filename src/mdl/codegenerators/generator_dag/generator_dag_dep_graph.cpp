@@ -403,8 +403,9 @@ public:
                             for (int i = 0, n = s_decl->get_field_count(); i < n; ++i) {
                                 IExpression const *init = s_decl->get_field_init(i);
 
-                                if (init != NULL)
+                                if (init != NULL) {
                                     visit(init);
+                                }
                             }
                         }
                     }
@@ -722,8 +723,9 @@ private:
             if (len + 2 >= name.size()) {
                 // "::" missing
             }
-            if (name[len] == ':' && name[len + 1] == ':')
+            if (name[len] == ':' && name[len + 1] == ':') {
                 len += 2;
+            }
 
             for (size_t i = len, n = name.size(); i < n; ++i) {
                 char c = name[i];
@@ -769,8 +771,9 @@ private:
     IDefinition const *find_parameter_for_size(ISymbol const *sym) const
     {
         Symbol_to_param_map::const_iterator it(m_curr_parameters.find(sym));
-        if (it != m_curr_parameters.end())
+        if (it != m_curr_parameters.end()) {
             return it->second;
+        }
         return NULL;
     }
 
@@ -981,8 +984,9 @@ void Dumper::node(Dependence_node const *n, char const *color)
         m_printer->print(color);
     }
 
-    if (use_box_shape)
+    if (use_box_shape) {
         m_printer->print(" shape=box");
+    }
 
     m_printer->print("];\n");
 }
@@ -1195,8 +1199,9 @@ void Dependence_node::add_edge(
 bool Dependence_node::mark_visited(size_t visited)
 {
     bool res = m_visit_count < visited;
-    if (res)
+    if (res) {
         m_visit_count = visited;
+    }
     return res;
 }
 
@@ -1408,8 +1413,9 @@ Dependence_node *DAG_dependence_graph::get_node(IDefinition const *idef)
         // from this module
 
         // entities from the builtin module are always exported
-        if (m_is_builtins || def->get_property(IDefinition::DP_IS_EXPORTED))
+        if (m_is_builtins || def->get_property(IDefinition::DP_IS_EXPORTED)) {
             flags |= Dependence_node::FL_IS_EXPORTED;
+        }
 
         if (def->get_kind() == IDefinition::DK_CONSTRUCTOR &&
             def->get_declaration() == NULL)
@@ -1477,10 +1483,12 @@ Dependence_node *DAG_dependence_graph::get_node(
     dag_name                     = Arena_strdup(m_arena, dag_name);
     dag_simple_name              = Arena_strdup(m_arena, dag_simple_name);
 
-    if (dag_alias_name != NULL)
+    if (dag_alias_name != NULL) {
         dag_alias_name = Arena_strdup(m_arena, dag_alias_name);
-    if (dag_preset_name != NULL)
+    }
+    if (dag_preset_name != NULL) {
         dag_preset_name = Arena_strdup(m_arena, dag_preset_name);
+    }
 
     Dependence_node *n = m_builder.create<Dependence_node>(
         &m_arena,
@@ -1519,8 +1527,9 @@ void DAG_dependence_graph::walk(IDG_visitor &visitor)
 bool DAG_dependence_graph::dump(char const *file_name)
 {
     FILE *f = fopen(file_name, "w");
-    if (f == NULL)
+    if (f == NULL) {
         return false;
+    }
 
     IAllocator *alloc = m_arena.get_allocator();
     Allocator_builder builder(alloc);
@@ -1570,8 +1579,9 @@ void DAG_dependence_graph::has_dependence_loop(Node_vec const &nodes)
         Dependence_node *s = nodes[i];
 
         size_t j = i + 1;
-        if (j == n)
+        if (j == n) {
             j = 0;
+        }
 
         Dependence_node *d = nodes[j];
 
@@ -1715,14 +1725,15 @@ void DAG_dependence_graph::create_exported_nodes(
 
                         string signature_suffix(m_arena.get_allocator());
                         signature_suffix += '(';
-                        signature_suffix += m_dag_builder.type_to_name(s_type);
+                        signature_suffix += m_dag_builder.type_to_name(s_type->skip_type_alias());
                         signature_suffix += ')';
 
                         string dag_name        = name + field_access + signature_suffix;
                         string dag_simple_name = simple_name + field_access;
                         string dag_alias_name(m_arena.get_allocator());
-                        if (!alias.empty())
+                        if (!alias.empty()) {
                             dag_alias_name = alias + field_access + signature_suffix;
+                        }
 
                         // we don't have the symbol here
                         Dependence_node::Parameter param(s_type, "s");

@@ -201,30 +201,40 @@ DB::Tag load_mdl_texture(
     DBIMAGE::Image_set* image_set,
     const mi::base::Uuid& impl_hash,
     bool shared_proxy,
-    mi::Float32 gamma)
+    mi::Float32 gamma,
+    mi::Sint32& result)
 {
-    if( !image_set)
+    if( !image_set) {
+        result = -1;
         return DB::Tag();
+    }
 
     mi::Size n = image_set->get_length();
-    if( n == 0)
+    if( n == 0) {
+        result = -1;
         return DB::Tag();
+    }
 
     for( mi::Size f = 0; f < n; ++f)
-        if( image_set->get_frame_length( f) == 0)
+        if( image_set->get_frame_length( f) == 0) {
+            result = -1;
             return DB::Tag();
+        }
 
     std::string identifier;
-    if( image_set->is_mdl_container()) {
+    const std::string& resolved_filename = image_set->get_resolved_filename( 0, 0);
+    const std::string& mdl_file_path = image_set->get_mdl_file_path();
+    if( !resolved_filename.empty()) {
+        identifier = resolved_filename;
+    } else if( image_set->is_mdl_container()) {
         identifier = image_set->get_container_filename() + std::string( "_")
             + image_set->get_container_membername( 0, 0);
+    } else if( !mdl_file_path.empty()) {
+        identifier = "mfp_" + mdl_file_path;
     } else {
-        identifier = image_set->get_resolved_filename( 0, 0);
-        if( identifier.empty()) {
-            identifier = "without_name";
-            // Never share the proxy for memory-based resources.
-            shared_proxy = false;
-        }
+        identifier = "without_name";
+        // Never share the proxy for memory-based resources.
+        shared_proxy = false;
     }
 
     const char* selector = image_set->get_selector();
@@ -240,8 +250,10 @@ DB::Tag load_mdl_texture(
             = MDL::DETAIL::generate_unique_db_name( transaction, db_texture_name.c_str());
 
     DB::Tag texture_tag = transaction->name_to_tag( db_texture_name.c_str());
-    if( texture_tag)
+    if( texture_tag) {
+        result = 0;
         return texture_tag;
+    }
 
     const DB::Privacy_level privacy_level = transaction->get_scope()->get_level();
 
@@ -253,18 +265,20 @@ DB::Tag load_mdl_texture(
 
     DB::Tag image_tag = transaction->name_to_tag( db_image_name.c_str());
     if( !image_tag) {
-        DBIMAGE::Image* image = new DBIMAGE::Image();
-        image->reset_image_set( transaction, image_set, impl_hash);
+        auto image = std::make_unique<DBIMAGE::Image>();
+        result = image->reset_image_set( transaction, image_set, impl_hash);
         image_tag = transaction->store_for_reference_counting(
-            image, db_image_name.c_str(), privacy_level);
+            image.release(), db_image_name.c_str(), privacy_level);
+    } else {
+        result = 0;
     }
 
-    Texture* texture = new Texture();
+    auto texture = std::make_unique<TEXTURE::Texture>();
     texture->set_image( image_tag);
     texture->set_gamma( gamma);
 
     texture_tag = transaction->store_for_reference_counting(
-        texture, db_texture_name.c_str(), privacy_level);
+        texture.release(), db_texture_name.c_str(), privacy_level);
     return texture_tag;
 }
 

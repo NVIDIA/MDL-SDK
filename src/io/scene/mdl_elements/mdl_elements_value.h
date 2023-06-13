@@ -333,13 +333,13 @@ public:
     Value_texture(
         const Type* type,
         DB::Tag value,
-        const char* unresolved_mdl_url,
+        const char* unresolved_file_path,
         const char* owner_module,
         mi::Float32 gamma,
         const char* selector)
       : Base( type),
         m_value( value),
-        m_unresolved_mdl_url( unresolved_mdl_url ? unresolved_mdl_url : ""),
+        m_unresolved_file_path( unresolved_file_path ? unresolved_file_path : ""),
         m_owner_module( owner_module ? owner_module : ""),
         m_gamma( gamma),
         m_selector( selector ? selector : "")
@@ -351,9 +351,9 @@ public:
 
     const char* get_file_path( DB::Transaction* transaction) const;
 
-    const char* get_unresolved_mdl_url() const { return m_unresolved_mdl_url.c_str(); }
+    const char* get_unresolved_file_path() const { return m_unresolved_file_path.c_str(); }
 
-    void set_unresolved_mdl_url( const char* url) { if( url) m_unresolved_mdl_url = url; }
+    void set_unresolved_file_path( const char* s) { if( s) m_unresolved_file_path = s; }
 
     const char* get_owner_module() const { return m_owner_module.c_str(); }
 
@@ -368,7 +368,7 @@ public:
 private:
     DB::Tag m_value;
     mutable std::string m_cached_file_path;
-    std::string m_unresolved_mdl_url;
+    std::string m_unresolved_file_path;
     std::string m_owner_module;
     mi::Float32 m_gamma;
     std::string m_selector;
@@ -383,11 +383,11 @@ public:
     Value_light_profile(
         const Type* type,
         DB::Tag value,
-        const char* unresolved_mdl_url,
+        const char* unresolved_file_path,
         const char* owner_module)
       : Base( type),
         m_value( value),
-        m_unresolved_mdl_url( unresolved_mdl_url ? unresolved_mdl_url : ""),
+        m_unresolved_file_path( unresolved_file_path ? unresolved_file_path : ""),
         m_owner_module( owner_module ? owner_module : "")
     { }
 
@@ -397,9 +397,9 @@ public:
 
     const char* get_file_path( DB::Transaction* transaction) const;
 
-    const char* get_unresolved_mdl_url() const { return m_unresolved_mdl_url.c_str(); }
+    const char* get_unresolved_file_path() const { return m_unresolved_file_path.c_str(); }
 
-    void set_unresolved_mdl_url( const char* url) { if( url) m_unresolved_mdl_url = url; }
+    void set_unresolved_file_path( const char* s) { if( s) m_unresolved_file_path = s; }
 
     const char* get_owner_module() const { return m_owner_module.c_str(); }
 
@@ -410,7 +410,7 @@ public:
 private:
     DB::Tag m_value;
     mutable std::string m_cached_file_path;
-    std::string m_unresolved_mdl_url;
+    std::string m_unresolved_file_path;
     std::string m_owner_module;
 };
 
@@ -424,11 +424,11 @@ public:
     Value_bsdf_measurement(
         const Type* type,
         DB::Tag value,
-        const char* unresolved_mdl_url,
+        const char* unresolved_file_path,
         const char* owner_module)
       : Base( type),
         m_value( value),
-        m_unresolved_mdl_url( unresolved_mdl_url ? unresolved_mdl_url : ""),
+        m_unresolved_file_path( unresolved_file_path ? unresolved_file_path : ""),
         m_owner_module( owner_module ? owner_module : "")
     { }
 
@@ -438,9 +438,9 @@ public:
 
     const char* get_file_path( DB::Transaction* transaction) const;
 
-    const char* get_unresolved_mdl_url() const { return m_unresolved_mdl_url.c_str(); }
+    const char* get_unresolved_file_path() const { return m_unresolved_file_path.c_str(); }
 
-    void set_unresolved_mdl_url( const char* url) { if( url) m_unresolved_mdl_url = url; }
+    void set_unresolved_file_path( const char* s) { if( s) m_unresolved_file_path = s; }
 
     const char* get_owner_module() const { return m_owner_module.c_str(); }
 
@@ -451,7 +451,7 @@ public:
 private:
     DB::Tag m_value;
     mutable std::string m_cached_file_path;
-    std::string m_unresolved_mdl_url;
+    std::string m_unresolved_file_path;
     std::string m_owner_module;
 };
 
@@ -525,7 +525,8 @@ public:
 
     IValue_string* create_string( const char* value) const;
 
-    IValue_string_localized* create_string_localized( const char* value, const char* original_value) const;
+    IValue_string_localized* create_string_localized(
+        const char* value, const char* original_value) const;
 
     IValue_vector* create_vector( const IType_vector* type) const;
 
@@ -543,7 +544,7 @@ public:
     IValue_texture* create_texture(
         const IType_texture* type,
         DB::Tag value,
-        const char* unresolved_mdl_url,
+        const char* unresolved_file_path,
         const char* owner_module,
         mi::Float32 gamma,
         const char* selector) const;
@@ -552,14 +553,14 @@ public:
 
     IValue_light_profile* create_light_profile(
         DB::Tag value,
-        const char* unresolved_mdl_url,
+        const char* unresolved_file_path,
         const char* owner_module) const;
 
     IValue_bsdf_measurement* create_bsdf_measurement( DB::Tag value) const;
 
     IValue_bsdf_measurement* create_bsdf_measurement(
         DB::Tag value,
-        const char* unresolved_mdl_url,
+        const char* unresolved_file_path,
         const char* owner_module) const;
 
     IValue_invalid_df* create_invalid_df( const IType_reference* type) const;

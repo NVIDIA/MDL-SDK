@@ -32,10 +32,6 @@
 
 #include "pch.h"
 
-#define MI_NEURAYLIB_DEPRECATED_13_0
-#include <mi/neuraylib/iscene_element.h>
-#undef MI_NEURAYLIB_DEPRECATED_13_0
-
 #include <mi/base/handle.h>
 
 #include "neuray_compiled_material_impl.h"
@@ -62,14 +58,10 @@ DB::Element_base* Function_call_impl::create_db_element(
     mi::Uint32 argc,
     const mi::base::IInterface* argv[])
 {
-    if( argc != 1)
+    if( !transaction)
         return nullptr;
-
-    mi::base::Handle<const mi::IBoolean> arg0( argv[0]->get_interface<mi::IBoolean>());
-    if( !arg0)
+    if( argc != 0)
         return nullptr;
-
-    // ignore arg0
     return new MDL::Mdl_function_call;
 }
 
@@ -78,19 +70,11 @@ mi::base::IInterface* Function_call_impl::create_api_class(
     mi::Uint32 argc,
     const mi::base::IInterface* argv[])
 {
-    if( argc != 1)
+    if( !transaction)
         return nullptr;
-
-    mi::base::Handle<const mi::IBoolean> arg0( argv[0]->get_interface<mi::IBoolean>());
-    if( !arg0)
+    if( argc != 0)
         return nullptr;
-
-    return (new Function_call_impl( arg0->get_value<bool>()))->cast_to_major();
-}
-
-Function_call_impl::Function_call_impl( bool materials_are_functions)
-  : m_materials_are_functions( materials_are_functions)
-{
+    return (new Function_call_impl())->cast_to_major();
 }
 
 const mi::base::IInterface* Function_call_impl::get_interface(
@@ -114,7 +98,7 @@ const mi::base::IInterface* Function_call_impl::get_interface(
     if( interface_id == mi::neuraylib::IFunction_call::IID() && !is_mat)
         return Parent_type::get_interface( interface_id);
     if( interface_id == mi::neuraylib::IFunction_call::IID() && is_mat)
-        return m_materials_are_functions ? Parent_type::get_interface( interface_id) : nullptr;
+        return Parent_type::get_interface( interface_id);
 
     ASSERT( M_NEURAY_API, false);
     return nullptr;
@@ -141,7 +125,7 @@ mi::base::IInterface* Function_call_impl::get_interface(
     if( interface_id == mi::neuraylib::IFunction_call::IID() && !is_mat)
         return Parent_type::get_interface( interface_id);
     if( interface_id == mi::neuraylib::IFunction_call::IID() && is_mat)
-        return m_materials_are_functions ? Parent_type::get_interface( interface_id) : nullptr;
+        return Parent_type::get_interface( interface_id);
 
     ASSERT( M_NEURAY_API, false);
     return nullptr;
@@ -149,14 +133,7 @@ mi::base::IInterface* Function_call_impl::get_interface(
 
 mi::neuraylib::Element_type Function_call_impl::get_element_type() const
 {
-    bool is_mat = is_material();
-
-    if( !is_mat)
-        return mi::neuraylib::ELEMENT_TYPE_FUNCTION_CALL;
-
-    return m_materials_are_functions
-        ? mi::neuraylib::ELEMENT_TYPE_FUNCTION_CALL
-        : mi::neuraylib::ELEMENT_TYPE_MATERIAL_INSTANCE;
+    return mi::neuraylib::ELEMENT_TYPE_FUNCTION_CALL;
 }
 
 const char* Function_call_impl::get_function_definition() const

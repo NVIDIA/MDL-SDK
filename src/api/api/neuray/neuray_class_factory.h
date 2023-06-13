@@ -112,13 +112,6 @@ public:
     /// Releases the registers class factories for user-defined classes.
     ~Class_factory();
 
-    /// Caches the value of IMdl_configuration::get_materials_are_functions(), to be passed to
-    /// some API classes.
-    void set_materials_are_functions( bool value);
-
-    /// Returns the cached value of IMdl_configuration::get_materials_are_functions().
-    bool get_materials_are_functions() const;
-
     // class registration
 
     /// The type of factory methods for API classes.
@@ -706,9 +699,6 @@ private:
 
     /// The lock that protects the map #m_map_name_enum_decl.
     mutable mi::base::Lock m_map_name_enum_decl_lock;
-
-    /// Value of IMdl_configuration::get_materials_are_functions().
-    bool m_materials_are_functions;
 };
 
 } // namespace NEURAY

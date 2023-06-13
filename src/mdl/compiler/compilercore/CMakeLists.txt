@@ -158,7 +158,9 @@ set(PROJECT_SOURCES
     "compilercore_types.cpp"
     "compilercore_optimizer.cpp"
     "compilercore_options.cpp"
+    "compilercore_parser.cpp"
     "compilercore_printers.cpp"
+    "compilercore_scanner.cpp"
     "compilercore_sema_analysis.cpp"
     "compilercore_serializer.cpp"
     "compilercore_streams.cpp"
@@ -175,6 +177,8 @@ set(PROJECT_SOURCES
 
 # mark files as generated to disable the check for existence during configure
 set_source_files_properties(${_GENERATED_SOURCES} PROPERTIES GENERATED TRUE)
+set_source_files_properties("${_GENERATED_DIR}/Parser.cpp" PROPERTIES HEADER_FILE_ONLY TRUE)
+set_source_files_properties("${_GENERATED_DIR}/Scanner.cpp" PROPERTIES HEADER_FILE_ONLY TRUE)
 
 # add the generator files to the solution
 set_source_files_properties(${_GENERATOR_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)

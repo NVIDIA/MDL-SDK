@@ -298,6 +298,35 @@ void generate_hlsl(
     std::cout << code_hlsl->get_code() << std::endl;
 }
 
+// Generates GLSL target code for a subexpression of a given compiled material.
+void generate_glsl(
+    mi::neuraylib::ITransaction* transaction,
+    mi::neuraylib::IMdl_backend_api* mdl_backend_api,
+    mi::neuraylib::IMdl_execution_context* context,
+    const char* compiled_material_name,
+    const char* path,
+    const char* fname)
+{
+    mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
+        transaction->access<mi::neuraylib::ICompiled_material>( compiled_material_name));
+    check_success(compiled_material.is_valid_interface());
+
+    mi::base::Handle<mi::neuraylib::IMdl_backend> be_glsl(
+        mdl_backend_api->get_backend( mi::neuraylib::IMdl_backend_api::MB_GLSL));
+    check_success(be_glsl.is_valid_interface());
+
+    check_success(be_glsl->set_option( "glsl_version", "450") == 0);
+
+    mi::base::Handle<const mi::neuraylib::ITarget_code> code_glsl(
+        be_glsl->translate_material_expression(
+            transaction, compiled_material.get(), path, fname, context));
+    check_success(print_messages( context));
+    check_success(code_glsl);
+
+    std::cout << "Dumping GLSL code for \"" << path << "\" of \"" << compiled_material_name
+              << "\":" << std::endl << std::endl;
+    std::cout << code_glsl->get_code() << std::endl;
+}
 
 void usage( char const *prog_name)
 {
@@ -430,6 +459,14 @@ int MAIN_UTF8(int argc, char* argv[])
                 transaction.get(), mdl_backend_api.get(), context.get(),
                 class_compilation_name.c_str(),
                 options.expr_path.c_str(), "tint");
+            generate_glsl(
+                transaction.get(), mdl_backend_api.get(), context.get(),
+                instance_compilation_name.c_str(),
+                options.expr_path.c_str(), "tint");
+            generate_glsl(
+                transaction.get(), mdl_backend_api.get(), context.get(),
+                class_compilation_name.c_str(),
+                options.expr_path.c_str(), "tint");
             generate_hlsl(
                 transaction.get(), mdl_backend_api.get(), context.get(),
                 instance_compilation_name.c_str(),
@@ -457,4 +494,3 @@ int MAIN_UTF8(int argc, char* argv[])
 
 // Convert command line arguments to UTF8 on Windows
 COMMANDLINE_TO_UTF8
-

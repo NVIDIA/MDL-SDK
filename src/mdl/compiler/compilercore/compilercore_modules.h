@@ -968,6 +968,7 @@ public:
         PR_TEXEL_2D_ADD_FRAME           = 0x08000, ///< add a frame param to texel_() on tex2d
         PR_TEXEL_3D_ADD_FRAME           = 0x10000, ///< add a frame param to texel_() on tex3d
         PR_TEXTURE_ADD_SELECTOR         = 0x20000, ///< add a selector param to tex constructor
+        PR_IN_GROUP_ADD_COLAPSED        = 0x40000, ///< add a collapted param to in_group() anno
     };
 
     /// Alters one call argument according to the given promotion rules.

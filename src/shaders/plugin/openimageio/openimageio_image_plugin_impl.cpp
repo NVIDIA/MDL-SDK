@@ -42,9 +42,12 @@
 #include "openimageio_utilities.h"
 
 #include <cassert>
+#include <memory>
+
 #include <base/system/version/i_version.h>
 
 #include <OpenImageIO/imageio.h>
+#include <OpenImageIO/filesystem.h>
 
 namespace MI {
 
@@ -163,14 +166,64 @@ const char* Image_plugin_impl::get_supported_type( mi::Uint32 index) const
     return IMAGE::convert_pixel_type_enum_to_string( m_pixel_types[index]);
 }
 
-bool Image_plugin_impl::test( const mi::Uint8* buffer, mi::Uint32 file_size) const
-{
-    return true;
-}
-
 mi::neuraylib::Impexp_priority Image_plugin_impl::get_priority() const
 {
     return mi::neuraylib::IMPEXP_PRIORITY_WELL_DEFINED;
+}
+
+bool Image_plugin_impl::test( mi::neuraylib::IReader* reader) const
+{
+    if( !reader)
+        return false;
+    if( !reader->supports_absolute_access())
+        return false;
+
+    // Avoid buffering the entire file just for this method (see Image_file_reader_impl
+    // constructor). Also alleviates the need to enable the header-only mode for libjpeg (see
+    // Image_file_reader_impl::setup_image_input()).
+    if( m_name == "oiio_jpg")
+        return true;
+
+    auto io_proxy = std::unique_ptr<OIIO::Filesystem::IOProxy>(
+        create_input_proxy( reader, /*use_buffer*/ false, /*buffer*/ nullptr));
+    std::string ext = m_oiio_format;
+
+    OIIO::ImageSpec config;
+    config["oiio:UnassociatedAlpha"] = 1;
+
+    // Workaround for issue #3273: Set proxy also via config.
+    OIIO::Filesystem::IOProxy* io_proxy_ptr = io_proxy.get();
+    config.attribute( "oiio:ioproxy", OIIO::TypeDesc::PTR, &io_proxy_ptr);
+
+    auto image_input = std::unique_ptr<OIIO::ImageInput>(
+        OIIO::ImageInput::open( ext, &config, io_proxy.get()));
+    if( !image_input)
+        return false;
+
+    return true;
+}
+
+mi::neuraylib::IImage_file* Image_plugin_impl::open_for_reading(
+    mi::neuraylib::IReader* reader, const char* selector) const
+{
+    if( !reader)
+        return nullptr;
+
+    if( !reader->supports_absolute_access())
+        return nullptr;
+
+    Image_file_reader_impl* result = new Image_file_reader_impl(
+        m_oiio_format,
+        m_name,
+        m_image_api.get(),
+        reader,
+        selector);
+    if( !result->is_valid()) {
+        delete result;
+        return nullptr;
+    }
+
+    return result;
 }
 
 mi::neuraylib::IImage_file* Image_plugin_impl::open_for_writing(
@@ -217,28 +270,6 @@ mi::neuraylib::IImage_file* Image_plugin_impl::open_for_writing(
         nr_of_layers,
         gamma,
         quality);
-    if( !result->is_valid()) {
-        delete result;
-        return nullptr;
-    }
-
-    return result;
-}
-
-mi::neuraylib::IImage_file* Image_plugin_impl::open_for_reading(
-    mi::neuraylib::IReader* reader) const
-{
-    if( !reader)
-        return nullptr;
-
-    if( !reader->supports_absolute_access())
-        return nullptr;
-
-    Image_file_reader_impl* result = new Image_file_reader_impl(
-        m_oiio_format,
-        m_name,
-        m_image_api.get(),
-        reader);
     if( !result->is_valid()) {
         delete result;
         return nullptr;

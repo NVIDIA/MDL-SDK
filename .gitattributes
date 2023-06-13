@@ -1,1 +1,2 @@
 examples/thirdparty/content/fonts/NotoSansCJK-Medium.ttc filter=lfs diff=lfs merge=lfs -text
+examples/mdl/nvidia/sdk_examples/resources/environment.hdr filter=lfs diff=lfs merge=lfs -text

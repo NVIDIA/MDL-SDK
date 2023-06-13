@@ -39,6 +39,10 @@ namespace MI {
 
 namespace IMAGE {
 
+/// Dummy type to select the overload/constructor for file-based images.
+struct File_based_helper {};
+typedef const File_based_helper* File_based;
+
 /// Dummy type to select the overload/constructor for container-based images.
 struct Container_based_helper {};
 typedef const Container_based_helper* Container_based;
@@ -135,6 +139,9 @@ constexpr bool has_alpha( Pixel_type pixel_type);
 ///
 /// The default gamma value is 1.0 for HDR pixel types and 2.2 for LDR pixel types.
 constexpr mi::Float32 get_default_gamma( Pixel_type pixel_type);
+
+/// Indicates whether \p selector is the alpha channel selector.
+bool is_valid_alpha_channel( const char* selector);
 
 /// Indicates whether \p selector is a valid RGBA channel selector.
 bool is_valid_rgba_channel( const char* selector);
@@ -404,6 +411,15 @@ constexpr mi::Float32 get_default_gamma( Pixel_type pixel_type)
     }
 }
 
+inline bool is_valid_alpha_channel( const char* selector)
+{
+    if( !selector)
+        return false;
+    if( selector[0] == 'A' && selector[1] == '\0')
+        return true;
+    return false;
+}
+
 inline bool is_valid_rgba_channel( const char* selector)
 {
     if( !selector)
@@ -446,14 +462,18 @@ inline Pixel_type get_pixel_type_for_channel( Pixel_type pixel_type, const char*
             return PT_UNDEF;
 
         case PT_RGB:
+            return is_valid_alpha_channel( selector) ? PT_UNDEF : PT_SINT8;
+
         case PT_RGBA:
             return PT_SINT8;
 
         case PT_RGBE:
-        case PT_RGBEA:
         case PT_RGB_16:
-        case PT_RGBA_16:
         case PT_RGB_FP:
+            return is_valid_alpha_channel( selector) ? PT_UNDEF : PT_FLOAT32;
+
+        case PT_RGBEA:
+        case PT_RGBA_16:
         case PT_COLOR:
             return PT_FLOAT32;
 

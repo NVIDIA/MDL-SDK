@@ -81,7 +81,7 @@ As the IDs will also be used as an index into an internal attribute table per re
 In the examples, we use a helper class \c Resource_collection
  - for collecting and loading resources used by MDL expressions via the ILambda_resource_enumerator interface and registering the resulting IDs with a ILambda_function and
  - for providing resource IDs for target argument blocks via the IGenerated_code_value_callback.
-For loading texture resources, the examples use the \c Texture_data helper class, which accesses the image file data via an IEntity_resolver obtained from IMDL::create_entity_resolver() and uses the FreeImage library for retrieving image meta information and image data.
+For loading texture resources, the examples use the \c Texture_data helper class, which accesses the image file data via an IEntity_resolver obtained from IMDL::create_entity_resolver() and uses the OpenImageIO library for retrieving image meta information and image data.
 </dd>
 
 <dt><b>Adding material subexpressions to the link unit</b></dt>

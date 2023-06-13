@@ -37,7 +37,7 @@ template <typename T>
 class Hash_ptr {
 public:
     size_t operator()(T const *p) const {
-        size_t t = p - (T const *)0;
+        size_t t = (size_t)p;
         return ((t) / (sizeof(size_t) * 2)) ^ (t >> 16);
     }
 };
@@ -47,7 +47,7 @@ template <>
 class Hash_ptr<void> {
 public:
     size_t operator()(void const *p) const {
-        size_t t = (char const *)p - (char const *)0;
+        size_t t = (size_t)p;
         return (t)  ^ (t >> 4);
     }
 };
@@ -57,7 +57,7 @@ template <>
 class Hash_ptr<void const> {
 public:
     size_t operator()(void const *p) const {
-        size_t t = (char const *)p - (char const *)0;
+        size_t t = (size_t)p;
         return (t)  ^ (t >> 4);
     }
 };

@@ -863,17 +863,25 @@ std::string Resource_callback::construct_mdl_file_path(
 const char* Resource_callback::get_extension( const char* pixel_type)
 {
     std::string s = pixel_type;
-    if( s == "Float32" || s == "Rgb_fp" || s == "Color" || s == "Float32<3>" || s == "Float32<4>")
+
+    // HDR
+    if( s == "Float32" || s == "Rgb_fp" || s == "Float32<3>")
         return ".exr";
-    if( s == "Float32<2>" || s == "Rgbe" || s == "Rgbea") // HDR, requires conversion
+    if( s == "Color" || s == "Float32<4>") // avoid EXR with alpha
+        return ".tif";
+    if( s == "Float32<2>" || s == "Rgbe")  // requires conversion
         return ".exr";
-    if( s == "Rgb" || s == "Rgba" || s == "Rgb_16" || s == "Rgba_16") // LDR
+    if( s == "Rgbea")                      // requires conversion, avoid EXR with alpha
+        return ".tif";
+
+    // LDR
+    if( s == "Rgb" || s == "Rgba" || s == "Rgb_16" || s == "Rgba_16")
         return ".png";
-    if( s == "Sint8" || s == "Sint32") // Sint8 requires conversion
+    if( s == "Sint8" || s == "Sint32")
         return ".tif";
 
     ASSERT( M_NEURAY_API, false);
-    return ".exr";
+    return ".tif";
 }
 
 void Resource_callback::add_error_export_failed(

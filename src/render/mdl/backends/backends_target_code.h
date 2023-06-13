@@ -204,7 +204,7 @@ public:
     ///
     /// \return           The body texture count or \c ~0ull, if the value is invalid due to
     ///                   more than one call to a link unit add function.
-    Size get_body_texture_count() const override;
+    Size deprecated_get_body_texture_count() const override;
 
     /// Returns the name of a texture resource used by the target code.
     ///
@@ -244,6 +244,14 @@ public:
     /// \return           The shape of the texture resource of the given
     ///                   index, or \c Texture_shape_invalid if \p index is out of range.
     Texture_shape get_texture_shape(Size index) const override;
+
+    /// Check whether the texture resource is coming from the body of expressions
+    /// (not solely from material arguments). It will be necessary regardless of the chosen
+    /// material arguments.
+    ///
+    /// \param index      The index of the texture resource.
+    /// \return           True if the texture is referenced from inside the material body.
+    bool get_texture_is_body_resource(Size index) const override;
 
     /// Returns the distribution function data this texture refers to.
     ///
@@ -363,7 +371,7 @@ public:
     ///
     /// \return           The body light profile count or \c ~0ull, if the value is invalid due to
     ///                   more than one call to a link unit add function.
-    Size get_body_light_profile_count() const override;
+    Size deprecated_get_body_light_profile_count() const override;
 
     /// Returns the name of a light profile resource used by the target code.
     const char* get_light_profile(Size index) const override;
@@ -374,6 +382,14 @@ public:
     /// \return           The MDL URL of the light profile resource of the given
     ///                   index, or \c NULL if \p index is out of range.
     const char* get_light_profile_url(Size index) const override;
+
+    /// Check whether the light profile resource is coming from the body of expressions
+    /// (not solely from material arguments). It will be necessary regardless of the chosen
+    /// material arguments.
+    ///
+    /// \param index      The index of the light profile resource.
+    /// \return           True if the light profile is referenced from inside the material body.
+    bool get_light_profile_is_body_resource(Size index) const override;
 
     /// Returns the owner module name of a relative light profile URL.
     ///
@@ -392,7 +408,7 @@ public:
     ///
     /// \return           The body BSDF measurement count or \c ~0ull, if the value is invalid due
     ///                   to more than one call to a link unit add function.
-    Size get_body_bsdf_measurement_count() const override;
+    Size deprecated_get_body_bsdf_measurement_count() const override;
 
     /// Returns the name of a BSDF measurement resource used by the target code.
     const char* get_bsdf_measurement(Size index) const override;
@@ -403,6 +419,14 @@ public:
     /// \return           The MDL URL of the BSDF measurement resource of the given
     ///                   index, or \c NULL if \p index is out of range.
     const char* get_bsdf_measurement_url(Size index) const override;
+
+    /// Check whether the BSDF measurement resource is coming from the body of expressions
+    /// (not solely from material arguments). It will be necessary regardless of the chosen
+    /// material arguments.
+    ///
+    /// \param index      The index of the BSDF measurement resource.
+    /// \return           True if the BSDF measurement is referenced from inside the material body.
+    bool get_bsdf_measurement_is_body_resource(Size index) const override;
 
     /// Returns the owner module name of a relative BSDF measurement URL.
     ///
@@ -687,6 +711,40 @@ public:
         mi::neuraylib::Texture_handler_base* tex_handler,
         const mi::neuraylib::ITarget_argument_block *cap_args) const override;
 
+    /// Indicates whether the target code can be serialized.
+    bool supports_serialization() const final;
+
+    /// Stores the data of this object into a buffer that can used in an external cache.
+    const mi::neuraylib::IBuffer* serialize(
+        mi::neuraylib::IMdl_execution_context* context) const final;
+
+    /// Run the init function for this code on the native CPU (single-init mode).
+    ///
+    /// This function updates the normal field of the shading state with the result of
+    /// \c "geometry.normal" and, if the \c "num_texture_results" backend option has been set to
+    /// non-zero, fills the text_results fields of the state.
+    ///
+    /// \param[in]  index       The index of the callable function.
+    /// \param[in]  state       The core state.
+    /// \param[in]  tex_handler Texture handler containing the vtable for the user-defined
+    ///                         texture lookup functions. Can be NULL if the built-in resource
+    ///                         handler is used.
+    /// \param[in]  cap_args    The captured arguments to use for the execution.
+    ///                         If \p cap_args is \c NULL, the captured arguments of this
+    ///                         \c ITarget_code object for the given callable function will be used,
+    ///                         if any.
+    ///
+    /// \return
+    ///    -  0: on success
+    ///    - -1: if execution was aborted by runtime error
+    ///    - -2: cannot execute: not native code or the given function is not an init function
+    ///          for single-init mode
+    mi::Sint32 execute_init(
+        mi::Size index,
+        mi::neuraylib::Shading_state_material& state,
+        mi::neuraylib::Texture_handler_base* tex_handler,
+        const mi::neuraylib::ITarget_argument_block *cap_args) const override;
+
     // non-API methods.
 
     /// Adds a new callable function to this target code.
@@ -721,7 +779,9 @@ public:
     /// \param gamma                 texture gamma
     /// \param selector              texture selector
     /// \param shape                 the texture shape of the texture
-    /// \param sema                  the semantic of the texture, typically \c DS_UNKNOWN.
+    /// \param df_data_kind          the kind of BSDF data in case of BSDF data textures
+    ///                              (otherwise BDK_NONE)
+    /// \param is_body_resource      true in case the resource is referenced from the body
     void add_texture_index(
         size_t index,
         const std::string& name,
@@ -729,27 +789,32 @@ public:
         float gamma,
         const std::string& selector,
         Texture_shape shape,
-        mi::mdl::IValue_texture::Bsdf_data_kind df_data_kind);
+        mi::mdl::IValue_texture::Bsdf_data_kind df_data_kind,
+        bool is_body_resource);
 
     /// Registers a used light profile index.
     ///
-    /// \param index  the texture index as used in compiled code
-    /// \param name   the name of the DB element this index refers to.
+    /// \param index                 the texture index as used in compiled code
+    /// \param name                  the name of the DB element this index refers to.
     /// \param mdl_url               the mdl url.
+    /// \param is_body_resource      true in case the resource is referenced from the body
     void add_light_profile_index(
         size_t index,
         const std::string& name,
-        const std::string& mdl_url);
+        const std::string& mdl_url,
+        bool is_body_resource);
 
     /// Registers a used bsdf measurement index.
     ///
-    /// \param index  the texture index as used in compiled code
-    /// \param name   the name of the DB element this index refers to.
-    /// \param mdl_url               the mdl url.
+    /// \param index                the texture index as used in compiled code
+    /// \param name                 the name of the DB element this index refers to.
+    /// \param mdl_url              the mdl url.
+    /// \param is_body_resource     true in case the resource is referenced from the body
     void add_bsdf_measurement_index(
         size_t index,
         const std::string& name,
-        const std::string& mdl_url);
+        const std::string& mdl_url,
+        bool is_body_resource);
 
     /// Registers a used string constant index.
     ///
@@ -810,13 +875,6 @@ public:
         mi::Size &ry,
         mi::Size &rz);
 
-    /// Indicates whether the target code can be serialized.
-    bool supports_serialization() const final;
-
-    /// Stores the data of this object into a buffer that can used in an external cache.
-    const mi::neuraylib::IBuffer* serialize(
-        mi::neuraylib::IMdl_execution_context* context) const final;
-
     /// Called from the back-end to restore an instance of this class.
     bool deserialize(
         mi::mdl::ICode_generator* code_gen,
@@ -853,10 +911,12 @@ private:
         Resource_info(
             std::string const &db_name,
             std::string const &mdl_url,
-            std::string const &owner)
+            std::string const &owner,
+            bool is_body_resource)
         : m_db_name(db_name)
         , m_mdl_url(mdl_url)
         , m_owner_module(owner)
+        , m_is_body_resource(is_body_resource)
         {
         }
 
@@ -865,6 +925,7 @@ private:
             : m_db_name()
             , m_mdl_url()
             , m_owner_module()
+            , m_is_body_resource(false)
         {
         }
 
@@ -884,6 +945,12 @@ private:
         char const *get_owner() const
         {
             return m_owner_module.c_str();
+        }
+
+        /// Check whether the resource is a body resource.
+        bool is_body_resource() const
+        {
+            return m_is_body_resource;
         }
 
         /// Required for serialization.
@@ -909,6 +976,9 @@ private:
 
         /// The owner module name of the resource.
         std::string m_owner_module;
+
+        /// True if the resource is referenced from the material body.
+        bool m_is_body_resource;
     };
 
     /// Helper value type for texture entries.
@@ -921,8 +991,9 @@ private:
             float gamma,
             std::string const &selector,
             Texture_shape shape,
-            mi::mdl::IValue_texture::Bsdf_data_kind df_data_kind)
-        : Resource_info(db_name, mdl_url, owner)
+            mi::mdl::IValue_texture::Bsdf_data_kind df_data_kind,
+            bool is_body_resource)
+        : Resource_info(db_name, mdl_url, owner, is_body_resource)
         , m_gamma(gamma)
         , m_selector(selector)
         , m_texture_shape(shape)

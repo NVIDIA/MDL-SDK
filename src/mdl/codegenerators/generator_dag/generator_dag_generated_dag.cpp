@@ -403,12 +403,14 @@ public:
 
             switch (arg->get_kind()) {
             case DAG_node::EK_CONSTANT:
-                if (!m_process_constants && !has_name)
+                if (!m_process_constants && !has_name) {
                     continue;
+                }
                 break;
             case DAG_node::EK_PARAMETER:
-                if (!m_process_parameters && !has_name)
+                if (!m_process_parameters && !has_name) {
                     continue;
+                }
                 break;
             default:
                 break;
@@ -1647,7 +1649,25 @@ void Generated_code_dag::compile_local_function(
             // convert the function body
             IExpression const *expr = get_single_expr_body(func_decl);
 
-            func.set_body(expr != NULL ? dag_builder.expr_to_dag(expr) : NULL);
+            if (expr != NULL) {
+                // make parameters accessible, so array length could be retrieved
+                if (proto_decl->get_kind() == IDeclaration::DK_FUNCTION) {
+                    IDeclaration_function const *fun_decl = cast<IDeclaration_function>(func_decl);
+                    if (fun_decl->is_preset()) {
+                        mi::base::Handle<IModule const> handle = orig_module;
+                        fun_decl = cast<IDeclaration_function>(proto_decl);
+                        fun_decl = skip_presets(fun_decl, handle);
+                    }
+
+                    for (size_t k = 0; k < parameter_count; ++k) {
+                        IParameter const *parameter = fun_decl->get_parameter(k);
+                        dag_builder.make_accessible(parameter);
+                    }
+                }
+                func.set_body(dag_builder.expr_to_dag(expr));
+            } else {
+                func.set_body(NULL);
+            }
         }
     } else {
         // DAG generated functions are always uniform
@@ -3313,7 +3333,8 @@ Generated_code_dag::Material_instance::Material_instance(
 {
     m_node_factory.enable_unsafe_math_opt(unsafe_math_optimizations);
 
-    memset(m_slot_hashes, 0, sizeof(m_slot_hashes));
+    for (size_t i = 0; i < sizeof(m_slot_hashes)/sizeof(m_slot_hashes[0]); ++i)
+        m_slot_hashes[i] = DAG_hash();
 }
 
 // Acquires a const interface.
@@ -3639,10 +3660,19 @@ Generated_code_dag::Error_code Generated_code_dag::Material_instance::initialize
 
     set_property(IP_CLASS_COMPILED,                 0 != (flags & CLASS_COMPILATION));
 
-    m_referenced_scene_data.insert(
-        m_referenced_scene_data.end(),
-        creator.get_referenced_scene_data().begin(),
-        creator.get_referenced_scene_data().end());
+    if (creator.uses_non_const_scene_data()) {
+        // could not determine the set referenced scene data, add all strings
+        m_referenced_scene_data.insert(
+            m_referenced_scene_data.end(),
+            creator.get_referenced_strings().begin(),
+            creator.get_referenced_strings().end());
+    } else {
+        // could track
+        m_referenced_scene_data.insert(
+            m_referenced_scene_data.end(),
+            creator.get_referenced_scene_data().begin(),
+            creator.get_referenced_scene_data().end());
+    }
 
     // make sure, the observable state is deterministic
     std::sort(m_referenced_scene_data.begin(), m_referenced_scene_data.end());
@@ -4699,6 +4729,9 @@ Generated_code_dag::Material_instance::Instantiate_helper::Instantiate_helper(
     0, Dep_analysis_cache::hasher(), Dep_analysis_cache::key_equal(), get_allocator())
 , m_properties(0)
 , m_referenced_scene_data(dag_builder.get_allocator())
+, m_referenced_strings(dag_builder.get_allocator())
+, m_ignore_referenced_strings(false)
+, m_scene_name_is_non_const(false)
 , m_instantiate_args(flags & CLASS_COMPILATION)
 , m_fold_params(get_allocator())
 {
@@ -5083,6 +5116,26 @@ bool Generated_code_dag::Material_instance::Instantiate_helper::is_layer_qualifi
     return false;
 }
 
+// Returns true if this instance uses non-const scene data.
+void Generated_code_dag::Material_instance::Instantiate_helper::process_string_constants(
+    IValue const *v)
+{
+    if (m_ignore_referenced_strings)
+        return;
+
+    if (IValue_string const *sval = as<IValue_string>(v)) {
+        m_referenced_strings.insert(string(sval->get_value(), get_allocator()));
+        return;
+    }
+
+    if (IValue_compound const *cval = as<IValue_compound>(v)) {
+        for (int i = 0, n = cval->get_component_count(); i < n; ++i) {
+            IValue const *s = cval->get_value(i);
+            process_string_constants(s);
+        }
+    }
+}
+
 // Compile the material.
 DAG_call const *
 Generated_code_dag::Material_instance::Instantiate_helper::compile()
@@ -5222,30 +5275,40 @@ namespace {
 typedef Generated_code_dag::Material_instance::Dep_analysis_cache  Dep_analysis_cache;
 typedef Generated_code_dag::Material_instance::Dependence_result   Dependence_result;
 
-/// Helper class to analyze function ASTs.
-class Ast_analysis : public Module_visitor
+/// Helper class to analyze several dependencies on function ASTs.
+class Ast_dependence_analysis : public Module_visitor
 {
 public:
     /// Constructor.
     ///
+    /// \param alloc    the allocator
     /// \param owner    the owner module of the analyzed function
     /// \param cache    the result cache to be used
-    Ast_analysis(
+    Ast_dependence_analysis(
         IAllocator         *alloc,
         IModule const      *owner,
         Dep_analysis_cache &cache)
     : m_alloc(alloc)
     , m_owner(owner)
     , m_cache(cache)
-    , m_depends_on_transform(false)
-    , m_depends_on_object_id(false)
-    , m_edf_global_distribution(false)
-    , m_depends_on_uniform_scene_data(false)
-    , m_referenced_scene_data(alloc)
+    , m_res(alloc)
     {
     }
 
-    /// Post visit of an call
+    /// Post visit of a literal.
+    IExpression *post_visit(IExpression_literal *lit) MDL_FINAL
+    {
+        process_string_constants(lit->get_value());
+        return lit;
+    }
+
+    /// Pre visit of an annotation block.
+    bool pre_visit(IAnnotation_block *block) MDL_FINAL
+    {
+        return false;  // never dive into annotations
+    }
+
+    /// Post visit of an call.
     IExpression *post_visit(IExpression_call *call) MDL_FINAL
     {
         // assume the AST error free
@@ -5274,32 +5337,11 @@ public:
         case IDefinition::DS_INTRINSIC_STATE_TRANSFORM_VECTOR:
         case IDefinition::DS_INTRINSIC_STATE_TRANSFORM_NORMAL:
         case IDefinition::DS_INTRINSIC_STATE_TRANSFORM_SCALE:
-            m_depends_on_transform = true;
+            m_res.m_depends_on_transform = true;
             break;
         case IDefinition::DS_INTRINSIC_STATE_OBJECT_ID:
-            m_depends_on_object_id = true;
+            m_res.m_depends_on_object_id = true;
             break;
-
-        case IDefinition::DS_INTRINSIC_SCENE_DATA_ISVALID:
-        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT:
-        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT2:
-        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT3:
-        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT4:
-        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT:
-        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT2:
-        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT3:
-        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4:
-        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_COLOR:
-            {
-                if (mi::mdl::IExpression_literal const *lit =
-                        as<mi::mdl::IExpression_literal>(
-                            call->get_argument(0)->get_argument_expr())) {
-                    if (IValue_string const *name_str = as<IValue_string>(lit->get_value())) {
-                        m_referenced_scene_data.insert(string(name_str->get_value(), m_alloc));
-                    }
-                }
-                break;
-            }
 
         case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT:
         case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2:
@@ -5310,14 +5352,33 @@ public:
         case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3:
         case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
         case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4X4:
+            m_res.m_depends_on_uniform_scene_data = true;
+            [[fallthrough]];
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_ISVALID:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT2:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT3:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT4:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT2:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT3:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_COLOR:
+        case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4X4:
             {
-                m_depends_on_uniform_scene_data = true;
+                bool has_const_value = false;
                 if (mi::mdl::IExpression_literal const *lit =
                         as<mi::mdl::IExpression_literal>(
                             call->get_argument(0)->get_argument_expr())) {
                     if (IValue_string const *name_str = as<IValue_string>(lit->get_value())) {
-                        m_referenced_scene_data.insert(string(name_str->get_value(), m_alloc));
+                        has_const_value = true;
+                        m_res.m_referenced_scene_data.insert(
+                            string(name_str->get_value(), m_alloc));
                     }
+                }
+                if (!has_const_value) {
+                    m_res.m_scene_name_is_non_const = true;
                 }
                 break;
             }
@@ -5330,20 +5391,28 @@ public:
     }
 
     /// Returns true if the analyzed entity depends on object transforms.
-    bool depends_on_transform() const { return m_depends_on_transform; }
+    bool depends_on_transform() const { return m_res.m_depends_on_transform; }
 
     /// Returns true if the analyzed entity depends on state::object_id().
-    bool depends_on_object_id() const { return m_depends_on_object_id; }
+    bool depends_on_object_id() const { return m_res.m_depends_on_object_id; }
 
     /// Returns true if the analyzed entity depends on any edf's global_distribution.
-    bool depends_on_global_distribution() const { return m_edf_global_distribution; }
+    bool depends_on_global_distribution() const { return m_res.m_edf_global_distribution; }
 
     /// Returns true if this instance depends on uniform scene data.
-    bool depends_on_uniform_scene_data() const { return m_depends_on_uniform_scene_data; }
+    bool depends_on_uniform_scene_data() const { return m_res.m_depends_on_uniform_scene_data; }
+
+    /// Returns true if this instance uses non-const scene data.
+    bool uses_non_const_scene_data() const { return m_res.m_scene_name_is_non_const; }
 
     /// Returns the set of scene data names referenced by the analyzed entity.
-    Generated_code_dag::String_set const &referenced_scene_data() const {
-        return m_referenced_scene_data;
+    Generated_code_dag::String_set &referenced_scene_data()  {
+        return m_res.m_referenced_scene_data;
+    }
+
+    /// Returns the set of string literals referenced by the analyzed entity.
+    Generated_code_dag::String_set &referenced_strings()  {
+        return m_res.m_referenced_strings;
     }
 
 private:
@@ -5351,17 +5420,30 @@ private:
     ///
     /// \param parent  the parent analysis
     /// \param owner   the owner of the entity to analyze
-    Ast_analysis(IAllocator *alloc, Ast_analysis &parent, IModule const *owner)
+    Ast_dependence_analysis(IAllocator *alloc, Ast_dependence_analysis &parent, IModule const *owner)
     : m_alloc(alloc)
     , m_owner(owner)
     , m_cache(parent.m_cache)
-    , m_depends_on_transform(false)
-    , m_depends_on_object_id(false)
-    , m_edf_global_distribution(false)
-    , m_depends_on_uniform_scene_data(false)
-    , m_referenced_scene_data(alloc)
+    , m_res(alloc)
     {
     }
+
+    // Returns true if this instance uses non-const scene data.
+    void process_string_constants(IValue const *v)
+    {
+        if (IValue_string const *sval = as<IValue_string>(v)) {
+            m_res.m_referenced_strings.insert(string(sval->get_value(), m_alloc));
+            return;
+        }
+
+        if (IValue_compound const *cval = as<IValue_compound>(v)) {
+            for (int i = 0, n = cval->get_component_count(); i < n; ++i) {
+                IValue const *s = cval->get_value(i);
+                process_string_constants(s);
+            }
+        }
+    }
+
 
     /// Analyze a call to a user defined function.
     void analyze_unknown_call(IExpression_call const *call)
@@ -5383,16 +5465,8 @@ private:
     {
         Dep_analysis_cache::const_iterator it = m_cache.find(def);
         if (it != m_cache.end()) {
-            Dependence_result const &res = it->second;
-
-            m_depends_on_transform          |= res.m_depends_on_transform;
-            m_depends_on_object_id          |= res.m_depends_on_object_id;
-            m_edf_global_distribution       |= res.m_edf_global_distribution;
-            m_depends_on_uniform_scene_data |= res.m_depends_on_uniform_scene_data;
-            m_referenced_scene_data.insert(
-                res.m_referenced_scene_data.begin(),
-                res.m_referenced_scene_data.end());
-
+            Dependence_result const &cached_res = it->second;
+            m_res.update(cached_res);
         } else {
             mi::base::Handle<IModule const> owner(m_owner->get_owner_module(def));
             def = m_owner->get_original_definition(def);
@@ -5404,24 +5478,13 @@ private:
                 return;
             }
 
-            Ast_analysis analysis(m_alloc, *this, owner.get());
+            Ast_dependence_analysis analysis(m_alloc, *this, owner.get());
             analysis.visit(func);
 
             // cache the result
-            m_cache.emplace(def, Dependence_result(
-                analysis.m_depends_on_transform,
-                analysis.m_depends_on_object_id,
-                analysis.m_edf_global_distribution,
-                analysis.m_depends_on_uniform_scene_data,
-                analysis.m_referenced_scene_data));
+            m_cache.emplace(def, analysis.m_res);
 
-            m_depends_on_transform          |= analysis.m_depends_on_transform;
-            m_depends_on_object_id          |= analysis.m_depends_on_object_id;
-            m_edf_global_distribution       |= analysis.m_edf_global_distribution;
-            m_depends_on_uniform_scene_data |= analysis.m_depends_on_uniform_scene_data;
-            m_referenced_scene_data.insert(
-                analysis.m_referenced_scene_data.begin(),
-                analysis.m_referenced_scene_data.end());
+            m_res.update(analysis.m_res);
         }
     }
 
@@ -5473,7 +5536,7 @@ private:
             break;
         }
         if (global_distribution) {
-            m_edf_global_distribution = true;
+            m_res.m_edf_global_distribution = true;
         }
     }
 
@@ -5537,7 +5600,7 @@ private:
             break;
         }
         if (global_distribution) {
-            m_edf_global_distribution = true;
+            m_res.m_edf_global_distribution = true;
         }
     }
 
@@ -5551,20 +5614,8 @@ private:
     /// The analysis result cache.
     Dep_analysis_cache                &m_cache;
 
-    /// True if this instance depends on the object transforms.
-    bool m_depends_on_transform;
-
-    /// True if this instance depends of the object id.
-    bool m_depends_on_object_id;
-
-    /// True if this instance depends on global distribution (edf).
-    bool m_edf_global_distribution;
-
-    /// True if this instance depends on uniform scene data.
-    bool m_depends_on_uniform_scene_data;
-
-    /// Set of scene data names referenced by this instance.
-    Generated_code_dag::String_set m_referenced_scene_data;
+    ///  The result of this analysis.
+    Dependence_result                 m_res;
 };
 
 }  // anonymous
@@ -5591,6 +5642,17 @@ void Generated_code_dag::Material_instance::Instantiate_helper::analyze_call(
         add_property(IP_DEPENDS_ON_OBJECT_ID, true);
         break;
 
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT4:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
+    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
+        add_property(IP_DEPENDS_ON_UNIFORM_SCENE_DATA, true);
+        [[fallthrough]];
     case IDefinition::DS_INTRINSIC_SCENE_DATA_ISVALID:
     case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT:
     case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_INT2:
@@ -5602,29 +5664,16 @@ void Generated_code_dag::Material_instance::Instantiate_helper::analyze_call(
     case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4:
     case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_COLOR:
         {
+            bool has_const_value = false;
+
             if (DAG_constant const *c = as<DAG_constant>(call->get_argument(0))) {
                 if (IValue_string const *name_str = as<IValue_string>(c->get_value())) {
                     m_referenced_scene_data.insert(string(name_str->get_value(), get_allocator()));
+                    has_const_value = true;
                 }
             }
-            break;
-        }
-
-    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT:
-    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT2:
-    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT3:
-    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_INT4:
-    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT:
-    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT2:
-    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3:
-    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
-    case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
-        {
-            add_property(IP_DEPENDS_ON_UNIFORM_SCENE_DATA, true);
-            if (DAG_constant const *c = as<DAG_constant>(call->get_argument(0))) {
-                if (IValue_string const *name_str = as<IValue_string>(c->get_value())) {
-                    m_referenced_scene_data.insert(string(name_str->get_value(), get_allocator()));
-                }
+            if (!has_const_value) {
+                m_scene_name_is_non_const = true;
             }
             break;
         }
@@ -5660,15 +5709,19 @@ void Generated_code_dag::Material_instance::Instantiate_helper::analyze_function
     Dep_analysis_cache::const_iterator it = m_cache.find(def);
     if (it != m_cache.end()) {
         // already computed
-        Dependence_result const &res = it->second;
+        Dependence_result const &cached_res = it->second;
 
-        add_property(IP_DEPENDS_ON_TRANSFORM,           res.m_depends_on_transform);
-        add_property(IP_DEPENDS_ON_OBJECT_ID,           res.m_depends_on_object_id);
-        add_property(IP_DEPENDS_ON_GLOBAL_DISTRIBUTION, res.m_edf_global_distribution);
-        add_property(IP_DEPENDS_ON_UNIFORM_SCENE_DATA,  res.m_depends_on_uniform_scene_data);
+        add_property(IP_DEPENDS_ON_TRANSFORM,           cached_res.m_depends_on_transform);
+        add_property(IP_DEPENDS_ON_OBJECT_ID,           cached_res.m_depends_on_object_id);
+        add_property(IP_DEPENDS_ON_GLOBAL_DISTRIBUTION, cached_res.m_edf_global_distribution);
+        add_property(IP_DEPENDS_ON_UNIFORM_SCENE_DATA,  cached_res.m_depends_on_uniform_scene_data);
         m_referenced_scene_data.insert(
-            res.m_referenced_scene_data.begin(),
-            res.m_referenced_scene_data.end());
+            cached_res.m_referenced_scene_data.begin(),
+            cached_res.m_referenced_scene_data.end());
+        m_referenced_strings.insert(
+            cached_res.m_referenced_strings.begin(),
+            cached_res.m_referenced_strings.end());
+        m_scene_name_is_non_const |= cached_res.m_scene_name_is_non_const;
     } else {
         IDeclaration const *decl = def->get_declaration();
         if (decl == NULL) {
@@ -5676,7 +5729,7 @@ void Generated_code_dag::Material_instance::Instantiate_helper::analyze_function
         }
 
         if (IDeclaration_function const *func = as<IDeclaration_function>(decl)) {
-            Ast_analysis analysis(get_allocator(), owner, m_cache);
+            Ast_dependence_analysis analysis(get_allocator(), owner, m_cache);
 
             analysis.visit(func);
 
@@ -5686,16 +5739,24 @@ void Generated_code_dag::Material_instance::Instantiate_helper::analyze_function
                 analysis.depends_on_global_distribution());
             add_property(IP_DEPENDS_ON_UNIFORM_SCENE_DATA,
                 analysis.depends_on_uniform_scene_data());
+
             m_referenced_scene_data.insert(
                 analysis.referenced_scene_data().begin(),
                 analysis.referenced_scene_data().end());
+            m_referenced_strings.insert(
+                analysis.referenced_strings().begin(),
+                analysis.referenced_strings().end());
+
+            m_scene_name_is_non_const |= analysis.uses_non_const_scene_data();
 
             m_cache.emplace(def, Dependence_result(
                 0 != (get_properties() & IP_DEPENDS_ON_TRANSFORM),
                 0 != (get_properties() & IP_DEPENDS_ON_OBJECT_ID),
                 0 != (get_properties() & IP_DEPENDS_ON_GLOBAL_DISTRIBUTION),
                 0 != (get_properties() & IP_DEPENDS_ON_UNIFORM_SCENE_DATA),
-                analysis.referenced_scene_data()));
+                analysis.uses_non_const_scene_data(),
+                std::move(analysis.referenced_scene_data()),
+                std::move(analysis.referenced_strings())));
         }
     }
 }
@@ -5752,6 +5813,9 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag(
             if (IValue_resource const *res = as<IValue_resource>(v)) {
                 // maybe the resource value must be modified (aka, a TAG might be added
                 v = m_resource_modifier.modify(res, m_dag_builder.tos_module(), m_value_factory);
+            } else {
+                // collect referenced strings
+                process_string_constants(v);
             }
             res = m_node_factory.create_constant(v);
         }
@@ -5813,9 +5877,20 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag(
 
             if (res == NULL) {
                 if (!args_processed) {
+                    bool is_elemental = is_elemental_df_semantics(call->get_semantic());
+
                     for (int i = 0; i < n_args; ++i) {
-                        args[i].arg = instantiate_dag(call->get_argument(i));
-                        args[i].param_name = call->get_parameter_name(i);
+                        DAG_node const *arg;
+                        char const *param_name = call->get_parameter_name(i);
+                        if (is_elemental && i == n_args - 1 && strcmp(param_name, "handle") == 0) {
+                            Flag_store ignore_ref_strings(m_ignore_referenced_strings, true);
+                            arg = instantiate_dag(call->get_argument(i));
+                        } else {
+                            arg = instantiate_dag(call->get_argument(i));
+                        }
+
+                        args[i].arg = arg;
+                        args[i].param_name = param_name;
                     }
                 }
 
@@ -6016,6 +6091,8 @@ Generated_code_dag::Material_instance::Instantiate_helper::instantiate_dag_argum
                 // maybe the resource value must be modified (aka, a TAG might be added
                 v = resource = m_resource_modifier.modify(
                     resource, m_dag_builder.tos_module(), m_value_factory);
+            } else {
+                process_string_constants(v);
             }
 
             if ((m_flags & NO_STRING_PARAMS) != 0 && contains_string_type(t)) {

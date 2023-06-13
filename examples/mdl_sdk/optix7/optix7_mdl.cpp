@@ -838,7 +838,7 @@ void createContext(PathTracerState& state, int cuda_device_id)
     state.module_compile_options.optLevel         = OPTIX_COMPILE_OPTIMIZATION_DEFAULT;
     state.module_compile_options.debugLevel       = OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO;
 
-    state.pipeline_compile_options.usesMotionBlur = false;
+    state.pipeline_compile_options.usesMotionBlur = 0;
     state.pipeline_compile_options.traversableGraphFlags =
         OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
 #ifdef CONTRIB_IN_PAYLOAD
@@ -1156,8 +1156,13 @@ void buildScene(PathTracerState& state)
         circumference = r = 0;
         state.scene_width = 2 * tan_fovH_2 * 3;  // gives an eye distance of 3
     } else {
-        // half a sphere radius padding between spheres
-        circumference = 2 * n * 1.5f;
+        if (n == 2) {
+            // for two spheres, we need a little more padding
+            circumference = 2 * n * 1.8f;
+        } else {
+            // half a sphere radius padding between spheres
+            circumference = 2 * n * 1.5f;
+        }
         r = circumference / float(2 * M_PI);
 
         // plus 1.25 for the radius of a sphere and quarter a sphere margin
@@ -1491,7 +1496,7 @@ void initLaunchParams(PathTracerState& state)
 {
     CUDA_CHECK(cudaMalloc(
         reinterpret_cast<void**>(&state.params.accum_buffer),
-        state.params.width * state.params.height * sizeof(float3)
+        state.params.width * state.params.height * sizeof(float4)
     ));
     state.params.frame_buffer = nullptr;  // Will be set when output buffer is mapped
 
@@ -1552,7 +1557,7 @@ void handleResize(mi::examples::mdl::GL_display *gl_display, PathTracerState& st
     else
         CUDA_CHECK(cudaMalloc(
             reinterpret_cast<void**>(&state.params.accum_buffer),
-            state.params.width * state.params.height * sizeof(float3)
+            state.params.width * state.params.height * sizeof(float4)
         ));
 }
 
@@ -1803,13 +1808,14 @@ void showMaterialGUI(PathTracerState &state)
     ImGui::Begin("Material parameters");
     ImGui::Text("CTRL + Click to manually enter numbers");
 
-    std::string current_label = state.mdl_materials[state.cur_material_index].mat_info->name();
+    std::string current_label = std::to_string(state.cur_material_index) + ") "
+        + state.mdl_materials[state.cur_material_index].mat_info->name();
 
     if (ImGui::BeginCombo("material", current_label.c_str())) {
         // add selectable materials to the combo box
         for (size_t i = 0, n = state.mdl_materials.size(); i < n; ++i) {
             bool is_selected = i == state.cur_material_index;
-            std::string label = state.mdl_materials[i].mat_info->name();
+            std::string label = std::to_string(i) + ") " + state.mdl_materials[i].mat_info->name();
             if (ImGui::Selectable(label.c_str(), is_selected))
                 state.cur_material_index = i;
             if (is_selected)
@@ -1866,10 +1872,16 @@ void showMaterialGUI(PathTracerState &state)
                 param.range_max());
             break;
         case Param_info::PK_COLOR:
+        {
+            // Ensure color picker is opaque
+            float oldAlpha = ImGui::GetStyle().Alpha;
+            ImGui::GetStyle().Alpha = 1.f;
             changed |= ImGui::ColorEdit3(
                 param.display_name(),
                 &param.data<float>());
+            ImGui::GetStyle().Alpha = oldAlpha;
             break;
+        }
         case Param_info::PK_BOOL:
             changed |= ImGui::Checkbox(
                 param.display_name(),
@@ -1912,10 +1924,16 @@ void showMaterialGUI(PathTracerState &state)
                             param.range_max());
                         break;
                     case Param_info::PK_COLOR:
+                    {
+                        // Ensure color picker is opaque
+                        float oldAlpha = ImGui::GetStyle().Alpha;
+                        ImGui::GetStyle().Alpha = 1.f;
                         changed |= ImGui::ColorEdit3(
                             idx_str.c_str(),
                             reinterpret_cast<float *>(ptr));
+                        ImGui::GetStyle().Alpha = oldAlpha;
                         break;
+                    }
                     case Param_info::PK_BOOL:
                         changed |= ImGui::Checkbox(
                             param.display_name(),
@@ -2098,7 +2116,7 @@ void printUsageAndExit(const char* argv0)
         << "Usage  : " << argv0 << " [options] [<material_name>]\n"
         << "Options:\n"
         << " --file | -f <filename> File for image output\n"
-        << " --launch-samples | -s  Number of samples per pixel per launch (default: 16)\n"
+        << " --launch-samples | -s  Number of samples per pixel per launch (default: 1)\n"
         << " --mdl_path | -p <path> MDL search path, can occur multiple times.\n"
         << " --device <id>          run on CUDA device <id> (default: 0)\n"
         << " --hdr <filename>       HDR environment map (default: data/environment.hdr)\n"
@@ -2124,7 +2142,7 @@ int main(int argc, char* argv[])
     PathTracerState state;
     state.params.width = 1024;
     state.params.height = 1024;
-    state.params.samples_per_launch = 16;
+    state.params.samples_per_launch = 1;
 
     //
     // Parse command line options
@@ -2289,15 +2307,16 @@ int main(int argc, char* argv[])
             // copy rendered image to canvas
             mi::base::Handle<mi::neuraylib::ICanvas> canvas(
                 state.mdl_helper->get_image_api()->create_canvas(
-                    "Rgb_fp", state.params.width, state.params.height));
+                    "Color", state.params.width, state.params.height));
             mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile());
             CUDA_CHECK(cudaMemcpy(
                 tile->get_data(), state.params.accum_buffer,
-                state.params.width * state.params.height * sizeof(float3),
+                state.params.width * state.params.height * sizeof(float4),
                 cudaMemcpyDeviceToHost));
 
             // export canvas to file
-            state.mdl_helper->get_impexp_api()->export_canvas(outfile.c_str(), canvas.get());
+            state.mdl_helper->get_impexp_api()->export_canvas(
+                outfile.c_str(), canvas.get(), 100u, true);
         }
 
         cleanupState(state);

@@ -171,7 +171,7 @@ void Mdlc::usage()
         "  -C\n"
         "\tColor the output.\n"
         "  --check-lib <root>\n"
-        "\tCheck a library stored at root.\n"
+        "\tRun a syntax check on all modules found in <root> or below.\n"
         "  --target <target>\n"
         "  -t <target>\n"
         "\tSet target language.\n"
@@ -468,7 +468,7 @@ int Mdlc::run(int argc, char *argv[])
     if (show_version) {
         fprintf(
             stderr,
-            "mdlc version 1.0, build %s.\n",
+            "mdlc version 1.8, build %s.\n",
             MI::VERSION::get_platform_version());
         return EXIT_SUCCESS;
     }
@@ -482,7 +482,7 @@ int Mdlc::run(int argc, char *argv[])
 
     m_imdl->install_search_path(search_path);
 
-    if (mi::getopt::optind >= argc) {
+    if (mi::getopt::optind >= argc && m_check_root.empty()) {
         fprintf(stderr,"%s: no source modules specified\n", argv[0]);
         return EXIT_FAILURE;
     }
@@ -491,6 +491,11 @@ int Mdlc::run(int argc, char *argv[])
 
     if (!m_check_root.empty()) {
         find_all_modules(m_check_root.c_str(), NULL);
+
+        if (m_verbose) {
+            fprintf(stderr, "Compiling %u modules, be patient...\n",
+                unsigned(m_input_modules.size()));
+        }
     }
 
     for (int i = mi::getopt::optind; i < argc; ++i) {
@@ -511,14 +516,16 @@ int Mdlc::run(int argc, char *argv[])
         } else {
             module = mi::base::make_handle(compile(input_module.c_str(), errors));
         }
-        if (!module.is_valid_interface())
+        if (!module.is_valid_interface()) {
             return EXIT_FAILURE;
+        }
         err_count += errors;
 
         if (m_check_root.empty()) {
             // compile
-            if (!backend(module.get()))
+            if (!backend(module.get())) {
                 return EXIT_FAILURE;
+            }
         }
     }
 

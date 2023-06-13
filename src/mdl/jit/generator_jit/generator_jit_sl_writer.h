@@ -208,6 +208,7 @@ public:
     /// \param exp_func_list        the list of exported functions for which prototypes must
     ///                             be generated
     /// \param df_handle_slot_mode  the mode of handles in API types
+    /// \param enable_opt_remarks   enable OptimizationRemarks
     SLWriterPass(
         mi::mdl::IAllocator                                  *alloc,
         Type_mapper const                                    &type_mapper,
@@ -218,7 +219,8 @@ public:
         mi::mdl::Messages_impl                               &messages,
         bool                                                 enable_debug,
         mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list,
-        mi::mdl::Df_handle_slot_mode                         df_handle_slot_mode);
+        mi::mdl::Df_handle_slot_mode                         df_handle_slot_mode,
+        bool                                                 enable_opt_remarks);
 
     /// Specifies which analysis info is necessary and which is preserved.
     void getAnalysisUsage(llvm::AnalysisUsage &usage) const final;
@@ -855,16 +857,18 @@ private:
 
 /// Creates a HLSL writer pass.
 ///
-/// \param[in]  alloc                the allocator
-/// \param[in]  type_mapper          the type mapper
-/// \param[in]  out                  the source code object the HLSL code is written to
-/// \param[in]  num_texture_spaces   the number of supported texture spaces
-/// \param[in]  num_texture_results  the number of texture result entries
-/// \param[in]  options              backend options
-/// \param[out] messages             backend messages
-/// \param[in]  enable_debug         true, if debug info should be generated
-/// \param[in]  df_handle_slot_mode  the layout of the BSDF_{evaluate, auxiliary}_data structs
-/// \param[out] exp_func_list        list of exported functions
+/// \param[in]  alloc                    the allocator
+/// \param[in]  type_mapper              the type mapper
+/// \param[in]  out                      the source code object the HLSL code is written to
+/// \param[in]  num_texture_spaces       the number of supported texture spaces
+/// \param[in]  num_texture_results      the number of texture result entries
+/// \param[in]  options                  backend options
+/// \param[out] messages                 backend messages
+/// \param[in]  enable_debug             true, if debug info should be generated
+/// \param[in]  df_handle_slot_mode      the layout of the BSDF_{evaluate, auxiliary}_data structs
+/// \param[out] exp_func_list            list of exported functions
+/// \param[in]  enable_opt_remarks       enable OptimizationRemarks
+/// \param[in]  enable_noinline_support  enable support for noinline (otherwise noinline is ignored)
 llvm::Pass *createHLSLWriterPass(
     mi::mdl::IAllocator                                  *alloc,
     Type_mapper const                                    &type_mapper,
@@ -875,7 +879,9 @@ llvm::Pass *createHLSLWriterPass(
     mi::mdl::Messages_impl                               &messages,
     bool                                                 enable_debug,
     mi::mdl::Df_handle_slot_mode                         df_handle_slot_mode,
-    mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list);
+    mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list,
+    bool                                                 enable_opt_remarks,
+    bool                                                 enable_noinline_support);
 
 /// Creates a GLSL writer pass.
 ///

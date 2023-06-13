@@ -164,7 +164,7 @@ protected:
     // recreated when the framebuffer is resized.
     virtual void recreate_size_dependent_resources() {}
 
-    // The callback to update the appliction logic. Is called directly after
+    // The callback to update the application logic. Is called directly after
     // a new swapchain image is acquired and after waiting for the fence for
     // the current frame's command buffer.
     virtual void update(float elapsed_seconds, uint32_t image_index) = 0;
@@ -228,7 +228,7 @@ protected:
     VkSemaphore m_image_available_semaphore = nullptr;
     VkSemaphore m_render_finished_semaphore = nullptr;
 
-    // For no window mode we have to handle device memory ourselfs
+    // For no window mode we have to handle device memory ourselves
     std::vector<VkDeviceMemory> m_swapchain_device_memories;
 
     // Depth stencil buffer
@@ -400,8 +400,7 @@ const char* vkresult_to_str(VkResult result);
 const char* vkformat_to_str(VkFormat format);
 
 // Default resource values for glslang.
-// See: https://github.com/KhronosGroup/glslang/StandAlone/ResourceLimits.cpp
-extern const TBuiltInResource g_default_built_in_resource;
+const TBuiltInResource* get_default_resource_limits();
 
 } // namespace mi::examples::vk
 

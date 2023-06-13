@@ -64,7 +64,24 @@ std::string hash_to_string( const mi::base::Uuid& hash)
     return buffer;
 }
 
+std::string get_log_identifier(
+    const std::string& filename,
+    const std::string& container_filename,
+    const std::string& container_membername,
+    const std::string& mdl_file_path)
+{
+    std::string result;
+    if( !filename.empty())
+        return std::string( "light profile \"") + filename + '\"';
+    if( !container_filename.empty())
+        return std::string( "light profile \"") + container_membername + "\" in \""
+            + container_filename + '\"';
+    if( !mdl_file_path.empty())
+        return std::string( "light profile from MDL file path \"") + mdl_file_path + '\"';
+    return "memory- or reader-based light profile (no name available)";
 }
+
+} // namespace
 
 // implemented in lightprofile_ies_parser.cpp
 bool setup_lightprofile(
@@ -105,6 +122,10 @@ mi::Sint32 Lightprofile::reset_file(
     mi::neuraylib::Lightprofile_degree degree,
     mi::Uint32 flags)
 {
+    std::string extension = STRING::to_lower( HAL::Ospath::get_ext( original_filename));
+    if( extension != ".ies")
+        return -3;
+
     SYSTEM::Access_module<PATH::Path_module> m_path_module( false);
     const std::string resolved_filename
         = m_path_module->search( PATH::RESOURCE, original_filename);
@@ -122,14 +143,14 @@ mi::Sint32 Lightprofile::reset_file(
         "Result: %s", resolved_filename.empty() ? "(failed)" : resolved_filename.c_str());
 #endif
     if( resolved_filename.empty())
-        return -2;
+        return -4;
 
     // create reader for resolved_filename
     DISK::File_reader_impl reader;
     if( !reader.open( resolved_filename.c_str()))
-        return -2;
+        return -5;
 
-    const std::string log_identifier = "light profile \"" + resolved_filename + '\"';
+    const std::string log_identifier = get_log_identifier( resolved_filename, {}, {}, {});
     const mi::base::Uuid impl_hash{0,0,0,0};
     const mi::Sint32 result = reset_shared( transaction,
         &reader, log_identifier, impl_hash, resolution_phi, resolution_theta, degree, flags);
@@ -153,7 +174,7 @@ mi::Sint32 Lightprofile::reset_reader(
     mi::neuraylib::Lightprofile_degree degree,
     mi::Uint32 flags)
 {
-    const std::string log_identifier = "memory-based light profile";
+    const std::string log_identifier = get_log_identifier( {}, {}, {}, {});
     const mi::base::Uuid impl_hash{0,0,0,0};
     const mi::Sint32 result = reset_shared( transaction,
         reader, log_identifier, impl_hash, resolution_phi, resolution_theta, degree, flags);
@@ -182,18 +203,8 @@ mi::Sint32 Lightprofile::reset_mdl(
     mi::neuraylib::Lightprofile_degree degree,
     mi::Uint32 flags)
 {
-    // compute filename for log messages
-    std::string log_identifier;
-    if( !filename.empty())
-        log_identifier = std::string( "light profile \"") + filename + '\"';
-    else if( !container_filename.empty())
-        log_identifier = std::string( "light profile \"") + container_membername + "\" in \""
-            + container_filename + '\"';
-    else if( !mdl_file_path.empty())
-        log_identifier = std::string( "light profile from MDL file path \"") + mdl_file_path + '\"';
-    else
-        log_identifier = "memory-based light profile";
-
+    std::string log_identifier = get_log_identifier(
+        filename, container_filename, container_membername, mdl_file_path);
     const mi::Sint32 result = reset_shared( transaction,
         reader, log_identifier, impl_hash, resolution_phi, resolution_theta, degree, flags);
     if( result != 0)
@@ -222,16 +233,16 @@ mi::Sint32 Lightprofile::reset_shared(
     const bool cw_set  = (flags & mi::neuraylib::LIGHTPROFILE_CLOCKWISE        ) != 0;
     const bool ccw_set = (flags & mi::neuraylib::LIGHTPROFILE_COUNTER_CLOCKWISE) != 0;
     if( flags >= 16 || (cw_set && ccw_set) || (!cw_set && !ccw_set))
-        return -3;
+        return -13;
 
     // reject invalid degree
     if(    degree != mi::neuraylib::LIGHTPROFILE_HERMITE_BASE_1
         && degree != mi::neuraylib::LIGHTPROFILE_HERMITE_BASE_3)
-        return -3;
+        return -14;
 
     // reject invalid resolutions
     if( resolution_phi == 1 || resolution_theta == 1)
-        return -5;
+        return -15;
 
     // if impl_hash is valid, check whether implementation class exists already
     std::string impl_name;
@@ -259,7 +270,7 @@ mi::Sint32 Lightprofile::reset_shared(
 
     // handle file format errors
     if( !success)
-        return -4;
+        return -7;
 
     Lightprofile_impl* impl = new Lightprofile_impl(
         resolution_phi, resolution_theta, degree, flags,
@@ -330,27 +341,27 @@ const SERIAL::Serializable* Lightprofile::serialize( SERIAL::Serializer* seriali
 {
     Scene_element_base::serialize( serializer);
 
-    SERIAL::write(serializer, serializer->is_remote() ? "" : m_original_filename);
-    SERIAL::write(serializer, serializer->is_remote() ? "" : m_resolved_filename);
-    SERIAL::write(serializer, serializer->is_remote() ? "" : m_resolved_container_filename);
-    SERIAL::write(serializer, serializer->is_remote() ? "" : m_resolved_container_membername);
-    SERIAL::write(serializer, serializer->is_remote() ? "" : m_mdl_file_path);
-    SERIAL::write(serializer, HAL::Ospath::sep());
+    SERIAL::write( serializer, serializer->is_remote() ? "" : m_original_filename);
+    SERIAL::write( serializer, serializer->is_remote() ? "" : m_resolved_filename);
+    SERIAL::write( serializer, serializer->is_remote() ? "" : m_resolved_container_filename);
+    SERIAL::write( serializer, serializer->is_remote() ? "" : m_resolved_container_membername);
+    SERIAL::write( serializer, serializer->is_remote() ? "" : m_mdl_file_path);
+    SERIAL::write( serializer, HAL::Ospath::sep());
 
-    SERIAL::write(serializer, m_impl_tag);
-    SERIAL::write(serializer, m_impl_hash);
+    SERIAL::write( serializer, m_impl_tag);
+    SERIAL::write( serializer, m_impl_hash);
 
-    SERIAL::write(serializer, m_cached_resolution_phi);
-    SERIAL::write(serializer, m_cached_resolution_theta);
-    SERIAL::write(serializer, static_cast<mi::Uint32>( m_cached_degree));
-    SERIAL::write(serializer, m_cached_flags);
-    SERIAL::write(serializer, m_cached_start_phi);
-    SERIAL::write(serializer, m_cached_start_theta);
-    SERIAL::write(serializer, m_cached_delta_phi);
-    SERIAL::write(serializer, m_cached_delta_theta);
-    SERIAL::write(serializer, m_cached_candela_multiplier);
-    SERIAL::write(serializer, m_cached_power);
-    SERIAL::write(serializer, m_cached_is_valid);
+    SERIAL::write( serializer, m_cached_resolution_phi);
+    SERIAL::write( serializer, m_cached_resolution_theta);
+    SERIAL::write( serializer, static_cast<mi::Uint32>( m_cached_degree));
+    SERIAL::write( serializer, m_cached_flags);
+    SERIAL::write( serializer, m_cached_start_phi);
+    SERIAL::write( serializer, m_cached_start_theta);
+    SERIAL::write( serializer, m_cached_delta_phi);
+    SERIAL::write( serializer, m_cached_delta_theta);
+    SERIAL::write( serializer, m_cached_candela_multiplier);
+    SERIAL::write( serializer, m_cached_power);
+    SERIAL::write( serializer, m_cached_is_valid);
 
     return this + 1;
 }
@@ -359,30 +370,30 @@ SERIAL::Serializable* Lightprofile::deserialize( SERIAL::Deserializer* deseriali
 {
     Scene_element_base::deserialize( deserializer);
 
-    SERIAL::read(deserializer, &m_original_filename);
-    SERIAL::read(deserializer, &m_resolved_filename);
-    SERIAL::read(deserializer, &m_resolved_container_filename);
-    SERIAL::read(deserializer, &m_resolved_container_membername);
-    SERIAL::read(deserializer, &m_mdl_file_path);
+    SERIAL::read( deserializer, &m_original_filename);
+    SERIAL::read( deserializer, &m_resolved_filename);
+    SERIAL::read( deserializer, &m_resolved_container_filename);
+    SERIAL::read( deserializer, &m_resolved_container_membername);
+    SERIAL::read( deserializer, &m_mdl_file_path);
     std::string serializer_sep;
-    SERIAL::read(deserializer, &serializer_sep);
+    SERIAL::read( deserializer, &serializer_sep);
 
-    SERIAL::read(deserializer, &m_impl_tag);
-    SERIAL::read(deserializer, &m_impl_hash);
+    SERIAL::read( deserializer, &m_impl_tag);
+    SERIAL::read( deserializer, &m_impl_hash);
 
-    SERIAL::read(deserializer, &m_cached_resolution_phi);
-    SERIAL::read(deserializer, &m_cached_resolution_theta);
+    SERIAL::read( deserializer, &m_cached_resolution_phi);
+    SERIAL::read( deserializer, &m_cached_resolution_theta);
     mi::Uint32 degree;
-    SERIAL::read(deserializer, &degree);
+    SERIAL::read( deserializer, &degree);
     m_cached_degree = static_cast<mi::neuraylib::Lightprofile_degree>( degree);
-    SERIAL::read(deserializer, &m_cached_flags);
-    SERIAL::read(deserializer, &m_cached_start_phi);
-    SERIAL::read(deserializer, &m_cached_start_theta);
-    SERIAL::read(deserializer, &m_cached_delta_phi);
-    SERIAL::read(deserializer, &m_cached_delta_theta);
-    SERIAL::read(deserializer, &m_cached_candela_multiplier);
-    SERIAL::read(deserializer, &m_cached_power);
-    SERIAL::read(deserializer, &m_cached_is_valid);
+    SERIAL::read( deserializer, &m_cached_flags);
+    SERIAL::read( deserializer, &m_cached_start_phi);
+    SERIAL::read( deserializer, &m_cached_start_theta);
+    SERIAL::read( deserializer, &m_cached_delta_phi);
+    SERIAL::read( deserializer, &m_cached_delta_theta);
+    SERIAL::read( deserializer, &m_cached_candela_multiplier);
+    SERIAL::read( deserializer, &m_cached_power);
+    SERIAL::read( deserializer, &m_cached_is_valid);
 
     // Adjust m_original_filename and m_resolved_filename for this host.
     if( !m_original_filename.empty()) {
@@ -625,18 +636,18 @@ const SERIAL::Serializable* Lightprofile_impl::serialize( SERIAL::Serializer* se
 {
     Scene_element_base::serialize( serializer);
 
-    SERIAL::write(serializer, m_resolution_phi);
-    SERIAL::write(serializer, m_resolution_theta);
-    SERIAL::write_enum(serializer, m_degree);
-    SERIAL::write(serializer, m_flags);
-    SERIAL::write(serializer, m_start_phi);
-    SERIAL::write(serializer, m_start_theta);
-    SERIAL::write(serializer, m_delta_phi);
-    SERIAL::write(serializer, m_delta_theta);
+    SERIAL::write( serializer, m_resolution_phi);
+    SERIAL::write( serializer, m_resolution_theta);
+    SERIAL::write_enum( serializer, m_degree);
+    SERIAL::write( serializer, m_flags);
+    SERIAL::write( serializer, m_start_phi);
+    SERIAL::write( serializer, m_start_theta);
+    SERIAL::write( serializer, m_delta_phi);
+    SERIAL::write( serializer, m_delta_theta);
 
-    SERIAL::write(serializer, m_data);
-    SERIAL::write(serializer, m_candela_multiplier);
-    SERIAL::write(serializer, m_power);
+    SERIAL::write( serializer, m_data);
+    SERIAL::write( serializer, m_candela_multiplier);
+    SERIAL::write( serializer, m_power);
 
     return this + 1;
 }
@@ -645,18 +656,18 @@ SERIAL::Serializable* Lightprofile_impl::deserialize( SERIAL::Deserializer* dese
 {
     Scene_element_base::deserialize( deserializer);
 
-    SERIAL::read(deserializer, &m_resolution_phi);
-    SERIAL::read(deserializer, &m_resolution_theta);
-    SERIAL::read_enum(deserializer, &m_degree);
-    SERIAL::read(deserializer, &m_flags);
-    SERIAL::read(deserializer, &m_start_phi);
-    SERIAL::read(deserializer, &m_start_theta);
-    SERIAL::read(deserializer, &m_delta_phi);
-    SERIAL::read(deserializer, &m_delta_theta);
+    SERIAL::read( deserializer, &m_resolution_phi);
+    SERIAL::read( deserializer, &m_resolution_theta);
+    SERIAL::read_enum( deserializer, &m_degree);
+    SERIAL::read( deserializer, &m_flags);
+    SERIAL::read( deserializer, &m_start_phi);
+    SERIAL::read( deserializer, &m_start_theta);
+    SERIAL::read( deserializer, &m_delta_phi);
+    SERIAL::read( deserializer, &m_delta_theta);
 
-    SERIAL::read(deserializer, &m_data);
-    SERIAL::read(deserializer, &m_candela_multiplier);
-    SERIAL::read(deserializer, &m_power);
+    SERIAL::read( deserializer, &m_data);
+    SERIAL::read( deserializer, &m_candela_multiplier);
+    SERIAL::read( deserializer, &m_power);
 
     return this + 1;
 }
@@ -711,8 +722,10 @@ bool export_to_writer(
     const mi::Uint32 resolution_phi   = impl->get_resolution_phi();
     const mi::Uint32 resolution_theta = impl->get_resolution_theta();
 
-    const mi::Float32 first_phi = round_3_digits( mi::math::degrees( impl->get_phi( 0)));
-    const mi::Float32 last_phi  = round_3_digits( mi::math::degrees( impl->get_phi( resolution_phi-1)));
+    const mi::Float32 first_phi
+        = round_3_digits( mi::math::degrees( impl->get_phi( 0)));
+    const mi::Float32 last_phi
+        = round_3_digits( mi::math::degrees( impl->get_phi( resolution_phi-1)));
 
     bool type_c;
     bool sampling;
@@ -851,17 +864,22 @@ DB::Tag load_mdl_lightprofile(
     const std::string& container_membername,
     const std::string& mdl_file_path,
     const mi::base::Uuid& impl_hash,
-    bool shared_proxy)
+    bool shared_proxy,
+    mi::Sint32& result)
 {
-    if( !reader)
-        return DB::Tag( 0);
+    if( !reader) {
+        result = -1;
+        return DB::Tag();
+    }
 
     std::string identifier;
-    if( !filename.empty())
+    if( !filename.empty()) {
         identifier = filename;
-    else if( !container_filename.empty())
+    } else if( !container_filename.empty()) {
         identifier = container_filename + "_" + container_membername;
-    else {
+    } else if( !mdl_file_path.empty()) {
+        identifier = "mfp_" + mdl_file_path;
+    } else {
         identifier = "without_name";
         // Never share the proxy for memory-based resources.
         shared_proxy = false;
@@ -873,20 +891,21 @@ DB::Tag load_mdl_lightprofile(
         db_name = MDL::DETAIL::generate_unique_db_name( transaction, db_name.c_str());
 
     DB::Tag tag = transaction->name_to_tag( db_name.c_str());
-    if( tag)
+    if( tag) {
+        result = 0;
         return tag;
+    }
 
-    Lightprofile* lp = new Lightprofile();
-    const mi::Sint32 result = lp->reset_mdl( transaction,
+    auto lp = std::make_unique<Lightprofile>();
+    result = lp->reset_mdl( transaction,
         reader, filename, container_filename, container_membername, mdl_file_path, impl_hash);
-    ASSERT( M_LIGHTPROFILE, result == 0 || result == -4);
-    if( result == -4)
-        LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_IO,
-            "File format error in default light profile \"%s\" in \"%s\".",
-            container_membername.c_str(), container_filename.c_str());
+    ASSERT( M_LIGHTPROFILE, result == 0 || result == -7);
+    if( result != 0)
+        return DB::Tag();
 
     tag = transaction->store_for_reference_counting(
-        lp, db_name.c_str(), transaction->get_scope()->get_level());
+        lp.release(), db_name.c_str(), transaction->get_scope()->get_level());
+    result = 0;
     return tag;
 }
 

@@ -190,7 +190,7 @@ public:
 };
 
 class IValue_string_localized : public
-    mi::base::Interface_declare<0x9f699d83, 0xe6be, 0x41f9, 0xbe, 0x76, 0xef, 0x95, 0x55, 0x1e, 0xbe, 0xdb,
+    mi::base::Interface_declare<0x9f699d83,0xe6be,0x41f9,0xbe,0x76,0xef,0x95,0x55,0x1e,0xbe,0xdb,
     IValue_string>
 {
 public:
@@ -364,18 +364,24 @@ public:
 
     virtual void set_value( DB::Tag value) = 0;
 
-     /// Returns the owner module by its MDL name.
+    /// Returns the unresolved MDL file path of the resource.
     ///
     /// Returns empty string (instead of \c NULL) if not available.
-    virtual const char* get_unresolved_mdl_url() const = 0;
+    virtual const char* get_unresolved_file_path() const = 0;
 
-    virtual void set_unresolved_mdl_url( const char* url) = 0;
+    /// Sets the unresolved MDL file path of the resource.
+    ///
+    /// Requires the empty string to clear (instead of \c NULL which is ignored).
+    virtual void set_unresolved_file_path( const char* s) = 0;
 
     /// Returns the MDL name of the owner module.
     ///
     /// Returns empty string (instead of \c NULL) if not available.
     virtual const char* get_owner_module() const = 0;
 
+    /// Sets the MDL name of the owner module.
+    ///
+    /// Requires the empty string to clear (instead of \c NULL which is ignored).
     virtual void set_owner_module( const char* module) = 0;
 
     virtual const char* get_file_path( DB::Transaction* transaction) const = 0;
@@ -501,7 +507,7 @@ public:
     virtual IValue_texture* create_texture(
         const IType_texture* type,
         DB::Tag value,
-        const char* unresolved_mdl_url,
+        const char* unresolved_file_path,
         const char* owner_module,
         mi::Float32 gamma,
         const char* selector) const = 0;
@@ -513,7 +519,7 @@ public:
     /// \param owner_module   MDL name of owner module (or \c NULL).
     virtual IValue_light_profile* create_light_profile(
         DB::Tag value,
-        const char* unresolved_mdl_url,
+        const char* unresolved_file_path,
         const char* owner_module) const = 0;
 
     virtual IValue_bsdf_measurement* create_bsdf_measurement( DB::Tag value) const = 0;
@@ -523,7 +529,7 @@ public:
     /// \param owner_module   MDL name of owner module (or \c NULL).
     virtual IValue_bsdf_measurement* create_bsdf_measurement(
         DB::Tag value,
-        const char* unresolved_mdl_url,
+        const char* unresolved_file_path,
         const char* owner_module) const = 0;
 
     virtual IValue_invalid_df* create_invalid_df( const IType_reference* type) const = 0;

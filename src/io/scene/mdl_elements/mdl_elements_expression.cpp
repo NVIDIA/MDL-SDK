@@ -353,7 +353,8 @@ const IAnnotation_definition* Annotation::get_definition( DB::Transaction* trans
     if( !definition_proxy_tag)
         return nullptr;
 
-    DB::Access<Mdl_annotation_definition_proxy> definition_proxy( definition_proxy_tag, transaction);
+    DB::Access<Mdl_annotation_definition_proxy> definition_proxy(
+        definition_proxy_tag, transaction);
     std::string module_db_name = definition_proxy->get_db_module_name();
 
     DB::Tag module_tag = transaction->name_to_tag( module_db_name.c_str());
@@ -1189,14 +1190,15 @@ void Expression_factory::serialize_annotation_definition_list(
     SERIAL::Serializer* serializer,
     const IAnnotation_definition_list* anno_def_list) const
 {
-    const Annotation_definition_list* anno_def_list_impl =
-        static_cast<const Annotation_definition_list*>(anno_def_list);
+    const Annotation_definition_list* anno_def_list_impl
+        = static_cast<const Annotation_definition_list*>( anno_def_list);
 
-    write(serializer, anno_def_list_impl->m_name_to_index);
+    write( serializer, anno_def_list_impl->m_name_to_index);
     mi::Size size = anno_def_list_impl->m_anno_definitions.size();
-    SERIAL::write(serializer, size);
-    for (mi::Size i = 0; i < size; ++i)
-        serialize_annotation_definition(serializer, anno_def_list_impl->m_anno_definitions[i].get());
+    SERIAL::write( serializer, size);
+    for( mi::Size i = 0; i < size; ++i)
+        serialize_annotation_definition(
+            serializer, anno_def_list_impl->m_anno_definitions[i].get());
 }
 
 IAnnotation_definition_list* Expression_factory::deserialize_annotation_definition_list(
@@ -1204,13 +1206,13 @@ IAnnotation_definition_list* Expression_factory::deserialize_annotation_definiti
 {
     Annotation_definition_list* list_impl = new Annotation_definition_list;
 
-    read(deserializer, &list_impl->m_name_to_index);
+    read( deserializer, &list_impl->m_name_to_index);
 
     mi::Size size;
-    SERIAL::read(deserializer, &size);
-    list_impl->m_anno_definitions.resize(size);
-    for (mi::Size i = 0; i < size; ++i)
-        list_impl->m_anno_definitions[i] = deserialize_annotation_definition(deserializer);
+    SERIAL::read( deserializer, &size);
+    list_impl->m_anno_definitions.resize( size);
+    for( mi::Size i = 0; i < size; ++i)
+        list_impl->m_anno_definitions[i] = deserialize_annotation_definition( deserializer);
 
     return list_impl;
 }

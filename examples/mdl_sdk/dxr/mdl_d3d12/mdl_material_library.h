@@ -113,15 +113,18 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
         /// Reload an (already loaded) module and all importing modules in order
         /// get back to a consistent state.
-        bool reload_module(const std::string& module_db_name, bool& targets_changed);
+        bool reload_module(const std::string& module_db_name);
 
         /// Reload an (already loaded) module and all importing modules in order
         /// get back to a consistent state. If \c module_source_code is not empty,
         /// the module is reloaded from string.
         bool reload_module(
             const std::string& module_db_name,
-            const char* module_source_code,
-            bool& targets_changed);
+            const char* module_source_code);
+
+        /// After modules have been reloaded, existing materials need to be updated,
+        /// repaired or recreated. Has to be called after `reload_modules` is done.
+        bool repair_materials_after_reload(bool& targets_changed);
 
         /// recompile a material after parameter changes in instance compilation mode
         /// or after structural changes in class compilation mode.

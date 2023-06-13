@@ -62,7 +62,7 @@ public:
     /// \param lockless   The lockless variant of Access_canvas prefetches all tiles of the canvas
     ///                   to avoid locking in the lookup() method. Note that operator= and the
     ///                   set() method are not thread-safe in the lockless variant.
-    Access_canvas( const mi::neuraylib::ICanvas* canvas = 0, bool lockless = false);
+    Access_canvas( const mi::neuraylib::ICanvas* canvas = nullptr, bool lockless = false);
 
     /// Copy constructor. Explicit because locks are not copyable.
     Access_canvas( const Access_canvas& rhs);
@@ -161,7 +161,7 @@ public:
     /// \param lockless   The lockless variant of Edit_canvas prefetches all tiles of the canvas
     ///                   to avoid locking in the lookup() and store() methods. Note that operator=
     ///                   and the set() method are not thread-safe in the lockless variant.
-    Edit_canvas( mi::neuraylib::ICanvas* canvas = 0, bool lockless = false);
+    Edit_canvas( mi::neuraylib::ICanvas* canvas = nullptr, bool lockless = false);
 
     /// Copy constructor. Explicit because locks are not copyable.
     Edit_canvas( const Edit_canvas& rhs);

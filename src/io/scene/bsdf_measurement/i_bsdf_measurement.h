@@ -77,10 +77,11 @@ public:
     ///                              are used to locate the file.
     /// \return
     ///                              -  0: Success.
-    ///                              - -2: Failure to resolve the given filename, e.g., the file
+    ///                              - -3: Invalid filename extension (only \c .mbsdf is supported).
+    ///                              - -4: Failure to resolve the given filename, e.g., the file
     ///                                    does not exist.
-    ///                              - -3: Invalid file format or invalid filename extension (only
-    ///                                    \c .mbsdf is supported).
+    ///                              - -5: Failure to open the file.
+    ///                              - -7: Invalid file format.
     Sint32 reset_file( DB::Transaction* transaction, const std::string& original_filename);
 
     /// Imports a BSDF measurement from a reader.
@@ -90,7 +91,7 @@ public:
     /// \param reader                The reader for the BSDF measurement.
     /// \return
     ///                              -  0: Success.
-    ///                              - -3: Invalid file format.
+    ///                              - -7: Invalid file format.
     Sint32 reset_reader( DB::Transaction* transaction, mi::neuraylib::IReader* reader);
 
     /// Imports a BSDF measurement from a reader (used by MDL integration).
@@ -99,17 +100,16 @@ public:
     ///                              class in the DB).
     /// \param reader                The reader for the BSDF measurement.
     /// \param filename              The resolved filename (for file-based BSDF measurements).
-    /// \param container_filename    The resolved filename of the container itself (for container-based
-    ///                              BSDF measurements).
-    /// \param container_membername  The relative filename of the BSDF measuement in the container (for
-    ///                              container-based BSDF measurements).
+    /// \param container_filename    The resolved filename of the container itself (for container-
+    ///                              based BSDF measurements).
+    /// \param container_membername  The relative filename of the BSDF measuement in the container
+    ///                              (for container-based BSDF measurements).
     /// \param mdl_file_path         The MDL file path.
     /// \param impl_hash             Hash of the data in the implementation class. Use {0,0,0,0} if
     ///                              hash is not known.
     /// \return
     ///                              -  0: Success.
-    ///                              - -3: Invalid file format or invalid filename extension (only
-    ///                                    \c .mbsdf is supported).
+    ///                              - -7: Invalid file format.
     Sint32 reset_mdl(
         DB::Transaction* transaction,
         mi::neuraylib::IReader* reader,
@@ -388,8 +388,12 @@ private:
 ///                             BSDF data for the reflection.
 /// \param[out] transmission    The imported BSDF data for the reflection (or \c NULL if there is no
 ///                             BSDF data for the transmission.
-/// \return                     \c true in case of success, \c false otherwise.
-bool import_from_file(
+/// \return
+///                              -  0: Success.
+///                              - -3: Invalid filename extension (only \c .mbsdf is supported).
+///                              - -5: Failure to open the file.
+///                              - -7: Invalid file format.
+mi::Sint32 import_from_file(
     const std::string& filename,
     mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data>& reflection,
     mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data>& transmission);
@@ -401,8 +405,10 @@ bool import_from_file(
 ///                             BSDF data for the reflection.
 /// \param[out] transmission    The imported BSDF data for the reflection (or \c NULL if there is no
 ///                             BSDF data for the transmission.
-/// \return                     \c true in case of success, \c false otherwise.
-bool import_from_reader(
+/// \return
+///                              -  0: Success.
+///                              - -7: Invalid file format.
+mi::Sint32 import_from_reader(
     mi::neuraylib::IReader* reader,
     mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data>& reflection,
     mi::base::Handle<mi::neuraylib::IBsdf_isotropic_data>& transmission);
@@ -447,9 +453,14 @@ mi::neuraylib::IBuffer* create_buffer_from_bsdf_measurement(
 ///                              hash is not known.
 /// \param shared_proxy          Indicates whether a possibly already existing proxy DB element for
 ///                              that resource should simply be reused (the decision is based on
-///                              \c container_filename and \c container_membername, not on
-///                              \c impl_hash). Otherwise, an independent proxy DB element is
-///                              created, even if the resource has already been loaded.
+///                              \p filename, \c container_filename and \c container_membername, not
+///                              on \c impl_hash which is relevant for the impl class). Otherwise,
+///                              an independent proxy DB element is created, even if the resource
+///                              has already been loaded.
+/// \param[out] result
+///                              -  0: Success.
+///                              - -1: Invalid parameters (\c NULL pointer).
+///                              - -7: Invalid file format.
 /// \return                      The tag of that BSDF measurement (invalid in case of failures).
 DB::Tag load_mdl_bsdf_measurement(
     DB::Transaction* transaction,
@@ -459,7 +470,8 @@ DB::Tag load_mdl_bsdf_measurement(
     const std::string& container_membername,
     const std::string& mdl_file_path,
     const mi::base::Uuid& impl_hash,
-    bool shared_proxy);
+    bool shared_proxy,
+    mi::Sint32& result);
 
 } // namespace BSDFM
 

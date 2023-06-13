@@ -38,21 +38,21 @@ namespace Coco {
 class Generator {
 public:
 	Generator(Tab *tab, Errors *errors);
-	FILE* OpenFrame(const wchar_t* frame);
-	FILE* OpenGen(const wchar_t *genName);
+	FILE* OpenFrame(const char* frame);
+	FILE* OpenGen(const char *genName);
 	void GenCopyright();
 	void GenPrefixFromNamespace();
-	void SkipFramePart(const wchar_t *stop);
-	void CopyFramePart(const wchar_t *stop);
+	void SkipFramePart(const char *stop);
+	void CopyFramePart(const char *stop);
 
 private:
 	FILE* fram;
 	FILE* gen;
 	Tab *tab;
-	wchar_t* frameFile;
+	char* frameFile;
 	Errors *errors;
 
-	void CopyFramePart(const wchar_t* stop, bool generateOutput);
+	void CopyFramePart(const char* stop, bool generateOutput);
 
 };
 

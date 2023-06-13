@@ -139,6 +139,11 @@ public:
     ///                     gamma which is 1.0 for HDR pixel types and 2.2 for LDR pixel types.
     /// \return             The requested canvas, or \c NULL in case of invalid parameters or
     ///                     CUDA errors.
+#else // MI_SKIP_WITH_MDL_SDK_DOXYGEN
+    /// Unused.
+    ///
+    /// This method exists only for technical reasons (ABI compatibility). Calling it results in
+    /// unspecified behavior.
 #endif // MI_SKIP_WITH_MDL_SDK_DOXYGEN
     virtual ICanvas_cuda* create_canvas_cuda(
         Sint32 cuda_device_id,
@@ -148,19 +153,25 @@ public:
         Uint32 layers = 1,
         Float32 gamma = 0.0f) const = 0;
 
-    /// Creates mipmaps from the given canvas.
+    /// Creates a mipmap from the given canvas.
     ///
     /// \note The base level (the canvas that is passed in) is not included in the returned
     /// canvas array.
     ///
-    /// \param canvas           The canvas to create the mipmaps from.
+    /// \param canvas           The canvas to create the mipmap from.
     /// \param gamma_override   If this parameter is different from zero, it is used instead of the
     ///                         canvas gamma during mipmap creation.
     /// \return                 An array of type #mi::IPointer containing pointers to
-    ///                         the mipmaps of type #mi::neuraylib::ICanvas.
-    ///                         If no mipmaps could be created, NULL is returned.
-    virtual IArray* create_mipmaps(
+    ///                         the miplevels of type #mi::neuraylib::ICanvas.
+    ///                         If no mipmap could be created, \c NULL is returned.
+    virtual IArray* create_mipmap(
         const ICanvas* canvas, Float32 gamma_override = 0.0f) const = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_14_0
+    inline IArray* create_mipmaps(
+        const ICanvas* canvas, Float32 gamma_override = 0.0f) const
+    { return create_mipmap( canvas, gamma_override); }
+#endif // MI_NEURAYLIB_DEPRECATED_14_0
 
     /// Creates a copy of the passed tile.
     virtual ITile* clone_tile( const ITile* tile) const = 0;
@@ -281,9 +292,11 @@ public:
     /// \param image_format  The image format of the buffer, e.g., \c "jpg". Note that support for
     ///                      a given image format requires an image plugin capable of handling that
     ///                      format.
+    /// \param selector      The selector, or \c NULL. \ifnot DICE_API See section 2.3.1 in
+    ///                      [\ref MDLLS] for details. \endif
     /// \return              The canvas with the decoded pixel data, or \c NULL in case of failure.
     virtual ICanvas* create_canvas_from_buffer(
-        const IBuffer* buffer, const char* image_format) const = 0;
+        const IBuffer* buffer, const char* image_format, const char* selector = 0) const = 0;
 
     /// Decodes the pixel data from a reader into a canvas.
     ///
@@ -292,9 +305,11 @@ public:
     /// \param image_format  The image format of the buffer, e.g., \c "jpg". Note that support for
     ///                      a given image format requires an image plugin capable of handling that
     ///                      format.
+    /// \param selector      The selector, or \c NULL. \ifnot DICE_API See section 2.3.1 in
+    ///                      [\ref MDLLS] for details. \endif
     /// \return              The canvas with the decoded pixel data, or \c NULL in case of failure.
     virtual ICanvas* create_canvas_from_reader(
-        IReader* reader, const char* image_format) const = 0;
+        IReader* reader, const char* image_format, const char* selector = 0) const = 0;
 
     /// Indicates whether a particular image format is supported for decoding.
     ///
@@ -437,6 +452,7 @@ public:
     /// Invalid pixel type/selector combinations are:
     /// - \p pixel_type is not an RGB or RGBA pixel type
     /// - \p selector is not an RGBA channel selector
+    /// - \p selector is \c "A", but \p pixel_type has no alpha channel
     ///
     /// \param pixel_type   The pixel type of the mipmap/canvas/tile.
     /// \param selector     The RGBA channel selector.

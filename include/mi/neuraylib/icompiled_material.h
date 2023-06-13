@@ -33,7 +33,6 @@
 
 #include <mi/neuraylib/iexpression.h>
 #include <mi/neuraylib/iscene_element.h>
-#include <mi/neuraylib/version.h>
 
 namespace mi {
 
@@ -300,8 +299,8 @@ public:
     ///                                    code will be written. The error codes have the following
     ///                                    meaning:
     ///                                    -  0: Success.
-    ///                                    - -1: The parameter material_instance_name is NULL or a
-    ///                                          material instance of that name does not exist in
+    ///                                    - -1: The parameter material_instance_name is \c NULL or
+    ///                                          a material instance of that name does not exist in
     ///                                          the database.
     ///                                    - -2: The given parameter index exceeds the parameter
     ///                                          count of the compiled material.
@@ -310,7 +309,7 @@ public:
     ///                                          parameter is not connected to a function or the
     ///                                          material instance has been changed after the
     ///                                          creation of this compiled material.
-    /// \return The database name of the connected function or NULL in case an error occurred.
+    /// \return The database name of the connected function or \c NULL in case an error occurred.
     virtual const IString* get_connected_function_db_name(
         const char* material_instance_name,
         Size parameter_index,

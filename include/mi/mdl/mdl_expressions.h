@@ -484,8 +484,8 @@ public:
     /// \param index  the index of the requested argument
     ///
     /// \note After parsing, the arguments are in the order as they
-    ///       occured in the source code. After the semantic analysis
-    ///       arguments are reordered and defualt arguments are inserted, so
+    ///       occurred in the source code. After the semantic analysis
+    ///       arguments are reordered and default arguments are inserted, so
     ///       the i'th argument corresponds to the i'th function parameter.
     virtual IArgument const *get_argument(int index) const = 0;
 

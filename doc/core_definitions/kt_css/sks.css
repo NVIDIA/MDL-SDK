@@ -1,15 +1,14 @@
 
 :root {
-    --ser: 'Palatino','Palatino Linotype',serif;
-    --serif: 1rem 'Palatino','Palatino Linotype',serif; 
+    --ser: 'Linux Libertine', serif;
+    --serif: 1.1rem 'Linux Libertine',serif;
 
-    --sans: 'Source Sans Pro',sans-serif;
-    --sans-serif: 1rem 'Source Sans Pro',sans-serif;
+    --sans: 'Noto Sans',sans-serif;
+    --sans-serif: 1rem 'Noto Sans',sans-serif;
 
     --mono: 'Roboto Mono',monospace;
-    --monospace: .9rem 'Roboto Mono',monospace;
+    --monospace: .95rem 'Roboto Mono',monospace;
 }
-
 
 
 * { padding: 0; margin: 0; border: 0; }
@@ -25,7 +24,7 @@ html { margin: 4%; background-color: black; }
 #cover_credit { font-size:12px; font-style:italic; margin-bottom:24px; clear:both; float:right; }
 .footeritem { padding: 0 .75em; }
 sub { padding-left: 2px; }
-#blackheader { font-family: var(--sans); color: white; padding: 0 1em; margin: 0; border: 0; vertical-align: middle; font-size: 1.5em; height: 2.5em; overflow: hidden; font-weight: bold; }
+#blackheader { font-family: var(--sans); color: white; padding: 0 1em; margin: 0; border: 0; vertical-align: middle; font-size: 1.5em; height: 2.5em; overflow: hidden; }
 #logos { line-height: 2.2; }
 #blackheader_title { line-height: 2.4; }
 #blackheader, #blackfooter { background-color: rgb(84,93,100) }
@@ -38,8 +37,8 @@ sub { padding-left: 2px; }
 .floatright { float: right; }
 #headerlogo_left img { padding: .3em 1.5em 0 .5em; }
 #headerlogo_right { height: 2.5em; float: right; }
-#blackfooter { box-sizing: border-box; font-family: var(--sans); color: white; padding: .7em 0; margin: 0; font-size: .8em; text-align: center; font-weight: bold; }
-#blackfooter a { color: #FFFFFF; font-weight: bold; }
+#blackfooter { box-sizing: border-box; font-family: var(--sans); color: white; padding: .7em 0; margin: 0; font-size: .8em; text-align: center; }
+#blackfooter a { color: #FFFFFF; }
 .footeritem { padding: 0 .75em; display: inline-block; }
 .rightjustify img { padding-left: 30px; }
 a { outline: 0; }

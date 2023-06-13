@@ -99,7 +99,7 @@ mi::neuraylib::ICanvas_cuda* Image_api_impl::create_canvas_cuda(
     return nullptr;
 }
 
-mi::IArray* Image_api_impl::create_mipmaps(
+mi::IArray* Image_api_impl::create_mipmap(
     const mi::neuraylib::ICanvas* canvas, mi::Float32 gamma) const
 {
     ASSERT( M_IMAGE, !"not implemented by this implementation");
@@ -140,13 +140,22 @@ mi::Sint32 Image_api_impl::read_raw_pixels(
     if( width == 0 || height == 0)
         return -2;
 
-    const IMAGE::Pixel_type pixel_type = IMAGE::convert_pixel_type_string_to_enum( buffer_pixel_type);
+    const IMAGE::Pixel_type pixel_type
+        = IMAGE::convert_pixel_type_string_to_enum( buffer_pixel_type);
     if( pixel_type == IMAGE::PT_UNDEF)
         return -3;
 
     IMAGE::Access_canvas access_canvas( canvas);
-    const bool success = access_canvas.read_rect( static_cast<mi::Uint8*>( buffer), buffer_topdown,
-        pixel_type, canvas_x, canvas_y, width, height, buffer_padding, canvas_layer);
+    const bool success = access_canvas.read_rect(
+        static_cast<mi::Uint8*>( buffer),
+        buffer_topdown,
+        pixel_type,
+        canvas_x,
+        canvas_y,
+        width,
+        height,
+        buffer_padding,
+        canvas_layer);
     return success ? 0 : -4;
 }
 
@@ -168,13 +177,21 @@ mi::Sint32 Image_api_impl::write_raw_pixels(
     if( width == 0 || height == 0)
         return -2;
 
-    const IMAGE::Pixel_type pixel_type = IMAGE::convert_pixel_type_string_to_enum( buffer_pixel_type);
+    const IMAGE::Pixel_type pixel_type
+        = IMAGE::convert_pixel_type_string_to_enum( buffer_pixel_type);
     if( pixel_type == IMAGE::PT_UNDEF)
         return -3;
 
     IMAGE::Edit_canvas edit_canvas( canvas);
-    const bool success = edit_canvas.write_rect( static_cast<const mi::Uint8*>( buffer), buffer_topdown,
-        pixel_type, canvas_x, canvas_y, width, height, buffer_padding, canvas_layer);
+    const bool success = edit_canvas.write_rect(
+        static_cast<const mi::Uint8*>( buffer), buffer_topdown,
+        pixel_type,
+        canvas_x,
+        canvas_y,
+        width,
+        height,
+        buffer_padding,
+        canvas_layer);
     return success ? 0 : -4;
 }
 
@@ -202,24 +219,25 @@ mi::neuraylib::IBuffer* Image_api_impl::create_buffer_from_canvas(
 
 mi::neuraylib::ICanvas* Image_api_impl::create_canvas_from_buffer(
     const mi::neuraylib::IBuffer* buffer,
-    const char* image_format) const
+    const char* image_format,
+    const char* selector) const
 {
     if( !buffer || !image_format)
         return nullptr;
 
     DISK::Memory_reader_impl reader( buffer);
     return m_image_module->create_canvas(
-        IMAGE::Memory_based(), &reader, image_format, /*selector*/ nullptr);
+        IMAGE::Memory_based(), &reader, image_format, selector);
 }
 
 mi::neuraylib::ICanvas* Image_api_impl::create_canvas_from_reader(
-    mi::neuraylib::IReader* reader, const char* image_format) const
+    mi::neuraylib::IReader* reader, const char* image_format, const char* selector) const
 {
     if( !reader || !image_format)
         return nullptr;
 
     return m_image_module->create_canvas(
-        IMAGE::Memory_based(), reader, image_format, /*selector*/ nullptr);
+        IMAGE::Memory_based(), reader, image_format, selector);
 }
 
 bool Image_api_impl::supports_format_for_decoding(

@@ -46,6 +46,8 @@
 #include "generator_jit_glsl_writer.h"
 #include "generator_jit_streams.h"
 
+#define DEBUG_TYPE "glsl_writer"
+
 namespace mi {
 namespace mdl {
 namespace glsl {
@@ -72,7 +74,8 @@ GLSLWriterBasePass::GLSLWriterBasePass(
     Type_mapper const           &type_mapper,
     mi::mdl::Options_impl const &options,
     mi::mdl::Messages_impl      &messages,
-    bool                        enable_debug)
+    bool                        enable_debug,
+    bool                        enable_opt_remarks)
 : Base(pid)
 , m_alloc(alloc)
 , m_type_mapper(type_mapper)
@@ -850,6 +853,7 @@ glsl::Type *GLSLWriterBasePass::convert_type(
                 return m_tc.int_type;
             default:
                 MDL_ASSERT(!"unexpected LLVM integer type");
+                error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_INTEGER_TYPE);
                 return m_tc.int_type;
             }
         }
@@ -916,6 +920,7 @@ glsl::Type *GLSLWriterBasePass::convert_type(
                 }
             }
             MDL_ASSERT(!"invalid vector type");
+            error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_VECTOR_TYPE);
             return m_tc.error_type;
         }
 
@@ -923,6 +928,7 @@ glsl::Type *GLSLWriterBasePass::convert_type(
     case llvm::Type::FP128TyID:
     case llvm::Type::PPC_FP128TyID:
         MDL_ASSERT(!"unexpected LLVM type");
+        error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_FP_TYPE);
         if (m_ctx.has_double_type()) {
             return m_tc.double_type;
         }
@@ -949,6 +955,7 @@ glsl::Type *GLSLWriterBasePass::convert_type(
             return convert_struct_type(struct_type);
         }
         MDL_ASSERT(!"pointer types not supported, yet");
+        error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_PTR_TYPE);
         return m_tc.error_type;
 
     case llvm::Type::BFloatTyID:
@@ -960,10 +967,12 @@ glsl::Type *GLSLWriterBasePass::convert_type(
     case llvm::Type::FunctionTyID:
     case llvm::Type::ScalableVectorTyID:
         MDL_ASSERT(!"unexpected LLVM type");
+        error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_TYPE);
         return m_tc.error_type;
     }
 
     MDL_ASSERT(!"unknown LLVM type");
+    error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_TYPE);
     return m_tc.error_type;
 }
 
@@ -1497,7 +1506,7 @@ glsl::Expr *GLSLWriterBasePass::create_type_cast(
 
     glsl::Def_function *def = lookup_constructor(dst, arg);
     if (def == nullptr) {
-        // FIXME: create an error
+        error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
         return m_expr_factory.create_invalid(zero_loc);
     }
     MDL_ASSERT(dst->skip_type_alias() == def->get_type()->get_return_type()->skip_type_alias());
@@ -1516,7 +1525,7 @@ glsl::Expr *GLSLWriterBasePass::create_float2int_bitcast(
     Runtime_flags flags;
     glsl::Def_function *def = lookup_runtime("floatBitsToInt", arg, flags);
     if (def == nullptr) {
-        // FIXME: create an error
+        error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
         return m_expr_factory.create_invalid(zero_loc);
     }
     MDL_ASSERT(dst->skip_type_alias() == def->get_type()->get_return_type()->skip_type_alias());
@@ -1536,7 +1545,7 @@ glsl::Expr *GLSLWriterBasePass::create_int2float_bitcast(
     Runtime_flags flags;
     glsl::Def_function *def = lookup_runtime("intBitsToFloat", arg, flags);
     if (def == nullptr) {
-        // FIXME: create an error
+        error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
         return m_expr_factory.create_invalid(zero_loc);
     }
     MDL_ASSERT(dst->skip_type_alias() == def->get_type()->get_return_type()->skip_type_alias());
@@ -1588,7 +1597,7 @@ glsl::Expr *GLSLWriterBasePass::create_runtime_call(
     Runtime_flags flags;
     glsl::Def_function *def = lookup_runtime(func, args, flags);
     if (def == nullptr) {
-        // FIXME: error
+        error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
         return m_expr_factory.create_invalid(loc);
     }
 
@@ -1728,6 +1737,18 @@ glsl::Location GLSLWriterBasePass::convert_location(
 
 // Add a JIT backend warning message to the messages.
 void GLSLWriterBasePass::warning(int code)
+{
+    // FIXME: get from JIT be
+    char MESSAGE_CLASS = 'J';
+
+    mi::mdl::Error_params params(m_alloc);
+
+    string msg(m_messages.format_msg(code, MESSAGE_CLASS, params));
+    m_messages.add_warning_message(code, MESSAGE_CLASS, 0, NULL, msg.c_str());
+}
+
+// Add a JIT backend error message to the messages.
+void GLSLWriterBasePass::error(int code)
 {
     // FIXME: get from JIT be
     char MESSAGE_CLASS = 'J';
@@ -2010,6 +2031,7 @@ size_t GLSLWriterBasePass::fill_binary_data(
 
 // Finalize the compilation unit and write it to the given output stream.
 void GLSLWriterBasePass::finalize(
+    llvm::Module                     &M,
     Generated_code_source            *code,
     list<glsl::Symbol *>::Type const &remaps)
 {

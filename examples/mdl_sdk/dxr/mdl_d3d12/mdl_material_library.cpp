@@ -108,7 +108,6 @@ void Mdl_material_library::register_material(Mdl_material* material)
     if (old_target)
         unregister_material(material);
 
-    assert(material->get_target_code_id() == static_cast<size_t>(-1));
     new_target->register_material(material);
 }
 
@@ -298,28 +297,26 @@ bool Mdl_material_library::reload_material(
     const std::vector<std::string>& modules = desc.get_module_db_names();
     bool success = true;
     for(const auto& module_db_name : modules)
-        success &= reload_module(module_db_name, code, targets_changed);
+        success &= reload_module(module_db_name, code);
+
+    // repair materials
+    success &= repair_materials_after_reload(targets_changed);
     return success;
 }
 
 // ------------------------------------------------------------------------------------------------
 
-bool Mdl_material_library::reload_module(
-    const std::string& module_db_name,
-    bool& targets_changed)
+bool Mdl_material_library::reload_module(const std::string& module_db_name)
 {
-    return reload_module(module_db_name, "", targets_changed);
+    return reload_module(module_db_name, "");
 }
 
 // ------------------------------------------------------------------------------------------------
 
 bool Mdl_material_library::reload_module(
     const std::string& module_db_name,
-    const char* module_source_code,
-    bool& targets_changed)
+    const char* module_source_code)
 {
-    targets_changed = false;
-
     // collect all modules to reload
     std::vector<std::string> dependencies;
     std::deque<std::string> to_process;
@@ -348,7 +345,7 @@ bool Mdl_material_library::reload_module(
             // Add all modules that import the current one to be processed afterwards.
 
             for (auto i_name : found->second.is_imported_by)
-                if(!contains(dependencies, i_name) && !contains(to_process, i_name))
+                if (!contains(dependencies, i_name) && !contains(to_process, i_name))
                     to_process.push_back(i_name);
         };
 
@@ -392,10 +389,15 @@ bool Mdl_material_library::reload_module(
         // reflect changed imports
         update_module_dependencies(module_name);
     }
+    return true;
+}
 
+bool Mdl_material_library::repair_materials_after_reload(bool& targets_changed)
+{
     // update material instances and compiled materials
+    targets_changed = false;
     std::vector<Mdl_material*> changed_materials;
-    std::set<std::string> old_hashes;
+    mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(m_sdk->create_context());
     visit_materials([&](Mdl_material* material) // could be done in parallel if compiling
     {                                           // becomes a bottleneck
 
@@ -407,7 +409,6 @@ bool Mdl_material_library::reload_module(
         if (current_hash != material->get_material_compiled_hash())
         {
             changed_materials.push_back(material);
-            old_hashes.insert(current_hash);
             targets_changed = true;
         }
 

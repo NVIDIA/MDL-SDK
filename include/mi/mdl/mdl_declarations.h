@@ -519,7 +519,7 @@ public:
 
     /// Set the function body.
     ///
-    /// \param body  the new boby of the funtion declaration
+    /// \param body  the new boby of the function declaration
     ///
     /// \note For a error free MDL function this should be a IStatement_compound,
     ///       for a error  free material a IStatement_expression.

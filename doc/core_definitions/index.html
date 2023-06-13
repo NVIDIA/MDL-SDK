@@ -22,7 +22,12 @@ MathJax = {
 <link rel="stylesheet" href="kt_css/sks.css">
 <link rel="stylesheet" href="kt_css/arc.css">
 
+<link rel="stylesheet" href="ext/fonts/noto-sans.css">
+<link rel="stylesheet" href="ext/fonts/linux-libertine.css">
 <link rel="stylesheet" href="ext/fonts/roboto-mono.css">
+<link rel="stylesheet" href="ext/fonts/linux-libertine.css">
+<link rel="stylesheet" href="ext/fonts/roboto-mono.css">
+<link rel="stylesheet" href="ext/fonts/noto-sans.css">
 <link href="../images/mdl_icon.png" type="image/png" rel="shortcut icon" /></head>
 <body>
 <div id="blackheader">
@@ -135,27 +140,29 @@ MathJax = {
 <li><span class="nodestatus level2" data-depth="2"></span>
 <span class="navlink" data-basename="functions" data-target="bitmap-texture"><span class="navnumber">3.2</span> Bitmap texture</span></li>
 <li><span class="nodestatus level2" data-depth="2"></span>
-<span class="navlink" data-basename="functions" data-target="perlin-noise-texture"><span class="navnumber">3.3</span> Perlin noise texture</span></li>
+<span class="navlink" data-basename="functions" data-target="triplanar-bitmap-texture"><span class="navnumber">3.3</span> Triplanar Bitmap texture</span></li>
 <li><span class="nodestatus level2" data-depth="2"></span>
-<span class="navlink" data-basename="functions" data-target="perlin-noise-texture-bump-mapping"><span class="navnumber">3.4</span> Perlin noise texture &#8211; bump mapping</span></li>
+<span class="navlink" data-basename="functions" data-target="perlin-noise-texture"><span class="navnumber">3.4</span> Perlin noise texture</span></li>
 <li><span class="nodestatus level2" data-depth="2"></span>
-<span class="navlink" data-basename="functions" data-target="cellular-noise-texture"><span class="navnumber">3.5</span> Cellular noise texture</span></li>
+<span class="navlink" data-basename="functions" data-target="perlin-noise-texture-bump-mapping"><span class="navnumber">3.5</span> Perlin noise texture &#8211; bump mapping</span></li>
 <li><span class="nodestatus level2" data-depth="2"></span>
-<span class="navlink" data-basename="functions" data-target="cellular-noise-texture-bump-mapping"><span class="navnumber">3.6</span> Cellular noise texture &#8211; bump mapping</span></li>
+<span class="navlink" data-basename="functions" data-target="cellular-noise-texture"><span class="navnumber">3.6</span> Cellular noise texture</span></li>
 <li><span class="nodestatus level2" data-depth="2"></span>
-<span class="navlink" data-basename="functions" data-target="flow-noise-texture"><span class="navnumber">3.7</span> Flow noise texture</span></li>
+<span class="navlink" data-basename="functions" data-target="cellular-noise-texture-bump-mapping"><span class="navnumber">3.7</span> Cellular noise texture &#8211; bump mapping</span></li>
 <li><span class="nodestatus level2" data-depth="2"></span>
-<span class="navlink" data-basename="functions" data-target="flow-noise-texture-bump-mapping"><span class="navnumber">3.8</span> Flow noise texture &#8211; bump mapping</span></li>
+<span class="navlink" data-basename="functions" data-target="flow-noise-texture"><span class="navnumber">3.8</span> Flow noise texture</span></li>
 <li><span class="nodestatus level2" data-depth="2"></span>
-<span class="navlink" data-basename="functions" data-target="3d-checker-texture"><span class="navnumber">3.9</span> 3D checker texture</span></li>
+<span class="navlink" data-basename="functions" data-target="flow-noise-texture-bump-mapping"><span class="navnumber">3.9</span> Flow noise texture &#8211; bump mapping</span></li>
 <li><span class="nodestatus level2" data-depth="2"></span>
-<span class="navlink" data-basename="functions" data-target="3d-checker-texture-bump-mapping"><span class="navnumber">3.10</span> 3D checker texture &#8211; bump mapping</span></li>
+<span class="navlink" data-basename="functions" data-target="3d-checker-texture"><span class="navnumber">3.10</span> 3D checker texture</span></li>
 <li><span class="nodestatus level2" data-depth="2"></span>
-<span class="navlink" data-basename="functions" data-target="bitmap-texture-bump"><span class="navnumber">3.11</span> Bitmap texture, bump</span></li>
+<span class="navlink" data-basename="functions" data-target="3d-checker-texture-bump-mapping"><span class="navnumber">3.11</span> 3D checker texture &#8211; bump mapping</span></li>
 <li><span class="nodestatus level2" data-depth="2"></span>
-<span class="navlink" data-basename="functions" data-target="normal-map-texture"><span class="navnumber">3.12</span> Normal map texture</span></li>
+<span class="navlink" data-basename="functions" data-target="bitmap-texture-bump"><span class="navnumber">3.12</span> Bitmap texture, bump</span></li>
 <li><span class="nodestatus level2" data-depth="2"></span>
-<span class="navlink" data-basename="functions" data-target="blend-normals"><span class="navnumber">3.13</span> Blend normals</span></li></ul>
+<span class="navlink" data-basename="functions" data-target="normal-map-texture"><span class="navnumber">3.13</span> Normal map texture</span></li>
+<li><span class="nodestatus level2" data-depth="2"></span>
+<span class="navlink" data-basename="functions" data-target="triplanar-normalmap-texture"><span class="navnumber">3.14</span> Triplanar Normalmap texture</span></li></ul>
 </li></ul>
 
 <ul>
@@ -195,8 +202,8 @@ local file system (accessed through the
 bottom of the page or from the following links:</p>
 
 <div style="padding-left:2em;">
-<a href="mdl_core_definitions.230415.A4.pdf">View documentation in A4 format</a><br>
-<a href="mdl_core_definitions.230415.LTR.pdf">View documentation in US Letter format</a><br>
+<a href="mdl_core_definitions.230603.A4.pdf">View documentation in A4 format</a><br>
+<a href="mdl_core_definitions.230603.LTR.pdf">View documentation in US Letter format</a><br>
 </div>
 <h3>Overriding security settings</h3>
 
@@ -269,12 +276,13 @@ When the page loads, click the check box &#8220;Allow blocked content.&#8221;</p
 </div><div id="blackfooter">
 <span class="footeritem">
 </span>
-<span class="footeritem">
-15&#160;April&#160;2023,&#160;20:38,&#160;rev.363600.4887
+  <span class="footeritem">
+3&#160;June&#160;2023,&#160;20:12,&#160;r367100.2992, v1.4
 </span>
-<span class="footeritem">
-<a href="https://www.nvidia.com/en-us/about-nvidia/legal-info/" target="_blank" shape="rect">&copy; 2023 NVIDIA&nbsp;Corporation.</a> All rights reserved.
+ <span class="footeritem">
+<a href="https://www.nvidia.com/en-us/about-nvidia/legal-info/">&copy; 2023 NVIDIA&nbsp;Corporation.</a> All rights reserved.
 </span>
+
 </div>
 
 <script src="ext/jquery/jquery-3.2.1.min.js"></script>
@@ -297,6 +305,7 @@ When the page loads, click the check box &#8220;Allow blocked content.&#8221;</p
 <script src="kt_js/toc.js"></script>
 <script src="kt_js/annotate.js"></script>
 <script src="kt_js/rfolder.js"></script>
+<script src="kt_js/security_workaround.js"></script>
 <script src="kt_js/search_targets.js"></script>
 
 </body>

@@ -33,17 +33,43 @@
 # -------------------------------------------------------------------------------------------------
 
 # use the python binray of the dev package if available
-if(NOT python_PATH AND MDL_DEPENDENCY_PYTHON_DEV_EXE)
+if((NOT python_PATH OR NOT EXISTS python_PATH) AND MDL_DEPENDENCY_PYTHON_DEV_EXE)
     set(python_PATH ${MDL_DEPENDENCY_PYTHON_DEV_EXE} CACHE FILEPATH "Path of the Python 2.7+ binary." FORCE)
 endif()
 
-# use a default fallback
-if(NOT python_PATH)
-    find_program(python_PATH python)
+# use a default fallback to find python3
+if(NOT python_PATH OR NOT EXISTS ${python_PATH})
+    # use the cmake built-in find script (requires 3.12)
+    if(EXISTS ${PYTHON_DIR})
+        set(Python3_ROOT_DIR ${PYTHON_DIR})
+    endif()
+    find_package (Python3 COMPONENTS Interpreter)
+
+    # use the found interpreter as the default python interpreter tool
+    if(TARGET Python3::Interpreter)
+        message(WARNING "Changing \"python_PATH\" to \"${Python3_EXECUTABLE}\" because specified path does not exist: \"${python_PATH}\"")
+        set(python_PATH ${Python3_EXECUTABLE} CACHE FILEPATH "Path of the Python 3.8+ binary." FORCE)
+    endif()
 endif()
 
-if(NOT python_PATH)
-    MESSAGE(FATAL_ERROR "The tool dependency \"${TARGET_ADD_TOOL_DEPENDENCY_TOOL}\" for target \"${TARGET_ADD_TOOL_DEPENDENCY_TARGET}\" could not be resolved.")
+# use a default fallback to find python2
+if(NOT python_PATH OR NOT EXISTS ${python_PATH})
+    # use the cmake built-in find script (requires 3.12)
+    if(EXISTS ${PYTHON_DIR})
+        set(Python2_ROOT_DIR ${PYTHON_DIR})
+    endif()
+    find_package (Python2 COMPONENTS Interpreter)
+
+    # use the found interpreter as the default python interpreter tool
+    if(TARGET Python2::Interpreter)
+        message(WARNING "Changing \"python_PATH\" to \"${Python2_EXECUTABLE}\" because specified path does not exist: \"${python_PATH}\"")
+        set(python_PATH ${Python3_EXECUTABLE} CACHE FILEPATH "Path of the Python 2.7+ binary." FORCE)
+    endif()
+endif()
+
+# fallbacks did not work
+if(NOT python_PATH OR NOT EXISTS ${python_PATH})
+    MESSAGE(FATAL_ERROR "The tool dependency \"${TARGET_ADD_TOOL_DEPENDENCY_TOOL}\" for target \"${TARGET_ADD_TOOL_DEPENDENCY_TARGET}\" could not be resolved. Please specify \"PYTHON_DIR\" or \"python_PATH\"" )
 endif()
 
 # call --version

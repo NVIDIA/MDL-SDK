@@ -77,10 +77,11 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
 {
     // init mdl options
     m_mdl_options.use_class_compilation = app->get_options()->use_class_compilation;
-    m_mdl_options.fold_all_bool_parameters = false;
+    m_mdl_options.fold_all_bool_parameters = app->get_options()->fold_all_bool_parameters;
     m_mdl_options.fold_all_enum_parameters = false;
     m_mdl_options.enable_shader_cache = app->get_options()->enable_shader_cache;
-
+    m_mdl_options.distilling_support_enabled = false;
+    m_mdl_options.distilling_target = "none";
 
     // Access the MDL SDK
     m_neuray = mi::examples::mdl::load_and_get_ineuray();
@@ -105,10 +106,10 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
     mi::base::Handle<mi::neuraylib::IPlugin_configuration> plugin_conf(
         m_neuray->get_api_component<mi::neuraylib::IPlugin_configuration>());
 
-    log_info("Load 'nv_freeimage' plugin.");
-    if (mi::examples::mdl::load_plugin(m_neuray.get(), "nv_freeimage" MI_BASE_DLL_FILE_EXT) != 0)
+    log_info("Load 'nv_openimageio' plugin.");
+    if (mi::examples::mdl::load_plugin(m_neuray.get(), "nv_openimageio" MI_BASE_DLL_FILE_EXT) != 0)
     {
-        log_error("Failed to load the 'nv_freeimage' plugin.", SRC);
+        log_error("Failed to load the 'nv_openimageio' plugin.", SRC);
         return;
     }
 
@@ -119,6 +120,13 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
         return;
     }
 
+    const bool distiller_loaded = 
+        mi::examples::mdl::load_plugin(m_neuray.get(), "mdl_distiller" MI_BASE_DLL_FILE_EXT) == 0;
+
+    if (!distiller_loaded)
+    {
+        log_error("Failed to load the 'mdl_distiller' plugin. Continue without distilling support.");
+    }
 
     // Start the MDL SDK
     mi::Sint32 result = m_neuray->start();
@@ -135,6 +143,11 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
     m_mdl_impexp_api = m_neuray->get_api_component<mi::neuraylib::IMdl_impexp_api>();
     m_evaluator_api = m_neuray->get_api_component<mi::neuraylib::IMdl_evaluator_api>();
 
+    if (distiller_loaded)
+    {
+        m_distiller_api = m_neuray->get_api_component<mi::neuraylib::IMdl_distiller_api>();
+        m_mdl_options.distilling_support_enabled = m_distiller_api.is_valid_interface();
+    }
 
     // create and setup HLSL backend
     mi::base::Handle<mi::neuraylib::IMdl_backend_api> mdl_backend_api(
@@ -230,7 +243,7 @@ Mdl_sdk::~Mdl_sdk()
     m_hlsl_backend = nullptr;
     m_database = nullptr;
     m_config = nullptr;
-
+    m_distiller_api = nullptr;
 
     // Shut down the MDL SDK
     if (m_neuray->shutdown() != 0)

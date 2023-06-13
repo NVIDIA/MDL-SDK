@@ -89,7 +89,7 @@ public:
         // reset private fields of the context to allow reuse
         void reset();
 
-        // calls IMdl_factory::decode_name() if encoded names are enabled, otherwise returns \p name
+        // calls IMdl_factory::decode_name()
         std::string decode_name(const std::string& name);
 
         // required to resolve resources

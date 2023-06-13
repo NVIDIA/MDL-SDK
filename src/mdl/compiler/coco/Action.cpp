@@ -32,22 +32,30 @@ Coco/R itself) does not fall under the GNU General Public License.
 
 namespace Coco {
 
-Action::Action(int typ, int sym, Node::TransCode tc) {
-	this->target = NULL;
-	this->next   = NULL;
-
-	this->typ = typ; this->sym = sym; this->tc = tc;
+Action::Action(int typ, int sym, Node::TransCode tc)
+: typ(typ)
+, sym(sym)
+, tc(tc)
+, target(NULL)
+, next(NULL)
+{
 }
 
 void Action::AddTarget(Target *t) { // add t to the action.targets
 	Target *last = NULL;
 	Target *p = target;
 	while (p != NULL && t->state->nr >= p->state->nr) {
-		if (t->state == p->state) return;
+		if (t->state == p->state) {
+			return;
+		}
 		last = p; p = p->next;
 	}
 	t->next = p;
-	if (p == target) target = t; else last->next = t;
+	if (p == target) {
+		target = t;
+	} else {
+		last->next = t;
+	}
 }
 
 void Action::AddTargets(Action *a) {// add copy of a.targets to action.targets
@@ -55,14 +63,16 @@ void Action::AddTargets(Action *a) {// add copy of a.targets to action.targets
 		Target *t = new Target(p->state);
 		AddTarget(t);
 	}
-	if (a->tc == Node::contextTrans) tc = Node::contextTrans;
+	if (a->tc == Node::contextTrans) {
+		tc = Node::contextTrans;
+	}
 }
 
 CharSet* Action::Symbols(Tab *tab) {
 	CharSet *s;
-	if (typ == Node::clas)
+	if (typ == Node::clas) {
 		s = tab->CharClassSet(sym)->Clone();
-	else {
+	}  else {
 		s = new CharSet(); s->Set(sym);
 	}
 	return s;
@@ -73,7 +83,7 @@ void Action::ShiftWith(CharSet *s, Tab *tab) {
 		typ = Node::chr; sym = s->First();
 	} else {
 		CharClass *c = tab->FindCharClass(s);
-		if (c == NULL) c = tab->NewCharClass(L"#", s); // class with dummy name
+		if (c == NULL) c = tab->NewCharClass("#", s); // class with dummy name
 		typ = Node::clas; sym = c->n;
 	}
 }

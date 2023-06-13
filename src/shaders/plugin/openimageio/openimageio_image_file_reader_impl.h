@@ -55,7 +55,8 @@ public:
         const std::string& oiio_format,
         const std::string& plugin_name,
         mi::neuraylib::IImage_api* image_api,
-        mi::neuraylib::IReader* reader);
+        mi::neuraylib::IReader* reader,
+        const char* selector);
 
     // methods of mi::neuraylib::IImage_file
 
@@ -89,7 +90,7 @@ public:
 private:
     /// Sets up \c m_image_input.
     ///
-    /// Modifies \p c_image_input and \p c_nv_header_only. Only const because it is used from read()
+    /// Modifies \c m_image_input and \c m_nv_header_only. Only const because it is used from read()
     /// (and the constructor).
     bool setup_image_input( bool from_constructor) const;
 
@@ -114,20 +115,37 @@ private:
     /// Input object
     mutable std::unique_ptr<OIIO::ImageInput> m_image_input;
 
-    /// Resolution of the image in x-direction.
-    mi::Uint32 m_resolution_x;
-
-    /// Resolution of the image in y-direction.
-    mi::Uint32 m_resolution_y;
-
-    /// Resolution of the image in z-direction.
-    mi::Uint32 m_resolution_z;
-
-    /// The pixel type of the image.
-    IMAGE::Pixel_type m_pixel_type;
-
     /// Indicates whether the "nv:header_only" attribute was set.
-    mutable bool m_nv_header_only;
+    mutable bool m_nv_header_only = false;
+
+    /// \name Various properties derived from the image input and the selector.
+    //@{
+
+    /// The subimage index (usually 0, but the selector might affect this).
+    mi::Uint32 m_subimage = 0;
+
+    /// Resolution of the subimage in x-direction.
+    mi::Uint32 m_resolution_x = 1;
+
+    /// Resolution of the subimage in y-direction.
+    mi::Uint32 m_resolution_y = 1;
+
+    /// Resolution of the subimage in z-direction.
+    mi::Uint32 m_resolution_z = 1;
+
+    /// The pixel type of the subimage (after applying the selector).
+    IMAGE::Pixel_type m_pixel_type = IMAGE::PT_UNDEF;
+
+    /// The channel names (for layers: after stripping the selector prefix plus dot).
+    std::vector<std::string> m_channel_names;
+
+    /// The first channel index to import.
+    mi::Sint32 m_channel_start = -1;
+
+    /// The last channel index+1 to import.
+    mi::Sint32 m_channel_end = -1;
+
+    //@}
 };
 
 } // namespace MI_OIIO

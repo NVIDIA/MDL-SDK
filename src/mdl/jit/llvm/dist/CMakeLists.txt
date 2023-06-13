@@ -23,10 +23,11 @@ if (NOT PACKAGE_VERSION)
 endif()
 
 if ((CMAKE_GENERATOR MATCHES "Visual Studio") AND (CMAKE_GENERATOR_TOOLSET STREQUAL ""))
-  message(WARNING "Visual Studio generators use the x86 host compiler by "
-                  "default, even for 64-bit targets. This can result in linker "
-                  "instability and out of memory errors. To use the 64-bit "
-                  "host compiler, pass -Thost=x64 on the CMake command line.")
+  set(CMAKE_GENERATOR_TOOLSET "host=x64")
+  # message(WARNING "Visual Studio generators use the x86 host compiler by "
+  #                 "default, even for 64-bit targets. This can result in linker "
+  #                 "instability and out of memory errors. To use the 64-bit "
+  #                 "host compiler, pass -Thost=x64 on the CMake command line.")
 endif()
 
 if (CMAKE_GENERATOR STREQUAL "Xcode" AND NOT CMAKE_OSX_ARCHITECTURES)

@@ -112,7 +112,7 @@ FreeImageIO construct_io_for_reading()
 {
     FreeImageIO result;
     result.read_proc = read_handler;
-    result.write_proc = 0;
+    result.write_proc = nullptr;
     result.seek_proc = seek_handler;
     result.tell_proc = tell_handler;
     return result;
@@ -121,7 +121,7 @@ FreeImageIO construct_io_for_reading()
 FreeImageIO construct_io_for_writing()
 {
     FreeImageIO result;
-    result.read_proc = 0;
+    result.read_proc = nullptr;
     result.write_proc = write_handler;
     result.seek_proc = seek_handler;
     result.tell_proc = tell_handler;
@@ -137,7 +137,7 @@ const char* convert_freeimage_pixel_type_to_neuray_pixel_type( FREE_IMAGE_TYPE t
         case FIT_RGBAF:  return "Color";
         case FIT_FLOAT:  return "Float32";
         case FIT_INT32:  return "Sint32";
-        default:         return 0;
+        default:         return nullptr;
     }
 }
 

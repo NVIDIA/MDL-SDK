@@ -36,6 +36,15 @@
 #include <mi/mdl/mdl_definitions.h>
 #include <mi/mdl/mdl_stdlib_types.h>
 
+// Portable alignment macro supporting pre C++11.
+#ifndef __align__
+#ifdef _MSC_VER
+#define __align__(n) __declspec(align(n))
+#else
+#define __align__(n) __attribute__((aligned(n)))
+#endif
+#endif
+
 namespace mi {
 namespace mdl {
 
@@ -621,7 +630,8 @@ struct Texture_handler_vtable_impl {
         Texture_handler_base const  *self,
         tct_uint                    bsdf_measurement_index,
         tct_float const             theta_phi_out[2],   //!< theta in [0, pi/2] and phi in [-pi, pi]
-        tct_float const             xi[3],              //!< uniform random values
+        tct_float const             xi[3],              /*!< pseudo-random sample numbers
+                                                             in range [0, 1) */
         Mbsdf_part                  part);              //!< reflection or transmission
 
     /// Implementation of \c bsdf_measurement_pdf() for an MBSDF.
@@ -727,6 +737,15 @@ struct Texture_handler_vtable_impl {
         Shading_state_material                *state,
         tct_uint                               scene_data_id,
         tct_float const                        default_value[3],
+        tct_bool                               uniform_lookup);
+
+    /// Implementation of scene_data_lookup_float4x4().
+    void (*m_scene_data_lookup_float4x4)(
+        tct_float                              result[16],
+        Texture_handler_base const            *self_base,
+        Shading_state_material                *state,
+        tct_uint                               scene_data_id,
+        tct_float const                        default_value[16],
         tct_bool                               uniform_lookup);
 
     //
@@ -838,13 +857,13 @@ enum Bsdf_event_type {
 #define MDL_CORE_BSDF_USE_MATERIAL_IOR (-1.0f)
 
 /// Input and output structure for BSDF sampling data.
-struct Bsdf_sample_data {
+struct __align__(16) Bsdf_sample_data {
     tct_float3       ior1;           ///< mutual input: IOR current medium
     tct_float3       ior2;           ///< mutual input: IOR other side
     tct_float3       k1;             ///< mutual input: outgoing direction
 
     tct_float3       k2;             ///< output: incoming direction
-    tct_float4       xi;             ///< input: pseudo-random sample numbers
+    tct_float4       xi;             ///< input: pseudo-random sample numbers in range [0, 1)
     tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
     tct_float3       bsdf_over_pdf;  ///< output: bsdf * dot(normal, k2) / pdf
     Bsdf_event_type  event_type;     ///< output: the type of event for the generated sample
@@ -863,7 +882,7 @@ enum Df_handle_slot_mode
 };
 
 /// Input and output structure for BSDF evaluation data.
-struct Bsdf_evaluate_data_base {};
+struct __align__(16) Bsdf_evaluate_data_base {};
 
 template<Df_handle_slot_mode N>
 struct Bsdf_evaluate_data : public Bsdf_evaluate_data_base
@@ -912,7 +931,7 @@ struct Bsdf_evaluate_data<DF_HSM_NONE> : public Bsdf_evaluate_data_base
 };
 
 /// Input and output structure for BSDF PDF calculation data.
-struct Bsdf_pdf_data {
+struct __align__(16) Bsdf_pdf_data {
     tct_float3       ior1;           ///< mutual input: IOR current medium
     tct_float3       ior2;           ///< mutual input: IOR other side
     tct_float3       k1;             ///< mutual input: outgoing direction
@@ -922,7 +941,7 @@ struct Bsdf_pdf_data {
 };
 
 /// Input and output structure for BSDF auxiliary calculation data.
-struct Bsdf_auxiliary_data_base {};
+struct __align__(16) Bsdf_auxiliary_data_base {};
 
 template<Df_handle_slot_mode N>
 struct Bsdf_auxiliary_data : public Bsdf_auxiliary_data_base
@@ -1212,9 +1231,9 @@ enum Edf_event_type
 };
 
 /// Input and output structure for EDF sampling data.
-struct Edf_sample_data
+struct __align__(16) Edf_sample_data
 {
-    tct_float4      xi;             ///< input: pseudo-random sample number
+    tct_float4      xi;             ///< input: pseudo-random sample numbers in range [0, 1)
     tct_float3      k1;             ///< output: outgoing direction
     tct_float       pdf;            ///< output: pdf (non-projected hemisphere)
     tct_float3      edf_over_pdf;   ///< output: edf * dot(normal,k1) / pdf
@@ -1223,7 +1242,7 @@ struct Edf_sample_data
 };
 
 /// Input and output structure for EDF evaluation data.
-struct Edf_evaluate_data_base {};
+struct __align__(16) Edf_evaluate_data_base {};
 
 template<Df_handle_slot_mode N>
 struct Edf_evaluate_data : public Edf_evaluate_data_base
@@ -1258,14 +1277,14 @@ struct Edf_evaluate_data<DF_HSM_NONE> : public Edf_evaluate_data_base
 };
 
 /// Input and output structure for EDF PDF calculation data.
-struct Edf_pdf_data
+struct __align__(16) Edf_pdf_data
 {
     tct_float3      k1;             ///< input: outgoing direction
     tct_float       pdf;            ///< output: pdf (non-projected hemisphere)
 };
 
 /// Input and output structure for EDF auxiliary calculation data.
-struct Edf_auxiliary_data_base {};
+struct __align__(16) Edf_auxiliary_data_base {};
 
 template<Df_handle_slot_mode N>
 struct Edf_auxiliary_data : public Edf_auxiliary_data_base

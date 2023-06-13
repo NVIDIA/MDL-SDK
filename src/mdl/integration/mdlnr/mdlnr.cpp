@@ -47,6 +47,7 @@
 
 #include "mdlnr.h"
 #include "mdlnr_search_path.h"
+#include "mdlnr_module.h"
 
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
 #include <mdl/compiler/compilercore/compilercore_assert.h>
@@ -56,6 +57,7 @@
 #include <mdl/compiler/compilercore/compilercore_file_utils.h>
 #include <mdl/compiler/compilercore/compilercore_code_cache.h>
 #include <mdl/compiler/compilercore/compilercore_errors.h>
+#include <mi/mdl/mdl_distiller_node_types.h>
 
 // Enable the MDL debug allocator in DEBUG builds
 #if defined(DEBUG)
@@ -216,6 +218,8 @@ bool Mdlc_module_impl::init()
     if (!m_mdl)
         return false;
 
+    mi::mdl::Node_types::init();
+
     m_mdl->install_search_path(MDL_search_path::create(m_allocator.get()));
 
     // retrieve MDL parameters
@@ -237,6 +241,18 @@ bool Mdlc_module_impl::init()
     options.set_option(mi::mdl::MDL::option_warn, "275=off");
 
 
+    {
+        // register nvidia/distilling_support.mdl
+        bool res = m_mdl->add_builtin_module(
+            "::nvidia::distilling_support",
+            (char const *)mi::mdl::mdl_module_distilling_support,
+            sizeof(mi::mdl::mdl_module_distilling_support),
+            /*is_encoded=*/true,
+            /*is_native=*/false);
+
+        MDL_ASSERT(res && "Registration of ::nvidia::distilling_support failed");
+        STLEXT::no_unused_variable_warning_please(res);
+    }
 
     mi::mdl::Allocator_builder builder(m_allocator.get());
 
@@ -258,6 +274,7 @@ void Mdlc_module_impl::exit()
 {
 
     if (m_mdl) {
+        mi::mdl::Node_types::exit();
         m_mdl->release();
         m_mdl = nullptr;
     }

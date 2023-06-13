@@ -29,6 +29,13 @@
 # name of the target and the resulting library
 set(PROJECT_NAME mdl-integration-mdlnr)
 
+# generated Files
+set(_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
+set(_GENERATED_SOURCES
+    ${_GENERATED_DIR}/mdlnr_module.cpp
+    ${_GENERATED_DIR}/mdlnr_module.h
+    )
+
 # collect sources
 set(PROJECT_HEADERS
     "i_mdlnr.h"
@@ -39,17 +46,40 @@ set(PROJECT_HEADERS
 set(PROJECT_SOURCES
     "mdlnr.cpp"
     "mdlnr_search_path.cpp"
+    ${_GENERATED_SOURCES}
     ${PROJECT_HEADERS}
     )
-    
+
+# mark files as generated to disable the check for existence during configure
+set_source_files_properties(${_GENERATED_SOURCES} PROPERTIES GENERATED TRUE)
+
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
     SOURCES ${PROJECT_SOURCES}
+    ADDITIONAL_INCLUDE_DIRS ${_GENERATED_DIR}
 )
 
 # add dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME} 
-    DEPENDS 
+target_add_dependencies(TARGET ${PROJECT_NAME}
+    DEPENDS
         boost
+    )
+
+set(_STANDARD_MDL
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../shaders/mdl/nvidia/distilling_support.mdl
+    )
+
+target_add_tool_dependency(TARGET ${PROJECT_NAME} TOOL python)
+add_custom_command(
+    OUTPUT
+        ${_GENERATED_DIR}/mdlnr_module.cpp
+        ${_GENERATED_DIR}/mdlnr_module.h
+    COMMAND ${CMAKE_COMMAND} -E echo "Generate Standard Module Header ..."
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
+    COMMAND ${python_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/../../../mdl/compiler/compilercore/generate_stdmodule.py -E P4ssW0rT -e -d ${_GENERATED_DIR}/mdlnr_module.cpp ${_STANDARD_MDL}
+    DEPENDS
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../mdl/compiler/compilercore/generate_stdmodule.py
+        ${_STANDARD_MDL}
+    VERBATIM
     )

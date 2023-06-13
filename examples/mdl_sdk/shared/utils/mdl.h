@@ -121,7 +121,7 @@ namespace mi { namespace examples { namespace mdl
     };
 
     /// Configures the MDL SDK by installing a default logger, setting the default MDL search path,
-    /// and loading the freeimage and dds image plugins. This done by many examples so it makes
+    /// and loading the OpenImageIO and DDS image plugins. This done by many examples so it makes
     /// sense to bundle this here in one place and focus on the actual example.
     ///
     /// \param neuray                   pointer to the main MDL SDK interface
@@ -156,19 +156,15 @@ namespace mi { namespace examples { namespace mdl
 
     /// Adds a missing signature to a material name.
     ///
-    /// If encoded names are enabled, then material names include the signature. Specifying these
-    /// signatures on the command-line can be tedious. Hence, this convenience method is used to
-    /// add the missing signature. Since there are no overloads for materials, we can simply search
-    /// the module for the given material -- or simpler, let the overload resolution handle that.
-    ///
-    /// If encoded names are disabled, then input and output are identical, and there is no reason
-    /// to call this method.
+    /// Specifying material signatures on the command-line can be tedious. Hence, this convenience
+    /// method is used to add the missing signature. Since there are no overloads for materials, we
+    /// can simply search the module for the given material -- or simpler, let the overload
+    /// resolution handle that.
     ///
     /// \param module                       the module containing the material
     /// \param material_name                the DB name of the material without signature
-    /// \return                             the DB name of the material including signature (if
-    ///                                     encoded name are enabled), or the empty string in case
-    ///                                     of errors.
+    /// \return                             the DB name of the material including signature, or the
+    ///                                     empty string in case of errors.
     inline std::string add_missing_material_signature(
         const mi::neuraylib::IModule* module,
         const std::string& material_name);
@@ -328,7 +324,6 @@ namespace mi { namespace examples { namespace mdl
 
     inline mi::Sint32 load_plugin(mi::neuraylib::INeuray* neuray, const char* path)
     {
-        // Load the FreeImage plugin.
         mi::base::Handle<mi::neuraylib::IPlugin_configuration> plugin_conf(
             neuray->get_api_component<mi::neuraylib::IPlugin_configuration>());
 
@@ -500,11 +495,13 @@ namespace mi { namespace examples { namespace mdl
         // load plugins if not skipped
         if (options.skip_loading_plugins)
             return true;
-        if (load_plugin(neuray, "nv_freeimage" MI_BASE_DLL_FILE_EXT) != 0)
+
+        if (load_plugin(neuray, "nv_openimageio" MI_BASE_DLL_FILE_EXT) != 0)
         {
-            fprintf(stderr, "Fatal: Failed to load the nv_freeimage plugin.\n");
+            fprintf(stderr, "Fatal: Failed to load the nv_openimageio plugin.\n");
             return false;
         }
+
         if (load_plugin(neuray, "dds" MI_BASE_DLL_FILE_EXT) != 0)
         {
             fprintf(stderr, "Fatal: Failed to load the dds plugin.\n");

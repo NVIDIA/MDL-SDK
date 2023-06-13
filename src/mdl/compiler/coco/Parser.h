@@ -42,17 +42,18 @@ namespace Coco {
 
 class Parser {
 private:
-	enum {
+	enum TokenKind {
 		_EOF=0,
 		_ident=1,
 		_number=2,
 		_string=3,
 		_badString=4,
 		_char=5,
+		maxT=41,
+		noSym = 41,
 		_ddtSym=42,
 		_optionSym=43
 	};
-	int maxT;
 
 	Token *dummyToken;
 	int errDist;
@@ -81,8 +82,8 @@ int id;
 	ParserGen *pgen;
 
 	bool genScanner;
-	wchar_t* tokenString;  // used in declarations of literal tokens
-	wchar_t* noString;     // used in declarations of literal tokens
+	char* tokenString;  // used in declarations of literal tokens
+	char* noString;     // used in declarations of literal tokens
 
 	// This method will be called by the contructor if it exits.
 	// This support is specific to the C++ version of Coco/R.
@@ -93,7 +94,7 @@ int id;
 		id  = 0;
 		str = 1;
 		tokenString = NULL;
-		noString = coco_string_create(L"-none-");
+		noString = coco_string_create("-none-");
 	}
 
 	// Uncomment this method if cleanup is necessary,
@@ -108,7 +109,7 @@ int id;
 
 	Parser(Scanner *scanner);
 	~Parser();
-	void SemErr(const wchar_t* msg);
+	void SemErr(const char* msg);
 
 	void Coco();
 	void SetDecl();
@@ -120,7 +121,7 @@ int id;
 	void Expression(Graph* &g);
 	void SimSet(CharSet* &s);
 	void Char(int &n);
-	void Sym(wchar_t* &name, int &kind);
+	void Sym(char* &name, int &kind);
 	void Term(Graph* &g);
 	void Resolver(Position* &pos);
 	void Factor(Graph* &g);

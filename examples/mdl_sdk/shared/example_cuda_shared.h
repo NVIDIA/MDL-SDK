@@ -777,7 +777,7 @@ bool Material_gpu_context::prepare_texture(
             &device_tex_miparray, &channel_desc, extent, num_levels));
 
         // create all mipmap levels and copy them to the CUDA arrays in the mipmapped array
-        mi::base::Handle<mi::IArray> mipmaps(image_api->create_mipmaps(canvas.get(), 1.0f));
+        mi::base::Handle<mi::IArray> mipmaps(image_api->create_mipmap(canvas.get(), 1.0f));
 
         for (mi::Uint32 level = 0; level < num_levels; ++level) {
             mi::base::Handle<mi::neuraylib::ICanvas const> level_canvas;
@@ -1365,6 +1365,7 @@ public:
         bool enable_derivatives,
         bool fold_ternary_on_df,
         bool enable_auxiliary,
+        bool enable_pdf,
         bool use_adapt_normal,
         const std::string& df_handle_mode);
 
@@ -1477,6 +1478,7 @@ Material_compiler::Material_compiler(
         bool enable_derivatives,
         bool fold_ternary_on_df,
         bool enable_auxiliary,
+        bool enable_pdf,
         bool use_adapt_normal,
         const std::string& df_handle_mode)
     : m_mdl_impexp_api(mdl_impexp_api, mi::base::DUP_INTERFACE)
@@ -1514,6 +1516,10 @@ Material_compiler::Material_compiler(
         // We enable it to create an additional 'auxiliary' function that can be called on each
         // distribution function to fill an albedo and normal buffer e.g. for denoising.
         check_success(m_be_cuda_ptx->set_option("enable_auxiliary", "on") == 0);
+    }
+    if (!enable_pdf) {
+        // Option "enable_pdf": Default is enabled.
+        check_success(m_be_cuda_ptx->set_option("enable_pdf", "off") == 0);
     }
 
 
@@ -1624,8 +1630,12 @@ mi::base::Handle<const mi::neuraylib::ITarget_code> Material_compiler::generate_
     check_success(code_cuda_ptx);
 
 #ifdef DUMP_PTX
-    std::cout << "Dumping CUDA PTX code:\n\n"
-        << code_cuda_ptx->get_code() << std::endl;
+    FILE *file = fopen("target_code.ptx", "wt");
+    if (file)
+    {
+        fwrite(code_cuda_ptx->get_code(), code_cuda_ptx->get_code_size(), 1, file);
+        fclose(file);
+    }
 #endif
 
     return code_cuda_ptx;
@@ -1828,8 +1838,12 @@ CUmodule build_linked_kernel(
 
     std::string ptx_func_array_src = generate_func_array_ptx(target_codes);
 #ifdef DUMP_PTX
-    std::cout << "Dumping CUDA PTX code for the \"mdl_expr_functions\" array:\n\n"
-        << ptx_func_array_src << std::endl;
+    FILE *file = fopen("func_array.ptx", "wt");
+    if (file)
+    {
+        fwrite(ptx_func_array_src.c_str(), ptx_func_array_src.size(), 1, file);
+        fclose(file);
+    }
 #endif
 
     // Link all generated code, our generated PTX array and our kernel together
@@ -1901,6 +1915,15 @@ CUmodule build_linked_kernel(
     std::cout << "CUDA link completed." << std::endl;
     if (info_log[0])
         std::cout << "Linker output:\n" << info_log << std::endl;
+
+#ifdef DUMP_PTX
+    file = fopen("target_code.cubin", "wb");
+    if (file)
+    {
+        fwrite(linked_cubin, linked_cubin_size, 1, file);
+        fclose(file);
+    }
+#endif
 
     // Load the result and get the entrypoint of our kernel
     check_cuda_success(cuModuleLoadData(&cuda_module, linked_cubin));

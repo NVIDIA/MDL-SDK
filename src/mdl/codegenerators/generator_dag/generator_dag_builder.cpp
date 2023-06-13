@@ -1350,8 +1350,19 @@ void DAG_builder::set_parameter_array_size_var(
     IParameter const *param = decl->get_parameter(index);
     if (ISimple_name const *size_name = param->get_type_name()->get_size_name()) {
         IType_array const *arg_type = cast<IType_array>(arg_exp->get_type());
-        IValue const *val = m_value_factory.create_int(arg_type->get_size());
-        DAG_node const *array_size = m_node_factory.create_constant(val);
+        DAG_node const *array_size;
+        if (arg_type->is_immediate_sized()) {
+            IValue const *val = m_value_factory.create_int(arg_type->get_size());
+            array_size = m_node_factory.create_constant(val);
+        } else {
+            DAG_call::Call_argument arg(arg_exp, "a");
+
+            array_size = m_node_factory.create_call(
+                "operator_len(<0>[])",
+                IDefinition::DS_INTRINSIC_DAG_ARRAY_LENGTH,
+                &arg, 1,
+                m_type_factory.create_int());
+        }
         m_tmp_value_map[size_name->get_definition()] = array_size;
     }
 }
@@ -2160,7 +2171,7 @@ DAG_node const *DAG_builder::create_struct_insert(
         if (i != 0) {
             name += ',';
         }
-        name += type_to_name(field_tp);
+        name += type_to_name(field_tp->skip_type_alias());
 
         if (i == index) {
             field = e_node;
@@ -2731,6 +2742,10 @@ DAG_node const *DAG_builder::try_inline(
         // inlining forbidden
         return NULL;
     }
+    if (orig_call_def->get_property(IDefinition::DP_IS_NATIVE)) {
+        // never inline native
+        return NULL;
+    }
 
     IType_function const *f_type = cast<IType_function>(orig_call_def->get_type());
     IType const *ret_type = f_type->get_return_type();
@@ -2828,10 +2843,13 @@ DAG_node const *DAG_builder::try_inline(
         return NULL;
     }
 
-    if (!m_node_factory.is_noinline_ignored() &&
-        !def->get_property(IDefinition::DP_ALLOW_INLINE))
+    if (!m_node_factory.is_noinline_ignored() && !def->get_property(IDefinition::DP_ALLOW_INLINE))
     {
         // inlining forbidden
+        return NULL;
+    }
+    if (def->get_property(IDefinition::DP_IS_NATIVE)) {
+        // never inline native
         return NULL;
     }
 
@@ -2983,7 +3001,7 @@ DAG_node const *DAG_builder::call_to_dag(
         Small_VLA<char, 256> names(get_allocator(), 32 * n_args);
         for (int i = 0; i < n_args; ++i) {
             char *name = &names[32 * i];
-            snprintf(name, 32, "%d", i);
+            snprintf(name, 32, "value%d", i);
 
             call_args[i].param_name = name;
         }

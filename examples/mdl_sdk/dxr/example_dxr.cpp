@@ -262,6 +262,16 @@ bool Example_dxr::load()
     scene_data.point_light_position = options->point_light_position;
     scene_data.point_light_intensity = options->point_light_intensity;
     scene_data.environment_intensity_factor = options->hdr_scale;
+    scene_data.environment_rotation = options->hdr_rotate;
+    scene_data.background_color_enabled = options->background_color_enabled ? 1u : 0u;
+    scene_data.background_color = options->background_color;
+
+    /// UV transformations
+    scene_data.uv_scale = options->uv_scale;
+    scene_data.uv_offset = options->uv_offset;
+    scene_data.uv_repeat = options->uv_repeat;
+    scene_data.uv_saturate = options->uv_saturate;
+
     scene_data.restart_progressive_rendering();
 
     if (options->lpe == "albedo")
@@ -413,6 +423,7 @@ bool Example_dxr::load_scene(
     IScene_loader::Scene_options scene_options;
     scene_options.units_per_meter = options->units_per_meter;
     scene_options.handle_z_axis_up = options->handle_z_axis_up;
+    scene_options.uv_flip = options->uv_flip;
 
     if (!loader.load(get_mdl_sdk(), scene_path, scene_options))
     {
@@ -529,6 +540,23 @@ bool Example_dxr::load_scene(
         m_camera_controls->fit_into_view(aabb);
     }
 
+    if (options->camera_pose_override)
+    {
+        Scene_node* camera_node = m_camera_controls->get_target();
+        m_scene->get_root()->add_child(camera_node);
+        Transform trafo = Transform::look_at(
+            options->camera_position, options->camera_focus, { 0.0f, 1.0f, 0.0 });
+        camera_node->set_local_transformation(trafo);
+        camera_node->update(Update_args{});
+    }
+
+    if (options->camera_fov > 0.0f)
+    {
+        Scene_node* camera_node = m_camera_controls->get_target();
+        camera_node->get_camera()->set_field_of_view(options->camera_fov);
+        camera_node->update(Update_args{});
+    }
+
     // process materials, generate and compile HLSL Code
     // ----------------------------------------------------------------------------------------
     if (!get_mdl_sdk().get_library()->generate_and_compile_targets())
@@ -627,7 +655,9 @@ void Example_dxr::reload_material(
         // reload the modules of this material
         log_info("Started reloading material: " + material->get_name());
         bool targets_changed = false;
-        if (!get_mdl_sdk().get_library()->reload_material(material, targets_changed))
+        bool reload_success = get_mdl_sdk().get_library()->reload_material(
+            material, targets_changed);
+        if (!reload_success)
         {
             log_error("Reloading material failed.", SRC);
             mat_gui->bind_material(material); // rebind the material to the gui
@@ -871,20 +901,26 @@ bool Example_dxr::update_rendering_pipeline()
         if (options->enable_auxiliary)
             defines["ENABLE_AUXILIARY"] = std::to_string(1);
 
-        Shader_compiler compiler;
-        if (!pipeline->add_library(
-            compiler.compile_shader_library(
-                mi::examples::io::get_executable_folder() + "/content/ray_gen_program.hlsl",
-                &defines),
-            true,
-            {"RayGenProgram"}))
+        Shader_compiler compiler(this);
+
+        // compile ray gen programs
+        std::vector<Shader_library> raygen_libraries = compiler.compile_shader_library(
+            get_options(),
+            mi::examples::io::get_executable_folder() + "/content/ray_gen_program.hlsl",
+            &defines, { "RayGenProgram" });
+        // add ray gen programs to the pipeline
+        for (const auto& it : raygen_libraries)
+            if (!pipeline->add_library(it))
                 return after_cleanup();
 
-        if (!pipeline->add_library(
-            compiler.compile_shader_library(
-                mi::examples::io::get_executable_folder() + "/content/miss_programs.hlsl"),
-            true,
-            {"RadianceMissProgram", "ShadowMissProgram"}))
+        // compile miss programs
+        std::vector<Shader_library> miss_libraries = compiler.compile_shader_library(
+            get_options(),
+            mi::examples::io::get_executable_folder() + "/content/miss_programs.hlsl",
+            nullptr, { "RadianceMissProgram", "ShadowMissProgram" });
+        // add miss programs to the pipeline
+        for (const auto& it : miss_libraries)
+            if (!pipeline->add_library(it))
                 return after_cleanup();
     }
 
@@ -900,26 +936,30 @@ bool Example_dxr::update_rendering_pipeline()
             if (target->get_material_count() == 0)
                 return true;
 
-            std::string target_code_id = "_" + target->get_shader_name_suffix();
-            std::string radiance_closest_hit = "MdlRadianceClosestHitProgram" + target_code_id;
-            std::string radiance_any_hit = "MdlRadianceAnyHitProgram" + target_code_id;
-            std::string shadow_any_hit = "MdlShadowAnyHitProgram" + target_code_id;
+            const std::vector<Shader_library>& material_shaders =
+                target->get_dxil_compiled_libraries();
 
-            if (!pipeline->add_library(target->get_dxil_compiled_library(), false,
-                {radiance_closest_hit, radiance_any_hit, shadow_any_hit}))
-                return false;
+            // add ray gen programs to the pipeline
+            for (const auto& it : material_shaders)
+                if (!pipeline->add_library(it))
+                    return false;
 
             // Create and add hit groups to the pipeline.
             // this one will handle the shading of objects with MDL materials
+            std::string target_code_id = "_" + target->get_shader_name_suffix();
             if (!pipeline->add_hitgroup(
                 "MdlRadianceHitGroup" + target_code_id,
-                radiance_closest_hit, radiance_any_hit, ""))
+                target->get_entrypoint_radiance_closest_hit_name(),
+                target->get_entrypoint_radiance_any_hit_name(),
+                ""))
                 return false;
 
             // .. this one will deal with shadows cast by objects with MDL materials
             if (!pipeline->add_hitgroup(
                 "MdlShadowHitGroup" + target_code_id,
-                "", shadow_any_hit, ""))
+                "",
+                target->get_entrypoint_shadow_any_hit_name(),
+                ""))
                 return false;
 
             return true; // continue visits
@@ -979,7 +1019,7 @@ bool Example_dxr::update_rendering_pipeline()
         // associate the signatures with the hit groups
         if (!mat_library.visit_materials([&](Mdl_material* mat)
         {
-            if (mat->get_target_code_id() == static_cast<size_t>(-1))
+            if (!mat->get_target_code())
             {
                 return true;
             }
@@ -1060,8 +1100,8 @@ bool Example_dxr::update_rendering_pipeline()
             binding_table->add_miss_program(
                 static_cast<size_t>(Ray_type::Shadow), "ShadowMissProgram");
 
-        std::map<size_t, const Shader_binding_tables::Shader_handle> radiance_hit_handles;
-        std::map<size_t, const Shader_binding_tables::Shader_handle> shadow_hit_handles;
+        std::map<std::string, const Shader_binding_tables::Shader_handle> radiance_hit_handles;
+        std::map<std::string, const Shader_binding_tables::Shader_handle> shadow_hit_handles;
 
         mat_library.visit_target_codes([&](Mdl_material_target* target)
         {
@@ -1069,16 +1109,16 @@ bool Example_dxr::update_rendering_pipeline()
             if (target->get_material_count() == 0)
                 return true;
 
-            size_t tc_id = target->get_id();
-            std::string target_code_id = "_" + target->get_shader_name_suffix();
+            std::string hash = target->get_compiled_material_hash();
+            std::string suffix = "_" + hash;
 
-            radiance_hit_handles.insert({tc_id, binding_table->add_hit_group(
+            radiance_hit_handles.insert({ hash, binding_table->add_hit_group(
                 static_cast<size_t>(Ray_type::Radiance),
-                "MdlRadianceHitGroup" + target_code_id)});
+                "MdlRadianceHitGroup" + suffix) });
 
-            shadow_hit_handles.insert({tc_id, binding_table->add_hit_group(
+            shadow_hit_handles.insert({ hash, binding_table->add_hit_group(
                 static_cast<size_t>(Ray_type::Shadow),
-                "MdlShadowHitGroup" + target_code_id)});
+                "MdlShadowHitGroup" + suffix) });
 
             return true; // continue visit
         });
@@ -1131,8 +1171,8 @@ bool Example_dxr::update_rendering_pipeline()
                 local_root_arguments.geometry_scene_data_info_buffer_offset =
                     static_cast<uint32_t>(part->get_scene_data_info_buffer_offset());
 
-                // get the target code that contains the material
-                size_t tc_id = material->get_target_code_id();
+                // hash of the target code, used to map materials to hit groups
+                const std::string& hash = material->get_hash();
 
                 // target (link unit) specific resources
                 local_root_arguments.target_heap_region_start =
@@ -1153,7 +1193,7 @@ bool Example_dxr::update_rendering_pipeline()
 
                 // set data for this part
                 if (!binding_table->set_shader_record(
-                    hit_record_index, radiance_hit_handles[tc_id], &local_root_arguments))
+                    hit_record_index, radiance_hit_handles[hash], &local_root_arguments))
                     return false;
 
                 // since shadow ray also need to evaluate the MDL expressions
@@ -1165,7 +1205,7 @@ bool Example_dxr::update_rendering_pipeline()
                         part->get_geometry_handle());
 
                 if (!binding_table->set_shader_record(
-                    hit_record_index, shadow_hit_handles[tc_id], &local_root_arguments))
+                    hit_record_index, shadow_hit_handles[hash], &local_root_arguments))
                     return false;
 
                 return true; // continue traversal
@@ -1629,7 +1669,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int nCmdSh
     if (lpCmdLine && *lpCmdLine)
         argv = CommandLineToArgvW(lpCmdLine, &argc);
 
-    // create a console window of not suppressed by the first argument
     if((argc <= 0 || wcscmp(argv[0], L"--no_console_window") != 0) &&
        (AttachConsole(ATTACH_PARENT_PROCESS) || AllocConsole()))
     {
@@ -1645,7 +1684,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int nCmdSh
 
     // parse command line options
     int return_code = 1;
-    if (parse_options(options, argc, argv,return_code))
+    if (parse_options(options, argc, argv, return_code))
     {
         // run the application
         mi::examples::dxr::Example_dxr app;

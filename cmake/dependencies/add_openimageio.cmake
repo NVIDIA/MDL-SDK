@@ -50,38 +50,48 @@ else()
     # link static/shared object
     if(NOT __TARGET_ADD_DEPENDENCY_NO_LINKING)
         if(WINDOWS)
-            # static library (part)
-            target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET}
-                PRIVATE
-                    ${LINKER_WHOLE_ARCHIVE}
-                    OpenImageIO::OpenImageIO
-                    TIFF::TIFF
-                    liblzma::liblzma
-                    ${LINKER_NO_WHOLE_ARCHIVE}
-                )
+            # Misuse OpenImageIO version to distinguish older vcpkg versions (e.g. 42f74e3db
+            # plus patch) from newer vcpkg versions (e.g. 3640e7cb1).
+            if(MDL_DEPENDENCY_OPENIMAGEIO_VERSION VERSION_LESS "2.4.5.0")
+                target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET}
+                    PRIVATE
+                        ${LINKER_WHOLE_ARCHIVE}
+                        OpenImageIO::OpenImageIO
+                        TIFF::TIFF
+                        liblzma::liblzma
+                        ${LINKER_NO_WHOLE_ARCHIVE}
+                    )
+            else()
+                target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET}
+                    PRIVATE
+                        ${LINKER_WHOLE_ARCHIVE}
+                        OpenImageIO::OpenImageIO
+                        ${LINKER_NO_WHOLE_ARCHIVE}
+                    )
+            endif()
         else()
-            # shared library
-            target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET}
-                PRIVATE
-                    ${LINKER_NO_AS_NEEDED}
-                    OpenImageIO::OpenImageIO
-                    # Explicitly add TIFF library here to avoid that it first
-                    # appears (as dependency of OIIO) after LZMA below.
-                    TIFF::TIFF
-                    # Necessary to avoid undefined symbols in TIFF library.
-                    liblzma::liblzma
-                    ${LINKER_AS_NEEDED}
-                )
+            # Misuse OpenImageIO version to distinguish older vcpkg versions (e.g. 42f74e3db
+            # plus patch) from newer vcpkg versions (e.g. 3640e7cb1).
+            if(MDL_DEPENDENCY_OPENIMAGEIO_VERSION VERSION_LESS "2.4.5.0")
+                target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET}
+                    PRIVATE
+                        ${LINKER_NO_AS_NEEDED}
+                        OpenImageIO::OpenImageIO
+                        # Explicitly add TIFF library here to avoid that it first
+                        # appears (as dependency of OIIO) after LZMA below.
+                        TIFF::TIFF
+                        # Necessary to avoid undefined symbols in TIFF library.
+                        liblzma::liblzma
+                        ${LINKER_AS_NEEDED}
+                    )
+            else()
+                target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET}
+                    PRIVATE
+                        ${LINKER_NO_AS_NEEDED}
+                        OpenImageIO::OpenImageIO
+                        ${LINKER_AS_NEEDED}
+                    )
+            endif()
         endif()
-    endif()
-
-    # copy runtime dependencies
-    # copy system libraries only on windows, we assume the libraries are installed in a unix environment
-    if(NOT __TARGET_ADD_DEPENDENCY_NO_RUNTIME_COPY AND WINDOWS)
-        get_target_property(PROPERTY_LOCATION OpenImageIO::OpenImageIO LOCATION)
-        target_copy_to_output_dir(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
-            FILES
-                ${PROPERTY_LOCATION}
-            )
     endif()
 endif()

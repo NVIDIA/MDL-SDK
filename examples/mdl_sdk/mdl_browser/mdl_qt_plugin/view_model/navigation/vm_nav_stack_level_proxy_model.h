@@ -58,7 +58,7 @@ public:
     // get an item of this level (the VM_nav_package can represent both, packages and modules)
     Q_INVOKABLE VM_nav_package* get_package(int index) const;
 
-    // sets the underlaying VM_nav_stack_level_model
+    // sets the underlying VM_nav_stack_level_model
     // called by the VM_nav_stack
     void setSourceModel(QAbstractItemModel* source_model) override;
 

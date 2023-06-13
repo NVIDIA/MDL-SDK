@@ -138,7 +138,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
             vertex_buffer_view.BufferLocation = Buffer::get_resource()->GetGPUVirtualAddress();
             vertex_buffer_view.StrideInBytes = static_cast<uint32_t>(sizeof(TVertex));
             vertex_buffer_view.SizeInBytes = static_cast<uint32_t>(Buffer::get_size_in_byte());
-            return std::move(vertex_buffer_view);
+            return vertex_buffer_view;
         }
     };
 

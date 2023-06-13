@@ -102,7 +102,7 @@ DirectX::XMMATRIX Transform::get_matrix() const
         DirectX::XMMatrixScaling(scale.x, scale.y, scale.z),
         DirectX::XMMatrixRotationQuaternion(rotation)),
         DirectX::XMMatrixTranslation(translation.x, translation.y, translation.z));
-    return std::move(res);
+    return res;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -891,7 +891,18 @@ Scene_node::~Scene_node()
 void Scene_node::add_child(Scene_node* to_add)
 {
     m_children.push_back(to_add);
+    if (to_add->m_parent)
+        to_add->m_parent->remove_child(to_add);
     to_add->m_parent = this;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+void Scene_node::remove_child(Scene_node* to_remove)
+{
+    auto it = std::find(m_children.begin(), m_children.end(), to_remove);
+    if (it != m_children.end())
+        m_children.erase(it);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -998,15 +1009,6 @@ void Scene_node::update_bounding_volumes()
     }
 
     m_global_aabb = new_global_aabb;
-}
-
-// ------------------------------------------------------------------------------------------------
-// ------------------------------------------------------------------------------------------------
-
-IScene_loader::Scene_options::Scene_options()
-    : units_per_meter(1.0f)
-    , handle_z_axis_up(false)
-{
 }
 
 // ------------------------------------------------------------------------------------------------

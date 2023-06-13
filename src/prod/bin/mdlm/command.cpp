@@ -61,7 +61,7 @@ namespace mdlm
 {
     extern mi::neuraylib::INeuray * neuray(); //Application::theApp().neuray(
     extern void report(const std::string & msg); //Application::theApp().report(
-    extern bool freeimage_available(); //Application::theApp().freeimage_available(
+    extern bool openimageio_available(); //Application::theApp().openimageio_available(
 }
 
 int Command::execute()
@@ -686,7 +686,7 @@ int Install::execute()
             Util::log_error("Invalid archive: " + m_archive);
             return INVALID_ARCHIVE;
         }
-        Util::log_info("Begin instalation of archive: " + Util::normalize(m_archive));
+        Util::log_info("Begin installation of archive: " + Util::normalize(m_archive));
         Util::log_info("Destination directory: " + Util::normalize(m_mdl_directory));
     }
     {
@@ -1022,10 +1022,10 @@ int Create_mdle::execute()
         mdlm::neuray()->get_api_component<mi::neuraylib::IMdle_api>());
 
 
-    // Load the FreeImage plugin.
-    if(!mdlm::freeimage_available())
+    // Load the OpenImageIO plugin.
+    if(!mdlm::openimageio_available())
     {
-        Util::log_error("failed to load nv_freeimage plugin.");
+        Util::log_error("failed to load nv_openimageio plugin.");
         return -1;
     }
 

@@ -94,11 +94,8 @@ void configuration(INeuray* neuray, ILogger* logger, Application::Options* optio
     mdl_config->set_logger(logger);
 
     mi::base::Handle<IPlugin_configuration> plug_config(neuray->get_api_component<IPlugin_configuration>());
-#ifndef MI_PLATFORM_WINDOWS
-    plug_config->load_plugin_library("nv_freeimage.so");
-#else
-    plug_config->load_plugin_library("nv_freeimage.dll");
-#endif
+    plug_config->load_plugin_library("nv_openimageio" MI_BASE_DLL_FILE_EXT);
+    plug_config->load_plugin_library("dds" MI_BASE_DLL_FILE_EXT);
 
     // Gather list of path to add to MDL search path
     vector<string> directories;

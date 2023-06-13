@@ -46,9 +46,12 @@ namespace mi {namespace examples { namespace mdl_d3d12 { namespace materialx
 
         bool match_gltf_name(const std::string& gltf_name) const final;
 
-        std::string generate_mdl_source_code(
+        bool generate_mdl_source_code(
+            Mdl_sdk& mdl_sdk,
             const std::string& gltf_name,
-            const std::string& scene_directory) const final;
+            const std::string& scene_directory,
+            std::string& out_generated_mdl_code,
+            std::string& out_generated_mdl_name) const final;
 
         std::string get_scene_name_prefix() const final { return "[MTLX]"; }
 
@@ -61,6 +64,7 @@ namespace mi {namespace examples { namespace mdl_d3d12 { namespace materialx
     private:
         std::vector<std::string> m_paths;
         std::vector<std::string> m_libraries;
+        std::string m_generated_mdl_path;
     };
 
 }}}}

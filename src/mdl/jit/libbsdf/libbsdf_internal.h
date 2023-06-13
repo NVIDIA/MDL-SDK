@@ -758,6 +758,13 @@ struct BSDF
         float3 const &true_inherited_normal,
         const BSDF &false_bsdf,
         float3 const &false_inherited_normal);
+
+    // disable calculating PDF in sample for now. This is now done by calling the full PDF
+    // at the end of sample to avoid code duplication by layerers of layerers.
+    static bool calc_pdf_in_sample()
+    {
+        return false;
+    }
 };
 
 struct BSDF_component

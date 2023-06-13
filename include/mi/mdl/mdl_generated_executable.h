@@ -1469,7 +1469,7 @@ public:
     ///
     /// \note This allows to execute any compiled function on the CPU. The result must be
     ///       big enough to take the functions result.
-    ///       It can be used as a replacement to run_core() if this funciton is NOT a
+    ///       It can be used as a replacement to run_core() if this function is NOT a
     ///       switch function.
     virtual bool run_generic(
         size_t                       index,

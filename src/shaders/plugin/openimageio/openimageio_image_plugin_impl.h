@@ -42,19 +42,19 @@ namespace MI {
 
 namespace MI_OIIO {
 
-// TODOs:
-// - look into "oiio:ColorSpace" attribute
-//
-// With changes to the image plugin API:
-// - support for non-standard channel names (in EXR) (MDL-680)
-// - better implementation of test() method (pass in reader) (MDL-819)
-//
-// With pixel types for half:
-// - direct support for half without conversion to float
+// The plugin has the following limitations:
+// - 3d textures and cubemaps are not supported.
+// - Higher miplevels are ignored.
+// - Per-channel pixel types are not supported.
+// - Deep pixels are not supported.
+// - Metadata is mostly ignored, in particular the "oiio:ColorSpace" attribute.
 class Image_plugin_impl : public mi::neuraylib::IImage_plugin
 {
 public:
-    /// Constructs an image plugin that handles images of a given name/OIIO format.
+    /// Constructor.
+    ///
+    /// \param name          Name of the plugin (start with \c "oiio_").
+    /// \param oiio_format   Corresponding OIIO format.
     Image_plugin_impl( const char* name, const char* oiio_format);
 
     virtual ~Image_plugin_impl() { }
@@ -81,9 +81,14 @@ public:
 
     const char* get_supported_type( mi::Uint32 index) const override;
 
-    bool test( const mi::Uint8* buffer, mi::Uint32 file_size) const override;
-
     mi::neuraylib::Impexp_priority get_priority() const override;
+
+    bool supports_selectors() const override { return true; }
+
+    bool test( mi::neuraylib::IReader* reader) const override;
+
+    mi::neuraylib::IImage_file* open_for_reading(
+        mi::neuraylib::IReader* reader, const char* selector) const override;
 
     mi::neuraylib::IImage_file* open_for_writing(
         mi::neuraylib::IWriter* writer,
@@ -95,8 +100,6 @@ public:
         bool is_cubemap,
         mi::Float32 gamma,
         mi::Uint32 quality) const override;
-
-    mi::neuraylib::IImage_file* open_for_reading( mi::neuraylib::IReader* reader) const override;
 
 private:
 

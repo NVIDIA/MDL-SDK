@@ -1,0 +1,2367 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+// Rules that directly map individual expressions to other mdl expressions
+// functions.
+rules Make_simple_for_ue4 bottomup {
+    import nvidia::distilling_support;
+
+    // Fix wrong 0.0 initialization of the normal field in older materials.
+    material( tw,sf,bf,ior,vol,
+              material_geometry(dis,cutout,n))
+        --> material(tw,sf,bf,ior,vol,material_geometry(dis,cutout,state::normal()))
+        if n == 0.0;
+
+    microfacet_ggx_vcavities_bsdf(_,_,tint,_,_,mode) --> diffuse_transmission_bsdf(tint)
+        if mode == scatter_transmit;
+
+    microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t,mode) -->
+                custom_curve_layer( nvidia::distilling_support::refl_from_ior(option( global_float_ior)),
+                    1.0,5.0,1.0, microfacet_ggx_vcavities_bsdf(ru,rv,tint,color(0.0),t), diffuse_transmission_bsdf(tint))
+        if mode == scatter_reflect_transmit;
+
+    //get rid of anisotropy: preserve the lower roughness component
+    //microfacet_ggx_vcavities_bsdf( ru,rv,tint,_,t,mode) --> microfacet_ggx_vcavities_bsdf( math::pow((ru+rv)*0.5,.95),math::pow((ru+rv)*0.5,.95),tint,color(0.0),t,mode);
+//    microfacet_ggx_vcavities_bsdf( ru,rv,tint,_,t,mode) --> microfacet_ggx_vcavities_bsdf( (ru+rv)*0.5,(ru+rv)*0.5,tint,color(0.0),t,mode);
+    microfacet_ggx_vcavities_bsdf( ru,rv,tint,_,t,mode) -->
+        microfacet_ggx_vcavities_bsdf( nvidia::distilling_support::combine_anisotropic_roughness(ru,rv),nvidia::distilling_support::combine_anisotropic_roughness(ru,rv),tint,color(0.0),t,mode)
+            maybe ru != rv;
+
+    //fix all glossy/specular to be ggx
+    microfacet_beckmann_smith_bsdf(ru,rv,tint,_,t,mode) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
+    specular_bsdf(tint,mode) --> microfacet_ggx_vcavities_bsdf( 0.0,0.0,tint,color(0.0),state::texture_tangent_u(0),mode) repeat_rules;
+    microfacet_beckmann_vcavities_bsdf(ru,rv,tint,_,t,mode)--> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
+    microfacet_ggx_smith_bsdf(ru,rv,tint,_,t,mode) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
+    simple_glossy_bsdf(ru,rv,tint,_,t,mode) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
+    ward_geisler_moroder_bsdf(ru,rv,tint,_,t) --> microfacet_ggx_vcavities_bsdf( ru,rv,tint,color(0.0),t) repeat_rules;
+    backscattering_glossy_reflection_bsdf(ru,rv,tint,_,t,handle) --> microfacet_ggx_vcavities_bsdf(ru,rv,tint,color(0.0),t,scatter_reflect,handle) repeat_rules;
+    sheen_bsdf(r,tint,tintt,_,handle) --> microfacet_ggx_vcavities_bsdf(r,r,tint,tintt,state::texture_tangent_u(0),scatter_reflect,handle) repeat_rules;
+
+    //some brutal removal of unsupported components: todo see if we can do better
+    measured_bsdf(_) --> bsdf();
+    thin_film(_,_,base) --> base repeat_rules;
+    measured_curve_factor(a,base) -->
+        //custom_curve_layer( 0.0, 1.0, 5.0, 1.,
+            //bsdf_tint(a[0],base), bsdf_tint(nvidia::distilling_support::last_element(a),base), state::normal());
+            bsdf_tint(a[0],base);
+    measured_factor(t,base) -->
+        bsdf_tint(nvidia::distilling_support::directional_coloring(
+            tex::lookup_color(t,float2(0.0),
+                              wrap_repeat,wrap_repeat,float2(0.0,1.0),float2(0.0,1.0),0.0),
+            tex::lookup_color(t,float2(1.0),
+                              wrap_repeat,wrap_repeat,float2(0.0,1.0),float2(0.0,1.0),0.0
+                      ),1.0),base);
+
+    bsdf_directional_factor(tint_n,tint_g,e,base) -->
+        bsdf_tint( nvidia::distilling_support::directional_coloring(tint_n,tint_g,e), base) maybe tint_g!=color(1.0);
+    bsdf_directional_factor(tint_n,tint_g,e,base) -->
+        custom_curve_layer( 0.0,1.0,e, 1.0, bsdf_tint(tint_g,base), bsdf_tint(tint_n,base));
+
+    bsdf_clamped_mix_1(w1,df1) --> bsdf_tint( color(w1), df1);
+    bsdf_unbounded_mix_1(w1,df1) --> bsdf_tint( color(w1), df1);
+    bsdf_mix_1(w1,df1) --> bsdf_tint( color(w1), df1);
+    //total review of mix handling necessary todo.
+    bsdf_clamped_mix_2(w1,df1,w2,df2) --> bsdf_mix_2(w1,df1,w2,df2);
+    bsdf_clamped_mix_3(w1,df1,w2,df2,w3,df3) --> bsdf_mix_2(w1,df1,w2+w3,bsdf_mix_2(w2/(w2+w3),df2,w3/(w2+w3),df3));
+    bsdf_unbounded_mix_2(w1,df1,w2,df2) --> bsdf_mix_2(w1,df1,w2,df2);
+    bsdf_unbounded_mix_3(w1,df1,w2,df2,w3,df3) --> bsdf_mix_2(w1,df1,w2+w3,bsdf_mix_2(w2/(w2+w3),df2,w3/(w2+w3),df3));
+    bsdf_mix_3(w1,df1,w2,df2,w3,df3)--> bsdf_mix_2(w1,df1,w2+w3,bsdf_mix_2(w2/(w2+w3),df2,w3/(w2+w3),df3));
+
+    //todo: detect custom curve layering without directional dependency and convert into mixes
+
+    diffuse_transmission_bsdf(tint) --> bsdf_mix_2(0.4,diffuse_transmission_bsdf(tint),0.6,diffuse_reflection_bsdf(tint));
+
+    //should be better handled by Adapt_layering_for_ue4
+    //fresnel_layer( ior, w, layer, base, n) -->
+    //    weighted_layer(nvidia::distilling_support::refl_from_ior(ior)*w,layer,base,n) if ior > 5.0;
+    fresnel_layer( ior, _, _, base, _) -->
+        base if ior ==1.0;
+    fresnel_layer( ior, w, layer, base, n) -->
+        custom_curve_layer(nvidia::distilling_support::refl_from_ior(ior),1.0,5.0,w,layer,base,n);
+
+    measured_curve_layer(a,w,layer,base,n) -->
+//        custom_curve_layer( a[0],nvidia::distilling_support::last_element(a),5.0, w, layer, base, n);
+        weighted_layer( math::max_value(a[0])*w, bsdf_tint(a[0]/math::max_value(a[0]),layer), base, n);
+
+    dusty_diffuse_reflection_bsdf(tint) --> diffuse_reflection_bsdf(tint, 1.0);
+
+
+    postcond
+        //nonode(diffuse_transmission_bsdf) &&
+        nonode(specular_bsdf) && //done testing
+        nonode(simple_glossy_bsdf) &&//done testing
+        nonode(backscattering_glossy_reflection_bsdf) &&//done testing
+        nonode(sheen_bsdf) &&//done testing
+        nonode(measured_bsdf) &&
+        nonode(microfacet_beckmann_smith_bsdf) &&
+        nonode(microfacet_ggx_smith_bsdf) &&
+        nonode(microfacet_beckmann_vcavities_bsdf) &&
+        nonode(ward_geisler_moroder_bsdf) &&//done testing
+        nonode(thin_film) &&
+        nonode(bsdf_directional_factor) &&
+        nonode(measured_curve_factor) &&
+        nonode(measured_factor) &&
+        nonode(bsdf_mix_1) &&//done testing
+        nonode(bsdf_mix_3) &&//done testing
+        nonode(bsdf_clamped_mix_1) &&//done testing
+        nonode(bsdf_clamped_mix_2) &&//done testing
+        nonode(bsdf_clamped_mix_3) &&
+        nonode(bsdf_unbounded_mix_1) &&
+        nonode(bsdf_unbounded_mix_2) &&
+        nonode(bsdf_unbounded_mix_3) &&
+        nonode(bsdf_color_mix_1) &&
+        nonode(bsdf_color_mix_2) &&
+        nonode(bsdf_color_mix_3) &&
+        nonode(bsdf_color_clamped_mix_1) &&
+        nonode(bsdf_color_clamped_mix_2) &&
+        nonode(bsdf_color_clamped_mix_3) &&
+        nonode(bsdf_color_unbounded_mix_1) &&
+        nonode(bsdf_color_unbounded_mix_2) &&
+        nonode(bsdf_color_unbounded_mix_3) &&
+//        nonode(weighted_layer) &&//done testing
+//        nonode(color_weighted_layer) &&
+        nonode(fresnel_layer) &&//done testing
+        nonode(color_fresnel_layer) &&
+        nonode(measured_curve_layer) &&
+        nonode(fresnel_factor) &&
+        nonode(color_measured_curve_layer);
+//        custom_curve_layer
+//        bsdf_mix_2
+//        diffuse_reflection_bsdf
+//        microfacet_ggx_vcavities_bsdf
+//        bsdf_tint
+
+}
+
+rules Adapt_layering_for_ue4 bottomup {
+    //high f0 does not translate into ue4 in a simple way. generate metallic component
+    custom_curve_layer( f0,f90,e, w, layer, base, n) -->
+        weighted_layer((f0 - 0.08)*w,layer,custom_curve_layer( 0.08,f90,e, w, layer,base,n),n)
+        if f0 > .08;
+    custom_curve_layer( f0,f90,e, w, layer, base, n) -->
+        weighted_layer( math::max( f0 - 0.08,0.0) * w ,layer,custom_curve_layer( math::min( f0,0.08 ),f90,e, w, layer,base,n),n)
+        maybe f0 > .08;
+}
+
+rules Make_transmission_into_cutout_ue4 bottomup {
+//misuse the local_normals weight to store a global opacity value to be combined with the cutout
+    material(tw,material_surface(b [[ opacity ~ o ]],em),bf,ior,vol,material_geometry(d,cutout,nprime))
+        --> material(tw,material_surface(b,em),bf,ior,vol,
+                     material_geometry(d,cutout*o,nprime));
+
+    b ~ diffuse_transmission_bsdf(tint)--> b [[ opacity = 1.0-(.9*math::average(tint)) ]];
+
+    b ~ bsdf_mix_2(_,bsdf(),_,bsdf()) --> b;
+    b ~ bsdf_mix_2(w1, _bs1 [[ opacity ~ o1 ]],
+                   w2, _bs2 [[ opacity ~ o2 ]]) -->
+        b [[ opacity = nvidia::distilling_support::average(w1,o1,w2,o2) ]];
+    b ~ bsdf_mix_2(w1, _bs1 [[ opacity ~ o1 ]],
+                   w2, _bs2) -->
+        b [[ opacity = nvidia::distilling_support::average(w1,o1,w2,1.0) ]];
+    b ~ bsdf_mix_2(w2, _bs1,
+                   w1, _bs2 [[ opacity ~ o1 ]]) -->
+        b [[ opacity = o1 ]]
+        if (w1 == 1.0) && (w2 == 0.0);
+        //found match! deadrule; //compiler optimizes away
+    b ~ bsdf_mix_2(w2, _bs1,
+                   w1, _bs2 [[ opacity ~ o1 ]]) -->
+        b [[ opacity = nvidia::distilling_support::average(w1,o1,w2,1.0) ]];
+
+    b ~ custom_curve_layer(_,_,_,_,bsdf(),bsdf(),_)
+        --> b;
+    b ~ custom_curve_layer(_,_,e,_,_bs1 [[opacity ~ o1 ]],_bs2 [[ opacity ~o2 ]],_)
+        --> b [[ opacity = nvidia::distilling_support::directional_weighting(o2,o1,e) ]];
+    b ~ custom_curve_layer(_,_,e,_,_, _bs2 [[ opacity ~ o2 ]],_)
+        --> b [[ opacity = nvidia::distilling_support::directional_weighting(o2,1.0,e) ]];
+    b ~ custom_curve_layer(_,_,e,_, _bs1 [[ opacity ~ o1 ]],_,_)
+        --> b [[ opacity = nvidia::distilling_support::directional_weighting(1.0,o1,e) ]];
+}
+
+rules Elide_transmission1 topdown{
+    //try to preserve transmission color in reflection color since alpha (cutout) does not have a color
+    //this first pass is for special pattern handling
+    //a typical pattern is:
+    //custom_curve_layer(coat,mix(w1,transmission, w2,rest) )
+
+    custom_curve_layer(f0,f90,e,w,coat,bsdf_mix_2(_,_,wa,diffuse_transmission_bsdf(tint1)),n)-->
+        custom_curve_layer(f0,f90,e,w,coat,bsdf_tint( tint1,coat),n) if (wa == 1.0);
+
+    custom_curve_layer(f0,f90,e,w,coat,bsdf_mix_2(wb,base,wa,diffuse_transmission_bsdf(tint1)),n)-->
+        custom_curve_layer(f0,f90,e,w,coat,bsdf_mix_2(wb,base,wa,bsdf_tint(tint1,coat)),n) maybe tint1 != color(1.0);
+    custom_curve_layer(f0,f90,e,w,coat,bsdf_mix_2(wb,base,wa,diffuse_transmission_bsdf(_)),n)-->
+        custom_curve_layer(f0,f90,e,w,coat,bsdf_mix_2(wb,base,wa,coat),n);
+
+    custom_curve_layer(f0,f90,e,w,coat,bsdf_mix_2(wa,diffuse_transmission_bsdf(tint1),_,_),n)-->
+        custom_curve_layer(f0,f90,e,w,coat,bsdf_tint( tint1,coat),n) if (wa == 1.0);
+
+    custom_curve_layer(f0,f90,e,w,coat,bsdf_mix_2(wa,diffuse_transmission_bsdf(tint1),wb,base),n)-->
+        custom_curve_layer(f0,f90,e,w,coat,bsdf_mix_2(wb,base,wa,bsdf_tint(tint1,coat)),n) maybe tint1 != color(1.0);
+    custom_curve_layer(f0,f90,e,w,coat,bsdf_mix_2(wa,diffuse_transmission_bsdf(_),wb,base),n)-->
+        custom_curve_layer(f0,f90,e,w,coat,bsdf_mix_2(wb,base,wa,coat),n);
+
+}
+rules Elide_transmission2 bottomup {
+    material(tw,material_surface(diffuse_transmission_bsdf(tint1),em),bf,ior,vol,material_geometry(d,cutout,nprime))
+        --> material(tw,material_surface(diffuse_reflection_bsdf(tint1),em),bf,ior,vol,
+                     material_geometry(d,cutout,nprime));
+
+    //todo: handle absorption.
+    bsdf_mix_2(w1,diffuse_transmission_bsdf(tint1),w2,diffuse_transmission_bsdf(tint2)) -->
+        diffuse_transmission_bsdf(nvidia::distilling_support::average(w1,tint1,w2,tint2));
+
+    bsdf_mix_2(w1,diffuse_transmission_bsdf(tint),w2,base) -->
+        bsdf_tint( math::lerp(color(1.),tint,w1)*w2 ,base);
+    bsdf_mix_2(w2,base,w1,diffuse_transmission_bsdf(tint)) -->
+        bsdf_tint( math::lerp(color(1.),tint,w1)*w2 ,base);
+    custom_curve_layer(_,_,e,_,diffuse_transmission_bsdf(tint1),diffuse_transmission_bsdf(tint2),_)
+        --> diffuse_transmission_bsdf( nvidia::distilling_support::directional_coloring(tint2,tint1,e));
+    custom_curve_layer(_,_,e,_,diffuse_transmission_bsdf(tint),base,_)
+        --> bsdf_tint( nvidia::distilling_support::directional_coloring(color(1.),tint,e) ,base);
+    custom_curve_layer(_,_,e,_,layer,diffuse_transmission_bsdf(tint),_)
+        --> bsdf_tint( nvidia::distilling_support::directional_coloring(tint,color(1.),e) ,layer);
+}
+
+rules Make_normal_for_sg bottomup {
+    material(tw,
+             material_surface(df @ bsdf [[ local_normal_n ~ nl ]],em),
+             bf,ior,vol,material_geometry(d,cutout,n))
+        --> material(tw,material_surface(df,em),
+                     bf,ior,vol,
+                     material_geometry(d,cutout,nvidia::distilling_support::add_detail_normal(nl, n)));
+
+    b ~ bsdf() --> b [[ local_normal_w = 0.0, local_normal_n = state::normal() ]];
+    b ~ bsdf_tint(_, _bs [[ local_normal_w ~ nw, local_normal_n ~ nl ]]) -->
+        b [[ local_normal_w = nw, local_normal_n = nl ]];
+    b ~ bsdf_tint_ex(_, _, _bs [[ local_normal_w ~ nw, local_normal_n ~ nl ]]) -->
+        b [[ local_normal_w = nw, local_normal_n = nl ]];
+    b ~ diffuse_reflection_bsdf(_,_) --> b [[ local_normal_w = 0.0, local_normal_n = state::normal() ]];
+    b ~ diffuse_transmission_bsdf(_) --> b [[ local_normal_w = 0.0, local_normal_n = state::normal() ]];
+
+    b ~ microfacet_ggx_vcavities_bsdf(_,_,_,_,_) -->
+        b [[ local_normal_w = 0.0, local_normal_n = state::normal() ]];
+
+    //mixes, make sure only expressions are generated if one of the components has a weight != 0
+    b ~ bsdf_mix_2(_, _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                   _, _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]])
+         --> b [[ local_normal_w = 0.0, local_normal_n = nl1 ]]
+        if (nl1 == nl2) && (nw1 == nw2) && (nw1 == 0.0) ;
+
+    b ~ bsdf_mix_2(w1, _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                   w2, _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]])
+         --> b [[ local_normal_w = w1 * nw1 + w2 * nw2, local_normal_n = nl1 ]]
+        if (nl1 == nl2)  ;
+
+/*unnecessary, compiler optimizes 0 weights away
+    b ~ bsdf_mix_2(w1, _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                   w2, _bs2 [[ local_normal_w ~ nw2 ]])
+        --> b [[ local_normal_w = w1 * nw1 + w2 * nw2, local_normal_n = nl1 ]]
+        if (w1 == 1.0) && (w2 == 0.0);
+    b ~ bsdf_mix_2(w1, _bs1 [[ local_normal_w ~ nw1 ]],
+                   w2, _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]])
+        --> b [[ local_normal_w = w1 * nw1 + w2 * nw2, local_normal_n = nl2 ]]
+        if (w1 == 0.0) && (w2 == 1.0);*/
+
+    b ~ bsdf_mix_2(w1, _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                   w2, _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]])
+        --> b [[ local_normal_w  = w1 * nw1 + w2 * nw2,
+                 local_normal_n = nvidia::distilling_support::combine_normals( w1 , nl1, w2 , nl2) ]];
+
+    //layering will always generate a weight, i.e. subsequent layering will only partially affect the overall normal
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                       _bs2 [[ local_normal_w ~  nw2, local_normal_n ~ nl2 ]],
+                       n)
+        --> b [[ local_normal_w = w1, local_normal_n = n ]]
+        if (n == nl1) && (n == nl2) && (nw1 == 0.0) && (nw2 == 0.0);
+
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                       _bs2,
+                       _)
+        --> b [[ local_normal_w = w1, local_normal_n = nl1 ]]
+          if (nw1 == 1.0) && w1 == (1.0);
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                       _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                       _)
+        --> b [[ local_normal_w = (1.0-w1) * nw2 + w1,
+                 local_normal_n = nvidia::distilling_support::combine_normals( 1.0-w1, nl2, w1, nl1) ]]
+          if nw1 == 1.0;
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1 ]],
+                       _bs2,
+                       n)
+        --> b [[ local_normal_w = w1, local_normal_n = n ]]
+          if (nw1 == 0.0) && w1 == (1.0);
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1 ]],
+                       _bs2 [[ local_normal_n ~ nl2 ]],
+                       n)
+        --> b [[ local_normal_w = w1, local_normal_n = n ]]
+          if nw1 == 0.0 && nl2 == state::normal();
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1 ]],
+                       _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                       n)
+        --> b [[ local_normal_w = (1.0-w1) * nw2 + w1,
+                 local_normal_n = nvidia::distilling_support::combine_normals( 1.0-w1, nl2, w1, n) ]]
+          if nw1 == 0.0;
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                       _bs2,
+                       n)
+        --> b [[ local_normal_w = w1,
+                 local_normal_n = nvidia::distilling_support::combine_normals(1.0-nw1,n,nw1,nl1) ]]
+          if w1 == 1.0;
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                       _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                       n)
+        --> b [[ local_normal_w = (1.0-w1) * nw2 + w1,
+                 local_normal_n =
+                 nvidia::distilling_support::combine_normals( 1.0-w1, nl2, w1, 
+                                                              nvidia::distilling_support::combine_normals(1.0-nw1,n,nw1,nl1)) ]];
+
+    //dont collect normals of custom curve layers top
+    b ~ custom_curve_layer(_,_,_,_,
+                           _bs1,
+                           _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                           _)
+        --> b [[ local_normal_w = nw2, local_normal_n = nl2 ]];
+}
+
+rules Make_normal_for_ue4 bottomup {
+
+    //weight is a measure for how much influence of the normal will remain if a layering normal is added
+/*
+     material(tw,material_surface(df @ bsdf [[ local_normal_w ~ w, local_normal_n ~ nl ]],e,ei,em),
+              bf,ior,v,abs,scat,d,cutout,n)
+     --> material(tw,material_surface(df,e,ei,em),
+                  bf,ior,v,abs,scat,d,cutout,nprime)
+        if n != nl && n!= state::normal()
+        where nprime = nvidia::distilling_support::add_detail_normal(nl,n);
+     material(tw,material_surface(df @ bsf [[ local_normal_w ~ w, local_normal_n ~ nl ]],e,ei,em),
+              bf,ior,v,abs,scat,d,cutout,n)
+     --> material(tw,material_surface(df,e,ei,em),bf,ior,v,abs,scat,d,cutout,nl)
+        if n != nl && n== state::normal();
+*/
+
+     //use geometry.normal for temporary storage of the base normal.
+     //Fix_normals_for_ue4 is later used to
+    material(tw,material_surface(df @ bsdf [[ local_normal_n ~ nl ]],em),
+             bf,ior,vol,material_geometry(d,cutout,_))
+        --> material(tw,material_surface(df,em),
+                     bf,ior,vol,
+                     material_geometry(d,cutout,nl));
+
+    b ~ bsdf() --> b [[ local_normal_w = 0.0, local_normal_n = state::normal() ]];
+    b ~ bsdf_tint(_, _bs [[ local_normal_w ~ nw, local_normal_n ~ nl ]]) -->
+        b [[ local_normal_w = nw, local_normal_n = nl ]];
+    b ~ bsdf_tint_ex(_,_, _bs [[ local_normal_w ~ nw, local_normal_n ~ nl ]]) -->
+        b [[ local_normal_w = nw, local_normal_n = nl ]];
+    b ~ diffuse_reflection_bsdf(_,_) --> b [[ local_normal_w = 0.0, local_normal_n = state::normal() ]];
+    b ~ diffuse_transmission_bsdf(_) --> b [[ local_normal_w = 0.0, local_normal_n = state::normal() ]];
+
+    b ~ microfacet_ggx_vcavities_bsdf(_,_,_,_,_) --> b [[ local_normal_w = 0.0, local_normal_n = state::normal() ]];
+
+    //mixes, make sure only expressions are generated if one of the components has a weight != 0
+    b ~ bsdf_mix_2(_, _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                   _, _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]])
+         --> b [[ local_normal_w = 0.0, local_normal_n = nl1 ]]
+        if (nl1 == nl2) && (nw1 == nw2) && (nw1 == 0.0) ;
+
+    b ~ bsdf_mix_2(w1, _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                   w2, _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]])
+         --> b [[ local_normal_w = w1 * nw1 + w2 * nw2, local_normal_n = nl1 ]]
+        if (nl1 == nl2);
+
+    /*unnecessary, compiler optimizes 0 weights away
+    b ~ bsdf_mix_2(w1, _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                   w2, _bs2 [[ local_normal_w ~ nw2 ]])
+        --> b [[ local_normal_w =  w1 * nw1 + w2 * nw2, local_normal_n = nl1 ]]
+        if (w1 == 1.0) && (w2 == 0.0);
+    b ~ bsdf_mix_2(w1, _bs1 [[ local_normal_w ~ nw1 ]],
+                   w2, _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]])
+        --> b [[ local_normal_w = w1 * nw1 + w2 * nw2, local_normal_n = nl2 ]]
+        if (w1 == 0.0) && (w2 == 1.0);*/
+
+    b ~ bsdf_mix_2(w1, _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                   w2, _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]])
+        --> b [[ local_normal_w = w1 * nw1 + w2 * nw2, 
+                 local_normal_n = nvidia::distilling_support::combine_normals( w1 , nl1, w2 , nl2) ]];
+
+    //layering will always generate a weight, i.e. subsequent layering will only partially affect the overall normal
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                       _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                       n)
+        --> b [[ local_normal_w = w1, local_normal_n = n ]]
+        if (n == nl1) && (n == nl2) && (nw1 == 0.0) && (nw2 == 0.0);
+
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                       _bs2
+                       ,_)
+        --> b [[ local_normal_w = w1, local_normal_n =nl1 ]]
+          if (nw1 == 1.0) && w1 == (1.0);
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                       _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                       _)
+        --> b [[ local_normal_w = (1.0-w1) * nw2 + w1,
+                 local_normal_n = nvidia::distilling_support::combine_normals( 1.0-w1, nl2, w1, nl1) ]]
+          if nw1 == 1.0;
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1 ]],
+                       _bs2,
+                       n)
+        --> b [[ local_normal_w = w1, local_normal_n = n ]]
+          if (nw1 == 0.0) && w1 == (1.0);
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1 ]],
+                       _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                       n)
+        --> b [[ local_normal_w = (1.0-w1) * nw2 + w1,
+                 local_normal_n = nvidia::distilling_support::combine_normals( 1.0-w1, nl2, w1, n) ]]
+          if nw1 == 0.0;
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                       _bs2,
+                       n)
+        --> b [[ local_normal_w = w1,
+                 local_normal_n = nvidia::distilling_support::combine_normals(1.0-nw1,n,nw1,nl1) ]]
+          if w1 == 1.0;
+    b ~ weighted_layer(w1,
+                       _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                       _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                       n)
+        --> b [[ local_normal_w = (1.0-w1) * nw2 + w1,
+                 local_normal_n = nvidia::distilling_support::combine_normals
+                   ( 1.0-w1, nl2, w1, nvidia::distilling_support::combine_normals(1.0-nw1,n,nw1,nl1)) ]];
+
+    //dont collect normals of custom curve layers top, these are for clearcoats
+    b ~ custom_curve_layer(_,_,_,_,
+                           _bs1,
+                           _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                           _)
+        --> b [[ local_normal_w = nw2, local_normal_n = nl2 ]];
+//        if (n == nl1) && (n == nl2)
+//        where w = w0 * option( top_layer_weight);
+   // b ~ custom_curve_layer(_,_,_,w0,_,_bs [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],n)
+   //     --> b [[ local_normal_w = nw2 * (1.-w) + w,
+   //              local_normal_n = affine_normal_sum( (1.-w)*nw2, nl2, w*(1.-nw1), n, w*nw1, nl1) ]]
+   //     where w = w0 * option( top_layer_weight);
+
+}
+
+rules Save_normal bottomup {
+    material(tw,material_surface(scattering,em),bf,ior,vol,material_geometry(d,cutout,nprime))
+     --> material(tw,material_surface(weighted_layer(1.0,scattering,bsdf(),nprime),em),bf,ior,vol,material_geometry(d,cutout,nprime));
+
+}
+rules Restore_normal bottomup {
+     material(tw,material_surface(weighted_layer(_,scattering,_,nprime),em),bf,ior,vol,material_geometry(d,cutout,_))
+        -->material(tw,material_surface(scattering,em),bf,ior,vol,material_geometry(d,cutout,nprime));
+
+     //make sure wo dont do bump mapping twice
+     custom_curve_layer(a,b,c,d,e,f,_)-->custom_curve_layer(a,b,c,d,e,f,state::normal());
+}
+rules Elide_weighted_layer_for_ue4 topdown {
+    weighted_layer(w,_,base,_) --> base repeat_rules if w == 0.0 deadrule; //should be taken care off by the compiler
+    weighted_layer(w,layer,_,_) --> layer repeat_rules if w == 1.0;
+    weighted_layer(w,layer,base,_) --> bsdf_mix_2( w, layer, 1.0 - w, base);
+}
+
+// Removes all tint modifiers.
+rules Elide_tint_for_ue4 topdown {
+    bsdf_tint( _, bsdf()) --> bsdf() skip_recursion;//eliminate earlier???
+    bsdf_tint( c, diffuse_reflection_bsdf(tint,r)) --> diffuse_reflection_bsdf( c * tint, r) skip_recursion;
+    bsdf_tint( c, diffuse_transmission_bsdf(tint))
+        --> diffuse_reflection_bsdf( c * tint) skip_recursion;
+    bsdf_tint( c, microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t)) --> microfacet_ggx_vcavities_bsdf( ru,rv,c * tint,color(0.0),t) skip_recursion;
+//    bsdf_tint( c, microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t)) --> microfacet_ggx_vcavities_bsdf( ru,rv,nvidia::distilling_support::directional_coloring(c,tint,1.),color(0.0),t) skip_recursion;
+    bsdf_tint( c, bsdf_tint(tint,base)) --> bsdf_tint( c * tint, base) repeat_rules;
+    bsdf_tint( c, bsdf_tint_ex(tint,tintt,base)) --> bsdf_tint_ex( c * tint, c * tintt, base) repeat_rules;
+    bsdf_tint( c, bsdf_mix_2(w1,df1,w2,df2))
+        --> bsdf_mix_2( w1, bsdf_tint( c, df1), w2, bsdf_tint( c, df2));
+    bsdf_tint( c, custom_curve_layer(f0,f90,e,w,layer,base,n))
+        --> custom_curve_layer( f0,f90,e, w, bsdf_tint( c, layer), bsdf_tint( c, base), n);
+
+    bsdf_tint_ex( _, _, bsdf()) --> bsdf() skip_recursion;//eliminate earlier???
+    bsdf_tint_ex( c, _, diffuse_reflection_bsdf(tint,r)) --> diffuse_reflection_bsdf( c * tint, r) skip_recursion;
+    bsdf_tint_ex( _, c, diffuse_transmission_bsdf(tint))
+        --> diffuse_reflection_bsdf( c * tint) skip_recursion;
+    bsdf_tint_ex( c, _, microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t)) --> microfacet_ggx_vcavities_bsdf( ru,rv,c * tint,color(0.0),t) skip_recursion;
+    bsdf_tint_ex( c, ct, bsdf_tint(tint,base)) --> bsdf_tint_ex( c * tint, ct * tint, base) repeat_rules;
+    bsdf_tint_ex( c, ct, bsdf_tint_ex(tint,tintt,base)) --> bsdf_tint_ex( c * tint, ct * tintt, base) repeat_rules;
+    bsdf_tint_ex( c, ct, bsdf_mix_2(w1,df1,w2,df2))
+        --> bsdf_mix_2( w1, bsdf_tint_ex( c, ct, df1), w2, bsdf_tint_ex( c, ct, df2));
+    bsdf_tint_ex( c, ct, custom_curve_layer(f0,f90,e,w,layer,base,n))
+        --> custom_curve_layer( f0,f90,e, w, bsdf_tint_ex( c, ct, layer), bsdf_tint_ex( c, ct, base), n);
+    postcond nonode(bsdf_tint) && nonode(bsdf_tint_ex);
+}
+
+rules Fix_common_tint_for_UE4 topdown {
+//align color if there are  metallic and dielectric
+    material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,_,t4),bsdf_mix_2(
+        w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1),
+        w2,custom_curve_layer(f0,f90,e,w,layer,diffuse_reflection_bsdf(tint2,r2),n)),n3),em),
+            bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,color(0.0),t4),bsdf_mix_2(
+            w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,nvidia::distilling_support::average(w1,tint1,w2,tint2),color(0.0),t1),
+            w2,custom_curve_layer(f0,f90,e,w,layer,diffuse_reflection_bsdf(nvidia::distilling_support::average(w1,tint1,w2,tint2),r2),n)),n3),em),
+                bf,ior,vol,material_geometry(d,cutout,ng)) skip_recursion maybe tint1 != tint2
+        deadrule; //solved by sorting in the distilling
+
+//align color if there are  metallic and dielectric
+//if dielectric is purely diffuse,
+    material(tw,material_surface(bsdf_mix_2(
+        w2,custom_curve_layer(f0,f90,e,w,layer,diffuse_reflection_bsdf(tint2,r2),n),
+        w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1)
+        ),em),
+            bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(bsdf_mix_2(
+            w2b,custom_curve_layer(f0,f90,e,w,layer,diffuse_reflection_bsdf( c4,r2),n),
+            w1b,microfacet_ggx_vcavities_bsdf(ru1,rv1,c4,color(0.0),t1)
+            ),em),
+                bf,ior,vol,material_geometry(d,cutout,ng))
+        skip_recursion
+        maybe tint1 != tint2 && w == 0.0
+        where
+        c4 = tint1*w1+tint2*w2
+        w2b = 1.0-w1b //use the fact that w1+w2 must be 1.0 here
+        w1b = math::saturate(w1a/(w1a+w2a)) //safe because one weight is always >0
+        w2a = w2*math::max_value(tint2)
+        w1a = w1*math::max_value(tint1);
+
+//align color if there are  metallic and dielectric
+    material(tw,material_surface(bsdf_mix_2(
+        w2,custom_curve_layer(f0,f90,e,w,layer,diffuse_reflection_bsdf(tint2,r2),n),
+        w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1)
+        ),em),
+            bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(bsdf_mix_2(
+            w2,custom_curve_layer(f0,f90,e,w,layer,diffuse_reflection_bsdf(nvidia::distilling_support::average(w1,tint1,w2,tint2),r2),n),
+            w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,nvidia::distilling_support::average(w1,tint1,w2,tint2),color(0.0),t1)
+            ),em),
+                bf,ior,vol,material_geometry(d,cutout,ng)) skip_recursion maybe tint1 != tint2;
+
+//align color if there are  metallic and dielectric  +coat
+    material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,_,t4),bsdf_mix_2(
+        w2,custom_curve_layer(f0,f90,e,w,layer,diffuse_reflection_bsdf(tint2,r2),n),
+        w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1)
+        ),n3),em),
+            bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,color(0.0),t4),bsdf_mix_2(
+            w2b,custom_curve_layer(f0,f90,e,w,layer,diffuse_reflection_bsdf(c4,r2),n),
+            w1b,microfacet_ggx_vcavities_bsdf(ru1,rv1,c4,color(0.0),t1)
+            ),n3),em),
+                bf,ior,vol,material_geometry(d,cutout,ng))
+    skip_recursion
+    maybe tint1 != tint2 && w == 0.0
+        where
+        c4 = tint1*w1+tint2*w2
+        w2b = 1.0-w1b //use the fact that w1+w2 must be 1.0 here
+        w1b = math::saturate(w1a/(w1a+w2a)) //safe because one weight is always >0
+        w2a = w2*math::max_value(tint2)
+        w1a = w1*math::max_value(tint1);
+
+
+//align color if there are  metallic and dielectric  +coat
+    material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,_,t4),bsdf_mix_2(
+        w2,custom_curve_layer(f0,f90,e,w,layer,diffuse_reflection_bsdf(tint2,r2),n),
+        w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1)
+        ),n3),em),
+            bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,color(0.0),t4),bsdf_mix_2(
+            w2,custom_curve_layer(f0,f90,e,w,layer,diffuse_reflection_bsdf(nvidia::distilling_support::average(w1,tint1,w2,tint2),r2),n),
+            w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,nvidia::distilling_support::average(w1,tint1,w2,tint2),color(0.0),t1)
+            ),n3),em),
+                bf,ior,vol,material_geometry(d,cutout,ng)) skip_recursion maybe tint1 != tint2;
+
+}
+rules Fix_common_roughness_for_UE4 topdown {
+//align roughness if there are 2 glossy lobes mixed and color if we have metallic and dielectric
+    material(tw,material_surface(bsdf_mix_2(
+        w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1),
+        w2,custom_curve_layer(f0,f90,e,w,microfacet_ggx_vcavities_bsdf(ru2,rv2,tint2,_,t2),base,n)),em),
+            bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(bsdf_mix_2(
+            w1,microfacet_ggx_vcavities_bsdf(nvidia::distilling_support::average(w1,ru1,w2,ru2),nvidia::distilling_support::average(w1,rv1,w2,rv2),tint1,color(0.0),t1),
+            w2,custom_curve_layer(f0,f90,e,w,microfacet_ggx_vcavities_bsdf(nvidia::distilling_support::average(w1,ru1,w2,ru2),nvidia::distilling_support::average(w1,rv1,w2,rv2),tint2,color(0.0),t2),base,n)),em),
+                bf,ior,vol,material_geometry(d,cutout,ng)) skip_recursion maybe ru2 != ru1
+                deadrule; //sorting triggers other rule
+
+    material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,_,t4),
+        bsdf_mix_2(
+            w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1),
+            w2,custom_curve_layer(f0,f90,e,w,microfacet_ggx_vcavities_bsdf(ru2,rv2,tint2,_,t2),base,n)
+            ),n3)
+            ,em),bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,color(0.0),t4),
+            bsdf_mix_2(
+                w1,microfacet_ggx_vcavities_bsdf(nvidia::distilling_support::average(w1,ru1,w2,ru2),nvidia::distilling_support::average(w1,rv1,w2,rv2),tint1,color(0.0),t1),
+                w2,custom_curve_layer(f0,f90,e,w,microfacet_ggx_vcavities_bsdf(nvidia::distilling_support::average(w1,ru1,w2,ru2),nvidia::distilling_support::average(w1,rv1,w2,rv2),tint2,color(0.0),t2),base,n))
+                ,n3),em),
+                    bf,ior,vol,material_geometry(d,cutout,ng)) skip_recursion maybe ru2 != ru1
+                deadrule; //sorting triggers other rule
+
+    material(tw,material_surface(bsdf_mix_2(
+        w2,custom_curve_layer(f0,f90,e,w,microfacet_ggx_vcavities_bsdf(ru2,rv2,tint2,_,t2),base,n),
+        w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1)
+        ),em),
+            bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(bsdf_mix_2(
+            w2,custom_curve_layer(f0,f90,e,w,microfacet_ggx_vcavities_bsdf(nvidia::distilling_support::average(w1,ru1,w2,ru2),nvidia::distilling_support::average(w1,rv1,w2,rv2),tint2,color(0.0),t2),base,n),
+            w1,microfacet_ggx_vcavities_bsdf(nvidia::distilling_support::average(w1,ru1,w2,ru2),nvidia::distilling_support::average(w1,rv1,w2,rv2),tint1,color(0.0),t1)
+            ),em),
+                bf,ior,vol,material_geometry(d,cutout,ng)) skip_recursion maybe ru2 != ru1;
+
+    material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,_,t4),
+        bsdf_mix_2(
+            w2,custom_curve_layer(f0,f90,e,w,microfacet_ggx_vcavities_bsdf(ru2,rv2,tint2,_,t2),base,n),
+            w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1)
+            ),n3)
+            ,em),bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(custom_curve_layer(f0_3,f90_3,e3,w3,microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,color(0.0),t4),
+            bsdf_mix_2(
+                w2,custom_curve_layer(f0,f90,e,w,microfacet_ggx_vcavities_bsdf(nvidia::distilling_support::average(w1,ru1,w2,ru2),nvidia::distilling_support::average(w1,rv1,w2,rv2),tint2,color(0.0),t2),base,n),
+                w1,microfacet_ggx_vcavities_bsdf(nvidia::distilling_support::average(w1,ru1,w2,ru2),nvidia::distilling_support::average(w1,rv1,w2,rv2),tint1,color(0.0),t1)
+                ),n3),em),
+                    bf,ior,vol,material_geometry(d,cutout,ng)) skip_recursion maybe ru2 != ru1;
+
+}
+
+rules Fix_normals_for_UE4 topdown {
+//geometry normal was set to the base undercoat normal of the material, create separate weighted layer for it
+
+    material(tw,material_surface(custom_curve_layer( f0,f90,exp, w, layer, base,n1),em),
+             bf,ior,vol,material_geometry(d,cutout,n))
+        --> material(tw,
+                     material_surface(
+                         custom_curve_layer( f0,f90,exp, w, layer,
+                                                  weighted_layer(1.0,base,bsdf(),n),
+                                                  n1),
+                         em),
+                     bf,ior,vol,
+                     material_geometry(d,cutout,state::normal())) skip_recursion;
+
+    material(tw,material_surface(scattering,em),bf,ior,vol,material_geometry(d,cutout,n))
+     -->
+     material(tw,
+         material_surface(
+                weighted_layer(1.0,scattering,bsdf(),n),
+                em),
+              bf,ior,vol,material_geometry(d,cutout,state::normal())) skip_recursion;
+}
+
+rules Merge_normals_for_UE4 topdown {
+//combine geometry normal with layer normal so there are only 2 potential pickup places
+//also fix other layering normals so that iray renders correctly
+
+    material(tw,material_surface(weighted_layer(w,bsdf_mix_2(w1,custom_curve_layer(f0,f90,exp, w3, layer,base,_),w2,s1),s2,n),em),
+            bf,ior,vol,material_geometry(d,cutout,ng))
+     --> material(tw,material_surface(
+            weighted_layer(w,
+                bsdf_mix_2(w1,custom_curve_layer(f0,f90,exp, w3, layer,base,nvidia::distilling_support::add_detail_normal(n,ng)),w2,s1),
+                s2,nvidia::distilling_support::add_detail_normal(n,ng)),em),
+            bf,ior,vol,material_geometry(d,cutout,state::normal())) skip_recursion maybe (ng != state::normal()) ;
+
+    material(tw,material_surface(weighted_layer(w,s1,s2,n),em),
+            bf,ior,vol,material_geometry(d,cutout,ng))
+     --> material(tw,material_surface(weighted_layer(w,s1,s2,nvidia::distilling_support::add_detail_normal(n,ng)),em),
+              bf,ior,vol,material_geometry(d,cutout,state::normal())) skip_recursion maybe (ng != state::normal()) ;
+
+     material(tw,material_surface(
+        custom_curve_layer( f0,f90,exp, w, layer,
+            weighted_layer(w4,bsdf_mix_2(w1,custom_curve_layer(f0_1,f90_1,exp_1, w3, layer_1,base,_),w2,s1),s2,n),n1),em),
+            bf,ior,vol,material_geometry(d,cutout,ng))
+     -->  material(tw,material_surface(
+        custom_curve_layer( f0,f90,exp, w, layer,
+            weighted_layer(w4,bsdf_mix_2(w1,custom_curve_layer(
+                    f0_1,f90_1,exp_1, w3, layer_1,base,nvidia::distilling_support::add_detail_normal(n,ng)),
+                w2,s1),s2,nvidia::distilling_support::add_detail_normal(n,ng)),
+                nvidia::distilling_support::add_detail_normal(n1,ng)),em),
+                bf,ior,vol,material_geometry(d,cutout,state::normal())) skip_recursion maybe (ng != state::normal());
+
+    material(tw,material_surface(
+        custom_curve_layer( f0,f90,exp, w, layer,weighted_layer(w1,s1,s2,n),n1),em),
+            bf,ior,vol,material_geometry(d,cutout,ng))
+     -->  material(tw,material_surface(
+        custom_curve_layer( f0,f90,exp, w, layer,
+            weighted_layer(w1,s1,s2,nvidia::distilling_support::add_detail_normal(n,ng)),
+                nvidia::distilling_support::add_detail_normal(n1,ng)),em),
+                bf,ior,vol,material_geometry(d,cutout,state::normal())) skip_recursion maybe (ng != state::normal());
+
+    material(tw,material_surface(
+        custom_curve_layer( f0,f90,exp, w, layer,base,n1),em),
+            bf,ior,vol,material_geometry(d,cutout,ng))
+     -->  material(tw,material_surface(
+        custom_curve_layer( f0,f90,exp, w, layer,base,nvidia::distilling_support::add_detail_normal(n1,ng)),em),
+                bf,ior,vol,material_geometry(d,cutout,state::normal()))     skip_recursion;
+
+}
+
+rules Fix_backface topdown {
+    material(tw,scatter,_,ior,vol,geom) --> material(tw,scatter,scatter,ior,vol,geom) skip_recursion;
+}
+// Rules to simplify an MDL expression's scattering fields to a UE4-like clearcoat material model.
+rules Make_for_ue4 bottomup {
+
+    //ue4 clearcoated is simplified lay(glo(white),mix(lay(glo(white),dif(c1)),glo(c1)))
+    //result: there are a multitude of legal outcome configurations. mapping to UE4 coated would work for:
+    //simple:
+    //- dif                                                     dielectric without coat
+    //- glo                                                     metal
+    //1level
+    //- lay(glo(white),dif)                                     dielectric
+    //- lay(glo(white),glo(c1))                                 coated metal
+    //2level
+    //- mix(lay(glo(white),dif(c1)),glo(c1)))                   disney (mix of dielectric and metal)
+    //- lay(glo(white),lay(glo(white),dif(c1)))                 coated dielectric
+    //3 level
+    //- lay(glo(white),mix(lay(glo(white),dif(c1)),glo(c1)))    coated disney
+    //
+    //-> eliminate all invalid configurations
+    //1 level
+    //-lay(dif,glo) *done* layer(glo,dif)
+    //-lay(dif,dif)*done* dif
+    //-mix(dif,dif) *done* dif
+    //-mix(glo,glo) *done* glo
+    //-mix(diff,glo) *done* glo (interpret as metallic and roughness for diffuse = 1)
+    //2 level
+    //-mix(lay(glo,dif),dif)  *done* lay(glo,dif)
+    //-mix(lay(glo,glo),dif) *done* mixing uncoated and a coated metal? second diffuse-> glossy with roughness 1
+    //-mix(lay(glo,glo),glo) *done* mixing uncoated and a coated metal
+    //-mix(lay(glo,glo),lay(glo,glo))  *done*  mixing 2 coated metals
+    //-mix(lay(glo,glo),lay(glo,dif))  *done* mixing a dielectric and a coated metal
+    //-mix(lay(glo,dif),lay(glo,dif))  *done* mixing 2 dielectric
+    //-lay(glo,lay(glo,glo)) *done* coat on coat -> merge coats
+    //3 level
+    //-lay(glo                  ,lay(glo,lay(glo,dif)))  *done* //double coat, mix 2 coats
+    //-mix(lay(glo,lay(glo,dif)), glo) *done* //mix a metal with a coated dielectric
+    //-mix(lay(glo,lay(glo,dif)), dif) *done* //mix a coated dielectric with a uncoated dielectric
+    //-mix(lay(glo,lay(glo,dif)), lay(glo,dif)) *done*//mix a coated dielectric with a dielectric
+    //-mix(lay(glo,lay(glo,dif)), lay(glo,glo)) *done*//mix a coated dielectric with a coated metal
+    //-mix(lay(glo,lay(glo,dif)), lay(glo,lay(glo,dif))) *done*//mix 2 coated dielectric
+    //-mix(lay(glo,lay(glo,dif)), mix(lay(glo,dif),glo)) *done //mix a coated dielectric with a mix of dielectric and metal
+    //-mix(mix(lay(glo,dif),glo), glo) *done* //mix a metal with a disney
+    //-mix(mix(lay(glo,dif),glo), dif) *done* //mix a diffuse with a disney
+    //-mix(mix(lay(glo,dif),glo), lay(glo,glo))) *done* //mix a coated metal with a disney
+    //-mix(mix(lay(glo,dif),glo), lay(glo,dif))) *done*//mix a dielectric with a disney
+    //-mix(mix(lay(glo,dif),glo), lay(glo,lay(glo,dif)) *done* mix a coated dielectric with a disney
+    //-mix(mix(lay(glo,dif),glo), mix(lay(glo,dif),glo)) *done* mix 2 disney
+    //
+    //4 level!!
+    //-mix(lay(glo,mix(lay(glo,dif),glo)), glo) *done* mix ue4 with metal
+    //-mix(lay(glo,mix(lay(glo,dif),glo)), dif) *done* mix ue4 with diffuse
+    //-mix(lay(glo,mix(lay(glo,dif),glo)), lay(glo,dif)) *done* mix ue4 with dielectric
+    //-mix(lay(glo,mix(lay(glo,dif),glo)), lay(glo,glo)) *done* mix ue4 with coated metal
+    //-mix(lay(glo,mix(lay(glo,dif),glo)), lay(glo,lay(glo,dif))) *done* mix ue4 with coated dielectric
+    //-mix(lay(glo,mix(lay(glo,dif),glo)), mix(lay(glo,dif),glo)) *done mix ue4 with disney
+    //-mix(lay(glo,mix(lay(glo,dif),glo)), lay(glo,mix(lay(glo,dif),glo))) *done* mix ue4 with ue4
+    //-lay( glo ,lay(glo,mix(lay(glo,dif),glo))) *done* double coating
+    //
+    //*brutals* whole layer into a single glossy brdf ->repeat
+    //-lay(lay(glo,glo), _) *done* ->repeat
+    //-lay(lay(glo,dif), _) *done* ->repeat
+    //-lay(mix(lay(glo,dif),glo)), _) *done* ->repeat
+    //-lay(lay(glo,lay(glo,dif)), _) *done* ->repeat
+    //-lay(lay(glo,mix(lay(glo,dif),glo)), _) *done* ->repeat
+    //-lay(dif,_) *done*
+    //what to do with wrong (not white, not matching) color in gloss?
+    //i.e.
+    // lay(glo(c1),dif(c2))
+    // possible sollutions
+    // -lay(glo(white),dif(average(c1,c2) ) -> metalls become dielectrics
+    // -mix(glo(average(c1,c2)),dif(average(c1,c2) ->directionality is lost
+    //
+    //->preserve metalness for now
+    //-lay(glo(c1),dif(c2))
+    //-mix(lay(glo,dif(c1)),glo(c2))
+    //
+
+
+    //0 and 1 level
+    bsdf() --> diffuse_reflection_bsdf( color(0.0), 0.0);
+    bsdf_mix_2(
+        w1, diffuse_reflection_bsdf(c1,r1),
+        w2, diffuse_reflection_bsdf(c2,r2))
+        --> diffuse_reflection_bsdf(w1*c1+w2*c2, nvidia::distilling_support::average(w1,r1,w2,r2));
+
+    bsdf_mix_2(
+        w1, microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+        w2, microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,_))
+        -->
+microfacet_ggx_vcavities_bsdf(
+            nvidia::distilling_support::average(w1,ru1,w2,ru2),
+            nvidia::distilling_support::average(w1,rv1,w2,rv2), w1*c1+w2*c2,color(0.0),t1 )
+        if rv2 == ru2;
+
+    bsdf_mix_2(
+        w1, microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,_),
+        w2, microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2))
+        --> microfacet_ggx_vcavities_bsdf(
+            nvidia::distilling_support::average(w1,ru1,w2,ru2),
+            nvidia::distilling_support::average(w1,rv1,w2,rv2), w1*c1+w2*c2,color(0.0),t2 );
+
+    bsdf_mix_2(
+        w2, diffuse_reflection_bsdf(_,_),
+        w1, microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1))
+          --> microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1)
+            if (w1==1.0) && (w2 == 0.0)
+                deadrule; //compiler optimizes away
+    bsdf_mix_2(
+        w2, diffuse_reflection_bsdf(c2,r2),
+        w1, microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1))
+          --> bsdf_mix_2(
+            w2, custom_curve_layer(0.0,1.0,5.0,0.0, microfacet_ggx_vcavities_bsdf(ru1,rv1,color(0.0),color(0.0),t1), diffuse_reflection_bsdf(c2,r2)),
+            w1, microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1));
+
+//    custom_curve_layer(_,f90,_,w,
+//        diffuse_reflection_bsdf(c1,r1),
+//        diffuse_reflection_bsdf(c2,r2))
+//        --> diffuse_reflection_bsdf(w*f90*c1+(1.0-w)*c2,
+//            nvidia::distilling_support::average(w*f90,r1,(1.0-w),r2));
+
+
+    //mix(lay(glo,dif),dif)  ->lay(glo,dif)
+    bsdf_mix_2(
+        w2, diffuse_reflection_bsdf(_,_),
+        w1, custom_curve_layer(f0,f90,e,w,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            diffuse_reflection_bsdf(c2,r2),n)
+        )
+        --> custom_curve_layer(f0,f90,e,w,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+            diffuse_reflection_bsdf(c2, r2),n)
+            if (w1==1.0) && (w2==0.0) deadrule; //optimized away by compiler. always?
+    //mix(lay(glo,dif),dif)  ->lay(glo,dif)
+    bsdf_mix_2(
+        w2, diffuse_reflection_bsdf(c3,r3),
+        w1, custom_curve_layer(f0,f90,e,w,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            diffuse_reflection_bsdf(c2,r2),n)
+        )
+        --> custom_curve_layer(f0,f90,e,nvidia::distilling_support::part_normalized(w1*w,w1,w2),
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+            diffuse_reflection_bsdf(w1*c2+w2*c3, nvidia::distilling_support::average(w1,r2,w2,r3)),n);
+    //-mix(lay(glo,glo),dif) mixing dielectric and a coated metal?
+    bsdf_mix_2(
+        w2, diffuse_reflection_bsdf(c3,r3),
+        w1, custom_curve_layer(f0,f90,e,w,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),n)
+        )
+        --> custom_curve_layer(f0,f90,e,nvidia::distilling_support::part_normalized(w1*w,w1,w2),
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+//            microfacet_ggx_vcavities_bsdf(
+//                nvidia::distilling_support::average(w1,ru2,w2,1.),
+//                nvidia::distilling_support::average(w1,rv2,w2,1.),w1*c2+w2*c3,color(0.0),t2),n);
+            bsdf_mix_2(
+                w2, custom_curve_layer(0.0,1.0,5.0,0.0, microfacet_ggx_vcavities_bsdf(ru1,rv1,color(1.0),color(0.0),t1), diffuse_reflection_bsdf(c3,r3)),
+                w1, microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,color(0.0),t2)),n);
+    //-mix(lay(glo,glo),glo) mixing uncoated and a coated metal t3 is lost
+    bsdf_mix_2(
+        w1, custom_curve_layer(f0,f90,e,w,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),n),
+        w2, microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,_)
+        )
+        --> custom_curve_layer(f0,f90,e,nvidia::distilling_support::part_normalized(w1*w,w1,w2),
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1,ru2,w2,ru3),
+                nvidia::distilling_support::average(w1,rv2,w2,rv3),w1*c2+w2*c3,color(0.0),t2),n);
+    //-lay(glo,lay(glo,glo)) clearcoat on clearcoat -> merge coats
+    custom_curve_layer(f0a,f90a,ea,wa,
+        microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+        custom_curve_layer(_,_,_,wb,
+            microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,_), //TODO: better second tangent handling
+            microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,t3),nb),na)
+        --> custom_curve_layer(f0a,f90a,ea,wa+wb,//TODO f0b,f90b,eb
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(wa,ru1,wb,ru2),
+                nvidia::distilling_support::average(wa,rv1,wb,rv2),
+                nvidia::distilling_support::average(wa,c1,wb,c2),
+                color(0.0),
+                t1),
+            microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,color(0.0),t3),
+            na) if nb == na;
+    custom_curve_layer(f0a,f90a,ea,wa,
+        microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+        custom_curve_layer(_,_,_,wb,
+            microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,_), //TODO: better second tangent handling
+            microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,t3),nb),na)
+        --> custom_curve_layer(f0a,f90a,ea,wa+wb,//TODO f0b,f90b,eb
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(wa,ru1,wb,ru2),
+                nvidia::distilling_support::average(wa,rv1,wb,rv2),
+                nvidia::distilling_support::average(wa,c1,wb,c2),
+                color(0.0),
+                t1),
+            microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,color(0.0),t3),
+            nvidia::distilling_support::combine_normals(wa,na,wb,nb));
+     //-mix(lay(glo,glo),lay(glo,glo))  mixing 2 coated metals
+     bsdf_mix_2(
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),na),
+        w2, custom_curve_layer(f0b,f90b,eb,wb,
+            microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,_),
+            microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,_),nb))
+        --> custom_curve_layer(
+            nvidia::distilling_support::average(w1,f0a,w2,f0b),
+            nvidia::distilling_support::average(w1,f90a,w2,f90b),
+            nvidia::distilling_support::average(w1,ea,w2,eb),w1*wa+w2*wb,
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1,ru1,w2,ru3),
+                nvidia::distilling_support::average(w1,rv1,w2,rv3),
+                nvidia::distilling_support::average(w1,c1,w2,c3),
+                color(0.0),
+                t1),
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1,ru2,w2,ru4),
+                nvidia::distilling_support::average(w1,rv2,w2,rv4),
+                nvidia::distilling_support::average(w1,c2,w2,c4),
+                color(0.0),
+                t2),
+                na) if nb == na;
+     bsdf_mix_2(
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),na),
+        w2, custom_curve_layer(f0b,f90b,eb,wb,
+            microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,_),
+            microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,_),nb))
+        --> custom_curve_layer(
+            nvidia::distilling_support::average(w1,f0a,w2,f0b),
+            nvidia::distilling_support::average(w1,f90a,w2,f90b),
+            nvidia::distilling_support::average(w1,ea,w2,eb),w1*wa+w2*wb,
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1,ru1,w2,ru3),
+                nvidia::distilling_support::average(w1,rv1,w2,rv3),
+                nvidia::distilling_support::average(w1,c1,w2,c3),
+                color(0.0),
+                t1),
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1,ru2,w2,ru4),
+                nvidia::distilling_support::average(w1,rv2,w2,rv4),
+                nvidia::distilling_support::average(w1,c2,w2,c4),
+                color(0.0),
+                t2),
+                nvidia::distilling_support::combine_normals(w1,na,w2,nb));
+     //-mix(lay(glo,glo),lay(glo,dif))  mixing a dielectric and a coated metal
+     bsdf_mix_2(
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),na),
+        w2, custom_curve_layer(f0b,f90b,eb,wb,
+            microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,t3),
+            diffuse_reflection_bsdf(c4,r4),nb))
+        --> custom_curve_layer(f0a,f90a,ea,wa*w1,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+            bsdf_mix_2(
+                w2, custom_curve_layer(f0b,f90b,eb,wb,
+                    microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,color(0.0),t3),
+                    diffuse_reflection_bsdf(c4,r4),nb),
+                w1, microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,color(0.0),t2)),na);
+
+     //reverse -mix(lay(glo,glo),lay(glo,dif))  mixing a dielectric and a coated metal
+     bsdf_mix_2(
+        w2, custom_curve_layer(f0b,f90b,eb,wb,
+            microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,_),
+            diffuse_reflection_bsdf(c4,_),nb),
+
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),na)
+            )
+        --> custom_curve_layer(
+            nvidia::distilling_support::average(w1,f0a,w2,f0b),
+            nvidia::distilling_support::average(w1,f90a,w2,f90b),
+            nvidia::distilling_support::average(w1,ea,w2,eb),w1*wa+w2*wb,
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1,ru1,w2,ru3),
+                nvidia::distilling_support::average(w1,rv1,w2,rv3),
+                nvidia::distilling_support::average(w1,c1,w2,c3),
+                color(0.0),
+                t1),
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1,ru2,w2,1.),
+                nvidia::distilling_support::average(w1,rv2,w2,1.),
+                nvidia::distilling_support::average(w1,c2,w2,c4),
+                color(0.0),
+                t2),
+                na) if nb == na;
+     bsdf_mix_2(
+        w2, custom_curve_layer(f0b,f90b,eb,wb,
+            microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,_),
+            diffuse_reflection_bsdf(c4,_),nb),
+
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),na)
+            )
+        --> custom_curve_layer(
+            nvidia::distilling_support::average(w1,f0a,w2,f0b),
+            nvidia::distilling_support::average(w1,f90a,w2,f90b),
+            nvidia::distilling_support::average(w1,ea,w2,eb),w1*wa+w2*wb,
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1,ru1,w2,ru3),
+                nvidia::distilling_support::average(w1,rv1,w2,rv3),
+                nvidia::distilling_support::average(w1,c1,w2,c3),
+                color(0.0),
+                t1),
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1,ru2,w2,1.),
+                nvidia::distilling_support::average(w1,rv2,w2,1.),
+                nvidia::distilling_support::average(w1,c2,w2,c4),
+                color(0.0),
+                t2),
+                nvidia::distilling_support::combine_normals(w1,na,w2,nb));
+    //-mix(lay(glo,dif),lay(glo,dif))  mixing 2 dielectric
+     bsdf_mix_2(
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            diffuse_reflection_bsdf(c2,r2),na),
+        w2, custom_curve_layer(f0b,f90b,eb,wb,
+            microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,_),
+            diffuse_reflection_bsdf(c4,r4),nb))
+        --> custom_curve_layer(
+            nvidia::distilling_support::average(w1,f0a,w2,f0b),
+                nvidia::distilling_support::average(w1,f90a,w2,f90b),
+                nvidia::distilling_support::average(w1,ea,w2,eb),w1*wa+w2*wb,
+                microfacet_ggx_vcavities_bsdf(
+                    nvidia::distilling_support::average(w1,ru1,w2,ru3),
+                    nvidia::distilling_support::average(w1,rv1,w2,rv3),
+                    nvidia::distilling_support::average(w1,c1,w2,c3),
+                    color(0.0),
+                    t1),
+                diffuse_reflection_bsdf(
+                    nvidia::distilling_support::average(w1,c2,w2,c4),
+                    nvidia::distilling_support::average(w1,r2,w2,r4)),
+                    na) if nb == na;
+     bsdf_mix_2(
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            diffuse_reflection_bsdf(c2,r2),na),
+        w2, custom_curve_layer(f0b,f90b,eb,wb,
+            microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,_),
+            diffuse_reflection_bsdf(c4,r4),nb))
+        --> custom_curve_layer(
+            nvidia::distilling_support::average(w1,f0a,w2,f0b),
+                nvidia::distilling_support::average(w1,f90a,w2,f90b),
+                nvidia::distilling_support::average(w1,ea,w2,eb),w1*wa+w2*wb,
+                microfacet_ggx_vcavities_bsdf(
+                    nvidia::distilling_support::average(w1,ru1,w2,ru3),
+                    nvidia::distilling_support::average(w1,rv1,w2,rv3),
+                    nvidia::distilling_support::average(w1,c1,w2,c3),
+                    color(0.0),
+                    t1),
+                diffuse_reflection_bsdf(
+                    nvidia::distilling_support::average(w1,c2,w2,c4),
+                    nvidia::distilling_support::average(w1,r2,w2,r4)),
+                    nvidia::distilling_support::combine_normals(w1,na,w2,nb));
+    //-lay(glo                  ,lay(glo,lay(glo,dif)))  //double coat, mix 2 coats
+    custom_curve_layer(f0a,f90a,ea,wa,
+        microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+        custom_curve_layer(_,_,_,wb,
+            microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,_),
+            custom_curve_layer(f0c,f90c,ec,wc,
+                microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,t3),
+                diffuse_reflection_bsdf(c4,r4),nc),nb),na)
+        --> custom_curve_layer(f0a,f90a,ea,math::max(wa,wb),//TODO f0b,f90b,eb
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(wa*g1*g1*g1,ru1,wb*g2*g2*g2,ru2),
+                nvidia::distilling_support::average(wa*g1*g1*g1,rv1,wb*g2*g2*g2,rv2),
+                nvidia::distilling_support::average(wa,c1,wb,c2),
+                color(0.0),
+                t1),
+            custom_curve_layer(f0c,f90c,ec,wc,
+                microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,color(0.0),t3),
+                diffuse_reflection_bsdf(c4,r4),nc),na)
+                if nb == na
+                where g1 = (1.0-ru1)
+                      g2 = (1.0-ru2);
+    custom_curve_layer(f0a,f90a,ea,wa,
+        microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+        custom_curve_layer(_,_,_,wb,
+            microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,_),
+            custom_curve_layer(f0c,f90c,ec,wc,
+                microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,t3),
+                diffuse_reflection_bsdf(c4,r4),nc),nb),na)
+        --> custom_curve_layer(f0a,f90a,ea,math::max(wa,wb),//TODO f0b,f90b,eb
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(wa*g1*g1*g1,ru1,wb*g2*g2*g2,ru2),
+                nvidia::distilling_support::average(wa*g1*g1*g1,rv1,wb*g2*g2*g2,rv2),
+                nvidia::distilling_support::average(wa,c1,wb,c2),
+                color(0.0),
+                t1),
+            custom_curve_layer(f0c,f90c,ec,wc,
+                microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,color(0.0),t3),
+                diffuse_reflection_bsdf(c4,r4),nc),nvidia::distilling_support::combine_normals(wa,na,wb,nb))
+                where g1 = (1.0-ru1)
+                      g2 = (1.0-ru2);
+    //-mix(lay(glo,lay(glo,dif)), glo) //mix a metal with a partial metal
+     bsdf_mix_2(
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            custom_curve_layer(f0b,f90b,eb,wb,
+                microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),
+                diffuse_reflection_bsdf(c3,r3),nb),na),
+        w2, microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,t4)
+        )
+        --> custom_curve_layer(f0a,f90a,ea,w1*wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+            bsdf_mix_2(
+                w1,custom_curve_layer(f0b,f90b,eb,wb,
+                    microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,color(0.0),t2),
+                    diffuse_reflection_bsdf(c3,r3),nb),
+                w2, microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,color(0.0),t4)),na);
+     //-mix(lay(glo,lay(glo,dif)), dif) //mix a coated dielectric with a uncoated dielectric
+     bsdf_mix_2(
+        w2, diffuse_reflection_bsdf(c4,r4),
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            custom_curve_layer(f0b,f90b,eb,wb,
+                microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),
+                diffuse_reflection_bsdf(c3,r3),nb),na)
+        )
+        --> custom_curve_layer(f0a,f90a,ea,w1*wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+            custom_curve_layer(f0b,f90b,eb,wb*w1,
+                microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,color(0.0),t2),
+                diffuse_reflection_bsdf(
+                    nvidia::distilling_support::average(w1,c3,w2,c4),
+                    nvidia::distilling_support::average(w1,r3,w2,r4)),nb),na);
+    //-mix(lay(glo,lay(glo,dif)), lay(glo,dif)) //mix a coated dielectric with a dielectric
+     bsdf_mix_2(
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            custom_curve_layer(f0b,f90b,eb,wb,
+                microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2), //*todo* better tangent blending. use prevalent tangent?
+                diffuse_reflection_bsdf(c3,r3),nb),na),
+        w2, custom_curve_layer(f0c,f90c,ec,wc,
+            microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,_),
+            diffuse_reflection_bsdf(c5,r5),nc))
+        --> custom_curve_layer(f0a,f90a,ea,w1*wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+            custom_curve_layer(
+                nvidia::distilling_support::average(w1,f0b,w2,f0c),
+                nvidia::distilling_support::average(w1,f90b,w2,f90c),
+                nvidia::distilling_support::average(w1,eb,w2,ec),w1*wb+w2*wc,
+                microfacet_ggx_vcavities_bsdf(
+                    nvidia::distilling_support::average(w1,ru2,w2,ru4),
+                    nvidia::distilling_support::average(w1,rv2,w2,rv4),
+                    nvidia::distilling_support::average(w1,c2,w2,c4),
+                    color(0.0),
+                    t2),
+                diffuse_reflection_bsdf(nvidia::distilling_support::average(w1,c3,w2,c5),
+                    nvidia::distilling_support::average(w1,r3,w2,r5)),
+                    nb),na) if nb == nc;
+     bsdf_mix_2(
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            custom_curve_layer(f0b,f90b,eb,wb,
+                microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2), //*todo* better tangent blending. use prevalent tangent?
+                diffuse_reflection_bsdf(c3,r3),nb),na),
+        w2, custom_curve_layer(f0c,f90c,ec,wc,
+            microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,_),
+            diffuse_reflection_bsdf(c5,r5),nc))
+        --> custom_curve_layer(f0a,f90a,ea,w1*wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+            custom_curve_layer(
+                nvidia::distilling_support::average(w1,f0b,w2,f0c),
+                nvidia::distilling_support::average(w1,f90b,w2,f90c),
+                nvidia::distilling_support::average(w1,eb,w2,ec),w1*wb+w2*wc,
+                microfacet_ggx_vcavities_bsdf(
+                    nvidia::distilling_support::average(w1,ru2,w2,ru4),
+                    nvidia::distilling_support::average(w1,rv2,w2,rv4),
+                    nvidia::distilling_support::average(w1,c2,w2,c4),
+                    color(0.0),
+                    t2),
+                diffuse_reflection_bsdf(nvidia::distilling_support::average(w1,c3,w2,c5),
+                    nvidia::distilling_support::average(w1,r3,w2,r5)),
+                    nvidia::distilling_support::combine_normals(w1,nb,w2,nc)),na);
+    //reversed-mix(lay(glo,lay(glo,dif)), lay(glo,dif)) //mix a coated dielectric with a dielectric
+     bsdf_mix_2(
+        w2, custom_curve_layer(f0c,f90c,ec,wc,
+            microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,_),
+            diffuse_reflection_bsdf(c5,r5),nc),
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            custom_curve_layer(f0b,f90b,eb,wb,
+                microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2), //*todo* better tangent blending. use prevalent tangent?
+                diffuse_reflection_bsdf(c3,r3),nb),na)
+            )
+        --> custom_curve_layer(f0a,f90a,ea,w1*wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+            custom_curve_layer(
+                nvidia::distilling_support::average(w1,f0b,w2,f0c),
+                nvidia::distilling_support::average(w1,f90b,w2,f90c),
+                nvidia::distilling_support::average(w1,eb,w2,ec),w1*wb+w2*wc,
+                microfacet_ggx_vcavities_bsdf(
+                    nvidia::distilling_support::average(w1,ru2,w2,ru4),
+                    nvidia::distilling_support::average(w1,rv2,w2,rv4),
+                    nvidia::distilling_support::average(w1,c2,w2,c4),
+                    color(0.0),
+                    t2),
+                diffuse_reflection_bsdf(nvidia::distilling_support::average(w1,c3,w2,c5),
+                    nvidia::distilling_support::average(w1,r3,w2,r5)),
+                    nb),na) if nb == nc;
+     bsdf_mix_2(
+        w2, custom_curve_layer(f0c,f90c,ec,wc,
+            microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,_),
+            diffuse_reflection_bsdf(c5,r5),nc),
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            custom_curve_layer(f0b,f90b,eb,wb,
+                microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2), //*todo* better tangent blending. use prevalent tangent?
+                diffuse_reflection_bsdf(c3,r3),nb),na)
+            )
+        --> custom_curve_layer(f0a,f90a,ea,w1*wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+            custom_curve_layer(
+                nvidia::distilling_support::average(w1,f0b,w2,f0c),
+                nvidia::distilling_support::average(w1,f90b,w2,f90c),
+                nvidia::distilling_support::average(w1,eb,w2,ec),w1*wb+w2*wc,
+                microfacet_ggx_vcavities_bsdf(
+                    nvidia::distilling_support::average(w1,ru2,w2,ru4),
+                    nvidia::distilling_support::average(w1,rv2,w2,rv4),
+                    nvidia::distilling_support::average(w1,c2,w2,c4),
+                    color(0.0),
+                    t2),
+                diffuse_reflection_bsdf(nvidia::distilling_support::average(w1,c3,w2,c5),
+                    nvidia::distilling_support::average(w1,r3,w2,r5)),
+                    nvidia::distilling_support::combine_normals(w1,nb,w2,nc)),na);
+    //-mix(lay(glo,lay(glo,dif)), lay(glo,glo)) //mix a coated dielectric with a coated metal
+     bsdf_mix_2(
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            custom_curve_layer(f0b,f90b,eb,wb,
+                microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2), //*todo* better tangent blending. use prevalent tangent?
+                diffuse_reflection_bsdf(c3,r3),nb),na),
+        w2, custom_curve_layer(f0c,f90c,ec,wc,
+            microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,_),
+            microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,_,t5),nc))
+        --> custom_curve_layer(
+            nvidia::distilling_support::average(w1,f0a,w2,f0c),
+            nvidia::distilling_support::average(w1,f90a,w2,f90c),
+            nvidia::distilling_support::average(w1,ea,w2,ec),w1*wa+w2*wc,
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1,ru1,w2,ru4),
+                nvidia::distilling_support::average(w1,rv1,w2,rv4),
+                nvidia::distilling_support::average(w1,c1,w2,c4),
+                color(0.0),
+                t1),
+            bsdf_mix_2(
+                w1, custom_curve_layer(f0b,f90b,eb,wb,
+                    microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,color(0.0),t2),
+                    diffuse_reflection_bsdf(c3,r3),nb),
+                w2, microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,color(0.0),t5)),
+            na) if na == nc;
+     bsdf_mix_2(
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            custom_curve_layer(f0b,f90b,eb,wb,
+                microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2), //*todo* better tangent blending. use prevalent tangent?
+                diffuse_reflection_bsdf(c3,r3),nb),na),
+        w2, custom_curve_layer(f0c,f90c,ec,wc,
+            microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,_),
+            microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,_,t5),nc))
+        --> custom_curve_layer(
+            nvidia::distilling_support::average(w1,f0a,w2,f0c),
+            nvidia::distilling_support::average(w1,f90a,w2,f90c),
+            nvidia::distilling_support::average(w1,ea,w2,ec),w1*wa+w2*wc,
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1,ru1,w2,ru4),
+                nvidia::distilling_support::average(w1,rv1,w2,rv4),
+                nvidia::distilling_support::average(w1,c1,w2,c4),
+                color(0.0),
+                t1),
+            bsdf_mix_2(
+                w1, custom_curve_layer(f0b,f90b,eb,wb,
+                    microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,color(0.0),t2),
+                    diffuse_reflection_bsdf(c3,r3),nb),
+                w2, microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,color(0.0),t5)),
+            nvidia::distilling_support::combine_normals(w1,na,w2,nc));
+    //reversed -mix(lay(glo,lay(glo,dif)), lay(glo,glo)) //mix a coated dielectric with a coated metal
+     bsdf_mix_2(
+        w2, custom_curve_layer(f0c,f90c,ec,wc,
+            microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,_),
+            microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,_,t5),nc),
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            custom_curve_layer(f0b,f90b,eb,wb,
+                microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2), //*todo* better tangent blending. use prevalent tangent?
+                diffuse_reflection_bsdf(c3,r3),nb),na)
+            )
+        --> custom_curve_layer(
+            nvidia::distilling_support::average(w1,f0a,w2,f0c),
+            nvidia::distilling_support::average(w1,f90a,w2,f90c),
+            nvidia::distilling_support::average(w1,ea,w2,ec),w1*wa+w2*wc,
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1,ru1,w2,ru4),
+                nvidia::distilling_support::average(w1,rv1,w2,rv4),
+                nvidia::distilling_support::average(w1,c1,w2,c4),
+                color(0.0),
+                t1),
+            bsdf_mix_2(
+                w1, custom_curve_layer(f0b,f90b,eb,wb,
+                    microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,color(0.0),t2),
+                    diffuse_reflection_bsdf(c3,r3),nb),
+                w2, microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,color(0.0),t5)),
+            na) if na == nc;
+     bsdf_mix_2(
+        w2, custom_curve_layer(f0c,f90c,ec,wc,
+            microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,_),
+            microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,_,t5),nc),
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            custom_curve_layer(f0b,f90b,eb,wb,
+                microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2), //*todo* better tangent blending. use prevalent tangent?
+                diffuse_reflection_bsdf(c3,r3),nb),na)
+            )
+        --> custom_curve_layer(
+            nvidia::distilling_support::average(w1,f0a,w2,f0c),
+            nvidia::distilling_support::average(w1,f90a,w2,f90c),
+            nvidia::distilling_support::average(w1,ea,w2,ec),w1*wa+w2*wc,
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1,ru1,w2,ru4),
+                nvidia::distilling_support::average(w1,rv1,w2,rv4),
+                nvidia::distilling_support::average(w1,c1,w2,c4),
+                color(0.0),
+                t1),
+            bsdf_mix_2(
+                w1, custom_curve_layer(f0b,f90b,eb,wb,
+                    microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,color(0.0),t2),
+                    diffuse_reflection_bsdf(c3,r3),nb),
+                w2, microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,color(0.0),t5)),
+            nvidia::distilling_support::combine_normals(w1,na,w2,nc));
+    //-mix(lay(glo,lay(glo,dif)), lay(glo,lay(glo,dif))) //mix 2 coated dielectric
+     bsdf_mix_2(
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            custom_curve_layer(f0b,f90b,eb,wb,
+                microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),
+                diffuse_reflection_bsdf(c3,r3),nb),na),
+        w2, custom_curve_layer(f0c,f90c,ec,wc,
+            microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,_),
+            custom_curve_layer(f0d,f90d,ed,wd,
+                microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,_,_), //*todo* better tangent blending. use prevalent tangent?
+                diffuse_reflection_bsdf(c6,r6),nd),nc))
+        --> custom_curve_layer(
+            nvidia::distilling_support::average(w1,f0a,w2,f0c),
+            nvidia::distilling_support::average(w1,f90a,w2,f90c),
+            nvidia::distilling_support::average(w1,ea,w2,ec),w1*wa+w2*wc,
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1,ru1,w2,ru4),
+                nvidia::distilling_support::average(w1,rv1,w2,rv4),
+                nvidia::distilling_support::average(w1,c1,w2,c4),
+                color(0.0),
+                t1),
+            custom_curve_layer(
+                nvidia::distilling_support::average(w1,f0b,w2,f0d),
+                nvidia::distilling_support::average(w1,f90b,w2,f90d),
+                nvidia::distilling_support::average(w1,eb,w2,ed),w1*wb+w2*wd,
+                microfacet_ggx_vcavities_bsdf(
+                    nvidia::distilling_support::average(w1,ru2,w2,ru5),
+                    nvidia::distilling_support::average(w1,rv2,w2,rv5),
+                    nvidia::distilling_support::average(w1,c2,w2,c5),
+                    color(0.0),
+                    t2),
+                diffuse_reflection_bsdf(
+                    nvidia::distilling_support::average(w1,c3,w2,c6),
+                    nvidia::distilling_support::average(w1,r3,w2,r6)),
+                nvidia::distilling_support::combine_normals(w1,nb,w2,nd)),
+            nvidia::distilling_support::combine_normals(w1,na,w2,nc));
+    //-mix(lay(glo,lay(glo,dif)), mix(lay(glo,dif),glo)) //mix a coated dielectric with a disney
+     bsdf_mix_2(
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            custom_curve_layer(f0b,f90b,eb,wb,
+                microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),
+                diffuse_reflection_bsdf(c3,r3),nb),na),
+        w2,bsdf_mix_2(
+            w3, custom_curve_layer(f0c,f90c,ec,wc,
+                microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,_),
+                diffuse_reflection_bsdf(c5,r5),nc),
+            w4, microfacet_ggx_vcavities_bsdf(ru6,rv6,c6,_,t6)
+            )
+        )
+        --> custom_curve_layer(
+                nvidia::distilling_support::average(w1,f0a,w2,f0c),
+                nvidia::distilling_support::average(w1,f90a,w2,f90c),
+                nvidia::distilling_support::average(w1,ea,w2,ec),w1*wa+w2*wc,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+                bsdf_mix_2(
+                    w3*w2+w1, custom_curve_layer(
+                        nvidia::distilling_support::average(w1,f0b,w2,f0c),
+                        nvidia::distilling_support::average(w1,f90b,w2,f90c),
+                        nvidia::distilling_support::average(w1,eb,w2,ec),w1*wb+w2*wc,
+                        microfacet_ggx_vcavities_bsdf(
+                            nvidia::distilling_support::average(w1,ru2,w2,ru4),
+                            nvidia::distilling_support::average(w1,rv2,w2,rv4),
+                            nvidia::distilling_support::average(w1,c2,w2,c4),
+                            color(0.0),
+                            t2),
+                        diffuse_reflection_bsdf(nvidia::distilling_support::average(w1,c3,w2,c5),
+                            nvidia::distilling_support::average(w1,r3,w2,r5)),
+                            nvidia::distilling_support::combine_normals(w1,nb,w2,nc)),
+                    w4*w2, microfacet_ggx_vcavities_bsdf(ru6,rv6,c6,color(0.0),t6)),na);
+    //-mix(mix(lay(glo,dif),glo), glo) //mix a metal with a disney
+    bsdf_mix_2(
+        w2,microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,_),
+        w1,  bsdf_mix_2(
+            w3, custom_curve_layer(f0a,f90a,ea,wa,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+                diffuse_reflection_bsdf(c2,r2),na),
+            w4, microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,t3))
+        )
+        --> bsdf_mix_2(
+                w3*w1, custom_curve_layer(f0a,f90a,ea,wa,
+                    microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+                    diffuse_reflection_bsdf(c2,r2),na),
+                w4*w1+w2, microfacet_ggx_vcavities_bsdf(
+                    nvidia::distilling_support::average(w1,ru3,w2,ru4),
+                    nvidia::distilling_support::average(w1,rv3,w2,rv4),
+                    nvidia::distilling_support::average(w1,c3,w2,c4),
+                    color(0.0),
+                    t3));
+    //-mix(mix(lay(glo,dif),glo), dif) //mix a diffuse with a disney
+    bsdf_mix_2( w2,diffuse_reflection_bsdf(_,_),
+        w1,  bsdf_mix_2(
+            w3, custom_curve_layer(f0a,f90a,ea,wa,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+                diffuse_reflection_bsdf(c2,r2),na),
+            w4, microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,t3)
+            )
+        )
+        --> bsdf_mix_2(
+                w3, custom_curve_layer(f0a,f90a,ea,wa,
+                    microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+                    diffuse_reflection_bsdf(c2,r2),na),
+                w4, microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,color(0.0),t3))
+                if (w1 == 1.0) && (w2 == 0.0);
+    //-mix(mix(lay(glo,dif),glo), dif) //mix a diffuse with a disney
+    bsdf_mix_2( w2,diffuse_reflection_bsdf(c4,r4),
+        w1,  bsdf_mix_2(
+            w3, custom_curve_layer(f0a,f90a,ea,wa,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+                diffuse_reflection_bsdf(c2,r2),na),
+            w4, microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,t3)
+            )
+        )
+        --> bsdf_mix_2(
+                w3*w1+w2, custom_curve_layer(f0a,f90a,ea,wa,
+                    microfacet_ggx_vcavities_bsdf(
+                        nvidia::distilling_support::average(w1,ru1,w2,1.),
+                        nvidia::distilling_support::average(w1,rv1,w2,1.),
+                        nvidia::distilling_support::average(w1,c1,w2,c4),
+                        color(0.0),
+                        t1),
+                    diffuse_reflection_bsdf(
+                        nvidia::distilling_support::average(w1,c2,w2,c4),
+                        nvidia::distilling_support::average(w1,r2,w2,r4)),na),
+                w4*w1, microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,color(0.0),t3));
+    //-mix(mix(lay(glo,dif),glo), lay(glo,glo))) //mix a coated metal with a disney
+    bsdf_mix_2(
+        w2, custom_curve_layer(f0b,f90b,eb,wb,
+            microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,t4),
+            microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,_,_),nb),
+        w1,  bsdf_mix_2(
+            w3, custom_curve_layer(f0a,f90a,ea,wa,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+                diffuse_reflection_bsdf(c2,r2),na),
+            w4, microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,t3)
+
+            )
+        )
+        --> custom_curve_layer(f0b,f90b,eb,wb*w2,
+            microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,color(0.0),t4),
+            bsdf_mix_2(
+                w1*w3, custom_curve_layer(f0a,f90a,ea,wa,
+                    microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+                    diffuse_reflection_bsdf(c2,r2),na),
+                w1*w4+w2, microfacet_ggx_vcavities_bsdf(
+                    nvidia::distilling_support::average(w1*w4,ru3,w2,ru5),
+                    nvidia::distilling_support::average(w1*w4,rv3,w2,rv5),
+                    nvidia::distilling_support::average(w1*w4,c3,w2,c5),
+                    color(0.0),
+                    t3)),nb);
+    //-mix(mix(lay(glo,dif),glo), lay(glo,dif))) //mix a dielectric with a disney
+        bsdf_mix_2(
+            w2, custom_curve_layer(f0b,f90b,eb,wb,
+                microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,_),
+                diffuse_reflection_bsdf(c5,r5),nb),
+            w1,  bsdf_mix_2(
+                w3, custom_curve_layer(f0a,f90a,ea,wa,
+                        microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+                        diffuse_reflection_bsdf(c2,r2),na),
+                w4, microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,t3)
+                )
+            )
+        --> bsdf_mix_2(
+            w3*w1+w2, custom_curve_layer(
+                    nvidia::distilling_support::average(w1,f0a,w2,f0b),
+                    nvidia::distilling_support::average(w1,f90a,w2,f90b),
+                    nvidia::distilling_support::average(w1,ea,w2,eb),
+                    nvidia::distilling_support::average(w1,wa,w2,wb),
+                microfacet_ggx_vcavities_bsdf(
+                    nvidia::distilling_support::average(w1,ru1,w2,ru4),
+                    nvidia::distilling_support::average(w1,rv1,w2,rv4),
+                    nvidia::distilling_support::average(w1,c1,w2,c4),
+                    color(0.0),
+                    t1),
+                diffuse_reflection_bsdf(
+                    nvidia::distilling_support::average(w1,c2,w2,c5),
+                    nvidia::distilling_support::average(w1,r2,w2,r5)),
+                nvidia::distilling_support::combine_normals(w1,na,w2,nb)),
+            w4*w1, microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,color(0.0),t3));
+    //-mix(mix(lay(glo,dif),glo), lay(glo,lay(glo,dif)) mix a coated dielectric with a disney
+        bsdf_mix_2(
+            w2, custom_curve_layer(f0b,f90b,eb,wb,
+                microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,t4),
+                custom_curve_layer(f0c,f90c,ec,wc,
+                    microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,_,_),
+                    diffuse_reflection_bsdf(c6,r6),nc),nb),
+            w1,  bsdf_mix_2(
+                w3, custom_curve_layer(f0a,f90a,ea,wa,
+                    microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+                    diffuse_reflection_bsdf(c2,r2),na),
+                w4, microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,t3)
+            )
+        )
+        --> custom_curve_layer(f0b,f90b,eb,wb*w2,
+                microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,color(0.0),t4),
+                bsdf_mix_2(
+                    w1*w3+w2, custom_curve_layer(
+                            nvidia::distilling_support::average(w1,f0a,w2,f0c),
+                            nvidia::distilling_support::average(w1,f90a,w2,f90c),
+                            nvidia::distilling_support::average(w1,ea,w2,ec),
+                            nvidia::distilling_support::average(w1,wa,w2,wc),
+                        microfacet_ggx_vcavities_bsdf(
+                            nvidia::distilling_support::average(w1,ru1,w2,ru5),
+                            nvidia::distilling_support::average(w1,rv1,w2,rv5),
+                            nvidia::distilling_support::average(w1,c1,w2,c5),
+                            color(0.0),
+                            t1),
+                        diffuse_reflection_bsdf(
+                            nvidia::distilling_support::average(w1,c2,w2,c6),
+                            nvidia::distilling_support::average(w1,r2,w2,r6)),
+                        nvidia::distilling_support::combine_normals(w1,na,w2,nc)),
+                    w1*w4, microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,color(0.0),t3)
+                ),nb)
+        deadrule; //mix sorting triggers other rule
+    //-mix(mix(lay(glo,dif),glo), mix(lay(glo,dif),glo)) mix 2 disney
+        bsdf_mix_2(
+            w1, bsdf_mix_2(
+                w3, custom_curve_layer(f0a,f90a,ea,wa,
+                    microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+                    diffuse_reflection_bsdf(c2,r2),na),
+                w4, microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,t3)
+            ),
+            w2,  bsdf_mix_2(
+                w5, custom_curve_layer(f0b,f90b,eb,wb,
+                    microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,_),
+                    diffuse_reflection_bsdf(c5,r5),nb),
+                w6, microfacet_ggx_vcavities_bsdf(ru6,rv6,c6,_,_)
+            )
+        )
+        --> bsdf_mix_2(
+            w1*w3+w2*w5, custom_curve_layer(
+                nvidia::distilling_support::average(w1*w3,f0a,w2*w5,f0b),
+                nvidia::distilling_support::average(w1*w3,f90a,w2*w5,f90b),
+                nvidia::distilling_support::average(w1*w3,ea,w2*w5,eb),
+                nvidia::distilling_support::average(w1*w3,wa,w2*w5,wb),
+                microfacet_ggx_vcavities_bsdf(
+                    nvidia::distilling_support::average(w1*w3,ru1,w2*w5,ru4),
+                    nvidia::distilling_support::average(w1*w3,rv1,w2*w5,rv4),
+                    nvidia::distilling_support::average(w1*w3,c1,w2*w5,c4),
+                    color(0.0),
+                    t1),
+                diffuse_reflection_bsdf(
+                    nvidia::distilling_support::average(w1*w3,c2,w2*w5,c5),
+                    nvidia::distilling_support::average(w1*w3,r2,w2*w5,r5)),
+                nvidia::distilling_support::combine_normals(w1*w3,na,w2*w5,nb)),
+            w1*w4+w2*w6, microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1*w4,ru3,w2*w6,ru6),
+                nvidia::distilling_support::average(w1*w4,rv3,w2*w6,rv6),
+                nvidia::distilling_support::average(w1*w4,c3,w2*w6,c6),
+                color(0.0),
+                t3)
+        );
+    //-mix(lay(glo,mix(lay(glo,dif),glo)), glo) mix ue4 with metal
+        bsdf_mix_2(
+            w1, custom_curve_layer(f0a,f90a,ea,wa,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+                bsdf_mix_2(
+                    w3, custom_curve_layer(f0b,f90b,eb,wb,
+                        microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),
+                        diffuse_reflection_bsdf(c3,r3),nb),
+                    w4, microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,t4)
+            ),na),
+            w2, microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,_,_)
+
+            )
+        --> custom_curve_layer(f0a,f90a,ea,wa * w1,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+                bsdf_mix_2(
+                    w3*w1, custom_curve_layer(f0b,f90b,eb,wb,
+                        microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,color(0.0),t2),
+                        diffuse_reflection_bsdf(c3,r3),nb),
+                    w4*w1+w2, microfacet_ggx_vcavities_bsdf(
+                        nvidia::distilling_support::average(w4*w1,ru4,w2,ru5),
+                        nvidia::distilling_support::average(w4*w1,rv4,w2,rv5),
+                        nvidia::distilling_support::average(w4*w1,c4,w2,c5),
+                        color(0.0),
+                        t4)
+            ),na);
+    //-mix(lay(glo,mix(lay(glo,dif),glo)), dif) mix ue4 with diffuse
+        bsdf_mix_2(
+            w2, diffuse_reflection_bsdf(c5,r5),
+            w1, custom_curve_layer(f0a,f90a,ea,wa,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+                bsdf_mix_2(
+                    w3, custom_curve_layer(f0b,f90b,eb,wb,
+                        microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),
+                        diffuse_reflection_bsdf(c3,r3),nb),
+                    w4, microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,t4)
+            ),na)
+        )
+        --> custom_curve_layer(f0a,f90a,ea,wa * w1,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+                bsdf_mix_2(
+                    w3*w1+w2, custom_curve_layer(f0b,f90b,eb,wb,
+                        microfacet_ggx_vcavities_bsdf(
+                            nvidia::distilling_support::average(w3*w1,ru2,w2,1.),
+                            nvidia::distilling_support::average(w3*w1,rv2,w2,1.),
+                            nvidia::distilling_support::average(w3*w1,c2,w2,c5),
+                            color(0.0),
+                            t2),
+                        diffuse_reflection_bsdf(
+                            nvidia::distilling_support::average(w1,c3,w2,c5),
+                            nvidia::distilling_support::average(w1,r3,w2,r5)),nb),
+                    w4*w1, microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,color(0.0),t4)),na);
+    //-mix(lay(glo,mix(lay(glo,dif),glo)), lay(glo,dif)) mix ue4 with dielectric
+        bsdf_mix_2(
+            w1, custom_curve_layer(f0a,f90a,ea,wa,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+                bsdf_mix_2(
+                    w3, custom_curve_layer(f0b,f90b,eb,wb,
+                        microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),
+                        diffuse_reflection_bsdf(c3,r3),nb),
+                    w4, microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,t4)
+            ),na),
+            w2,custom_curve_layer(f0c,f90c,ec,wc,
+                microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,_,_),
+                diffuse_reflection_bsdf(c6,r6),nc))
+        --> custom_curve_layer(f0a,f90a,ea,wa * w1,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+                bsdf_mix_2(
+                    w3*w1+w2, custom_curve_layer(
+                        nvidia::distilling_support::average(w3*w1,f0b,w2,f0c),
+                        nvidia::distilling_support::average(w3*w1,f90b,w2,f90c),
+                        nvidia::distilling_support::average(w3*w1,eb,w2,ec),
+                        nvidia::distilling_support::average(w3*w1,wb,w2,wc),
+                        microfacet_ggx_vcavities_bsdf(
+                            nvidia::distilling_support::average(w3*w1,ru2,w2,ru5),
+                            nvidia::distilling_support::average(w3*w1,rv2,w2,rv5),
+                            nvidia::distilling_support::average(w3*w1,c2,w2,c5),
+                            color(0.0),
+                            t2),
+                        diffuse_reflection_bsdf(
+                            nvidia::distilling_support::average(w3*w1,c3,w2,c6),
+                            nvidia::distilling_support::average(w3*w3*w1,r3,w2,r6)),
+                        nvidia::distilling_support::combine_normals(w1,nb,w2,nc)),
+                    w4*w1, microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,color(0.0),t4)),na);
+    //reverse -mix(lay(glo,mix(lay(glo,dif),glo)), lay(glo,dif)) mix ue4 with dielectric
+        bsdf_mix_2(
+            w2,custom_curve_layer(f0c,f90c,ec,wc,
+                microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,_,_),
+                diffuse_reflection_bsdf(c6,r6),nc),
+            w1, custom_curve_layer(f0a,f90a,ea,wa,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+                bsdf_mix_2(
+                    w3, custom_curve_layer(f0b,f90b,eb,wb,
+                        microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),
+                        diffuse_reflection_bsdf(c3,r3),nb),
+                    w4, microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,t4)
+            ),na)
+        )
+        --> custom_curve_layer(f0a,f90a,ea,wa * w1,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+                bsdf_mix_2(
+                    w3*w1+w2, custom_curve_layer(
+                        nvidia::distilling_support::average(w3*w1,f0b,w2,f0c),
+                        nvidia::distilling_support::average(w3*w1,f90b,w2,f90c),
+                        nvidia::distilling_support::average(w3*w1,eb,w2,ec),
+                        nvidia::distilling_support::average(w3*w1,wb,w2,wc),
+                        microfacet_ggx_vcavities_bsdf(
+                            nvidia::distilling_support::average(w3*w1,ru2,w2,ru5),
+                            nvidia::distilling_support::average(w3*w1,rv2,w2,rv5),
+                            nvidia::distilling_support::average(w3*w1,c2,w2,c5),
+                            color(0.0),
+                            t2),
+                        diffuse_reflection_bsdf(
+                            nvidia::distilling_support::average(w3*w1,c3,w2,c6),
+                            nvidia::distilling_support::average(w3*w1,r3,w2,r6)),
+                        nvidia::distilling_support::combine_normals(w3*w1,nb,w2,nc)),
+                    w4*w1, microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,color(0.0),t4)),na);
+    //-mix(lay(glo,mix(lay(glo,dif),glo)), lay(glo,glo))
+        bsdf_mix_2(
+            w1, custom_curve_layer(f0a,f90a,ea,wa,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+                bsdf_mix_2(
+                    w3, custom_curve_layer(f0b,f90b,eb,wb,
+                        microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),
+                        diffuse_reflection_bsdf(c3,r3),nb),
+                    w4, microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,t4)
+            ),na),
+            w2,custom_curve_layer(f0c,f90c,ec,wc,
+                microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,_,_),
+                microfacet_ggx_vcavities_bsdf(ru6,rv6,c6,_,_),nc))
+        --> custom_curve_layer(
+            nvidia::distilling_support::average(w1,f0a,w2,f0c),
+            nvidia::distilling_support::average(w1,f90a,w2,f90c),
+            nvidia::distilling_support::average(w1,ea,w2,ec),wa*w1+wc*w2,
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1,ru1,w2,ru5),
+                nvidia::distilling_support::average(w1,rv1,w2,rv5),
+                nvidia::distilling_support::average(w1,c1,w2,c5),
+                color(0.0),
+                t1),
+                bsdf_mix_2(
+                    w1*w3, custom_curve_layer(f0b,f90b,eb,wb,
+                        microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,color(0.0),t2),
+                        diffuse_reflection_bsdf(c3,r3),nb),
+                    w1*w4+w2, microfacet_ggx_vcavities_bsdf(
+                        nvidia::distilling_support::average(w1*w4,ru4,w2,ru6),
+                        nvidia::distilling_support::average(w1*w4,rv4,w2,rv6),
+                        nvidia::distilling_support::average(w1*w4,c4,w2,c6),
+                        color(0.0),
+                        t4)),
+                    nvidia::distilling_support::combine_normals(w1*w4,na,w2,nc));
+    //reverse -mix(lay(glo,mix(lay(glo,dif),glo)), lay(glo,glo))
+        bsdf_mix_2(
+            w2,custom_curve_layer(f0c,f90c,ec,wc,
+                microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,_,_),
+                microfacet_ggx_vcavities_bsdf(ru6,rv6,c6,_,_),nc),
+            w1, custom_curve_layer(f0a,f90a,ea,wa,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+                bsdf_mix_2(
+                    w3, custom_curve_layer(f0b,f90b,eb,wb,
+                        microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),
+                        diffuse_reflection_bsdf(c3,r3),nb),
+                    w4, microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,t4)
+            ),na)
+        )
+        --> custom_curve_layer(
+            nvidia::distilling_support::average(w1,f0a,w2,f0c),
+            nvidia::distilling_support::average(w1,f90a,w2,f90c),
+            nvidia::distilling_support::average(w1,ea,w2,ec),wa*w1+wc*w2,
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1,ru1,w2,ru5),
+                nvidia::distilling_support::average(w1,rv1,w2,rv5),
+                nvidia::distilling_support::average(w1,c1,w2,c5),
+                color(0.0),
+                t1),
+                bsdf_mix_2(
+                    w1*w3, custom_curve_layer(f0b,f90b,eb,wb,
+                        microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,color(0.0),t2),
+                        diffuse_reflection_bsdf(c3,r3),nb),
+                    w1*w4+w2, microfacet_ggx_vcavities_bsdf(
+                        nvidia::distilling_support::average(w1*w4,ru4,w2,ru6),
+                        nvidia::distilling_support::average(w1*w4,rv4,w2,rv6),
+                        nvidia::distilling_support::average(w1*w4,c4,w2,c6),
+                        color(0.0),
+                        t4)),
+                    nvidia::distilling_support::combine_normals(w1*w4,na,w2,nc));
+    //-mix(lay(glo,mix(lay(glo,dif),glo)), lay(glo,lay(glo,dif))) mix ue4 with coated dielectric
+        bsdf_mix_2(
+            w1, custom_curve_layer(f0a,f90a,ea,wa,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+                bsdf_mix_2(
+                    w3, custom_curve_layer(f0b,f90b,eb,wb,
+                        microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),
+                        diffuse_reflection_bsdf(c3,r3),nb),
+                    w4, microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,t4)
+            ),na),
+            w2,custom_curve_layer(f0c,f90c,ec,wc,
+                microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,_,_),
+                custom_curve_layer(f0d,f90d,ed,wd,
+                    microfacet_ggx_vcavities_bsdf(ru6,rv6,c6,_,_),
+                    diffuse_reflection_bsdf(c7,r7),nd),nc))
+        --> custom_curve_layer(
+            nvidia::distilling_support::average(w1,f0a,w2,f0c),
+            nvidia::distilling_support::average(w1,f90a,w2,f90c),
+            nvidia::distilling_support::average(w1,ea,w2,ec),wa*w1+wc*w2,
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1,ru1,w2,ru5),
+                nvidia::distilling_support::average(w1,rv1,w2,rv5),
+                nvidia::distilling_support::average(w1,c1,w2,c5),
+                color(0.0),
+                t1),
+                bsdf_mix_2(
+                    w1*w3+w2, custom_curve_layer(
+                        nvidia::distilling_support::average(w1*w3,f0b,w2,f0d),
+                        nvidia::distilling_support::average(w1*w3,f90b,w2,f90d),
+                        nvidia::distilling_support::average(w1*w3,eb,w2,ed),
+                        nvidia::distilling_support::average(w1*w3,wb,w2,wd),
+                        microfacet_ggx_vcavities_bsdf(
+                            nvidia::distilling_support::average(w1*w3,ru2,w2,ru6),
+                            nvidia::distilling_support::average(w1*w3,rv2,w2,rv6),
+                            nvidia::distilling_support::average(w1*w3,c2,w2,c6),
+                            color(0.0),
+                            t2),
+                        diffuse_reflection_bsdf(
+                            nvidia::distilling_support::average(w1*w3,c3,w2,c7),
+                            nvidia::distilling_support::average(w1*w3,r3,w2,r7)),
+                        nvidia::distilling_support::combine_normals(w1*w3,nb,w2,nd)),
+                    w1*w4, microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,color(0.0),t4)),
+                    nvidia::distilling_support::combine_normals(w1,na,w2,nc));
+    //reverse -mix(lay(glo,mix(lay(glo,dif),glo)), lay(glo,lay(glo,dif))) mix ue4 with coated dielectric
+        bsdf_mix_2(
+            w2,custom_curve_layer(f0c,f90c,ec,wc,
+                microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,_,_),
+                custom_curve_layer(f0d,f90d,ed,wd,
+                    microfacet_ggx_vcavities_bsdf(ru6,rv6,c6,_,_),
+                    diffuse_reflection_bsdf(c7,r7),nd),nc),
+            w1, custom_curve_layer(f0a,f90a,ea,wa,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+                bsdf_mix_2(
+                    w3, custom_curve_layer(f0b,f90b,eb,wb,
+                        microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),
+                        diffuse_reflection_bsdf(c3,r3),nb),
+                    w4, microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,t4)
+            ),na)
+        )
+        --> custom_curve_layer(
+            nvidia::distilling_support::average(w1,f0a,w2,f0c),
+            nvidia::distilling_support::average(w1,f90a,w2,f90c),
+            nvidia::distilling_support::average(w1,ea,w2,ec),wa*w1+wc*w2,
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1,ru1,w2,ru5),
+                nvidia::distilling_support::average(w1,rv1,w2,rv5),
+                nvidia::distilling_support::average(w1,c1,w2,c5),
+                color(0.0),
+                t1),
+                bsdf_mix_2(
+                    w1*w3+w2, custom_curve_layer(
+                        nvidia::distilling_support::average(w1*w3,f0b,w2,f0d),
+                        nvidia::distilling_support::average(w1*w3,f90b,w2,f90d),
+                        nvidia::distilling_support::average(w1*w3,eb,w2,ed),
+                        nvidia::distilling_support::average(w1*w3,wb,w2,wd),
+                        microfacet_ggx_vcavities_bsdf(
+                            nvidia::distilling_support::average(w1*w3,ru2,w2,ru6),
+                            nvidia::distilling_support::average(w1*w3,rv2,w2,rv6),
+                            nvidia::distilling_support::average(w1*w3,c2,w2,c6),
+                            color(0.0),
+                            t2),
+                        diffuse_reflection_bsdf(
+                            nvidia::distilling_support::average(w1*w3,c3,w2,c7),
+                            nvidia::distilling_support::average(w1*w3,r3,w2,r7)),
+                        nvidia::distilling_support::combine_normals(w1*w3,nb,w2,nd)),
+                    w1*w4, microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,color(0.0),t4)),
+                    nvidia::distilling_support::combine_normals(w1,na,w2,nc));
+    //-mix(lay(glo,mix(lay(glo,dif),glo)), mix(lay(glo,dif),glo)) mix ue4 with disney
+         bsdf_mix_2(
+            w1, custom_curve_layer(f0a,f90a,ea,wa,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+                bsdf_mix_2(
+                    w3, custom_curve_layer(f0b,f90b,eb,wb,
+                        microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),
+                        diffuse_reflection_bsdf(c3,r3),nb),
+                    w4, microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,t4)
+            ),na),
+            w2,  bsdf_mix_2(
+                w5, custom_curve_layer(f0c,f90c,ec,wc,
+                    microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,_,_),
+                    diffuse_reflection_bsdf(c6,r6),nc),
+                w6, microfacet_ggx_vcavities_bsdf(ru7,rv7,c7,_,_)
+            )
+        )
+        --> custom_curve_layer(f0a,f90a,ea,wa * w1,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+                bsdf_mix_2(
+                    w3*w1+w2*w5 , custom_curve_layer(
+                        nvidia::distilling_support::average(w3*w1,f0b,w2*w5,f0c),
+                        nvidia::distilling_support::average(w3*w1,f90b,w2*w5,f90c),
+                        nvidia::distilling_support::average(w3*w1,eb,w2*w5,ec),
+                        nvidia::distilling_support::average(w3*w1,wb,w2*w5,wc),
+                        microfacet_ggx_vcavities_bsdf(
+                            nvidia::distilling_support::average(w3*w1,ru2,w2*w5,ru5),
+                            nvidia::distilling_support::average(w3*w1,rv2,w2*w5,rv5),
+                            nvidia::distilling_support::average(w3*w1,c2,w2*w5,c5),
+                            color(0.0),
+                            t2),
+                        diffuse_reflection_bsdf(
+                            nvidia::distilling_support::average(w3*w1,c3,w2*w5,c6),
+                            nvidia::distilling_support::average(w3*w1,r3,w2*w5,r6)),
+                        nvidia::distilling_support::combine_normals(w3*w1,nb,w2*w5,nc)),
+                    w4*w1+w2*w6, microfacet_ggx_vcavities_bsdf(
+                            nvidia::distilling_support::average(w4*w1,ru4,w2*w6,ru7),
+                            nvidia::distilling_support::average(w4*w1,rv4,w2*w6,rv7),
+                            nvidia::distilling_support::average(w4*w1,c4,w2*w6,c7),
+                            color(0.0),
+                            t4)),na);
+    //-mix(lay(glo,mix(lay(glo,dif),glo)), lay(glo,mix(lay(glo,dif),glo))) mix ue4 with ue4
+         bsdf_mix_2(
+            w1, custom_curve_layer(f0a,f90a,ea,wa,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+                bsdf_mix_2(
+                    w3, custom_curve_layer(f0b,f90b,eb,wb,
+                        microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),
+                        diffuse_reflection_bsdf(c3,r3),nb),
+                    w4, microfacet_ggx_vcavities_bsdf(ru4,rv4,c4,_,t4)
+            ),na),
+            w2, custom_curve_layer(f0c,f90c,ec,wc,
+                microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,_,_),
+                bsdf_mix_2(
+                    w5, custom_curve_layer(f0d,f90d,ed,wd,
+                        microfacet_ggx_vcavities_bsdf(ru6,rv6,c6,_,_),
+                        diffuse_reflection_bsdf(c7,r7),nd),
+                    w6, microfacet_ggx_vcavities_bsdf(ru8,rv8,c8,_,_)
+            ),nc)
+        )
+        --> custom_curve_layer(
+            nvidia::distilling_support::average(w1,f0a,w2,f0c),
+            nvidia::distilling_support::average(w1,f90a,w2,f90c),
+            nvidia::distilling_support::average(w1,ea,w2,ec),wa*w1+wc*w2,
+            microfacet_ggx_vcavities_bsdf(
+                nvidia::distilling_support::average(w1,ru1,w2,ru5),
+                nvidia::distilling_support::average(w1,rv1,w2,rv5),
+                nvidia::distilling_support::average(w1,c1,w2,c5),
+                color(0.0),
+                t1),
+                bsdf_mix_2(
+                    w3*w1+w2*w5 , custom_curve_layer(
+                        nvidia::distilling_support::average(w3*w1,f0b,w2*w5,f0d),
+                        nvidia::distilling_support::average(w3*w1,f90b,w2*w5,f90d),
+                        nvidia::distilling_support::average(w3*w1,eb,w2*w5,ed),
+                        nvidia::distilling_support::average(w3*w1,wb,w2*w5,wd),
+                        microfacet_ggx_vcavities_bsdf(
+                            nvidia::distilling_support::average(w3*w1,ru2,w2*w5,ru6),
+                            nvidia::distilling_support::average(w3*w1,rv2,w2*w5,rv6),
+                            nvidia::distilling_support::average(w3*w1,c2,w2*w5,c6),
+                            color(0.0),
+                            t2),
+                        diffuse_reflection_bsdf(
+                            nvidia::distilling_support::average(w3*w1,c3,w2*w5,c7),
+                            nvidia::distilling_support::average(w3*w1,r3,w2*w5,r7)),
+                        nvidia::distilling_support::combine_normals(w3*w1,nb,w2*w5,nd)),
+                    w4*w1+w2*w6, microfacet_ggx_vcavities_bsdf(
+                            nvidia::distilling_support::average(w4*w1,ru4,w2*w6,ru8),
+                            nvidia::distilling_support::average(w4*w1,rv4,w2*w6,rv8),
+                            nvidia::distilling_support::average(w4*w1,c4,w2*w6,c8),
+                            color(0.0),
+                            t4)),
+                nvidia::distilling_support::combine_normals(w1,na,w2,nc));
+    //-lay( glo ,lay(glo,mix(lay(glo,dif),glo))) double coating
+    custom_curve_layer(f0a,f90a,ea,wa,
+        microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+        custom_curve_layer(_,_,_,wb,
+            microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,_),
+            bsdf_mix_2(
+                w5, custom_curve_layer(f0c,f90c,ec,wc,
+                    microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,t3),
+                    diffuse_reflection_bsdf(c4,r4),nc),
+                w6, microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,_,t5)
+        ),nb),na)
+    --> custom_curve_layer(f0a,f90a,ea,math::max(wa,wb),
+        microfacet_ggx_vcavities_bsdf(
+            nvidia::distilling_support::average(wa*g1*g1*g1,ru1,wb*g2*g2*g2,ru2),
+            nvidia::distilling_support::average(wa*g1*g1*g1,rv1,wb*g2*g2*g2,rv2),
+            nvidia::distilling_support::average(wa,c1,wb,c2),
+            color(0.0),
+            t1),
+        bsdf_mix_2(
+            w5, custom_curve_layer(f0c,f90c,ec,wc,
+                microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,color(0.0),t3),
+                diffuse_reflection_bsdf(c4,r4),nc),
+            w6, microfacet_ggx_vcavities_bsdf(ru5,rv5,c5,color(0.0),t5)
+    ),nvidia::distilling_support::combine_normals(wa/(wa+wb),na,wb/(wa+wb),nb))
+            where g1 = (1.0-ru1)
+              g2 = (1.0-ru2);
+    //diff layer
+    custom_curve_layer(f0,_,_,w,
+        diffuse_reflection_bsdf(c1,r1),
+        base,_)
+//    --> custom_curve_layer(f0,f90,e,w,
+//            microfacet_ggx_vcavities_bsdf(1.,1.c1,_,),
+//            base,n1) repeat_rules;
+      --> bsdf_mix_2(w*f0,diffuse_reflection_bsdf(c1,r1),1.-(w*f0),base) repeat_rules;
+    //-lay(lay(glo,glo), _)
+    custom_curve_layer(f0a,f90a,ea,wa,
+        custom_curve_layer(f0b,_,_,wb,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,_),
+            microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),
+            _),
+        base,na)
+    --> custom_curve_layer(f0a,f90a,ea,wa,
+        microfacet_ggx_vcavities_bsdf(
+            nvidia::distilling_support::average(wb*f0b,ru1,1.,ru2),
+            nvidia::distilling_support::average(wb*f0b,rv1,1.,rv2),
+            nvidia::distilling_support::average(wb*f0b,c1,1.,c2),
+            color(0.0),
+            t2),
+        base,na) repeat_rules;
+
+    //-lay(lay(glo,dif), _)
+    custom_curve_layer(f0a,f90a,ea,wa,
+        custom_curve_layer(_,_,_,wb,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            diffuse_reflection_bsdf(c2,_),
+            _),
+        base,na)
+    --> custom_curve_layer(f0a,f90a,ea,wa,
+        microfacet_ggx_vcavities_bsdf(
+            ru1,
+            rv1,
+            nvidia::distilling_support::average(wb,c1,1.-wb,c2),
+            color(0.0),
+            t1),
+        base,na) repeat_rules;
+    //-lay(mix(lay(glo,dif),glo)), _)
+    custom_curve_layer(f0a,f90a,ea,wa,
+        bsdf_mix_2(
+                w1, custom_curve_layer(_,_,_,wb,
+                        microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+                        diffuse_reflection_bsdf(c2,_),
+                        _),
+                _, microfacet_ggx_vcavities_bsdf(_,_,c3,_,_)
+                ),
+            base,na)
+    --> custom_curve_layer(f0a,f90a,ea,wb*w1+wa,
+        microfacet_ggx_vcavities_bsdf(
+            ru1,
+            rv1,
+            (c1+c2+c3)/3.,
+            color(0.0),
+            t1),
+        base,na) repeat_rules;
+    //-lay(lay(glo,lay(glo,dif)), _)
+    custom_curve_layer(f0a,f90a,ea,wa,
+        custom_curve_layer(_,_,_,_,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            custom_curve_layer(_,_,_,_,
+                microfacet_ggx_vcavities_bsdf(_,_,c2,_,_),
+                diffuse_reflection_bsdf(c3,_),
+                _)
+            ,_)
+        ,base,na)
+    --> custom_curve_layer(f0a,f90a,ea,wa,
+        microfacet_ggx_vcavities_bsdf(
+            ru1,
+            rv1,
+            (c1+c2+c3)/3.,
+            color(0.0),
+            t1),
+        base,na) repeat_rules;
+
+    //-lay(lay(glo,mix(lay(glo,dif),glo)), _) ->repeat
+    custom_curve_layer(f0a,f90a,ea,wa,
+        custom_curve_layer(_,_,_,_,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            bsdf_mix_2(
+                _, custom_curve_layer(_,_,_,_,
+                    microfacet_ggx_vcavities_bsdf(_,_,c2,_,_),
+                    diffuse_reflection_bsdf(c3,_),
+                    _),
+                _, microfacet_ggx_vcavities_bsdf(_,_,c4,_,_)
+                  )
+            ,_)
+        ,base,na)
+    --> custom_curve_layer(f0a,f90a,ea,wa,
+        microfacet_ggx_vcavities_bsdf(
+            ru1,
+            rv1,
+            (c1+c2+c3+c4)/4.,
+            color(0.0),
+            t1),
+        base,na) repeat_rules;
+
+postcond  (
+        match( material(_,material_surface(diffuse_reflection_bsdf(_,_),_),_,_,_,_))
+    ||  match( material(_,material_surface(microfacet_ggx_vcavities_bsdf(_,_,_,_,_),_),_,_,_,_))
+    ||  match( material(_,material_surface(custom_curve_layer(_,_,_,_,
+                              microfacet_ggx_vcavities_bsdf(_,_,_,_,_),diffuse_reflection_bsdf(_,_),_),_),_,_,_,_))
+    ||  match( material(_,material_surface(custom_curve_layer(_,_,_,_,
+                              microfacet_ggx_vcavities_bsdf(_,_,_,_,_),microfacet_ggx_vcavities_bsdf(_,_,_,_,_),_),_),_,_,_,_))
+    ||  match( material(_,material_surface(custom_curve_layer(_,_,_,_,
+                              microfacet_ggx_vcavities_bsdf(_,_,_,_,_),
+                              custom_curve_layer(_,_,_,_,microfacet_ggx_vcavities_bsdf(_,_,_,_,_),diffuse_reflection_bsdf(_,_),_),_)
+                       ,_),_,_,_,_))
+    ||  match( material(_,material_surface(bsdf_mix_2(_,
+                              custom_curve_layer(_,_,_,_,
+                                microfacet_ggx_vcavities_bsdf(_,_,_,_,_),diffuse_reflection_bsdf(_,_,_),_),_,
+                              microfacet_ggx_vcavities_bsdf(_,_,_,_,_))
+                       ,_),_,_,_,_))
+    ||  match( material(_,material_surface(custom_curve_layer(_,_,_,_,
+                            microfacet_ggx_vcavities_bsdf(_,_,_,_,_),
+                            bsdf_mix_2(_,
+                              custom_curve_layer(_,_,_,_,
+                                microfacet_ggx_vcavities_bsdf(_,_,_,_,_),diffuse_reflection_bsdf(_,_,_),_),_,
+                              microfacet_ggx_vcavities_bsdf(_,_,_,_,_)),_)
+                       ,_),_,_,_,_))
+          );
+
+
+}
+// Rules to simplify an MDL expression's scattering fields to a spec_glossy material model.
+rules Make_for_sg bottomup {
+    material(tw,scatter,_,ior,vol,geom) --> material(tw,scatter,scatter,ior,vol,geom);
+
+    //sg is simplified lay(glo(c2),dif(c1))
+    //result: there are a multitude of legal outcome configurations. mapping to UE4 coated would work for:
+    //simple:
+    //- dif                                                     dielectric without coat
+    //- glo                                                     metal
+    //1level
+    //- lay(glo,dif)                                     dielectric
+
+
+    //-> eliminate all invalid configurations
+    //- lay(glo(white),glo(c1))                    done             coated metal
+    //2level
+    //- mix(lay(glo(),dif()),glo()))       done            disney (mix of dielectric and metal)
+    //- lay(glo(white),lay(glo(white),dif(c1)))                 coated dielectric
+
+    //1 level
+    //-lay(dif,glo) *done* layer(glo,dif)
+    //-lay(dif,dif)*done* dif
+    //-mix(dif,dif) *done* dif
+    //-mix(glo,glo) *done* glo
+    //-mix(diff,glo) *done* glo (interpret as metallic and roughness for diffuse = 1)
+    //2 level
+    //-mix(lay(glo,dif),dif)  *done* lay(glo,dif)
+    //-mix(lay(glo,dif),lay(glo,dif))  *done* mixing 2 dielectric
+    //
+    //*brutals* whole layer into a single glossy brdf ->repeat
+    //-lay(lay(glo,dif), _) *done* ->repeat
+    //-lay(lay(glo,lay(glo,dif)), _) *done* ->repeat
+    //-lay(dif,_) *done*
+    //what to do with wrong (not white, not matching) color in gloss?
+    //i.e.
+    // lay(glo(c1),dif(c2))
+    // possible sollutions
+    // -lay(glo(white),dif(average(c1,c2) ) -> metalls become dielectrics
+    // -mix(glo(average(c1,c2)),dif(average(c1,c2) ->directionality is lost
+    //
+    //->preserve metalness for now
+    //-lay(glo(c1),dif(c2))
+    //-mix(lay(glo,dif(c1)),glo(c2))
+    //
+
+
+    //0 and 1 level
+    bsdf() --> diffuse_reflection_bsdf( color(0.0), 0.0);
+    diffuse_transmission_bsdf(_) --> diffuse_reflection_bsdf( color(0.0), 0.0) deadrule; //removed elsewhere
+    bsdf_mix_2(
+        w1, diffuse_reflection_bsdf(c1,r1),
+        w2, diffuse_reflection_bsdf(c2,r2))
+        --> diffuse_reflection_bsdf(w1*c1+w2*c2, nvidia::distilling_support::average(w1,r1,w2,r2));
+
+    bsdf_mix_2(
+        w1, microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+        w2, microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,_))
+        --> microfacet_ggx_vcavities_bsdf(
+            nvidia::distilling_support::average(w1,ru1,w2,ru2),
+            nvidia::distilling_support::average(w1,rv1,w2,rv2),
+            w1*c1+w2*c2,color(0.0),
+            t1 )
+        if rv2 == ru2;
+    bsdf_mix_2(
+        w1, microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,_),
+        w2, microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2))
+        --> microfacet_ggx_vcavities_bsdf(
+            nvidia::distilling_support::average(w1,ru1,w2,ru2),
+            nvidia::distilling_support::average(w1,rv1,w2,rv2),
+            w1*c1+w2*c2,color(0.0),
+            t2 );
+/*    bsdf_mix_2(
+        w2, diffuse_reflection_bsdf(_,_),
+        w1, microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1))
+        --> microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1)
+                if (w1 == 1.0) && (w2 == 0.0);*/
+//assume normalized mix, can't support clamped mix anyway due to sorting
+    bsdf_mix_2(
+        w2, diffuse_reflection_bsdf(c2,r2),
+        w1, microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1))
+        --> custom_curve_layer(1.0,1.0,5.0,wg,
+                microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+                diffuse_reflection_bsdf(c2*wd_c,r2),state::normal())
+        where wd_c = wd > 0.0 ? wd/(1.0-wg): 0.0
+              wd = (w1+w2)>1.0? w2/(w1+w2):w2
+              wg = (w1+w2)>1.0? w1/(w1+w2):w1;
+
+
+
+
+//collapsing 2 glossy coats is tricky. which is more important?
+//visually more prominent is the one with lower roughness. averagin roughness is actually usually bad.
+//->heavily weight in the roughness
+    custom_curve_layer(_,_,_,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,_),
+            microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),_)
+        --> microfacet_ggx_vcavities_bsdf(
+//                                    nvidia::distilling_support::combine_glossy(wa,ru1,ru1,1.0,ru2,ru2),
+//                                    nvidia::distilling_support::combine_glossy(wa,rv1,rv1,1.0,rv2,rv2),t2);
+//                                    math::min(ru1,ru2),
+//                                    math::min(rv1,rv2),t2);
+                                      nvidia::distilling_support::average(wa*g1*g1*g1,ru1,g2*g2*g2,ru2),
+                                      nvidia::distilling_support::average(wa*g1*g1*g1,rv1,g2*g2*g2,rv2),
+                                      nvidia::distilling_support::average(wa,c1,1.0,c2),
+                                      color(0.0),
+                                      t2)
+                where g1 = (1.0-ru1)
+                      g2 = (1.0-ru2);
+
+    //lay(glo(white),lay(glo(white),dif(c1)))
+    custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,_),
+            custom_curve_layer(f0b,f90b,eb,wb,
+                microfacet_ggx_vcavities_bsdf(ru2,rv2,c2,_,t2),
+                diffuse_reflection_bsdf(c3,r3),nb),
+            _)
+        -->
+        custom_curve_layer(
+            nvidia::distilling_support::average(wa,f0a,wb,f0b),
+            nvidia::distilling_support::average(wa,f90a,wb,f90b),
+            nvidia::distilling_support::average(wa,ea,wb,eb),
+            nvidia::distilling_support::average(wa,wa,wb,wb),
+            microfacet_ggx_vcavities_bsdf(
+//                                        nvidia::distilling_support::combine_glossy(wa,ru1,ru1,wb,ru2,ru2),
+//                                        nvidia::distilling_support::combine_glossy(wa,rv1,rv1,wb,rv2,rv2),t2),
+//                                        math::min(ru1,ru2),
+//                                        math::min(rv1,rv2),t2),
+                                          nvidia::distilling_support::average(wa*g1*g1*g1,ru1,wb*g2*g2*g2,ru2),
+                                          nvidia::distilling_support::average(wa*g1*g1*g1,rv1,wb*g2*g2*g2,rv2),
+                                          nvidia::distilling_support::average(wa,c1,wb,c2),color(0.0),t2),
+                diffuse_reflection_bsdf(c3,r3),nb)
+                where g1 = (1.0-ru1)
+                      g2 = (1.0-ru2);
+    //-lay(lay(glo,dif), _)
+    custom_curve_layer(f0a,f90a,ea,wa,
+        custom_curve_layer(_,_,_,wb,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            diffuse_reflection_bsdf(c2,_),
+            _),
+        base,na)
+    --> custom_curve_layer(f0a,f90a,ea,wa,
+        microfacet_ggx_vcavities_bsdf(
+            ru1,
+            rv1,
+            nvidia::distilling_support::average(wb,c1,1.-wb,c2),
+            color(0.0),
+            t1),
+        base,na) repeat_rules;
+
+    //mix(lay(glo,dif),dif)  ->lay(glo,dif)
+    bsdf_mix_2(
+        w2, diffuse_reflection_bsdf(_,_),
+        w1, custom_curve_layer(f0,f90,e,w,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            diffuse_reflection_bsdf(c2,r2),n)
+        )
+        --> custom_curve_layer(f0,f90,e,w,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+            diffuse_reflection_bsdf(c2, r2),n)
+            if (w1 == 1.0) && (w2 == 0.0)
+        deadrule; //optimized away by compiler
+    //mix(lay(glo,dif),dif)  ->lay(glo,dif)
+    bsdf_mix_2(
+        w2, diffuse_reflection_bsdf(c3,r3),
+        w1, custom_curve_layer(f0,f90,e,w,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            diffuse_reflection_bsdf(c2,r2),n)
+        )
+        --> custom_curve_layer(f0,f90,e,nvidia::distilling_support::part_normalized(w1*w,w1,w2),
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+            diffuse_reflection_bsdf(w1*c2+w2*c3, nvidia::distilling_support::average(w1,r2,w2,r3)),n);
+/*     //mix(lay(glo(),dif()),glo()))
+     bsdf_mix_2(
+        w1, custom_curve_layer(f0,f90,e,w,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            diffuse_reflection_bsdf(c2,r2),n),
+        w2, microfacet_ggx_vcavities_bsdf(_,_,_,_,_)
+        )
+        --> custom_curve_layer(f0,f90,e,w,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,color(0.0),t1),
+            diffuse_reflection_bsdf(c2, r2),n)
+            if (w1 == 1.0)&&(w2 == 0.0);*/
+     //mix(lay(glo(),dif()),glo()))
+     bsdf_mix_2(
+        w1, custom_curve_layer(f0,f90,e,w,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            diffuse_reflection_bsdf(c2,r2),n),
+        w2, microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,_)
+        )
+        --> custom_curve_layer(w1*f0+w2,w1*f90+w2,e,w1*w+w2,
+            microfacet_ggx_vcavities_bsdf(w1*ru1+w2*ru3,w1*rv1+w2*rv3,w1*c1+w2*c3,color(0.0),t1),
+            diffuse_reflection_bsdf(c2, r2),n);
+
+     //-mix(lay(glo,dif),lay(glo,dif))  mixing 2 dielectric
+     bsdf_mix_2(
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            diffuse_reflection_bsdf(c2,r2),na),
+        w2, custom_curve_layer(f0b,f90b,eb,wb,
+            microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,_),
+            diffuse_reflection_bsdf(c4,r4),nb))
+        --> custom_curve_layer(
+            nvidia::distilling_support::average(w1,f0a,w2,f0b),
+                nvidia::distilling_support::average(w1,f90a,w2,f90b),
+                nvidia::distilling_support::average(w1,ea,w2,eb),w1*wa+w2*wb,
+                microfacet_ggx_vcavities_bsdf(
+                    nvidia::distilling_support::average(w1,ru1,w2,ru3),
+                    nvidia::distilling_support::average(w1,rv1,w2,rv3),
+                    nvidia::distilling_support::average(w1,c1,w2,c3),
+                    color(0.0),
+                    t1),
+                diffuse_reflection_bsdf(
+                    nvidia::distilling_support::average(w1,c2,w2,c4),
+                    nvidia::distilling_support::average(w1,r2,w2,r4)),
+                    na) if nb == na;
+     bsdf_mix_2(
+        w1, custom_curve_layer(f0a,f90a,ea,wa,
+            microfacet_ggx_vcavities_bsdf(ru1,rv1,c1,_,t1),
+            diffuse_reflection_bsdf(c2,r2),na),
+        w2, custom_curve_layer(f0b,f90b,eb,wb,
+            microfacet_ggx_vcavities_bsdf(ru3,rv3,c3,_,_),
+            diffuse_reflection_bsdf(c4,r4),nb))
+        --> custom_curve_layer(
+            nvidia::distilling_support::average(w1,f0a,w2,f0b),
+                nvidia::distilling_support::average(w1,f90a,w2,f90b),
+                nvidia::distilling_support::average(w1,ea,w2,eb),w1*wa+w2*wb,
+                microfacet_ggx_vcavities_bsdf(
+                    nvidia::distilling_support::average(w1,ru1,w2,ru3),
+                    nvidia::distilling_support::average(w1,rv1,w2,rv3),
+                    nvidia::distilling_support::average(w1,c1,w2,c3),
+                    color(0.0),
+                    t1),
+                diffuse_reflection_bsdf(
+                    nvidia::distilling_support::average(w1,c2,w2,c4),
+                    nvidia::distilling_support::average(w1,r2,w2,r4)),
+                    nvidia::distilling_support::combine_normals(w1,na,w2,nb));
+    //diff layer
+    custom_curve_layer(f0,_,_,w,
+        diffuse_reflection_bsdf(c1,r1),
+        base,_)
+//    --> custom_curve_layer(f0,f90,e,w,
+//            microfacet_ggx_vcavities_bsdf(c1,1.,1.), // FIXME: Wrong arity
+//            base,n1) repeat_rules;
+      --> bsdf_mix_2(w*f0,diffuse_reflection_bsdf(c1,r1),1.-(w*f0),base) repeat_rules;
+postcond  (
+        match( material(_,material_surface(diffuse_reflection_bsdf(_,_),_),_,_,_,_))
+    ||  match( material(_,material_surface(microfacet_ggx_vcavities_bsdf(_,_,_,_,_),_),_,_,_,_))
+    ||  match( material(_,material_surface(custom_curve_layer(_,_,_,_,
+                              microfacet_ggx_vcavities_bsdf(_,_,_,_,_),diffuse_reflection_bsdf(_,_),_),_),_,_,_,_))
+          );
+
+}
+
+
+

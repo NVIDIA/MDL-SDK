@@ -42,7 +42,9 @@ target_include_directories(${__TARGET_ADD_DEPENDENCY_TARGET}
     )
 
 # add build dependency
-add_dependencies(${__TARGET_ADD_DEPENDENCY_TARGET} mdl::mdl_sdk)
+if(MDL_TREAT_RUNTIME_DEPS_AS_BUILD_DEPS)
+    add_dependencies(${__TARGET_ADD_DEPENDENCY_TARGET} mdl::mdl_sdk)
+endif()
 
 # runtime dependencies
 if(NOT __TARGET_ADD_DEPENDENCY_NO_RUNTIME_COPY)
@@ -56,6 +58,7 @@ if(NOT __TARGET_ADD_DEPENDENCY_NO_RUNTIME_COPY)
                     ${CMAKE_BINARY_DIR}/src/shaders/plugin/dds/$(Configuration)
                     ${CMAKE_BINARY_DIR}/src/shaders/plugin/freeimage/$(Configuration)
                     ${CMAKE_BINARY_DIR}/src/shaders/plugin/openimageio/$(Configuration)
+                    ${CMAKE_BINARY_DIR}/src/shaders/plugin/mdl_distiller/$(Configuration)
                 )
 
     else()

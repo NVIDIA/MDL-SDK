@@ -51,46 +51,7 @@
 #include <cuda_runtime.h>
 #include <vector_functions.h>
 
-#include <FreeImage.h>
-
-// anonymous namespace for FreeImage IO interface functions
-namespace {
-
-unsigned DLL_CALLCONV read_handler(void* buffer, unsigned size, unsigned count, fi_handle handle)
-{
-    if (handle == nullptr)
-        return 0;
-
-    mi::mdl::IMDL_resource_reader *reader =
-        reinterpret_cast<mi::mdl::IMDL_resource_reader *>(handle);
-
-    return unsigned(reader->read(buffer, size * count) / size);
-}
-
-int DLL_CALLCONV seek_handler(fi_handle handle, long offset, int origin)
-{
-    if (handle == nullptr)
-        return 0;
-
-    mi::mdl::IMDL_resource_reader *reader =
-        reinterpret_cast<mi::mdl::IMDL_resource_reader *>(handle);
-
-    return reader->seek(offset, mi::mdl::IMDL_resource_reader::Position(origin)) ? 0 : -1;
-}
-
-long DLL_CALLCONV tell_handler(fi_handle handle)
-{
-    if (handle == nullptr)
-        return 0;
-
-    mi::mdl::IMDL_resource_reader *reader =
-        reinterpret_cast<mi::mdl::IMDL_resource_reader *>(handle);
-
-    return long(reader->tell());
-}
-
-}  // anonymous namespace
-
+#include <OpenImageIO/imageio.h>
 
 /// Representation of textures, holding meta and image data.
 class Texture_data
@@ -101,7 +62,6 @@ public:
     : m_path()
     , m_gamma_mode(mi::mdl::IValue_texture::gamma_default)
     , m_shape(mi::mdl::IType_texture::TS_2D)
-    , m_dib(nullptr)
     , m_bsdf_data(nullptr)
     , m_width(0)
     , m_height(0)
@@ -117,7 +77,6 @@ public:
     : m_path(tex->get_string_value())
     , m_gamma_mode(tex->get_gamma_mode())
     , m_shape(tex->get_type()->get_shape())
-    , m_dib(nullptr)
     , m_bsdf_data(nullptr)
     , m_width(0)
     , m_height(0)
@@ -128,7 +87,7 @@ public:
             return;
         }
 
-        // FreeImage only supports 2D textures
+        // Our OpenImageIO plugin supports only 2D textures
         if (m_shape != mi::mdl::IType_texture::TS_2D)
             return;
 
@@ -142,7 +101,6 @@ public:
     : m_path(path)
     , m_gamma_mode(mi::mdl::IValue_texture::gamma_default)
     , m_shape(mi::mdl::IType_texture::TS_2D)
-    , m_dib(nullptr)
     , m_bsdf_data(nullptr)
     , m_width(0)
     , m_height(0)
@@ -151,17 +109,8 @@ public:
         load_image(resolver);
     }
 
-    /// Destructor.
-    ~Texture_data()
-    {
-        if (m_dib) {
-            FreeImage_Unload(m_dib);
-            m_dib = nullptr;
-        }
-    }
-
     /// Returns true, if the texture was loaded successfully.
-    bool is_valid() const { return m_dib != nullptr || m_bsdf_data != nullptr; }
+    bool is_valid() const { return m_image || m_bsdf_data != nullptr; }
 
     /// Get the texture width.
     mi::Uint32 get_width() const { return m_width; }
@@ -179,7 +128,7 @@ public:
     mi::mdl::IType_texture::Shape get_shape() const { return m_shape; }
 
     /// Get the texture image data.
-    FIBITMAP *get_dib() const { return m_dib; }
+    std::shared_ptr<OIIO::ImageInput> get_image() const { return m_image; }
 
     /// Get the bsdf texture data if present.
     unsigned char const *get_bsdf_data() const { return m_bsdf_data; }
@@ -200,7 +149,7 @@ private:
                 /*ctx*/ nullptr));
         if (!resource_set)
             return;
-        
+
         if (resource_set->get_udim_mode() != mi::mdl::NO_UDIM || resource_set->get_count() != 1)
             return;
 
@@ -208,29 +157,14 @@ private:
         if (!elem || elem->get_count() != 1)
             return;
 
-        mi::base::Handle<mi::mdl::IMDL_resource_reader> reader(elem->open_reader(0));
-
-        FreeImageIO io;
-        io.read_proc = read_handler;
-        io.write_proc = 0;
-        io.seek_proc = seek_handler;
-        io.tell_proc = tell_handler;
-
-        FREE_IMAGE_FORMAT fif = FreeImage_GetFileTypeFromHandle(&io, reader.get());
-        if (fif == FIF_UNKNOWN) {
-            // no signature? try to get type by file name
-            fif = FreeImage_GetFIFFromFilename(m_path.c_str());
-        }
-        // unknown or unsupported type?
-        if (fif == FIF_UNKNOWN || !FreeImage_FIFSupportsReading(fif))
+        const char* filename = elem->get_filename(0);
+        m_image = OIIO::ImageInput::open(filename);
+        if (!m_image)
             return;
 
-        m_dib = FreeImage_LoadFromHandle(fif, &io, reader.get());
-        if (m_dib == nullptr)
-            return;
-
-        m_width = FreeImage_GetWidth(m_dib);
-        m_height = FreeImage_GetHeight(m_dib);
+        const OIIO::ImageSpec &spec = m_image->spec();
+        m_width = spec.width;
+        m_height = spec.height;
         m_depth = 1;
     }
 
@@ -258,7 +192,7 @@ private:
     std::string m_path;
     mi::mdl::IValue_texture::gamma_mode m_gamma_mode;
     mi::mdl::IType_texture::Shape m_shape;
-    FIBITMAP *m_dib;
+    std::shared_ptr<OIIO::ImageInput> m_image;
     unsigned char const *m_bsdf_data;
     mi::Uint32 m_width;
     mi::Uint32 m_height;
@@ -1229,36 +1163,33 @@ bool Material_gpu_context::prepare_texture(
     // For simplicity, the texture access functions are only implemented for float4 and gamma
     // is pre-applied here (all images are converted to linear space).
 
-    FIBITMAP *dib = tex->get_dib();
-    FIBITMAP *own_dib = nullptr;
-    if (FreeImage_GetImageType(dib) != FIT_RGBAF) {
-        own_dib = FreeImage_ConvertToRGBAF(dib);
-        dib = own_dib;
-    }
-
-    // This example expects, that there is no additional padding per image line
-    if (FreeImage_GetPitch(dib) != unsigned(width * 4 * sizeof(float))) {
-        if (own_dib)
-            FreeImage_Unload(own_dib);
+    std::vector<float> data(4 * width * height);
+    std::shared_ptr<OIIO::ImageInput> image(tex->get_image());
+    mi::Sint32 bytes_per_row = 4 * width * sizeof(float);
+    bool success = image->read_image(
+        /*subimage*/ 0,
+        /*miplevel*/ 0,
+        /*chbegin*/ 0,
+        /*chend*/ 4,
+        OIIO::TypeDesc::FLOAT,
+        data.data() + (height-1) * 4 * width,
+        /*xstride*/ 4 * sizeof(float),
+        /*ystride*/ -bytes_per_row,
+        /*zstride*/ OIIO::AutoStride);
+    if (!success)
         return false;
-    }
+
+    if (image->spec().nchannels <= 3)
+        for (size_t i = 0, n = data.size(); i < n; i += 4)
+            data[i+3] = 1.0f;
 
     // Convert to linear color space if necessary
     if (tex->get_gamma_mode() != mi::mdl::IValue_texture::gamma_linear) {
-        if (own_dib == nullptr) {
-            own_dib = FreeImage_Clone(dib);
-            dib = own_dib;
-        }
-
-        // FreeImage_AdjustGamma does not support floating point data,
-        // so we need to do it ourselves
-
-        float *data = reinterpret_cast<float *>(FreeImage_GetBits(dib));
-        for (size_t i = 0, n = width * height * 4; i < n; i += 4) {
+        for (size_t i = 0, n = data.size(); i < n; i += 4) {
             // Only adjust r, g and b, not alpha
-            data[i] = std::pow(data[i], 2.2f);
-            data[i + 1] = std::pow(data[i + 1], 2.2f);
-            data[i + 2] = std::pow(data[i + 2], 2.2f);
+            data[i  ] = std::pow(data[i  ], 2.2f);
+            data[i+1] = std::pow(data[i+1], 2.2f);
+            data[i+2] = std::pow(data[i+2], 2.2f);
         }
     }
 
@@ -1285,7 +1216,7 @@ bool Material_gpu_context::prepare_texture(
         for (unsigned level = 0; level < num_levels; ++level) {
             float4 *cur_data;
             if (level == 0)
-                cur_data = reinterpret_cast<float4 *>(FreeImage_GetBits(dib));
+                cur_data = reinterpret_cast<float4 *>(data.data());
             else
                 cur_data = gen_mip_level(prev_data, cur_width, cur_height);
 
@@ -1311,8 +1242,7 @@ bool Material_gpu_context::prepare_texture(
         cudaArray_t device_tex_data;
         check_cuda_success(cudaMallocArray(&device_tex_data, &channel_desc, width, height));
 
-        BYTE const *data = FreeImage_GetBits(dib);
-        check_cuda_success(cudaMemcpy2DToArray(device_tex_data, 0, 0, data,
+        check_cuda_success(cudaMemcpy2DToArray(device_tex_data, 0, 0, data.data(),
             width * sizeof(float4), width * sizeof(float4), height,
             cudaMemcpyHostToDevice));
 
@@ -1365,9 +1295,6 @@ bool Material_gpu_context::prepare_texture(
         tex_obj_unfilt,
         make_uint3(tex->get_width(), tex->get_height(), tex->get_depth())));
     m_all_textures.push_back(textures.back());
-
-    if (own_dib)
-        FreeImage_Unload(own_dib);
 
     return true;
 }
@@ -1538,8 +1465,8 @@ public:
 
         // Option "df_handle_slot_mode": Default is "none".
         // When using light path expressions, individual parts of the distribution functions can be
-        // selected using "handles". The contribution of each of those parts has to be evaluated 
-        // during rendering. This option controls how many parts are evaluated with each call into 
+        // selected using "handles". The contribution of each of those parts has to be evaluated
+        // during rendering. This option controls how many parts are evaluated with each call into
         // the generated "evaluate" and "auxiliary" functions and how the data is passed.
         options.set_option(MDL_JIT_OPTION_LINK_LIBBSDF_DF_HANDLE_SLOT_MODE, df_handle_mode.c_str());
 
@@ -1654,7 +1581,11 @@ Ptx_code *Material_ptx_compiler::generate_cuda_ptx()
 {
     // ctx should be the same value used when the unit was created
     mi::base::Handle<mi::mdl::IGenerated_code_executable> code_ptx(
-        m_jit_be->compile_unit(/*ctx=*/nullptr, m_link_unit.get()));
+        m_jit_be->compile_unit(
+            /*ctx=*/nullptr,
+            /*module_cache=*/nullptr,
+            m_link_unit.get(),
+            /*llvm_ir_output=*/false));
     check_success(code_ptx);
 
 #ifdef DUMP_PTX
@@ -1923,7 +1854,7 @@ bool Material_ptx_compiler::add_material(
                 size_t main_func_index;
                 if (!m_link_unit->add(
                     dist_func.get(),
-                    /*module_cache=*/NULL,
+                    /*module_cache=*/nullptr,
                     &m_module_manager,
                     &arg_block_index,
                     &main_func_index,
@@ -1980,7 +1911,7 @@ bool Material_ptx_compiler::add_material(
                 // no module cache here, as we do not use dropt_import_entries() in the Core API
                 if (!m_link_unit->add(
                     lambda.get(),
-                    /*module_cache=*/NULL,
+                    /*module_cache=*/nullptr,
                     &m_module_manager,
                     mi::mdl::IGenerated_code_executable::FK_LAMBDA,
                     &arg_block_index,
@@ -2224,131 +2155,37 @@ CUmodule build_linked_kernel(
 //
 //------------------------------------------------------------------------------
 
-// Export the given 8-bit per channel RGBA data to the given path.
-// The file format is determined by the path (must be supported by FreeImage).
-bool export_image_rgba(
-    char const *path, mi::Uint32 width, mi::Uint32 height, mi::Uint32 const *data)
-{
-    FIBITMAP *dib = FreeImage_AllocateT(
-        FIT_BITMAP,
-        int(width),
-        int(height),
-        /*bpp=*/ 32,
-        /*red_mask=*/   0x00ff0000,
-        /*green_mask=*/ 0x0000ff00,
-        /*blue_mask=*/  0x000000ff);
-    if (dib == nullptr)
-        return false;
-
-    if (FreeImage_GetPitch(dib) != unsigned(width * sizeof(mi::Uint32))) {
-        std::cout << "Unexpected pitch" << std::endl;
-        FreeImage_Unload(dib);
-        return false;
-    }
-
-    memcpy(FreeImage_GetBits(dib), data, width * height * sizeof(mi::Uint32));
-
-    FREE_IMAGE_FORMAT fif = FreeImage_GetFIFFromFilename(path);
-    // unknown or unsupported type?
-    if (fif == FIF_UNKNOWN || !FreeImage_FIFSupportsWriting(fif)) {
-        FreeImage_Unload(dib);
-        return false;
-    }
-
-    bool res = FreeImage_Save(fif, dib, path) != 0;
-    FreeImage_Unload(dib);
-    return res;
-}
-
 // Export the given RGBF data to the given path.
-// The file format is determined by the path (must be supported by FreeImage).
+// The file format is determined by the path (must be supported by OpenImageIO).
 bool export_image_rgbf(
     char const *path, mi::Uint32 width, mi::Uint32 height, float3 const *data)
 {
-    FIBITMAP *dib = FreeImage_AllocateT(
-        FIT_RGBF,
-        int(width),
-        int(height));
-    if (dib == nullptr)
-        return false;
-
-    if (FreeImage_GetPitch(dib) != unsigned(width * sizeof(float3))) {
-        std::cout << "Unexpected pitch" << std::endl;
-        FreeImage_Unload(dib);
-        return false;
+    size_t n = width * height;
+    std::vector<unsigned char> tmp(3*n);
+    for (size_t i = 0, j = 0; i < n; ++i, j += 3) {
+        tmp[j  ] = static_cast<unsigned char>(std::max(0.f, std::min(data[i].x, 1.f)) * 255.0f);
+        tmp[j+1] = static_cast<unsigned char>(std::max(0.f, std::min(data[i].y, 1.f)) * 255.0f);
+        tmp[j+2] = static_cast<unsigned char>(std::max(0.f, std::min(data[i].z, 1.f)) * 255.0f);
     }
 
-    memcpy(FreeImage_GetBits(dib), data, width * height * sizeof(float3));
+    OIIO::ROI roi( 0, width, 0, height, 0, 1, 0, 3);
+    OIIO::ImageSpec spec( roi, OIIO::TypeDesc::UINT8);
 
-    FREE_IMAGE_FORMAT fif = FreeImage_GetFIFFromFilename(path);
-    // unknown or unsupported type?
-    if (fif == FIF_UNKNOWN || !FreeImage_FIFSupportsWriting(fif)) {
-        FreeImage_Unload(dib);
-        return false;
-    }
+    std::unique_ptr<OIIO::ImageOutput> image(OIIO::ImageOutput::create(path));
+    if (!image)
+           return false;
 
-    bool res = false;
-    switch (fif)
-    {
-        // conversion required? Note, this list is not complete
-        case FIF_PNG:
-        case FIF_JPEG:
-        case FIF_BMP:
-        {
-            FIBITMAP *dst = FreeImage_AllocateT(
-                FIT_BITMAP,
-                int(width),
-                int(height),
-                /*bpp=*/ 32,
-                /*red_mask=*/   0x00ff0000,
-                /*green_mask=*/ 0x0000ff00,
-                /*blue_mask=*/  0x000000ff);
+    mi::Sint32 bytes_per_row = 3 * width * sizeof(unsigned char);
 
-
-            // calculate the number of bytes per pixel (3 for 24-bit or 4 for 32-bit)
-            const unsigned bytespp = FreeImage_GetLine(dst) / FreeImage_GetWidth(dst);
-
-            const unsigned src_pitch = FreeImage_GetPitch(dib);
-            const unsigned dst_pitch = FreeImage_GetPitch(dst);
-
-            const BYTE *dst_bits = (BYTE*) FreeImage_GetBits(dst);
-            BYTE *src_bits = (BYTE*) FreeImage_GetBits(dib);
-
-            for (unsigned y = 0; y < height; y++)
-            {
-                BYTE *dst_pixel = (BYTE*) dst_bits;
-                const FIRGBF *src_pixel = (FIRGBF*) src_bits;
-                for (unsigned x = 0; x < width; x++)
-                {
-                    // convert and scale to the range [0..255]
-                    dst_pixel[FI_RGBA_RED] =
-                        (char)(std::max(0.f, std::min(src_pixel->red, 1.f)) * 255.0f);
-                    dst_pixel[FI_RGBA_GREEN] =
-                        (char)(std::max(0.f, std::min(src_pixel->green, 1.f)) * 255.0f);
-                    dst_pixel[FI_RGBA_BLUE] =
-                        (char)(std::max(0.f, std::min(src_pixel->blue, 1.f)) * 255.0f);
-                    dst_pixel[FI_RGBA_ALPHA] = 255;
-
-                    dst_pixel += bytespp;
-                    src_pixel++;
-                }
-                dst_bits += dst_pitch;
-                src_bits += src_pitch;
-            }
-
-            res = FreeImage_Save(fif, dst, path) != 0;
-            FreeImage_Unload(dst);
-            break;
-        }
-
-        // no conversion required
-        default:
-            res = FreeImage_Save(fif, dib, path) != 0;
-            break;
-    }
-
-    FreeImage_Unload(dib);
-    return res;
+    image->open(path, spec);
+    bool success = image->write_image(
+        OIIO::TypeDesc::UINT8,
+        tmp.data() + (height-1) * 3 * width,
+        /*xstride*/ OIIO::AutoStride,
+        /*ystride*/ -bytes_per_row,
+        /*zstride*/ OIIO::AutoStride);
+    image->close();
+    return success;
 }
 
 #endif // EXAMPLE_CUDA_SHARED_H

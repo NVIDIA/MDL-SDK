@@ -25,7 +25,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  ******************************************************************************/
-mdl 1.7;
+mdl 1.8;
 
 using ::anno import hard_range, soft_range;
 using ::state import texture_tangent_u, normal, transform_vector, coordinate_space;
@@ -42,6 +42,11 @@ export bsdf diffuse_reflection_bsdf(
     float          roughness = 0.0 [[ hard_range(0.0, 1.0) ]],
     uniform string handle    = ""
 ) [[ intrinsic() ]];
+
+export bsdf dusty_diffuse_reflection_bsdf(
+    color          tint   = color( 1.0),
+    uniform string handle = ""
+) [[ intrinsic(), since(1,8) ]];
 
 export bsdf diffuse_transmission_bsdf(
     color          tint      = color(1.0),
@@ -256,6 +261,11 @@ export vdf anisotropic_vdf (
     float directional_bias = 0.0 [[ hard_range(-1.0, 1.0) ]],
     uniform string handle  = ""
 ) [[ intrinsic() ]];
+
+export vdf fog_vdf(
+    float particle_size = 8.0f,
+    uniform string handle = ""
+) [[ intrinsic(), since(1,8) ]];
 
 // recoloring of bsdf, edf, and vdf
 export bsdf tint(color tint, bsdf base) [[ intrinsic() ]];

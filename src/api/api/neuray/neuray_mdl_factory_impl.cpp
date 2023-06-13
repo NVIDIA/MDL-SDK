@@ -122,14 +122,13 @@ mi::neuraylib::IValue_texture* Mdl_factory_impl::create_texture(
     mi::Float32 gamma,
     const char* selector,
     bool shared,
-    mi::Sint32* errors)
+    mi::neuraylib::IMdl_execution_context* context)
 {
-    mi::Sint32 dummy_errors = 0;
-    if( !errors)
-        errors = &dummy_errors;
+    MDL::Execution_context default_context;
+    MDL::Execution_context* mdl_context = unwrap_context( context, default_context);
 
     if( !transaction) {
-        *errors = -1;
+        add_error_message( mdl_context, "Invalid parameters (NULL pointer).", -1);
         return nullptr;
     }
 
@@ -137,8 +136,11 @@ mi::neuraylib::IValue_texture* Mdl_factory_impl::create_texture(
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
     MDL::IType_texture::Shape int_shape = ext_shape_to_int_shape( shape);
-    mi::base::Handle<MDL::IValue_texture> result( MDL::Mdl_module::create_texture(
-        db_transaction, file_path, int_shape, gamma, selector, shared, errors));
+    mi::base::Handle<MDL::IValue_texture> result( MDL::create_texture(
+        db_transaction, file_path, int_shape, gamma, selector, shared, mdl_context));
+    // TODO MDL-1136 harmonize valid result XOR non-zero error messages count
+    if( mdl_context->get_error_messages_count() > 0)
+        return nullptr;
     if( !result)
         return nullptr;
 
@@ -150,14 +152,13 @@ mi::neuraylib::IValue_light_profile* Mdl_factory_impl::create_light_profile(
     mi::neuraylib::ITransaction* transaction,
     const char* file_path,
     bool shared,
-    mi::Sint32* errors)
+    mi::neuraylib::IMdl_execution_context* context)
 {
-    mi::Sint32 dummy_errors = 0;
-    if( !errors)
-        errors = &dummy_errors;
+    MDL::Execution_context default_context;
+    MDL::Execution_context* mdl_context = unwrap_context( context, default_context);
 
     if( !transaction) {
-        *errors = -1;
+        add_error_message( mdl_context, "Invalid parameters (NULL pointer).", -1);
         return nullptr;
     }
 
@@ -165,7 +166,7 @@ mi::neuraylib::IValue_light_profile* Mdl_factory_impl::create_light_profile(
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
     mi::base::Handle<MDL::IValue_light_profile> result(
-        MDL::Mdl_module::create_light_profile( db_transaction, file_path, shared, errors));
+        MDL::create_light_profile( db_transaction, file_path, shared, mdl_context));
     if( !result)
         return nullptr;
 
@@ -177,14 +178,13 @@ mi::neuraylib::IValue_bsdf_measurement* Mdl_factory_impl::create_bsdf_measuremen
     mi::neuraylib::ITransaction* transaction,
     const char* file_path,
     bool shared,
-    mi::Sint32* errors)
+    mi::neuraylib::IMdl_execution_context* context)
 {
-    mi::Sint32 dummy_errors = 0;
-    if( !errors)
-        errors = &dummy_errors;
+    MDL::Execution_context default_context;
+    MDL::Execution_context* mdl_context = unwrap_context( context, default_context);
 
     if( !transaction) {
-        *errors = -1;
+        add_error_message( mdl_context, "Invalid parameters (NULL pointer).", -1);
         return nullptr;
     }
 
@@ -192,7 +192,7 @@ mi::neuraylib::IValue_bsdf_measurement* Mdl_factory_impl::create_bsdf_measuremen
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
 
     mi::base::Handle<MDL::IValue_bsdf_measurement> result(
-        MDL::Mdl_module::create_bsdf_measurement( db_transaction, file_path, shared, errors));
+        MDL::create_bsdf_measurement( db_transaction, file_path, shared, mdl_context));
     if( !result)
         return nullptr;
 
@@ -413,102 +413,6 @@ const mi::IString* Mdl_factory_impl::encode_type_name( const char* name) const
     return new String_impl( result.c_str());
 }
 
-mi::Sint32 Mdl_factory_impl::deprecated_create_variants(
-    mi::neuraylib::ITransaction* transaction,
-    const char* module_name,
-    const mi::IArray* variant_data)
-{
-    if( !module_name || !variant_data)
-        return -5;
-    mi::Size variant_count = variant_data->get_length();
-    if( variant_count == 0)
-        return -5;
-
-    if( !transaction)
-        return -5;
-    Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( transaction);
-    DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
-
-    std::vector<MDL::Variant_data> mdl_variant_data(variant_count);
-    MDL::Execution_context context;
-    for( mi::Size i = 0; i < variant_count; ++i) {
-
-        mi::base::Handle<const mi::IStructure> variant(
-            variant_data->get_value<mi::IStructure>( i));
-        if( !variant)
-            return -5;
-
-        mi::base::Handle<const mi::IString> variant_name(
-            variant->get_value<mi::IString>( "variant_name"));
-        if( !variant_name) {
-            variant_name = variant->get_value<mi::IString>( "preset_name");
-            if( variant_name)
-                LOG::mod_log->warning( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
-                    "The struct member name \"preset_name\" is deprecated. Please use "
-                    "\"variant_name\" instead (and the type name \"Variant_data\" instead of "
-                    "\"Preset_data\").");
-        }
-        if( !variant_name)
-            return -5;
-        mdl_variant_data[i].m_variant_name = variant_name->get_c_str();
-
-        mi::base::Handle<const mi::IString> prototype_name(
-            variant->get_value<mi::IString>( "prototype_name"));
-        if( !prototype_name)
-            return -5;
-        DB::Tag tag = db_transaction->name_to_tag( prototype_name->get_c_str());
-        if( !tag)
-            return -5;
-        SERIAL::Class_id class_id = db_transaction->get_class_id( tag);
-        if( class_id != MDL::ID_MDL_FUNCTION_DEFINITION)
-            return -5;
-        DB::Access<MDL::Mdl_function_definition> def( tag, db_transaction);
-        if( !def->is_valid( db_transaction, &context))
-            return -5;
-        mi::neuraylib::IFunction_definition::Semantics sema = def->get_semantic();
-        if( !MDL::is_supported_prototype( sema, /*for_variant*/ true))
-            return -5;
-        mdl_variant_data[i].m_prototype_tag = tag;
-
-        mi::base::Handle<const mi::neuraylib::IExpression_list> defaults(
-            variant->get_value<mi::neuraylib::IExpression_list>( "defaults"));
-        mdl_variant_data[i].m_defaults = get_internal_expression_list( defaults.get());
-
-        mi::base::Handle<const mi::neuraylib::IAnnotation_block> annotations(
-            variant->get_value<mi::neuraylib::IAnnotation_block>( "annotations"));
-        mdl_variant_data[i].m_annotations = get_internal_annotation_block( annotations.get());
-    }
-
-    mi::Sint32 result = MDL::Mdl_module::deprecated_create_module(
-        db_transaction, module_name, mdl_variant_data.data(), mdl_variant_data.size(), &context);
-    MDL::log_messages( &context);
-
-    // map error codes
-    if( result == -1)
-        result = context.get_error_message( 0).m_code;
-    if( result == -4 || result > 1)
-        result = -8;
-
-    return result;
-}
-
-mi::Sint32 Mdl_factory_impl::deprecated_create_materials(
-    mi::neuraylib::ITransaction* transaction,
-    const char* module_name,
-    const mi::IArray* material_data)
-{
-    return -1;
-}
-
-mi::Sint32 Mdl_factory_impl::deprecated_create_materials(
-    mi::neuraylib::ITransaction* transaction,
-    const char* module_name,
-    const mi::IArray* mdl_data,
-    mi::neuraylib::IMdl_execution_context *context)
-{
-    return -1;
-}
-
 bool Mdl_factory_impl::is_valid_mdl_identifier( const char* name) const
 {
     return m_mdl->is_valid_mdl_identifier( name);
@@ -526,7 +430,7 @@ mi::Sint32 Mdl_factory_impl::shutdown()
     m_mdl.reset();
     return 0;
 }
-    
+
 } // namespace NEURAY
 
 } // namespace MI

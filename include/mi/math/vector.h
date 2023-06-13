@@ -727,10 +727,10 @@ public:
 template <typename T, Size DIM>
 inline Vector<T,DIM>& operator+=(
     Vector<T,DIM>&       lhs,
-    const Vector<T,DIM>& rhs)
+    const Vector_struct<T,DIM>& rhs)
 {
     for( Size i(0u); i < DIM; ++i)
-        lhs[i] += rhs[i];
+        vector_base_ptr(lhs)[i] += vector_base_ptr(rhs)[i];
     return lhs;
 }
 
@@ -738,10 +738,10 @@ inline Vector<T,DIM>& operator+=(
 template <typename T, Size DIM>
 inline Vector<T,DIM>& operator-=(
     Vector<T,DIM>&       lhs,
-    const Vector<T,DIM>& rhs)
+    const Vector_struct<T,DIM>& rhs)
 {
     for( Size i(0u); i < DIM; ++i)
-        lhs[i] -= rhs[i];
+        vector_base_ptr(lhs)[i] -= vector_base_ptr(rhs)[i];
     return lhs;
 }
 
@@ -749,10 +749,10 @@ inline Vector<T,DIM>& operator-=(
 template <typename T, Size DIM>
 inline Vector<T,DIM>& operator*=(
     Vector<T,DIM>&       lhs,
-    const Vector<T,DIM>& rhs)
+    const Vector_struct<T,DIM>& rhs)
 {
     for( Size i(0u); i < DIM; ++i)
-        lhs[i] *= rhs[i];
+        vector_base_ptr(lhs)[i] *= vector_base_ptr(rhs)[i];
     return lhs;
 }
 
@@ -761,10 +761,10 @@ inline Vector<T,DIM>& operator*=(
 template <typename T, Size DIM>
 inline Vector<T,DIM>& operator%=(
     Vector<T,DIM>&       lhs,
-    const Vector<T,DIM>& rhs)
+    const Vector_struct<T,DIM>& rhs)
 {
     for( Size i(0u); i < DIM; ++i)
-        lhs[i] %= rhs[i];
+        vector_base_ptr(lhs)[i] %= vector_base_ptr(rhs)[i];
     return lhs;
 }
 
@@ -772,18 +772,18 @@ inline Vector<T,DIM>& operator%=(
 template <typename T, typename U, Size DIM>
 inline Vector<T,DIM>& operator/=(
     Vector<T,DIM>&       lhs,
-    const Vector<U,DIM>& rhs)
+    const Vector_struct<U,DIM>& rhs)
 {
     for( Size i(0u); i < DIM; ++i)
-        lhs[i] = T(lhs[i] / rhs[i]);
+        vector_base_ptr(lhs)[i] = T(vector_base_ptr(lhs)[i] / vector_base_ptr(rhs)[i]);
     return lhs;
 }
 
 /// Adds \p lhs and \p rhs elementwise and returns the new result.
 template <typename T, Size DIM>
 inline Vector<T,DIM> operator+(
-    const Vector<T,DIM>& lhs,
-    const Vector<T,DIM>& rhs)
+    const Vector_struct<T,DIM>& lhs,
+    const Vector_struct<T,DIM>& rhs)
 {
     Vector<T,DIM> tmp( lhs);
     return tmp += rhs;
@@ -792,8 +792,8 @@ inline Vector<T,DIM> operator+(
 /// Subtracts \p rhs elementwise from \p lhs and returns the new result.
 template <typename T, Size DIM>
 inline Vector<T,DIM> operator-(
-    const Vector<T,DIM>& lhs,
-    const Vector<T,DIM>& rhs)
+    const Vector_struct<T,DIM>& lhs,
+    const Vector_struct<T,DIM>& rhs)
 {
     Vector<T,DIM> tmp( lhs);
     return tmp -= rhs;
@@ -802,8 +802,8 @@ inline Vector<T,DIM> operator-(
 /// Multiplies \p rhs elementwise with \p lhs and returns the new result.
 template <typename T, Size DIM>
 inline Vector<T,DIM> operator*(
-    const Vector<T,DIM>& lhs,
-    const Vector<T,DIM>& rhs)
+    const Vector_struct<T,DIM>& lhs,
+    const Vector_struct<T,DIM>& rhs)
 {
     Vector<T,DIM> tmp( lhs);
     return tmp *= rhs;
@@ -813,8 +813,8 @@ inline Vector<T,DIM> operator*(
 /// Only defined for typenames \p T having the % operator.
 template <typename T, Size DIM>
 inline Vector<T,DIM> operator%(
-    const Vector<T,DIM>& lhs,
-    const Vector<T,DIM>& rhs)
+    const Vector_struct<T,DIM>& lhs,
+    const Vector_struct<T,DIM>& rhs)
 {
     Vector<T,DIM> tmp( lhs);
     return tmp %= rhs;
@@ -823,8 +823,8 @@ inline Vector<T,DIM> operator%(
 /// Divides \p rhs elementwise by \p lhs and returns the new result.
 template <typename T, typename U, Size DIM>
 inline Vector<T,DIM> operator/(
-    const Vector<T,DIM>& lhs,
-    const Vector<U,DIM>& rhs)
+    const Vector_struct<T,DIM>& lhs,
+    const Vector_struct<U,DIM>& rhs)
 {
     Vector<T,DIM> tmp(lhs);
     return tmp /= rhs;
@@ -832,12 +832,116 @@ inline Vector<T,DIM> operator/(
 
 /// Negates the vector \p v elementwise and returns the new result.
 template <typename T, Size DIM>
-inline Vector<T,DIM> operator-( const Vector<T,DIM>& v)
+inline Vector<T,DIM> operator-( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> tmp;
     for( Size i(0u); i < DIM; ++i)
-        tmp[i] = -v[i];
+        vector_base_ptr(tmp)[i] = -vector_base_ptr(v)[i];
     return tmp;
+}
+
+
+//------ Resolve ambiguity with hybrid operators -------------
+// (Those operators should really be restricted to scalar types but that requires
+// modern C++ which some users of this headers don't enable.)
+
+/// Adds \p rhs elementwise to \p lhs and returns the modified \p lhs.
+template <typename T, Size DIM>
+inline Vector<T,DIM>& operator+=(
+    Vector<T,DIM>&       lhs,
+    const Vector<T,DIM>& rhs)
+{
+    return lhs += static_cast<const Vector_struct<T,DIM>&>(rhs);
+}
+
+/// Subtracts \p rhs elementwise from \p lhs and returns the modified \p lhs.
+template <typename T, Size DIM>
+inline Vector<T,DIM>& operator-=(
+    Vector<T,DIM>&       lhs,
+    const Vector<T,DIM>& rhs)
+{
+    return lhs -= static_cast<const Vector_struct<T,DIM>&>(rhs);
+}
+
+/// Multiplies \p rhs elementwise with \p lhs and returns the modified \p lhs.
+template <typename T, Size DIM>
+inline Vector<T,DIM>& operator*=(
+    Vector<T,DIM>&       lhs,
+    const Vector<T,DIM>& rhs)
+{
+    return lhs *= static_cast<const Vector_struct<T,DIM>&>(rhs);
+}
+
+/// Computes \p lhs modulo \p rhs elementwise and returns the modified \p lhs.
+/// Only defined for typenames \p T having the % operator.
+template <typename T, Size DIM>
+inline Vector<T,DIM>& operator%=(
+    Vector<T,DIM>&       lhs,
+    const Vector<T,DIM>& rhs)
+{
+    return lhs %= static_cast<const Vector_struct<T,DIM>&>(rhs);
+}
+
+/// Divides \p lhs elementwise by \p rhs and returns the modified \p lhs.
+template <typename T, typename U, Size DIM>
+inline Vector<T,DIM>& operator/=(
+    Vector<T,DIM>&       lhs,
+    const Vector<U,DIM>& rhs)
+{
+    return lhs /= static_cast<const Vector_struct<U,DIM>&>(rhs);
+}
+
+/// Adds \p lhs and \p rhs elementwise and returns the new result.
+template <typename T, Size DIM>
+inline Vector<T,DIM> operator+(
+    const Vector<T,DIM>& lhs,
+    const Vector<T,DIM>& rhs)
+{
+    return lhs + static_cast<const Vector_struct<T,DIM>&>(rhs);
+}
+
+/// Subtracts \p rhs elementwise from \p lhs and returns the new result.
+template <typename T, Size DIM>
+inline Vector<T,DIM> operator-(
+    const Vector<T,DIM>& lhs,
+    const Vector<T,DIM>& rhs)
+{
+    return lhs - static_cast<const Vector_struct<T,DIM>&>(rhs);
+}
+
+/// Multiplies \p rhs elementwise with \p lhs and returns the new result.
+template <typename T, Size DIM>
+inline Vector<T,DIM> operator*(
+    const Vector<T,DIM>& lhs,
+    const Vector<T,DIM>& rhs)
+{
+    return lhs * static_cast<const Vector_struct<T,DIM>&>(rhs);
+}
+
+/// Computes \p lhs modulo \p rhs elementwise and returns the new result.
+/// Only defined for typenames \p T having the % operator.
+template <typename T, Size DIM>
+inline Vector<T,DIM> operator%(
+    const Vector<T,DIM>& lhs,
+    const Vector<T,DIM>& rhs)
+{
+    return lhs % static_cast<const Vector_struct<T,DIM>&>(rhs);
+}
+
+/// Divides \p rhs elementwise by \p lhs and returns the new result.
+template <typename T, typename U, Size DIM>
+inline Vector<T,DIM> operator/(
+    const Vector<T,DIM>& lhs,
+    const Vector<U,DIM>& rhs)
+{
+    return lhs / static_cast<const Vector_struct<U,DIM>&>(rhs);
+}
+
+/// Negates the vector \p v elementwise and returns the new result.
+template <typename T, Size DIM>
+inline Vector<T,DIM> operator-( const Vector<T,DIM>& v)
+{
+    return -static_cast<const Vector_struct<T,DIM>&>(v);
 }
 
 
@@ -851,7 +955,7 @@ inline Vector<T,DIM>& operator*=(
     TT             s)
 {
     for( Size i(0u); i < DIM; ++i)
-        v[i] = T(v[i] * s);
+        vector_base_ptr(v)[i] = T(vector_base_ptr(v)[i] * s);
     return v;
 }
 
@@ -864,7 +968,7 @@ inline Vector<T,DIM>& operator%=(
     TT             s)
 {
     for( Size i(0u); i < DIM; ++i)
-        v[i] = T(v[i] % s);
+        vector_base_ptr(v)[i] = T(vector_base_ptr(v)[i] % s);
     return v;
 }
 
@@ -875,14 +979,14 @@ inline Vector<T,DIM>& operator/=(
     TT              s)
 {
     for( Size i(0u); i < DIM; ++i)
-        v[i] = T(v[i] / s);
+        vector_base_ptr(v)[i] = T(vector_base_ptr(v)[i] / s);
     return v;
 }
 
 /// Multiplies the vector \p v elementwise with the scalar \p s and returns the new result.
 template <typename T, typename TT, Size DIM>
 inline Vector<T,DIM> operator*(
-    const Vector<T,DIM>& v,
+    const Vector_struct<T,DIM>& v,
     TT                   s)
 {
     Vector<T,DIM> tmp( v);
@@ -893,7 +997,7 @@ inline Vector<T,DIM> operator*(
 template <typename T, typename TT, Size DIM>
 inline Vector<T,DIM> operator*(
     TT                   s,
-    const Vector<T,DIM>& v)
+    const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> tmp(v);
     return tmp *= s;
@@ -904,7 +1008,7 @@ inline Vector<T,DIM> operator*(
 /// Only defined for typenames \p T having the % operator for \p TT arguments.
 template <typename T, typename TT, Size DIM>
 inline Vector<T,DIM> operator%(
-    const Vector<T,DIM>& v,
+    const Vector_struct<T,DIM>& v,
     TT                   s)
 {
     Vector<T,DIM> tmp(v);
@@ -914,7 +1018,7 @@ inline Vector<T,DIM> operator%(
 /// Divides the vector \p v elementwise by the scalar \p s and returns the new result.
 template <typename T, typename TT, Size DIM>
 inline Vector<T,DIM> operator/(
-    const Vector<T,DIM>& v,
+    const Vector_struct<T,DIM>& v,
     TT                   s)
 {
     Vector<T,DIM> tmp( v);
@@ -1126,61 +1230,61 @@ inline Vector<bool,DIM> elementwise_is_greater_than_or_equal(
 
 /// Returns a vector with the elementwise absolute values of the vector \p v.
 template <typename T, Size DIM>
-inline Vector<T,DIM> abs( const Vector<T,DIM>& v)
+inline Vector<T,DIM> abs( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = abs( v[i]);
+        result[i] = abs( vector_base_ptr(v)[i]);
     return result;
 }
 
 /// Returns a vector with the elementwise arc cosine of the vector \p v.
 template <typename T, Size DIM>
-inline Vector<T,DIM> acos( const Vector<T,DIM>& v)
+inline Vector<T,DIM> acos( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = acos( v[i]);
+        result[i] = acos( vector_base_ptr(v)[i]);
     return result;
 }
 
 /// Returns \c true if \c all of all elements of \c v returns \c true.
 template <typename T, Size DIM>
-inline bool all( const Vector<T,DIM>& v)
+inline bool all( const Vector_struct<T,DIM>& v)
 {
     for( Size i = 0; i != DIM; ++i)
-        if( !all(v[i]))
+        if( !all(vector_base_ptr(v)[i]))
             return false;
     return true;
 }
 
 /// Returns \c true if \c any of any element of \c v returns \c true.
 template <typename T, Size DIM>
-inline bool any( const Vector<T,DIM>& v)
+inline bool any( const Vector_struct<T,DIM>& v)
 {
     for( Size i = 0; i != DIM; ++i)
-        if( any(v[i]))
+        if( any(vector_base_ptr(v)[i]))
            return true;
     return false;
 }
 
 /// Returns a vector with the elementwise arc sine of the vector \p v.
 template <typename T, Size DIM>
-inline Vector<T,DIM> asin( const Vector<T,DIM>& v)
+inline Vector<T,DIM> asin( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = asin( v[i]);
+        result[i] = asin( vector_base_ptr(v)[i]);
     return result;
 }
 
 /// Returns a vector with the elementwise arc tangent of the vector \p v.
 template <typename T, Size DIM>
-inline Vector<T,DIM> atan( const Vector<T,DIM>& v)
+inline Vector<T,DIM> atan( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = atan( v[i]);
+        result[i] = atan( vector_base_ptr(v)[i]);
     return result;
 }
 
@@ -1188,149 +1292,152 @@ inline Vector<T,DIM> atan( const Vector<T,DIM>& v)
 ///
 /// The signs of the elements of \p v and \p w are used to determine the quadrant of the results.
 template <typename T, Size DIM>
-inline Vector<T,DIM> atan2( const Vector<T,DIM>& v,  const Vector<T,DIM>& w)
+inline Vector<T,DIM> atan2( const Vector_struct<T,DIM>& v,  const Vector_struct<T,DIM>& w)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = atan2( v[i], w[i]);
+        result[i] = atan2( vector_base_ptr(v)[i], vector_base_ptr(w)[i]);
     return result;
 }
 
 /// Returns a vector with the elementwise smallest integral value that is not less than the element
 /// in vector \p v.
 template <typename T, Size DIM>
-inline Vector<T,DIM> ceil( const Vector<T,DIM>& v)
+inline Vector<T,DIM> ceil( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = ceil( v[i]);
+        result[i] = ceil( vector_base_ptr(v)[i]);
     return result;
 }
 
 /// Returns the vector \p v elementwise clamped to the range [\p low, \p high].
 template <typename T, Size DIM>
 inline Vector<T,DIM> clamp(
-    const Vector<T,DIM>&  v,
-    const Vector<T,DIM>&  low,
-    const Vector<T,DIM>&  high)
+    const Vector_struct<T,DIM>&  v,
+    const Vector_struct<T,DIM>&  low,
+    const Vector_struct<T,DIM>&  high)
 {
     Vector<T,DIM> result;
     for( Size i = 0u; i < DIM; ++i)
-        result[i] = clamp( v[i], low[i], high[i]);
+        result[i] = clamp(
+            vector_base_ptr(v)[i], vector_base_ptr(low)[i], vector_base_ptr(high)[i]);
     return result;
 }
 
 /// Returns the vector \p v elementwise clamped to the range [\p low, \p high].
 template <typename T, Size DIM>
 inline Vector<T,DIM> clamp(
-    const Vector<T,DIM>& v,
-    const Vector<T,DIM>& low,
+    const Vector_struct<T,DIM>& v,
+    const Vector_struct<T,DIM>& low,
     T                    high)
 {
     Vector<T,DIM> result;
     for( Size i = 0u; i < DIM; ++i)
-        result[i] = clamp( v[i], low[i], high);
+        result[i] = clamp( vector_base_ptr(v)[i], vector_base_ptr(low)[i], high);
     return result;
 }
 
 /// Returns the vector \p v elementwise clamped to the range [\p low, \p high].
 template <typename T, Size DIM>
 inline Vector<T,DIM> clamp(
-    const Vector<T,DIM>& v,
+    const Vector_struct<T,DIM>& v,
     T                    low,
-    const Vector<T,DIM>& high)
+    const Vector_struct<T,DIM>& high)
 {
     Vector<T,DIM> result;
     for( Size i = 0u; i < DIM; ++i)
-        result[i] = clamp( v[i], low, high[i]);
+        result[i] = clamp( vector_base_ptr(v)[i], low, vector_base_ptr(high)[i]);
     return result;
 }
 
 /// Returns the vector \p v elementwise clamped to the range [\p low, \p high].
 template <typename T, Size DIM>
 inline Vector<T,DIM> clamp(
-    const Vector<T,DIM>& v,
+    const Vector_struct<T,DIM>& v,
     T                    low,
     T                    high)
 {
     Vector<T,DIM> result;
     for( Size i = 0u; i < DIM; ++i)
-        result[i] = clamp( v[i], low, high);
+        result[i] = clamp( vector_base_ptr(v)[i], low, high);
     return result;
 }
 
 /// Returns a vector with the elementwise cosine of the vector \p v.
 template <typename T, Size DIM>
-inline Vector<T,DIM> cos( const Vector<T,DIM>& v)
+inline Vector<T,DIM> cos( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = cos( v[i]);
+        result[i] = cos( vector_base_ptr(v)[i]);
     return result;
 }
 
 /// Converts elementwise radians in \p v to degrees.
 template <typename T, Size DIM>
-inline Vector<T,DIM> degrees( const Vector<T,DIM>& v)
+inline Vector<T,DIM> degrees( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = degrees( v[i]);
+        result[i] = degrees( vector_base_ptr(v)[i]);
     return result;
 }
 
 /// Returns elementwise maximum of two vectors.
 template <typename T, Size DIM>
 inline Vector<T,DIM> elementwise_max(
-    const Vector<T,DIM>& lhs,
-    const Vector<T,DIM>& rhs)
+    const Vector_struct<T,DIM>& lhs,
+    const Vector_struct<T,DIM>& rhs)
 {
     Vector<T,DIM> r;
     for( Size i(0u); i < Vector<T,DIM>::DIMENSION; ++i)
-        r[i] = base::max MI_PREVENT_MACRO_EXPAND ( lhs[i], rhs[i] );
+        vector_base_ptr(r)[i] = base::max MI_PREVENT_MACRO_EXPAND (
+            vector_base_ptr(lhs)[i], vector_base_ptr(rhs)[i] );
     return r;
 }
 
 /// Returns elementwise minimum of two vectors.
 template <typename T, Size DIM>
 inline Vector<T,DIM> elementwise_min(
-    const Vector<T,DIM>& lhs,
-    const Vector<T,DIM>& rhs)
+    const Vector_struct<T,DIM>& lhs,
+    const Vector_struct<T,DIM>& rhs)
 {
     Vector<T,DIM> r;
     for( Size i(0u); i < Vector<T,DIM>::DIMENSION; ++i)
-        r[i] = base::min MI_PREVENT_MACRO_EXPAND ( lhs[i], rhs[i] );
+        vector_base_ptr(r)[i] = base::min MI_PREVENT_MACRO_EXPAND (
+            vector_base_ptr(lhs)[i], vector_base_ptr(rhs)[i] );
     return r;
 }
 
 /// Returns a vector with elementwise \c e to the power of the element in the vector \p v.
 template <typename T, Size DIM>
-inline Vector<T,DIM> exp( const Vector<T,DIM>& v)
+inline Vector<T,DIM> exp( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = exp( v[i]);
+        result[i] = exp( vector_base_ptr(v)[i]);
     return result;
 }
 
 /// Returns a vector with elementwise \c 2 to the power of the element in the vector \p v.
 template <typename T, Size DIM>
-inline Vector<T,DIM> exp2( const Vector<T,DIM>& v)
+inline Vector<T,DIM> exp2( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = exp2( v[i]);
+        result[i] = exp2( vector_base_ptr(v)[i]);
     return result;
 }
 
 /// Returns a vector with the elementwise largest integral value that is not greater than the
 /// element in vector \p v.
 template <typename T, Size DIM>
-inline Vector<T,DIM> floor( const Vector<T,DIM>& v)
+inline Vector<T,DIM> floor( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = floor( v[i]);
+        result[i] = floor( vector_base_ptr(v)[i]);
     return result;
 }
 
@@ -1338,11 +1445,11 @@ inline Vector<T,DIM> floor( const Vector<T,DIM>& v)
 ///
 /// The elementwise result has the same sign as \p a.
 template <typename T, Size DIM>
-inline Vector<T,DIM> fmod( const Vector<T,DIM>& a, const Vector<T,DIM>& b)
+inline Vector<T,DIM> fmod( const Vector_struct<T,DIM>& a, const Vector_struct<T,DIM>& b)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = fmod( a[i], b[i]);
+        result[i] = fmod( vector_base_ptr(a)[i], vector_base_ptr(b)[i]);
     return result;
 }
 
@@ -1350,33 +1457,33 @@ inline Vector<T,DIM> fmod( const Vector<T,DIM>& a, const Vector<T,DIM>& b)
 ///
 /// The elementwise result has the same sign as \p a.
 template <typename T, Size DIM>
-inline Vector<T,DIM> fmod( const Vector<T,DIM>& a, T b)
+inline Vector<T,DIM> fmod( const Vector_struct<T,DIM>& a, T b)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = fmod( a[i], b);
+        result[i] = fmod( vector_base_ptr(a)[i], b);
     return result;
 }
 
 /// Returns a vector with the elementwise positive fractional part of the vector \p v.
 template <typename T, Size DIM>
-inline Vector<T,DIM> frac( const Vector<T,DIM>& v)
+inline Vector<T,DIM> frac( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = frac( v[i]);
+        result[i] = frac( vector_base_ptr(v)[i]);
     return result;
 }
 
 /// Compares the two given values elementwise for equality within the given epsilon.
 template <typename T, Size DIM>
 inline bool is_approx_equal(
-    const Vector<T,DIM>& left,
-    const Vector<T,DIM>& right,
+    const Vector_struct<T,DIM>& left,
+    const Vector_struct<T,DIM>& right,
     T                    e)
 {
     for( Size i = 0u; i < DIM; ++i)
-        if( !is_approx_equal( left[i], right[i], e))
+        if( !is_approx_equal( vector_base_ptr(left)[i], vector_base_ptr(right)[i], e))
             return false;
     return true;
 }
@@ -1385,13 +1492,14 @@ inline bool is_approx_equal(
 /// <tt>(1-t) * v1 + t * v2</tt>.
 template <typename T, Size DIM>
 inline Vector<T,DIM> lerp(
-    const Vector<T,DIM>& v1,  ///< one vector
-    const Vector<T,DIM>& v2,  ///< second vector
-    const Vector<T,DIM>& t)   ///< interpolation parameter in [0,1]
+    const Vector_struct<T,DIM>& v1,  ///< one vector
+    const Vector_struct<T,DIM>& v2,  ///< second vector
+    const Vector_struct<T,DIM>& t)   ///< interpolation parameter in [0,1]
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = v1[i] * (T(1)-t[i]) + v2[i] * t[i];
+        result[i] = vector_base_ptr(v1)[i] * (T(1)-vector_base_ptr(t)[i])
+                  + vector_base_ptr(v2)[i] * vector_base_ptr(t)[i];
     return result;
 }
 
@@ -1399,45 +1507,45 @@ inline Vector<T,DIM> lerp(
 /// <tt>(1-t) * v1 + t * v2</tt>.
 template <typename T, Size DIM>
 inline Vector<T,DIM> lerp(
-    const Vector<T,DIM>& v1,  ///< one vector
-    const Vector<T,DIM>& v2,  ///< second vector
+    const Vector_struct<T,DIM>& v1,  ///< one vector
+    const Vector_struct<T,DIM>& v2,  ///< second vector
     T          t)             ///< interpolation parameter in [0,1]
 {
     // equivalent to: return v1 * (T(1)-t) + v2 * t;
     Vector<T,DIM> result;
     T t2 = T(1) - t;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = v1[i] * t2 + v2[i] * t;
+        result[i] = vector_base_ptr(v1)[i] * t2 + vector_base_ptr(v2)[i] * t;
     return result;
 }
 
 /// Returns a vector with the elementwise natural logarithm of the vector \p v.
 template <typename T, Size DIM>
-inline Vector<T,DIM> log( const Vector<T,DIM>& v)
+inline Vector<T,DIM> log( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = log( v[i]);
+        result[i] = log( vector_base_ptr(v)[i]);
     return result;
 }
 
 /// Returns a vector with the elementwise %base 2 logarithm of the vector \p v.
 template <typename T, Size DIM>
-inline Vector<T,DIM> log2 MI_PREVENT_MACRO_EXPAND ( const Vector<T,DIM>& v)
+inline Vector<T,DIM> log2 MI_PREVENT_MACRO_EXPAND ( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = log2 MI_PREVENT_MACRO_EXPAND ( v[i]);
+        result[i] = log2 MI_PREVENT_MACRO_EXPAND ( vector_base_ptr(v)[i]);
     return result;
 }
 
 /// Returns a vector with the elementwise %base 10 logarithm of the vector \p v.
 template <typename T, Size DIM>
-inline Vector<T,DIM> log10( const Vector<T,DIM>& v)
+inline Vector<T,DIM> log10( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = log10( v[i]);
+        result[i] = log10( vector_base_ptr(v)[i]);
     return result;
 }
 
@@ -1446,91 +1554,91 @@ inline Vector<T,DIM> log10( const Vector<T,DIM>& v)
 ///
 /// Both parts have elementwise the same sign as \p v.
 template <typename T, Size DIM>
-inline Vector<T,DIM> modf( const Vector<T,DIM>& v, Vector<T,DIM>& i)
+inline Vector<T,DIM> modf( const Vector_struct<T,DIM>& v, Vector<T,DIM>& i)
 {
     Vector<T,DIM> result;
     for( Size j = 0; j != DIM; ++j)
-        result[j] = modf( v[j], i[j]);
+        result[j] = modf( vector_base_ptr(v)[j], vector_base_ptr(i)[j]);
     return result;
 }
 
 /// Returns the vector \p a  elementwise to the power of \p b.
 template <typename T, Size DIM>
-inline Vector<T,DIM> pow( const Vector<T,DIM>& a, const Vector<T,DIM>& b)
+inline Vector<T,DIM> pow( const Vector_struct<T,DIM>& a, const Vector_struct<T,DIM>& b)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = pow( a[i], b[i]);
+        result[i] = pow( vector_base_ptr(a)[i], vector_base_ptr(b)[i]);
     return result;
 }
 
 /// Returns the vector \p a  elementwise to the power of \p b.
 template <typename T, Size DIM>
-inline Vector<T,DIM> pow( const Vector<T,DIM>& a, T b)
+inline Vector<T,DIM> pow( const Vector_struct<T,DIM>& a, T b)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = pow( a[i], b);
+        result[i] = pow( vector_base_ptr(a)[i], b);
     return result;
 }
 
 /// Converts elementwise degrees in \p v to radians.
 template <typename T, Size DIM>
-inline Vector<T,DIM> radians( const Vector<T,DIM>& v)
+inline Vector<T,DIM> radians( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = radians( v[i]);
+        result[i] = radians( vector_base_ptr(v)[i]);
     return result;
 }
 
 /// Returns a vector with the elements of vector \p v rounded to nearest integers.
 template <typename T, Size DIM>
-inline Vector<T,DIM> round( const Vector<T,DIM>& v)
+inline Vector<T,DIM> round( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = round( v[i]);
+        result[i] = round( vector_base_ptr(v)[i]);
     return result;
 }
 
 /// Returns the reciprocal of the square root of each element of \p v.
 template <typename T, Size DIM>
-inline Vector<T,DIM> rsqrt( const Vector<T,DIM>& v)
+inline Vector<T,DIM> rsqrt( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = rsqrt( v[i]);
+        result[i] = rsqrt( vector_base_ptr(v)[i]);
     return result;
 }
 
 /// Returns the vector \p v clamped elementwise to the range [0,1].
 template <typename T, Size DIM>
-inline Vector<T,DIM> saturate( const Vector<T,DIM>& v)
+inline Vector<T,DIM> saturate( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = saturate( v[i]);
+        result[i] = saturate( vector_base_ptr(v)[i]);
     return result;
 }
 
 /// Returns the elementwise sign of vector \p v.
 template <typename T, Size DIM>
-inline Vector<T,DIM> sign( const Vector<T,DIM>& v)
+inline Vector<T,DIM> sign( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = sign( v[i]);
+        result[i] = sign( vector_base_ptr(v)[i]);
     return result;
 }
 
 /// Returns a vector with the elementwise sine of the vector \p v.
 template <typename T, Size DIM>
-inline Vector<T,DIM> sin( const Vector<T,DIM>& v)
+inline Vector<T,DIM> sin( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = sin( v[i]);
+        result[i] = sin( vector_base_ptr(v)[i]);
     return result;
 }
 
@@ -1538,10 +1646,10 @@ inline Vector<T,DIM> sin( const Vector<T,DIM>& v)
 ///
 /// The angles \p a are specified in radians.
 template <typename T, Size DIM>
-inline void sincos( const Vector<T,DIM>& a, Vector<T,DIM>& s, Vector<T,DIM>& c)
+inline void sincos( const Vector_struct<T,DIM>& a, Vector<T,DIM>& s, Vector<T,DIM>& c)
 {
     for( Size i = 0; i != DIM; ++i)
-        sincos( a[i], s[i], c[i]);
+        sincos( vector_base_ptr(a)[i], vector_base_ptr(s)[i], vector_base_ptr(c)[i]);
 }
 
 /// Returns 0 if \p v is less than \p a and 1 if \p v is greater than \p b in an elementwise
@@ -1551,13 +1659,14 @@ inline void sincos( const Vector<T,DIM>& a, Vector<T,DIM>& s, Vector<T,DIM>& c)
 /// elements in \p v vary from \p a to \p b.
 template <typename T, Size DIM>
 inline Vector<T,DIM> smoothstep(
-    const Vector<T,DIM>& a,
-    const Vector<T,DIM>& b,
-    const Vector<T,DIM>& v)
+    const Vector_struct<T,DIM>& a,
+    const Vector_struct<T,DIM>& b,
+    const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = smoothstep( a[i], b[i], v[i]);
+        result[i] = smoothstep(
+            vector_base_ptr(a)[i], vector_base_ptr(b)[i], vector_base_ptr(v)[i]);
     return result;
 }
 
@@ -1568,43 +1677,43 @@ inline Vector<T,DIM> smoothstep(
 /// \p x varies from \p a to \p b.
 template <typename T, Size DIM>
 inline Vector<T,DIM> smoothstep(
-    const Vector<T,DIM>& a,
-    const Vector<T,DIM>& b,
+    const Vector_struct<T,DIM>& a,
+    const Vector_struct<T,DIM>& b,
     T x)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = smoothstep( a[i], b[i], x);
+        result[i] = smoothstep( vector_base_ptr(a)[i], vector_base_ptr(b)[i], x);
     return result;
 }
 
 /// Returns the square root of each element of \p v.
 template <typename T, Size DIM>
-inline Vector<T,DIM> sqrt( const Vector<T,DIM>& v)
+inline Vector<T,DIM> sqrt( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = sqrt( v[i]);
+        result[i] = sqrt( vector_base_ptr(v)[i]);
     return result;
 }
 
 /// Returns elementwise 0 if \p v is less than \p a and 1 otherwise.
 template <typename T, Size DIM>
-inline Vector<T,DIM> step( const Vector<T,DIM>& a, const Vector<T,DIM>& v)
+inline Vector<T,DIM> step( const Vector_struct<T,DIM>& a, const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = step( a[i], v[i]);
+        result[i] = step( vector_base_ptr(a)[i], vector_base_ptr(v)[i]);
     return result;
 }
 
 /// Returns a vector with the elementwise tangent of the vector \p v.
 template <typename T, Size DIM>
-inline Vector<T,DIM> tan( const Vector<T,DIM>& v)
+inline Vector<T,DIM> tan( const Vector_struct<T,DIM>& v)
 {
     Vector<T,DIM> result;
     for( Size i = 0; i != DIM; ++i)
-        result[i] = tan( v[i]);
+        result[i] = tan( vector_base_ptr(v)[i]);
     return result;
 }
 
@@ -1614,8 +1723,8 @@ inline Vector<T,DIM> tan( const Vector<T,DIM>& v)
 /// Returns the two-times-two determinant result for the two vectors \p lhs and \p rhs.
 template <typename T>
 inline T cross(
-    const Vector<T,2>& lhs,
-    const Vector<T,2>& rhs)
+    const Vector_struct<T,2>& lhs,
+    const Vector_struct<T,2>& rhs)
 {
     return lhs.x * rhs.y - lhs.y * rhs.x;
 }
@@ -1623,8 +1732,8 @@ inline T cross(
 /// Returns the three-dimensional cross product result for the two vectors \p lhs and \p rhs.
 template <typename T>
 inline Vector<T,3> cross(
-    const Vector<T,3>& lhs,
-    const Vector<T,3>& rhs)
+    const Vector_struct<T,3>& lhs,
+    const Vector_struct<T,3>& rhs)
 {
     return Vector<T,3>( lhs.y * rhs.z - lhs.z * rhs.y,
                         lhs.z * rhs.x - lhs.x * rhs.z,

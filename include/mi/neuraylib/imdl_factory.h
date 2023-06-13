@@ -35,6 +35,10 @@
 #include <mi/neuraylib/iexpression.h>
 #include <mi/neuraylib/version.h>
 
+#if defined (MI_NEURAYLIB_DEPRECATED_12_1) || defined(MI_NEURAYLIB_DEPRECATED_14_0)
+#include <mi/neuraylib/imdl_execution_context.h>
+#endif
+
 namespace mi {
 
 class IArray;
@@ -86,9 +90,9 @@ public:
 
     /// Clones an execution context.
     ///
-    /// Creates a new execution context if \p context is NULL (as in #create_execution_context()).
-    /// There is \em no deep copy of option values of type #mi::base::IInterface, they are shared
-    /// by both instances.
+    /// Creates a new execution context if \p context is \c NULL (as in
+    /// #create_execution_context()). There is \em no deep copy of option values of type
+    /// #mi::base::IInterface, they are shared by both instances.
     ///
     /// Useful to change options temporarily.
     virtual IMdl_execution_context* clone( const IMdl_execution_context* context) = 0;
@@ -112,17 +116,23 @@ public:
     ///                      texture is finally located and includes sharing with instances that
     ///                      have not explicitly been loaded via this method, e.g., textures in
     ///                      defaults.
-    /// \param errors        An optional pointer to an #mi::Sint32 to which an error code will be
-    ///                      written. The error codes have the following meaning:
-    ///                      -  0: Success.
-    ///                      - -1: Invalid parameters (\c NULL pointer).
-    ///                      - -2: The file path is not an absolute MDL file path.
-    ///                      - -3: Failed to resolve the given file path, or no suitable image
-    ///                            plugin available.
+    /// \param context       An execution context which can be queried for detailed error messages
+    ///                      after the operation has finished. Can be \c NULL. The error codes have
+    ///                      the following meaning:
+    ///                      -   0: Success.
+    ///                      -  -1: Invalid parameters (\c NULL pointer).
+    ///                      -  -2: The file path is not an absolute MDL file path.
+    ///                      -  -3: No image plugin found to handle the file.
+    ///                      -  -4: Failure to resolve the given filename, e.g., the file does
+    ///                             not exist.
+    ///                      -  -5: Failure to open the resolved file.
+    ///                      -  -7: The image plugin failed to import the data.
+    ///                      - -10: Failure to apply the given selector.
     /// \return              The value referencing the texture, or \c NULL in case of failure.
     ///
-    /// \see #mi::neuraylib::IImage::reset_file() if you are given a plain filename instead of an
-    ///      MDL file path.
+    /// \see #mi::neuraylib::IImage::reset_file() \if IRAY_API or
+    ///      #mi::neuraylib::IVolume_data::reset_file() \endif if you are given a plain filename
+    ///      instead of an MDL file path.
     virtual IValue_texture* create_texture(
         ITransaction* transaction,
         const char* file_path,
@@ -130,7 +140,7 @@ public:
         Float32 gamma,
         const char* selector,
         bool shared,
-        Sint32* errors = 0) = 0;
+        IMdl_execution_context* context) = 0;
 
 #ifdef MI_NEURAYLIB_DEPRECATED_12_1
     inline IValue_texture* create_texture(
@@ -140,8 +150,38 @@ public:
         Float32 gamma,
         bool shared,
         Sint32* errors = 0)
-    { return create_texture( transaction, file_path, shape, gamma, 0, shared, errors); }
+    {
+        mi::base::Handle<IMdl_execution_context> context( create_execution_context());
+        IValue_texture* result = create_texture(
+            transaction, file_path, shape, gamma, 0, shared, context.get());
+        if( errors) {
+            mi::base::Handle<const IMessage> msg( context->get_error_message( 0));
+            *errors = msg ? msg->get_code() : 0;
+        }
+        return result;
+    }
 #endif // MI_NEURAYLIB_DEPRECATED_12_1
+
+#ifdef MI_NEURAYLIB_DEPRECATED_14_0
+    inline IValue_texture* create_texture(
+        ITransaction* transaction,
+        const char* file_path,
+        IType_texture::Shape shape,
+        Float32 gamma,
+        const char* selector,
+        bool shared,
+        Sint32* errors = 0)
+    {
+        mi::base::Handle<IMdl_execution_context> context( create_execution_context());
+        IValue_texture* result = create_texture(
+            transaction, file_path, shape, gamma, selector, shared, context.get());
+        if( errors) {
+            mi::base::Handle<const IMessage> msg( context->get_error_message( 0));
+            *errors = msg ? msg->get_code() : 0;
+        }
+        return result;
+    }
+#endif // MI_NEURAYLIB_DEPRECATED_14_0
 
     /// Creates a value referencing a light profile identified by an MDL file path.
     ///
@@ -155,18 +195,44 @@ public:
     ///                      where the light profile is finally located and includes sharing with
     ///                      instances that have not explicitly been loaded via this method, e.g.,
     ///                      light profiles in defaults.
-    /// \param errors        An optional pointer to an #mi::Sint32 to which an error code will be
-    ///                      written. The error codes have the following meaning:
-    ///                      -  0: Success.
-    ///                      - -1: Invalid parameters (\c NULL pointer).
-    ///                      - -2: The file path is not an absolute MDL file path.
-    ///                      - -3: Failed to resolve the given file path.
+    /// \param context       An execution context which can be queried for detailed error messages
+    ///                      after the operation has finished. Can be \c NULL. The error codes have
+    ///                      the following meaning:
+    ///                      -   0: Success.
+    ///                      -  -1: Invalid parameters (\c NULL pointer).
+    ///                      -  -2: The file path is not an absolute MDL file path.
+    ///                      -  -3: Invalid filename extension (only \c .ies is supported).
+    ///                      -  -4: Failure to resolve the given filename, e.g., the file does
+    ///                             not exist.
+    ///                      -  -5: Failure to open the resolved file.
+    ///                      -  -7: File format error.
     /// \return              The value referencing the light profile, or \c NULL in case of failure.
     ///
     /// \see #mi::neuraylib::ILightprofile::reset_file() if you are given a plain filename instead
     ///      of an MDL file path.
     virtual IValue_light_profile* create_light_profile(
-        ITransaction* transaction, const char* file_path, bool shared, Sint32* errors = 0) = 0;
+        ITransaction* transaction,
+        const char* file_path,
+        bool shared,
+        IMdl_execution_context* context) = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_14_0
+    inline IValue_light_profile* create_light_profile(
+        ITransaction* transaction,
+        const char* file_path,
+        bool shared,
+        Sint32* errors = 0)
+    {
+        mi::base::Handle<IMdl_execution_context> context( create_execution_context());
+        IValue_light_profile* result = create_light_profile(
+            transaction, file_path, shared, context.get());
+        if( errors) {
+            mi::base::Handle<const IMessage> msg( context->get_error_message( 0));
+            *errors = msg ? msg->get_code() : 0;
+        }
+        return result;
+    }
+#endif // MI_NEURAYLIB_DEPRECATED_14_0
 
     /// Creates a value referencing a BSDF measurement identified by an MDL file path.
     ///
@@ -180,19 +246,45 @@ public:
     ///                      where the BSDF measurement is finally located and includes sharing with
     ///                      instances that have not explicitly been loaded via this method, e.g.,
     ///                      BSDF measurements in defaults.
-    /// \param errors        An optional pointer to an #mi::Sint32 to which an error code will be
-    ///                      written. The error codes have the following meaning:
+    /// \param context       An execution context which can be queried for detailed error messages
+    ///                      after the operation has finished. Can be \c NULL. The error codes have
+    ///                      the following meaning:
     ///                      -  0: Success.
     ///                      - -1: Invalid parameters (\c NULL pointer).
     ///                      - -2: The file path is not an absolute MDL file path.
-    ///                      - -3: Failed to resolve the given file path.
+    ///                      - -3: Invalid filename extension (only \c .mbsdf is supported).
+    ///                      - -4: Failure to resolve the given filename, e.g., the file does not
+    ///                            exist.
+    ///                      - -5: Failure to open the resolved file.
+    ///                      - -7: Invalid file format.
     /// \return              The value referencing the BSDF measurement, or \c NULL in case of
     ///                      failure.
     ///
     /// \see #mi::neuraylib::IBsdf_measurement::reset_file() if you are given a plain filename
     ///      instead of an MDL file path.
     virtual IValue_bsdf_measurement* create_bsdf_measurement(
-        ITransaction* transaction, const char* file_path, bool shared, Sint32* errors = 0) = 0;
+        ITransaction* transaction,
+        const char* file_path,
+        bool shared,
+        IMdl_execution_context* context) = 0;
+
+#ifdef MI_NEURAYLIB_DEPRECATED_14_0
+    inline IValue_bsdf_measurement* create_bsdf_measurement(
+        ITransaction* transaction,
+        const char* file_path,
+        bool shared,
+        Sint32* errors = 0)
+    {
+        mi::base::Handle<IMdl_execution_context> context( create_execution_context());
+        IValue_bsdf_measurement* result = create_bsdf_measurement(
+            transaction, file_path, shared, context.get());
+        if( errors) {
+            mi::base::Handle<const IMessage> msg( context->get_error_message( 0));
+            *errors = msg ? msg->get_code() : 0;
+        }
+        return result;
+    }
+#endif // MI_NEURAYLIB_DEPRECATED_14_0
 
     /// Creates a module builder for a given module.
     ///
@@ -311,8 +403,7 @@ public:
     /// Decodes a DB or MDL name.
     ///
     /// \param name   The encoded DB or MDL name to be decoded.
-    /// \return       The decoded DB or MDL name, or \c NULL if \p name is \c NULL. Returns the
-    ///               input string if encoded names are disabled.
+    /// \return       The decoded DB or MDL name, or \c NULL if \p name is \c NULL.
     ///
     /// \note This method should only be used for display purposes. Do \em not use the returned
     ///       name to identify functions or materials since this representation is ambiguous. For
@@ -328,8 +419,7 @@ public:
     /// Encodes a DB or MDL module name.
     ///
     /// \param name    The decoded DB or MDL module name to be encoded.
-    /// \return        The encoded DB or MDL module name, or \c NULL if \p name is \c NULL. Returns
-    ///                the input string if encoded names are disabled.
+    /// \return        The encoded DB or MDL module name, or \c NULL if \p name is \c NULL.
     ///
     /// \note This method does not require the corresponding module to be loaded. The method does
     ///       not check whether the given name is valid.
@@ -347,9 +437,7 @@ public:
     ///                         \c NULL can be used for functions or materials without parameters
     ///                         (treated like an empty array).
     /// \return                 The encoded function or material definition name, or \c NULL if
-    ///                         \p name or one of the array elements is \c NULL. If encoded names
-    ///                         are disabled, then the individual components of the name are joined
-    ///                         by parentheses and commas without further encoding.
+    ///                         \p name or one of the array elements is \c NULL.
     ///
     /// \note This method does not require the corresponding module to be loaded. The method does
     ///       not check whether the given name is valid, nor whether it is defined in the
@@ -364,7 +452,6 @@ public:
     ///
     /// \param name             The decoded MDL name of a type.
     /// \return                 The encoded MDL name of the type, or \c NULL if \p name is \c NULL.
-    ///                         Returns the input string if encoded names are disabled
     ///
     /// \note This method does not require the corresponding module to be loaded. The method does
     ///       not check whether the given name is valid, nor whether it is defined in the
@@ -373,18 +460,6 @@ public:
     /// \see #mi::neuraylib::IMdl_factory::encode_function_definition_name(),
     ///      #mi::neuraylib::IMdl_factory::encode_module_name()
     virtual const IString* encode_type_name( const char* name) const = 0;
-
-    virtual Sint32 MI_NEURAYLIB_DEPRECATED_METHOD_12_0(create_variants)(
-        ITransaction* transaction, const char* module_name, const IArray* variant_data) = 0;
-
-    virtual Sint32 MI_NEURAYLIB_DEPRECATED_METHOD_12_0(create_materials)(
-        ITransaction* transaction, const char* module_name, const IArray* material_data) = 0;
-
-    virtual Sint32 MI_NEURAYLIB_DEPRECATED_METHOD_12_0(create_materials)(
-        ITransaction* transaction,
-        const char* module_name,
-        const IArray* mdl_data,
-        IMdl_execution_context* context) = 0;
 
     /// Indicates whether the given string is a valid MDL identifier.
     virtual bool is_valid_mdl_identifier( const char* name) const = 0;

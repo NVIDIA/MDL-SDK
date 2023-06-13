@@ -34,8 +34,57 @@
 namespace mi {
 namespace mdl {
 
-// Converts a wchar_t * string into an utf8 encoded string.
-char const *wchar_to_utf8(string &res, wchar_t const *src)
+// Get the length of an utf16 encoded string in code points, not in words.
+size_t utf16_len(wchar_t const *p)
+{
+    size_t l = 0;
+
+    for (;;) {
+        wchar_t wc = *p++;
+
+        if (wc == L'\0') {
+            return l;
+        }
+        ++l;
+        if (0xD800 <= wc && wc <= 0xDBFF) {
+            wc = *p;
+            if (0xDC00 <= wc && wc <= 0xDFFF) {
+                // assume valid surrogate
+                ++p;
+            }
+        }
+    }
+}
+
+// Get the length of an utf8 encoded string in code points, not in bytes.
+size_t utf8_len(char const *p)
+{
+    size_t l = 0;
+
+    for (;;) {
+        char c = *p++;
+
+        if (c == '\0') {
+            return l;
+        }
+        ++l;
+        if (c <= 0x7F) {
+            // 0xxxxxxx
+        } else if ((c & 0xF8) == 0xF0) {
+            // 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+            p += 3;
+        } else if ((c & 0xF0) == 0xE0) {
+            // 1110xxxx 10xxxxxx 10xxxxxx
+            p += 2;
+        } else if ((c & 0xE0) == 0xC0) {
+            // 110xxxxx 10xxxxxx
+            p += 1;
+        }
+    }
+}
+
+// Converts a utf16 string into an utf8 encoded string.
+char const *utf16_to_utf8(string &res, wchar_t const *src)
 {
     res.clear();
 
@@ -73,6 +122,7 @@ char const *wchar_to_utf8(string &res, wchar_t const *src)
                 res += char(0xBF);
                 res += char(0xBD);
             }
+            ++p;
         } else if (code <= 0xFFFF) {
             if (code < 0xD800 || code > 0xDFFF) {
                 // 1110xxxx 10xxxxxx 10xxxxxx
@@ -197,15 +247,7 @@ wchar_t const *utf8_to_utf16(wstring &res, char const *src)
         unsigned unicode_char;
 
         src = utf8_to_unicode_char(src, unicode_char);
-
-        if (unicode_char < 0x10000) {
-            res.append(wchar_t(unicode_char));
-        } else {
-            // encode as surrogate pair
-            unicode_char -= 0x10000;
-            res.append(wchar_t((unicode_char >> 10) + 0xD800));
-            res.append(wchar_t((unicode_char & 0x3FF) + 0xDC00));
-        }
+        utf16_append(res, unicode_char);
     }
     return res.c_str();
 }
@@ -274,6 +316,153 @@ char const *utf32_to_utf8(string &res, unsigned const *src)
         }
     }
     return res.c_str();
+}
+
+// Add an unicode utf32 character to an utf16 string.
+void utf16_append(wstring &s, unsigned c)
+{
+    // assume only valid utf32 characters added
+    if (c < 0x10000) {
+        s += wchar_t(c);
+    } else {
+            // encode as surrogate pair
+        c -= 0x10000;
+        s.append(wchar_t((c >> 10) + 0xD800));
+        s.append(wchar_t((c & 0x3FF) + 0xDC00));
+    }
+}
+
+// Get the next unicode character form an utf16 string.
+unsigned utf16_next(wchar_t const *&p)
+{
+    unsigned c = unsigned(*p++);
+
+    if (0xD800 <= c && c <= 0xDCFF) {
+        // surrogate pair
+        unsigned np = unsigned(*p);
+
+        if (c <= 0xDBFF && 0xDC00 <= np && np <= 0xDFFF) {
+            // valid pair
+            ++p;
+            c = (c - 0xD800) << 10;
+            np -= 0xDC00;
+            c = (c | np) + 0x10000;
+        } else {
+            // error, replace by (U+FFFD)
+            c = 0xFFFD;
+        }
+    }
+    return c;
+}
+
+// Add an unicode utf32 character to an utf8 string.
+void utf8_append(string &s, unsigned c)
+{
+    // assume only valid utf32 characters added
+    if (c <= 0x7F) {
+        // 0xxxxxxx
+        s += char(c);
+    } else if (c <= 0x7FF) {
+        // 110xxxxx 10xxxxxx
+        unsigned high = c >> 6;
+        unsigned low = c & 0x3F;
+        s += char(0xC0 + high);
+        s += char(0x80 + low);
+    } else if (c <= 0xFFFF) {
+        if (c < 0xD800 || c > 0xDFFF) {
+            // 1110xxxx 10xxxxxx 10xxxxxx
+            unsigned high = c >> 12;
+            unsigned middle = (c >> 6) & 0x3F;
+            unsigned low = c & 0x3F;
+            s += char(0xE0 + high);
+            s += char(0x80 + middle);
+            s += char(0x80 + low);
+        }
+    } else if (c <= 0x10FFFF) {
+        // 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+        unsigned high = (c >> 18) & 0x07;
+        unsigned mh = (c >> 12) & 0x3F;
+        unsigned ml = (c >> 6) & 0x3F;
+        unsigned low = c & 0x3F;
+        s += char(0xF0 + high);
+        s += char(0x80 + mh);
+        s += char(0x80 + ml);
+        s += char(0x80 + low);
+    } else {
+        // error, replace by (U+FFFD) (or EF BF BD in UTF-8)
+        s += char(0xEF);
+        s += char(0xBF);
+        s += char(0xBD);
+    }
+
+}
+
+// Get the next unicode character from an utf8 string.
+unsigned utf8_next(char const *&p)
+{
+    unsigned c = unsigned(*p++);
+
+    if (c <= 0x7F) {
+        // nothing to do, first 127 chars are the same in ascii and utf8
+        // 0xxxxxxx or end of file character
+    } else if ((c & 0xF8) == 0xF0) {
+        // 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+        bool error = false;
+
+        int c1 = c & 0x07; c = unsigned(*p++); error |= (c & 0xC0) != 0x80;
+        int c2 = c & 0x3F; c = unsigned(*p++); error |= (c & 0xC0) != 0x80;
+        int c3 = c & 0x3F; c = unsigned(*p++); error |= (c & 0xC0) != 0x80;
+        int c4 = c & 0x3F;
+        c = (c1 << 18) | (c2 << 12) | (c3 << 6) | c4;
+
+        // must be U+10000 .. U+10FFFF
+        error |= (c < 0x1000) || (c > 0x10FFFF);
+
+        // Because surrogate code points are not Unicode scalar values, any UTF-8 byte
+        // sequence that would otherwise map to code points U+D800..U+DFFF is illformed
+        error |= (0xD800 <= c) && (c <= 0xDFFF);
+
+        if (error) {
+            c = 0xFFFD;  // replacement character
+        }
+    } else if ((c & 0xF0) == 0xE0) {
+        // 1110xxxx 10xxxxxx 10xxxxxx
+        bool error = false;
+
+        int c1 = c & 0x0F; c = unsigned(*p++); error |= (c & 0xC0) != 0x80;
+        int c2 = c & 0x3F; c = unsigned(*p++); error |= (c & 0xC0) != 0x80;
+        int c3 = c & 0x3F;
+        c = (c1 << 12) | (c2 << 6) | c3;
+
+        // must be U+0800 .. U+FFFF
+        error |= c < 0x0800;
+
+        // Because surrogate code points are not Unicode scalar values, any UTF-8 byte
+        // sequence that would otherwise map to code points U+D800..U+DFFF is illformed
+        error |= (0xD800 <= c) && (c <= 0xDFFF);
+
+        if (error) {
+            c = 0xFFFD;  // replacement character
+        }
+    } else if ((c & 0xE0) == 0xC0) {
+        // 110xxxxx 10xxxxxx
+        bool error = false;
+
+        int c1 = c & 0x1F; c = unsigned(*p++); error |= (c & 0xC0) != 0x80;
+        int c2 = c & 0x3F;
+        c = (c1 << 6) | c2;
+
+        // must be U+0080 .. U+07FF
+        error |= c < 0x80;
+
+        if (error) {
+            c = 0xFFFD;  // replacement character
+        }
+    } else {
+        // error
+        c = 0xFFFD;  // replacement character
+    }
+    return c;
 }
 
 }  // mdl

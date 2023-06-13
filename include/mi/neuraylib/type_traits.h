@@ -1305,6 +1305,26 @@ template<> struct Matrix_type_traits<mi::Float64, 4, 3>
 template<> struct Matrix_type_traits<mi::Float64, 4, 4>
 { typedef mi::IFloat64_4_4 Interface_type; };
 
+
+#if (__cplusplus >= 201103L)
+// returns the name of interface types which have a type trait
+template <typename I, typename = decltype(Type_traits<I>::get_type_name())>
+const char* get_type_name()
+{
+    return Type_traits<I>::get_type_name();
+}
+
+// returns the name of types which implement an interface which as a type trait
+template <
+    typename T,
+    typename I = typename T::Interface,
+    typename = decltype(Type_traits<I>::get_type_name())>
+const char* get_type_name()
+{
+    return get_type_name<I>();
+}
+#endif
+
 /**@}*/ // end group mi_neuray_types
 
 } // namespace mi

@@ -81,9 +81,9 @@ bool Mdl_translator_impl::need_translation(const std::string & name) const
     static std::set<std::string> translation =
     {
           "::anno::display_name(string)"
-        , "::anno::in_group(string)"
-        , "::anno::in_group(string,string)"
-        , "::anno::in_group(string,string,string)"
+        , "::anno::in_group(string,bool)"
+        , "::anno::in_group(string,string,bool)"
+        , "::anno::in_group(string,string,string,bool)"
         , "::anno::key_words(string[N])"
         , "::anno::copyright_notice(string)"
         , "::anno::description(string)"

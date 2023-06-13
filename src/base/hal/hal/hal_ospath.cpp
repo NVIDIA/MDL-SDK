@@ -388,8 +388,10 @@ void Ospath::splitext(
         return;
 
     std::string::size_type i = path.find_last_of('.');
-    if (i == std::string::npos)
+    if (i == std::string::npos) {
+        root = path;
         return;
+    }
 
     root = path;
     root.erase(i, std::string::npos);
@@ -449,7 +451,7 @@ std::string get_known_folder(const KNOWNFOLDERID& id)
     HRESULT hr = SHGetKnownFolderPath(id, 0, nullptr, &knownFolderPath);
     if (! SUCCEEDED(hr))
         return std::string();
-    
+
     // convert from wstring to UTF8 string
     const std::wstring s(knownFolderPath);
     const int slength = (int)s.length();

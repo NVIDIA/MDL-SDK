@@ -106,6 +106,20 @@ namespace mi { namespace examples { namespace dxr
         /// mdl state will have an animation_time different from zero.
         uint32_t enable_animiation;
 
+        /// replace the background with a constant color when visible to the camera
+        /// used in the MaterialX tests
+        uint32_t background_color_enabled;
+        DirectX::XMFLOAT3 background_color;
+
+        /// UV transformations
+        DirectX::XMFLOAT2 uv_scale;
+        DirectX::XMFLOAT2 uv_offset;
+        uint32_t uv_repeat;
+        uint32_t uv_saturate;
+
+        /// rotation of the environment [0, 1]
+        float environment_rotation;
+
         /// resets the progressive iteration counter to restart the rendering in the next frame.
         void restart_progressive_rendering();
 

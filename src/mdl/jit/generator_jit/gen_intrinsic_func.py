@@ -533,6 +533,7 @@ class SignatureParser:
 		ret_type, params = self.split_signature(signature)
 
 		if (name == "diffuse_reflection_bsdf" or
+                                name == "dusty_diffuse_reflection_bsdf" or
 				name == "diffuse_transmission_bsdf" or
 				name == "specular_bsdf" or
 				name == "simple_glossy_bsdf" or
@@ -547,6 +548,7 @@ class SignatureParser:
 				name == "spot_edf" or
 				name == "measured_edf" or
 				name == "anisotropic_vdf" or
+				name == "fog_vdf" or
 				name == "tint" or
 				name == "thin_film" or
 				name == "directional_factor" or
@@ -686,10 +688,10 @@ class SignatureParser:
 		elif re.match("data_lookup_uniform_(float|int)$", name):
 			self.intrinsic_modes[name + signature] = "scene::data_lookup_uniform_atomic"
 			return True
-		elif re.match("data_lookup_(float2|float3|float4|color|int2|int3|int4)$", name):
+		elif re.match("data_lookup_(float2|float3|float4|float4x4|color|int2|int3|int4)$", name):
 			self.intrinsic_modes[name + signature] = "scene::data_lookup_vector"
 			return True
-		elif re.match("data_lookup_uniform_(float2|float3|float4|color|int2|int3|int4)$", name):
+		elif re.match("data_lookup_uniform_(float2|float3|float4|float4x4|color|int2|int3|int4)$", name):
 			self.intrinsic_modes[name + signature] = "scene::data_lookup_uniform_vector"
 			return True
 		elif name == "data_isvalid":
@@ -2018,8 +2020,8 @@ class SignatureParser:
 							llvm::Value *call_args[] = { a, b };
 							res = ctx->CreateCall(callee, call_args);
 						} else {
-						        zero = llvm::ConstantVector::getSplat(llvm::ElementCount::getFixed(%(size)d), zero);
-						        one  = llvm::ConstantVector::getSplat(llvm::ElementCount::getFixed(%(size)d), one);
+							zero = llvm::ConstantVector::getSplat(llvm::ElementCount::getFixed(%(size)d), zero);
+							one  = llvm::ConstantVector::getSplat(llvm::ElementCount::getFixed(%(size)d), one);
 
 							llvm::Value *cmp = ctx->CreateFCmp(llvm::ICmpInst::FCMP_OLT, b, a);
 							res = ctx->CreateSelect(cmp, zero, one);
@@ -2398,7 +2400,8 @@ class SignatureParser:
 						llvm::Value *s_tmp  = nullptr;
 						llvm::Value *c_tmp  = nullptr;
 						if (m_has_sincosf) {
-							sc_tmp = ctx->CreateAlloca(elm_tp);
+							sc_tmp = ctx.create_local(elm_tp, "sc_tmp");
+
 							s_tmp  = ctx.create_simple_gep_in_bounds(sc_tmp, 0u);
 							c_tmp  = ctx.create_simple_gep_in_bounds(sc_tmp, 1u);
 						}
@@ -2451,7 +2454,7 @@ class SignatureParser:
 					code = """
 						if (m_has_sincosf) {
 							llvm::Function *sincos_func = get_runtime_func(RT_SINCOSF);
-							res = ctx->CreateAlloca(ret_tp);
+							res = ctx.create_local(ret_tp, "res");
 							llvm::Value *sinp = ctx.create_simple_gep_in_bounds(res, 0u);
 							llvm::Value *cosp = ctx.create_simple_gep_in_bounds(res, 1u);
 							ctx->CreateCall(sincos_func, { a_val, sinp, cosp });
@@ -5071,7 +5074,45 @@ class SignatureParser:
 		elif mode == "scene::data_lookup_vector" or mode == "scene::data_lookup_uniform_vector":
 			runtime_func_enum_name = "THV_scene_" + intrinsic.replace("uniform_", "")
 			runtime_func_enum_deriv_name = runtime_func_enum_name.replace("lookup", "lookup_deriv")
-			if "_int" in intrinsic:
+			if "_float4x4" in intrinsic:
+				code = """
+				if (m_has_res_handler) {
+					MDL_ASSERT(!"not implemented yet");
+					res = nullptr;
+				} else {
+					llvm::Value *self_adr = ctx.create_simple_gep_in_bounds(
+						res_data, ctx.get_constant(Type_mapper::RDP_THREAD_DATA));
+					llvm::Value *self     = ctx->CreateBitCast(
+						ctx->CreateLoad(self_adr),
+						m_code_gen.m_type_mapper.get_core_tex_handler_ptr_type());
+
+					llvm::FunctionCallee runtime_func = ctx.get_tex_lookup_func(
+						self, Type_mapper::%(runtime_func_enum_name)s);
+
+					llvm::Type  *res_type = m_code_gen.m_type_mapper.get_arr_float_16_type();
+					llvm::Value *tmp        = ctx.create_local(res_type, "tmp");
+					llvm::Value *def_value  = ctx.create_local(res_type, "def_value");
+
+					// convert default value b to float[16]
+					ctx.convert_and_store(b, def_value);
+
+					// call runtime function
+					llvm::Value *args[] = {
+						tmp, self, ctx.get_state_parameter(), a, def_value, ctx.get_constant(%(is_uniform)s) };
+					llvm::CallInst *call = ctx->CreateCall(runtime_func, args);
+					call->setDoesNotThrow();
+
+					// convert result from float[16] to matrix type
+					res = ctx.load_and_convert(ctx.get_return_type(), tmp);
+				}
+				if (inst.get_return_derivs()) { // expand to dual
+					res = ctx.get_dual(res);
+				}
+				""" % {
+					"runtime_func_enum_name": runtime_func_enum_name,
+					"is_uniform": "true" if "uniform" in intrinsic else "false"
+				}
+			elif "_int" in intrinsic:
 				code = """
 				if (m_has_res_handler) {
 					MDL_ASSERT(!"not implemented yet");
@@ -5302,12 +5343,11 @@ class SignatureParser:
 			# Allocate valist buffer
 			code = """
 				buffer_size = int(llvm::alignTo(buffer_size, VPRINTF_BUFFER_ROUND_UP));
-				llvm::AllocaInst *valist = ctx->CreateAlloca(
+				llvm::AllocaInst *valist = ctx.create_local(
 					llvm::ArrayType::get(
 						m_code_gen.m_type_mapper.get_char_type(),
 						buffer_size
 					),
-					NULL,
 					"vprintf.valist");
 				valist->setAlignment(llvm::Align(VPRINTF_BUFFER_ALIGNMENT));
 
@@ -6261,6 +6301,8 @@ class SignatureParser:
 		self.register_mdl_runtime_func("mdl_tex_res_float3",         "F3_scII")
 		self.register_mdl_runtime_func("mdl_tex_res_color",          "CC_scII")
 
+		self.register_mdl_runtime_func("mdl_enter_func",              "VV_vv")
+
 	def generate_runtime_enum(self, f):
 		"""Generate the enum for the runtime functions."""
 		self.write(f, "/// Used functions from the C-runtime.\n")
@@ -6650,6 +6692,7 @@ class SignatureParser:
 		self.add_class_member("bool const",                           "m_has_sincosf",                "True if destination has sincosf.",  True)
 		self.add_class_member("bool const",                           "m_has_res_handler",            "True if a resource handler I/F is available.", True)
 		self.add_class_member("bool",                                 "m_use_user_state_module",      "True if user-defined state module functions should be used.", False)
+		self.add_class_member("bool",                                 "m_always_inline_rt",           "True if small runtime functions should be marked as always_inline", True)
 		self.add_class_member("int",                                  "m_internal_space",             "The internal_space encoding.", True)
 		self.add_class_member("llvm::Function *",                     "m_runtime_funcs[RT_LAST + 1]", "Runtime functions.",           False)
 		self.add_class_member("llvm::Function *",                     "m_intrinsics[%d * 2]" % self.m_next_func_index, "Cache for intrinsic functions, with and without derivative returns.", False)

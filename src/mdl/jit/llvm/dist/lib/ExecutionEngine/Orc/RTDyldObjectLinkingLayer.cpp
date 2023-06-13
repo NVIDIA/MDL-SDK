@@ -279,6 +279,15 @@ void RTDyldObjectLinkingLayer::onObjEmit(
     return;
   }
 
+  // Add to MemMgrs before potentially notifying other threads, that the object was emitted.
+  // Otherwise these other threads could already execute the code and remove the object,
+  // leading to defunct resource trackers.
+  if (auto Err = R.withResourceKeyDo(
+      [&](ResourceKey K) { MemMgrs[K].push_back(std::move(MemMgr)); })) {
+      getExecutionSession().reportError(std::move(Err));
+      R.failMaterialization();
+  }
+
   if (auto Err = R.notifyEmitted()) {
     getExecutionSession().reportError(std::move(Err));
     R.failMaterialization();
@@ -299,12 +308,6 @@ void RTDyldObjectLinkingLayer::onObjEmit(
 
   if (NotifyEmitted)
     NotifyEmitted(R, std::move(ObjBuffer));
-
-  if (auto Err = R.withResourceKeyDo(
-          [&](ResourceKey K) { MemMgrs[K].push_back(std::move(MemMgr)); })) {
-    getExecutionSession().reportError(std::move(Err));
-    R.failMaterialization();
-  }
 }
 
 Error RTDyldObjectLinkingLayer::handleRemoveResources(ResourceKey K) {

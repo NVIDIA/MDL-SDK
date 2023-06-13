@@ -82,7 +82,7 @@ namespace mdlm
         {}
         ~Option();
         Option(const Option & other); // Copy ctor
-        Option & operator=(const Option&); // Assignement operator
+        Option & operator=(const Option&); // Assignment operator
         bool is_valid() const { return m_id != -1; }
         void set_can_appear_mulitple_times(bool flag) { m_can_appear_mulitple_times = flag; }
         void set_is_command(bool flag) { m_is_command = flag; }

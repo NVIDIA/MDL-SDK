@@ -380,7 +380,7 @@ public:
  *
  *   \anchor mdl_archive_tool_option_compress_suffixes
  *   - <b>compress_suffixes:</b> This option allows to specify a comma separated list of
- *     file extentions that should be stored uncompressed inside an MDL archive.
+ *     file extensions that should be stored uncompressed inside an MDL archive.
  *     Default: ".ies,.mbsdf,.txt,.html"
  */
 #endif // MDL_ARCHIEVER_H

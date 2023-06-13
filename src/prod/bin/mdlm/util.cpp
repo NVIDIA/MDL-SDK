@@ -86,8 +86,8 @@ bool Util::File::Test()
                 is_empty = new_folder.is_empty();
                 check_success3(true == is_empty, Errors::ERR_UNIT_TEST, "Util::File::Test()");
 
-                bool sucess = Util::copy_file(newtempfile, new_folder_name);
-                check_success3(true == sucess, Errors::ERR_UNIT_TEST, "Util::File::Test()");
+                bool success = Util::copy_file(newtempfile, new_folder_name);
+                check_success3(true == success, Errors::ERR_UNIT_TEST, "Util::File::Test()");
 
                 new_folder.remove();
                 check_success3(true == is_empty, Errors::ERR_UNIT_TEST, "Util::File::Test()");

@@ -360,7 +360,9 @@ public:
     ///
     /// Note that scopes are reference counted. The actual removal will not happen before all
     /// elements referencing the scope have been released, e.g., child scopes, transactions,
-    /// database elements, including handles to the scope itself.
+    /// database elements, including handles to the scope itself. Even when all these conditions
+    /// are met, scope removal might actually happen at a later point in time, depending on the
+    /// timing of past and current transactions, even in unrelated scopes.
     ///
     /// It is not possible to remove the global scope.
     ///

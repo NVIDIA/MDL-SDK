@@ -34,40 +34,6 @@
 namespace mi { namespace examples { namespace mdl_d3d12
 {
 
-Raytracing_pipeline::Library::Library(
-    const IDxcBlob* dxil_library,
-    bool owns_dxil_library,
-    const std::vector<std::string>& exported_symbols)
-
-    : m_dxil_library(dxil_library)
-    , m_owns_dxil_library(owns_dxil_library)
-    , m_exported_symbols(exported_symbols.size())
-    , m_exports(exported_symbols.size())
-{
-    // Create one export descriptor per symbol
-    for (size_t i = 0; i < exported_symbols.size(); i++)
-    {
-        m_exported_symbols[i] = mi::examples::strings::str_to_wstr(exported_symbols[i]);
-        m_exports[i] = {};
-        m_exports[i].Name = m_exported_symbols[i].c_str();
-        m_exports[i].ExportToRename = nullptr;
-        m_exports[i].Flags = D3D12_EXPORT_FLAG_NONE;
-    }
-
-    // Create a library descriptor combining the DXIL code and the export names
-    m_desc.DXILLibrary.BytecodeLength =
-        const_cast<IDxcBlob*>(m_dxil_library)->GetBufferSize();
-
-    m_desc.DXILLibrary.pShaderBytecode =
-        const_cast<IDxcBlob*>(m_dxil_library)->GetBufferPointer();
-
-    m_desc.NumExports = static_cast<UINT>(m_exported_symbols.size());
-    m_desc.pExports = m_exports.data();
-}
-
-// ------------------------------------------------------------------------------------------------
-// ------------------------------------------------------------------------------------------------
-
 Raytracing_pipeline::Hitgroup::Hitgroup(
     std::string name,
     std::string closest_hit_symbol,
@@ -141,10 +107,7 @@ Raytracing_pipeline::~Raytracing_pipeline()
 
 // ------------------------------------------------------------------------------------------------
 
-bool Raytracing_pipeline::add_library(
-    const IDxcBlob * dxil_library,
-    bool owns_dxil_library,
-    const std::vector<std::string>& exported_symbols)
+bool Raytracing_pipeline::add_library(const Shader_library& dxil_library)
 {
     if (m_is_finalized) {
         log_error("Pipeline '" + m_debug_name +
@@ -152,36 +115,29 @@ bool Raytracing_pipeline::add_library(
         return false;
     }
 
-    if (!dxil_library) {
-        log_error("Tried to add an invalid DxIL library "
-                    " to pipeline:" + m_debug_name + ". Compiling failed?", SRC);
-        return false;
-    }
-
     // check that the library does not exist yet
     for (auto&& libs : m_libraries)
-        if (libs.m_dxil_library == dxil_library) {
+        if (libs.get_dxil_library() == dxil_library.get_dxil_library()) {
             log_error("Tried to add DxIL library multiple times "
                         "to pipeline:" + m_debug_name + ".", SRC);
             return false;
         }
 
-    Library lib(dxil_library, owns_dxil_library, exported_symbols);
+    // add the library to the pipeline
+    m_libraries.push_back(dxil_library);
+    const Shader_library::Data* d3d_data = m_libraries.back().getData();
 
     // check if the symbols are not existing yet and add them to list of all exported symbols
-    for (const auto& s : lib.m_exported_symbols)
+    for (const auto& s : d3d_data->m_exported_symbols_w)
     {
         if (m_all_exported_symbols.find(s) != m_all_exported_symbols.end())
         {
             log_error("Tried to add duplicated symbol '" + mi::examples::strings::wstr_to_str(s) +
                         "' to pipeline:" + m_debug_name + ".", SRC);
-            // if (lib.m_owns_dxil_library)
-            //     delete lib.m_dxil_library;
             return false;
         }
         m_all_exported_symbols.insert(s);
     }
-    m_libraries.emplace_back(std::move(lib));
     return true;
 }
 
@@ -313,7 +269,7 @@ bool Raytracing_pipeline::finalize()
     {
         D3D12_STATE_SUBOBJECT libSubobject = {};
         libSubobject.Type = D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY;
-        libSubobject.pDesc = &lib.m_desc;
+        libSubobject.pDesc = &lib.getData()->m_desc;
         subobjects.push_back(std::move(libSubobject));
     }
 

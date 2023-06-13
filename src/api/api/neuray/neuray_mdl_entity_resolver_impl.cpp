@@ -324,7 +324,7 @@ mi::mdl::IMDL_import_result* Core_entity_resolver_impl::resolve_module(
     }
 
     // Sanity check against incorrect implementations of mi::neuraylib::IMdl_resolved_module:
-    // Module names have to be correctly encoded (if encoded names are enabled).
+    // Module names have to be correctly encoded.
     std::string decoded_module_name = MDL::decode_module_name( returned_module_name);
     if( decoded_module_name.empty()) {
         LOG::mod_log->error( M_NEURAY_API, LOG::Mod_log::C_MISC,

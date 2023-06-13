@@ -64,7 +64,8 @@ namespace {
 const static char* IESNA_1991 = "IESNA91";
 const static char* IESNA_1995 = "IESNA:LM-63-1995";
 const static char* IESNA_2002 = "IESNA:LM-63-2002";
-const static char* IESNA_UNKNOWN = "IESNA:LM-63-";
+const static char* IES_2019 = "IES:LM-63-2019";
+const static char* IES_UNKNOWN = "IES:LM-63-";
 
 // Specification used to give additional notes on parser errors
 //
@@ -93,7 +94,8 @@ public:
         IESNA_LM_63_1986 = 0,
         IESNA_LM_63_1991,
         IESNA_LM_63_1995,
-        IESNA_LM_63_2002
+        IESNA_LM_63_2002,
+        IES_LM_63_2019
     };
 
     // Orientation of the lamp within the luminaire (cp. Fig.1 in specification)
@@ -314,7 +316,12 @@ bool Lightprofile_ies_parser::parse_version(
         m_version = IESNA_LM_63_2002;
         return true;
     }
-    else if(!strncmp(IESNA_UNKNOWN, version, strlen(IESNA_UNKNOWN)))
+    else if (!strncmp(IES_2019, version, strlen(IES_2019)))
+    {
+        m_version = IES_LM_63_2019;
+        return true;
+    }
+    else if(!strncmp(IES_UNKNOWN, version, strlen(IES_UNKNOWN)))
     {
         // if a future version comes up, interpret it is as the highest version
         // known to the parser (instead of falling back to the old standard)
@@ -323,7 +330,7 @@ bool Lightprofile_ies_parser::parse_version(
                 "Data might not be imported correctly",
                 version, m_log_identifier.c_str());
 
-        m_version = IESNA_LM_63_2002;
+        m_version = IES_LM_63_2019;
         return true;
     }
     else

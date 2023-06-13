@@ -90,6 +90,7 @@ Mipmap_impl::Mipmap_impl(
 }
 
 Mipmap_impl::Mipmap_impl(
+    File_based,
     const std::string& filename,
     const char* selector,
     bool only_first_level,
@@ -113,7 +114,7 @@ Mipmap_impl::Mipmap_impl(
     if( !reader.open( filename.c_str())) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "Failed to open image file \"%s\".", filename.c_str());
-        *errors = -3;
+        *errors = -5;
         return;
     }
 
@@ -128,16 +129,19 @@ Mipmap_impl::Mipmap_impl(
     if( !plugin) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "No image plugin found to handle \"%s\".", filename.c_str());
-        *errors = -4;
+        *errors = -3;
         return;
     }
 
-    mi::base::Handle<mi::neuraylib::IImage_file> image_file( plugin->open_for_reading( &reader));
+    bool plugin_supports_selectors = plugin->supports_selectors();
+    const char* plugin_selector = plugin_supports_selectors ? selector : nullptr;
+    mi::base::Handle<mi::neuraylib::IImage_file> image_file(
+        plugin->open_for_reading( &reader, plugin_selector));
     if( !image_file) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin \"%s\" failed to import \"%s\".",
             plugin->get_name(), filename.c_str());
-        *errors = -5;
+        *errors = -7;
         return;
     }
 
@@ -154,21 +158,28 @@ Mipmap_impl::Mipmap_impl(
 
     m_levels.resize( m_nr_of_levels);
 
+    *errors = 0;
+
     for( mi::Uint32 i = 0; i < m_nr_of_provided_levels; ++i)
-        m_levels[i] = new Canvas_impl( filename, selector, i, image_file.get());
+        m_levels[i] = new Canvas_impl(
+            File_based(),
+            filename,
+            selector,
+            i,
+            image_file.get(),
+            plugin_supports_selectors,
+            errors);
 
     m_is_cubemap = false;
     mi::base::Handle<ICanvas> canvas_internal( m_levels[0]->get_interface<ICanvas>());
     if( canvas_internal)
         m_is_cubemap = canvas_internal->get_is_cubemap();
-
-    *errors = 0;
 }
 
 Mipmap_impl::Mipmap_impl(
     Container_based,
     mi::neuraylib::IReader* reader,
-    const std::string& archive_filename,
+    const std::string& container_filename,
     const std::string& member_filename,
     const char* selector,
     bool only_first_level,
@@ -188,8 +199,13 @@ Mipmap_impl::Mipmap_impl(
     m_last_created_level = 0;
     m_is_cubemap = false;
 
-    if( !reader || !reader->supports_absolute_access()) {
-        *errors = -3;
+    if( !reader) {
+        *errors = -1;
+        return;
+    }
+
+    if( !reader->supports_absolute_access()) {
+        *errors = -6;
         return;
     }
 
@@ -204,17 +220,20 @@ Mipmap_impl::Mipmap_impl(
     if( !plugin) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "No image plugin found to handle \"%s\" in \"%s\".",
-            member_filename.c_str(), archive_filename.c_str());
-        *errors = -4;
+            member_filename.c_str(), container_filename.c_str());
+        *errors = -3;
         return;
     }
 
-    mi::base::Handle<mi::neuraylib::IImage_file> image_file( plugin->open_for_reading( reader));
+    bool plugin_supports_selectors = plugin->supports_selectors();
+    const char* plugin_selector = plugin_supports_selectors ? selector : nullptr;
+    mi::base::Handle<mi::neuraylib::IImage_file> image_file(
+        plugin->open_for_reading( reader, plugin_selector));
     if( !image_file) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin \"%s\" failed to import \"%s\" in \"%s\".",
-            plugin->get_name(), member_filename.c_str(), archive_filename.c_str());
-        *errors = -5;
+            plugin->get_name(), member_filename.c_str(), container_filename.c_str());
+        *errors = -7;
         return;
     }
 
@@ -231,22 +250,24 @@ Mipmap_impl::Mipmap_impl(
 
     m_levels.resize( m_nr_of_levels);
 
+    *errors = 0;
+
     for( mi::Uint32 i = 0; i < m_nr_of_provided_levels; ++i)
         m_levels[i] = new Canvas_impl(
             Container_based(),
             reader,
-            archive_filename,
+            container_filename,
             member_filename,
             selector,
             i,
-            image_file.get());
+            image_file.get(),
+            plugin_supports_selectors,
+            errors);
 
     m_is_cubemap = false;
     mi::base::Handle<ICanvas> canvas_internal( m_levels[0]->get_interface<ICanvas>());
     if( canvas_internal)
         m_is_cubemap = canvas_internal->get_is_cubemap();
-
-    *errors = 0;
 }
 
 Mipmap_impl::Mipmap_impl(
@@ -272,8 +293,13 @@ Mipmap_impl::Mipmap_impl(
     m_last_created_level = 0;
     m_is_cubemap = false;
 
-    if( !reader || !reader->supports_absolute_access()) {
-        *errors = -3;
+    if( !reader) {
+        *errors = -1;
+        return;
+    }
+
+    if( !reader->supports_absolute_access()) {
+        *errors = -6;
         return;
     }
 
@@ -284,16 +310,19 @@ Mipmap_impl::Mipmap_impl(
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "No image plugin found to handle a memory-based image with image format \"%s\".",
             image_format);
-        *errors = -4;
+        *errors = -3;
         return;
     }
 
-    mi::base::Handle<mi::neuraylib::IImage_file> image_file( plugin->open_for_reading( reader));
+    bool plugin_supports_selectors = plugin->supports_selectors();
+    const char* plugin_selector = plugin_supports_selectors ? selector : nullptr;
+    mi::base::Handle<mi::neuraylib::IImage_file> image_file(
+        plugin->open_for_reading( reader, plugin_selector));
     if( !image_file) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin \"%s\" failed to import a memory-based image with image format "
             "\"%s\".", plugin->get_name(), image_format);
-        *errors = -5;
+        *errors = -7;
         return;
     }
 
@@ -310,6 +339,8 @@ Mipmap_impl::Mipmap_impl(
 
     m_levels.resize( m_nr_of_levels);
 
+    *errors = 0;
+
     for( mi::Uint32 i = 0; i < m_nr_of_provided_levels; ++i)
         m_levels[i] = new Canvas_impl(
             Memory_based(),
@@ -318,7 +349,9 @@ Mipmap_impl::Mipmap_impl(
             selector,
             mdl_file_path,
             i,
-            image_file.get());
+            image_file.get(),
+            plugin_supports_selectors,
+            errors);
 
     m_is_cubemap = false;
     mi::base::Handle<ICanvas> canvas_internal( m_levels[0]->get_interface<ICanvas>());

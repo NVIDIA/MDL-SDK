@@ -503,6 +503,11 @@ void Sema_analysis::report_unused_entities()
                 switch (def->get_kind()) {
                 case IDefinition::DK_VARIABLE:
                     wcode = UNUSED_VARIABLE;
+                    if (def->has_flag(Definition::DEF_IS_LET_TEMPORARY)) {
+                        // a let temporary
+                        wcode = UNUSED_LET_TEMPORARY;
+                    }
+
                     break;
                 case IDefinition::DK_CONSTANT:
                     wcode = UNUSED_CONSTANT;
@@ -1476,6 +1481,19 @@ void Sema_analysis::post_visit(IDeclaration_function *decl)
                 info.m_has_effect = true;
             }
         }
+    } else {
+        if (IStatement const *body = decl->get_body()) {
+            if (IStatement_compound const *cbody = as<IStatement_compound>(body)) {
+                if (cbody->get_statement_count() == 1) {
+                    IStatement_return const *ret_stmt =
+                        as<IStatement_return>(cbody->get_statement(0));
+                    if (ret_stmt != NULL) {
+                        // single return function
+                        check_single_return_expr(ret_stmt->get_expression());
+                    }
+                }
+            }
+        }
     }
     m_inside_single_expr_body = false;
 
@@ -1670,10 +1688,15 @@ bool Sema_analysis::identical_statements(
         }
     case IStatement::SK_EXPRESSION:
         {
-            IStatement_expression const *e_lhs = cast<IStatement_expression>(lhs);
-            IStatement_expression const *e_rhs = cast<IStatement_expression>(rhs);
-
-            return identical_expressions(e_lhs->get_expression(), e_rhs->get_expression());
+            IStatement_expression const *s_lhs = cast<IStatement_expression>(lhs);
+            IStatement_expression const *s_rhs = cast<IStatement_expression>(rhs);
+            IExpression const *e_lhs = s_lhs->get_expression();
+            IExpression const *e_rhs = s_rhs->get_expression();
+            if (e_lhs != NULL && e_rhs != NULL) {
+                return identical_expressions(e_lhs, e_rhs);
+            }
+            // only identical, if both are empty
+            return e_lhs == e_rhs;
         }
     case IStatement::SK_IF:
         {
@@ -2119,6 +2142,75 @@ void Sema_analysis::insert_assert_params(IExpression_call *expr)
 
     IArgument *arg_line = const_cast<IArgument *>(expr->get_argument(4));
     arg_line->set_argument_expr(lit_line);
+}
+
+// Check the expression of a single return function.
+void Sema_analysis::check_single_return_expr(
+    IExpression const *expr)
+{
+    if (is<IType_error>(expr->get_type())) {
+        // bad expression
+        return;
+    }
+
+    class Expr_checker : public Module_visitor {
+    public:
+        /// Constructor.
+        Expr_checker(Sema_analysis &ana) : m_ana(ana) {}
+
+        IExpression *post_visit(IExpression_unary *expr)
+        {
+            IExpression_unary::Operator op = expr->get_operator();
+            switch (op) {
+            case IExpression_unary::OK_PRE_INCREMENT:
+            case IExpression_unary::OK_PRE_DECREMENT:
+            case IExpression_unary::OK_POST_INCREMENT:
+            case IExpression_unary::OK_POST_DECREMENT:
+                m_ana.warning(
+                    SIDE_EFFECT_EXPRESSION_IN_RETURN,
+                    expr->access_position(),
+                    Error_params(m_ana).add(op)
+                );
+                break;
+            default:
+                break;
+            }
+            return expr;
+        }
+
+        IExpression *post_visit(IExpression_binary *expr)
+        {
+            IExpression_binary::Operator op = expr->get_operator();
+            switch (op) {
+            case IExpression_binary::OK_ASSIGN:
+            case IExpression_binary::OK_MULTIPLY_ASSIGN:
+            case IExpression_binary::OK_DIVIDE_ASSIGN:
+            case IExpression_binary::OK_MODULO_ASSIGN:
+            case IExpression_binary::OK_PLUS_ASSIGN:
+            case IExpression_binary::OK_MINUS_ASSIGN:
+            case IExpression_binary::OK_SHIFT_LEFT_ASSIGN:
+            case IExpression_binary::OK_SHIFT_RIGHT_ASSIGN:
+            case IExpression_binary::OK_UNSIGNED_SHIFT_RIGHT_ASSIGN:
+            case IExpression_binary::OK_BITWISE_AND_ASSIGN:
+            case IExpression_binary::OK_BITWISE_XOR_ASSIGN:
+            case IExpression_binary::OK_BITWISE_OR_ASSIGN:
+                m_ana.warning(
+                    ASSIGNMENT_EXPRESSION_IN_RETURN,
+                    expr->access_position(),
+                    Error_params(m_ana).add(op)
+                );
+                break;
+            default:
+                break;
+            }
+            return expr;
+        }
+
+    private:
+        Sema_analysis &m_ana;
+    };
+
+    Expr_checker(*this).visit(expr);
 }
 
 // start of an expression

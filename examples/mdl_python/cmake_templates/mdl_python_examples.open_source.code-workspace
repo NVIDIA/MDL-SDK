@@ -1,5 +1,5 @@
 /***************************************************************************************************
- * Copyright 2022 NVIDIA Corporation. All rights reserved.
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
  **************************************************************************************************/
 
 @IGNORE_THE_FOLLOWING_COMMENT@
@@ -35,7 +35,7 @@
 				"console": "integratedTerminal",
 				"env" : {
 					// Library Path to load the MDL SDK and plugins from
-					"PATH": "@MDL_SDK_PATH@/${input:CMAKE_BUILD_CONFIGURATION}@ENV_SEP@@FREEIMAGE_PATH@/${input:CMAKE_BUILD_CONFIGURATION}@ENV_SEP@${env:PATH}",
+					"PATH": "@MDL_SDK_PATH@/${input:CMAKE_BUILD_CONFIGURATION}@ENV_SEP@@FREEIMAGE_PATH@/${input:CMAKE_BUILD_CONFIGURATION}@ENV_SEP@@OPENIMAGEIO_PATH@/${input:CMAKE_BUILD_CONFIGURATION}@ENV_SEP@${env:PATH}",
 					// Path from which python modules are loaded from (i.e. pymdlsdk)
 					"PYTHONPATH": "@BINDING_MODULE_PATH@/${input:CMAKE_BUILD_CONFIGURATION}@ENV_SEP@${env:PYTHONPATH}",
 					// Path of the examples to access the example content

@@ -1,0 +1,125 @@
+/******************************************************************************
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_distilling_glsl Example for Using Distilled Materials in OpenGL
+
+<div align="right">
+    [\link mi_neuray_example_distilling_unity Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_distilling_target Next\endlink]
+</div>
+
+This example shows how an MDL material distilled to the UE4 target can be mapped
+to a predefined GLSL PBR shader to render a sphere in an OpenGL window.
+
+\section example_distilling_glsl_new New Topics
+  - Mapping distilled materials to a GLSL shader
+
+\section example_distilling_glsl_descr Detailed Description
+<dl>
+    <dt><b>
+        Baking versus code generation
+    </b></dt>
+    <dd><br>
+        To feed the parameters of the target GLSL shader for a renderer you can either bake the input 
+        functions of the distilled material into textures or generate GLSL code to calculate them at
+        runtime.
+        The former has the advantage of a fixed cost: in order to evaluate the parameter only one
+        texture lookup is needed. However, since baking is done on a 2D plane, your target geometry
+        will need a suitable UV-layout. Furthermore, if the texture function graph makes use of 
+        world or object space transformations, those will be fixed to the [0,1] x [0,1] range.
+        Generating GLSL code from the texture function graph does not suffer from those limitations, all
+        information is preserved. This comes at a potentially high runtime cost as the graphs
+        may contain many functions and/or functions that are expensive to evaluate (e.g. noise functions).
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Brief example overview
+    </b></dt>
+    <dd><br>
+        This example uses an UE4 like PBR shader with its typical \c base_color, \c metallic, \c roughness,
+        \c specular and \c normal parameters plus an optional clearcoat (see \c glsl/example_distilling_glsl.frag
+        for details). We wrap the access to those parameters into functions (e.g. get_base_color) rather than making
+        them uniform inputs to the shader itself. This allows us to use the same code structure for both a baked and
+        a GLSL representation of the distilled MDL materials` texture functions. At program runtime, those access-functions
+        are generated, and, together with a texture runtime, assembled into the final fragment shader.
+        
+        After parsing the command line and loading and configuring the MDL SDK, all given materials
+        are distilled to the UE4 target and  passed to the render_scene function. For every distilled material 
+        an instance of the class \c Mdl_pbr_shader is constructed. This class is responsible for setting up the final final GLSL shader.
+        
+        In order to unify the handling of baked and code-based representations of the PBR parameters in the \c Mdl_pbr_shader, 
+        we encapsulate the actual conversion into the \c Mdl_ue4 interface and its two specializations 
+        \c Mdl_ue4_glsl and \c Mdl_ue4_baker. <br>
+        The \c Mdl_ue4_glsl class uses the GLSL backend (see #mi::neuraylib::IMdl_backend) to generate GLSL code.
+        Upon construction the backend is acquired and configured and an #mi::neuraylib::ILink_unit is created.
+        Then, the base-class function \c Mdl_ue4::add_ue4_material_expressions() is called which walks the graph of a UE4-distilled 
+        MDL material and collects relevant input expression graphs (e.g. the one for \c base_color).
+        For each such expression the virtual function \c add_material_expression() is called. In this function the expressions
+        are fed into the #mi::neuraylib::ILink_unit for later code generation.<br>
+        The \c Mdl_ue4_baker class uses the #mi::neuraylib::IBaker for texture baking. It sets up
+        a map holding the material parameters we want to extract from the distilled material and then also calls the base-class function 
+        \c Mdl_ue4::add_ue4_material_expressions(). The \c Mdl_ue4_baker::add_material_expression() specialization simply collects 
+        the expressions for baking and saves them into the map. Finally, the expressions are baked and the access-functions are 
+        generated.<br>
+        Depending on the original MDL material, the distilled MDL material may not contain texturing expressions for every 
+        parameters of the PBR shader. In this case, dummy functions returning a suitable default value are generated by
+        both specializations.
+        
+        The constructor of \c Mdl_pbr_shader receives a pointer to either an \c Mdl_ue4_baker or an \c Mdl_ue4_glsl instance.
+        In order to assemble the final fragment shader the generated code given in \c Mdl_ue4 is combined with the static GLSL code found in
+        \c glsl/example_distilling_glsl.frag and all textures are uploaded to the GPU. In the \c Mdl_ue4_glsl case
+        this are all textures referenced by the generated GLSL code, in the \c Mdl_ue4_baker case, this are the baked
+        textures.
+    </dd>
+</dl>
+
+\section example_distilling_glsl Example Source
+
+To compile the source code, you need GLEW available at
+<a href="http://glew.sourceforge.net/">http://glew.sourceforge.net/</a> and GLFW available at
+<a href="http://www.glfw.org/download.html">http://www.glfw.org/download.html</a>. Please refer to the 
+\link mi_neuray_getting_started Getting Started \endlink section for details.
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/distilling_glsl/example_distilling_glsl.cpp</tt>
+
+\include distilling_glsl/example_distilling_glsl.cpp
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/distilling_glsl/example_distilling_glsl.frag</tt>
+
+\include distilling_glsl/example_distilling_glsl.frag
+
+<div align="right">
+    [\link mi_neuray_example_distilling_unity Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_distilling_target Next\endlink]
+</div>
+
+*/

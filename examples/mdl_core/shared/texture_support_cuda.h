@@ -595,7 +595,7 @@ extern "C" __device__ float df_light_profile_pdf(
 // Implementation of df::bsdf_measurement_isvalid() for an MBSDF.
 extern "C" __device__ bool df_bsdf_measurement_isvalid(
     Texture_handler_base const *self_base,
-    unsigned                    bsdf_measurement_index)
+    unsigned                    bsdf_measurement_idx)
 {
     return false;
 }
@@ -607,7 +607,7 @@ extern "C" __device__ bool df_bsdf_measurement_isvalid(
 extern "C" __device__ void df_bsdf_measurement_resolution(
     unsigned                    result[3],
     Texture_handler_base const  *self_base,
-    unsigned                    bsdf_measurement_index,
+    unsigned                    bsdf_measurement_idx,
     Mbsdf_part                  part)
 {
     result[0] = 0;
@@ -619,7 +619,7 @@ extern "C" __device__ void df_bsdf_measurement_resolution(
 extern "C" __device__ void df_bsdf_measurement_evaluate(
     float                       result[3],
     Texture_handler_base const  *self_base,
-    unsigned                    bsdf_measurement_index,
+    unsigned                    bsdf_measurement_idx,
     float const                 theta_phi_in[2],
     float const                 theta_phi_out[2],
     Mbsdf_part                  part)
@@ -631,7 +631,7 @@ extern "C" __device__ void df_bsdf_measurement_evaluate(
 extern "C" __device__ void df_bsdf_measurement_sample(
     float                       result[3],          // output: theta, phi, pdf
     Texture_handler_base const  *self_base,
-    unsigned                    bsdf_measurement_index,
+    unsigned                    bsdf_measurement_idx,
     float const                 theta_phi_out[2],
     float const                 xi[3],              // uniform random values
     Mbsdf_part                  part)
@@ -644,7 +644,7 @@ extern "C" __device__ void df_bsdf_measurement_sample(
 // Implementation of df::bsdf_measurement_pdf() for an MBSDF.
 extern "C" __device__ float df_bsdf_measurement_pdf(
     Texture_handler_base const  *self_base,
-    unsigned                    bsdf_measurement_index,
+    unsigned                    bsdf_measurement_idx,
     float const                 theta_phi_in[2],
     float const                 theta_phi_out[2],
     Mbsdf_part                  part)
@@ -659,7 +659,7 @@ extern "C" __device__ void df_bsdf_measurement_albedos(
                                                     //         [2] albedo trans. for theta_phi
                                                     //         [3] max albedo trans. global
     Texture_handler_base const  *self_base,
-    unsigned                    bsdf_measurement_index,
+    unsigned                    bsdf_measurement_idx,
     float const                 theta_phi[2])
 {
     store_result4(result, 0.0f);
@@ -810,6 +810,21 @@ extern "C" __device__ int scene_data_lookup_int(
     return default_value;
 }
 
+// Implementation of scene_data_lookup_float4x4().
+extern "C" __device__ void scene_data_lookup_float4x4(
+    float                                  result[16],
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    float const                            default_value[16],
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    for (int i = 0; i < 16; ++i)
+        result[i] = default_value[i];
+}
+
+
 // Implementation of scene_data_lookup_float4() with derivatives.
 extern "C" __device__ void scene_data_lookup_deriv_float4(
     tct_deriv_arr_float_4                 *result,
@@ -919,6 +934,7 @@ __device__ mi::mdl::Texture_handler_vtable tex_vtable = {
     scene_data_lookup_int3,
     scene_data_lookup_int4,
     scene_data_lookup_color,
+    scene_data_lookup_float4x4,
 };
 
 // The vtable containing all texture access handlers required by the generated code
@@ -958,6 +974,7 @@ __device__ mi::mdl::Texture_handler_deriv_vtable tex_deriv_vtable = {
     scene_data_lookup_int3,
     scene_data_lookup_int4,
     scene_data_lookup_color,
+    scene_data_lookup_float4x4,
     scene_data_lookup_deriv_float,
     scene_data_lookup_deriv_float2,
     scene_data_lookup_deriv_float3,

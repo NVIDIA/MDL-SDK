@@ -71,7 +71,7 @@ using namespace i18n;
 // This command creates XLIFF file from a single module or from a single package.
 // The command has options to set the locale, set a module or a package for
 // which we want XLIFF file. When setting a package we can chose to recursively traverse
-// sub-packages. XLIFF files can have context embeded as XLIFF groups or we can chose not
+// sub-packages. XLIFF files can have context embedded as XLIFF groups or we can chose not
 // to have any context. A dry-run mode allows to see the result of the command without 
 // creating the XLIFF file. A force option allows to overwrite existing XLIFF files.
 // The created XLIFF file is stored in the same directory as the given module or

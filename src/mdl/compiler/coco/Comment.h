@@ -29,20 +29,18 @@ Coco/R itself) does not fall under the GNU General Public License.
 #if !defined(COCO_COMMENT_H__)
 #define COCO_COMMENT_H__
 
-#include <wchar.h>
-
 namespace Coco {
 
 class Comment  					// info about comment syntax
 {
 public:
-	wchar_t* start;
-	wchar_t* stop;
+	char const *start;
+	char const *stop;
 	bool nested;
 	Comment *next;
 
-	Comment(wchar_t* start, wchar_t* stop, bool nested);
-	virtual ~Comment();
+	Comment(char const *start, char const *stop, bool nested);
+	~Comment();
 
 };
 

@@ -28,8 +28,9 @@
 
 #include "mdl_generator.h"
 
-#include <example_shared.h>
-#include <utils/io.h>
+#include "../common.h"
+#include "../mdl_sdk.h"
+#include <mi/mdl_sdk.h>
 
 #include <MaterialXCore/Material.h>
 #include <MaterialXFormat/Util.h>
@@ -40,9 +41,122 @@
 #include <MaterialXGenShader/Shader.h>
 #include <MaterialXGenShader/Util.h>
 
+
 namespace mi {namespace examples { namespace mdl_d3d12 { namespace materialx
 {
 namespace mx = MaterialX;
+
+
+class MdlStringResolver;
+using MdlStringResolverPtr = std::shared_ptr<MdlStringResolver>;
+
+class MdlStringResolver : public mx::StringResolver
+{
+public:
+
+    /// Create a new string resolver.
+    static MdlStringResolverPtr create()
+    {
+        return MdlStringResolverPtr(new MdlStringResolver());
+    }
+    ~MdlStringResolver() = default;
+
+    void initialize(mx::DocumentPtr document, mi::neuraylib::IMdl_configuration* config)
+    {
+        // remove duplicates and keep order by using a set
+        auto less = [](const mx::FilePath& lhs, const mx::FilePath& rhs) { return lhs.asString() < rhs.asString(); };
+        std::set<mx::FilePath, decltype(less)> mtlx_paths(less);
+        m_mtlx_document_paths.clear();
+        m_mdl_search_paths.clear();
+
+        // use the source search paths as base
+        mx::FilePath p = mx::FilePath(document->getSourceUri()).getParentPath().getNormalized();
+        mtlx_paths.insert(p);
+        m_mtlx_document_paths.append(p);
+
+        for (auto sp : mx::getSourceSearchPath(document))
+        {
+            sp = sp.getNormalized();
+            if(sp.exists() && mtlx_paths.insert(sp).second)
+                m_mtlx_document_paths.append(sp);
+        }
+
+        // add all search paths known to MDL
+        for (size_t i = 0, n = config->get_mdl_paths_length(); i < n; i++)
+        {
+            mi::base::Handle<const mi::IString> sp_istring(config->get_mdl_path(i));
+            p = mx::FilePath(sp_istring->get_c_str()).getNormalized();
+            if (p.exists() && mtlx_paths.insert(p).second)
+                m_mtlx_document_paths.append(p);
+
+            // keep a list of MDL search paths for resource resolution
+            m_mdl_search_paths.append(p);
+        }
+    }
+
+    std::string resolve(const std::string& str, const std::string& type) const override
+    {
+        mx::FilePath normalizedPath = mx::FilePath(str).getNormalized();
+
+        // in case the path is absolute we need to find a proper search path to put the file in
+        if (normalizedPath.isAbsolute())
+        {
+            // find the highest priority search path that is a prefix of the resource path
+            for (const auto& sp : m_mdl_search_paths)
+            {
+                if (sp.size() > normalizedPath.size())
+                    continue;
+
+                bool isParent = true;
+                for (size_t i = 0; i < sp.size(); ++i)
+                {
+                    if (sp[i] != normalizedPath[i])
+                    {
+                        isParent = false;
+                        break;
+                    }
+                }
+
+                if (!isParent)
+                    continue;
+
+                // found a search path that is a prefix of the resource
+                std::string resource_path =
+                    normalizedPath.asString(mx::FilePath::FormatPosix).substr(
+                        sp.asString(mx::FilePath::FormatPosix).size());
+                if (resource_path[0] != '/')
+                    resource_path = "/" + resource_path;
+                return resource_path;
+            }
+        }
+
+        log_error("MaterialX resource can not be accessed through an MDL search path. "
+            "Dropping the resource from the Material. Resource Path: " + normalizedPath.asString());
+
+        // drop the resource by returning the empty string.
+        // alternatively, the resource could be copied into an MDL search path,
+        // maybe even only temporary.
+        return "";
+    }
+
+    // Get the MaterialX paths used to load the current document as well the current MDL search
+    // paths in order to resolve resources by the MaterialX SDK.
+    const mx::FileSearchPath& get_search_paths() const { return m_mtlx_document_paths; }
+
+private:
+
+    // List of paths from which MaterialX can locate resources.
+    // This includes the document folder and the search paths used to load the document.
+    mx::FileSearchPath m_mtlx_document_paths;
+
+    // List of MDL search paths from which we can locate resources.
+    // This is only a subset of the MaterialX document paths and needs to be extended by using the
+    // `--mdl_path` option when starting the application if needed.
+    mx::FileSearchPath m_mdl_search_paths;
+};
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 
 Mdl_generator::Mdl_generator()
     : m_mtlx_search_paths()
@@ -85,7 +199,7 @@ bool Mdl_generator::set_source(const std::string& mtlx_material, const std::stri
 
 // ------------------------------------------------------------------------------------------------
 
-bool Mdl_generator::generate(Mdl_generator_result& inout_result) const
+bool Mdl_generator::generate(Mdl_sdk& mdl_sdk, Mdl_generator_result& inout_result) const
 {
     // Initialize the standard library
     mx::DocumentPtr mtlx_std_lib;
@@ -169,160 +283,136 @@ bool Mdl_generator::generate(Mdl_generator_result& inout_result) const
     generator_context.getOptions().targetDistanceUnit = "meter";
 
     // load the actual material
+
+    if (m_mtlx_source.empty())
     {
-        if (m_mtlx_source.empty())
+        log_error("[MTLX] Source file not specified.", SRC);
+        return false;
+    }
+
+    // Set up read options.
+    mx::XmlReadOptions readOptions;
+    readOptions.readXIncludeFunction = [](mx::DocumentPtr doc, const mx::FilePath& filename,
+        const mx::FileSearchPath& searchPath, const mx::XmlReadOptions* options)
+    {
+        mx::FilePath resolvedFilename = searchPath.find(filename);
+        if (resolvedFilename.exists())
         {
-            log_error("[MTLX] Source file not specified.", SRC);
-            return false;
+            readFromXmlFile(doc, resolvedFilename, searchPath, options);
         }
-
-        // Set up read options.
-        mx::XmlReadOptions readOptions;
-        readOptions.readXIncludeFunction = [](mx::DocumentPtr doc, const mx::FilePath& filename,
-            const mx::FileSearchPath& searchPath, const mx::XmlReadOptions* options)
+        else
         {
-            mx::FilePath resolvedFilename = searchPath.find(filename);
-            if (resolvedFilename.exists())
-            {
-                readFromXmlFile(doc, resolvedFilename, searchPath, options);
-            }
-            else
-            {
-                log_error("[MTLX] Include file not found: " + filename.asString(), SRC);
-            }
-        };
-
-        // Clear user data on the generator.
-        generator_context.clearUserData();
-
-        // Load source document.
-        mx::DocumentPtr material_document = mx::createDocument();
-        mx::FilePath material_filename = m_mtlx_source;
-        mx::readFromXmlFile(material_document, m_mtlx_source, mtlx_search_path, &readOptions);
-
-        // Import libraries.
-        material_document->importLibrary(mtlx_std_lib);
-
-        // Validate the document.
-        std::string message;
-        if (!material_document->validate(&message))
-        {
-            log_error("[MTLX] Validation warnings for '" + m_mtlx_source + "'", SRC);
-            std::cerr << message;
-            return false;
+            log_error("[MTLX] Include file not found: " + filename.asString(), SRC);
         }
+    };
 
-        // Find renderable elements.
-        mx::StringVec renderablePaths;
-        std::vector<mx::TypedElementPtr> elems;
-        std::vector<mx::NodePtr> materialNodes;
-        mx::findRenderableElements(material_document, elems);
-        if (elems.empty())
+    // Clear user data on the generator.
+    generator_context.clearUserData();
+
+    // Load source document.
+    mx::DocumentPtr material_document = mx::createDocument();
+    mx::FilePath material_filename = m_mtlx_source;
+    mx::readFromXmlFile(material_document, m_mtlx_source, mtlx_search_path, &readOptions);
+
+    // Import libraries.
+    material_document->importLibrary(mtlx_std_lib);
+
+    // flatten the resource paths of the document using a custom resolver allows
+    // the change the resource URIs into valid MDL paths.
+    auto custom_resolver = MdlStringResolver::create();
+    custom_resolver->initialize(material_document, &mdl_sdk.get_config());
+    mx::flattenFilenames(material_document, custom_resolver->get_search_paths(), custom_resolver);
+
+    // Validate the document.
+    std::string message;
+    if (!material_document->validate(&message))
+    {
+        // materialX validation failures do not mean that content can not be rendered.
+        // it points to mtlx authoring errors but rendering could still be fine.
+        // since MDL is robust against erroneous code we just continue. If there are problems
+        // in the generated code, we detect it on module load and use a fall-back material.
+        log_warning("[MTLX] Validation warnings for '" + m_mtlx_source + "'\n" + message, SRC);
+    }
+
+    // find (selected) renderable nodes
+    mx::TypedElementPtr element_to_generate_code_for;
+    if (!m_mtlx_material_name.empty())
+    {
+        mx::ElementPtr elem = material_document->getRoot();
+        std::vector<std::string> path = mi::examples::strings::split(m_mtlx_material_name, '/');
+        for (size_t i = 0; i < path.size(); ++i)
         {
-            log_error("[MTLX] No renderable elements found in '" + m_mtlx_source + "'", SRC);
-            return false;
+            elem = elem->getChild(path[i]);
+            if (!elem)
+                break;
         }
-        for (mx::TypedElementPtr elem : elems)
+        // if a node is specified properly, there is only one
+        if (elem)
         {
-            mx::TypedElementPtr renderableElem = elem;
-            mx::NodePtr node = elem->asA<mx::Node>();
-            if (node && node->getType() == mx::MATERIAL_TYPE_STRING)
-            {
-                std::vector<mx::NodePtr> shaderNodes = getShaderNodes(node, mx::SURFACE_SHADER_TYPE_STRING);
-                if (!shaderNodes.empty())
-                {
-                    renderableElem = *shaderNodes.begin();
-                }
-                materialNodes.push_back(node);
-            }
-            else
-            {
-                materialNodes.push_back(nullptr);
-            }
-            renderablePaths.push_back(renderableElem->getNamePath());
-        }
-
-        struct Mtlx_material
-        {
-            mx::DocumentPtr document;
-            mx::TypedElementPtr element;
-            std::string name;
-        };
-        std::vector<Mtlx_material> materials_to_genereate;
-
-        // Create new materials.
-        for (size_t i = 0; i < renderablePaths.size(); i++)
-        {
-            const auto& renderablePath = renderablePaths[i];
-            mx::ElementPtr elem = material_document->getDescendant(renderablePath);
             mx::TypedElementPtr typedElem = elem ? elem->asA<mx::TypedElement>() : nullptr;
-            if (!typedElem)
-            {
-                continue;
-            }
-
-            // if a specific material was selected we check for it
-            // otherwise we use the first one
-            std::string name = materialNodes[i] ? materialNodes[i]->getName() : renderablePath;
-            std::replace(name.begin(), name.end(), '/', '_');
-            if (!m_mtlx_material_name.empty() && name != m_mtlx_material_name)
-                continue;
-
-            materials_to_genereate.push_back(Mtlx_material{});
-            Mtlx_material& mat = materials_to_genereate.back();
-            mat.document = material_document;
-            mat.element = typedElem;
-            mat.name = name;
-            break;
-        }
-
-        if (materials_to_genereate.size() == 0)
-        {
-            if (!m_mtlx_material_name.empty())
-                log_error("[MTLX] Code generation failure: no material named '" +
-                    m_mtlx_material_name + "' found in '" + m_mtlx_source + "'");
-            else
-                log_error("[MTLX] Code generation failure: no material found in '"
-                    + m_mtlx_source + "'");
-
-            return false;
-        }
-
-        for (Mtlx_material& mat : materials_to_genereate)
-        {
-            // Clear cached implementations, in case libraries on the file system have changed.
-            generator_context.clearNodeImplementations();
-
-            mx::ShaderPtr shader = nullptr;
-            try
-            {
-                shader =
-                    generator_context.getShaderGenerator().generate(mat.name, mat.element, generator_context);
-            }
-            catch (mx::Exception& e)
-            {
-                log_error("[MTLX] Code generation failure:", e, SRC);
-                shader = nullptr;
-            }
-            if (!shader)
-            {
-                log_error("[MTLX] Failed to generate shader for element: " +
-                    mat.element->getNamePath(), SRC);
-                continue;
-            }
-
-            auto generated = shader->getSourceCode("pixel");
-            if (generated.empty())
-            {
-                log_error("[MTLX] Failed to generate source code for stage.", SRC);
-                continue;
-            }
-
-            inout_result.generated_mdl_code.push_back(generated);
-            inout_result.materialx_file_name.push_back(m_mtlx_source);
+            if (typedElem)
+                element_to_generate_code_for = typedElem;
         }
     }
-    return inout_result.generated_mdl_code.size() > 0;
+    else
+    {
+        // find the first render-able element
+        std::vector<mx::TypedElementPtr> elems;
+        mx::findRenderableElements(material_document, elems);
+        if (elems.size() > 0)
+        {
+            element_to_generate_code_for = elems[0];
+        }
+    }
+
+    if (!element_to_generate_code_for)
+    {
+        if (!m_mtlx_material_name.empty())
+            log_error("[MTLX] Code generation failure: no material named '" +
+                m_mtlx_material_name + "' found in '" + m_mtlx_source + "'");
+        else
+            log_error("[MTLX] Code generation failure: no material found in '"
+                + m_mtlx_source + "'");
+
+        return false;
+    }
+
+    // Clear cached implementations, in case libraries on the file system have changed.
+    generator_context.clearNodeImplementations();
+
+    std::string material_name = element_to_generate_code_for->getNamePath();
+    material_name = mi::examples::strings::replace(material_name, '/', '_');
+
+    mx::ShaderPtr shader = nullptr;
+    try
+    {
+        shader =
+            generator_context.getShaderGenerator().generate(material_name, element_to_generate_code_for, generator_context);
+    }
+    catch (mx::Exception& e)
+    {
+        log_error("[MTLX] Code generation failure:", e, SRC);
+        return false;
+    }
+
+    if (!shader)
+    {
+        log_error("[MTLX] Failed to generate shader for element: " + material_name, SRC);
+        return false;
+    }
+
+    auto generated = shader->getSourceCode("pixel");
+    if (generated.empty())
+    {
+        log_error("[MTLX] Failed to generate source code for stage.", SRC);
+        return false;
+    }
+
+    inout_result.materialx_file_name = m_mtlx_source;
+    inout_result.materialx_material_name = material_name;
+    inout_result.generated_mdl_code = generated;
+    inout_result.generated_mdl_name = shader->getStage("pixel").getFunctionName();
+    return true;
 }
 
 }}}}

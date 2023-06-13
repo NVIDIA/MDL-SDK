@@ -25,7 +25,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
-mdl 1.7;
+mdl 1.8;
 
 export bool data_isvalid(
     uniform string name) uniform [[ intrinsic(), since(1,6), literal_param_mask(1) ]];
@@ -105,3 +105,11 @@ export color data_lookup_color(
 export uniform color data_lookup_uniform_color(
     uniform string name,
     uniform color  default_value = color()) uniform [[ intrinsic(), since(1,6), literal_param_mask(1) ]];
+
+export float4x4 data_lookup_float4x4(
+    uniform string name,
+    float4x4 default_value = float4x4()) varying [[ intrinsic(), since(1,8), literal_param_mask(1) ]];
+
+export uniform float4x4 data_lookup_uniform_float4x4(
+    uniform string name,
+    uniform float4x4 default_value = float4x4()) uniform [[ intrinsic(), since(1,8), literal_param_mask(1) ]];

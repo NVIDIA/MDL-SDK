@@ -162,6 +162,8 @@ namespace mi { namespace examples { namespace dxr
         bool m_group_class_compilation;
         bool m_created_shader_cache_folder;
 
+        std::vector<std::string> distilling_targets;
+        size_t distilling_target_selected;
     };
 
     // --------------------------------------------------------------------------------------------
@@ -283,4 +285,3 @@ namespace mi { namespace examples { namespace dxr
 }}}
 
 #endif
-

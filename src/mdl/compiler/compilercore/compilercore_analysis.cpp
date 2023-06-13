@@ -649,64 +649,6 @@ static Position const *get_argument_position(IExpression const *call, int index)
     }
 }
 
-/// Check if an expression represents an lvalue.
-///
-/// \param expr  the expression to check
-static bool is_lvalue(IExpression const *expr)
-{
-    IType const *type = expr->get_type();
-
-    if (is<IType_error>(type)) {
-        // do not force more errors, this catches invalid expression also
-        // Note here the difference to Analysis::get_lvalue_base()
-        return true;
-    }
-
-    IType::Modifiers mod = type->get_type_modifiers();
-
-    if (mod & IType::MK_CONST)
-        return false;
-
-    for (;;) {
-        // in MDL, lvalues are variables
-        switch (expr->get_kind()) {
-        case IExpression::EK_REFERENCE:
-            {
-                IExpression_reference const *ref = cast<IExpression_reference>(expr);
-                Definition const            *def = impl_cast<Definition>(ref->get_definition());
-
-                if (def->has_flag(Definition::DEF_IS_LET_TEMPORARY)) {
-                    // let temporaries are rvalues.
-                    // Note here the difference to Analysis::get_lvalue_base(), we want
-                    // get_lvalue_base() return the Definition here.
-                    return false;
-                }
-
-                Definition::Kind kind = def->get_kind();
-
-                // only variables and parameters are
-                return kind == Definition::DK_VARIABLE || kind == Definition::DK_PARAMETER;
-            }
-        case IExpression::EK_BINARY:
-            {
-                IExpression_binary const     *bin_expr = cast<IExpression_binary>(expr);
-                IExpression_binary::Operator op        = bin_expr->get_operator();
-
-                // array indexes and select expression can be lvalues
-                if (op == IExpression_binary::OK_ARRAY_INDEX ||
-                    op == IExpression_binary::OK_SELECT)
-                {
-                    expr = bin_expr->get_left_argument();
-                    continue;
-                }
-                return false;
-            }
-        default:
-            return false;
-        }
-    }
-}
-
 /// Get the function qualifier from a (function) definition.
 ///
 /// \param def  the definition
@@ -1231,7 +1173,11 @@ public:
             IDefinition const *idef = ref->get_definition();
             Definition const  *def  = impl_cast<Definition>(idef);
 
-            if (def->has_flag(Definition::DEF_IS_LET_TEMPORARY)) {
+            // replace the reference of the temporary by its value itself, but
+            // beware of self reference, which would lead to endless recursion
+            if (def->has_flag(Definition::DEF_IS_LET_TEMPORARY) &&
+                !def->has_flag(Definition::DEF_USED_INCOMPLETE))
+            {
                 IDeclaration_variable const *vdecl =
                     cast<IDeclaration_variable>(def->get_declaration());
 
@@ -1402,14 +1348,20 @@ void Analysis::add_prev_definition_note(Definition const *prev_def)
     }
 }
 
-// Add a compiler note if the given expression references an let temporary.
-void Analysis::add_let_temporary_note(IExpression const *lhs)
+// Add a compiler note if the given expression references an rvalue.
+void Analysis::add_rvalue_note(IExpression const *lhs)
 {
     if (IDefinition const *idef = get_lvalue_base(lhs)) {
         Definition const *def = impl_cast<Definition>(idef);
         if (def->has_flag(Definition::DEF_IS_LET_TEMPORARY)) {
             add_note(
                 LET_TEMPORARIES_ARE_RVALUES,
+                def,
+                Error_params(*this).add_signature(def));
+        }
+        if (def->get_kind() == IDefinition::DK_PARAMETER) {
+            add_note(
+                PARAMETERS_ARE_RVALUES_HERE,
                 def,
                 Error_params(*this).add_signature(def));
         }
@@ -1778,7 +1730,7 @@ IType const *Analysis::get_result_type(IDefinition const *def)
     return type;
 }
 
-// Handle constant folding exceptions.
+// Called by IExpression::fold() if an exception occurs.
 void Analysis::Const_fold_expression::exception(
     Reason            r,
     IExpression const *expr,
@@ -1811,7 +1763,7 @@ void Analysis::Const_fold_expression::exception(
     MDL_ASSERT(!"Unsupported exception reason");
 }
 
-// Handle variable lookup.
+// Called by IExpression_reference::fold() to lookup a value of a (constant) variable.
 IValue const *Analysis::Const_fold_expression::lookup(
     IDefinition const *var)
 {
@@ -1819,7 +1771,16 @@ IValue const *Analysis::Const_fold_expression::lookup(
     return m_ana.get_module().get_value_factory()->create_bad();
 }
 
-// Handle intrinsic call evaluation.
+// Check whether evaluate_intrinsic_function() should be called for an unhandled
+// intrinsic functions with the given semantic.
+bool Analysis::Const_fold_expression::is_evaluate_intrinsic_function_enabled(
+    IDefinition::Semantics semantic) const
+{
+    // not supported
+    return false;
+}
+
+// Called by IExpression_call::fold() to evaluate unhandled intrinsic functions.
 IValue const *Analysis::Const_fold_expression::evaluate_intrinsic_function(
     IDefinition::Semantics semantic,
     const IValue *const arguments[],
@@ -1886,7 +1847,7 @@ Scope *Analysis::resolve_scope(
 
     size_t n = scope_node->get_component_count();
 
-    if (n > 1) {
+    if (n > 1 || scope_node->is_absolute()) {
         // we have a scope operator, search ALWAYS from global,
         // because only there imports can happen.
         scope = m_def_tab->get_global_scope();
@@ -2200,9 +2161,20 @@ Definition *Analysis::find_definition_for_qualified_name(
             def = m_def_tab->get_curr_scope()->find_definition_in_scope(sym);
         }
     } else {
-        def = bound_scope
-                ? bound_scope->find_definition_in_scope(sym)
-                : m_def_tab->get_definition(sym);
+        if (bound_scope != NULL) {
+            def = bound_scope->find_definition_in_scope(sym);
+
+            if (def == NULL && bound_scope == m_def_tab->get_global_scope()) {
+                // a little "ugliness" in our design: If the scope was explicitly
+                // bound to global, we will not find entities in predef scope, but
+                // predef exists in our compiler only, NOT in the spec,
+                // so explicitly search there too. Otherwise things like ::texture_2d() will
+                // fail.
+                def = m_def_tab->get_predef_scope()->find_definition_in_scope(sym);
+            }
+        } else {
+            def = m_def_tab->get_definition(sym);
+        }
     }
     if (def == NULL) {
         if (is_syntax_error(sym)) {
@@ -2262,9 +2234,20 @@ Definition *Analysis::find_definition_for_annotation_name(IQualified_name const 
     ISymbol const *sym = identifier->get_symbol();
     Definition *def = NULL;
 
-    def = bound_scope
-        ? bound_scope->find_definition_in_scope(sym)
-        : m_def_tab->get_definition(sym);
+    if (bound_scope != NULL) {
+        def = bound_scope->find_definition_in_scope(sym);
+
+        if (def == NULL && bound_scope == m_def_tab->get_global_scope()) {
+            // a little "ugliness" in our design: If the scope was explicitly
+            // bound to global, we will not find entities in predef scope, but
+            // predef exists in our compiler only, NOT in the spec,
+            // so explicitly search there too. Otherwise things like ::texture_2d() will
+            // fail.
+            def = m_def_tab->get_predef_scope()->find_definition_in_scope(sym);
+        }
+    } else {
+        def = m_def_tab->get_definition(sym);
+    }
 
     if (def == NULL) {
         // do not issue errors for parse errors on names
@@ -2301,9 +2284,21 @@ bool Analysis::is_material_qname(IQualified_name const *qual_name)
         return false;
     }
 
-    Definition *def = bound_scope
-        ? bound_scope->find_definition_in_scope(sym)
-        : m_def_tab->get_definition(sym);
+    Definition *def = NULL;
+    if (bound_scope != NULL) {
+        def = bound_scope->find_definition_in_scope(sym);
+
+        if (def == NULL && bound_scope == m_def_tab->get_global_scope()) {
+            // a little "ugliness" in our design: If the scope was explicitly
+            // bound to global, we will not find entities in predef scope, but
+            // predef exists in our compiler only, NOT in the spec,
+            // so explicitly search there too. Otherwise things like ::texture_2d() will
+            // fail.
+            def = m_def_tab->get_predef_scope()->find_definition_in_scope(sym);
+        }
+    } else {
+        def = m_def_tab->get_definition(sym);
+    }
     if (def != NULL) {
         if (IType_struct const *s_type = as<IType_struct>(def->get_type())) {
             return s_type->get_predefined_id() == IType_struct::SID_MATERIAL;
@@ -2677,6 +2672,7 @@ NT_analysis::NT_analysis(
 , m_is_return_annotation(false)
 , m_has_array_assignment(module.get_mdl_version() >= IMDL::MDL_VERSION_1_3)
 , m_has_auto_return(false)
+, m_parameters_are_rvalues(false)
 , m_module_cache(cache)
 , m_annotated_def(NULL)
 , m_deduced_type(NULL)
@@ -2882,7 +2878,7 @@ void NT_analysis::enter_builtin_annotations()
     }
 }
 
-// Enter builtin annotations for native modules.
+// Enter builtin annotations for pre 1.8 native modules and 1.8+ native functions.
 void NT_analysis::enter_native_annotations()
 {
     // the native() annotation: marks a native function
@@ -5808,6 +5804,7 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
                 }
 
                 Flag_store allow_let(m_allow_let_expression, single_expr_func);
+                Flag_store parameters_are_rvalues(m_parameters_are_rvalues, single_expr_func);
                 visit(body);
 
                 if (!single_expr_func) {
@@ -8840,15 +8837,16 @@ Definition const *NT_analysis::find_overload(
         error(
             CALLED_OBJECT_NOT_A_FUNCTION,
             call->get_reference()->access_position(),
-            Error_params(*this).add(def->get_sym()));
+            Error_params(*this)
+                .add("'")
+                .add_signature(def)
+                .add("' "));
         if (Position const *def_pos = def->get_position()) {
             add_note(
                 DEFINED_AT,
                 *def_pos,
                 Error_params(*this)
-                     .add("'")
-                    .add_signature(def)
-                    .add("' "));
+                    .add_signature(def));
         }
         return get_error_definition();
     }
@@ -10307,9 +10305,16 @@ Definition const *NT_analysis::reformat_default_struct_constructor(
                 }
             }
 
-            IValue const *pval = ptype_mod->create_default_value(
-                m_module.get_value_factory(), ptype);
-            expr = fact->create_literal(pval);
+            // Create an invalid expression when encountering an error type.
+            // The error should already have been reported
+            if (is<IType_error>(ptype)) {
+                expr = fact->create_invalid();
+                const_cast<IExpression *>(expr)->set_type(ptype);  // set type to error type
+            } else {
+                IValue const *pval = ptype_mod->create_default_value(
+                    m_module.get_value_factory(), ptype);
+                expr = fact->create_literal(pval);
+            }
         }
         def_modifier.set_parameter_value(i, expr);
 
@@ -11822,8 +11827,9 @@ static char check_allowed_chars(char const *s)
 // Start of a namespace alias
 bool NT_analysis::pre_visit(IDeclaration_namespace_alias *alias_decl)
 {
-    if (m_module.get_mdl_version() < IMDL::MDL_VERSION_1_6) {
-        // this feature does not exists prior to 1.6;
+    IMDL::MDL_version ver = m_module.get_mdl_version();
+    if (ver < IMDL::MDL_VERSION_1_6 || IMDL::MDL_VERSION_1_8 <= ver) {
+        // this feature does not exists prior to 1.6 but was removed in 1.8;
         // we could either handle it, assuming just the version number is wrong, or
         // ignore it (which probably creates more errors)
         error(
@@ -12095,7 +12101,7 @@ bool NT_analysis::pre_visit(IDeclaration_variable *var_decl)
 
                     if (is<IType_error>(init_type)) {
                         // error already reported
-                    } else if (!equal_types(a_type, init_type)) {
+                    } else if (!equal_types(a_type, init_type->skip_type_alias())) {
                         error(
                             NO_ARRAY_CONVERSION,
                             init->access_position(),
@@ -12690,7 +12696,7 @@ IExpression *NT_analysis::post_visit(IExpression_unary *un_expr)
                     .add(op == IExpression_unary::OK_POST_DECREMENT ||
                          op == IExpression_unary::OK_POST_INCREMENT ?
                          Error_params::DIR_LEFT : Error_params::DIR_RIGHT));
-            add_let_temporary_note(arg);
+            add_rvalue_note(arg);
         }
     }
 
@@ -12902,7 +12908,7 @@ IExpression *NT_analysis::post_visit(IExpression_binary *bin_expr)
                         Error_params(*this)
                             .add(op)
                             .add(Error_params::DIR_LEFT));
-                    add_let_temporary_note(lhs);
+                    add_rvalue_note(lhs);
                 }
             }
 
@@ -13277,6 +13283,8 @@ IExpression *NT_analysis::post_visit(IExpression_call *call_expr)
 // start of let expression
 bool NT_analysis::pre_visit(IExpression_let *let_expr)
 {
+    Flag_store parameters_are_rvalues(m_parameters_are_rvalues, true);
+
     {
         // a let expression creates a scope for its declarations and there uses
         // inside the expression
@@ -13990,6 +13998,13 @@ Definition const *NT_analysis::handle_known_annotation(
             case Definition::DS_ORIGIN_ANNOTATION:
                 // allowed on ALL entities.
                 return def;
+            case Definition::DS_NODE_OUTPUT_PORT_DEFAULT_ANNOTATION:
+                // not allowed on modules
+                warning(
+                    MODULE_DOES_NOT_SUPPORT_ANNOTATION,
+                    anno->access_position(),
+                    Error_params(*this).add(def->get_sym()));
+                break;
             default:
                 // do nothing
                 return def;
@@ -14010,6 +14025,7 @@ Definition const *NT_analysis::handle_known_annotation(
         case Definition::DS_USAGE_ANNOTATION:
         case Definition::DS_DESCRIPTION_ANNOTATION:
         case Definition::DS_DISPLAY_NAME_ANNOTATION:
+        case Definition::DS_NODE_OUTPUT_PORT_DEFAULT_ANNOTATION:
             return def;
 
         default:
@@ -14116,6 +14132,8 @@ Definition const *NT_analysis::handle_known_annotation(
                 case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3:
                 case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
                 case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
+                case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4X4:
+                case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4X4:
                     // these functions from the scene module use scene data
                     m_annotated_def->set_flag(Definition::DEF_USES_SCENE_DATA);
                     break;
@@ -14504,24 +14522,24 @@ Definition const *NT_analysis::handle_known_annotation(
         {
             bool has_error = false;
             switch (m_annotated_def->get_kind()) {
-                case Definition::DK_PARAMETER:
-                case Definition::DK_FUNCTION:
-                    // allowed on parameters, functions, materials
-                    break;
-                default:
-                    has_error = true;
-                    break;
-                }
+            case Definition::DK_PARAMETER:
+            case Definition::DK_FUNCTION:
+                // allowed on parameters, functions, materials
+                break;
+            default:
+                has_error = true;
+                break;
+            }
 
-                if (has_error) {
-                    warning(
-                        IGNORED_ON_THIS_ENTITY,
-                        anno->access_position(),
-                        Error_params(*this)
-                        .add(def->get_sym()));
-                    // ensure the ui_order annotation is deleted from the source for later ...
-                    def = get_error_definition();
-                }
+            if (has_error) {
+                warning(
+                    IGNORED_ON_THIS_ENTITY,
+                    anno->access_position(),
+                    Error_params(*this)
+                    .add(def->get_sym()));
+                // ensure the ui_order annotation is deleted from the source for later ...
+                def = get_error_definition();
+            }
         }
         break;
     case Definition::DS_ENABLE_IF_ANNOTATION:
@@ -14558,6 +14576,28 @@ Definition const *NT_analysis::handle_known_annotation(
         break;
     case Definition::DS_ORIGIN_ANNOTATION:
         // allowed on any entity
+        break;
+    case Definition::DS_NODE_OUTPUT_PORT_DEFAULT_ANNOTATION:
+        if (m_annotated_def->get_kind() != Definition::DK_TYPE) {
+            warning(
+                IGNORED_ON_THIS_ENTITY,
+                anno->access_position(),
+                Error_params(*this)
+                    .add(def->get_sym()));
+            // ensure the ui_order annotation is deleted from the source for later ...
+            def = get_error_definition();
+        } else if (! is<IType_error>(m_annotated_def->get_type())) {
+            IType_struct const *s_type = as<IType_struct>(m_annotated_def->get_type());
+            if (s_type == NULL) {
+                // only allowed on struct declarations
+                warning(
+                    IGNORED_ON_THIS_ENTITY,
+                    anno->access_position(),
+                    Error_params(*this)
+                        .add(def->get_sym()));
+                def = get_error_definition();
+            }
+        }
         break;
     case Definition::DS_BAKING_TMM_ANNOTATION:
     case Definition::DS_BAKING_BAKE_TO_TEXTURE_ANNOTATION:
@@ -16504,7 +16544,7 @@ void NT_analysis::run()
     if (m_module.is_stdlib()) {
         enter_builtin_annotations();
     }
-    if (m_module.is_native()) {
+    if (m_module.is_native() || m_module.get_mdl_version() >= IMDL::MDL_VERSION_1_8) {
         enter_native_annotations();
     }
 
@@ -16848,6 +16888,73 @@ Definition const *NT_analysis::get_definition_for_reference(
         }
     }
     return def;
+}
+
+// Check if an expression represents an lvalue.
+bool NT_analysis::is_lvalue(
+    IExpression const *expr) const
+{
+    IType const *type = expr->get_type();
+
+    if (is<IType_error>(type)) {
+        // do not force more errors, this catches invalid expression also
+        // Note here the difference to Analysis::get_lvalue_base()
+        return true;
+    }
+
+    IType::Modifiers mod = type->get_type_modifiers();
+
+    if (mod & IType::MK_CONST) {
+        return false;
+    }
+
+    for (;;) {
+        // in MDL, lvalues are variables
+        switch (expr->get_kind()) {
+        case IExpression::EK_REFERENCE:
+            {
+                IExpression_reference const *ref = cast<IExpression_reference>(expr);
+                Definition const            *def = impl_cast<Definition>(ref->get_definition());
+
+                if (def->has_flag(Definition::DEF_IS_LET_TEMPORARY)) {
+                    // let temporaries are rvalues.
+                    // Note here the difference to Analysis::get_lvalue_base(), we want
+                    // get_lvalue_base() return the Definition here.
+                    return false;
+                }
+
+                Definition::Kind kind = def->get_kind();
+
+                // only variables and parameters are, if NOT restricted
+                if (kind == Definition::DK_PARAMETER) {
+                    if (m_module.get_mdl_version() < IMDL::MDL_VERSION_1_8) {
+                        // no restriction prior to MDL 1.8
+                        return true;
+                    }
+                    return !m_parameters_are_rvalues;
+                }
+                return kind == Definition::DK_VARIABLE;
+            }
+        case IExpression::EK_BINARY:
+            {
+                IExpression_binary const     *bin_expr = cast<IExpression_binary>(expr);
+                IExpression_binary::Operator op        = bin_expr->get_operator();
+
+                // array indexes and select expression might be lvalues
+                if (op == IExpression_binary::OK_ARRAY_INDEX ||
+                    op == IExpression_binary::OK_SELECT)
+                {
+                    expr = bin_expr->get_left_argument();
+                    continue;
+                }
+                // all other cases are rvalues
+                return false;
+            }
+        default:
+            // all other cases are rvalues
+            return false;
+        }
+    }
 }
 
 // Constructor.

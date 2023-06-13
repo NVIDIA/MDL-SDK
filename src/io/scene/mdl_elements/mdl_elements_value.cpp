@@ -446,8 +446,8 @@ mi::Size Value_struct::get_memory_consumption() const
 
 const char* Value_texture::get_file_path( DB::Transaction* transaction) const
 {
-    if( !m_value && !m_unresolved_mdl_url.empty())
-        return m_unresolved_mdl_url.c_str();
+    if( !m_value && !m_unresolved_file_path.empty())
+        return m_unresolved_file_path.c_str();
 
     if( !m_value || transaction->get_class_id( m_value) != TEXTURE::ID_TEXTURE)
         return nullptr;
@@ -469,8 +469,8 @@ mi::Size Value_texture::get_memory_consumption() const
 
 const char* Value_light_profile::get_file_path( DB::Transaction* transaction) const
 {
-    if( !m_value && !m_unresolved_mdl_url.empty())
-        return m_unresolved_mdl_url.c_str();
+    if( !m_value && !m_unresolved_file_path.empty())
+        return m_unresolved_file_path.c_str();
 
     if( !m_value || transaction->get_class_id( m_value) != LIGHTPROFILE::ID_LIGHTPROFILE)
         return nullptr;
@@ -487,8 +487,8 @@ mi::Size Value_light_profile::get_memory_consumption() const
 
 const char* Value_bsdf_measurement::get_file_path( DB::Transaction* transaction) const
 {
-    if( !m_value && !m_unresolved_mdl_url.empty())
-        return m_unresolved_mdl_url.c_str();
+    if( !m_value && !m_unresolved_file_path.empty())
+        return m_unresolved_file_path.c_str();
 
     if( !m_value || transaction->get_class_id( m_value) != BSDFM::ID_BSDF_MEASUREMENT)
         return nullptr;
@@ -636,7 +636,8 @@ IValue_string* Value_factory::create_string( const char* value) const
     return new Value_string( type.get(), value);
 }
 
-IValue_string_localized* Value_factory::create_string_localized( const char* value, const char* original_value) const
+IValue_string_localized* Value_factory::create_string_localized(
+    const char* value, const char* original_value) const
 {
     mi::base::Handle<const IType_string> type( m_type_factory->create_string());
     return new Value_string_localized( type.get(), value, original_value);
@@ -677,7 +678,7 @@ IValue_texture* Value_factory::create_texture( const IType_texture* type, DB::Ta
 IValue_texture* Value_factory::create_texture(
     const IType_texture* type,
     DB::Tag value,
-    const char* unresolved_mdl_url,
+    const char* unresolved_file_path,
     const char* owner_module,
     mi::Float32 gamma,
     const char* selector) const
@@ -686,7 +687,7 @@ IValue_texture* Value_factory::create_texture(
         return nullptr;
 
     Value_texture* tex = new Value_texture(
-        type, value, unresolved_mdl_url, owner_module, gamma, selector);
+        type, value, unresolved_file_path, owner_module, gamma, selector);
     return tex;
 }
 
@@ -698,11 +699,11 @@ IValue_light_profile* Value_factory::create_light_profile( DB::Tag value) const
 
 IValue_light_profile* Value_factory::create_light_profile(
     DB::Tag value,
-    const char* unresolved_mdl_url,
+    const char* unresolved_file_path,
     const char* owner_module) const
 {
     mi::base::Handle<const IType_light_profile> type( m_type_factory->create_light_profile());
-    return new Value_light_profile( type.get(), value, unresolved_mdl_url, owner_module);
+    return new Value_light_profile( type.get(), value, unresolved_file_path, owner_module);
 }
 
 IValue_bsdf_measurement* Value_factory::create_bsdf_measurement( DB::Tag value) const
@@ -713,11 +714,11 @@ IValue_bsdf_measurement* Value_factory::create_bsdf_measurement( DB::Tag value) 
 
 IValue_bsdf_measurement* Value_factory::create_bsdf_measurement(
     DB::Tag value,
-    const char* unresolved_mdl_url,
+    const char* unresolved_file_path,
     const char* owner_module) const
 {
     mi::base::Handle<const IType_bsdf_measurement> type( m_type_factory->create_bsdf_measurement());
-    return new Value_bsdf_measurement( type.get(), value, unresolved_mdl_url, owner_module);
+    return new Value_bsdf_measurement( type.get(), value, unresolved_file_path, owner_module);
 }
 
 IValue_invalid_df* Value_factory::create_invalid_df( const IType_reference* type) const
@@ -845,7 +846,8 @@ void get_average( const IValue* min, const IValue* max, IValue* average)
         case IType::TK_DOUBLE: {
             mi::base::Handle<const IValue_double> min_double( min->get_interface<IValue_double>());
             mi::base::Handle<const IValue_double> max_double( max->get_interface<IValue_double>());
-            mi::base::Handle<IValue_double> average_double( average->get_interface<IValue_double>());
+            mi::base::Handle<IValue_double> average_double(
+                average->get_interface<IValue_double>());
             mi::Float64 min_v = min_double->get_value();
             mi::Float64 max_v = max_double->get_value();
             average_double->set_value( (min_v + max_v) / 2.0);
@@ -1068,9 +1070,10 @@ IValue* Value_factory::clone( const IValue* value) const
         case IValue::VK_STRING: {
             mi::base::Handle<const IValue_string_localized> value_string_localized(
                 value->get_interface<IValue_string_localized>());
-            if( value_string_localized) {
-                return create_string_localized( value_string_localized->get_value(), value_string_localized->get_original_value());
-            }
+            if( value_string_localized)
+                return create_string_localized(
+                    value_string_localized->get_value(),
+                    value_string_localized->get_original_value());
             mi::base::Handle<const IValue_string> value_string(
                 value->get_interface<IValue_string>());
             return create_string( value_string->get_value());
@@ -1106,7 +1109,7 @@ IValue* Value_factory::clone( const IValue* value) const
             return create_texture(
                 type_texture.get(),
                 value_texture->get_value(),
-                value_texture->get_unresolved_mdl_url(),
+                value_texture->get_unresolved_file_path(),
                 value_texture->get_owner_module(),
                 value_texture->get_gamma(),
                 value_texture->get_selector());
@@ -1116,7 +1119,7 @@ IValue* Value_factory::clone( const IValue* value) const
                 value->get_interface<IValue_light_profile>());
             return create_light_profile(
                 value_light_profile->get_value(),
-                value_light_profile->get_unresolved_mdl_url(),
+                value_light_profile->get_unresolved_file_path(),
                 value_light_profile->get_owner_module());
         }
         case IValue::VK_BSDF_MEASUREMENT: {
@@ -1124,7 +1127,7 @@ IValue* Value_factory::clone( const IValue* value) const
                 value->get_interface<IValue_bsdf_measurement>());
             return create_bsdf_measurement(
                 value_bsdf_measurement->get_value(),
-                value_bsdf_measurement->get_unresolved_mdl_url(),
+                value_bsdf_measurement->get_unresolved_file_path(),
                 value_bsdf_measurement->get_owner_module());
         }
         case IValue::VK_INVALID_DF: {
@@ -1532,7 +1535,12 @@ void Value_factory::dump_static(
                 value->get_interface<IValue_resource>());
             DB::Tag tag = value_resource->get_value();
             if( !tag) {
-                s << "(unset)";
+                s << "(unset";
+                const std::string& owner_module = value_resource->get_owner_module();
+                s << ", owner module \"" << owner_module << "\"";
+                const std::string& unresolved_mdl_file_path
+                    = value_resource->get_unresolved_file_path();
+                s << ", unresolved MDL file path \"" << unresolved_mdl_file_path << "\")";
                 return;
             }
             if( transaction)
@@ -1704,7 +1712,7 @@ void Value_factory::serialize( SERIAL::Serializer* serializer, const IValue* val
             mi::base::Handle<const IValue_texture> value_texture(
                 value->get_interface<IValue_texture>());
             SERIAL::write( serializer, value_texture->get_value());
-            serializer->write( value_texture->get_unresolved_mdl_url());
+            serializer->write( value_texture->get_unresolved_file_path());
             serializer->write( value_texture->get_owner_module());
             serializer->write( value_texture->get_gamma());
             const char* selector = value_texture->get_selector();
@@ -1715,7 +1723,7 @@ void Value_factory::serialize( SERIAL::Serializer* serializer, const IValue* val
             mi::base::Handle<const IValue_light_profile> value_light_profile(
                 value->get_interface<IValue_light_profile>());
             SERIAL::write( serializer, value_light_profile->get_value());
-            serializer->write( value_light_profile->get_unresolved_mdl_url());
+            serializer->write( value_light_profile->get_unresolved_file_path());
             serializer->write( value_light_profile->get_owner_module());
             return;
         }
@@ -1723,7 +1731,7 @@ void Value_factory::serialize( SERIAL::Serializer* serializer, const IValue* val
             mi::base::Handle<const IValue_bsdf_measurement> value_bsdf_measurement(
                 value->get_interface<IValue_bsdf_measurement>());
             SERIAL::write( serializer, value_bsdf_measurement->get_value());
-            serializer->write( value_bsdf_measurement->get_unresolved_mdl_url());
+            serializer->write( value_bsdf_measurement->get_unresolved_file_path());
             serializer->write( value_bsdf_measurement->get_owner_module());
             return;
         }
@@ -1853,8 +1861,8 @@ IValue* Value_factory::deserialize( SERIAL::Deserializer* deserializer) const
                 m_type_factory->deserialize<IType_texture>( deserializer));
             DB::Tag value;
             SERIAL::read( deserializer, &value);
-            std::string unresoved_resource_url;
-            SERIAL::read( deserializer, &unresoved_resource_url);
+            std::string unresolved_file_path;
+            SERIAL::read( deserializer, &unresolved_file_path);
             std::string owner_module;
             SERIAL::read( deserializer, &owner_module);
             mi::Float32 gamma;
@@ -1863,29 +1871,29 @@ IValue* Value_factory::deserialize( SERIAL::Deserializer* deserializer) const
             SERIAL::read( deserializer, &selector);
             const char* selector_cstr = !selector.empty() ? selector.c_str() : nullptr;
             IValue* result = create_texture( type.get(),
-                value, unresoved_resource_url.c_str(), owner_module.c_str(), gamma, selector_cstr);
+                value, unresolved_file_path.c_str(), owner_module.c_str(), gamma, selector_cstr);
             return result;
         }
         case IValue::VK_LIGHT_PROFILE: {
             DB::Tag value;
             SERIAL::read( deserializer, &value);
-            std::string unresoved_resource_url;
-            SERIAL::read( deserializer, &unresoved_resource_url);
+            std::string unresolved_file_path;
+            SERIAL::read( deserializer, &unresolved_file_path);
             std::string owner_module;
             SERIAL::read( deserializer, &owner_module);
             IValue* result = create_light_profile(
-                value, unresoved_resource_url.c_str(), owner_module.c_str());
+                value, unresolved_file_path.c_str(), owner_module.c_str());
             return result;
         }
         case IValue::VK_BSDF_MEASUREMENT: {
             DB::Tag value;
             SERIAL::read( deserializer, &value);
-            std::string unresoved_resource_url;
-            SERIAL::read( deserializer, &unresoved_resource_url);
+            std::string unresolved_file_path;
+            SERIAL::read( deserializer, &unresolved_file_path);
             std::string owner_module;
             SERIAL::read( deserializer, &owner_module);
             IValue* result = create_bsdf_measurement(
-                value, unresoved_resource_url.c_str(), owner_module.c_str());
+                value, unresolved_file_path.c_str(), owner_module.c_str());
             return result;
         }
         case IValue::VK_INVALID_DF: {

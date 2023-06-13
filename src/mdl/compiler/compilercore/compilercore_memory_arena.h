@@ -326,52 +326,52 @@ public:
     template<
         typename T, typename A1, typename A2, typename A3,
         typename A4, typename A5, typename A6>
-        T *create(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6) {
-            if (void *p = m_arena.allocate(sizeof(T))) {
-                return new(reinterpret_cast<T*>(p)) T(a1, a2, a3, a4, a5, a6);
-            }
-            return NULL;
+    T *create(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6) {
+        if (void *p = m_arena.allocate(sizeof(T))) {
+            return new(reinterpret_cast<T*>(p)) T(a1, a2, a3, a4, a5, a6);
+        }
+        return NULL;
     }
 
     template<
         typename T, typename A1, typename A2, typename A3,
         typename A4, typename A5, typename A6, typename A7>
-        T *create(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7) {
-            if (void *p = m_arena.allocate(sizeof(T))) {
-                return new(reinterpret_cast<T*>(p)) T(a1, a2, a3, a4, a5, a6, a7);
-            }
-            return NULL;
+    T *create(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7) {
+        if (void *p = m_arena.allocate(sizeof(T))) {
+            return new(reinterpret_cast<T*>(p)) T(a1, a2, a3, a4, a5, a6, a7);
+        }
+        return NULL;
     }
 
     template<
         typename T, typename A1, typename A2, typename A3,
         typename A4, typename A5, typename A6, typename A7, typename A8>
-        T *create(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7, A8 a8) {
-            if (void *p = m_arena.allocate(sizeof(T))) {
-                return new(reinterpret_cast<T*>(p)) T(a1, a2, a3, a4, a5, a6, a7, a8);
-            }
-            return NULL;
+    T *create(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7, A8 a8) {
+        if (void *p = m_arena.allocate(sizeof(T))) {
+            return new(reinterpret_cast<T*>(p)) T(a1, a2, a3, a4, a5, a6, a7, a8);
+        }
+        return NULL;
     }
 
     template<
         typename T, typename A1, typename A2, typename A3,
         typename A4, typename A5, typename A6, typename A7, typename A8, typename A9>
-        T *create(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7, A8 a8, A9 a9) {
-            if (void *p = m_arena.allocate(sizeof(T))) {
-                return new(reinterpret_cast<T*>(p)) T(a1, a2, a3, a4, a5, a6, a7, a8, a9);
-            }
-            return NULL;
+    T *create(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7, A8 a8, A9 a9) {
+        if (void *p = m_arena.allocate(sizeof(T))) {
+            return new(reinterpret_cast<T*>(p)) T(a1, a2, a3, a4, a5, a6, a7, a8, a9);
+        }
+        return NULL;
     }
 
     template<
         typename T, typename A1, typename A2, typename A3,
         typename A4, typename A5, typename A6, typename A7,
         typename A8, typename A9, typename A10>
-        T *create(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7, A8 a8, A9 a9, A10 a10) {
-            if (void *p = m_arena.allocate(sizeof(T))) {
-                return new(reinterpret_cast<T*>(p)) T(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
-            }
-            return NULL;
+    T *create(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7, A8 a8, A9 a9, A10 a10) {
+        if (void *p = m_arena.allocate(sizeof(T))) {
+            return new(reinterpret_cast<T*>(p)) T(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
+        }
+        return NULL;
     }
 
     template<
@@ -379,10 +379,24 @@ public:
         typename A4, typename A5, typename A6, typename A7,
         typename A8, typename A9, typename A10, typename A11>
         T *create(A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7, A8 a8, A9 a9, A10 a10, A11 a11) {
-            if (void *p = m_arena.allocate(sizeof(T))) {
-                return new(reinterpret_cast<T*>(p)) T(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11);
-            }
-            return NULL;
+        if (void *p = m_arena.allocate(sizeof(T))) {
+            return new(reinterpret_cast<T *>(p)) T(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11);
+        }
+        return NULL;
+    }
+
+    template<
+        typename T, typename A1, typename A2, typename A3,
+        typename A4, typename A5, typename A6, typename A7,
+        typename A8, typename A9, typename A10, typename A11, typename A12>
+    T *create(
+        A1 a1, A2 a2, A3 a3, A4 a4, A5 a5, A6 a6, A7 a7, A8 a8,
+        A9 a9, A10 a10, A11 a11, A12 a12) {
+        if (void *p = m_arena.allocate(sizeof(T))) {
+            return new(reinterpret_cast<T*>(p)) T(
+                a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12);
+        }
+        return NULL;
     }
 
     /// allocate n elements of type T

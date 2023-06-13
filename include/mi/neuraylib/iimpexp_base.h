@@ -48,17 +48,16 @@ class IImpexp_state;
 /// Confidence in capabilities of an importer or exporter.
 ///
 /// If there is more than one importer or exporter that accepts a certain file format, the importer
-/// or exporter with the highest confidence is taken.
+/// or exporter with the highest priority is taken. Tie-breaking is unspecified.
 ///
 /// \see #mi::neuraylib::IImpexp_base::get_priority()
 enum Impexp_priority
 {
-    /// The highest confidence, reserved for importer and exporter from user plugins. An importer
-    /// or exporter of this priority will always take precedence over all internal importers and
-    /// exporters.
+    /// The highest priority, reserved for importers and exporters from user plugins.
     IMPEXP_PRIORITY_OVERRIDE        = 4,
-    /// The highest possible priority for internal importer or exporter. Use only for importer or
-    /// exporter whose test function cannot fail and whose support for the format is complete.
+    /// The highest possible priority for importers or exporters in plugins provided in
+    /// \neurayProductName. Use only for importers or exporters whose test function cannot fail and
+    /// whose support for the format is complete.
     IMPEXP_PRIORITY_WELL_DEFINED    = 3,
     /// The test function might fail, or the format might not be fully supported.
     IMPEXP_PRIORITY_AMBIGUOUS       = 2,

@@ -60,7 +60,7 @@ public:
     ///
     /// Usually, \p image_module is \c NULL, in which case #start() and #stop() have to be used. If
     /// this class is used by Plugin_api_impl below, then the #start() and #stop() calls would lead
-    /// to a cyclic module initialization, therefore it is provided directly as arguemnt in such
+    /// to a cyclic module initialization, therefore it is provided directly as argument in such
     /// cases.
     Image_api_impl( IMAGE::Image_module* image_module);
 
@@ -87,7 +87,7 @@ public:
         mi::Uint32 layers,
         mi::Float32 gamma) const;
 
-    mi::IArray* create_mipmaps( const mi::neuraylib::ICanvas* canvas, mi::Float32 gamma) const;
+    mi::IArray* create_mipmap( const mi::neuraylib::ICanvas* canvas, mi::Float32 gamma) const;
 
     mi::neuraylib::ITile* clone_tile( const mi::neuraylib::ITile* tile) const;
 
@@ -126,11 +126,13 @@ public:
 
     mi::neuraylib::ICanvas* create_canvas_from_buffer(
         const mi::neuraylib::IBuffer* buffer,
-        const char* image_format) const;
+        const char* image_format,
+        const char* selector) const;
 
     mi::neuraylib::ICanvas* create_canvas_from_reader(
         mi::neuraylib::IReader* reader,
-        const char* image_format) const;
+        const char* image_format,
+        const char* selector) const;
 
     bool supports_format_for_decoding(
         const char* image_format, mi::neuraylib::IReader* reader) const;

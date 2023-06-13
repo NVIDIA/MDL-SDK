@@ -1,0 +1,789 @@
+/******************************************************************************
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+#include <mdl/compiler/compilercore/compilercore_mdl.h>
+#include <mdl/compiler/compilercore/compilercore_allocator.h>
+
+#define CURR_LOC Location(Location::OWNER_FILE_IDX, t->line, t->col)
+#define NEXT_LOC Location(Location::OWNER_FILE_IDX, la->line, la->col)
+
+$tokenPrefix=TOK_
+
+COMPILER mdltlc
+
+private:
+    // The current compilation unit.
+    Compilation_unit *m_unit;
+
+    // The expression factory of the current compilation unit.
+    Expr_factory *m_expr_factory;
+
+    // The type factory of the current compilation unit.
+    Type_factory *m_type_factory;
+
+    // The type factory of the current compilation unit.
+    Value_factory *m_value_factory;
+
+    // The rule factory of the current compilation unit.
+    Rule_factory *m_rule_factory;
+
+    // The symbol table of the current compilation unit.
+    Symbol_table *m_symtab;
+
+    // The allocator.
+    mi::mdl::IAllocator *m_alloc;
+
+    // Counter for generating unique identifiers.
+    int m_gensym_counter;
+
+public:
+    // Get the integer value from a token string.
+    static unsigned integer_value(
+        char const *val,
+        bool       &overflow,
+        bool       &is_unsigned);
+
+    // Get the floating point value from a token.
+    float float_value(
+        const char* s,
+        bool        &is_error);
+
+    // Set the current compilation unit.
+    void set_compilation_unit(Compilation_unit *unit);
+
+    // Add a ruleset to the current compilation unit.
+    void add_ruleset(Ruleset *ruleset);
+
+CHARACTERS
+
+    LETTER = 'A'..'Z' + 'a'..'z' .
+
+    DIGIT = '0'..'9' .
+
+    NONZERODIGIT = '1'..'9' .
+
+    HEXDIGIT = '0'..'9' + 'a'..'f' + 'A'..'F'.
+
+    OCTDIGIT = '0'..'7'.
+
+    CHARACTER = ANY - '"' - '\\' .
+    SEPARATOR_CHAR = '=' + '(' + ')' + ',' + ';' + '{' + '}' .
+
+    OPERATOR_CHAR = '.' + '[' + ']' + '+' + '*' + '/' + '^' + '~' + '%' + '<' + '>' + '&' + '|' + '?' + ':' + '-' .
+
+    ESCAPE = 'a' + 'b' + 'f' + 'r' + 'n' + 't' + '\\' + '\'' + '\"' .
+
+    NOT_EXP = ANY - 'e' - 'E' - 'f' - 'F' - 'd' - 'D' - DIGIT .
+
+TOKENS
+
+    IDENT = (LETTER | '_' | ':' ':') { LETTER | DIGIT | '_' | ':'} .
+
+    INTEGER_LITERAL
+        = (NONZERODIGIT { DIGIT })
+        | ( '0' ( ('x'|'X') HEXDIGIT { HEXDIGIT } | { OCTDIGIT } ) ).
+
+    FLOATING_LITERAL
+        =
+        ( (   DIGIT { DIGIT } '.'
+            | '.' DIGIT { DIGIT }
+            | DIGIT { DIGIT } ['.' { DIGIT }] ('e'|'E') ['+'|'-'] DIGIT { DIGIT }
+            | '.' DIGIT { DIGIT } ('e'|'E') ['+'|'-'] DIGIT { DIGIT }
+          ) ['f'|'F'|'d'|'D']
+        )
+        | ( DIGIT { DIGIT } '.' DIGIT { DIGIT } ['f'|'F'|'d'|'D'] )
+        .
+
+    STRING_LITERAL = '"' { CHARACTER | '\\' ESCAPE | '\\' CHARACTER } '"' .
+
+    IMPORT = "import" .
+
+    TRUE = "true" .
+    FALSE = "false" .
+
+    INC_OP = "++" .
+    DEC_OP = "--" .
+    MAPSTO = "-->" .
+    AT_OP = "@" .
+
+    ATTR_BEGIN = "[[" .
+    ATTR_END   = "]]" .
+
+    BOTTOMUP = "bottomup" .
+    TOPDOWN = "topdown" .
+
+    REPEAT_RULES = "repeat_rules" .
+    SKIP_RECURSION = "skip_recursion" .
+
+    RULES = "rules" .
+    RULE = "rule" .
+    DEADRULE = "deadrule" .
+    POSTCOND = "postcond" .
+    IF_KW = "if" .
+    MAYBE = "maybe" .
+    WHERE = "where" .
+    OPTION = "option" .
+
+    NONODE = "nonode" .
+    MATCH = "match" .
+
+// We allow nested comments in MDL to "comment out" code
+COMMENTS FROM "/*" TO "*/" NESTED
+COMMENTS FROM "//" TO '\n'
+
+IGNORE '\r' + '\n' + '\t'
+
+PRODUCTIONS
+
+mdltlc = { rules } .
+
+identifier<Symbol *&symbol> =
+    IDENT
+    (. symbol = m_symtab->get_symbol(t->val); .) .
+
+rules =
+    RULES
+    (. Symbol *sym = nullptr; .)
+    identifier<sym>
+    (. Ruleset::Strategy strat; .)
+    strategy<strat>
+    (. Ruleset *ruleset = m_rule_factory->create_ruleset(CURR_LOC, sym, strat); .)
+    '{'
+    imports<ruleset>
+    rule_sequence<ruleset>
+    postconds_opt<ruleset>
+    '}'
+    (. add_ruleset(ruleset); .) .
+
+strategy<Ruleset::Strategy &strat>
+    = BOTTOMUP (. strat = Ruleset::STRAT_BOTTOMUP; .)
+    | TOPDOWN  (. strat = Ruleset::STRAT_TOPDOWN;  .) .
+
+imports<Ruleset *&ruleset> = { import<ruleset> } .
+
+import<Ruleset *&ruleset> =
+    IMPORT
+    (.
+      Location loc = CURR_LOC;
+      Symbol *sym = nullptr;
+    .)
+    identifier<sym>
+    (.
+      Import *import = m_rule_factory->create_import(loc, sym);
+      ruleset->add_import(import);
+    .)
+    ';' .
+
+rule_sequence<Ruleset *&ruleset> = { rule<ruleset> } .
+
+rule<Ruleset *&ruleset> =
+    (.
+      Expr *expr_left = nullptr,
+           *expr_right,
+           *expr_guard = nullptr; /* In case no guard given. */
+      Rule::Result_code res_code = Rule::Result_code::RC_NO_RESULT_CODE;
+      Rule::Dead_rule dead_rule = Rule::Dead_rule::DR_NO_DEAD_RULE;
+
+      Argument_list bindings;
+    .)
+
+    node<expr_left>
+
+    MAPSTO
+    (. Location rule_loc = CURR_LOC; .)
+     expression<expr_right>
+    [ result_code<res_code> ]
+    [ guard<expr_guard> ]
+    [ where<bindings> ]
+    [ DEADRULE (. dead_rule = Rule::Dead_rule::DR_DEAD; .)]
+    ';'
+    (.
+      if (!expr_left)
+        return;
+      Rule *rule = m_rule_factory->create_rule(rule_loc,
+          expr_left,
+          expr_right,
+          res_code,
+          expr_guard,
+          dead_rule);
+      rule->set_bindings(bindings);
+      ruleset->add_rule(rule);
+    .) .
+
+attribute_expr<Expr_attribute::Expr_attribute_vector &attrs, mi::mdl::string &node_name > =
+    (.
+       Expr_attribute::Expr_attribute_entry entry;
+       char buf[32];
+       snprintf(buf, sizeof(buf), "%d", m_gensym_counter++);
+       node_name = "node_result_";
+       node_name += buf;
+    .)
+    attr_entry<entry>
+    (. attrs.push_back(entry); .)
+    {
+      ','
+      attr_entry<entry>
+      (. attrs.push_back(entry); .)
+    } .
+
+attr_entry<Expr_attribute::Expr_attribute_entry &pair > =
+    (. Symbol *sym = nullptr; .)
+    identifier<sym>
+    (.
+      pair.name = sym;
+      pair.type = m_type_factory->create_type_variable();
+      pair.expr = nullptr;
+      pair.is_pattern = true;
+    .)
+    [ ( '=' (. pair.is_pattern = false; .) | '~' ) expression<pair.expr> ] .
+
+postconds_opt<Ruleset *&ruleset> =
+    [
+      (. Expr *expr = nullptr; .)
+      POSTCOND postcond_or_expr<expr> ';'
+      (. ruleset->set_postcond_expr(expr); .)
+    ] .
+
+result_code<Rule::Result_code &res_code> =
+      REPEAT_RULES   (. res_code = Rule::Result_code::RC_REPEAT_RULES; .)
+    | SKIP_RECURSION (. res_code = Rule::Result_code::RC_SKIP_RECURSION; .) .
+
+node<Expr *&expr> =
+    (. Symbol *sym = nullptr; .)
+    identifier<sym>
+    (.
+      Expr *ref = m_expr_factory->create_reference(CURR_LOC,
+         m_type_factory->create_type_variable(), sym);
+      expr = ref; /* In case this is a simple reference. */
+    .)
+    ( AT_OP
+      (. Location loc = CURR_LOC; .)
+      identifier<sym>
+      (.
+          expr = m_expr_factory->create_type_annotation(loc, m_type_factory->create_type_variable(), expr, sym);
+      .)
+    | '~'
+      (. Location loc = CURR_LOC; .)
+        node<expr>
+      (.
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_TILDE, ref, expr);
+      .)
+    |
+      [ ternary_node_continuation<ref, expr> | call_node_continuation<ref, expr> ]
+    )
+    [
+      (.
+        Expr_attribute::Expr_attribute_vector attrs;
+        Expr *the_expr = expr;
+        mi::mdl::string node_name(m_alloc);
+      .)
+      ATTR_BEGIN attribute_expr<attrs, node_name> ATTR_END
+      (.
+        expr = m_expr_factory->create_attribute(CURR_LOC, m_type_factory->create_type_variable(), the_expr, attrs, node_name.c_str());
+      .)
+    ] .
+
+ternary_node_continuation<Expr *expr_cond, Expr *&expr> =
+    (.
+      Expr *expr_then, *expr_else;
+    .)
+    '?' node<expr_then> ':' node<expr_else>
+    (.
+      expr = m_expr_factory->create_conditional(expr_cond, expr_then, expr_else);
+    .) .
+
+call_node_continuation<Expr *expr_callee, Expr *&expr> =
+    (.
+      Expr_call *call_expr = m_expr_factory->create_call(m_type_factory->create_type_variable(), expr_callee);
+    .)
+    '(' [ paramlist<call_expr> ] ')'
+    (.
+      expr = call_expr;
+    .) .
+
+paramlist<Expr_call *call_expr> =
+    (. Expr *expr; .)
+    node<expr>
+    (.
+      Argument* arg = m_expr_factory->create_argument(expr);
+      call_expr->add_argument(arg);
+    .)
+    { ','
+      node<expr>
+      (.
+        Argument* arg = m_expr_factory->create_argument(expr);
+        call_expr->add_argument(arg);
+      .)
+    } .
+
+guard<Expr *&guard_expr>
+    (. Expr *expr; .)
+    =
+    IF_KW
+    expression<expr>
+    (. guard_expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->get_bool(), Expr_unary::OK_IF_GUARD, expr); .)
+    | MAYBE expression<expr>
+    (. guard_expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->get_bool(), Expr_unary::OK_MAYBE_GUARD, expr); .) .
+
+where<Argument_list &bindings> = WHERE binding_list<bindings> .
+
+binding_list<Argument_list &bindings> =
+    (. Expr *expr; .)
+    binding<expr>
+    (.
+      Argument* arg = m_expr_factory->create_argument(expr);
+      bindings.push(arg);
+    .)
+    {
+      binding<expr>
+      (.
+        Argument* arg = m_expr_factory->create_argument(expr);
+        bindings.push(arg);
+      .)
+    } .
+
+binding<Expr *&expr> =
+    (. Symbol *sym = nullptr; .)
+    identifier<sym>
+    (.
+      Expr *ref = m_expr_factory->create_reference(CURR_LOC,
+         m_type_factory->create_type_variable(), sym);
+      Expr *expr_right;
+      Location loc = CURR_LOC;
+    .)
+    '=' expression<expr_right>
+    (.
+      expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_ASSIGN, ref, expr_right);
+    .) .
+
+reference_or_call<Expr *&expr> =
+    (. Symbol *sym = nullptr; .)
+    identifier<sym>
+    (.
+      expr = m_expr_factory->create_reference(CURR_LOC, m_type_factory->create_type_variable(), sym);
+    .)
+    [
+      (.
+        Type *return_type = m_type_factory->create_type_variable();
+        Expr_call *call_expr = m_expr_factory->create_call(return_type, expr);
+      .)
+      '(' [ arglist<call_expr> ] ')'
+      (.
+        expr = call_expr;
+      .)
+    ] .
+
+arglist<Expr_call *call_expr> =
+    (. Expr *expr1; .)
+    expression<expr1>
+    (.
+      Argument* arg = m_expr_factory->create_argument(expr1);
+      call_expr->add_argument(arg);
+    .)
+    {
+      (. Expr *exprn; .)
+      ',' expression<exprn>
+      (.
+        Argument* argn = m_expr_factory->create_argument(exprn);
+        call_expr->add_argument(argn);
+      .)
+    } .
+
+primary_expr<Expr *&expr> =
+    (
+      literal<expr>
+      | reference_or_call<expr>
+      | '(' expression<expr> ')'
+        (. expr->mark_parenthesis(); .)
+      | OPTION '('
+        (.
+           Location loc = CURR_LOC;
+          Symbol *sym = nullptr;
+        .)
+        identifier<sym>
+        (.
+          Expr *ref = m_expr_factory->create_reference(loc,
+             m_type_factory->create_type_variable(), sym);
+          expr = ref;
+        .)
+        [ AT_OP
+          (. Location loc = CURR_LOC; .)
+          identifier<sym>
+          (.
+              expr = m_expr_factory->create_type_annotation(loc, m_type_factory->create_type_variable(), expr, sym);
+          .)
+        ]
+        (.
+          expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->get_bool(), Expr_unary::OK_OPTION, expr);
+        .)
+        ')'
+    )
+    [
+      (.
+        Expr_attribute::Expr_attribute_vector attrs;
+        Expr *the_expr = expr;
+        mi::mdl::string node_name(m_alloc);
+      .)
+      ATTR_BEGIN attribute_expr<attrs, node_name> ATTR_END
+      (.
+        expr = m_expr_factory->create_attribute(CURR_LOC, m_type_factory->create_type_variable(), the_expr, attrs, node_name.c_str());
+      .)
+    ] .
+
+postfix_expr<Expr *&expr> =
+    primary_expr<expr>
+    {
+      postfix<expr>
+    } .
+
+postfix<Expr *&expr>
+    (.
+       Expr *expr_in = expr;
+       Location loc = CURR_LOC;
+    .)
+    =
+    '[' expression<expr> ']'
+    (.
+      expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_ARRAY_SUBSCRIPT, expr_in, expr);
+    .)
+    | '.'
+    (. Symbol *sym = nullptr; .)
+    identifier<sym>
+    (.
+        expr = m_expr_factory->create_reference(CURR_LOC, m_type_factory->create_type_variable(), sym);
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_SELECT, expr_in, expr);
+    .)
+    | INC_OP
+    (.
+      expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->create_type_variable(), Expr_unary::OK_POST_INCREMENT, expr_in);
+    .)
+    | DEC_OP
+    (.
+      expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->create_type_variable(), Expr_unary::OK_POST_DECREMENT, expr_in);
+    .)
+    | AT_OP
+    (. Symbol *sym = nullptr; .)
+    identifier<sym>
+    (.
+        expr = m_expr_factory->create_type_annotation(loc, m_type_factory->create_type_variable(), expr_in, sym);
+    .) .
+
+unary_expr<Expr *&expr>
+    (.
+      Expr *expr_sub;
+    .)
+    =
+      INC_OP unary_expr<expr_sub>
+    (.
+      expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->create_type_variable(), Expr_unary::OK_PRE_INCREMENT, expr_sub);
+    .)
+    | DEC_OP unary_expr<expr_sub>
+    (.
+      expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->create_type_variable(), Expr_unary::OK_PRE_INCREMENT, expr_sub);
+    .)
+    |
+      (.
+        Expr_unary::Operator op;
+      .)
+      unary_operator<op> unary_expr<expr_sub>
+      (.
+        expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->create_type_variable(), op, expr_sub);
+      .)
+    | postfix_expr<expr> .
+
+unary_operator<Expr_unary::Operator &op> =
+      '+' (. op = Expr_unary::OK_POSITIVE; .)
+    | '-' (. op = Expr_unary::OK_NEGATIVE; .)
+    | '~' (. op = Expr_unary::OK_BITWISE_COMPLEMENT; .)
+    | '!' (. op = Expr_unary::OK_LOGICAL_NOT; .) .
+
+multiplicative_expr<Expr *&expr> =
+    unary_expr<expr>
+    {
+      (.
+        Expr *expr_left = expr;
+        Expr *expr_right;
+        Expr_binary::Operator op = Expr_binary::OK_PLUS;
+        Location loc = CURR_LOC;
+      .)
+      multiplicative_operator<op> unary_expr<expr_right>
+      (.
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), op, expr_left, expr_right);
+      .)
+    } .
+
+multiplicative_operator<Expr_binary::Operator &op> =
+      '*' (. op = Expr_binary::OK_MULTIPLY; .)
+    | '/' (. op = Expr_binary::OK_DIVIDE; .)
+    | '%' (. op = Expr_binary::OK_MODULO; .) .
+
+additive_expr<Expr *&expr> =
+    multiplicative_expr<expr>
+    {
+      (.
+        Expr *expr_left = expr;
+        Expr *expr_right;
+        Expr_binary::Operator op = Expr_binary::OK_PLUS;
+        Location loc = CURR_LOC;
+      .)
+      additive_operator<op> multiplicative_expr<expr_right>
+      (.
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), op, expr_left, expr_right);
+      .)
+    } .
+
+additive_operator<Expr_binary::Operator &op> =
+      '+' (. op = Expr_binary::OK_PLUS; .)
+    | '-' (. op = Expr_binary::OK_MINUS; .) .
+
+shift_expr<Expr *&expr> =
+    additive_expr<expr>
+    {
+      (.
+        Expr *expr_left = expr;
+        Expr *expr_right;
+        Expr_binary::Operator op = Expr_binary::OK_PLUS;
+        Location loc = CURR_LOC;
+      .)
+      shift_operator<op> additive_expr<expr_right>
+      (.
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), op, expr_left, expr_right);
+      .)
+    } .
+
+shift_operator<Expr_binary::Operator &op> =
+      "<<" (. op = Expr_binary::OK_SHIFT_LEFT; .)
+    | ">>" (. op = Expr_binary::OK_SHIFT_RIGHT; .)
+    | ">>>" (. op = Expr_binary::OK_SHIFT_RIGHT_ARITH; .) .
+
+relational_expr<Expr *&expr> =
+    shift_expr<expr>
+    {
+      (.
+        Expr *expr_left = expr;
+        Expr *expr_right;
+        Expr_binary::Operator op = Expr_binary::OK_PLUS;
+        Location loc = CURR_LOC;
+      .)
+      relational_operator<op> shift_expr<expr_right>
+      (.
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), op, expr_left, expr_right);
+      .)
+    } .
+
+relational_operator<Expr_binary::Operator &op> =
+      "<=" (. op = Expr_binary::OK_LESS_OR_EQUAL; .)
+    | ">=" (. op = Expr_binary::OK_GREATER_OR_EQUAL; .)
+    | '<' (. op = Expr_binary::OK_LESS; .)
+    | '>' (. op = Expr_binary::OK_GREATER; .) .
+
+equality_expr<Expr *&expr> =
+    relational_expr<expr>
+    {
+      (.
+        Expr *expr_left = expr;
+        Expr *expr_right;
+        Expr_binary::Operator op = Expr_binary::OK_PLUS;
+        Location loc = CURR_LOC;
+      .)
+      equality_operator<op> relational_expr<expr_right>
+      (.
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), op, expr_left, expr_right);
+      .)
+    } .
+
+equality_operator<Expr_binary::Operator &op> =
+      "==" (. op = Expr_binary::OK_EQUAL; .)
+    | "!=" (. op = Expr_binary::OK_NOT_EQUAL; .) .
+
+and_expr<Expr *&expr> =
+    equality_expr<expr>
+    {
+      (.
+        Expr *expr_left = expr;
+        Expr *expr_right;
+        Location loc = CURR_LOC;
+      .)
+      '&' equality_expr<expr_right>
+      (.
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_BITWISE_AND, expr_left, expr_right);
+      .)
+    } .
+
+exclusive_or_expr<Expr *&expr> =
+    and_expr<expr>
+    {
+      (.
+        Expr *expr_left = expr;
+        Expr *expr_right;
+        Location loc = CURR_LOC;
+      .)
+      '^' and_expr<expr_right>
+      (.
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_BITWISE_AND, expr_left, expr_right);
+      .)
+    } .
+
+inclusive_or_expr<Expr *&expr> =
+    exclusive_or_expr<expr>
+    {
+      (.
+        Expr *expr_left = expr;
+        Expr *expr_right;
+        Location loc = CURR_LOC;
+      .)
+      '|' exclusive_or_expr<expr_right>
+      (.
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_BITWISE_XOR, expr_left, expr_right);
+      .)
+    } .
+
+logical_and_expr<Expr *&expr> =
+    inclusive_or_expr<expr>
+    {
+      (.
+        Expr *expr_left = expr;
+        Expr *expr_right;
+        Location loc = CURR_LOC;
+      .)
+      "&&" inclusive_or_expr<expr_right>
+      (.
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_LOGICAL_AND, expr_left, expr_right);
+      .)
+    } .
+
+logical_or_expr<Expr *&expr> =
+    logical_and_expr<expr>
+    {
+      (.
+        Expr *expr_left = expr;
+        Expr *expr_right;
+        Location loc = CURR_LOC;
+      .)
+      "||" logical_and_expr<expr_right>
+      (.
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_LOGICAL_OR, expr_left, expr_right);
+      .)
+    } .
+
+expression<Expr *&expr> =
+    logical_or_expr<expr>
+    [
+      (.
+        Expr *expr_cond = expr;
+        Expr *expr_then;
+        Expr *expr_else;
+      .)
+      '?' expression<expr_then> ':' expression<expr_else>
+      (.
+         expr = m_expr_factory->create_conditional(expr_cond, expr_then, expr_else);
+      .)
+    ] .
+
+postcond_primary_expr<Expr *&expr> =
+      NONODE
+      '('
+      (. Symbol *sym = nullptr; .)
+      identifier<sym>
+      (.
+        Expr *ref = m_expr_factory->create_reference(CURR_LOC,
+           m_type_factory->create_type_variable(), sym);
+        expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->create_type_variable(), Expr_unary::OK_NONODE, ref);
+      .)
+      ')'
+    | MATCH '(' node<expr> ')'
+      (.
+        expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->create_type_variable(), Expr_unary::OK_MATCH, expr);
+      .)
+    | '(' postcond_or_expr<expr> ')'
+      (. expr->mark_parenthesis(); .) .
+
+postcond_and_expr<Expr *&expr> =
+    postcond_primary_expr<expr>
+    {
+      (.
+        Expr *expr_left = expr;
+        Expr *expr_right;
+        Location loc = CURR_LOC;
+      .)
+      "&&" postcond_primary_expr<expr_right>
+      (.
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_LOGICAL_AND, expr_left, expr_right);
+      .)
+    } .
+
+postcond_or_expr<Expr *&expr> =
+    postcond_and_expr<expr>
+    {
+      (.
+        Expr *expr_left = expr;
+        Expr *expr_right;
+        Location loc = CURR_LOC;
+      .)
+      "||" postcond_and_expr<expr_right>
+      (.
+        expr = m_expr_factory->create_binary(loc, m_type_factory->create_type_variable(), Expr_binary::OK_LOGICAL_OR, expr_left, expr_right);
+      .)
+    } .
+
+literal<Expr *&expr> =
+      INTEGER_LITERAL
+      (.
+          bool overflow = false, is_unsigned = false;
+          unsigned u = integer_value(t->val, overflow, is_unsigned);
+          if (overflow)
+              errors->Warning(t->line, t->col, "Integer constant overflow");
+          Value *v = m_value_factory->get_int(int(u));
+          expr = m_expr_factory->create_literal(CURR_LOC, v);
+      .)
+    | FLOATING_LITERAL
+      (.
+          bool is_error = false;
+          double d = float_value(t->val, is_error);
+          if (is_error)
+              errors->Warning(t->line, t->col, "Floating point constant overflow");
+          Value *v = m_value_factory->get_float(float(d), t->val);
+          expr = m_expr_factory->create_literal(CURR_LOC, v);
+      .)
+    | TRUE
+      (.
+          Value *v = m_value_factory->get_bool(true);
+          expr = m_expr_factory->create_literal(CURR_LOC, v);
+      .)
+    | FALSE
+      (.
+          Value *v = m_value_factory->get_bool(false);
+          expr = m_expr_factory->create_literal(CURR_LOC, v);
+      .)
+    | STRING_LITERAL
+      (.
+          Value *v = m_value_factory->get_string(t->val);
+          expr = m_expr_factory->create_literal(CURR_LOC, v);
+      .) .
+
+END mdltlc.

@@ -2108,6 +2108,7 @@ Link_unit_jit *Code_generator_jit::create_link_unit(
 // Compile a link unit into a LLVM-IR using the JIT.
 IGenerated_code_executable *Code_generator_jit::compile_unit(
     ICode_generator_thread_context *ctx,
+    IModule_cache                  *module_cache,
     ILink_unit const               *iunit,
     bool                           llvm_ir_output)
 {
@@ -2127,7 +2128,7 @@ IGenerated_code_executable *Code_generator_jit::compile_unit(
 
     Options_impl &options = impl_cast<Options_impl>(ctx->access_options());
 
-    Link_unit_jit const &unit = *impl_cast<Link_unit_jit>(iunit);
+    Link_unit_jit &unit = *const_cast<Link_unit_jit *>(impl_cast<Link_unit_jit>(iunit));
 
     IAllocator        *alloc = get_allocator();
     Allocator_builder builder(alloc);
@@ -2140,7 +2141,7 @@ IGenerated_code_executable *Code_generator_jit::compile_unit(
 #endif
 
     // now finalize the module
-    llvm::Module *llvm_module = unit->finalize_module();
+    llvm::Module *llvm_module = unit.finalize_module(module_cache);
     mi::base::Handle<IGenerated_code_executable> code_obj(unit.get_code_object());
 
 #ifdef PRINT_TIMINGS
@@ -2202,13 +2203,13 @@ IGenerated_code_executable *Code_generator_jit::compile_unit(
             code_obj->get_interface<mi::mdl::Generated_code_source>());
 
         Target_language target = unit.get_target_language();
-        if (llvm_ir_output || target == ICode_generator::TL_LLVM_IR) {
+	if (llvm_ir_output || target == ICode_generator::TL_LLVM_IR) {
             if (options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE)) {
                 unit->llvm_bc_compile(llvm_module, code->access_src_code());
             } else {
                 unit->llvm_ir_compile(llvm_module, code->access_src_code());
             }
-        } else {
+	} else {
             switch (target) {
             case ICode_generator::TL_PTX:
                 unit->ptx_compile(llvm_module, code->access_src_code());
@@ -2222,8 +2223,7 @@ IGenerated_code_executable *Code_generator_jit::compile_unit(
                 MDL_ASSERT(!"unexpected target kind");
                 break;
             }
-        }
-
+	}
         unit->fill_function_info(code.get());
 
         // set the read-only data segment

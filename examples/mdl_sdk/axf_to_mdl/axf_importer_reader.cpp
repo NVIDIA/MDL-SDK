@@ -104,13 +104,7 @@ static const char *s_axf_supported_color_spaces[] = {
         NULL
 };
 
-static const char *s_prototype_names_encoded_names_disabled[3] = {
-    "mdl::nvidia::axf_importer::axf_importer::svbrdf",
-    "mdl::nvidia::axf_importer::axf_importer::carpaint",
-    "mdl::nvidia::axf_importer::axf_importer::volumetric"
-};
-
-static const char *s_prototype_names_encoded_names_enabled[3] = {
+static const char *s_prototype_names[3] = {
     "mdl::nvidia::axf_importer::axf_importer::svbrdf("
         "texture_2d,texture_2d,texture_2d,texture_2d,texture_2d,texture_2d,texture_2d,"
         "::nvidia::axf_importer::axf_importer::brdf_type,bool,"
@@ -301,13 +295,15 @@ bool Axf_reader::read(
     const int num_materials = AXF::axfGetNumberOfMaterials(file_h.m_axf_file);
     for (int m = 0; m < num_materials; ++m) {
         bool success = read_material(file_h.m_axf_file, m, impexp_state);
+        if (!success)
+            return false;
     }
 
     const unsigned int num_variants = handle_collected_variants(impexp_state);
     if (num_variants > 0)
     {
         Axf_importer::report_message(6010, mi::base::MESSAGE_SEVERITY_INFO,
-            std::string("Loaded ") + lexicographic_cast(num_variants) +
+            std::string("Loaded ") + std::to_string(num_variants) +
             std::string(" materials from file ") + m_filename, impexp_state);
         return true;
     }
@@ -325,7 +321,7 @@ bool Axf_reader::read_material(
     char name_buf[AXF::AXF_MAX_KEY_SIZE];
     if (!AXF::axfGetMaterialIDString(material_h, name_buf, AXF::AXF_MAX_KEY_SIZE)) {
         string msg = string("Cannot retrieve material name from file ") + m_filename
-            + string(" for ") + string(lexicographic_cast(material_idx)) + string(". material.");
+            + string(" for ") + string(std::to_string(material_idx)) + string(". material.");
         Axf_importer::report_message(6003, mi::base::MESSAGE_SEVERITY_ERROR,
             msg, impexp_state);
         return false;
@@ -365,7 +361,7 @@ bool Axf_reader::read_material(
     // for the rest)
     const AXF::VersionedCompatibilityProfile supported_base_profiles_svbrdf[] = {
         {AXF_COMPAT_PROF_SVBRDF_WARD, 1},
-        {AXF_COMPAT_PROF_SVBRDF_WARD, 2},   // adds cutout and displacment
+        {AXF_COMPAT_PROF_SVBRDF_WARD, 2},   // adds cutout and displacement
         {AXF_COMPAT_PROF_SVBRDF_WARD, 3},   // adds transmission color
         {AXF_COMPAT_PROF_SVBRDF_GGX, 1},
         {AXF_COMPAT_PROF_SVBRDF_GGX, 2}     // adds transmission color
@@ -1018,7 +1014,7 @@ bool Axf_reader::handle_carpaint_representation(
                 std::swap(width, height);
             }
 
-            //!! somtimes the BRDFcolors texture is not <= 1.0...
+            //!! sometimes the BRDFcolors texture is not <= 1.0...
             //   according to X-Rite the colors are "normalized" and should always be valid in
             //   combination with the BRDF weights -> so we can apply the scale there to enforce
             //   a "valid" [0,1] texture
@@ -2024,23 +2020,16 @@ bool Axf_reader::access_mdl_material_definitions(
         return false;
     }
 
-    mi::base::Handle<mi::neuraylib::IMdl_configuration> mdl_configuration(
-        m_neuray->get_api_component<mi::neuraylib::IMdl_configuration>());
-    bool encoded_names_enabled = mdl_configuration->get_encoded_names_enabled();
-    const char **prototype_names = encoded_names_enabled
-        ? s_prototype_names_encoded_names_enabled
-        : s_prototype_names_encoded_names_disabled;
-
     m_svbrdf_material =
-        m_transaction->access<mi::neuraylib::IFunction_definition>(prototype_names[0]);
+        m_transaction->access<mi::neuraylib::IFunction_definition>(s_prototype_names[0]);
     m_carpaint_material =
-        m_transaction->access<mi::neuraylib::IFunction_definition>(prototype_names[1]);
+        m_transaction->access<mi::neuraylib::IFunction_definition>(s_prototype_names[1]);
     m_volumetric_material =
-        m_transaction->access<mi::neuraylib::IFunction_definition>(prototype_names[2]);
+        m_transaction->access<mi::neuraylib::IFunction_definition>(s_prototype_names[2]);
 
     if (!m_svbrdf_material) {
         std::string msg = "Cannot access the definition of \"";
-        msg += prototype_names[0];
+        msg += s_prototype_names[0];
         msg += "\". Has MDL module \"nvidia::axf_importer::axf_importer\" been properly imported?";
         Axf_importer::report_message(6031, mi::base::MESSAGE_SEVERITY_ERROR,
             msg, impexp_state);
@@ -2048,7 +2037,7 @@ bool Axf_reader::access_mdl_material_definitions(
     }
     if (!m_carpaint_material) {
         std::string msg = "Cannot access the definition of \"";
-        msg += prototype_names[1];
+        msg += s_prototype_names[1];
         msg += "\". Has MDL module \"nvidia::axf_importer::axf_importer\" been properly imported?";
         Axf_importer::report_message(6032, mi::base::MESSAGE_SEVERITY_ERROR,
             msg, impexp_state);
@@ -2056,7 +2045,7 @@ bool Axf_reader::access_mdl_material_definitions(
     }
     if (!m_volumetric_material) {
         std::string msg = "Cannot access the definition of \"";
-        msg += prototype_names[2];
+        msg += s_prototype_names[2];
         msg += "\". Has MDL module \"nvidia::axf_importer::axf_importer\" been properly imported?";
         Axf_importer::report_message(6044, mi::base::MESSAGE_SEVERITY_ERROR,
             msg, impexp_state);
@@ -2073,7 +2062,7 @@ T* get_parameter_type(
     const mi::neuraylib::IFunction_definition* material,
     const char* param_name)
 {
-    // check if the paramter exists
+    // check if the parameter exists
     const mi::base::Handle<const mi::neuraylib::IType_list> type_list(
         material->get_parameter_types());
     const mi::base::Handle<const mi::neuraylib::IType> type(type_list->get_type(param_name));
@@ -2986,7 +2975,7 @@ void Axf_reader::handle_preview_images(
         const string img_name = get_axf_pimage_prefix() +
             impexp_state->get_module_prefix() + string("_") +
             m_material_name + string("_")
-            + lexicographic_cast(width) + string("x") + lexicographic_cast(height);
+            + std::to_string(width) + string("x") + std::to_string(height);
         mi::base::Handle<mi::neuraylib::IImage> image(
             m_transaction->create<mi::neuraylib::IImage>("Image"));
         image->set_from_canvas(canvas.get());
@@ -3073,13 +3062,6 @@ unsigned int Axf_reader::handle_collected_variants(
         return false;
     }
 
-    mi::base::Handle<mi::neuraylib::IMdl_configuration> mdl_configuration(
-        m_neuray->get_api_component<mi::neuraylib::IMdl_configuration>());
-    bool encoded_names_enabled = mdl_configuration->get_encoded_names_enabled();
-    const char **prototype_names = encoded_names_enabled
-        ? s_prototype_names_encoded_names_enabled
-        : s_prototype_names_encoded_names_disabled;
-
     unsigned int num_variants = 0;
     std::vector<bool> success(m_variants.size(), false);
     for (size_t i=0; i<m_variants.size(); ++i) {
@@ -3087,13 +3069,13 @@ unsigned int Axf_reader::handle_collected_variants(
         const char *prototype_name;
         switch (m_variants[i].m_type) {
             case REP_SVBRDF:
-                prototype_name = prototype_names[0];
+                prototype_name = s_prototype_names[0];
                 break;
             case REP_CARPAINT:
-                prototype_name = prototype_names[1];
+                prototype_name = s_prototype_names[1];
                 break;
             case REP_VOLUMETRIC:
-                prototype_name = prototype_names[2];
+                prototype_name = s_prototype_names[2];
                 break;
             default:
                 assert(false);

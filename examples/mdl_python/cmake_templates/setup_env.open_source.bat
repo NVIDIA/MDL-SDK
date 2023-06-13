@@ -1,5 +1,5 @@
 ::*****************************************************************************
-:: Copyright 2022 NVIDIA Corporation. All rights reserved.
+:: Copyright 2023 NVIDIA Corporation. All rights reserved.
 ::*****************************************************************************
 
 @IGNORE_THE_FOLLOWING_COMMENT@
@@ -7,7 +7,7 @@
 :: If you want to regenerate it, delete this file and run CMake Configure again.
 
 :: Library path to load the MDL SDK and plugins from
-set @ENV_LIB_PATH@=@ENV_MDL_SDK_PATH_BAT@/@_CONFIG@;@ENV_FREEIMAGE_PATH_BAT@/@_CONFIG@;%@ENV_LIB_PATH@%
+set @ENV_LIB_PATH@=@ENV_MDL_SDK_PATH_BAT@/@_CONFIG@;@ENV_FREEIMAGE_PATH_BAT@/@_CONFIG@;@ENV_OPENIMAGEIO_PATH_BAT@/@_CONFIG@;@ENV_DDS_PATH_BAT@/@_CONFIG@;%@ENV_LIB_PATH@%
 
 :: Path from which python modules are loaded from (i.e. pymdlsdk)
 set PYTHONPATH=@BINDING_MODULE_PATH@/@_CONFIG@;%PYTHONPATH%

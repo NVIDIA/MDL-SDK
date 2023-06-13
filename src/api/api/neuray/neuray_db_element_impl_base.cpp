@@ -204,7 +204,7 @@ mi::Sint32 Db_element_impl_base::store(
 
     tag = transaction->get_tag_for_store( tag);
 
-    // use DB::JOURNAL_ALL instead of journal flags in m_access_base: for intitial stores it does
+    // use DB::JOURNAL_ALL instead of journal flags in m_access_base: for initial stores it does
     // not really matter, but for overwriting existing elements we do not know the journal flags
     // that need to be set
     db_transaction->store( tag, m_pointer.m_mutable, name, privacy, DB::JOURNAL_ALL, store_level);

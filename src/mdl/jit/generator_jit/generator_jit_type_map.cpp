@@ -114,6 +114,7 @@ Type_mapper::Type_mapper(
 , m_type_arr_float_2(llvm::ArrayType::get(m_type_float, 2))
 , m_type_arr_float_3(llvm::ArrayType::get(m_type_float, 3))
 , m_type_arr_float_4(llvm::ArrayType::get(m_type_float, 4))
+, m_type_arr_float_16(llvm::ArrayType::get(m_type_float, 16))
 
 , m_type_deriv_float(NULL)
 , m_type_deriv_float2(NULL)
@@ -1496,6 +1497,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
     llvm::Type *arr_float_2_ptr_type       = get_arr_float_2_ptr_type();
     llvm::Type *arr_float_3_ptr_type       = get_arr_float_3_ptr_type();
     llvm::Type *arr_float_4_ptr_type       = get_arr_float_4_ptr_type();
+    llvm::Type *arr_float_16_ptr_type      = get_arr_float_16_ptr_type();
     llvm::Type *arr_int_2_ptr_type         = get_arr_int_2_ptr_type();
     llvm::Type *arr_int_3_ptr_type         = get_arr_int_3_ptr_type();
     llvm::Type *arr_int_4_ptr_type         = get_arr_int_4_ptr_type();
@@ -1523,23 +1525,24 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
     llvm::FunctionType *df_light_profile_sample_type   = NULL;
     llvm::FunctionType *df_light_profile_pdf_type      = NULL;
 
-    llvm::FunctionType *df_bsdf_measurement_isvalid_type = NULL;
+    llvm::FunctionType *df_bsdf_measurement_isvalid_type    = NULL;
     llvm::FunctionType *df_bsdf_measurement_resolution_type = NULL;
     llvm::FunctionType *df_bsdf_measurement_evaluate_type   = NULL;
     llvm::FunctionType *df_bsdf_measurement_sample_type     = NULL;
     llvm::FunctionType *df_bsdf_measurement_pdf_type        = NULL;
     llvm::FunctionType *df_bsdf_measurement_albedos_type    = NULL;
 
-    llvm::FunctionType *scene_data_isvalid_type       = NULL;
-    llvm::FunctionType *scene_data_lookup_float_type  = NULL;
-    llvm::FunctionType *scene_data_lookup_float2_type = NULL;
-    llvm::FunctionType *scene_data_lookup_float3_type = NULL;
-    llvm::FunctionType *scene_data_lookup_float4_type = NULL;
-    llvm::FunctionType *scene_data_lookup_int_type    = NULL;
-    llvm::FunctionType *scene_data_lookup_int2_type   = NULL;
-    llvm::FunctionType *scene_data_lookup_int3_type   = NULL;
-    llvm::FunctionType *scene_data_lookup_int4_type   = NULL;
-    llvm::FunctionType *scene_data_lookup_color_type  = NULL;
+    llvm::FunctionType *scene_data_isvalid_type          = NULL;
+    llvm::FunctionType *scene_data_lookup_float_type     = NULL;
+    llvm::FunctionType *scene_data_lookup_float2_type    = NULL;
+    llvm::FunctionType *scene_data_lookup_float3_type    = NULL;
+    llvm::FunctionType *scene_data_lookup_float4_type    = NULL;
+    llvm::FunctionType *scene_data_lookup_int_type       = NULL;
+    llvm::FunctionType *scene_data_lookup_int2_type      = NULL;
+    llvm::FunctionType *scene_data_lookup_int3_type      = NULL;
+    llvm::FunctionType *scene_data_lookup_int4_type      = NULL;
+    llvm::FunctionType *scene_data_lookup_color_type     = NULL;
+    llvm::FunctionType *scene_data_lookup_float4x4_type  = NULL;
 
     llvm::FunctionType *scene_data_lookup_deriv_float_type  = NULL;
     llvm::FunctionType *scene_data_lookup_deriv_float2_type = NULL;
@@ -2114,8 +2117,22 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
             llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
     }
 
+    {
+        llvm::Type *args[] = {
+            arr_float_16_ptr_type,
+            self_ptr_type,
+            m_type_state_core_ptr,
+            string_type,
+            arr_float_16_ptr_type,
+            bool_type
+        };
+
+        scene_data_lookup_float4x4_type =
+            llvm::FunctionType::get(void_type, args, /*isVarArg=*/false);
+    }
+
     // currently we support only these
-    llvm::SmallVector<llvm::Type *, 40> vtable_members;
+    llvm::SmallVector<llvm::Type *, 41> vtable_members;
     vtable_members.append({
         get_ptr(tex_lookup_float4_2d_type),
         get_ptr(tex_lookup_float3_2d_type),
@@ -2152,6 +2169,7 @@ llvm::StructType *Type_mapper::construct_core_texture_handler_type(
         get_ptr(scene_data_lookup_int3_type),
         get_ptr(scene_data_lookup_int4_type),
         get_ptr(scene_data_lookup_color_type),
+        get_ptr(scene_data_lookup_float4x4_type)
     });
 
     if (use_derivatives()) {

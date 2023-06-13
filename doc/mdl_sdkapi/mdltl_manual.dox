@@ -1,0 +1,224 @@
+/******************************************************************************
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_mdltl_manual MDLTL User's Manual
+
+<div align="right">
+    [\link mi_neuray_mdltl Up: MDL Transformation Language\endlink]
+    [\link mi_neuray_mdltl_spec Next: MDLTL Specification\endlink]
+</div>
+
+\section mi_neuray_mdltl_manual_overview Overview
+
+Some applications working with MDL materials might not be capable of
+processing general materials with all MDL features. For example, a
+renderer might not be able to handle transparency, or it might require
+that materials have a fixed structure so that they can be processed
+efficiently. Renderers supporting different levels of detail for
+materials, or simpler materials to support real-time rendering, can
+benefit from working with simplified materials.
+
+The Distiller component, which is part of the \neurayApiName, enables
+applications with limited MDL support or other requirements to load
+general MDL materials, transforming them into different (often
+simpler) materials and then use them instead of the original
+materials.
+
+The goal of distilling is to transform general material graphs into
+graphs of a fixed structure that is suitable for certain
+applications. The distilling process takes a compiled material
+(mi::neuraylib::ICompiled_material) as input, modifies its definition
+by applying transformation rules, and returns a new compiled material
+with the transformed definition. Transformation rules are either built
+into the Distiller or are provided by Distiller plugins.
+
+The rules that are applied, their application order, and the structure of
+the resulting material are defined by <i>Distiller targets</i>. A
+Distiller plugin can provide one or more targets, and the application
+can select the target to apply using the target's name. For example,
+by default the Distiller includes the targets "diffuse" (which only
+uses a single diffuse BSDF for the output material), "transmissive_pbr"
+(a more expressive standard PBR material model), and others.
+
+Depending on the target, the distilled material can differ to a small or
+large degree from the input. For example, the "diffuse" target is much
+simpler than the target "transmissive_pbr", and the rendered images of
+the latter will be much closer to rendered images of the original input
+material.
+
+Targets are implemented by Distiller plugins by using the Distiller
+rule engine to repeatedly apply transformation rules to nodes in the
+material graph. Transformation rules are implemented as subclasses of
+the class `mi::mdl::IRule_matcher`. These classes for rule-matching can
+be written by hand, but a more convenient and less error-prone option
+is to write rules in the <i>MDL Transforamtion Language (MDLTL)</i>. MDLTL is a
+domain-specific language for describing transformations on MDL
+materials. These transformations are expressed as a set of rules which
+are compiled to C++ code and are then linked into Distiller plugins.
+
+\section mi_neuray_mdltl_manual_rule_example Rule Example
+
+As an introduction, we will examine the general form of a rule. More
+details about rules and more examples are in section \link
+mi_neuray_mdltl_spec_rules Rules\endlink.
+
+\code
+    microfacet_beckmann_smith_bsdf(ru,rv,tint,_,t,mode)
+        --> simple_glossy_bsdf( ru,rv,tint,color(0.0),t,mode);
+\endcode
+
+The left-hand side of the rule (before the `-->` arrow)
+describes a pattern to match on a node in the material graph. In this
+case, the pattern matches a <tt>microfacet_beckmann_smith_bsdf</tt>
+BSDF node. The right-hand side is an expression that serves as a
+replacement node. When the Distiller matches the rule, it checks
+whether the pattern fits the structure of a node. In case it does, the
+variables in the function call pattern (<tt>ru</tt>, <tt>rv</tt>,
+<tt>tint</tt>, <tt>t</tt> and <tt>mode</tt>) are bound to the
+corresponding fields of the node, and the right-hand side expression
+is evaluated. Then the original node is replaced by the new node in
+the material graph and matching continues. Also note the special
+pattern <tt>_</tt> (underscore) which acts like a wildcard and matches
+any expression. In this example, the wildcard pattern means that the
+fourth parameter of the matched node will simply be ignored.
+
+Rule matching and application can be controlled in several ways, as
+described in the section on \ref mi_neuray_mdltl_spec_rules "Rules".
+
+\section mi_neuray_mdltl_manual_compilation MDLTL Compilation Process
+
+Distiller rules written in MDLTL need to be compiled into C++ classes
+and linked into Distiller plugins. The \neurayApiName can load
+Distiller plugins and automatically makes the targets defined in the
+plugins available to the Distiller component, which in turn makes them
+available to the application.
+
+The MDLTL compiler translates rule specifications into C++
+classes. The MDLTL input files are compiled ahead of time and linked into the
+plugin(s) using them. Depending on the target for which a plugin is invoked,
+it will apply rules in a certain order and can also perform other
+steps between rule applications. The example \link
+mi_neuray_example_distilling_target Distilling target example\endlink
+contains a Distiller plugin and an MDLTL file. It illustrates how the
+plugin and the generated C++ code interact with each other.
+
+The following diagram shows how MDLTL files are compiled to C++,
+linked into plugins and then loaded at runtime into applications to
+perform the distilling process.
+
+\image html mdltl_distiller_flow.png "Distiller plugin build process"
+\image latex mdltl_distiller_flow.png "Distiller plugin build process"
+
+First, at plugin build time, MDLTL files are compiled by the MDLTL
+compiler (<tt>mdltlc</tt>) into C++ source code files. This code is
+compiled by a C++ compiler into a shared object, using the Distiller
+plugin header file for the <tt>mi::mdl::IRule_matcher</tt> class from
+which rule sets inherit, and the Distiller plugin API which is used by
+the generated code. Each MDLTL file results in a C++ .cpp and .h file,
+and several of these files can be compiled and linked together with a
+plugin module, resulting in a shared object (.so/.dll) file.
+
+At runtime, the application uses the \neurayApiName in order to
+distill materials. First, the application loads the \neurayApiName
+shared object and the distiller plugin(s) for the target(s) it
+needs. When calling into the SDK functions for distilling, the
+\neurayApiName calls into the Distiller module which in turn calls
+into the loaded Distiller plugin for the used target. After Distilling
+is finished, the result material is passed back from the Distiller
+plugin through the Distiller module and \neurayApiName to the
+application. Depending on its needs, the application can then use the
+distilled material for rendering or further processing.
+
+\section mi_neuray_mdltl_manual_mdltlc MDLTL Compiler Usage
+
+This section describes how the MDLTL compiler `mdltlc` is used to
+compile MDLTL files into C++ source code.
+
+`mdltlc` is invoked with one or more MDLTL filenames as command
+line arguments. Without any options, the input files are checked, but
+no output is produced. When the option `--generate` is given,
+each MDLTL file is compiled into two files: one C++ source code file
+with extension `.cpp` and one header file with extension
+`.h`, both having the file name (without the original
+extension) of the input MDLTL file. The output files are written to
+the current directory, or the directory given by the
+`--output-dir` option.
+
+The `--verbosity` option can be set to numbers between 0 and 5
+to produce different level of debug output.
+
+The `--mdl-path` option must be given when a non-standard MDL
+module is imported by a rule set. If given, the directory is added to
+the MDL search path.
+
+The `--normalize-mixers` option switches on mixer normalization. See
+\link mi_neuray_mdltl_spec_mixer_call_normalization Mixer call
+normalization\endlink for details on this feature.
+
+The `--all-errors` causes the compiler to print out all info,
+warning, error messages. By default, only the first 10 messages are
+shown.
+
+The `--warn` option switch on extra warnings, depending on the
+argument:
+
+- `non-normalized-mixers`: Print a warning when a mixer call in a pattern is not normalized.
+- `overlapping-patterns`: Print a warning when an overlapping is detected.
+
+Note that these options cannot warn about all possible cases, because
+the effect non-normalized mixers or overlapping patterns can depend on
+run-time input.
+
+\section mi_neuray_mdltl_manual_running_mdltlc Running mdltlc
+
+<tt>mdltlc</tt> understands the following command line options:
+
+<pre>
+Usage: mdltlc [options] modules
+Options are:
+  -?                            This help.
+  -v level                      verbosity level, 0 is quiet (default)
+  --output-dir=DIR              generate files in the given directory.
+  --mdl-path=DIR                add the given directory to the MDL search path.
+  --generate                    generate .h/.cpp files (off by default).
+  --normalize-mixers            enable mixer normalization (off by default).
+  --all-errors                  do not cut off list of error messages (off by default).
+  --warn=non-normalized-mixers  emit warnings for mixer call patterns that are not normalized.
+  --warn=overlapping-patterns   emit warnings for possibly overlapping patterns.
+</pre>
+
+The next page \link mi_neuray_mdltl_spec MDLTL
+Specification\endlink documents the syntax and semantics of MDLTL
+files.
+
+<div align="right">
+    [\link mi_neuray_mdltl Up: MDL Transformation Language\endlink]
+    [\link mi_neuray_mdltl_spec Next: MDLTL Specification\endlink]
+</div>
+
+*/

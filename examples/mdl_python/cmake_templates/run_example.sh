@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #*****************************************************************************
-# Copyright 2022 NVIDIA Corporation. All rights reserved.
+# Copyright 2023 NVIDIA Corporation. All rights reserved.
 #*****************************************************************************
 
 @IGNORE_THE_FOLLOWING_COMMENT@

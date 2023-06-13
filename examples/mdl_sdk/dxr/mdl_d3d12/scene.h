@@ -33,7 +33,7 @@
 
 #include "common.h"
 #include "raytracing_pipeline.h"
-#include "gltf_nv_materials_mdl.h"
+#include "gltf_extensions.h"
 
 namespace mi { namespace examples { namespace mdl_d3d12
 {
@@ -503,11 +503,16 @@ namespace mi { namespace examples { namespace mdl_d3d12
             std::vector<Mesh> meshes;
             std::vector<Camera> cameras;
             std::vector<Material> materials;
-            std::vector<Resource> resources;
+            std::vector<Resource> image_resources;
+            std::vector<Resource> mbsdf_resources;
+            std::vector<Resource> light_profile_resources;
             Node root;
 
             // holds the scene level information of the MDL extension
             fx::gltf::NV_MaterialsMDL::Gltf_extension ext_NV_materials_mdl;
+
+            // holds the scene level information of the IES extension
+            fx::gltf::EXT_LightsIES::Gltf_extension ext_EXT_lights_ies;
         };
 
         // --------------------------------------------------------------------
@@ -515,11 +520,12 @@ namespace mi { namespace examples { namespace mdl_d3d12
         class Scene_options
         {
         public:
-            explicit Scene_options();
+            explicit Scene_options() = default;
             virtual ~Scene_options() = default;
 
-            float units_per_meter; // todo
-            bool handle_z_axis_up;
+            float units_per_meter = 1.0f; // todo
+            bool handle_z_axis_up = false;
+            bool uv_flip = true;
         };
 
         // --------------------------------------------------------------------
@@ -810,7 +816,11 @@ namespace mi { namespace examples { namespace mdl_d3d12
         // get the world transformation of this node (read-only).
         const DirectX::XMMATRIX& get_global_transformation() const { return m_global_transformation; }
 
+        // add a node as child. removes the node from it's current parent.
         void add_child(Scene_node* to_add);
+
+        // remove a node from the children if present
+        void remove_child(Scene_node* to_remove);
 
         bool update(const Update_args& args);
 
@@ -857,9 +867,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// get the display name of the material, which will show up in a the GUI for instance.
         virtual const std::string& get_name() const = 0;
 
-        /// get the id of the target code that contains this material.
-        /// can be used with the material library for instance.
-        virtual size_t get_target_code_id() const = 0;
+        /// get the identifier of the target code for this material.
+        virtual const std::string& get_hash() const = 0;
 
         /// register scene data names that appear on the geometry data at the material for
         /// making them accessible in the shader.

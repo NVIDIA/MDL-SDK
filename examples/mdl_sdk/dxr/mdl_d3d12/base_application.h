@@ -98,8 +98,10 @@ namespace mi { namespace examples { namespace mdl_d3d12
             , mdl_paths()
             , mdl_next(false)
             , use_class_compilation(true)
+            , fold_all_bool_parameters(false)
             , force_single_threading(false)
             , no_gui(false)
+            , no_console_window(false)
             , hide_gui(false)
             , ray_depth(6)
             , output_file("output.png")
@@ -110,9 +112,22 @@ namespace mi { namespace examples { namespace mdl_d3d12
             , automatic_derivatives(false)
             , handle_z_axis_up(false)
             , units_per_meter(1.0f)
+            , uv_flip(false)
+            , uv_scale(1.0f, 1.0f)
+            , uv_offset(0.0f, 0.0f)
+            , uv_repeat(false)
+            , uv_saturate(false)
+            , camera_pose_override(false)
+            , camera_position(0.0f, 0.0f, 0.0f)
+            , camera_focus(0.0f, 0.0f, 0.0f)
+            , camera_fov(-1.0f)
             , gpu(-1)
             , gpu_debug(false)
             , enable_shader_cache(false)
+            , shader_opt("O3")
+#if MDL_ENABLE_SLANG
+            , use_slang(false)
+#endif
         {
         }
         virtual ~Base_options() = default;
@@ -122,11 +137,14 @@ namespace mi { namespace examples { namespace mdl_d3d12
         std::vector<std::string> mdl_paths;
         bool mdl_next;
         bool use_class_compilation;
+        bool fold_all_bool_parameters;
         bool force_single_threading;
         bool no_gui;
+        bool no_console_window;
         bool hide_gui;
         size_t ray_depth;
         std::string output_file;
+        std::string generated_mdl_path;
         std::string lpe;
         size_t iterations;
         bool enable_auxiliary;
@@ -134,9 +152,23 @@ namespace mi { namespace examples { namespace mdl_d3d12
         bool automatic_derivatives;
         bool handle_z_axis_up;
         float units_per_meter;
+        bool uv_flip;
+        DirectX::XMFLOAT2 uv_scale;
+        DirectX::XMFLOAT2 uv_offset;
+        bool uv_repeat;
+        bool uv_saturate;
+        bool camera_pose_override;
+        DirectX::XMFLOAT3 camera_position;
+        DirectX::XMFLOAT3 camera_focus;
+        float camera_fov;
         int32_t gpu;
         bool gpu_debug;
         bool enable_shader_cache;
+        std::string shader_opt;
+
+#if MDL_ENABLE_SLANG
+        bool use_slang;
+#endif
 
 #if MDL_ENABLE_MATERIALX
         std::vector<std::string> mtlx_paths;

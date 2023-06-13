@@ -167,17 +167,30 @@ private:
 ///                              hash is not known.
 /// \param shared_proxy          Indicates whether a possibly already existing proxy DB element for
 ///                              that resource should simply be reused (the decision is based on
-///                              the DB element name derived from \c image_set, not on
-///                              \c impl_hash). Otherwise, an independent proxy DB element is
-///                              created, even if the resource has already been loaded.
+///                              the DB element name derived from \c image_set, not
+///                              on \c impl_hash which is relevant for the impl class). Otherwise,
+///                              an independent proxy DB element is created, even if the resource
+///                              has already been loaded.
 /// \param gamma                 The gamma value of the texture.
-/// \return                      The tag of that texture (invalid in case of failures).
+/// \param[out] result
+///                              -   0: Success.
+///                              -  -1: Invalid parameters (\c NULL pointer or empty image set).
+///                              -  -3: No image plugin found to handle the data.
+///                              -  -5: Failure to open the file.
+///                              -  -6: The reader does not support absolute access.
+///                              -  -7: The image plugin failed to import the data.
+///                              - -10: Failure to apply the given selector.
+///                              - -12: Repeated u/v coordinates (per frame).
+/// \return                      The tag of that texture (not necessarily invalid in case of
+///                              failures).
+///                              TODO harmonize valid tag XOR non-zero result
 DB::Tag load_mdl_texture(
     DB::Transaction* transaction,
     DBIMAGE::Image_set* image_set,
     const mi::base::Uuid& impl_hash,
     bool shared_proxy,
-    mi::Float32 gamma);
+    mi::Float32 gamma,
+    mi::Sint32& result);
 
 } // namespace TEXTURE
 

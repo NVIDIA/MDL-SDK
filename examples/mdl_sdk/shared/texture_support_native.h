@@ -827,6 +827,20 @@ int scene_data_lookup_int(
     return default_value;
 }
 
+/// Implementation of scene_data_lookup_float4x4().
+void scene_data_lookup_float4x4(
+    float                                  result[16],
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    float const                            default_value[16],
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    for (int i = 0; i < 16; ++i)
+        result[i] = default_value[i];
+}
+
 /// Implementation of scene_data_lookup_float4() with derivatives.
 void scene_data_lookup_deriv_float4(
     tct_deriv_arr_float_4                 *result,
@@ -937,6 +951,7 @@ mi::neuraylib::Texture_handler_vtable tex_vtable = {
     scene_data_lookup_int3,
     scene_data_lookup_int4,
     scene_data_lookup_color,
+    scene_data_lookup_float4x4,
     /*m_scene_data_lookup_deriv_float*/  nullptr,
     /*m_scene_data_lookup_deriv_float2*/ nullptr,
     /*m_scene_data_lookup_deriv_float3*/ nullptr,
@@ -982,6 +997,7 @@ mi::neuraylib::Texture_handler_deriv_vtable tex_deriv_vtable = {
     scene_data_lookup_int3,
     scene_data_lookup_int4,
     scene_data_lookup_color,
+    scene_data_lookup_float4x4,
     scene_data_lookup_deriv_float,
     scene_data_lookup_deriv_float2,
     scene_data_lookup_deriv_float3,

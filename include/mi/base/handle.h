@@ -118,9 +118,9 @@ static const Dup_interface DUP_INTERFACE = 0;
 /// Note that this use case often shows up when you store a pointer passed in via a member function
 /// as a class member.
 /// 
-/// \if IRAY_API See also [:ipmlink overview_of_library_design Handle class] for an extended example (and
-/// [:ipmlink overview_of_library_design Reference counting] for the same example without handle class).
-/// \endif
+/// \if IRAY_API See also [:ipmlink overview_of_library_design Handle class] for an extended
+/// example (and [:ipmlink overview_of_library_design Reference counting] for the same example
+/// without handle class). \endif
 /// \if DICE_API See also \ref mi_neuray_handle for an extended example (and \ref
 /// mi_neuray_refcounting for the same example without handle class). \endif
 /// \if MDL_SDK_API See also \ref mi_neuray_handle for an extended example (and \ref

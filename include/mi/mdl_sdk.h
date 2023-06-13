@@ -70,7 +70,6 @@
 #include <mi/neuraylib/iimpexp_base.h>
 #include <mi/neuraylib/ilightprofile.h>
 #include <mi/neuraylib/imap.h>
-#include <mi/neuraylib/imaterial_definition.h>
 #include <mi/neuraylib/imaterial_instance.h>
 #include <mi/neuraylib/imatrix.h>
 #include <mi/neuraylib/imdl_archive_api.h>
@@ -80,6 +79,7 @@
 #include <mi/neuraylib/imdl_compiler.h>
 #include <mi/neuraylib/imdl_configuration.h>
 #include <mi/neuraylib/imdl_discovery_api.h>
+#include <mi/neuraylib/imdl_distiller_api.h>
 #include <mi/neuraylib/imdl_entity_resolver.h>
 #include <mi/neuraylib/imdl_evaluator_api.h>
 #include <mi/neuraylib/imdl_execution_context.h>

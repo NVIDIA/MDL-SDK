@@ -65,6 +65,7 @@ COMPILER mdl
     bool m_last_identifier_unicode;
     bool m_unicode_identifiers_supported;
     bool m_unicode_error_emitted;
+    bool m_trailing_comma_allowed;
 
     // Create a error name.
     ISimple_name *error_name()
@@ -75,7 +76,7 @@ COMPILER mdl
             t->line,
             t->col,
             t->line,
-            t->col + wcslen(t->val) - 1);
+            t->col + utf8_len(t->val) - 1);
     }
 
     // RAII like class to handle invalid names.
@@ -117,635 +118,106 @@ COMPILER mdl
     bool m_enable_mdl_next;
     bool m_enable_experimental;
 
-    void set_module(Module *module, bool enable_mdl_next, bool enable_experimental)
-    {
-        m_module                       = module;
-        m_enable_mdl_next              = enable_mdl_next;
-        m_enable_experimental          = enable_experimental;
-        m_name_factory                 = m_module->get_name_factory();
-        m_type_factory                 = m_module->get_type_factory();
-        m_expression_factory           = m_module->get_expression_factory();
-        m_value_factory                = m_module->get_value_factory();
-        m_statement_factory            = m_module->get_statement_factory();
-        m_declaration_factory          = m_module->get_declaration_factory();
-        m_annotation_factory           = m_module->get_annotation_factory();
+    void set_module(Module *module, bool enable_mdl_next, bool enable_experimental);
 
-        m_last_identifier_unicode       = false;
-        m_unicode_identifiers_supported = false;
-        m_unicode_error_emitted         = false;
-    }
-
-    Module *get_module()
-    {
-        return m_module;
-    }
+    Module *get_module() { return m_module; }
 
     // Parses an expression instead of a full MDL document.
-    IExpression const *parse_expression()
-    {
-        IExpression const *expr = NULL;
-
-        t = NULL;
-        la = dummyToken = scanner->CreateToken();
-        la->val = L"Dummy Token";
-        Get();
-        expression(expr);
-        Expect(0);
-
-        return expr;
-    }
+    IExpression const *parse_expression();
 
     // Check if the lookahead token is a comma.
-    bool see_comma()
-    {
-        return la->kind == TOK_COMMA;
-    }
+    bool see_comma() { return la->kind == TOK_COMMA; }
+
+    // Check for ',' !TOK.
+    bool non_trailing_comma(int tok);
+
+    // Check if trailing comma is allowed and the next token is a comma.
+    bool trailing_comma_allowed();
 
     // Skip square brackets.
-    bool skip_square_brackets(Token *&x)
-    {
-        for(;;) {
-            x = scanner->Peek();
-            if (x->kind == TOK_LEFT_SQUARE_BRACKET) {
-                if (!skip_square_brackets(x))
-                    return false;
-            } else if (x->kind == TOK_RIGHT_SQUARE_BRACKET) {
-                x = scanner->Peek();
-                return true;
-            } else if (x->kind == TOK_EOF) {
-                break;
-            }
-        }
-        return false;
-    }
+    bool skip_square_brackets(Token *&x);
 
     // Skip a type.
-    bool skip_type(Token *&x)
-    {
-        if ((x->kind == TOK_UNIFORM) || (x->kind == TOK_VARYING)) {
-            x = scanner->Peek();
-        }
-
-        if (x->kind == TOK_AUTO) {
-            x = scanner->Peek();
-            return true;
-        }
-
-        switch (x->kind) {
-        case TOK_SCOPE:
-            x = scanner->Peek();
-            return skip_type(x);
-        case TOK_IDENT:
-            x = scanner->Peek();
-            if (x->kind == TOK_SCOPE) {
-                x = scanner->Peek();
-                return skip_type(x);
-            } else if (x->kind == TOK_LEFT_SQUARE_BRACKET) {
-                return skip_square_brackets(x);
-            }
-            return true;
-        case TOK_BOOL:
-        case TOK_BOOL2:
-        case TOK_BOOL3:
-        case TOK_BOOL4:
-        case TOK_INT:
-        case TOK_INT2:
-        case TOK_INT3:
-        case TOK_INT4:
-        case TOK_FLOAT:
-        case TOK_FLOAT2:
-        case TOK_FLOAT3:
-        case TOK_FLOAT4:
-        case TOK_FLOAT2X2:
-        case TOK_FLOAT2X3:
-        case TOK_FLOAT2X4:
-        case TOK_FLOAT3X2:
-        case TOK_FLOAT3X3:
-        case TOK_FLOAT3X4:
-        case TOK_FLOAT4X2:
-        case TOK_FLOAT4X3:
-        case TOK_FLOAT4X4:
-        case TOK_DOUBLE:
-        case TOK_DOUBLE2:
-        case TOK_DOUBLE3:
-        case TOK_DOUBLE4:
-        case TOK_DOUBLE2X2:
-        case TOK_DOUBLE2X3:
-        case TOK_DOUBLE2X4:
-        case TOK_DOUBLE3X2:
-        case TOK_DOUBLE3X3:
-        case TOK_DOUBLE3X4:
-        case TOK_DOUBLE4X2:
-        case TOK_DOUBLE4X3:
-        case TOK_DOUBLE4X4:
-        case TOK_COLOR:
-        case TOK_STRING:
-        case TOK_BSDF:
-        case TOK_EDF:
-        case TOK_VDF:
-        case TOK_LIGHT_PROFILE:
-        case TOK_TEXTURE_2D:
-        case TOK_TEXTURE_3D:
-        case TOK_TEXTURE_CUBE:
-        case TOK_TEXTURE_PTEX:
-        case TOK_BSDF_MEASUREMENT:
-        case TOK_INTENSITY_MODE:
-        case TOK_MATERIAL:
-        case TOK_MATERIAL_EMISSION:
-        case TOK_MATERIAL_GEOMETRY:
-        case TOK_MATERIAL_SURFACE:
-        case TOK_MATERIAL_VOLUME:
-        case TOK_HAIR_BSDF:
-            x = scanner->Peek();
-            if (x->kind == TOK_LEFT_SQUARE_BRACKET)
-                return skip_square_brackets(x);
-            return true;
-        default:
-            return false;
-        }
-    }
+    bool skip_type(Token *&x);
 
     // If we see either "import" or "using" or "export" followed by "import" or "using"
-    // during lookeahed, we assume that the declaration is an import declaration.
-    bool is_import_declaration()
-    {
-        scanner->ResetPeek();
-        Token *x = la;
-        if (x->kind == TOK_EXPORT) {
-            x = scanner->Peek();
-        }
-        return (x->kind == TOK_IMPORT) || (x->kind == TOK_USING);
-    }
+    // during lookahead, we assume that the declaration is an import declaration.
+    bool is_import_declaration();
 
     // Check for ident '='
-    bool is_namespace_alias()
-    {
-        scanner->ResetPeek();
-        Token *x = la;
-        if (x->kind != TOK_IDENT) {
-            return false;
-        }
-        x = scanner->Peek();
-        return x->kind == TOK_EQUAL;
-    }
+    bool is_namespace_alias();
 
     // If we see a type followed by an identifier during lookahead,
     // we assume that this is a declaration.
-    bool is_declaration()
-    {
-        scanner->ResetPeek();
-        Token *x = la;
-        if (!skip_type(x))
-            return false;
-        return (x->kind == TOK_IDENT) || (x->kind == TOK_ANNOTATION_BLOCK_BEGIN);
-    }
+    bool is_declaration();
 
-    /// Check for C-style cast: We have already seen '(' expr '), check for start(postfix_expr)
-    bool is_c_style_cast()
-    {
-        scanner->ResetPeek();
-        Token *x = la;
-        if (x->kind != TOK_LEFT_PARENTHESIS)
-            return false;
-        x = scanner->Peek();
-        if (!skip_type(x))
-            return false;
-        if (x->kind != TOK_RIGHT_PARENTHESIS)
-            return false;
-        x = scanner->Peek();
+    // Check for C-style cast: We have already seen '(' expr '), check for start(postfix_expr)
+    bool is_c_style_cast();
 
-        switch (x->kind) {
-        // start of unary expression
-        case TOK_TILDE:
-        case TOK_BANG:
-        case TOK_PLUS:
-        case TOK_MINUS:
-        case TOK_INC_OP:
-        case TOK_DEC_OP:
-        case TOK_CAST:
-        // start of primary expression (subset of unary)
-        case TOK_TRUE:
-        case TOK_FALSE:
-        case TOK_INTEGER_LITERAL:
-        case TOK_FLOATING_LITERAL:
-        case TOK_FRACT_LITERAL:
-        case TOK_STRING_LITERAL:
-        case TOK_SCOPE:
-        case TOK_BOOL:
-        case TOK_BOOL2:
-        case TOK_BOOL3:
-        case TOK_BOOL4:
-        case TOK_INT:
-        case TOK_INT2:
-        case TOK_INT3:
-        case TOK_INT4:
-        case TOK_FLOAT:
-        case TOK_FLOAT2:
-        case TOK_FLOAT3:
-        case TOK_FLOAT4:
-        case TOK_FLOAT2X2:
-        case TOK_FLOAT2X3:
-        case TOK_FLOAT2X4:
-        case TOK_FLOAT3X2:
-        case TOK_FLOAT3X3:
-        case TOK_FLOAT3X4:
-        case TOK_FLOAT4X2:
-        case TOK_FLOAT4X3:
-        case TOK_FLOAT4X4:
-        case TOK_DOUBLE:
-        case TOK_DOUBLE2:
-        case TOK_DOUBLE3:
-        case TOK_DOUBLE4:
-        case TOK_DOUBLE2X2:
-        case TOK_DOUBLE2X3:
-        case TOK_DOUBLE2X4:
-        case TOK_DOUBLE3X2:
-        case TOK_DOUBLE3X3:
-        case TOK_DOUBLE3X4:
-        case TOK_DOUBLE4X2:
-        case TOK_DOUBLE4X3:
-        case TOK_DOUBLE4X4:
-        case TOK_COLOR:
-        case TOK_STRING:
-        case TOK_BSDF:
-        case TOK_EDF:
-        case TOK_VDF:
-        case TOK_LIGHT_PROFILE:
-        case TOK_TEXTURE_2D:
-        case TOK_TEXTURE_3D:
-        case TOK_TEXTURE_CUBE:
-        case TOK_TEXTURE_PTEX:
-        case TOK_BSDF_MEASUREMENT:
-        case TOK_INTENSITY_MODE:
-        case TOK_MATERIAL:
-        case TOK_MATERIAL_EMISSION:
-        case TOK_MATERIAL_GEOMETRY:
-        case TOK_MATERIAL_SURFACE:
-        case TOK_MATERIAL_VOLUME:
-        case TOK_HAIR_BSDF:
-        case TOK_IDENT:
-            return true;
-        case TOK_LEFT_PARENTHESIS:
-            // while '(' is a start of a primary expression, do not treat it as a c-style cast
-            // here:
-            // (t)(f) *is* legal
-            return false;
-        default:
-            return false;
-        }
-    }
-
-    // If we see an identifier followed by a colon during lookeahed,
+    // If we see an identifier followed by a colon during lookahead,
     // we assume that the argument is named.
-    bool is_named_argument()
-    {
-        scanner->ResetPeek();
-        Token *x = la;
-        if (x->kind == TOK_COMMA)
-            x = scanner->Peek();
-        if (x->kind == TOK_IDENT) {
-            x = scanner->Peek();
-            return x->kind == TOK_COLON;
-        } else {
-            return false;
-        }
-    }
+    bool is_named_argument();
 
     // Check if the next two tokens are coupled right brackets
-    bool is_anno_block_end()
-    {
-        scanner->ResetPeek();
-        if (la->kind == TOK_RIGHT_SQUARE_BRACKET) {
-            int line = la->line;
-            int col  = la->col;
-            Token *x = scanner->Peek();
-            if (x->kind != TOK_RIGHT_SQUARE_BRACKET)
-                return false;
-            return line == x->line && col + 1 == x->col;
-        }
-        return false;
-    }
+    bool is_anno_block_end();
 
     // Check if the next two tokens are '[' and ']
-    bool is_array_constructor()
-    {
-        scanner->ResetPeek();
-        if (la->kind == TOK_LEFT_SQUARE_BRACKET) {
-            Token *x = scanner->Peek();
-            if (x->kind == TOK_RIGHT_SQUARE_BRACKET)
-                return true;
-        }
-        return false;
-    }
+    bool is_array_constructor();
 
     // Check if the next three tokens are '(', '*', and ')'.
-    bool is_clone()
-    {
-        scanner->ResetPeek();
-        if (la->kind == TOK_LEFT_PARENTHESIS) {
-            Token *x = scanner->Peek();
-            if (x->kind == TOK_STAR) {
-                x = scanner->Peek();
-                if (x->kind == TOK_RIGHT_PARENTHESIS)
-                    return true;
-            }
-        }
-        return false;
-    }
+    bool is_clone();
 
     // Check if we see '::' and IDENT/UNICODE_IDENT
-    bool is_scope_name()
-    {
-        scanner->ResetPeek();
-        Token *x = la;
-        if (x->kind != TOK_SCOPE)
-            return false;
-        x = scanner->Peek();
-        return x->kind == TOK_IDENT || (x->kind == TOK_UNICODE_IDENT && unicode_identifier_support());
-    }
+    bool is_scope_name();
 
     // Check if we see '::' and '..'.
-    bool is_scope_dotdot()
-    {
-        scanner->ResetPeek();
-        Token *x = la;
-        if (x->kind != TOK_SCOPE)
-            return false;
-        x = scanner->Peek();
-        return x->kind == TOK_DOTDOT;
-    }
+    bool is_scope_dotdot();
 
-    bool unicode_identifier_support()
-    {
-        return m_unicode_identifiers_supported;
-    }
+    bool unicode_identifier_support() { return m_unicode_identifiers_supported; }
 
-    void unicode_identifiers_not_supported_error(Token const *t) {
-        if (!m_unicode_error_emitted) {
-            m_unicode_error_emitted = true;
-            errors->Error(t->line, t->col,
-                          UNICODE_IDENTIFIERS_NOT_SUPPORTED,
-                          Error_params(m_alloc));
-        }
-    }
+    void unicode_identifiers_not_supported_error(Token const *t);
 
-    ISimple_name const *to_simple(Token const *t)
-    {
-        string tmp(m_alloc);
-        ISymbol const *symbol = errDist > 0 ?
-            m_name_factory->create_symbol(wchar_to_utf8(tmp, t->val)) :
-            m_name_factory->get_error_symbol();
-        return m_name_factory->create_simple_name(
-                    symbol,
-                    t->line,
-                    t->col,
-                    t->line,
-                    t->col + wcslen(t->val) - 1);
-    }
+    ISimple_name const *to_simple(Token const *t);
 
-    ISimple_name const *to_simple(ISimple_name const *name)
-    {
-        if (name == NULL) {
-            ISymbol const *symbol = m_name_factory->get_error_symbol();
-            return m_name_factory->create_simple_name(
-                    symbol,
-                    t->line,
-                    t->col,
-                    t->line,
-                    t->col);
-        }
-        return name;
-    }
+    ISimple_name const *to_simple(ISimple_name const *name);
 
     // Create a simple name from a utf8 string and a position.
-    ISimple_name const *to_simple(char const *utf8_s, int sl, int sc, int el, int ec)
-    {
-        ISymbol const *symbol = m_name_factory->create_symbol(utf8_s);
-        return m_name_factory->create_simple_name(
-            symbol, sl, sc, el, ec);
-    }
+    ISimple_name const *to_simple(char const *utf8_s, int sl, int sc, int el, int ec);
 
     // Create a qualified name from a simple name.
-    IQualified_name *to_qualified(ISimple_name const *simple_name)
-    {
-        IQualified_name *qualified_name = m_name_factory->create_qualified_name();
-        qualified_name->add_component(to_simple(simple_name));
-        return qualified_name;
-    }
+    IQualified_name *to_qualified(ISimple_name const *simple_name);
 
     // Create a qualified error name.
-    IQualified_name *qualified_error()
-    {
-        ISymbol const *symbol = m_name_factory->create_symbol("<ERROR>");
-        ISimple_name const *simple_name = m_name_factory->create_simple_name(
-                    symbol,
-                    t->line,
-                    t->col,
-                    t->line,
-                    t->col);
-        return to_qualified(simple_name);
-    }
+    IQualified_name *qualified_error();
 
     // Create a type name from a type name prefix and a token.
-    IType_name *to_type(IType_name *prefix, Token *tok)
-    {
-        IType_name *type_name = prefix;
-        IQualified_name *qualified_name;
-
-        if (type_name) {
-            qualified_name = type_name->get_qualified_name();
-        } else {
-            qualified_name = m_name_factory->create_qualified_name();
-            type_name = m_name_factory->create_type_name(qualified_name, tok->line, tok->col);
-        }
-        qualified_name->add_component(to_simple(tok));
-        Position &tpos = type_name->access_position();
-        Position const &qpos = qualified_name->access_position();
-        tpos.set_end_line(qpos.get_end_line());
-        tpos.set_end_column(qpos.get_end_column());
-        return type_name;
-    }
+    IType_name *to_type(IType_name *prefix, Token *tok);
 
     // Create a type name from a type name prefix and a token.
-    IType_name *to_unicode_type(IType_name *prefix, Token *tok)
-    {
-        IType_name *type_name = prefix;
-        IQualified_name *qualified_name;
-
-        if (type_name) {
-            qualified_name = type_name->get_qualified_name();
-        } else {
-            qualified_name = m_name_factory->create_qualified_name();
-            type_name = m_name_factory->create_type_name(qualified_name, tok->line, tok->col);
-        }
-        string tmp(m_alloc);
-        int sl = tok->line;
-        int sc = tok->col;
-        int el = tok->col;
-        int ec = tok->col + wcslen(tok->val) - 1;
-
-        wchar_to_utf8(tmp, tok->val);
-        tmp = tmp.substr(1, tmp.size() - 2);
-
-        ISimple_name const *simple_name = to_simple(tmp.c_str(), sl, sc, el, ec);
-        qualified_name->add_component(simple_name);
-        Position &tpos = type_name->access_position();
-        Position const &qpos = qualified_name->access_position();
-        tpos.set_end_line(qpos.get_end_line());
-        tpos.set_end_column(qpos.get_end_column());
-        return type_name;
-    }
+    IType_name *to_unicode_type(IType_name *prefix, Token *tok);
 
     // Create a type name from a simple name.
-    IType_name *to_type(ISimple_name const *simple_name)
-    {
-        IQualified_name *qualified_name = to_qualified(simple_name);
-        IType_name *type_name = m_name_factory->create_type_name(qualified_name);
-        Position &q_pos = qualified_name->access_position();
-        Position &t_pos = type_name->access_position();
-        t_pos.set_start_line(q_pos.get_start_line());
-        t_pos.set_start_column(q_pos.get_start_column());
-        t_pos.set_end_line(q_pos.get_end_line());
-        t_pos.set_end_column(q_pos.get_end_column());
-        return type_name;
-    }
+    IType_name *to_type(ISimple_name const *simple_name);
 
     // Create an "auto" typename
-    IType_name *auto_type(Token *tok)
-    {
-        return to_type(NULL, tok);
-    }
+    IType_name *auto_type(Token *tok);
 
     // Create a reference from a type name.
     IExpression_reference const *to_reference(
         IType_name const *type_name,
-        bool             is_array_con = false)
-    {
-        IExpression_reference *result = m_expression_factory->create_reference(type_name);
-        if (is_array_con)
-            result->set_array_constructor();
-        Position const &t_pos = type_name->access_position();
-        Position &r_pos = result->access_position();
-        r_pos.set_start_line(t_pos.get_start_line());
-        r_pos.set_start_column(t_pos.get_start_column());
-        r_pos.set_end_line(t_pos.get_end_line());
-        r_pos.set_end_column(t_pos.get_end_column());
-        return result;
-    }
+        bool             is_array_con = false);
 
     // Create a reference from a simple name.
-    IExpression_reference const *to_reference(ISimple_name const *simple_name)
-    {
-        return to_reference(to_type(simple_name));
-    }
+    IExpression_reference const *to_reference(ISimple_name const *simple_name);
 
     // Create a statement from an expression.
-    IStatement_expression const *to_statement(IExpression const *exp)
-    {
-        exp = check_expr(exp);
-        IStatement_expression *result = m_statement_factory->create_expression(exp);
-        if (exp != NULL) {
-            Position const &pos = exp->access_position();
-            Position &r_pos = result->access_position();
-            r_pos.set_start_line(pos.get_start_line());
-            r_pos.set_start_column(pos.get_start_column());
-            r_pos.set_end_line(pos.get_end_line());
-            r_pos.set_end_column(pos.get_end_column());
-        }
-        return result;
-    }
+    IStatement_expression const *to_statement(IExpression const *expr);
 
     // Create an integer value.
-    static wchar_t const *integer_value(wchar_t const *val, bool &overflow, unsigned long &value)
-    {
-        int base = 0;
-        unsigned long res = 0;
-        unsigned long maxv = 0, maxd = 0;
-        overflow = false;
-
-        wchar_t const *s = val;
-        if (*s == L'0') {
-            ++s;
-            if (*s == L'x' || *s == L'X') {
-                ++s;
-                base = 16;
-                maxv = 0x10000000;  // 0x10000000 * 16 + 0 = 0x100000000
-            } else if (*s == L'b' || *s == L'B') {
-                ++s;
-                base = 2;
-                maxv = 0x80000000;  // 0x80000000 *  2 + 0 = 0x100000000
-            } else {
-                base = 8;
-                maxv = 0x20000000;  // 0x20000000 *  8 + 0 = 0x100000000
-            }
-        } else {
-            base = 10;
-            maxv = 0x19999999;      // 0x19999999 * 10 + 6 = 0x100000000
-            maxd = 6;
-        }
-
-        for (;;) {
-            unsigned long digit = 16;
-            switch (*s) {
-            case L'0': digit = 0; break;
-            case L'1': digit = 1; break;
-            case L'2': digit = 2; break;
-            case L'3': digit = 3; break;
-            case L'4': digit = 4; break;
-            case L'5': digit = 5; break;
-            case L'6': digit = 6; break;
-            case L'7': digit = 7; break;
-            case L'8': digit = 8; break;
-            case L'9': digit = 9; break;
-            case L'a': digit = 10; break;
-            case L'b': digit = 11; break;
-            case L'c': digit = 12; break;
-            case L'd': digit = 13; break;
-            case L'e': digit = 14; break;
-            case L'f': digit = 15; break;
-            case L'A': digit = 10; break;
-            case L'B': digit = 11; break;
-            case L'C': digit = 12; break;
-            case L'D': digit = 13; break;
-            case L'E': digit = 14; break;
-            case L'F': digit = 15; break;
-            default: goto out;
-            }
-
-            // beware of C++ semantics: gcc will optimize simple overflow tests away :-(
-            if (res >= maxv && digit >= maxd)
-                overflow = true;
-
-            res *= base;
-            res += digit;
-            ++s;
-        }
-    out:
-        /* ignore overflow on sign bit, this cannot be checked reliable here
-        if (res >= 0x80000000) {
-            // overflow on sign bit
-            overflow = true;
-        }
-        */
-        value = res;
-        return s;
-    }
+    static char const *integer_value(char const *val, bool &overflow, unsigned long &value);
 
     // Check an expression.
-    IType_name *check_type(IType_name *type) {
-        if (type == ERR_TYPE) {
-            IQualified_name *q_name = qualified_error();
-            IType_name *result = m_name_factory->create_type_name(q_name);
-            Position const &t_pos = q_name->access_position();
-            Position &r_pos = result->access_position();
-            r_pos.set_start_line(t_pos.get_start_line());
-            r_pos.set_start_column(t_pos.get_start_column());
-            r_pos.set_end_line(t_pos.get_end_line());
-            r_pos.set_end_column(t_pos.get_end_column());
-            return result;
-        }
-        return type;
-    }
+    IType_name *check_type(IType_name *type);
 
     /// RAII-like check.
     class Checker_type {
@@ -816,89 +288,27 @@ COMPILER mdl
     // Create an unary expression.
     IExpression_unary *create_unary(
         IExpression_unary::Operator const op,
-        IExpression const                 *argument)
-    {
-        argument = check_expr(argument);
-        Position const &pos = argument->access_position();
-        IExpression_unary *expr = m_expression_factory->create_unary(
-                                                            op,
-                                                            argument,
-                                                            pos.get_start_line(),
-                                                            pos.get_start_column(),
-                                                            pos.get_end_line(),
-                                                            pos.get_end_column());
-        return expr;
-    }
+        IExpression const                 *argument);
 
     // Create a binary expression.
     IExpression_binary *create_binary(
         IExpression_binary::Operator const op,
         IExpression const                  *left,
-        IExpression const                  *right)
-    {
-        left  = check_expr(left);
-        right = check_expr(right);
-        IExpression_binary *expr = m_expression_factory->create_binary(op, left, right);
-        Position const &l_pos = left->access_position();
-        Position const &r_pos = right->access_position();
-        Position &e_pos = expr->access_position();
-        e_pos.set_start_line(l_pos.get_start_line());
-        e_pos.set_start_column(l_pos.get_start_column());
-        e_pos.set_end_line(r_pos.get_end_line());
-        e_pos.set_end_column(r_pos.get_end_column());
-        return expr;
-    }
+        IExpression const                  *right);
 
     // Create a conditional expression.
     IExpression_conditional *create_conditional(
         IExpression const *cond,
-        IExpression const *true_exp,
-        IExpression const *false_exp)
-    {
-        cond  = check_expr(cond);
-        true_exp = check_expr(true_exp);
-        false_exp = check_expr(false_exp);
-        Position const &s_pos = cond->access_position();
-        Position const &e_pos = false_exp->access_position();
-        return m_expression_factory->create_conditional(
-            cond,
-            true_exp,
-            false_exp,
-            s_pos.get_start_line(),
-            s_pos.get_start_column(),
-            e_pos.get_end_line(),
-            e_pos.get_end_column());
-    }
+        IExpression const *true_expr,
+        IExpression const *false_expr);
 
     // Create a positional argument.
-    IArgument_positional const *create_positional_argument(IExpression const *expr)
-    {
-        expr = check_expr(expr);
-        Position const &e_pos = expr->access_position();
-        return m_expression_factory->create_positional_argument(
-                expr,
-                e_pos.get_start_line(),
-                e_pos.get_start_column(),
-                e_pos.get_end_line(),
-                e_pos.get_end_column());
-    }
+    IArgument_positional const *create_positional_argument(IExpression const *expr);
 
     // Create a named argument.
     IArgument_named const *create_named_argument(
         ISimple_name const *parameter_name,
-        IExpression const  *expr)
-    {
-        expr = check_expr(expr);
-        Position const &p_pos = parameter_name->access_position();
-        Position const &e_pos = expr->access_position();
-        return m_expression_factory->create_named_argument(
-            parameter_name,
-            expr,
-            p_pos.get_start_line(),
-            p_pos.get_start_column(),
-            e_pos.get_end_line(),
-            e_pos.get_end_column());
-    }
+        IExpression const  *expr);
 
     // Create a parameter.
     IParameter const *create_parameter(
@@ -907,210 +317,30 @@ COMPILER mdl
         IType_name const        *type_name,
         ISimple_name const      *name,
         IExpression const       *init,
-        IAnnotation_block const *annotations)
-    {
-        init = check_expr(init);
-        Position const &t_pos = type_name->access_position();
-        int start_line = sl ? sl : t_pos.get_start_line();
-        int start_column = sc ? sc : t_pos.get_start_column();
-        int end_line = t_pos.get_end_line();
-        int end_column = t_pos.get_end_column();
-        if (annotations) {
-            Position const &a_pos = annotations->access_position();
-            end_line = a_pos.get_end_line();
-            end_column = a_pos.get_end_column();
-        } else if (init) {
-            Position const &i_pos = init->access_position();
-            end_line = i_pos.get_end_line();
-            end_column = i_pos.get_end_column();
-        }
-        IParameter const *param = m_declaration_factory->create_parameter(
-                                        type_name,name,init,annotations,
-                                        start_line,start_column,end_line,end_column);
-        return param;
-    }
+        IAnnotation_block const *annotations);
 
     // Create a declaration.
-    IStatement_declaration *create_declaration(IDeclaration const *decl)
-    {
-        decl = check_decl(decl);
-        IStatement_declaration *stmnt = m_statement_factory->create_declaration(decl);
-        Position const &d_pos = decl->access_position();
-        Position &s_pos = stmnt->access_position();
-        s_pos.set_start_line(d_pos.get_start_line());
-        s_pos.set_start_column(d_pos.get_start_column());
-        s_pos.set_end_line(d_pos.get_end_line());
-        s_pos.set_end_column(d_pos.get_end_column());
-        return stmnt;
-    }
+    IStatement_declaration *create_declaration(IDeclaration const *decl);
 
     // Add a declaration.
-    void add_declaration(IDeclaration const *decl)
-    {
-        decl = check_decl(decl);
-        m_module->add_declaration(decl);
-    }
+    void add_declaration(IDeclaration const *decl);
 
     // Add an annotation.
     static void add_annotation(
         IAnnotation_block *&annotations,
-        IAnnotation const *anno)
-    {
-        // just ignore wrong annotations
-        if (anno != NULL)
-            annotations->add_annotation(anno);
-    }
+        IAnnotation const *anno);
 
     // Mark that an expression was in parenthesis.
-    static void mark_parenthesis(IExpression const *exp)
-    {
-      if (exp != ERR_EXPR)
-          const_cast<IExpression *>(exp)->mark_parenthesis();
-    }
+    static void mark_parenthesis(IExpression const *expr);
 
-    // Convert escape sequences in string literals amnd skip quaotes.
-    string convert_escape_sequences_skip_quotes(wchar_t const *ws)
-    {
-        size_t l = wcslen(ws);
-        wstring res(m_alloc);
-        res.reserve(l - 2);
-
-        wchar_t const *p = ws + 1;     // skip first quote
-        wchar_t const *e = ws + l - 1; // skip last quote
-
-        while (p < e) {
-            if (*p == '\\') {
-                ++p;
-                wchar_t wc = *p;
-                switch (wc) {
-                case L'a': res += '\a'; ++p; break;
-                case L'b': res += '\b'; ++p; break;
-                case L'f': res += '\f'; ++p; break;
-                case L'n': res += '\n'; ++p; break;
-                case L'r': res += '\r'; ++p; break;
-                case L't': res += '\t'; ++p; break;
-                case L'v': res += '\v'; ++p; break;
-                case L'\\': res += '\\'; ++p; break;
-                case L'\'': res += '\''; ++p; break;
-                case L'"': res += '"'; ++p; break;
-                case L'0':
-                case L'1':
-                case L'2':
-                case L'3':
-                case L'4':
-                case L'5':
-                case L'6':
-                case L'7':
-                    {
-                        unsigned code = 0;
-                        bool exit = false;
-                        do {
-                            switch (*p) {
-                            case L'0': code = code * 8 + 0; break;
-                            case L'1': code = code * 8 + 1; break;
-                            case L'2': code = code * 8 + 2; break;
-                            case L'3': code = code * 8 + 3; break;
-                            case L'4': code = code * 8 + 4; break;
-                            case L'5': code = code * 8 + 5; break;
-                            case L'6': code = code * 8 + 6; break;
-                            case L'7': code = code * 8 + 7; break;
-                            default: --p; exit = true; break;
-                            }
-                            ++p;
-                         } while (!exit);
-                         res += wchar_t(code);
-                    }
-                    break;
-                case L'x':
-                case L'u':
-                case L'U':
-                    {
-                        unsigned code = 0;
-                        unsigned range = 0x10FFFF;
-
-                        if (wc == L'x')
-                            range = 0xFF;
-                        else if (wc == L'u')
-                            range = 0xFFFF;
-                        bool exit = false;
-                        bool overrun = false;
-                        ++p;
-                        wchar_t const *start = p;
-                        if (!isxdigit(*p)) {
-                            wchar_t wbuf[32];
-                            swprintf(wbuf, 32, L"\\%c used with no following hex digits", wc);
-
-                            errors->Warning(t->line, int(t->col + p - ws), wbuf);
-                            res += *p;
-                         } else {
-                            do {
-                                switch (*p) {
-                                case L'0': code = code * 16 + 0; break;
-                                case L'1': code = code * 16 + 1; break;
-                                case L'2': code = code * 16 + 2; break;
-                                case L'3': code = code * 16 + 3; break;
-                                case L'4': code = code * 16 + 4; break;
-                                case L'5': code = code * 16 + 5; break;
-                                case L'6': code = code * 16 + 6; break;
-                                case L'7': code = code * 16 + 7; break;
-                                case L'8': code = code * 16 + 8; break;
-                                case L'9': code = code * 16 + 9; break;
-                                case L'a':
-                                case L'A': code = code * 16 + 10; break;
-                                case L'b':
-                                case L'B': code = code * 16 + 11; break;
-                                case L'c':
-                                case L'C': code = code * 16 + 12; break;
-                                case L'd':
-                                case L'D': code = code * 16 + 13; break;
-                                case L'e':
-                                case L'E': code = code * 16 + 14; break;
-                                case L'f':
-                                case L'F': code = code * 16 + 15; break;
-                                default: --p; exit = true; break;
-                                }
-                                if (code > range)
-                                    overrun = true;
-                                ++p;
-                             } while (!exit);
-                             if (overrun) {
-                                 wchar_t wbuf[48];
-                                 swprintf(wbuf, 48, L"\\%c escape sequence out of range", wc);
-
-                                 errors->Warning(t->line, int(t->col + p - start), wbuf);
-                             }
-                             res += wchar_t(code);
-                         }
-                    }
-                    break;
-                case L'\0':
-                    res += wc; ++p; break;
-                default:
-                    {
-                        wchar_t wbuf[32];
-                        swprintf(wbuf, 32, L"Unknown escape sequence '\\%c'", wc);
-                        errors->Warning(t->line, int(t->col + p - ws), wbuf);
-                        res += wc; ++p;
-                    }
-                    break;
-                }
-            } else {
-                res += *p;
-                ++p;
-            }
-        }
-        string tmp(m_alloc);
-        res.reserve(l - 2);
-        wchar_to_utf8(tmp, res.c_str());
-        return tmp;
-    }
+    // Convert escape sequences in string literals and skip quotes.
+    string convert_escape_sequences_skip_quotes(char const *s);
 
     // The type of vectors of parameters.
     typedef vector<IParameter const *>::Type Parameter_vector;
 
     // A class for adding arguments to either a call or an annotation.
-    class Argument_owner
-    {
+    class Argument_owner {
         public:
             // Constructor.
             // \param call  the call expression to which arguments should be added
@@ -1147,8 +377,6 @@ CHARACTERS
 
     LETTER = 'A'..'Z' + 'a'..'z' .
 
-    UNICODE_LETTER = ANY - '\'' - '\n' - '\r' .
-
     DIGIT = '0'..'9' .
 
     NONZERODIGIT = '1'..'9' .
@@ -1159,6 +387,8 @@ CHARACTERS
 
     CHARACTER = ANY - '"' - '\\' .
 
+    UNICODE_CHARACTER = ANY - '\'' - '\\' .
+
     ESCAPE = 'a' + 'b' + 'f' + 'r' + 'n' + 't' + '\\' + '\'' + '\"' .
 
     NOT_EXP = ANY - 'e' - 'E' - 'f' - 'F' - 'd' - 'D' - DIGIT .
@@ -1167,7 +397,7 @@ TOKENS
 
     IDENT = LETTER { LETTER | DIGIT | '_' } .
 
-    UNICODE_IDENT = '\'' { UNICODE_LETTER } '\'' .
+    UNICODE_IDENT = '\'' { UNICODE_CHARACTER | '\\' ESCAPE | '\\' UNICODE_CHARACTER } '\'' .
 
     INTEGER_LITERAL
         = (NONZERODIGIT { DIGIT })
@@ -1227,6 +457,10 @@ TOKENS
     LEFT_SQUARE_BRACKET = '[' .
 
     RIGHT_SQUARE_BRACKET = ']' .
+
+    LEFT_BRACKET = '{' .
+
+    RIGHT_BRACKET = '}' .
 
     ANNOTATION_BLOCK_BEGIN = "[[" .
 
@@ -1354,6 +588,17 @@ mdl
         }
     .
 
+trailing_comma =
+    [
+         ','
+         (.
+             if (!m_trailing_comma_allowed) {
+                 errors->Error(la, "trailing \",\" is not allowed here");
+             }
+         .)
+    ]
+    .
+
 boolean_literal<bool &value,int &sl,int &sc,int &el,int &ec>
     = "true"
                                     (.
@@ -1361,7 +606,7 @@ boolean_literal<bool &value,int &sl,int &sc,int &el,int &ec>
                                         sl = t->line;
                                         sc = t->col;
                                         el = t->line;
-                                        ec = t->col + wcslen(t->val) - 1;
+                                        ec = t->col + utf8_len(t->val) - 1;
                                     .)
     | "false"
                                     (.
@@ -1369,7 +614,7 @@ boolean_literal<bool &value,int &sl,int &sc,int &el,int &ec>
                                         sl = t->line;
                                         sc = t->col;
                                         el = t->line;
-                                        ec = t->col + wcslen(t->val) - 1;
+                                        ec = t->col + utf8_len(t->val) - 1;
                                     .)
     .
 
@@ -1379,11 +624,11 @@ integer_literal<unsigned long &value, int &sl, int &sc, int &el, int &ec>
                                         integer_value(t->val, overflow, value);
                                         if (overflow)
                                             errors->Warning(
-                                                t->line, t->col, L"Integer constant overflow");
+                                                t->line, t->col, "Integer constant overflow");
                                         sl = t->line;
                                         sc = t->col;
                                         el = t->line;
-                                        ec = t->col + wcslen(t->val) - 1;
+                                        ec = t->col + utf8_len(t->val) - 1;
                                     .)
     .
 
@@ -1392,7 +637,7 @@ fract_literal<int &major, int &minor>
                                         bool overflow = false, ov = false;
                                         unsigned long v;
 
-                                        wchar_t const *dot = integer_value(t->val, ov, v);
+                                        char const *dot = integer_value(t->val, ov, v);
                                         overflow |= ov;
                                         major = v;
 
@@ -1401,7 +646,7 @@ fract_literal<int &major, int &minor>
                                         overflow |= ov;
                                         if (overflow)
                                             errors->Warning(
-                                                t->line, t->col, L"Integer constant overflow");
+                                                t->line, t->col, "Integer constant overflow");
 
                                         minor = v;
                                     .)
@@ -1412,8 +657,8 @@ floating_literal<double &value,int &sl,int &sc,int &el,int &ec,bool &is_float,bo
                                     (.
                                         // do this only if we had NO error here
                                         if (errDist > 0) {
-                                            wchar_t *end;
-                                            value = wcstod(t->val,&end);
+                                            char *end;
+                                            value = strtod(t->val,&end);
                                             if (value == HUGE_VAL || value == -HUGE_VAL) {
                                                 errors->Error(
                                                     t->line, t->col,
@@ -1428,12 +673,12 @@ floating_literal<double &value,int &sl,int &sc,int &el,int &ec,bool &is_float,bo
                                             if (*end)
                                                 fprintf(
                                                     stderr,
-                                                    "failed to convert floating literal '%ls'\n",
+                                                    "failed to convert floating literal '%s'\n",
                                                     t->val);
                                             sl = t->line;
                                             sc = t->col;
                                             el = t->line;
-                                            ec = t->col + wcslen(t->val) - 1;
+                                            ec = t->col + utf8_len(t->val) - 1;
                                             is_error = false;
                                         } else {
                                             is_error = true;
@@ -1450,14 +695,14 @@ string_literal<string &utf8, int &sl, int &sc, int &el, int &ec>
             sl = t->line;
             sc = t->col;
             el = t->line;
-            ec = t->col + wcslen(t->val) - 1;
+            ec = t->col + utf8_len(t->val) - 1;
         .)
     {
         STRING_LITERAL
         (.
             utf8 += convert_escape_sequences_skip_quotes(t->val);
             el = t->line;
-            ec = t->col + wcslen(t->val) - 1;
+            ec = t->col + utf8_len(t->val) - 1;
         .)
     }
     .
@@ -1486,6 +731,7 @@ mdl_version
                                             } else {
                                                 scanner->set_mdl_version(major, minor);
                                                 m_unicode_identifiers_supported =
+                                                m_trailing_comma_allowed =
                                                     m_module->get_mdl_version() >= mi::mdl::IMDL::MDL_version::MDL_VERSION_1_8;
                                             }
                                         }
@@ -1493,24 +739,23 @@ mdl_version
     SYNC ';' .
 
 simple_name<ISimple_name const *&value>
-    = IDENT                         
-      (. value = to_simple(t); 
+    = IDENT
+      (. value = to_simple(t);
          m_last_identifier_unicode = false;
       .)
     .
 
 simple_unicode_name<ISimple_name const *&value>
     = UNICODE_IDENT
-    (. string tmp(m_alloc);
+    (. string utf8(t->val, m_alloc);
        int sl = t->line;
        int sc = t->col;
        int el = t->col;
-       int ec = t->col + wcslen(t->val) - 1;
+       int ec = t->col + utf8_len(t->val) - 1;
 
-       wchar_to_utf8(tmp, t->val);
-       // Strip off leading and trailing single quotes.
-       tmp = tmp.substr(1, tmp.size() - 2);
-       value = to_simple(tmp.c_str(), sl, sc, el, ec);
+       utf8 = convert_escape_sequences_skip_quotes(t->val);
+       
+       value = to_simple(utf8.c_str(), sl, sc, el, ec);
        m_last_identifier_unicode = true;
        if (!unicode_identifier_support()) {
          value = error_name();
@@ -1604,7 +849,7 @@ qualified_import<IQualified_name *&value>
                                         .)
         }
         [
-            "::" '*'                    (. 
+            "::" '*'                    (.
                                            m_last_identifier_unicode = false;
                                            value->add_component(to_simple(t));
                                         .)
@@ -1701,8 +946,8 @@ frequency_qualifier<Qualifier &qualifier,int &sl,int &sc>
 
 relative_type<IType_name *prefix,IType_name *&name>
     =
-    (. 
-       Checker_type checker(*this, name); 
+    (.
+       Checker_type checker(*this, name);
        m_last_identifier_unicode = false;
     .)
 
@@ -1777,15 +1022,15 @@ relative_type<IType_name *prefix,IType_name *&name>
                                                                                     /// @break
     | IDENT                                 (. name = to_type(prefix, t); .)
         [
-            "::"                            (. IType_name *name_cont = ERR_TYPE;  
+            "::"                            (. IType_name *name_cont = ERR_TYPE;
                                                m_last_identifier_unicode = false;
                                             .)
             relative_type<name,name_cont>
         ]
-    | UNICODE_IDENT 
-                                            (. 
-                                               name = to_unicode_type(prefix, t); 
-                                               m_last_identifier_unicode = true; 
+    | UNICODE_IDENT
+                                            (.
+                                               name = to_unicode_type(prefix, t);
+                                               m_last_identifier_unicode = true;
                                                if (!unicode_identifier_support()) {
                                                   unicode_identifiers_not_supported_error(t);
                                                   name = check_type(ERR_TYPE);
@@ -1895,10 +1140,11 @@ parameter_list<Parameter_vector &parameters>
             [
                 parameter<para>
                                                 (. parameters.push_back(para); .)
-                { WEAK ','
-                    parameter<para>
+                { IF(non_trailing_comma(TOK_RIGHT_PARENTHESIS))
+                    ',' parameter<para>
                                                 (. parameters.push_back(para); .)
                 }
+                trailing_comma
             ]
         ')'
     .
@@ -1932,20 +1178,22 @@ argument_list<Argument_owner &arg_owner>
             [ IF(is_named_argument())
                 named_argument<argument>
                                                 (. arg_owner.add_argument(argument); .)
-                { WEAK ','
-                    named_argument<argument>
+                { IF(non_trailing_comma(TOK_RIGHT_PARENTHESIS))
+                    ',' named_argument<argument>
                                                 (. arg_owner.add_argument(argument); .)
                 }                                                               /// @break
+                trailing_comma
             | positional_argument<argument>
                                                 (. arg_owner.add_argument(argument); .)
-                { IF(see_comma() && !is_named_argument())
-                    WEAK ',' positional_argument<argument>
+                { IF(non_trailing_comma(TOK_RIGHT_PARENTHESIS) && !is_named_argument())
+                    ',' positional_argument<argument>
                                                 (. arg_owner.add_argument(argument); .)
                 }                                                               /// @break@tab
-                { WEAK ','
-                    named_argument<argument>
+                { IF(non_trailing_comma(TOK_RIGHT_PARENTHESIS))
+                    ',' named_argument<argument>
                                                 (. arg_owner.add_argument(argument); .)
                 }                                                               /// @break
+                trailing_comma
             ]                                                                   /// @break
         ')'
     .
@@ -1961,7 +1209,16 @@ using_alias<IDeclaration const *&declaration, int sl, int sc>
         (. IQualified_name *qname =  m_name_factory->create_qualified_name(); .)
         qualified_utf8_name<qname>
         SYNC ';'
-        (. declaration = m_declaration_factory->create_namespace_alias(alias, qname); .)
+        (.
+            Position const &end_pos = qname->access_position();
+            declaration = m_declaration_factory->create_namespace_alias(
+                alias,
+                qname,
+                sl,
+                sc,
+                end_pos.get_end_line(),
+                end_pos.get_end_column());
+        .)
     .
 
 using_import<IDeclaration const *&declaration, bool exported>
@@ -2322,9 +1579,10 @@ enum_type_declaration<bool exported, IDeclaration const *&declaration>
                                                 .)
         '{'                                                             /// @break@tab
             enum_value_declarator<enum_declaration>
-            { WEAK ','
+            { IF(non_trailing_comma(TOK_RIGHT_BRACKET)) ','
                 enum_value_declarator<enum_declaration>
             }                                                           /// @break
+            trailing_comma
         '}'
         SYNC ';'
                                                 (.
@@ -3192,7 +2450,7 @@ let_expression<IExpression const *&exp>
                 '}'                                                             /// @break
             )                                                                   /// @break
         WEAK "in"                           (. IExpression const *right = ERR_EXPR; .)
-        unary_expression<right>             (.
+        assignment_expression<right>        (.
                                                 right = check_expr(right);
                                                 let_exp->set_expression(right);
                                                 Position const &e_pos = right->access_position();

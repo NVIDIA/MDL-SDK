@@ -201,42 +201,6 @@ private:
 
 }  // anonymous
 
-const char* Mdl_module::deprecated_get_module_db_name(
-    DB::Transaction* transaction,
-    const char* argument,
-    Execution_context* context)
-{
-    bool mdle_module = is_mdle(argument);
-    std::string mdl_module_name = get_mdl_name_from_load_module_arg(argument, mdle_module);
-    if( mdl_module_name.empty()) {
-        add_error_message( context,
-            STRING::formatted_string( "Invalid module name \"%s\".", argument), -1);
-        return nullptr;
-    }
-
-    std::string db_module_name = get_db_name(mdl_module_name);
-
-    // Check whether the module exists in the DB.
-    DB::Tag db_module_tag = transaction->name_to_tag(db_module_name.c_str());
-    if (!db_module_tag)
-    {
-        // don't consider this an error. This allows to check if a module is loaded.
-        return nullptr;
-    }
-
-    // Check if the DB entry is a module
-    if (transaction->get_class_id(db_module_tag) != Mdl_module::id)
-    {
-        LOG::mod_log->error(M_SCENE, LOG::Mod_log::C_DATABASE,
-            "DB name for module \"%s\" (\"%s\") already in use.",
-            mdl_module_name.c_str(), db_module_name.c_str());
-        return nullptr;
-    }
-
-    // get the name (look up name again instead of using db_module_name to obtain a valid pointer)
-    return transaction->tag_to_name(db_module_tag);
-}
-
 mi::Sint32 Mdl_module::create_module(
     DB::Transaction* transaction,
     const char* argument,
@@ -251,20 +215,10 @@ mi::Sint32 Mdl_module::create_module(
     bool mdle_module = is_mdle( argument);
 
     // Sanity check for non-MDLE module names.
-    if( !mdle_module && !starts_with_scope( argument)) {
-
-        if( MDL::get_encoded_names_enabled()) {
-            return add_error_message( context, STRING::formatted_string(
-                "Invalid module name \"%s\" (does not start with \"::\" and is not an MDLE file "
-                "path).", decode_for_error_msg( argument).c_str()), -1);
-        } else {
-            add_warning_message( context, STRING::formatted_string(
-                "The module name \"%s\" does not start with \"::\" (and is not an MDLE file path). "
-                "This is deprecated, please add leading double colons.",
-                decode_for_error_msg( argument).c_str()));
-        }
-
-    }
+    if( !mdle_module && !starts_with_scope( argument))
+        return add_error_message( context, STRING::formatted_string(
+            "Invalid module name \"%s\" (does not start with \"::\" and is not an MDLE file "
+            "path).", decode_for_error_msg( argument).c_str()), -1);
 
     // Compute MDL module name
     std::string mdl_module_name = get_mdl_name_from_load_module_arg( argument, mdle_module);
@@ -283,10 +237,9 @@ mi::Sint32 Mdl_module::create_module(
         return add_error_message( context,
             STRING::formatted_string( "Invalid module name \"%s\".", argument), -1);
 
-    if( MDL::get_encoded_names_enabled()
-        && (   (core_load_module_arg.find( '(') != std::string::npos)
-            || (core_load_module_arg.find( ')') != std::string::npos)
-            || (core_load_module_arg.find( ',') != std::string::npos)))
+    if(    (core_load_module_arg.find( '(') != std::string::npos)
+        || (core_load_module_arg.find( ')') != std::string::npos)
+        || (core_load_module_arg.find( ',') != std::string::npos))
         return add_error_message( context,
             STRING::formatted_string( "Invalid module name \"%s\" containing parentheses or "
                 "commas.", argument), -1);
@@ -382,10 +335,9 @@ mi::Sint32 Mdl_module::create_module(
         return add_error_message( context,
             STRING::formatted_string( "Invalid module name \"%s\".", module_name), -1);
 
-    if( MDL::get_encoded_names_enabled()
-        && (   (core_module_name.find( '(') != std::string::npos)
-            || (core_module_name.find( ')') != std::string::npos)
-            || (core_module_name.find( ',') != std::string::npos)))
+    if(    (core_module_name.find( '(') != std::string::npos)
+        || (core_module_name.find( ')') != std::string::npos)
+        || (core_module_name.find( ',') != std::string::npos))
         return add_error_message( context,
             STRING::formatted_string( "Invalid module name \"%s\" containing parentheses or "
                 "commas.", module_name), -1);
@@ -448,70 +400,6 @@ mi::Sint32 Mdl_module::create_module(
     return context->get_result();
 }
 
-mi::Sint32 Mdl_module::deprecated_create_module(
-    DB::Transaction* transaction,
-    const char* module_name,
-    Variant_data* variant_data,
-    mi::Size variant_count,
-    Execution_context* context)
-{
-    ASSERT( M_SCENE, module_name);
-    ASSERT( M_SCENE, variant_data);
-    ASSERT( M_SCENE, context);
-
-    // Reject invalid module names (in particular, names containing slashes and backslashes).
-    std::string core_module_name = decode_module_name( module_name);
-    if( !is_valid_module_name( core_module_name))
-        return -1;
-
-    // Check whether the module exists already in the DB.
-    std::string db_module_name = get_db_name( module_name);
-    DB::Tag db_module_tag = transaction->name_to_tag( db_module_name.c_str());
-    if( db_module_tag) {
-        if( transaction->get_class_id( db_module_tag) != Mdl_module::id) {
-            LOG::mod_log->error( M_SCENE, LOG::Mod_log::C_DATABASE,
-                "DB name for module \"%s\" already in use.", core_module_name.c_str());
-            return -3;
-        }
-        return 1;
-    }
-
-    // Prepare annotation blocks for module builder (replace nullptr by empty annotation blocks).
-    mi::base::Handle<IExpression_factory> ef( get_expression_factory());
-    for( mi::Size i = 0; i < variant_count; ++i) {
-        Variant_data& pd = variant_data[i];
-        if( !pd.m_annotations)
-            pd.m_annotations = ef->create_annotation_block();
-    }
-
-    // Create builder
-    Mdl_module_builder builder(
-        transaction,
-        db_module_name.c_str(),
-        /*min_mdl_version*/ mi::mdl::IMDL::MDL_VERSION_1_0,
-        /*max_mdl_version*/ mi::mdl::IMDL::MDL_LATEST_VERSION,
-        /*export_to_db*/ true,
-        context);
-    if( context->get_error_messages_count() > 0)
-        return -1;
-
-    // Add variants to module
-    for( mi::Size i = 0; i < variant_count; ++i) {
-        const Variant_data& vd = variant_data[i];
-        if( builder.add_variant(
-            vd.m_variant_name.c_str(),
-            vd.m_prototype_tag,
-            vd.m_defaults.get(),
-            vd.m_annotations.get(),
-            /*return_annotations*/ nullptr,
-            /*is_exported*/ true,
-            context) < 0)
-            return -1;
-    }
-
-    return context->get_error_messages_count() > 0 ? -1 : 0;
-}
-
 bool Mdl_module::supports_reload() const
 {
     if( m_module->is_stdlib() || m_module->is_builtins())
@@ -521,10 +409,11 @@ bool Mdl_module::supports_reload() const
     if( strcmp( name, "::base") == 0)
         return false;
 
+    if( strcmp( name, "::nvidia::distilling_support") == 0)
+        return false;
 
     return true;
 }
-
 
 namespace {
 
@@ -660,6 +549,13 @@ mi::Sint32 Mdl_module::create_module_internal(
 
     lock.unlock();
 
+    LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_DATABASE,
+        "  Module (MDL name): \"%s\"", mdl_module_name.c_str());
+    LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_DATABASE,
+        "  Module (DB name): \"%s\"", db_module_name.c_str());
+    LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_DATABASE,
+        "  Module (core module name): \"%s\"", core_module_name);
+
     // Compile the module.
     mi::base::Handle<mi::mdl::IGenerated_code_dag> code_dag(
         generate_dag( transaction, mdl, module, context));
@@ -678,6 +574,8 @@ mi::Sint32 Mdl_module::create_module_internal(
         std::string core_import_name = import->get_name();
         std::string mdl_import_name  = encode_module_name( core_import_name);
         std::string db_import_name   = get_db_name( mdl_import_name);
+        LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_DATABASE,
+            "    Import %u (DB name): \"%s\"", i, db_import_name.c_str());
         Mdl_tag_ident import_ident;
         DB::Tag import_tag = transaction->name_to_tag( db_import_name.c_str());
         if( !import_tag) {
@@ -716,7 +614,7 @@ mi::Sint32 Mdl_module::create_module_internal(
                     db_annotation_name.c_str()), -3);
         }
         LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_DATABASE,
-          "    Annotation %llu (DB name): \"%s\"", i, db_annotation_name.c_str());
+            "    Annotation %llu (DB name): \"%s\"", i, db_annotation_name.c_str());
         annotation_tags.push_back( transaction->reserve_tag());
     }
 
@@ -739,7 +637,7 @@ mi::Sint32 Mdl_module::create_module_internal(
                     db_function_name.c_str()), -3);
         }
         LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_DATABASE,
-          "    Function %llu (DB name): \"%s\"", i, db_function_name.c_str());
+            "    Function %llu (DB name): \"%s\"", i, db_function_name.c_str());
         function_tags.emplace_back( transaction->reserve_tag(), module_ident);
     }
 
@@ -762,7 +660,7 @@ mi::Sint32 Mdl_module::create_module_internal(
                     db_material_name.c_str()), -3);
         }
         LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_DATABASE,
-          "    Material %llu (DB name): \"%s\"", i, db_material_name.c_str());
+            "    Material %llu (DB name): \"%s\"", i, db_material_name.c_str());
         material_tags.emplace_back( transaction->reserve_tag(), module_ident);
     }
 
@@ -840,118 +738,6 @@ mi::Sint32 Mdl_module::create_module_internal(
     }
 
     return 0;
-}
-
-IValue_texture* Mdl_module::create_texture(
-    DB::Transaction* transaction,
-    const char* file_path,
-    IType_texture::Shape shape,
-    mi::Float32 gamma,
-    const char* selector,
-    bool shared,
-    mi::Sint32* errors)
-{
-    mi::Sint32 dummy_errors = 0;
-    if( !errors)
-        errors = &dummy_errors;
-
-    if( !transaction || !file_path) {
-        *errors = -1;
-        return nullptr;
-    }
-
-    if( !is_absolute_mdl_file_path( file_path)) {
-        *errors = -2;
-        return nullptr;
-    }
-
-    DB::Tag tag = DETAIL::mdl_texture_to_tag(
-        transaction,
-        file_path,
-        /*module_filename*/ nullptr,
-        /*module_name*/ nullptr,
-        gamma,
-        selector,
-        shared,
-        /*context*/ nullptr); // TODO expose execution context
-    if( !tag) {
-        *errors = -3;
-        return nullptr;
-    }
-
-    *errors = 0;
-    mi::base::Handle<IType_factory> tf( get_type_factory());
-    mi::base::Handle<IValue_factory> vf( get_value_factory());
-    mi::base::Handle<const IType_texture> t( tf->create_texture( shape));
-    return vf->create_texture( t.get(), tag);
-}
-
-IValue_light_profile* Mdl_module::create_light_profile(
-    DB::Transaction* transaction, const char* file_path, bool shared, mi::Sint32* errors)
-{
-    mi::Sint32 dummy_errors = 0;
-    if( !errors)
-        errors = &dummy_errors;
-
-    if( !transaction || !file_path) {
-        *errors = -1;
-        return nullptr;
-    }
-
-    if( !is_absolute_mdl_file_path( file_path)) {
-        *errors = -2;
-        return nullptr;
-    }
-
-    DB::Tag tag = DETAIL::mdl_light_profile_to_tag(
-        transaction,
-        file_path,
-        /*module_filename*/ nullptr,
-        /*module_name*/ nullptr,
-        shared,
-        /*context*/ nullptr); // TODO expose execution context
-    if( !tag) {
-        *errors = -3;
-        return nullptr;
-    }
-
-    *errors = 0;
-    mi::base::Handle<IValue_factory> vf( get_value_factory());
-    return vf->create_light_profile( tag);
-}
-
-IValue_bsdf_measurement* Mdl_module::create_bsdf_measurement(
-    DB::Transaction* transaction, const char* file_path, bool shared, mi::Sint32* errors)
-{
-    mi::Sint32 dummy_errors = 0;
-    if( !errors)
-        errors = &dummy_errors;
-
-    if( !transaction || !file_path) {
-        *errors = -1;
-        return nullptr;
-    }
-
-    if( !is_absolute_mdl_file_path( file_path)) {
-        *errors = -2;
-        return nullptr;
-    }
-
-    DB::Tag tag = DETAIL::mdl_bsdf_measurement_to_tag(
-        transaction,
-        file_path,
-        /*module_filename*/ nullptr,
-        /*module_name*/ nullptr,
-        shared,
-        /*context*/ nullptr); // TODO expose execution context
-    if( !tag) {
-        *errors = -3;
-        return nullptr;
-    }
-
-    *errors = 0;
-    mi::base::Handle<IValue_factory> vf( get_value_factory());
-    return vf->create_bsdf_measurement( tag);
 }
 
 Mdl_module::Mdl_module()
@@ -1115,16 +901,17 @@ void Mdl_module::init_module( DB::Transaction* transaction, Execution_context* c
         // convert annotations
         mi::Size annotation_annotation_count = m_code_dag->get_annotation_annotation_count(i);
         Mdl_annotation_block annotations(annotation_annotation_count);
-        for (mi::Size a = 0; a < annotation_annotation_count; ++a) {
-            annotations[a] = m_code_dag->get_annotation_annotation(i, a);
-        }
-        mi::base::Handle<IAnnotation_block> annotations_int(converter.mdl_dag_node_vector_to_int_annotation_block(
-            annotations, m_mdl_name.c_str()));
+        for( mi::Size a = 0; a < annotation_annotation_count; ++a)
+            annotations[a] = m_code_dag->get_annotation_annotation( i, a);
+        mi::base::Handle<IAnnotation_block> annotations_int(
+            converter.mdl_dag_node_vector_to_int_annotation_block(
+                annotations, m_mdl_name.c_str()));
 
-        bool is_exported = m_code_dag->get_annotation_property(i, mi::mdl::IGenerated_code_dag::AP_IS_EXPORTED);
+        bool is_exported
+            = m_code_dag->get_annotation_property(i, mi::mdl::IGenerated_code_dag::AP_IS_EXPORTED);
 
-        mi::neuraylib::IAnnotation_definition::Semantics sema = mdl_semantics_to_ext_annotation_semantics(
-            m_code_dag->get_annotation_semantics(i));
+        mi::neuraylib::IAnnotation_definition::Semantics sema
+            = mdl_semantics_to_ext_annotation_semantics( m_code_dag->get_annotation_semantics( i));
 
         // get version information
         mi::neuraylib::Mdl_version since_version;
@@ -1134,8 +921,11 @@ void Mdl_module::init_module( DB::Transaction* transaction, Execution_context* c
             since_version   = convert_mdl_version( module_impl->get_mdl_version());
             removed_version = mi::neuraylib::MDL_VERSION_INVALID;
         } else {
-            const mi::mdl::Definition* def = mi::mdl::impl_cast<mi::mdl::Definition>( module_impl->find_signature(
-                core_name, /*only_exported*/ !m_module->is_builtins(), /*find_function*/ false));
+            const mi::mdl::Definition* def = mi::mdl::impl_cast<mi::mdl::Definition>(
+                module_impl->find_signature(
+                    core_name,
+                    /*only_exported*/ !m_module->is_builtins(),
+                    /*find_function*/ false));
             if( !def) {
                 // ::math::const_expr() and ::...::native() have no definition
                 since_version   = convert_mdl_version( module_impl->get_mdl_version());
@@ -1333,7 +1123,7 @@ mi::Size Mdl_module::get_import_count() const
 DB::Tag Mdl_module::get_import( mi::Size index) const
 {
     if( index >= m_imports.size())
-        return DB::Tag( 0);
+        return DB::Tag();
     return m_imports[index].first;
 }
 
@@ -1354,16 +1144,18 @@ mi::Size Mdl_module::get_function_count() const
     return m_functions.size();
 }
 
-DB::Tag Mdl_module::get_function(mi::Size index) const
+DB::Tag Mdl_module::get_function( mi::Size index) const
 {
     if( index >= m_functions.size())
-        return DB::Tag( 0);
+        return DB::Tag();
     return m_functions[index].first;
 }
 
-const char* Mdl_module::get_function_name(DB::Transaction* transaction, mi::Size index) const
+const char* Mdl_module::get_function_name( DB::Transaction* transaction, mi::Size index) const
 {
-    return index >= m_functions.size() ? nullptr : transaction->tag_to_name(m_functions[index].first);
+    if( index >= m_functions.size())
+        return nullptr;
+    return transaction->tag_to_name( m_functions[index].first);
 }
 
 mi::Size Mdl_module::get_material_count() const
@@ -1374,8 +1166,15 @@ mi::Size Mdl_module::get_material_count() const
 DB::Tag Mdl_module::get_material(mi::Size index) const
 {
     if( index >= m_materials.size())
-        return DB::Tag( 0);
+        return DB::Tag();
     return m_materials[index].first;
+}
+
+const char* Mdl_module::get_material_name( DB::Transaction* transaction, mi::Size index) const
+{
+    if( index >= m_materials.size())
+        return nullptr;
+    return transaction->tag_to_name( m_materials[index].first);
 }
 
 const IAnnotation_block* Mdl_module::get_annotations() const
@@ -1392,21 +1191,16 @@ mi::Size Mdl_module::get_annotation_definition_count() const
     return m_annotation_definitions->get_size();
 }
 
-const IAnnotation_definition* Mdl_module::get_annotation_definition(mi::Size index) const
+const IAnnotation_definition* Mdl_module::get_annotation_definition( mi::Size index) const
 {
-    ASSERT(M_SCENE, m_annotation_definitions);
-    return m_annotation_definitions->get_definition(index);
+    ASSERT( M_SCENE, m_annotation_definitions);
+    return m_annotation_definitions->get_definition( index);
 }
 
-const IAnnotation_definition* Mdl_module::get_annotation_definition(const char* name) const
+const IAnnotation_definition* Mdl_module::get_annotation_definition( const char* name) const
 {
-    ASSERT(M_SCENE, m_annotation_definitions);
-    return m_annotation_definitions->get_definition(name);
-}
-
-const char* Mdl_module::get_material_name(DB::Transaction* transaction, mi::Size index) const
-{
-    return index >= m_materials.size() ? nullptr : transaction->tag_to_name(m_materials[index].first);
+    ASSERT( M_SCENE, m_annotation_definitions);
+    return m_annotation_definitions->get_definition( name);
 }
 
 bool Mdl_module::is_standard_module() const
@@ -1529,7 +1323,7 @@ std::vector<std::string> Mdl_module::get_function_overloads_by_signature(
 
         // TODO encoded names: workaround to add missing signature for materials
         std::string name = s;
-        if( get_encoded_names_enabled() && (name.back() != ')')) {
+        if( (name.back() != ')')) {
 
             std::string prefix = get_db_name( encode_name_without_signature( name)) + '(';
             size_t prefix_len = prefix.size();
@@ -1748,8 +1542,11 @@ mi::Sint32 Mdl_module::reload_from_string(
         get_input_stream( module_source, /*filename*/ ""));
 
     std::string core_module_name = decode_module_name( m_mdl_name);
-    mi::base::Handle<const mi::mdl::IModule> module(mdl->load_module_from_stream(
-        ctx.get(), recursive ? nullptr : &cache, core_module_name.c_str(), module_source_stream.get()));
+    mi::base::Handle<const mi::mdl::IModule> module( mdl->load_module_from_stream(
+        ctx.get(),
+        recursive ? nullptr : &cache,
+        core_module_name.c_str(),
+        module_source_stream.get()));
 
     // report messages even when the module is valid (warnings, notes, ...)
     convert_and_log_messages(ctx->access_messages(), context);
@@ -1909,7 +1706,9 @@ mi::Sint32 Mdl_module::reload_module_internal(
     // check types
     if( !check_user_types( code_dag.get())) {
         add_error_message(
-            context, "The module has incompatible type changes and therefore cannot be reloaded.", -2);
+            context,
+            "The module has incompatible type changes and therefore cannot be reloaded.",
+            -2);
         return -1;
     }
 
@@ -1922,7 +1721,8 @@ mi::Sint32 Mdl_module::reload_module_internal(
             = get_db_name( MDL::get_mdl_name( code_dag.get(), /*is_material*/ false, i));
         function_names[i] = db_function_name;
         DB::Tag function_tag = transaction->name_to_tag( db_function_name.c_str());
-        if( function_tag && transaction->get_class_id( function_tag) != ID_MDL_FUNCTION_DEFINITION) {
+        if( function_tag
+            && transaction->get_class_id( function_tag) != ID_MDL_FUNCTION_DEFINITION) {
             std::string msg = "DB name for function definition '" + db_function_name + "' "
                 "already in use and not of type ELEMENT_TYPE_FUNCTION_DEFINITION";
             add_error_message( context, msg, -3);
@@ -1939,7 +1739,8 @@ mi::Sint32 Mdl_module::reload_module_internal(
             = get_db_name( MDL::get_mdl_name( code_dag.get(), /*is_material*/ true, i));
         material_names[i] = db_material_name;
         DB::Tag material_tag = transaction->name_to_tag( db_material_name.c_str());
-        if( material_tag && transaction->get_class_id( material_tag) != ID_MDL_FUNCTION_DEFINITION) {
+        if( material_tag
+            && transaction->get_class_id( material_tag) != ID_MDL_FUNCTION_DEFINITION) {
             std::string msg = "DB name for material definition '" + db_material_name + "' "
                 "already in use and not of type ELEMENT_TYPE_FUNCTION_DEFINITION";
             add_error_message( context, msg, -3);
@@ -1994,7 +1795,7 @@ mi::Sint32 Mdl_module::reload_module_internal(
                 m_file_name.c_str(), m_mdl_name.c_str(), resolve_resources);
 
             LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_DATABASE,
-              "    Function %llu (reload/new, DB name): \"%s\"", i, function_names[i].c_str());
+                "    Function %llu (reload/new, DB name): \"%s\"", i, function_names[i].c_str());
             new_functions[i] = Mdl_tag_ident( new_tag, m_ident);
             transaction->store_for_reference_counting(
                 new_tag, db_function, function_names[i].c_str(), privacy_level);
@@ -2009,13 +1810,21 @@ mi::Sint32 Mdl_module::reload_module_internal(
 
             DB::Access<Mdl_function_definition> old_db_function( old_tag, transaction);
             if( old_db_function->is_compatible( *db_function)) {
-                LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_DATABASE,
-                  "    Function %llu (reload/compatible, DB name): \"%s\"", i, function_names[i].c_str());
+                LOG::mod_log->debug(
+                    M_SCENE,
+                    LOG::Mod_log::C_DATABASE,
+                    "    Function %llu (reload/compatible, DB name): \"%s\"",
+                    i,
+                    function_names[i].c_str());
                 new_functions[i] = Mdl_tag_ident( old_tag, m_functions[it->second].second);
                 delete db_function;
             } else {
-                LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_DATABASE,
-                  "    Function %llu (reload/replace, DB name): \"%s\"", i, function_names[i].c_str());
+                LOG::mod_log->debug(
+                    M_SCENE,
+                    LOG::Mod_log::C_DATABASE,
+                    "    Function %llu (reload/replace, DB name): \"%s\"",
+                    i,
+                    function_names[i].c_str());
                 new_functions[i] = Mdl_tag_ident( old_tag, m_ident);
                 transaction->store_for_reference_counting(
                     old_tag, db_function, function_names[i].c_str(), privacy_level);
@@ -2038,7 +1847,7 @@ mi::Sint32 Mdl_module::reload_module_internal(
                 m_file_name.c_str(), m_mdl_name.c_str(), resolve_resources);
 
             LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_DATABASE,
-              "    Material %llu (reload/new, DB name): \"%s\"", i, material_names[i].c_str());
+                "    Material %llu (reload/new, DB name): \"%s\"", i, material_names[i].c_str());
             new_materials[i] = Mdl_tag_ident( new_tag, m_ident);
             transaction->store_for_reference_counting(
                 new_tag, db_material, material_names[i].c_str(), privacy_level);
@@ -2053,13 +1862,21 @@ mi::Sint32 Mdl_module::reload_module_internal(
 
             DB::Access<Mdl_function_definition> old_db_material( old_tag, transaction);
             if( old_db_material->is_compatible( *db_material)) {
-                LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_DATABASE,
-                  "    Material %llu (reload/compatible, DB name): \"%s\"", i, material_names[i].c_str());
+                LOG::mod_log->debug(
+                    M_SCENE,
+                    LOG::Mod_log::C_DATABASE,
+                    "    Material %llu (reload/compatible, DB name): \"%s\"",
+                    i,
+                    material_names[i].c_str());
                 new_materials[i] = Mdl_tag_ident( old_tag, m_materials[it->second].second);
                 delete db_material;
             } else {
-                LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_DATABASE,
-                  "    Material %llu (reload/replace, DB name): \"%s\"", i, material_names[i].c_str());
+                LOG::mod_log->debug(
+                    M_SCENE,
+                    LOG::Mod_log::C_DATABASE,
+                    "    Material %llu (reload/replace, DB name): \"%s\"",
+                    i,
+                    material_names[i].c_str());
                 new_materials[i] = Mdl_tag_ident( old_tag, m_ident);
                 transaction->store_for_reference_counting(
                     old_tag, db_material, material_names[i].c_str(), privacy_level);
@@ -2080,8 +1897,12 @@ mi::Sint32 Mdl_module::reload_module_internal(
             Mdl_annotation_definition_proxy* db_annotation = new Mdl_annotation_definition_proxy(
                 m_mdl_name.c_str());
 
-            LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_DATABASE,
-              "    Annotation %llu (reload/new, DB name): \"%s\"", i, annotation_names[i].c_str());
+            LOG::mod_log->debug(
+                M_SCENE,
+                LOG::Mod_log::C_DATABASE,
+                "    Annotation %llu (reload/new, DB name): \"%s\"",
+                i,
+                annotation_names[i].c_str());
             new_annotations[i] = new_tag;
             transaction->store_for_reference_counting(
                 new_tag, db_annotation, annotation_names[i].c_str(), privacy_level);
@@ -2093,8 +1914,12 @@ mi::Sint32 Mdl_module::reload_module_internal(
             Mdl_annotation_definition_proxy* db_annotation = new Mdl_annotation_definition_proxy(
                 m_mdl_name.c_str());
 
-            LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_DATABASE,
-              "    Annotation %llu (reload/replace, DB name): \"%s\"", i, annotation_names[i].c_str());
+            LOG::mod_log->debug(
+                M_SCENE,
+                LOG::Mod_log::C_DATABASE,
+                "    Annotation %llu (reload/replace, DB name): \"%s\"",
+                i,
+                annotation_names[i].c_str());
             new_annotations[i] = old_tag;
             transaction->store_for_reference_counting(
                 old_tag, db_annotation, annotation_names[i].c_str(), privacy_level);
@@ -2296,7 +2121,8 @@ void Mdl_module::dump( DB::Transaction* transaction) const
 
     mi::Size annotation_proxies_count = m_annotation_proxies.size();
     for( mi::Size i = 0; i < annotation_proxies_count; ++i)
-        s << "Annotation definition " << i << ": " << m_annotation_proxies[i].get_uint() << std::endl;
+        s << "Annotation definition " << i << ": " << m_annotation_proxies[i].get_uint()
+          << std::endl;
 
     s << std::endl;
     LOG::mod_log->info( M_SCENE, LOG::Mod_log::C_DATABASE, "%s", s.str().c_str());
@@ -2342,6 +2168,10 @@ void Mdl_module::get_scene_element_references( DB::Tag_set* result) const
     for( const auto& imp: m_imports)
         result->insert( imp.first);
 
+    collect_references( m_constants.get(), result);
+
+    collect_references( m_annotations.get(), result);
+
     for( const auto& fct: m_functions)
         result->insert( fct.first);
 
@@ -2351,8 +2181,6 @@ void Mdl_module::get_scene_element_references( DB::Tag_set* result) const
     for( const auto& ad: m_annotation_proxies)
         result->insert( ad);
 
-    collect_references( m_annotations.get(), result);
-
     for( const auto& res: m_resources)
         if( res.m_tag)
             result->insert( res.m_tag);
@@ -2361,4 +2189,3 @@ void Mdl_module::get_scene_element_references( DB::Tag_set* result) const
 } // namespace MDL
 
 } // namespace MI
-

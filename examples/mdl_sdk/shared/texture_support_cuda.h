@@ -225,27 +225,6 @@ __device__ inline void store_result3(float res[3], float v0, float v1, float v2)
     res[2] = v2;
 }
 
-// Stores the luminance if a given float[3] in a float.
-__device__ inline void store_result1(float* res, float3 const& v)
-{
-    // store luminance
-    *res = 0.212671 * v.x + 0.715160 * v.y + 0.072169 * v.z;
-}
-
-
-// Stores the luminance if a given float[3] in a float.
-__device__ inline void store_result1(float* res, float v0, float v1, float v2)
-{
-    // store luminance
-    *res = 0.212671 * v0 + 0.715160 * v1 + 0.072169 * v2;
-}
-
-// Stores a given float in a float
-__device__ inline void store_result1(float* res, float s)
-{
-    *res = s;
-}
-
 
 // ------------------------------------------------------------------------------------------------
 // Textures
@@ -619,6 +598,7 @@ extern "C" __device__ void tex_resolution_3d(
         result[0] = 0;
         result[1] = 0;
         result[2] = 0;
+        return;
     }
 
     Texture const& tex = self->textures[texture_idx - 1];
@@ -638,20 +618,12 @@ extern "C" __device__ bool tex_texture_isvalid(
 }
 
 // Implementation of frame function needed by generated code.
+// Note: frames are not implemented for the MDL SDK examples.
 extern "C" __device__ void tex_frame(
     int                         result[2],
-    Texture_handler_base const *self_base,
-    unsigned                    texture_idx)
+    Texture_handler_base const */*self_base*/,
+    unsigned                    /*texture_idx*/)
 {
-    Texture_handler const* self = static_cast<Texture_handler const*>(self_base);
-
-    if (texture_idx == 0 || texture_idx - 1 >= self->num_textures) {
-        // invalid texture returns zero
-        result[0] = 0;
-        result[1] = 0;
-    }
-
-    // Texture const& tex = self->textures[texture_idx - 1];
     result[0] = 0;
     result[1] = 0;
 }
@@ -728,7 +700,7 @@ extern "C" __device__ float df_light_profile_evaluate(
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
     if (light_profile_idx == 0 || light_profile_idx - 1 >= self->num_lightprofiles)
-        return 0.0f; // invalid light profile returns zero
+        return 0.0f;  // invalid light profile returns zero
 
     const Lightprofile& lp = self->lightprofiles[light_profile_idx - 1];
 
@@ -743,7 +715,7 @@ extern "C" __device__ float df_light_profile_evaluate(
     phi = phi - lp.theta_phi_start.y -
         floorf((phi - lp.theta_phi_start.y) * float(0.5 / M_PI)) * float(2.0 * M_PI);
 
-    // (phi < 0.0f) is no problem, this is handle by the (black) border
+    // (phi < 0.0f) is no problem, this is handled by the (black) border
     // since it implies lp.theta_phi_start.y > 0 (and we really have "no data" below that)
     float v = phi * lp.theta_phi_inv_delta.y * lp.inv_angular_resolution.y;
 
@@ -775,6 +747,8 @@ extern "C" __device__ void df_light_profile_sample(
 
     const Lightprofile& lp = self->lightprofiles[light_profile_idx - 1];
     uint2 res = lp.angular_resolution;
+    if (res.x <= 2 || res.y <= 2)
+        return;  // invalid resolution
 
 
     // sample theta_out
@@ -797,8 +771,8 @@ extern "C" __device__ void df_light_profile_sample(
     float xi1 = xi[1];
     const float* cdf_data_phi = cdf_data_theta + (res.x - 1)            // CDF theta block
                               + (idx_theta * (res.y - 1));              // selected CDF for phi
+    const unsigned idx_phi = sample_cdf(cdf_data_phi, res.y - 1, xi1);  // binary search
 
-    const unsigned idx_phi = sample_cdf(cdf_data_phi, res.y - 1, xi1);        // binary search
     float prob_phi = cdf_data_phi[idx_phi];
     if (idx_phi > 0)
     {
@@ -848,11 +822,8 @@ extern "C" __device__ float df_light_profile_pdf(
         return 0.0f;  // invalid light profile returns zero
 
     const Lightprofile& lp = self->lightprofiles[light_profile_idx - 1];
-
-    // CDF data
     const uint2 res = lp.angular_resolution;
     const float* cdf_data_theta = lp.cdf_data;
-
 
     // map theta to 0..1 range
     const float theta = theta_phi[0] - lp.theta_phi_start.x;
@@ -865,18 +836,17 @@ extern "C" __device__ float df_light_profile_pdf(
     phi = phi - lp.theta_phi_start.y -
         floorf((phi - lp.theta_phi_start.y) * float(0.5 / M_PI)) * float(2.0 * M_PI);
 
-    // (phi < 0.0f) is no problem, this is handle by the (black) border
+    // (phi < 0.0f) is no problem, this is handled by the (black) border
     // since it implies lp.theta_phi_start.y > 0 (and we really have "no data" below that)
     const int idx_phi = int(phi * lp.theta_phi_inv_delta.y);
 
     // wrap_mode: border black would be an alternative (but it produces artifacts at low res)
-    if (idx_theta < 0 || idx_theta > (res.x - 2) || idx_phi < 0 || idx_phi >(res.x - 2))
+    if (idx_theta < 0 || idx_theta > res.x - 2 || idx_phi < 0 || idx_phi > res.y - 2)
         return 0.0f;
 
 
     // get probability for theta
     //-------------------------------------------
-
     float prob_theta = cdf_data_theta[idx_theta];
     if (idx_theta > 0)
     {
@@ -890,7 +860,6 @@ extern "C" __device__ float df_light_profile_pdf(
         + (res.x - 1)                             // CDF theta block
         + (idx_theta * (res.y - 1));              // selected CDF for phi
 
-
     float prob_phi = cdf_data_phi[idx_phi];
     if (idx_phi > 0)
     {
@@ -902,8 +871,8 @@ extern "C" __device__ float df_light_profile_pdf(
     const float2 start = lp.theta_phi_start;
     const float2 delta = lp.theta_phi_delta;
 
-    const float cos_theta_0 = cos(start.x + float(idx_theta)      * delta.x);
-    const float cos_theta_1 = cos(start.x + float(idx_theta + 1u) * delta.x);
+    const float cos_theta_0 = cosf(start.x + float(idx_theta)      * delta.x);
+    const float cos_theta_1 = cosf(start.x + float(idx_theta + 1u) * delta.x);
 
     return prob_theta * prob_phi / (delta.y * (cos_theta_0 - cos_theta_1));
 }
@@ -916,10 +885,10 @@ extern "C" __device__ float df_light_profile_pdf(
 // Implementation of bsdf_measurement_isvalid() for an MBSDF.
 extern "C" __device__ bool df_bsdf_measurement_isvalid(
     Texture_handler_base const *self_base,
-    unsigned                    bsdf_measurement_index)
+    unsigned                    bsdf_measurement_idx)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
-    return bsdf_measurement_index != 0 && bsdf_measurement_index - 1 < self->num_mbsdfs;
+    return bsdf_measurement_idx != 0 && bsdf_measurement_idx - 1 < self->num_mbsdfs;
 }
 
 // Implementation of df::bsdf_measurement_resolution() function needed by generated code,
@@ -929,12 +898,12 @@ extern "C" __device__ bool df_bsdf_measurement_isvalid(
 extern "C" __device__ void df_bsdf_measurement_resolution(
     unsigned                    result[3],
     Texture_handler_base const  *self_base,
-    unsigned                    bsdf_measurement_index,
+    unsigned                    bsdf_measurement_idx,
     Mbsdf_part                  part)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
-    if (bsdf_measurement_index == 0 || bsdf_measurement_index - 1 >= self->num_mbsdfs)
+    if (bsdf_measurement_idx == 0 || bsdf_measurement_idx - 1 >= self->num_mbsdfs)
     {
         // invalid MBSDF returns zero
         result[0] = 0;
@@ -943,11 +912,11 @@ extern "C" __device__ void df_bsdf_measurement_resolution(
         return;
     }
 
-    Mbsdf const &bm = self->mbsdfs[bsdf_measurement_index - 1];
-    const unsigned part_index = static_cast<unsigned>(part);
+    Mbsdf const &bm = self->mbsdfs[bsdf_measurement_idx - 1];
+    const unsigned part_idx = static_cast<unsigned>(part);
 
     // check for the part
-    if (bm.has_data[part_index] == 0)
+    if (part_idx > 1 || bm.has_data[part_idx] == 0)
     {
         result[0] = 0;
         result[1] = 0;
@@ -956,11 +925,10 @@ extern "C" __device__ void df_bsdf_measurement_resolution(
     }
 
     // pass out the information
-    result[0] = bm.angular_resolution[part_index].x;
-    result[1] = bm.angular_resolution[part_index].y;
-    result[2] = bm.num_channels[part_index];
+    result[0] = bm.angular_resolution[part_idx].x;
+    result[1] = bm.angular_resolution[part_idx].y;
+    result[2] = bm.num_channels[part_idx];
 }
-
 
 
 __device__ inline float3 bsdf_compute_uvw(const float theta_phi_in[2],
@@ -970,7 +938,7 @@ __device__ inline float3 bsdf_compute_uvw(const float theta_phi_in[2],
     float u = theta_phi_out[1] - theta_phi_in[1];
     if (u < 0.0) u += float(2.0 * M_PI);
     if (u > float(1.0 * M_PI)) u = float(2.0 * M_PI) - u;
-    u *= M_ONE_OVER_PI;
+    u *= float(M_ONE_OVER_PI);
 
     const float v = theta_phi_out[0] * float(2.0 / M_PI);
     const float w = theta_phi_in[0] * float(2.0 / M_PI);
@@ -992,41 +960,41 @@ __device__ inline T bsdf_measurement_lookup(const cudaTextureObject_t& eval_volu
 extern "C" __device__ void df_bsdf_measurement_evaluate(
     float                       result[3],
     Texture_handler_base const  *self_base,
-    unsigned                    bsdf_measurement_index,
+    unsigned                    bsdf_measurement_idx,
     float const                 theta_phi_in[2],
     float const                 theta_phi_out[2],
     Mbsdf_part                  part)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
-    if (bsdf_measurement_index == 0 || bsdf_measurement_index - 1 >= self->num_mbsdfs)
+    if (bsdf_measurement_idx == 0 || bsdf_measurement_idx - 1 >= self->num_mbsdfs)
     {
         // invalid MBSDF returns zero
         store_result3(result, 0.0f);
         return;
     }
 
-    const Mbsdf& bm = self->mbsdfs[bsdf_measurement_index - 1];
-    const unsigned part_index = static_cast<unsigned>(part);
+    const Mbsdf& bm = self->mbsdfs[bsdf_measurement_idx - 1];
+    const unsigned part_idx = static_cast<unsigned>(part);
 
-    // check for the parta
-    if (bm.has_data[part_index] == 0)
+    // check for the parts
+    if (part_idx > 1 || bm.has_data[part_idx] == 0)
     {
         store_result3(result, 0.0f);
         return;
     }
 
     // handle channels
-    if (bm.num_channels[part_index] == 3)
+    if (bm.num_channels[part_idx] == 3)
     {
         const float4 sample = bsdf_measurement_lookup<float4>(
-            bm.eval_data[part_index], theta_phi_in, theta_phi_out);
+            bm.eval_data[part_idx], theta_phi_in, theta_phi_out);
         store_result3(result, sample.x, sample.y, sample.z);
     }
     else
     {
         const float sample = bsdf_measurement_lookup<float>(
-            bm.eval_data[part_index], theta_phi_in, theta_phi_out);
+            bm.eval_data[part_idx], theta_phi_in, theta_phi_out);
         store_result3(result, sample);
     }
 }
@@ -1035,7 +1003,7 @@ extern "C" __device__ void df_bsdf_measurement_evaluate(
 extern "C" __device__ void df_bsdf_measurement_sample(
     float                       result[3],          // output: theta, phi, pdf
     Texture_handler_base const  *self_base,
-    unsigned                    bsdf_measurement_index,
+    unsigned                    bsdf_measurement_idx,
     float const                 theta_phi_out[2],
     float const                 xi[3],              // uniform random values
     Mbsdf_part                  part)
@@ -1045,21 +1013,23 @@ extern "C" __device__ void df_bsdf_measurement_sample(
     result[2] = 0.0f;
 
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
-    if (bsdf_measurement_index == 0 || bsdf_measurement_index - 1 >= self->num_mbsdfs)
+    if (bsdf_measurement_idx == 0 || bsdf_measurement_idx - 1 >= self->num_mbsdfs)
         return;  // invalid MBSDFs returns zero
 
-    const Mbsdf& bm = self->mbsdfs[bsdf_measurement_index - 1];
-    unsigned part_index = static_cast<unsigned>(part);
+    const Mbsdf& bm = self->mbsdfs[bsdf_measurement_idx - 1];
+    unsigned part_idx = static_cast<unsigned>(part);
 
-    if (bm.has_data[part_index] == 0)
+    if (part_idx > 1 || bm.has_data[part_idx] == 0)
         return;  // check for the part
 
     // CDF data
-    uint2 res = bm.angular_resolution[part_index];
-    const float* sample_data = bm.sample_data[part_index];
+    uint2 res = bm.angular_resolution[part_idx];
+    const float* sample_data = bm.sample_data[part_idx];
+    if (res.x < 1 || res.y < 1)
+        return;  // invalid resolution
 
     // compute the theta_in index (flipping input and output, BSDFs are symmetric)
-    unsigned idx_theta_in = unsigned(theta_phi_out[0] * M_ONE_OVER_PI * 2.0f * float(res.x));
+    unsigned idx_theta_in = unsigned(theta_phi_out[0] * float(M_ONE_OVER_PI * 2.0f) * float(res.x));
     idx_theta_in = min(idx_theta_in, res.x - 1);
 
     // sample theta_out
@@ -1102,7 +1072,7 @@ extern "C" __device__ void df_bsdf_measurement_sample(
 
     // compute theta and phi out
     //-------------------------------------------
-    const float2 inv_res = bm.inv_angular_resolution[part_index];
+    const float2 inv_res = bm.inv_angular_resolution[part_idx];
 
     const float s_theta = float(0.5 * M_PI) * inv_res.x;
     const float s_phi   = float(1.0 * M_PI) * inv_res.y;
@@ -1131,31 +1101,31 @@ extern "C" __device__ void df_bsdf_measurement_sample(
 // Implementation of df::bsdf_measurement_pdf() for an MBSDF.
 extern "C" __device__ float df_bsdf_measurement_pdf(
     Texture_handler_base const  *self_base,
-    unsigned                    bsdf_measurement_index,
+    unsigned                    bsdf_measurement_idx,
     float const                 theta_phi_in[2],
     float const                 theta_phi_out[2],
     Mbsdf_part                  part)
 {
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
 
-    if (bsdf_measurement_index == 0 || bsdf_measurement_index - 1 >= self->num_mbsdfs)
+    if (bsdf_measurement_idx == 0 || bsdf_measurement_idx - 1 >= self->num_mbsdfs)
         return 0.0f;  // invalid MBSDF returns zero
 
-    const Mbsdf& bm = self->mbsdfs[bsdf_measurement_index - 1];
-    unsigned part_index = static_cast<unsigned>(part);
+    const Mbsdf& bm = self->mbsdfs[bsdf_measurement_idx - 1];
+    unsigned part_idx = static_cast<unsigned>(part);
 
     // check for the part
-    if (bm.has_data[part_index] == 0)
+    if (part_idx > 1 || bm.has_data[part_idx] == 0)
         return 0.0f;
 
     // CDF data and resolution
-    const float* sample_data = bm.sample_data[part_index];
-    uint2 res = bm.angular_resolution[part_index];
+    const float* sample_data = bm.sample_data[part_idx];
+    uint2 res = bm.angular_resolution[part_idx];
 
     // compute indices in the CDF data
     float3 uvw = bsdf_compute_uvw(theta_phi_in, theta_phi_out); // phi_delta, theta_out, theta_in
-    unsigned idx_theta_in  = unsigned(theta_phi_in[0]  * M_ONE_OVER_PI * 2.0f * float(res.x));
-    unsigned idx_theta_out = unsigned(theta_phi_out[0] * M_ONE_OVER_PI * 2.0f * float(res.x));
+    unsigned idx_theta_in  = unsigned(theta_phi_in[0]  * float(M_ONE_OVER_PI * 2.0f) * float(res.x));
+    unsigned idx_theta_out = unsigned(theta_phi_out[0] * float(M_ONE_OVER_PI * 2.0f) * float(res.x));
     unsigned idx_phi_out   = unsigned(uvw.x * float(res.y));
     idx_theta_in  = min(idx_theta_in, res.x - 1);
     idx_theta_out = min(idx_theta_out, res.x - 1);
@@ -1182,7 +1152,7 @@ extern "C" __device__ float df_bsdf_measurement_pdf(
     }
 
     // compute probability to select a position in the sphere patch
-    float2 inv_res = bm.inv_angular_resolution[part_index];
+    float2 inv_res = bm.inv_angular_resolution[part_idx];
 
     const float s_theta = float(0.5 * M_PI) * inv_res.x;
     const float s_phi = float(1.0 * M_PI) * inv_res.y;
@@ -1200,22 +1170,25 @@ __device__ inline void df_bsdf_measurement_albedo(
                                                     // for the selected direction ([0]) and
                                                     // global ([1])
     Texture_handler const       *self,
-    unsigned                    bsdf_measurement_index,
+    unsigned                    bsdf_measurement_idx,
     float const                 theta_phi[2],
     Mbsdf_part                  part)
 {
-    const Mbsdf& bm = self->mbsdfs[bsdf_measurement_index - 1];
-    const unsigned part_index = static_cast<unsigned>(part);
+    const Mbsdf& bm = self->mbsdfs[bsdf_measurement_idx - 1];
+    const unsigned part_idx = static_cast<unsigned>(part);
 
     // check for the part
-    if (bm.has_data[part_index] == 0)
+    if (part_idx > 1 || bm.has_data[part_idx] == 0)
         return;
 
-    const uint2 res = bm.angular_resolution[part_index];
+    const uint2 res = bm.angular_resolution[part_idx];
+    if (res.x < 1)
+        return;
+
     unsigned idx_theta = unsigned(theta_phi[0] * float(2.0 / M_PI) * float(res.x));
     idx_theta = min(idx_theta, res.x - 1u);
-    result[0] = bm.albedo_data[part_index][idx_theta];
-    result[1] = bm.max_albedo[part_index];
+    result[0] = bm.albedo_data[part_idx][idx_theta];
+    result[1] = bm.max_albedo[part_idx];
 }
 
 // Implementation of df::bsdf_measurement_albedos() for an MBSDF.
@@ -1225,7 +1198,7 @@ extern "C" __device__ void df_bsdf_measurement_albedos(
                                                     //         [2] albedo trans. for theta_phi
                                                     //         [3] max albedo trans. global
     Texture_handler_base const  *self_base,
-    unsigned                    bsdf_measurement_index,
+    unsigned                    bsdf_measurement_idx,
     float const                 theta_phi[2])
 {
     result[0] = 0.0f;
@@ -1234,20 +1207,20 @@ extern "C" __device__ void df_bsdf_measurement_albedos(
     result[3] = 0.0f;
 
     Texture_handler const *self = static_cast<Texture_handler const *>(self_base);
-    if (bsdf_measurement_index == 0 || bsdf_measurement_index - 1 >= self->num_mbsdfs)
+    if (bsdf_measurement_idx == 0 || bsdf_measurement_idx - 1 >= self->num_mbsdfs)
         return;  // invalid MBSDF returns zero
 
     df_bsdf_measurement_albedo(
         &result[0],
         self,
-        bsdf_measurement_index,
+        bsdf_measurement_idx,
         theta_phi,
         mi::neuraylib::MBSDF_DATA_REFLECTION);
 
     df_bsdf_measurement_albedo(
         &result[2],
         self,
-        bsdf_measurement_index,
+        bsdf_measurement_idx,
         theta_phi,
         mi::neuraylib::MBSDF_DATA_TRANSMISSION);
 }
@@ -1421,6 +1394,20 @@ extern "C" __device__ int scene_data_lookup_int(
     return default_value;
 }
 
+// Implementation of scene_data_lookup_float4x4().
+extern "C" __device__ void scene_data_lookup_float4x4(
+    float                                  result[16],
+    Texture_handler_base const            *self_base,
+    Shading_state_material                *state,
+    unsigned                               scene_data_id,
+    float const                            default_value[16],
+    bool                                   uniform_lookup)
+{
+    // just return default value
+    for (int i = 0; i < 16; ++i)
+        result[i] = default_value[i];
+}
+
 // Implementation of scene_data_lookup_float4() with derivatives.
 extern "C" __device__ void scene_data_lookup_deriv_float4(
     tct_deriv_arr_float_4                 *result,
@@ -1532,6 +1519,7 @@ __device__ mi::neuraylib::Texture_handler_vtable tex_vtable = {
     scene_data_lookup_int3,
     scene_data_lookup_int4,
     scene_data_lookup_color,
+    scene_data_lookup_float4x4,
 };
 
 // The vtable containing all texture access handlers required by the generated code
@@ -1572,6 +1560,7 @@ __device__ mi::neuraylib::Texture_handler_deriv_vtable tex_deriv_vtable = {
     scene_data_lookup_int3,
     scene_data_lookup_int4,
     scene_data_lookup_color,
+    scene_data_lookup_float4x4,
     scene_data_lookup_deriv_float,
     scene_data_lookup_deriv_float2,
     scene_data_lookup_deriv_float3,

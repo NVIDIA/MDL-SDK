@@ -33,13 +33,20 @@
 #include <llvm/IR/DebugInfo.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/IR/IntrinsicInst.h>
+#include <llvm/Analysis/OptimizationRemarkEmitter.h>
 
 #include <mdl/compiler/compilercore/compilercore_allocator.h>
+#include <mdl/compiler/compilercore/compilercore_errors.h>
+#include <mdl/compiler/compilercore/compilercore_messages.h>
+
 #include <mdl/compiler/compiler_hlsl/compiler_hlsl_compiler.h>
 #include <mdl/compiler/compiler_hlsl/compiler_hlsl_tools.h>
+#include <mdl/compiler/compiler_hlsl/compiler_hlsl_visitor.h>
 
 #include "generator_jit_hlsl_writer.h"
 #include "generator_jit_streams.h"
+
+#define DEBUG_TYPE "hlsl_writer"
 
 namespace mi {
 namespace mdl {
@@ -65,7 +72,8 @@ HLSLWriterBasePass::HLSLWriterBasePass(
     Type_mapper const           &type_mapper,
     mi::mdl::Options_impl const &options,
     mi::mdl::Messages_impl      &messages,
-    bool                        enable_debug)
+    bool                        enable_debug,
+    bool                        enable_opt_remarks)
 : Base(pid)
 , m_alloc(alloc)
 , m_type_mapper(type_mapper)
@@ -81,8 +89,11 @@ HLSLWriterBasePass::HLSLWriterBasePass(
 , m_type_cache(0, Type2type_map::hasher(), Type2type_map::key_equal(), alloc)
 , m_debug_types(alloc)
 , m_ref_fnames(0, Ref_fname_id_map::hasher(), Ref_fname_id_map::key_equal(), alloc)
+, m_messages(messages)
 , m_next_unique_name_id(0u)
+, m_noinline_mode(hlsl::IPrinter::ATTR_NOINLINE_WRAP)
 , m_use_dbg(enable_debug)
+, m_opt_remarks(enable_opt_remarks)
 {
 }
 
@@ -672,6 +683,7 @@ hlsl::Type *HLSLWriterBasePass::convert_type(
                 return m_tc.int_type;
             default:
                 MDL_ASSERT(!"unexpected LLVM integer type");
+                error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_INTEGER_TYPE);
                 return m_tc.int_type;
             }
         }
@@ -737,6 +749,7 @@ hlsl::Type *HLSLWriterBasePass::convert_type(
                 }
             }
             MDL_ASSERT(!"invalid vector type");
+            error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_VECTOR_TYPE);
             return m_tc.error_type;
         }
 
@@ -744,6 +757,7 @@ hlsl::Type *HLSLWriterBasePass::convert_type(
     case llvm::Type::FP128TyID:
     case llvm::Type::PPC_FP128TyID:
         MDL_ASSERT(!"unexpected LLVM type");
+        error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_FP_TYPE);
         return m_tc.double_type;
 
     case llvm::Type::PointerTyID:
@@ -766,6 +780,7 @@ hlsl::Type *HLSLWriterBasePass::convert_type(
             return convert_struct_type(struct_type);
         }
         MDL_ASSERT(!"pointer types not supported, yet");
+        error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_PTR_TYPE);
         return m_tc.error_type;
 
     case llvm::Type::BFloatTyID:
@@ -777,10 +792,12 @@ hlsl::Type *HLSLWriterBasePass::convert_type(
     case llvm::Type::FunctionTyID:
     case llvm::Type::ScalableVectorTyID:
         MDL_ASSERT(!"unexpected LLVM type");
+        error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_TYPE);
         return m_tc.error_type;
     }
 
     MDL_ASSERT(!"unknown LLVM type");
+    error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_TYPE);
     return m_tc.error_type;
 }
 
@@ -1179,35 +1196,123 @@ bool  HLSLWriterBasePass::must_be_materialized(
     return false;
 }
 
+/// Count number of functions inside a compilation unit.
+static size_t get_function_count(
+    hlsl::Compilation_unit const *unit)
+{
+    size_t cnt = 0;
+
+    for (hlsl::Compilation_unit::const_iterator it(unit->decl_begin()), end(unit->decl_end());
+        it != end;
+        ++it)
+    {
+        hlsl::Declaration const *decl = it;
+
+        if (hlsl::Declaration_function const *fdecl = as<hlsl::Declaration_function>(decl)) {
+            if (fdecl->is_prototype()) {
+                // ignore prototypes
+                continue;
+            }
+            ++cnt;
+        }
+    }
+    return cnt;
+}
+
+/// Count number of expressions (ignored references).
+static size_t get_expr_count(
+    hlsl::Compilation_unit const *unit)
+{
+    class Expr_visitor : public hlsl::CUnit_visitor {
+    public:
+        /// Constructor.
+        Expr_visitor()
+        : m_expr_cnt(0u)
+        {}
+
+        size_t get_count() const { return m_expr_cnt; }
+
+        void post_visit(Expr *expr) HLSL_FINAL {
+            ++m_expr_cnt;
+        }
+
+        void post_visit(Expr_ref *expr) HLSL_FINAL {
+            // do not count references
+        }
+
+    private:
+        size_t m_expr_cnt;
+    };
+
+    Expr_visitor visitor;
+
+    visitor.visit(const_cast<hlsl::Compilation_unit *>(unit));
+    return visitor.get_count();
+}
+
 // Finalize the compilation unit and write it to the given output stream.
 void HLSLWriterBasePass::finalize(
+    llvm::Module                     &M,
     Generated_code_source            *code,
     list<hlsl::Symbol *>::Type const &remaps)
 {
-    String_stream_writer      out(code->access_src_code());
-    mi::base::Handle<Printer> printer(m_compiler->create_printer(&out));
+    String_stream_writer            out(code->access_src_code());
+    mi::base::Handle<hlsl::Printer> printer(m_compiler->create_printer(&out));
 
     // analyze and optimize it
     m_unit->analyze(*m_compiler.get());
 
     printer->enable_locations(m_use_dbg);
 
+    // use defined to wrap [noinline]
+    printer->set_attr_noinline_mode(m_noinline_mode);
+
     // generate the defines fragment
-    if (!remaps.empty()) {
+    if (m_noinline_mode == hlsl::IPrinter::ATTR_NOINLINE_WRAP || !remaps.empty()) {
         printer->print_comment("defines");
 
-        typedef list<hlsl::Symbol *>::Type Symbol_list;
-
-        for (Symbol_list::const_iterator it(remaps.begin()), end(remaps.end()); it != end; ++it) {
-            printer->print("#define MAPPED_");
-            printer->print((*it)->get_name());
-            printer->print(" 1");
+        if (m_noinline_mode == hlsl::IPrinter::ATTR_NOINLINE_WRAP) {
+            printer->print("#if COMPUTE_SHADER_BUILD\n");
+            printer->print("#define ATTR_NOINLINE\n");
+            printer->print("#else\n");
+            printer->print("#define ATTR_NOINLINE [noinline]\n");
+            printer->print("#endif\n");
             printer->nl();
         }
-        printer->nl();
+
+        if (!remaps.empty()) {
+            typedef list<hlsl::Symbol *>::Type Symbol_list;
+
+            for (Symbol_list::const_iterator it(remaps.begin()), end(remaps.end()); it != end; ++it) {
+                printer->print("#define MAPPED_");
+                printer->print((*it)->get_name());
+                printer->print(" 1");
+                printer->nl();
+            }
+            printer->nl();
+        }
     }
 
     printer->print(m_unit.get());
+
+    if (m_opt_remarks) {
+        // just use the first function
+        llvm::Function const &F = *M.begin();
+
+        llvm::OptimizationRemarkEmitter ORE(&F);
+
+        ORE.emit([&]() {
+            return llvm::OptimizationRemark(DEBUG_TYPE, "HLSL", &F)
+                << "#HLSL Functions "
+                << llvm::ore::NV("fcount", get_function_count(m_unit.get()));
+        });
+
+        ORE.emit([&]() {
+            return llvm::OptimizationRemark(DEBUG_TYPE, "HLSL", &F)
+                << "#HLSL Expressions "
+                << llvm::ore::NV("ecount", get_expr_count(m_unit.get()));
+        });
+    }
 }
 
 // Generates a new global static const variable to hold an LLVM value.
@@ -1247,6 +1352,18 @@ hlsl::Definition *HLSLWriterBasePass::create_global_const(
     m_unit->add_decl(decl_cnst);
 
     return cnst_def;
+}
+
+// Add a JIT backend error message to the messages.
+void HLSLWriterBasePass::error(int code)
+{
+    // FIXME: get from JIT be
+    char MESSAGE_CLASS = 'J';
+
+    mi::mdl::Error_params params(m_alloc);
+
+    string msg(m_messages.format_msg(code, MESSAGE_CLASS, params));
+    m_messages.add_warning_message(code, MESSAGE_CLASS, 0, NULL, msg.c_str());
 }
 
 // Dump the current AST.

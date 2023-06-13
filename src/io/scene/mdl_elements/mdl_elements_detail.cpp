@@ -198,7 +198,15 @@ void decompose_resolved_filename(
     container_membername = get_container_membername( resolved_filename);
 }
 
+/// Returns a decoded module name suitable for error messages. Support \c NULL arguments.
+std::string get_module_name_for_error_msg( const char* module_name)
+{
+    if( !module_name)
+        return "(no module name available)";
+    return decode_for_error_msg( module_name);
 }
+
+} // namespace
 
 std::string unresolve_resource_filename(
     const char* filename,
@@ -307,6 +315,7 @@ DB::Tag mdl_resource_to_tag(
     const mi::mdl::IValue_resource* value,
     const char* module_filename,
     const char* module_name,
+    bool errors_are_warnings,
     Execution_context* context)
 {
     switch( value->get_kind()) {
@@ -318,6 +327,7 @@ DB::Tag mdl_resource_to_tag(
                 texture,
                 module_filename,
                 module_name,
+                errors_are_warnings,
                 context);
         }
 
@@ -328,6 +338,7 @@ DB::Tag mdl_resource_to_tag(
                 lp,
                 module_filename,
                 module_name,
+                errors_are_warnings,
                 context);
         }
 
@@ -339,6 +350,7 @@ DB::Tag mdl_resource_to_tag(
                 bsdfm,
                 module_filename,
                 module_name,
+                errors_are_warnings,
                 context);
         }
 
@@ -348,22 +360,12 @@ DB::Tag mdl_resource_to_tag(
     }
 }
 
-static bool is_volume_file( const char* file_path)
-{
-    std::string base, ext;
-    HAL::Ospath::splitext( file_path, base, ext);
-    STRING::to_lower( ext);
-    if( ext == ".vdb") {
-        return true;
-    }
-    return false;
-}
-
 DB::Tag mdl_texture_to_tag(
     DB::Transaction* transaction,
     const mi::mdl::IValue_texture* value,
     const char* module_filename,
     const char* module_name,
+    bool errors_are_warnings,
     Execution_context* context)
 {
     mi::Uint32 tag_uint32 = value->get_tag_value();
@@ -374,22 +376,13 @@ DB::Tag mdl_texture_to_tag(
         return DB::Tag( tag_uint32);
 
     const char* file_path = value->get_string_value();
+
     // Fail if neither tag nor string value is set.
     if( !file_path || !file_path[0])
-        return DB::Tag( 0);
+        return DB::Tag();
 
-    const mi::mdl::IType_texture* tex_type = value->get_type();
-    if( tex_type->get_shape() == mi::mdl::IType_texture::TS_3D && is_volume_file( file_path)) {
-        return mdl_volume_texture_to_tag(
-            transaction,
-            file_path,
-            module_filename,
-            module_name,
-            value->get_selector(),
-            /*shared*/ true,
-            context);
-    }
-
+    mi::mdl::IType_texture::Shape shape
+        = as<mi::mdl::IType_texture>( value->get_type())->get_shape();
     mi::Float32 gamma = convert_gamma_enum_to_float( value->get_gamma_mode());
     const char* selector = value->get_selector();
     if( selector && !selector[0])
@@ -401,6 +394,8 @@ DB::Tag mdl_texture_to_tag(
         file_path,
         module_filename,
         module_name,
+        errors_are_warnings,
+        shape,
         gamma,
         selector,
         /*shared*/ true,
@@ -412,22 +407,42 @@ DB::Tag mdl_texture_to_tag(
     const char* file_path,
     const char* module_filename,
     const char* module_name,
+    bool errors_are_warnings,
+    mi::mdl::IType_texture::Shape shape,
     mi::Float32 gamma,
     const char* selector,
     bool shared,
     Execution_context* context)
 {
-    // we might have UDIM textures here, so load a whole set
+    // Check for volume textures.
+    std::string extension = STRING::to_lower( HAL::Ospath::get_ext( file_path));
+    if( extension == ".vdb" && shape == mi::mdl::IType_texture::TS_3D) {
+        return mdl_volume_texture_to_tag(
+            transaction,
+            file_path,
+            module_filename,
+            module_name,
+            errors_are_warnings,
+            selector,
+            /*shared*/ true,
+            context);
+    }
+
     mi::base::Handle<mi::mdl::IMDL_resource_set> resource_set( get_resource_set(
         file_path, module_filename, module_name, /*log_messages*/ true, context));
-    mi::base::Handle<mi::mdl::IMDL_resource_element const> elem(
-        resource_set ? resource_set->get_element(0) : nullptr);
+    mi::base::Handle<const mi::mdl::IMDL_resource_element> elem(
+        resource_set ? resource_set->get_element( 0) : nullptr);
     if( !elem) {
-        std::string decoded_mdl_module_name
-            = module_name ? decode_for_error_msg( module_name) : "(no module name)";
-        LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO,
-            "Failed to resolve \"%s\" in \"%s\".", file_path, decoded_mdl_module_name.c_str());
-        return DB::Tag( 0);
+        std::string decoded_mdl_module_name = get_module_name_for_error_msg( module_name);
+        std::string msg = std::string( "Failed to resolve \"") + file_path
+            + "\" in \"" + decoded_mdl_module_name + "\".";
+        if( errors_are_warnings) {
+            LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO, "%s", msg.c_str());
+            add_warning_message( context, msg.c_str());
+        } else {
+            add_error_message( context, msg.c_str(), -4);
+        }
+        return DB::Tag();
     }
 
     const char* first_filename = elem->get_filename( 0);
@@ -448,13 +463,41 @@ DB::Tag mdl_texture_to_tag(
     if( no_callbacks_under_mutex)
         resource_set = new Local_mdl_resource_set( resource_set.get());
 
-    DB::Tag tag;
     Mdl_image_set image_set( resource_set.get(), file_path, selector);
     mi::base::Uuid hash = get_hash( resource_set.get());
 
     std::unique_lock<std::mutex> lock( g_transaction_mutex);
 
-    tag = TEXTURE::load_mdl_texture( transaction, &image_set, hash, shared, gamma);
+    mi::Sint32 result = 0;
+    DB::Tag tag = TEXTURE::load_mdl_texture( transaction, &image_set, hash, shared, gamma, result);
+    ASSERT( M_SCENE, result == 0 || result == -3 || result == -7 || result == -10);
+    // Note: tag.is_valid() && (result != 0) is feasible.
+    // TODO MDL-1136 harmonize valid tag XOR non-zero result
+    ASSERT( M_SCENE, tag.is_valid() | (result != 0));
+
+    if( result != 0) {
+        std::string decoded_mdl_module_name = get_module_name_for_error_msg( module_name);
+        std::string msg;
+        if( result == -3) {
+            msg = std::string( "No image plugin found to handle \"") + file_path
+                + "\" in \"" + decoded_mdl_module_name + "\".";
+        } else if( result == -7) {
+            msg = std::string( "File format error in \"") + file_path
+                + "\" in \"" + decoded_mdl_module_name + "\".";
+        } else if( result == -10) {
+            msg = std::string( "Failed to apply selector \"") + (selector ? selector : "")
+                + "\" to \"" + file_path
+                + "\" in \"" + decoded_mdl_module_name + "\".";
+        }
+
+        if( errors_are_warnings) {
+            LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO, "%s", msg.c_str());
+            add_warning_message( context, msg.c_str());
+        } else {
+            add_error_message( context, msg.c_str(), result);
+        }
+        return tag;
+    }
 
     LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_IO,
         "... and mapped to texture \"%s\" (tag %u).",
@@ -468,6 +511,7 @@ DB::Tag mdl_volume_texture_to_tag(
     const char* file_path,
     const char* module_filename,
     const char* module_name,
+    bool errors_are_warnings,
     const char* selector,
     bool shared,
     Execution_context* context)
@@ -480,6 +524,7 @@ DB::Tag mdl_light_profile_to_tag(
     const mi::mdl::IValue_light_profile* value,
     const char* module_filename,
     const char* module_name,
+    bool errors_are_warnings,
     Execution_context* context)
 {
     mi::Uint32 tag_uint32 = value->get_tag_value();
@@ -493,11 +538,17 @@ DB::Tag mdl_light_profile_to_tag(
 
     // Fail if neither tag nor string value is set.
     if( !file_path || !file_path[0])
-        return DB::Tag( 0);
+        return DB::Tag();
 
     // Convert string value into tag value.
     return mdl_light_profile_to_tag(
-        transaction, file_path, module_filename, module_name, /*shared*/ true, context);
+        transaction,
+        file_path,
+        module_filename,
+        module_name,
+        /*shared*/ true,
+        errors_are_warnings,
+        context);
 }
 
 DB::Tag mdl_light_profile_to_tag(
@@ -506,16 +557,36 @@ DB::Tag mdl_light_profile_to_tag(
     const char* module_filename,
     const char* module_name,
     bool shared,
+    bool errors_are_warnings,
     Execution_context* context)
 {
+    std::string extension = STRING::to_lower( HAL::Ospath::get_ext( file_path));
+    if( extension != ".ies") {
+        std::string decoded_mdl_module_name = get_module_name_for_error_msg( module_name);
+        std::string msg = std::string( "Invalid extension for light profile \"") + file_path
+            + "\" in \"" + decoded_mdl_module_name + "\".";
+        if( errors_are_warnings) {
+            LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO, "%s", msg.c_str());
+            add_warning_message( context, msg.c_str());
+        } else {
+            add_error_message( context, msg.c_str(), -3);
+        }
+        return DB::Tag();
+    }
+
     mi::base::Handle<mi::mdl::IMDL_resource_reader> reader(
         get_reader( file_path, module_filename, module_name, /*log_messages*/ true, context));
     if( !reader) {
-        std::string decoded_mdl_module_name
-            = module_name ? decode_for_error_msg( module_name) : "(no module name)";
-        LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO,
-            "Failed to resolve \"%s\" in \"%s\".", file_path, decoded_mdl_module_name.c_str());
-        return DB::Tag( 0);
+        std::string decoded_mdl_module_name = get_module_name_for_error_msg( module_name);
+        std::string msg = std::string( "Failed to resolve \"") + file_path
+            + "\" in \"" + decoded_mdl_module_name + "\".";
+        if( errors_are_warnings) {
+            LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO, "%s", msg.c_str());
+            add_warning_message( context, msg.c_str());
+        } else {
+            add_error_message( context, msg.c_str(), -4);
+        }
+        return DB::Tag();
     }
 
     const char* resolved_filename = reader->get_filename();
@@ -523,7 +594,6 @@ DB::Tag mdl_light_profile_to_tag(
         "Resolved \"%s\" in \"%s\" to \"%s\".",
         file_path, module_name, resolved_filename ? resolved_filename : "(no filename)");
 
-    DB::Tag tag;
     const std::string& absolute_mdl_file_path = reader->get_mdl_url();
     mi::base::Uuid hash = get_hash( reader.get());
 
@@ -536,7 +606,8 @@ DB::Tag mdl_light_profile_to_tag(
     std::unique_lock<std::mutex> lock( g_transaction_mutex);
 
     Resource_reader_impl wrapped_reader( reader.get());
-    tag = LIGHTPROFILE::load_mdl_lightprofile(
+    mi::Sint32 result = 0;
+    DB::Tag tag = LIGHTPROFILE::load_mdl_lightprofile(
         transaction,
         &wrapped_reader,
         filename,
@@ -544,7 +615,24 @@ DB::Tag mdl_light_profile_to_tag(
         container_membername,
         absolute_mdl_file_path,
         hash,
-        shared);
+        shared,
+        result);
+    ASSERT( M_SCENE, result == 0 || result == -7);
+    // Note: tag.is_valid() && (result != 0) is *not* feasible.
+    ASSERT( M_SCENE, tag.is_valid() ^ (result != 0));
+
+    if( result == -7) {
+        std::string decoded_mdl_module_name = get_module_name_for_error_msg( module_name);
+        std::string msg = std::string( "File format error in \"") + file_path
+            + "\" in \"" + decoded_mdl_module_name + "\".";
+        if( errors_are_warnings) {
+            LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO, "%s", msg.c_str());
+            add_warning_message( context, msg.c_str());
+        } else {
+            add_error_message( context, msg.c_str(), result);
+        }
+        return tag;
+    }
 
     LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_IO,
         "... and mapped to lightprofile \"%s\" (tag %u).",
@@ -557,6 +645,7 @@ DB::Tag mdl_bsdf_measurement_to_tag(
     const mi::mdl::IValue_bsdf_measurement* value,
     const char* module_filename,
     const char* module_name,
+    bool errors_are_warnings,
     Execution_context* context)
 {
     mi::Uint32 tag_uint32 = value->get_tag_value();
@@ -570,11 +659,17 @@ DB::Tag mdl_bsdf_measurement_to_tag(
 
     // Fail if neither tag nor string value is set.
     if( !file_path || !file_path[0])
-        return DB::Tag( 0);
+        return DB::Tag();
 
     // Convert string value into tag value.
     return mdl_bsdf_measurement_to_tag(
-        transaction, file_path, module_filename, module_name, /*shared*/ true, context);
+        transaction,
+        file_path,
+        module_filename,
+        module_name,
+        /*shared*/ true,
+        errors_are_warnings,
+        context);
 }
 
 DB::Tag mdl_bsdf_measurement_to_tag(
@@ -583,16 +678,36 @@ DB::Tag mdl_bsdf_measurement_to_tag(
     const char* module_filename,
     const char* module_name,
     bool shared,
+    bool errors_are_warnings,
     Execution_context* context)
 {
+    std::string extension = STRING::to_lower( HAL::Ospath::get_ext( file_path));
+    if( extension != ".mbsdf") {
+        std::string decoded_mdl_module_name = get_module_name_for_error_msg( module_name);
+        std::string msg = std::string( "Invalid extension for BSDF measurement \"") + file_path
+            + "\" in \"" + decoded_mdl_module_name + "\".";
+        if( errors_are_warnings) {
+            LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO, "%s", msg.c_str());
+            add_warning_message( context, msg.c_str());
+        } else {
+            add_error_message( context, msg.c_str(), -3);
+        }
+        return DB::Tag();
+    }
+
     mi::base::Handle<mi::mdl::IMDL_resource_reader> reader(
         get_reader( file_path, module_filename, module_name, /*log_messages*/ true, context));
     if( !reader) {
-        std::string decoded_mdl_module_name
-            = module_name ? decode_for_error_msg( module_name) : "(no module name)";
-        LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO,
-            "Failed to resolve \"%s\" in \"%s\".", file_path, decoded_mdl_module_name.c_str());
-        return DB::Tag( 0);
+        std::string decoded_mdl_module_name = get_module_name_for_error_msg( module_name);
+        std::string msg = std::string( "Failed to resolve \"") + file_path
+            + "\" in \"" + decoded_mdl_module_name + "\".";
+        if( errors_are_warnings) {
+            LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO, "%s", msg.c_str());
+            add_warning_message( context, msg.c_str());
+        } else {
+            add_error_message( context, msg.c_str(), -4);
+        }
+        return DB::Tag();
     }
 
     const char* resolved_filename = reader->get_filename();
@@ -600,7 +715,6 @@ DB::Tag mdl_bsdf_measurement_to_tag(
         "Resolved \"%s\" in \"%s\" to \"%s\".",
         file_path, module_name, resolved_filename ? resolved_filename : "(no filename)");
 
-    DB::Tag tag;
     const std::string& absolute_mdl_file_path = reader->get_mdl_url();
     mi::base::Uuid hash = get_hash( reader.get());
 
@@ -613,7 +727,8 @@ DB::Tag mdl_bsdf_measurement_to_tag(
     std::unique_lock<std::mutex> lock( g_transaction_mutex);
 
     Resource_reader_impl wrapped_reader( reader.get());
-    tag = BSDFM::load_mdl_bsdf_measurement(
+    mi::Sint32 result = 0;
+    DB::Tag tag = BSDFM::load_mdl_bsdf_measurement(
         transaction,
         &wrapped_reader,
         filename,
@@ -621,7 +736,24 @@ DB::Tag mdl_bsdf_measurement_to_tag(
         container_membername,
         absolute_mdl_file_path,
         hash,
-        shared);
+        shared,
+        result);
+    ASSERT( M_SCENE, result == 0 || result == -7);
+    // Note: tag.is_valid() && (result != 0) is *not* feasible.
+    ASSERT( M_SCENE, tag.is_valid() ^ (result != 0));
+
+    if( result == -7) {
+        std::string decoded_mdl_module_name = get_module_name_for_error_msg( module_name);
+        std::string msg = std::string( "File format error in \"") + file_path
+            + "\" in \"" + decoded_mdl_module_name + "\".";
+        if( errors_are_warnings) {
+            LOG::mod_log->warning( M_SCENE, LOG::Mod_log::C_IO, "%s", msg.c_str());
+            add_warning_message( context, msg.c_str());
+        } else {
+            add_error_message( context, msg.c_str(), result);
+        }
+        return tag;
+    }
 
     LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_IO,
         "... and mapped to scene element \"%s\" (tag %u).",
@@ -998,8 +1130,7 @@ Mdl_image_set::Mdl_image_set(
 
     m_mdl_file_path = set->get_mdl_url_mask();
 
-    std::string root;
-    HAL::Ospath::splitext( m_mdl_file_path, root, m_file_format);
+    m_file_format = STRING::to_lower( HAL::Ospath::get_ext( m_mdl_file_path));
     if( !m_file_format.empty() && m_file_format[0] == '.' )
         m_file_format = m_file_format.substr( 1);
 }
@@ -1110,7 +1241,7 @@ const char* Mdl_image_set::get_container_membername( mi::Size f, mi::Size i) con
 mi::neuraylib::IReader* Mdl_image_set::open_reader( mi::Size f, mi::Size i) const
 {
     ASSERT( M_SCENE, f < get_length());
-    ASSERT( M_SCENE, i < get_frame_length( i));
+    ASSERT( M_SCENE, i < get_frame_length( f));
 
     mi::base::Handle<mi::mdl::IMDL_resource_element const> elem( m_resource_set->get_element( f));
     mi::base::Handle<mi::mdl::IMDL_resource_reader> reader( elem->open_reader( i));
@@ -1151,22 +1282,29 @@ std::string lookup_thumbnail(
          ASSERT( M_SCENE, vstr.is_valid_interface());
 
          // lookup file
-        Execution_context context;
+         Execution_context context;
          std::string file = resolve_resource_filename(
-             vstr->get_value(), module_filename.c_str(), module_name.c_str(), /*log_messages*/ true, &context);
+             vstr->get_value(),
+             module_filename.c_str(),
+             module_name.c_str(),
+             /*log_messages*/ true,
+             &context);
          if( !file.empty())
              return file;
          break;
     }
 
-    // construct thumbnail filename according to the "old" convention module_name.def_simple_name.ext
+    // construct thumbnail filename according to the "old" convention
+    // module_name.def_simple_name.ext
     const char* ext[] = {"png", "jpg", "jpeg", "PNG", "JPG", "JPEG", nullptr};
 
     // located in container?
     if( is_archive_filename( module_filename) || is_mdle_filename( module_filename)) {
 
-        std::string module_container_filename   = get_container_filename( module_filename.c_str());
-        std::string module_container_membername = get_container_membername( module_filename.c_str());
+        std::string module_container_filename
+            = get_container_filename( module_filename.c_str());
+        std::string module_container_membername
+            = get_container_membername( module_filename.c_str());
 
         if( !has_mdl_suffix( module_container_membername)) {
             assert( false);
@@ -1183,7 +1321,8 @@ std::string lookup_thumbnail(
 
         // check for supported file types
         for( int i = 0; ext[i] != nullptr; ++i) {
-            std::string thumbnail_container_membername = thumbnail_container_member_basename + ext[i];
+            std::string thumbnail_container_membername
+                = thumbnail_container_member_basename + ext[i];
             mi::base::Handle<mi::mdl::IInput_stream> file( archive_tool->get_file_content(
                 module_container_filename.c_str(), thumbnail_container_membername.c_str()));
             if( file)

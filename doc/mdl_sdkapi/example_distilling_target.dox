@@ -1,0 +1,176 @@
+/******************************************************************************
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+
+/*! \page mi_neuray_example_distilling_target Example for custom Distiller plugin
+
+<div align="right">
+    [\link mi_neuray_example_distilling_glsl Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_traversal Next\endlink]
+</div>
+
+This example describes the creation of custom Distiller plugins and
+how to use them in an application. Distiller plugins implement one or
+more custom distilling target material(s) to which materials can be
+distilled.
+
+\section example_distilling_target_new New Topics
+  - Loading a custom Distiller plugin
+  - Custom Distiller plugin implementation
+  - Distiller rule definition
+
+\section example_distilling_target_descr Detailed Description
+
+<dl>
+    <dt><b>
+         Custom Distiller plugin loading
+    </b></dt>
+    <dd><br>
+        A custom Distiller plugin is a shared library that is loaded
+        into the MDL-SDK and provides one or more custom distilling
+        target(s) to the an application. The application is
+        responsible for loading the plugin and can then use the
+        target(s) through the Distiller API, just as for the targets
+        from the <tt>mdl_distiller</tt> plugin which is part of the
+        MDL-SDK.
+
+        The \ref example_distilling_target "example program" described
+        below loads an example plugin and distills a material to the
+        target implemented by the plugin.
+
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Custom distiller plugin implementation
+    </b></dt>
+    <dd><br>
+        The example distiller plugin implements a simple distiller
+        target called "mini_glossy" which only performs a very simple
+        transformation on any material it processes. "mini_glossy"
+        represents a material model that consists only of the nodes
+        <tt>simple_glossy_bsdf()</tt>, <tt>tint()</tt> and normalized
+        mixers and color mixers. All other nodes are replaced by
+        combinations of these in an attempt to simulate the appearance
+        of the original material.
+
+        The plugin in file `distilling_target_plugin.cpp` (see \ref
+        distilling_target_plugin "below") implements the Distiller
+        plugin interface. In its <tt>distill()</tt> function, it
+        applies several transformation rules to a compiled
+        material. These rules are defined in the domain-specific MDL
+        Transformation Language (MDLTL), which allows the
+        specification of rule-based graph transformations. The rule
+        file is also described \ref distilling_target_plugin_rules
+        "below".
+
+        Note that the example plugin implements one target.  The
+        plugin interface is general enough so that plugins could
+        implement more than one in the same plugin. The distiller
+        plugin <tt>mdl_distilller</tt> that comes with the MDL-SDK
+        does exactly that and implements multiple targets.
+
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+    <dt><b>
+        Distiller rule definition
+    </b></dt>
+    <dd><br>
+        Distiller rule definitions specify transformations on material
+        graph nodes using a domain-specific declarative language,
+        called <i>MDL Transformation Language (MDLTL)</i>.
+
+        Each MDLTL file contains a number of rule sets, and each rule
+        set contains a number of rules. The Distiller plugin decides
+        which rule sets are applied to a material graph, and in which
+        order.
+
+        Each rule consists of a left- and a right-hadn side. The
+        left-hand side is a pattern that matches a graph node and
+        binds variables, and the right-hand side specifies the
+        replacement for the matched rule.
+
+        When a rule set is applied to a material, the Distiller will
+        attempt to match all rules of a rule set, in order, to each
+        node in the material graph. When it matches, the variables in
+        the lefthand pattern of the rule are bound to subexpressions
+        of the current node, and the node on the right-hand side is
+        constructed, possibly including expressions bound by the
+        left-hand pattern. After a successful match, the Distiller
+        will continue with matching other nodes of the
+        materials. Keywords in MDLTL specify the used
+        rule application strategy (such as top-down or bottom-up) as
+        well as repeated matching after a successful match.
+
+        <!-- Workaround to prevent a layout problem after dd tags. -->
+    </dd>
+</dl>
+
+\section example_distilling_target Example Source
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/distilling_target/example_distilling_target.cpp</tt>
+
+The following example program accepts the following command line options:
+<dl>
+    <dt>-h</dt>
+    <dd>show command line help</dd>
+    <dt>--material_file FILE></dt>
+    <dd>file containing fully qualified names of materials to distill</dd>
+    <dt>--module MODULE_NAME</dt>
+    <dd>distill all materials from the module, can occur multiple times</dd>
+    <dt>--mdl_path PATH</dt>
+    <dd>mdl search path, can occur multiple times</dd>
+    <dt>--dump-original-material</dt>
+    <dd>dump structure of distilled material</dd>
+    <dt>--dump-distilled-material</dt>
+    <dd>dump structure of distilled material</dd>
+</dl>
+
+\include distilling_target/example_distilling_target.cpp
+
+\section distilling_target_plugin Example Source for Distiller Plugin
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/distilling_target/distilling_target_plugin.cpp</tt>
+
+\include distilling_target/distilling_target_plugin.cpp
+
+\section distilling_target_plugin_rules Example Source for Distiller Plugin rules
+
+<b>Source Code Location:</b>
+  <tt>examples/mdl_sdk/distilling_target/distilling_target_plugin_rules.mtldl</tt>
+
+\include distilling_target/distilling_target_plugin_rules.mdltl
+
+<div align="right">
+    [\link mi_neuray_example_distilling_glsl Previous\endlink]
+    [\link mi_neuray_examples Up\endlink]
+    [\link mi_neuray_example_traversal Next\endlink]
+</div>
+
+*/

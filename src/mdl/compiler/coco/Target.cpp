@@ -32,10 +32,10 @@ Coco/R itself) does not fall under the GNU General Public License.
 
 namespace Coco {
 
-Target::Target(State *s) {
-	next = NULL;
-
-	state = s;
+Target::Target(State *s)
+: state(s)
+, next(NULL)
+{
 }
 
 }; // namespace

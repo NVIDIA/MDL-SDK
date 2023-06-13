@@ -64,16 +64,10 @@ function(FIND_D3D12_EXT)
         message(WARNING "Using Windows 10 Kit version ${_SDK_VERSION_STRING}. It might be needed to set this version manually in the 'General'-section in the Visual Studio property page of projects that use D3D12.")
     endif()
 
-    # additional dependency because of issues in dxc shipped with older windows SDKs
-    # also allow to manually specify DXC_DIR to use a different DXR
-    if((${_SDK_VERSION_STRING} VERSION_LESS "10.0.20348.0") OR (EXISTS ${DXC_DIR}))
-        if(${_SDK_VERSION_STRING} VERSION_LESS "10.0.20348.0")
-            message(WARNING "Windows SDKs before Version 10.0.20348.0 suffer from an issue in the DirectX Shader Compiler. Adding an additional dependency.")
-        endif()
-        if(EXISTS ${MDL_BASE_FOLDER}/cmake/find/find_dxc_ext.cmake)
-            include(${MDL_BASE_FOLDER}/cmake/find/find_dxc_ext.cmake)
-            find_dxc_ext()
-        endif()
+    # to get the IDxcCompiler3 we can not rely on the DXC delivered with windows
+    if(EXISTS ${MDL_BASE_FOLDER}/cmake/find/find_dxc_ext.cmake)
+        include(${MDL_BASE_FOLDER}/cmake/find/find_dxc_ext.cmake)
+        find_dxc_ext()
         if(NOT ${MDL_DXC_FOUND})
             message(FATAL_ERROR "Additional dependency for 'DirectX Shader Compiler' was not found.")
             return()
@@ -117,7 +111,6 @@ function(FIND_D3D12_EXT)
         ${_D3D12_LIBRARY_DIR}/d3d12.lib
         ${_D3D12_LIBRARY_DIR}/dxgi.lib
         ${_D3D12_LIBRARY_DIR}/dxguid.lib
-        ${_D3D12_LIBRARY_DIR}/dxcompiler.lib
         ${_D3D12_LIBRARY_DIR}/D3DCompiler.lib
     )
 
@@ -133,40 +126,28 @@ function(FIND_D3D12_EXT)
     # runtime libraries
     string(REPLACE "Windows Kits/10/lib" "Windows Kits/10/bin" _D3D12_BIN_DIR ${_D3D12_LIBRARY_DIR})
     string(REPLACE "/um/x64" "/x64" _D3D12_BIN_DIR ${_D3D12_BIN_DIR})
-    # find_file(_D3D12_DLL "D3D12.dll" PATHS ${_D3D12_BIN_DIR} $ENV{WINDIR}/System32)
-    # find_file(_D3D12_SDK_LAYER_DLL "d3d12SDKLayers.dll" PATHS ${_D3D12_BIN_DIR} $ENV{WINDIR}/System32)
-    # find_file(_D3D12_COMPILER_DLL "d3dcompiler_47.dll" PATHS ${_D3D12_BIN_DIR} $ENV{WINDIR}/System32)
-    find_file(_DX_COMPILER_DLL "dxcompiler.dll" PATHS ${_D3D12_BIN_DIR} $ENV{WINDIR}/System32)
-    find_file(_DX_IL_DLL "dxil.dll" PATHS ${_D3D12_BIN_DIR} $ENV{WINDIR}/System32)
-    
-    # use the explicitly defined dxc
+
+    # use the options explicitly defined dxc
     if(${MDL_DXC_FOUND})
-        set(_D3D12_SHARED ${MDL_DEPENDENCY_DXC_SHARED})
+        set(_D3D12_INCLUDE_DIR   ${MDL_DEPENDENCY_DXC_INCLUDE} ${_D3D12_INCLUDE_DIR})
+        set(_D3D12_SHARED   ${MDL_DEPENDENCY_DXC_SHARED})
+        set(_D3D12_LIBS   ${MDL_DEPENDENCY_DXC_LIBS} ${_D3D12_LIBS})
     else()
+        find_file(_DX_COMPILER_DLL "dxcompiler.dll" PATHS ${_D3D12_BIN_DIR} $ENV{WINDIR}/System32)
+        find_file(_DX_IL_DLL "dxil.dll" PATHS ${_D3D12_BIN_DIR} $ENV{WINDIR}/System32)
         set(_D3D12_SHARED
-            # ${_D3D12_DLL}
-            # ${_D3D12_SDK_LAYER_DLL}
-            # ${_D3D12_COMPILER_DLL}
             ${_DX_COMPILER_DLL}
             ${_DX_IL_DLL}
         )
-
-        foreach(_SHARED ${_D3D12_SHARED})
-            if(NOT EXISTS ${_SHARED})
-                message(STATUS "D3D12_INCLUDE_DIR: ${_D3D12_INCLUDE_DIR}")
-                message(STATUS "DXGI_INCLUDE_DIR: ${_DXGI_INCLUDE_DIR}")
-                message(STATUS "D3D12_LIBRARY_DIR: ${_D3D12_LIBRARY_DIR}")
-                message(STATUS "D3D12_BIN_DIR: ${_D3D12_BIN_DIR}")
-                message(STATUS "D3D12_DLL: ${_D3D12_DLL}")
-                message(STATUS "D3D12_SDK_LAYER_DLL: ${_D3D12_SDK_LAYER_DLL}")
-                message(STATUS "D3D12_COMPILER_DLL: ${_D3D12_COMPILER_DLL}")
-                message(STATUS "DX_COMPILER_DLL: ${_DX_COMPILER_DLL}")
-                message(STATUS "DX_IL_DLL: ${_DX_IL_DLL}")
-                message(STATUS "WINRT_INCLUDE_DIR: ${_WINRT_INCLUDE_DIR}")
-                message(FATAL_ERROR "The dependency \"d3d12\" could not be resolved. The following library does not exist: \"${_SHARED}\". To continue without D3D12, you can disable the option 'MDL_ENABLE_D3D12_EXAMPLES'.")
-            endif()   
-        endforeach()
+        set(_D3D12_LIBS ${_D3D12_LIBS} ${_D3D12_LIBRARY_DIR}/dxcompiler.lib)
     endif()
+
+    # check if all files and folders we specified exist
+    foreach(_SHARED ${_D3D12_INCLUDE_DIR} ${_D3D12_SHARED} ${_D3D12_LIBS})
+        if(NOT EXISTS ${_SHARED})
+            message(FATAL_ERROR "The dependency \"d3d12\" could not be resolved. The following library does not exist: \"${_SHARED}\". To continue without D3D12, you can disable the option 'MDL_ENABLE_D3D12_EXAMPLES'.")
+        endif()   
+    endforeach()
 
     # store path that are later used in the add_opengl.cmake
     set(MDL_DEPENDENCY_D3D12_INCLUDE ${_D3D12_INCLUDE_DIR} CACHE INTERNAL "d3d12 headers")
@@ -176,11 +157,11 @@ function(FIND_D3D12_EXT)
     set(MDL_DEPENDENCY_D3D12_SHARED ${_D3D12_SHARED} CACHE INTERNAL "d3d12 shared libs")
 
     if(MDL_LOG_DEPENDENCIES)
-        message(STATUS "[INFO] MDL_DEPENDENCY_D3D12_INCLUDE:       ${MDL_DEPENDENCY_D3D12_INCLUDE}")
-        message(STATUS "[INFO] MDL_DEPENDENCY_DXGI_INCLUDE:        ${MDL_DEPENDENCY_DXGI_INCLUDE}")
-        message(STATUS "[INFO] MDL_DEPENDENCY_WINRT_INCLUDE:       ${MDL_DEPENDENCY_WINRT_INCLUDE}")
-        message(STATUS "[INFO] MDL_DEPENDENCY_D3D12_LIBS:          ${MDL_DEPENDENCY_D3D12_LIBS}")
-        message(STATUS "[INFO] MDL_DEPENDENCY_D3D12_SHARED:        ${MDL_DEPENDENCY_D3D12_SHARED}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_D3D12_INCLUDE:         ${MDL_DEPENDENCY_D3D12_INCLUDE}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_DXGI_INCLUDE:          ${MDL_DEPENDENCY_DXGI_INCLUDE}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_WINRT_INCLUDE:         ${MDL_DEPENDENCY_WINRT_INCLUDE}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_D3D12_LIBS:            ${MDL_DEPENDENCY_D3D12_LIBS}")
+        message(STATUS "[INFO] MDL_DEPENDENCY_D3D12_SHARED:          ${MDL_DEPENDENCY_D3D12_SHARED}")
     endif()
 
 endfunction()

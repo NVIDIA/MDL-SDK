@@ -42,7 +42,7 @@ Search_path::~Search_path()
 {
 }
 
-// Take a snapshot of the current search pathes
+// Take a snapshot of the current search paths
 mi::Sint32 Search_path::snapshot()
 {
     if (!m_mdl_config)

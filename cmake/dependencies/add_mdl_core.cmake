@@ -42,7 +42,9 @@ target_include_directories(${__TARGET_ADD_DEPENDENCY_TARGET}
     )
 
 # add build dependency
-add_dependencies(${__TARGET_ADD_DEPENDENCY_TARGET} mdl::mdl_core)
+if(MDL_TREAT_RUNTIME_DEPS_AS_BUILD_DEPS)
+    add_dependencies(${__TARGET_ADD_DEPENDENCY_TARGET} mdl::mdl_core)
+endif()
 
 # runtime dependencies
 if(NOT __TARGET_ADD_DEPENDENCY_NO_RUNTIME_COPY)

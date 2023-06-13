@@ -72,13 +72,13 @@ public:
 
     mi::Sint32 reset_reader( mi::IArray* reader, const char* image_format, const char* selector);
 
-    bool set_from_canvas( const mi::neuraylib::ICanvas* canvas);
+    bool set_from_canvas( const mi::neuraylib::ICanvas* canvas, const char* selector);
 
-    bool set_from_canvas( mi::neuraylib::ICanvas* canvas, bool shared);
+    bool set_from_canvas( mi::neuraylib::ICanvas* canvas, const char* selector, bool shared);
 
-    bool set_from_canvas( const mi::IArray* canvas);
+    bool set_from_canvas( const mi::IArray* canvas, const char* selector);
 
-    bool set_from_canvas( mi::IArray* canvas, bool shared);
+    bool set_from_canvas( mi::IArray* canvas, const char* selector, bool shared);
 
     bool is_animated() const;
 

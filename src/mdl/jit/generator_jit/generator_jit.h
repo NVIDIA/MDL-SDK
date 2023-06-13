@@ -219,6 +219,18 @@ public:
     /// Set a new module cache.
     void set_module_cache(mi::mdl::IModule_cache *cache) { m_code_gen.set_module_cache(cache); }
 
+    /// Finalize compilation of the current module that was created by create_module().
+    ///
+    /// \param module_cache         the module cache if any
+    ///
+    /// \returns the LLVM module (that was create using create_module()) or NULL on error;
+    ///          in that case the module is destroyed
+    llvm::Module *finalize_module(mi::mdl::IModule_cache *module_cache)
+    {
+        Module_cache_scope scope(*this, module_cache);
+        return m_code_gen.finalize_module();
+    }
+
 private:
     /// Constructor.
     ///
@@ -754,15 +766,17 @@ public:
 
     /// Compile a link unit into a LLVM-IR, PTX or native code using the JIT.
     ///
-    /// \param ctx              the code generator thread context
-    /// \param unit             the link unit to compile
-    /// \param llvm_ir_output   if true generate LLVM-IR (prepared for the target language)
+    /// \param ctx                  the code generator thread context
+    /// \param module_cache         the module cache if any
+    /// \param unit                 the link unit to compile
+    /// \param llvm_ir_output       if true generate LLVM-IR (prepared for the target language)
     ///
     /// \return the compiled function or NULL on compilation errors
     ///
     /// \note the thread context should have the same value as in create_link_unit()
     IGenerated_code_executable *compile_unit(
         ICode_generator_thread_context *ctx,
+        IModule_cache                  *module_cache,
         ILink_unit const               *unit,
         bool                           llvm_ir_output) MDL_FINAL;
 

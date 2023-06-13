@@ -69,13 +69,6 @@ public:
 
     // public API methods
 
-    const mi::neuraylib::IValue_bool* deprecated_is_material_parameter_enabled(
-        mi::neuraylib::ITransaction* trans,
-        mi::neuraylib::IValue_factory* fact,
-        const mi::neuraylib::IMaterial_instance* inst,
-        mi::Size index,
-        mi::Sint32* error) const final;
-
     const mi::neuraylib::IValue_bool*is_function_parameter_enabled(
         mi::neuraylib::ITransaction* trans,
         mi::neuraylib::IValue_factory* fact,

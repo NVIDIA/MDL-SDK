@@ -170,7 +170,7 @@ void Uri::parse_uri( const std::string &parent, const std::string &child)
     //    scheme is known to always use the <hier_part> syntax.  The parser
     //    can then continue with the steps below for the remainder of the
     //    reference components.  Validating parsers should mark such a
-    //    misformed relative reference as an error.
+    //    malformed relative reference as an error.
 
     // 4) If the authority component is defined, then the reference is a
     //    network-path and we skip to step 7.  Otherwise, the reference

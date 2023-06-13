@@ -80,8 +80,8 @@ public:
     /// \param function_tag           The tag this definition will eventually get (needed to pass
     ///                               on to function calls later).
     /// \param function_ident         The identifier of this definition will be used to check if it
-    ///                               is still valid and has not been removed/altered due to a module
-    ///                               reload.
+    ///                               is still valid and has not been removed/altered due to a
+    ///                               module reload.
     /// \param module                 The MDL module of this function definition.
     /// \param code_dag               The DAG representation of the MDL module.
     /// \param is_material            Indicates whether this is a material or a function. Note that
@@ -169,6 +169,9 @@ public:
        DB::Transaction* transaction,
        const IExpression_list* arguments,
        mi::Sint32* errors = nullptr) const;
+
+    const char *get_mdl_mangled_name(
+        DB::Transaction *transaction) const;
 
     // internal methods
 
@@ -448,6 +451,8 @@ private:
     std::vector<std::vector<mi::Size> > m_enable_if_users;
 
     mi::base::Uuid m_function_hash;               ///< The function hash if any.
+
+    mutable std::string m_cached_mangled_name;    ///< Temporary to cache the mangled name.
 };
 
 } // namespace MDL

@@ -33,13 +33,19 @@
 
 #include "../common.h"
 
-namespace mi {namespace examples { namespace mdl_d3d12 { namespace materialx
+namespace mi {namespace examples { namespace mdl_d3d12 {
+
+class Mdl_sdk;
+
+namespace materialx
 {
     class Mdl_generator_result
     {
     public:
-        std::vector<std::string> materialx_file_name;
-        std::vector<std::string> generated_mdl_code;
+        std::string materialx_file_name;
+        std::string generated_mdl_code;
+        std::string materialx_material_name;
+        std::string generated_mdl_name;
     };
 
     // --------------------------------------------------------------------------------------------
@@ -69,9 +75,8 @@ namespace mi {namespace examples { namespace mdl_d3d12 { namespace materialx
         bool set_source(const std::string& mtlx_material, const std::string& material_name);
 
         /// generate mdl code
-        /// TODO: - handle multiple materials and functions
         ///       - handle relative resources
-        bool generate(Mdl_generator_result& inout_result) const;
+        bool generate(Mdl_sdk& sdk, Mdl_generator_result& inout_result) const;
 
     private:
         std::vector<std::string> m_mtlx_search_paths;

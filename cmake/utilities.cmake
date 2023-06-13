@@ -183,7 +183,6 @@ function(TARGET_BUILD_SETUP)
 
         target_compile_options(${TARGET_BUILD_SETUP_TARGET} 
             PRIVATE
-                "-mmacosx-version-min=10.13"
                 "-fPIC"
                 "-m64"
                 "-stdlib=libc++"
@@ -640,15 +639,22 @@ endfunction()
 # the reduce the redundant code in the base library projects, we can bundle several repeated tasks
 #
 function(CREATE_FROM_BASE_PRESET)
-    set(options WIN32 WINDOWS_UNICODE EXAMPLE DYNAMIC_MSVC_RUNTIME)
+    # the options DYNAMIC_MSVC_RUNTIME and STATIC_MSVC_RUNTIME override the
+    # general option MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES
+    set(options WIN32 WINDOWS_UNICODE EXAMPLE DYNAMIC_MSVC_RUNTIME STATIC_MSVC_RUNTIME)
     set(oneValueArgs TARGET VERSION TYPE NAMESPACE EXPORT_NAME OUTPUT_NAME VS_PROJECT_NAME EMBED_RC)
     set(multiValueArgs SOURCES ADDITIONAL_INCLUDE_DIRS)
     cmake_parse_arguments(CREATE_FROM_BASE_PRESET "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
 
+    # sanity check
+    if(CREATE_FROM_BASE_PRESET_DYNAMIC_MSVC_RUNTIME AND CREATE_FROM_BASE_PRESET_STATIC_MSVC_RUNTIME)
+        message(FATAL_ERROR "The options DYNAMIC_MSVC_RUNTIME and STATIC_MSVC_RUNTIME are mutually exclusive.")
+    endif()
+
     # the option EXAMPLE bundles a few things
     if(CREATE_FROM_BASE_PRESET_EXAMPLE)
         set(CREATE_FROM_BASE_PRESET_WINDOWS_UNICODE ON)           # enable unicode
-        if(MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES)
+        if(MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES AND NOT CREATE_FROM_BASE_PRESET_STATIC_MSVC_RUNTIME)
             set(CREATE_FROM_BASE_PRESET_DYNAMIC_MSVC_RUNTIME ON)  # runtime linking
         endif()
     endif()
@@ -1330,6 +1336,90 @@ function(CREATE_FROM_PYTHON_PRESET)
         )
 
     target_create_vs_user_settings(TARGET ${CREATE_FROM_PYTHON_PRESET_TARGET})
+
+endfunction()
+
+# -------------------------------------------------------------------------------------------------
+# build API reference documentation using Doxygen and optionally Dot
+
+function(CREATE_FROM_DOC_PRESET)
+    set(oneValueArgs TARGET COMMENT PROJECT_LABEL)
+    set(multiValueArgs )
+    cmake_parse_arguments(CREATE_FROM_DOC_PRESET "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+    # provides the following variables:
+    # - CREATE_FROM_DOC_PRESET_TARGET
+    # - CREATE_FROM_DOC_PRESET_COMMENT
+    # - CREATE_FROM_DOC_PRESET_PROJECT_LABEL
+
+    # Set up arguments for doxygen_configure_doxyfile.py.
+    if(MDL_DEPENDENCY_DOT_FOUND)
+        set(_HAVE_DOT_ARG "YES")
+        # Doxygen requires the directory containing the executable.
+        get_filename_component(_DOT_PATH_ARG "${MDL_DEPENDENCY_DOT_PATH}" DIRECTORY)
+        if(WINDOWS)
+            file(TO_NATIVE_PATH "${_DOT_PATH_ARG}" _DOT_PATH_ARG)
+        endif()
+        set(_IMAGE_PATH_ARG ".")
+    else()
+        set(_HAVE_DOT_ARG "NO")
+        # An empty string would be natural, but causes problems for argument passing below. Handle that
+        # in the script itself.
+        set(_DOT_PATH_ARG ".")
+        set(_IMAGE_PATH_ARG ".")
+    endif()
+
+    # Set up the dot wrapper (Linux and MacOS only). This relies on the shebang line in the wrapper
+    # since doxygen insists on invoking dot as "dot" (or "dot.exe") and does not accept an explicit
+    # command (only the path).
+    if(MDL_DEPENDENCY_DOT_FOUND AND (LINUX OR MACOSX))
+        # Set up variables for configure_file() below.
+        set(REAL_DOT "${_DOT_PATH_ARG}/dot")
+        if(LINUX)
+            set(SED_I "-i.bak")
+        else()
+           set(SED_I "-i .bak")
+        endif()
+        # Configure the dot wrapper.
+        configure_file(
+            ${MDL_BASE_FOLDER}/doc/build/doxygen_dot_wrapper.sh
+            ${CMAKE_CURRENT_BINARY_DIR}/dot
+            @ONLY)
+        # User dot wrapper.
+        set(_DOT_PATH_ARG ${CMAKE_CURRENT_BINARY_DIR})
+    endif()
+
+    add_custom_target(
+        ${CREATE_FROM_DOC_PRESET_TARGET}
+        COMMAND
+            ${python_PATH}
+            ${MDL_BASE_FOLDER}/doc/build/doxygen_configure_doxyfile.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile
+            ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
+            ${_HAVE_DOT_ARG}
+            ${_DOT_PATH_ARG}
+            ${_IMAGE_PATH_ARG}
+        COMMAND
+            ${MDL_DEPENDENCY_DOXYGEN_PATH}
+            ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
+        COMMAND
+            ${python_PATH}
+            ${MDL_BASE_FOLDER}/doc/build/doxygen_postprocess_css.py
+        COMMENT
+            ${CREATE_FROM_DOC_PRESET_COMMENT}
+        VERBATIM
+        WORKING_DIRECTORY
+            ${CMAKE_CURRENT_SOURCE_DIR})
+
+    set_target_properties(
+        ${CREATE_FROM_DOC_PRESET_TARGET}
+        PROPERTIES
+            ADDITIONAL_CLEAN_FILES ${CMAKE_CURRENT_SOURCE_DIR}/html
+            PROJECT_LABEL ${CREATE_FROM_DOC_PRESET_PROJECT_LABEL}
+            FOLDER "doc")
+
+    target_print_log_header(
+        TARGET ${CREATE_FROM_DOC_PRESET_TARGET}
+        TYPE DOCUMENTATION)
 
 endfunction()
 

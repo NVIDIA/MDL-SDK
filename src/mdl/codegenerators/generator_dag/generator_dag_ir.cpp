@@ -876,6 +876,260 @@ DAG_node const *DAG_node_factory_impl::unwrap_float_to_color(DAG_node const *n)
     return NULL;
 }
 
+/// Helper class for creating modified calls. N is the expected number of arguments.
+/// If there are more arguments, they will be allocated dynamically.
+/// Temporaries will be skipped automatically.
+template<size_t N>
+class Call_clone : public Small_VLA<DAG_call::Call_argument, N> {
+    typedef Small_VLA<DAG_call::Call_argument, N> Base;
+
+public:
+    /// Constructor from DAG_call.
+    ///
+    /// \param node_factory    The node factory to create new calls.
+    /// \param orig_call       The original DAG call to clone the arguments and other infos from.
+    Call_clone(DAG_node_factory_impl *node_factory, DAG_call const *orig_call)
+    : Base(node_factory->get_allocator(), orig_call->get_argument_count())
+    , m_node_factory(node_factory)
+    , m_orig_call(orig_call)
+    , m_call_name(NULL)
+    , m_call_sema(IDefinition::DS_UNKNOWN)
+    , m_call_ret_type(NULL)
+    {
+        for (size_t i = 0; i < this->size(); ++i) {
+            (*this)[i].param_name = orig_call->get_parameter_name(i);
+            (*this)[i].arg = skip_temporaries(orig_call->get_argument(i));
+        }
+    }
+
+    /// Constructor from arguments to create_call().
+    ///
+    /// \param node_factory    The node factory to create new calls.
+    /// \param name            The name of the called function.
+    /// \param sema            The semantics of the called function.
+    /// \param call_args       The call arguments of the called function.
+    /// \param num_call_args   The number of call arguments.
+    /// \param ret_type        The return type of the function.
+    Call_clone(
+        DAG_node_factory_impl         *node_factory,
+        char const                    *name,
+        IDefinition::Semantics        sema,
+        DAG_call::Call_argument const call_args[],
+        int                           num_call_args,
+        IType const                   *ret_type)
+    : Base(node_factory->get_allocator(), num_call_args)
+    , m_node_factory(node_factory)
+    , m_orig_call(NULL)
+    , m_call_name(name)
+    , m_call_sema(sema)
+    , m_call_ret_type(ret_type)
+    {
+        for (size_t i = 0; i < num_call_args; ++i) {
+            (*this)[i].param_name = call_args[i].param_name;
+            (*this)[i].arg = skip_temporaries(call_args[i].arg);
+        }
+    }
+
+    /// Create the call with the current, possibly modified arguments.
+    ///
+    /// \param node_factory  The node factory for creating the call.
+    DAG_node const *create_call()
+    {
+        if (m_orig_call != NULL) {
+            return m_node_factory->create_call(
+                m_orig_call->get_name(),
+                m_orig_call->get_semantic(),
+                this->data(),
+                this->size(),
+                m_orig_call->get_type());
+        } else {
+            return m_node_factory->create_call(
+                m_call_name,
+                m_call_sema,
+                this->data(),
+                this->size(),
+                m_call_ret_type);
+        }
+    }
+
+private:
+    /// The node factory to create new calls.
+    DAG_node_factory_impl   *m_node_factory;
+
+    /// The original DAG call node, when the DAG_call constructor was used.
+    DAG_call const          *m_orig_call;
+
+    /// The name for the call, when the arguments-to-create_call constructor was used.
+    char const              *m_call_name;
+
+    /// The semantics for the call, when the arguments-to-create_call constructor was used.
+    IDefinition::Semantics  m_call_sema;
+
+    /// The return type for the call, when the arguments-to-create_call constructor was used.
+    IType const             *m_call_ret_type;
+};
+
+/// Normalize a df::thin_film() call according to the spec rules.
+///
+/// \param name            The name of the called function.
+/// \param sema            The semantics of the called function.
+/// \param call_args       The call arguments of the called function.
+/// \param num_call_args   The number of call arguments.
+/// \param ret_type        The return type of the function.
+/// \returns               The created call or an equivalent IR node.
+DAG_node const *DAG_node_factory_impl::normalize_thin_film(
+    char const                    *name,
+    IDefinition::Semantics        sema,
+    DAG_call::Call_argument const call_args[],
+    int                           num_call_args,
+    IType const                   *ret_type)
+{
+    MDL_ASSERT(sema == IDefinition::DS_INTRINSIC_DF_THIN_FILM);
+
+    // the base argument of thin_film is the third argument
+    DAG_node const *base_arg = skip_temporaries(call_args[2].arg);
+
+    // cannot handle parameters
+    if (is<DAG_parameter>(base_arg))
+        return NULL;
+
+    // elimination: thin_film(..., bsdf()) -> bsdf()
+    if (is<DAG_constant>(base_arg)) {
+        MDL_ASSERT(is<IValue_invalid_ref>(cast<DAG_constant>(base_arg)->get_value()) &&
+            "expected BSDF constant to be bsdf()");
+        return base_arg;
+    }
+
+    DAG_call const *base_call = cast<DAG_call>(base_arg);
+    switch (base_call->get_semantic()) {
+    // elimination: nested thin-film
+    case IDefinition::DS_INTRINSIC_DF_THIN_FILM:
+        return base_arg;
+
+    // elimination: non-thin-film
+    case IDefinition::DS_INTRINSIC_DF_DIFFUSE_REFLECTION_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_DIFFUSE_TRANSMISSION_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_SPECULAR_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_MEASURED_BSDF:
+    case IDefinition::DS_INTRINSIC_DF_SHEEN_BSDF:
+        return base_arg;
+
+    // propagation: modifier(..., tint(..., bsdf)) -> tint(..., modifier(..., bsdf))
+    case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR:
+    case IDefinition::DS_INTRINSIC_DF_MEASURED_FACTOR:
+    case IDefinition::DS_INTRINSIC_DF_TINT:
+    {
+        Call_clone<3> thin_film_clone(
+            this, name, sema, call_args, num_call_args, ret_type);
+        Call_clone<3> modifier_clone(this, base_call);
+
+        // base is the last argument for all propagating modifier bsdfs
+        size_t tint_base_arg_index = modifier_clone.size() - 1;
+        DAG_node const *tint_base = modifier_clone[tint_base_arg_index].arg;
+
+        // create new thin_film call with base of tint
+        thin_film_clone[2].arg = tint_base;
+        DAG_node const *new_thin_film = thin_film_clone.create_call();
+
+        // create new modifier call with thin_film as base
+        modifier_clone[tint_base_arg_index].arg = new_thin_film;
+        return modifier_clone.create_call();
+    }
+
+    // propagation:
+    //   thin_film(..., mixer(bsdf_component[](bsdf_component(w_i, bsdf_i), ...)))
+    //   -> mixer(bsdf_component[](bsdf_component(w_i, thin_film(..., bsdf_i)), ...)))
+    case IDefinition::DS_INTRINSIC_DF_NORMALIZED_MIX:
+    case IDefinition::DS_INTRINSIC_DF_COLOR_NORMALIZED_MIX:
+    case IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX:
+    case IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX:
+    case IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX:
+    case IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX:
+    {
+        Call_clone<3> thin_film_clone(
+            this, name, sema, call_args, num_call_args, ret_type);
+        Call_clone<1> mixer_clone(this, base_call);
+
+        if (DAG_call const *components_arg = as<DAG_call>(mixer_clone[0].arg)) {
+            if (components_arg->get_semantic() != IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR) {
+                MDL_ASSERT(!"Unexpected argument for a mixer");
+                return NULL;
+            }
+
+            // apply the thin_film to all components
+            Call_clone<8> array_constr_clone(this, components_arg);
+            for (size_t i = 0; i < array_constr_clone.size(); ++i) {
+                DAG_node const *bsdf_comp = array_constr_clone[i].arg;
+                if (DAG_call const *bsdf_comp_call = as<DAG_call>(bsdf_comp)) {
+                    if (bsdf_comp_call->get_semantic() != IDefinition::DS_ELEM_CONSTRUCTOR) {
+                        MDL_ASSERT(!"Expected bsdf_component constructor");
+                        return NULL;
+                    }
+
+                    Call_clone<2> comp_constr_clone(this, bsdf_comp_call);
+
+                    // create new thin_film call with the component of the bsdf_component as base
+                    thin_film_clone[2].arg = comp_constr_clone[1].arg;
+                    DAG_node const *new_thin_film = thin_film_clone.create_call();
+
+                    // create new bsdf_component constructor call with the new call as component
+                    comp_constr_clone[1].arg = new_thin_film;
+                    array_constr_clone[i].arg = comp_constr_clone.create_call();
+                } else if (is<DAG_constant>(bsdf_comp)) {
+                    // if bsdf_comp is a constant, the component part is bsdf(), thus nothing to do
+                } else {
+                    // we cannot handle parameters
+                    return NULL;
+                }
+            }
+
+            // create new call to the array constructor with the modified component constructors
+            mixer_clone[0].arg = array_constr_clone.create_call();
+
+            // create new call to the mixer with the modified array constructor
+            return mixer_clone.create_call();
+        }
+
+        return NULL;
+    }
+
+    // propagation: thin_film(..., layerer(..., bsdf_i, ...))
+    // -> layerer(..., thin_film(..., bsdf_i), ...)
+    case IDefinition::DS_INTRINSIC_DF_WEIGHTED_LAYER:
+    case IDefinition::DS_INTRINSIC_DF_COLOR_WEIGHTED_LAYER:
+    case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_LAYER:
+    case IDefinition::DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER:
+    {
+        Call_clone<3> thin_film_clone(
+            this, name, sema, call_args, num_call_args, ret_type);
+        Call_clone<5> layerer_clone(this, base_call);
+
+        // for all these layerers, the layer argument is always the third to last
+        size_t layer_arg_index = layerer_clone.size() - 3;
+        if (DAG_call const *layer_call = as<DAG_call>(layerer_clone[layer_arg_index].arg)) {
+            // create new thin_film call with layer argument and use it as new layer
+            thin_film_clone[2].arg = layer_call;
+            layerer_clone[layer_arg_index].arg = thin_film_clone.create_call();
+        }
+
+        // for all these layerers, the base argument is always the second to last
+        size_t base_arg_index = layerer_clone.size() - 2;
+        if (DAG_call const *base_call = as<DAG_call>(layerer_clone[base_arg_index].arg)) {
+            // create new thin_film call with base argument and use it as new base
+            thin_film_clone[2].arg = base_call;
+            layerer_clone[base_arg_index].arg = thin_film_clone.create_call();
+        }
+
+        // create new call to the layerer with the modified layer and base arguments
+        return layerer_clone.create_call();
+    }
+
+    default:
+        return NULL;
+    }
+    return NULL;
+}
+
 // Create a call.
 DAG_node const *DAG_node_factory_impl::create_call(
     char const                    *name,
@@ -892,65 +1146,65 @@ DAG_node const *DAG_node_factory_impl::create_call(
     // - scene unit conversion
     // - texture constructors
     switch (sema) {
-        case IDefinition::DS_ELEM_CONSTRUCTOR:
-            if (num_call_args == 6 && is_material_type(ret_type)) {
-                DAG_call::Call_argument n_call_args[7];
+    case IDefinition::DS_ELEM_CONSTRUCTOR:
+        if (num_call_args == 6 && is_material_type(ret_type)) {
+            DAG_call::Call_argument n_call_args[7];
 
-                Type_factory &tf = *m_value_factory.get_type_factory();
+            Type_factory &tf = *m_value_factory.get_type_factory();
 
-                MDL_ASSERT(strcmp(
-                    name,
-                    "material$1.4(bool,material_surface,material_surface,"
-                    "color,material_volume,material_geometry)") == 0);
+            MDL_ASSERT(strcmp(
+                name,
+                "material$1.4(bool,material_surface,material_surface,"
+                "color,material_volume,material_geometry)") == 0);
 
-                n_call_args[0] = call_args[0];
-                n_call_args[1] = call_args[1];
-                n_call_args[2] = call_args[2];
-                n_call_args[3] = call_args[3];
-                n_call_args[4] = call_args[4];
-                n_call_args[5] = call_args[5];
+            n_call_args[0] = call_args[0];
+            n_call_args[1] = call_args[1];
+            n_call_args[2] = call_args[2];
+            n_call_args[3] = call_args[3];
+            n_call_args[4] = call_args[4];
+            n_call_args[5] = call_args[5];
 
-                n_call_args[6].param_name = "hair";
-                n_call_args[6].arg        =
-                    create_constant(m_value_factory.create_invalid_ref(tf.create_hair_bsdf()));
+            n_call_args[6].param_name = "hair";
+            n_call_args[6].arg        =
+                create_constant(m_value_factory.create_invalid_ref(tf.create_hair_bsdf()));
 
-                // map to material 1.5 constructor
-                name = "material(bool,material_surface,material_surface,"
-                       "color,material_volume,material_geometry,hair_bsdf)";
-                return create_call(
-                    name,
-                    IDefinition::DS_ELEM_CONSTRUCTOR,
-                    n_call_args,
-                    dimension_of(n_call_args),
-                    ret_type);
-            }
-            if (num_call_args == 3 && is_material_volume_type(ret_type)) {
-                DAG_call::Call_argument n_call_args[4];
+            // map to material 1.5 constructor
+            name = "material(bool,material_surface,material_surface,"
+                    "color,material_volume,material_geometry,hair_bsdf)";
+            return create_call(
+                name,
+                IDefinition::DS_ELEM_CONSTRUCTOR,
+                n_call_args,
+                dimension_of(n_call_args),
+                ret_type);
+        }
+        if (num_call_args == 3 && is_material_volume_type(ret_type)) {
+            DAG_call::Call_argument n_call_args[4];
 
-                MDL_ASSERT(strcmp(
-                    name,
-                    "material_volume$1.6(vdf,color,color)") == 0);
+            MDL_ASSERT(strcmp(
+                name,
+                "material_volume$1.6(vdf,color,color)") == 0);
 
-                IValue_float const *zero = m_value_factory.create_float(0.0f);
+            IValue_float const *zero = m_value_factory.create_float(0.0f);
 
-                n_call_args[0] = call_args[0];
-                n_call_args[1] = call_args[1];
-                n_call_args[2] = call_args[2];
+            n_call_args[0] = call_args[0];
+            n_call_args[1] = call_args[1];
+            n_call_args[2] = call_args[2];
 
-                n_call_args[3].param_name = "emission_intensity";
-                n_call_args[3].arg =
-                    create_constant(m_value_factory.create_rgb_color(zero, zero, zero));
+            n_call_args[3].param_name = "emission_intensity";
+            n_call_args[3].arg =
+                create_constant(m_value_factory.create_rgb_color(zero, zero, zero));
 
-                // map to material_volume 1.7 constructor
-                name = "material_volume(vdf,color,color,color)";
-                return create_call(
-                    name,
-                    IDefinition::DS_ELEM_CONSTRUCTOR,
-                    n_call_args,
-                    dimension_of(n_call_args),
-                    ret_type);
-            }
-            break;
+            // map to material_volume 1.7 constructor
+            name = "material_volume(vdf,color,color,color)";
+            return create_call(
+                name,
+                IDefinition::DS_ELEM_CONSTRUCTOR,
+                n_call_args,
+                dimension_of(n_call_args),
+                ret_type);
+        }
+        break;
     case IDefinition::DS_TEXTURE_CONSTRUCTOR:
         {
             IType_texture const  *tex_type = cast<IType_texture>(ret_type);
@@ -1978,8 +2232,35 @@ DAG_node const *DAG_node_factory_impl::create_call(
         }
         break;
 
+    case IDefinition::DS_IN_GROUP_ANNOTATION:
+        if (strncmp(name, "::anno::in_group$1.7(", 21) == 0) {
+            // MDL 1.7 -> 1.8: add collapsed parameter
+            DAG_call::Call_argument n_call_args[5];
+
+            for (int i = 0; i < num_call_args; ++i) {
+                n_call_args[i] = call_args[i];
+            }
+            n_call_args[num_call_args].param_name = "collapsed";
+            n_call_args[num_call_args].arg = create_constant(
+                m_value_factory.create_bool(false));
+
+            size_t l = strlen(name) - 1; // strip ")"
+            string new_name(name + 20, l - 20, get_allocator());
+            new_name += ",bool)";
+            new_name = "::anno::in_group" + new_name;
+            return create_call(new_name.c_str(), sema, n_call_args, num_call_args + 1, ret_type);
+        }
+        break;
+
     default:
         break;
+    }
+
+    // try to normalize a thin_film call
+    if (sema == IDefinition::DS_INTRINSIC_DF_THIN_FILM) {
+        if (DAG_node const *res = normalize_thin_film(
+                name, sema, call_args, num_call_args, ret_type))
+            return res;  // normalization was successful, return the result
     }
 
     if (m_opt_enabled && all_args_without_name(call_args, num_call_args)) {
@@ -2065,13 +2346,15 @@ DAG_node const *DAG_node_factory_impl::create_call(
         case IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS:
             {
                 // T(..., f: x, ...).f ==> x
-                DAG_node const *arg = call_args[0].arg;
+                DAG_node const *arg      = call_args[0].arg;
+                IType const    *arg_type = arg->get_type();
 
                 while (arg->get_kind() == DAG_node::EK_CALL &&
                     cast<DAG_call>(arg)->get_semantic() ==
                     operator_to_semantic(IExpression_unary::OK_CAST))
                 {
-                    // simply skip casts, our construction ensures, that the layout is compatible
+                    // simply skip casts, our construction ensures, that the layout is compatible,
+                    // but use the type of the cast itself!
                     arg = cast<DAG_call>(arg)->get_argument(0);
                 }
 
@@ -2079,7 +2362,7 @@ DAG_node const *DAG_node_factory_impl::create_call(
                     // check if arg is an elemental constructor
                     if (call->get_semantic() == IDefinition::DS_ELEM_CONSTRUCTOR) {
                         // T(..., f: x, ...).f ==> x
-                        if (IType_compound const *c_type = as<IType_compound>(call->get_type())) {
+                        if (IType_compound const *c_type = as<IType_compound>(arg_type)) {
                             int field_index = get_field_index(c_type, name);
                             MDL_ASSERT(field_index >= 0 && "field index not found");
                             if (DAG_node const *node = call->get_argument(field_index)) {
@@ -2090,7 +2373,7 @@ DAG_node const *DAG_node_factory_impl::create_call(
                 } else if (DAG_constant const *c = as<DAG_constant>(arg)) {
                     // T(..., f: x, ...).f == > x
                     IValue const *v = c->get_value();
-                    if (IType_compound const *c_type = as<IType_compound>(v->get_type())) {
+                    if (IType_compound const *c_type = as<IType_compound>(arg_type)) {
                         int idx = get_field_index(c_type, name);
                         MDL_ASSERT(idx >= 0 && "field index not found");
 
@@ -3218,9 +3501,14 @@ DAG_node_factory_impl::create_operator_call(
             // +x ==> x
             return arg;
         case IExpression_unary::OK_CAST:
-            // cast<T>(cast<S>(x) ==> cast<T>(x)
+            // cast<T>(cast<S>(x)) ==> cast<T>(x)
             if (is_operator(arg, uop)) {
-                arg = cast<DAG_call>(arg)->get_argument(0);
+                DAG_call::Call_argument n_call_arg(
+                    cast<DAG_call>(arg)->get_argument(0),
+                    call_args[0].param_name);
+                DAG_node *res = alloc_call(
+                    name, operator_to_semantic(op), &n_call_arg, 1, ret_type);
+                return static_cast<Call_impl *>(identify_remember(res));
             }
             break;
         default:
@@ -4251,6 +4539,14 @@ void set_parameter_index(DAG_parameter *param, Uint32 param_idx)
 {
     Parameter_impl *p = static_cast<Parameter_impl *>(param);
     p->set_index(param_idx);
+}
+
+// Skip DAG temporaries if necessary.
+DAG_node const *skip_temporaries(DAG_node const *node)
+{
+    while (DAG_temporary const *tmp = as<DAG_temporary>(node))
+        node = tmp->get_expr();
+    return node;
 }
 
 } // mdl

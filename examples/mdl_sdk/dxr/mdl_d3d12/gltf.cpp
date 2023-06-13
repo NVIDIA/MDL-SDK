@@ -27,7 +27,7 @@
  *****************************************************************************/
 
 #include "gltf.h"
-#include "gltf_nv_materials_mdl.h"
+#include "gltf_extensions.h"
 #include "mdl_sdk.h"
 
 #include <fx/gltf.h>
@@ -444,7 +444,7 @@ IScene_loader::Material::Texture_info get_texture(
     // the spec mentions this is a note to allow baking of texture transforms as fall back
     info.texCoord = tex.transform.texCoord != -1 ? tex.transform.texCoord : tex.texCoord;
     info.resource_uri = doc.images[src_index].uri;
-    info.resource_db_name = scene.resources[src_index].resource_db_name;
+    info.resource_db_name = scene.image_resources[src_index].resource_db_name;
 
     info.offset = { tex.transform.offset[0], tex.transform.offset[1] };
     info.rotation = tex.transform.rotation;
@@ -481,17 +481,18 @@ IScene_loader::Material::Texture_info get_texture(
 class Mi_buffer_view : public mi::base::Interface_implement<mi::neuraylib::IBuffer>
 {
 public:
-    Mi_buffer_view(const fx::gltf::Document& doc, const fx::gltf::Image& image)
+    template <typename ResourceType>
+    Mi_buffer_view(const fx::gltf::Document& doc, const ResourceType& resource)
     {
-        if (image.IsEmbeddedResource())
+        if (fx::gltf::is_embedded_resource(resource))
         {
-            // base64 encoded data
-            image.MaterializeData(m_embedded_data);
+            // encoded data
+            fx::gltf::materialize_data(resource, m_embedded_data);
         }
         else
         {
             // data in a binary file
-            const auto& bv = doc.bufferViews[image.bufferView];
+            const auto& bv = doc.bufferViews[resource.bufferView];
             const auto& buf = doc.buffers[bv.buffer];
             m_data = buf.data.data() + bv.byteOffset;
             m_byte_length = bv.byteLength;
@@ -927,7 +928,8 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
                         // approach that keeps continuity across the texture space,
                         // especially in the context of UDIM and uv-tiles.
                         auto vec2 = reinterpret_cast<DirectX::XMFLOAT2*>(dest_ptr);
-                        vec2->y = 1.0f - vec2->y;
+                        if (options.uv_flip == false/*!*/)
+                            vec2->y = 1.0f - vec2->y;
                     }
                 }
             }
@@ -1024,7 +1026,13 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
     // read MDL materials extension, scene level
     if (fx::gltf::read_extension(doc, m_scene->ext_NV_materials_mdl))
     {
-        log_info("found `NV_material_mdl` extension in document.");
+        log_info("found `NV_materials_mdl` extension in document.");
+    }
+
+    // read IES light profile extension, scene level
+    if (fx::gltf::read_extension(doc, m_scene->ext_EXT_lights_ies))
+    {
+        log_info("found `EXT_lights_ies` extension in document.");
     }
 
     // load the resources to db
@@ -1035,13 +1043,14 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
         size_t last_slash = scene_directory.rfind('/');
         scene_directory = scene_directory.substr(0, last_slash);
 
+        // load the images
         for (const auto& gltf_image : doc.images)
         {
-            m_scene->resources.push_back({});
-            std::string& resource_db_name = m_scene->resources.back().resource_db_name;
+            m_scene->image_resources.push_back({});
+            std::string& resource_db_name = m_scene->image_resources.back().resource_db_name;
 
             // image referenced by URI
-            if (!gltf_image.IsEmbeddedResource() && !gltf_image.uri.empty())
+            if (!fx::gltf::is_embedded_resource(gltf_image) && !gltf_image.uri.empty())
             {
                 // TODO absolute path computation?
                 std::string file_path = scene_directory + "/" + gltf_image.uri;
@@ -1063,7 +1072,7 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
             {
                 // compute a db name
                 std::string file_path =
-                    file_name + "@" + std::to_string(m_scene->resources.size() -1);
+                    file_name + "@" + std::to_string(m_scene->image_resources.size() -1);
                 resource_db_name = "mdldxr::" + file_path + "_image";
 
                 // if the image is not loaded yet, do so
@@ -1080,6 +1089,8 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
                     if (last_slash != std::string::npos)
                     {
                         format = format.substr(last_slash + 1);
+                        if (format == "x-exr")
+                            format = "exr"; // remove "x-"
                     }
                     mi::base::Handle<Mi_buffer_view> buffer(new Mi_buffer_view(doc, gltf_image));
                     mi::base::Handle<mi::neuraylib::IReader> reader(
@@ -1087,6 +1098,130 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
                     new_image->reset_reader(reader.get(), format.c_str());
 
                     sdk.get_transaction().store(new_image.get(), resource_db_name.c_str());
+                }
+            }
+        }
+
+        // load light profiles (EXT_lights_ies extension)
+        for (const auto& gltf_light_profile : m_scene->ext_EXT_lights_ies.lights)
+        {
+            m_scene->light_profile_resources.push_back({});
+            std::string& resource_db_name = m_scene->light_profile_resources.back().resource_db_name;
+
+            // light profile referenced by URI
+            if (!gltf_light_profile.IsEmbeddedResource() && !gltf_light_profile.uri.empty())
+            {
+                // TODO absolute path computation?
+                std::string file_path = scene_directory + "/" + gltf_light_profile.uri;
+                resource_db_name = "mdldxr::" + file_path + "_light_profile";
+
+                // if the light profile is not loaded yet, do so
+                mi::base::Handle<const mi::neuraylib::ILightprofile> light_profile(
+                    sdk.get_transaction().access<mi::neuraylib::ILightprofile>(resource_db_name.c_str()));
+                if (!light_profile)
+                {
+                    mi::base::Handle<mi::neuraylib::ILightprofile> new_light_profile(
+                        sdk.get_transaction().create<mi::neuraylib::ILightprofile>("Lightprofile"));
+                    new_light_profile->reset_file(file_path.c_str());
+                    sdk.get_transaction().store(new_light_profile.get(), resource_db_name.c_str());
+                }
+            }
+            // we have an embedded light profile
+            else
+            {
+                // compute a db name
+                std::string file_path =
+                    file_name + "@" + std::to_string(m_scene->light_profile_resources.size() - 1);
+                resource_db_name = "mdldxr::" + file_path + "_light_profile";
+
+                // if the light profile is not loaded yet, do so
+                mi::base::Handle<const mi::neuraylib::ILightprofile> light_profile(
+                    sdk.get_transaction().access<mi::neuraylib::ILightprofile>(resource_db_name.c_str()));
+                if (!light_profile)
+                {
+                    mi::base::Handle<mi::neuraylib::ILightprofile> new_light_profile(
+                        sdk.get_transaction().create<mi::neuraylib::ILightprofile>("Lightprofile"));
+
+                    // load the light profile from the binary buffer or data encoding
+                    mi::base::Handle<Mi_buffer_view> buffer(new Mi_buffer_view(doc, gltf_light_profile));
+                    mi::base::Handle<mi::neuraylib::IReader> reader(
+                        sdk.get_impexp_api().create_reader(buffer.get()));
+                    new_light_profile->reset_reader(reader.get());
+
+                    sdk.get_transaction().store(new_light_profile.get(), resource_db_name.c_str());
+                }
+            }
+        }
+
+        // load bsdf measurements (NV_materials_mdl extension)
+        for (const auto& gltf_mbsdf : m_scene->ext_NV_materials_mdl.bsdfMeasurements)
+        {
+            m_scene->mbsdf_resources.push_back({});
+            std::string& resource_db_name = m_scene->mbsdf_resources.back().resource_db_name;
+
+            // light profile referenced by URI
+            if (!gltf_mbsdf.IsEmbeddedResource() && !gltf_mbsdf.uri.empty())
+            {
+                // TODO absolute path computation?
+                std::string file_path = scene_directory + "/" + gltf_mbsdf.uri;
+                resource_db_name = "mdldxr::" + file_path + "_mbsdf";
+
+                // if the light profile is not loaded yet, do so
+                mi::base::Handle<const mi::neuraylib::IBsdf_measurement> mbsdf(
+                    sdk.get_transaction().access<mi::neuraylib::IBsdf_measurement>(resource_db_name.c_str()));
+                if (!mbsdf)
+                {
+                    mi::base::Handle<mi::neuraylib::IBsdf_measurement> new_mbsdf(
+                        sdk.get_transaction().create<mi::neuraylib::IBsdf_measurement>("Bsdf_measurement"));
+                    new_mbsdf->reset_file(file_path.c_str());
+                    sdk.get_transaction().store(new_mbsdf.get(), resource_db_name.c_str());
+                }
+            }
+            // we have an embedded bsdf measurement
+            else
+            {
+                // compute a db name
+                std::string file_path =
+                    file_name + "@" + std::to_string(m_scene->mbsdf_resources.size() - 1);
+                resource_db_name = "mdldxr::" + file_path + "_mbsdf";
+
+                // if the light profile is not loaded yet, do so
+                mi::base::Handle<const mi::neuraylib::IBsdf_measurement> mbsdf(
+                    sdk.get_transaction().access<mi::neuraylib::IBsdf_measurement>(resource_db_name.c_str()));
+                if (!mbsdf)
+                {
+                    mi::base::Handle<mi::neuraylib::IBsdf_measurement> new_mbsdf(
+                        sdk.get_transaction().create<mi::neuraylib::IBsdf_measurement>("Bsdf_measurement"));
+
+                    // load the mbsdf from the binary buffer or data encoding
+                    mi::base::Handle<Mi_buffer_view> buffer(new Mi_buffer_view(doc, gltf_mbsdf));
+                    mi::base::Handle<mi::neuraylib::IReader> reader(
+                        sdk.get_impexp_api().create_reader(buffer.get()));
+                    new_mbsdf->reset_reader(reader.get());
+
+                    sdk.get_transaction().store(new_mbsdf.get(), resource_db_name.c_str());
+                }
+            }
+        }
+
+        // pre-load embedded MDL modules
+        for (auto& gltf_module : m_scene->ext_NV_materials_mdl.modules)
+        {
+            // module referenced by URI
+            if (gltf_module.IsEmbeddedResource() || gltf_module.bufferView != -1)
+            {
+                std::string module_name = fx::gltf::NV_MaterialsMDL::convert_module_uri_to_package(gltf_module.modulePath);
+                mi::base::Handle<const mi::IString> module_db_name(sdk.get_factory().get_db_module_name(module_name.c_str()));
+
+                mi::base::Handle<const mi::neuraylib::IModule> module(
+                    sdk.get_transaction().access<mi::neuraylib::IModule>(module_db_name->get_c_str()));
+                if (!module)
+                {
+                    mi::base::Handle<Mi_buffer_view> buffer(new Mi_buffer_view(doc, gltf_module));
+                    std::string module_source((char*)buffer->get_data(), (size_t)buffer->get_data_size());
+
+                    sdk.get_impexp_api().load_module_from_string(
+                        sdk.get_transaction().get(), module_name.c_str(), module_source.c_str());
                 }
             }
         }
@@ -1157,7 +1292,7 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
         // read MDL materials extension, material level
         if (fx::gltf::read_extension(m, mat.ext_NV_materials_mdl))
         {
-            log_info("found `NV_material_mdl` extension on material: " + m.name);
+            log_info("found `NV_materials_mdl` extension on material: " + m.name);
         }
 
         mat.normal_texture = get_texture(doc, m.normalTexture, *m_scene);

@@ -251,34 +251,6 @@ const mi::neuraylib::IValue_resource* Module_impl::get_resource( mi::Size index)
         int_resource.get(), this->cast_to_major());
 }
 
-const mi::neuraylib::IType_resource* Module_impl::deprecated_get_resource_type(
-    mi::Size index) const
-{
-    mi::base::Handle<const mi::neuraylib::IValue_resource> resource( get_resource( index));
-    if( !resource)
-        return nullptr;
-
-    return resource->get_type();
-}
-
-const char* Module_impl::deprecated_get_resource_mdl_file_path( mi::Size index) const
-{
-    const MDL::Resource_tag_tuple* rtt = get_db_element()->get_resource_tag_tuple( index);
-    if( !rtt)
-        return nullptr;
-        
-    return rtt->m_mdl_file_path.c_str();
-}
-
-const char* Module_impl::deprecated_get_resource_name( mi::Size index) const
-{
-    mi::base::Handle<const mi::neuraylib::IValue_resource> resource( get_resource( index));
-    if( !resource)
-        return nullptr;
-
-    return resource->get_value();
-}
-
 mi::Size Module_impl::get_annotation_definition_count() const
 {
     return get_db_element()->get_annotation_definition_count();
@@ -349,56 +321,32 @@ mi::Sint32 Module_impl::reload_from_string(
     return result;
 }
 
-const mi::IArray* Module_impl::deprecated_get_function_overloads(
-    const char* name, const char* param_sig) const
+const mi::neuraylib::IType_resource* Module_impl::deprecated_get_resource_type(
+    mi::Size index) const
 {
-    if( !name)
+    mi::base::Handle<const mi::neuraylib::IValue_resource> resource( get_resource( index));
+    if( !resource)
         return nullptr;
 
-    // Split param_sig at commas, ignore optional parentheses.
-    std::vector<std::string> parameter_types_vector;
-    if( param_sig) {
-        std::string parameter_types( param_sig);
-        if( parameter_types[0] == '(')
-            parameter_types = parameter_types.substr( 1);
-        size_t n = parameter_types.size();
-        if( n > 0 && parameter_types[n-1] == ')')
-            parameter_types = parameter_types.substr( 0, n-1);
-        if( !parameter_types.empty()) {
-            size_t start = 0;
-            size_t comma = parameter_types.find( ',', start);
-            while( comma != std::string::npos) {
-                if( comma == start)
-                    return nullptr;
-                parameter_types_vector.push_back( parameter_types.substr( start, comma-start));
-                start = comma + 1;
-                comma = parameter_types.find( ',', start);
-            }
-            if( start < parameter_types.size())
-                parameter_types_vector.push_back( parameter_types.substr( start));
-        }
-    }
+    return resource->get_type();
+}
 
-    std::vector<const char*> parameter_types_vector_c_str;
-    parameter_types_vector_c_str.reserve(parameter_types_vector.size());
-    for( const auto& s: parameter_types_vector)
-        parameter_types_vector_c_str.push_back( s.c_str());
+const char* Module_impl::deprecated_get_resource_mdl_file_path( mi::Size index) const
+{
+    const MDL::Resource_tag_tuple* rtt = get_db_element()->get_resource_tag_tuple( index);
+    if( !rtt)
+        return nullptr;
+        
+    return rtt->m_mdl_file_path.c_str();
+}
 
-    const std::vector<std::string>& tmp =
-        get_db_element()->get_function_overloads_by_signature(
-            name, parameter_types_vector_c_str);
+const char* Module_impl::deprecated_get_resource_name( mi::Size index) const
+{
+    mi::base::Handle<const mi::neuraylib::IValue_resource> resource( get_resource( index));
+    if( !resource)
+        return nullptr;
 
-    mi::base::Handle<mi::IDynamic_array> result(
-        get_transaction()->create<mi::IDynamic_array>( "String[]"));
-    result->set_length( tmp.size());
-
-    for( mi::Size i = 0, n = tmp.size(); i < n; ++i) {
-        mi::base::Handle<mi::IString> element( result->get_element<mi::IString>( i));
-        element->set_c_str( tmp[i].c_str());
-    }
-
-    result->retain();
-    return result.get();
+    return resource->get_value();
 }
 
 } // namespace NEURAY

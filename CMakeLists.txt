@@ -32,15 +32,39 @@ cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 if(POLICY CMP0025)
     cmake_policy(SET CMP0025 NEW)
 endif()
-
-project(MDL LANGUAGES C CXX)
+if(POLICY CMP0102)
+    cmake_policy(SET CMP0102 NEW)
+endif()
 
 
 # MDL SDK build directories
 set(MDL_BASE_FOLDER ${CMAKE_SOURCE_DIR} CACHE PATH "The folder that contains the targets to build and the cmake utility scripts.")
 set(MDL_INCLUDE_FOLDER ${CMAKE_SOURCE_DIR}/include CACHE PATH "The folder that interface headers, i.e., mi/base, mi/neuray, ... directories.")
 set(MDL_SRC_FOLDER ${CMAKE_SOURCE_DIR}/src CACHE PATH "The folder that contains the sources, i.e., the base, io, mdl, ... directories.")
-set(MDL_EXAMPLES_FOLDER ${CMAKE_SOURCE_DIR}/examples CACHE PATH "The folder that contains the mdl examples")
+set(MDL_EXAMPLES_FOLDER ${CMAKE_SOURCE_DIR}/examples CACHE PATH "The folder that contains the mdl examples.")
+set(MDL_DOC_FOLDER ${CMAKE_SOURCE_DIR}/doc CACHE PATH "The folder that contains the documentation.")
+
+# default values for internal builds, before project()
+if(EXISTS ${MDL_BASE_FOLDER}/CMakeInternalBuildConfig_Toolchain_File.cmake AND NOT MDL_USE_LOCAL_DEPENDENCIES)
+   include(${MDL_BASE_FOLDER}/CMakeInternalBuildConfig_Toolchain_File.cmake)
+# otherwise, the toolchain has to be provided manually
+elseif(NOT CMAKE_TOOLCHAIN_FILE)
+    set(CMAKE_TOOLCHAIN_FILE "" CACHE FILEPATH "Path to toolchain file supplied to cmake.")
+    message(FATAL_ERROR "No toolchain set. Please set CMAKE_TOOLCHAIN_FILE to <vcpkg_root>/scripts/buildsystems/vcpkg.cmake")
+endif()
+
+# before project() due to its use in CMAKE_TOOLCHAIN_FILE
+if(WIN32 AND NOT UNIX)
+    set(VCPKG_TARGET_TRIPLET x64-windows-static)
+endif()
+
+project(MDL LANGUAGES C CXX)
+
+# default values for internal builds, after project()
+if(EXISTS ${MDL_BASE_FOLDER}/CMakeInternalBuildConfig.cmake AND NOT MDL_USE_LOCAL_DEPENDENCIES)
+   include(${MDL_BASE_FOLDER}/CMakeInternalBuildConfig.cmake)
+endif()
+
 
 #--------------------------------------------------------------------------------------------------
 # configuration options
@@ -48,11 +72,12 @@ option(MDL_BUILD_SDK_EXAMPLES "Adds MDL SDK examples to the build." ON)
 option(MDL_BUILD_CORE_EXAMPLES "Adds MDL Core examples to the build." ON)
 option(MDL_BUILD_ARNOLD_PLUGIN "Enable the build of the MDL Arnold plugin." OFF)
 option(MDL_BUILD_DDS_PLUGIN "Enable the build of the MDL DDS image plugin." ON)
-option(MDL_BUILD_FREEIMAGE_PLUGIN "Enable the build of the MDL Freeimage image plugin." ON)
-option(MDL_BUILD_OPENIMAGEIO_PLUGIN "Enable the build of the MDL OpenImageIO image plugin." OFF)
+option(MDL_BUILD_FREEIMAGE_PLUGIN "Enable the build of the MDL Freeimage image plugin." OFF)
+option(MDL_BUILD_OPENIMAGEIO_PLUGIN "Enable the build of the MDL OpenImageIO image plugin." ON)
 option(MDL_LOG_PLATFORM_INFOS "Prints some infos about the current build system (relevant for error reports)." ON)
-option(MDL_LOG_DEPENDENCIES "Prints the list of dependencies during the generation step." OFF)
+option(MDL_LOG_DEPENDENCIES "Prints the list of dependencies during the generation step." ON)
 option(MDL_LOG_FILE_DEPENDENCIES "Prints the list of files that is copied after a successful build." OFF)
+option(MDL_TREAT_RUNTIME_DEPS_AS_BUILD_DEPS "Treat runtime dependencies as build dependencies." ON)
 set(MDL_ADDITIONAL_COMPILER_DEFINES "MDL_SOURCE_RELEASE" CACHE STRING "Additional compile defines that are passed to each of the projects")
 set(MDL_ADDITIONAL_COMPILER_OPTIONS "" CACHE STRING "Additional compile options that are passed to each of the projects")
 
@@ -69,9 +94,12 @@ endif()
 include(${MDL_BASE_FOLDER}/cmake/setup.cmake)
 
 if(MDL_LOG_PLATFORM_INFOS)
-    MESSAGE(STATUS "[INFO] MDL_BUILD_SDK_EXAMPLES:             " ${MDL_BUILD_SDK_EXAMPLES})
-    MESSAGE(STATUS "[INFO] MDL_BUILD_CORE_EXAMPLES:            " ${MDL_BUILD_CORE_EXAMPLES})
-    MESSAGE(STATUS "[INFO] MDL_BUILD_ARNOLD_PLUGIN:            " ${MDL_BUILD_ARNOLD_PLUGIN})
+    MESSAGE(STATUS "[INFO] MDL_BUILD_SDK_EXAMPLES:               ${MDL_BUILD_SDK_EXAMPLES}")
+    MESSAGE(STATUS "[INFO] MDL_BUILD_CORE_EXAMPLES:              ${MDL_BUILD_CORE_EXAMPLES}")
+    MESSAGE(STATUS "[INFO] MDL_BUILD_ARNOLD_PLUGIN:              ${MDL_BUILD_ARNOLD_PLUGIN}")
+    MESSAGE(STATUS "[INFO] MDL_BUILD_OPENIMAGEIO_PLUGIN:         ${MDL_BUILD_OPENIMAGEIO_PLUGIN}")
+    MESSAGE(STATUS "[INFO] MDL_BUILD_FREEIMAGE_PLUGIN:           ${MDL_BUILD_FREEIMAGE_PLUGIN}")
+    MESSAGE(STATUS "[INFO] MDL_BUILD_DDS_PLUGIN:                 ${MDL_BUILD_DDS_PLUGIN}")
 endif()
 
 # enable tests if available
@@ -130,6 +158,7 @@ add_subdirectory(${MDL_SRC_FOLDER}/mdl/codegenerators/generator_dag)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/compiler/compilercore)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/compiler/compiler_glsl)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/compiler/compiler_hlsl)
+add_subdirectory(${MDL_SRC_FOLDER}/mdl/distiller/dist)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/jit/libbsdf)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/jit/libmdlrt)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/jit/devlib)
@@ -138,6 +167,7 @@ add_subdirectory(${MDL_SRC_FOLDER}/mdl/no_jit/generator_stub)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/runtime)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/integration/i18n)
 add_subdirectory(${MDL_SRC_FOLDER}/mdl/integration/mdlnr)
+add_subdirectory(${MDL_SRC_FOLDER}/render/baker/baker)
 add_subdirectory(${MDL_SRC_FOLDER}/render/mdl/backends)
 add_subdirectory(${MDL_SRC_FOLDER}/render/mdl/runtime)
 
@@ -147,6 +177,8 @@ add_subdirectory(${MDL_SRC_FOLDER}/prod/lib/mdl_sdk)
 add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/i18n)
 add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdlc)
 add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdlm)
+add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdltlc)
+add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdl_distiller)
 
 # PLUGINS
 #--------------------------------------------------------------------------------------------------
@@ -161,12 +193,16 @@ if(MDL_BUILD_OPENIMAGEIO_PLUGIN)
     add_subdirectory(${MDL_SRC_FOLDER}/shaders/plugin/openimageio)
 endif()
 
+add_subdirectory(${MDL_SRC_FOLDER}/shaders/plugin/mdl_distiller)
+
 # EXAMPLES
 #--------------------------------------------------------------------------------------------------
 
 # third party
-add_subdirectory(${MDL_EXAMPLES_FOLDER}/thirdparty/imgui)
-add_subdirectory(${MDL_EXAMPLES_FOLDER}/thirdparty/tinyxml2)
+if (MDL_BUILD_SDK_EXAMPLES OR MDL_BUILD_CORE_EXAMPLES)
+    add_subdirectory(${MDL_EXAMPLES_FOLDER}/thirdparty/imgui)
+    add_subdirectory(${MDL_EXAMPLES_FOLDER}/thirdparty/tinyxml2)
+endif()
 
 # Shared code used by MDL SDK examples, Python bindings, and other tools
 add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/shared)
@@ -182,6 +218,8 @@ if(MDL_BUILD_SDK_EXAMPLES)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/compilation)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/create_module)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/discovery)
+    add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/distilling)
+    add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/distilling_target)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/execution_native)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/generate_mdl_identifier)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/instantiation)
@@ -192,6 +230,7 @@ if(MDL_BUILD_SDK_EXAMPLES)
 
     if(MDL_ENABLE_OPENGL_EXAMPLES)
         add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/df_native)
+        add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/distilling_glsl)
         add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/execution_glsl)
     endif()
 
@@ -201,6 +240,7 @@ if(MDL_BUILD_SDK_EXAMPLES)
     endif()
 
     if(MDL_ENABLE_CUDA_EXAMPLES)
+        add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/distilling_unity)
         add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/execution_cuda)
         if(MDL_ENABLE_OPENGL_EXAMPLES)
             add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_sdk/df_cuda)
@@ -256,6 +296,16 @@ if(MDL_ENABLE_PYTHON_BINDINGS)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_python/pymdl_inspection)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl_python/start_shutdown)
 endif()
+
+# Documentation
+#--------------------------------------------------------------------------------------------------
+if(MDL_BUILD_DOCUMENTATION)
+    add_subdirectory(${MDL_DOC_FOLDER}/mdl_coreapi ${CMAKE_BINARY_DIR}/doc/mdl_coreapi)
+    add_subdirectory(${MDL_DOC_FOLDER}/mdl_sdkapi ${CMAKE_BINARY_DIR}/doc/mdl_sdkapi)
+    add_custom_target(doc ALL DEPENDS doc-mdl_coreapi doc-mdl_sdkapi)
+    set_target_properties(doc PROPERTIES PROJECT_LABEL "ALL" FOLDER "doc")
+endif()
+
 
 # add tests with the POST option; there require all regular targets to be defined already
 foreach(_TEST_POST ${MDL_TEST_LIST_POST})

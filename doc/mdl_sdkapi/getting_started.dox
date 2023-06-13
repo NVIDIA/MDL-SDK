@@ -28,8 +28,8 @@
 
 /*! \page mi_neuray_getting_started Getting Started
 
-\NeurayProductName is a software component that you can embed in your application       
-to provide MDL support in your application.                                     
+\NeurayProductName is a software component that you can embed in your application
+to provide MDL support in your application.
 
 The \neurayApiName is a C++ API. \NeurayProductName is provided as a dynamic library, which can be
 linked to your application or dynamically loaded at runtime.
@@ -61,12 +61,12 @@ for your own development.
 
 \if MDL_SOURCE_RELEASE
 
-Please refer to the file README.md in the toplevel directory of the \neurayAdjectiveName Source Repository for 
+Please refer to the file INSTALL.md in the toplevel directory of the \neurayAdjectiveName Source Repository for
 instructions on how to build the \neurayAdjectiveName and the examples.
 \else
 
 The \neurayAdjectiveName uses [CMake](http://www.cmake.org/) to generate build files for the examples.
-It is suggested to use CMake 3.11 or later, 
+It is required to use CMake 3.12 or later (3.21 or later on Windows),
 which can be downloaded from the [CMake Website](https://cmake.org/download/).
 When using a Unix-like system, you can install the *cmake* package using 
 the respective package management systems. On the Mac OS X platform, third party
@@ -74,55 +74,109 @@ dependencies can be resolved using the [Homebrew Package Manager](https://brew.s
 
 \subsection mi_neuray_getting_started_dependencies Dependencies
 
-The example source code requires a C++11 compiler. Some examples require additional third-party libraries.
+The example source code requires a C++17 compiler. Some examples require additional third-party libraries.
 
 The build with the following x64-platform-compiler combinations has been 
 successfully tested:
 
--   **Windows 10**:     Microsoft Visual Studio 2017 (msvc v141) or 2019 (msvc v142)
--   **Ubuntu 18.04**:   GCC 7, GCC 8, or GCC 9 (on x86-64 or aarch64)
--   **Mac OS X 10.13:** Xcode 8.3.3 (Apple Clang 8.1)
+-   **Windows 10:**            Microsoft Visual Studio 2017 (msvc v141) or 2019 (msvc v142)
+-   **CentOS 7, Debian 11**:   GCC 7 or GCC 10 (on x86-64 or aarch64)
+-   **Mac OS X 12.6:**         Xcode 12.4 (Apple Clang 12.0.0)
 
 The versions listed with the following dependencies have been
 successfully tested. Where not mentioned otherwise, other versions
 might work as well.
 
-The following third-party libraries are required:
+The following third-party dependencies are used by several and/or major
+examples. Installation is strongly recommended unless the corresponding group
+of examples is of no interest to you.
 
--   **GLEW** (2.1.0) 
-    - Linux: Install the *libglew-dev* package.
-    - Windows: Download and extract the pre-compiled binaries from 
-    [glew.sourceforge.net](http://glew.sourceforge.net/)
+-   **DirectX Raytracing support** (Windows only) \n
+    Building the DXR example requires Windows 10 version 1909 and the
+    corresponding SDK 10.0.18362.0. Additionally the optional *Graphic Tools*
+    feature has to be installed.
 
--   **GLFW** (3.2.1, 3.3.3)
-    - Linux: Install the *libglfw3-dev* package.
-    - Windows: Download and extract the pre-compiled x64 binaries from 
-    [glfw.org](http://www.glfw.org/download.html).
+-   **DirectX Shader Compiler support** (June 2022) (Windows only) \n 
+    Building the DXR example requires an updated version of the DirectX Shader
+    Compiler. \n
+    Download and extract the pre-compiled x64 binaries from
+    [github](https://github.com/microsoft/DirectXShaderCompiler/releases).
 
--   **NVIDIA CUDA Toolkit** (9.0 or later)
-    - Please follow the instructions on the 
+-   **GLEW** (2.1.0) \n
+    This dependency is required for all OpenGL-based examples. \n
+    Linux: Install the *libglew-dev* package. \n
+    Windows: Download and extract the pre-compiled binaries from 
+    [glew.sourceforge.net](http://glew.sourceforge.net/) \n
+    Mac OS X: Install the *glew* package using brew.
+
+-   **GLFW** (3.2.1, 3.3.3) \n
+    This dependency is required for all OpenGL- and Vulkan-based examples. \n
+    Linux: Install the *libglfw3-dev* package. \n
+    Windows: Download and extract the pre-compiled x64 binaries from 
+    [glfw.org](http://www.glfw.org/download.html). \n
+    Mac OS X: Install the *glfw* package using brew.
+
+-   **NVIDIA CUDA Toolkit** (11.x) \n
+    This dependency is required for all CUDA-based examples. \n
+    Please follow the instructions on the 
     [CUDA Developer Website](https://developer.nvidia.com/cuda-toolkit).
 
--   **Qt** (5.10.1)
-    - Please follow the instructions on the [Qt Website](https://www.qt.io/).  
-    To build with Qt 5.10.1 on Linux, your system's GLIBC needs to be release 
-    2.14 or later.
-
--   **Vulkan SDK** (1.2.198.1)
-    - Please follow the instructions on the
-    [Vulkan SDK Website](https://vulkan.lunarg.com/sdk/home).  
+-   **Vulkan SDK** (1.2.198.1) \n
+    This dependency is required for all Vulkan-based examples. \n
+    Please follow the instructions on the
+    [Vulkan SDK Website](https://vulkan.lunarg.com/sdk/home). \n
     For debug builds on Windows, the debug libraries are required to be installed.
 
--   **DirectX Raytracing support**
-    - To build the DXR example, Windows 10 version 1809 and the corresponding 
-    SDK 10.0.17763.0 as well as the optional *Graphic Tools* feature are required.
-    
--   **DirectX Raytracing support**
-    Building the DXR example requires:
+The following third-party dependencies are only used by fewer or single
+examples, or add additional features to other examples. Installation can be
+safely skipped unless you are specifically interested in those examples or
+features.
 
-    - Windows 10 version 1909 and the corresponding SDK 10.0.18362.0
+-   **Clang** (12.0.1) \n
+    This dependency is required to build the OptiX 7 example. \n
+    Using version 12.0.1 is mandatory. \n
+    Pre-compiled binaries can be found on
+    [llvm.org](http://releases.llvm.org/download.html#12.0.1).
 
-    Additionally the optional *Graphic Tools* feature has to be installed.
+-   **MaterialX** (github repository, tag: v1.38.4, Windows only) \n
+    This dependency adds MaterialX support to the DXR example. \n
+    Please download a release from
+    [github](https://github.com/AcademySoftwareFoundation/MaterialX/releases). \n
+    The pre-built packages do not contain libs for debug. If those are needed,
+    a build from source is required.
+
+-   **NVIDIA CUDA Toolkit** (8.0) \n
+    This exact version is required by the OptiX 7 example to generate LLVM bitcode
+    for the closest hit shader with Clang 12.0.1. \n
+    The old version is available in the
+    [CUDA Toolkit Archive](https://developer.nvidia.com/cuda-toolkit-archive).
+
+-   **OptiX** (7.x) \n
+    This dependency is required to build the OptiX 7 example. \n
+    Please follow the instructions on the [OptiX Website](https://developer.nvidia.com/designworks/optix/download).
+
+-   **Python3** (3.8.0) \n
+    This dependency is required to build the Python bindings examples. \n
+    Linux: Install the *python* package. \n
+    Windows and Max OS X: Download and install Python 3.8 from
+    [python.org](https://www.python.org/downloads/).
+
+-   **Python3 Development Package** (3.8.0) \n
+    This dependency is required to build the Python bindings. \n
+    Linux: Install the *python-dev* package in addition to *python*. \n
+    Windows and Max OS X: Download and install Python 3.8 from
+    [python.org](https://www.python.org/downloads/).
+
+-   **Qt** (5.10.1) \n
+    This dependency is required for the MDL browser example, a Qt-based browser
+    for MDL modules and materials. This browser is also accessible from the DXR
+    example. \n
+    Please follow the instructions on the [Qt Website](https://www.qt.io/).
+
+-   **X-Rite AxF SDK** (1.8.1) \n
+    This dependency is required to build the AxF-to-MDL example. \n
+    Please send the "Request AxF SDK" document from the
+    [X-Rite AxF Website](https://www.xrite.com/axf).
 
 \subsection mi_neuray_getting_started_windows_build Building on Windows
 
@@ -144,7 +198,7 @@ The following third-party libraries are required:
         C:/projects/mdl-sdk
 
 3.  After clicking ``Configure``, CMake asks you to choose the
-    Generator. Select `Visual Studio 14 2017 Win64` and click
+    Generator. Select `Visual Studio 15 2017` (or higher) and click
     `Finish`. CMake starts to configure the build and stops several
     times when user input is required to resolve dependencies.
 
@@ -158,20 +212,43 @@ The following third-party libraries are required:
     entry in CMake-Gui. Then, click ``Configure`` again to continue. Repeat 
     this step until no further errors occur.
 
-    During this process, you will need to setup the following entries:
+    During this process, you may need to setup the following entries based on the selected components:
 
-    -   **GLEW_DIR** in the GLEW group  
+    -   **ARNOLD_SDK_DIR** in Ungrouped Entries, \n
+        for example: *C:/projects/thirdparty/Arnold-6.0.3.0-windows*
+
+    -   **clang_PATH** in Ungrouped Entries (only if not found in the PATH), \n
+        for example: *C:/Program Files/LLVM-12/bin/clang.exe*
+
+    -   **CUDA8_PATH** in Ungrouped Entries, \n
+        for example: *C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v8.0* \n
+        Version 8 is mandatory here, used for the OptiX 7 example.
+
+    -   **DXC_DIR** in Ungrouped Entries, \n
+        for example: *C:/projects/thirdparty/dxc_2022_07_18*
+
+    -   **GLEW_DIR** in the GLEW group \n
         for example: *C:/projects/thirdparty/glew-2.1.0*
 
-    -   **GLFW_DIR** in Ungrouped Entries  
+    -   **GLFW_DIR** in Ungrouped Entries \n
         for example: *C:/projects/thirdparty/glfw-3.2.1.bin.WIN64*
 
-    -   **Qt5_DIR** in Ungrouped Entries (only if not installed using the installer)  
+    -   **MATERIALX_DIR** in Ungrouped Entries, \n
+        for example: *C:/projects/thirdparty/git/MaterialX* \n
+        For MaterialX support, the option **MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES** has to be enabled.
+
+    -   **python_PATH** in Ungrouped Entries (only if not found in the PATH), \n
+        for example: *C:/projects/thirdparty/python_3_8_0/bin/python.exe*
+
+    -   **Qt5_DIR** in Ungrouped Entries (only if not installed using the installer) \n
         for example: *C:/Qt/5.10.1/msvc2017_64*
 
-    -   **VULKAN_SDK_DIR** in Ungrouped Entries (only if not installed using the installer)
+    -   **VULKAN_SDK_DIR** in Ungrouped Entries (only if not installed using the installer) \n
         for example: *C:/VulkanSDK/1.2.198.1*
 
+    Note: when you installed a new Visual Studio version after installing CUDA,
+    you may have to reinstall CUDA to register it correctly with Visual Studio.
+    Otherwise, CMake won't find the CUDA compiler.
 
 6.  When all dependencies have been resolved or the corresponding examples 
     have been disabled as indicated in the CMake error messages, the log 
@@ -322,8 +399,23 @@ The following options allow to select the components to build and particular log
 -   **MDL_ENABLE_VULKAN_EXAMPLES**  
     [ON/OFF] enable/disable examples that require Vulkan.
 
+-   **MDL_ENABLE_OPTIX7_EXAMPLES**  
+    [ON/OFF] enable/disable examples that require OptiX 7 (Linux and Windows only).
+
 -   **MDL_ENABLE_QT_EXAMPLES**  
     [ON/OFF] enable/disable examples that require Qt.
+
+-   **MDL_ENABLE_AXF_EXAMPLES**  
+    [ON/OFF] enable/disable the AxF to MDL example.
+
+-   **MDL_ENABLE_PYTHON_BINDINGS**  
+    [ON/OFF] enable/disable the generation and compilation of the MDL Python Bindings.
+
+-   **MDL_BUILD_ARNOLD_PLUGIN**  
+    [ON/OFF] enable/disable the build of the MDL Arnold Plugin.
+
+-   **MDL_ENABLE_MATERIALX**  
+    [ON/OFF] enable/disable MaterialX in examples that support it.
 
 -   **MDL_LOG_PLATFORM_INFOS**  
     [ON/OFF] enable/disable the logging of platform and CMake settings.
@@ -334,10 +426,9 @@ The following options allow to select the components to build and particular log
 -   **MDL_LOG_FILE_DEPENDENCIES**  
     [ON/OFF] enable/disable the logging of files that copied to the output folder.
 
-By default, all options are set to ON. In case of any help request, please attach 
-the log messages generated when the log options are enabled.
+In case of any help request, please attach the log messages generated when the log options are enabled.
 \endif
-\subsection mi_neuray_getting_started_custom_build Custom builds environments
+\subsection mi_neuray_getting_started_custom_build Custom build environments
 
 You can integrate \neurayProductName easily in other build
 environments. You can also compile the examples by hand following the

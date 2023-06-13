@@ -287,8 +287,6 @@ const mi::neuraylib::ISerialized_function_name* Mdl_impexp_api_impl::serialize_f
     MDL::Execution_context default_context;
     MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
 
-    if( !MDL::get_encoded_names_enabled())
-        return nullptr;
     if( !definition_name)
         return nullptr;
 
@@ -358,8 +356,6 @@ const mi::neuraylib::IDeserialized_function_name* Mdl_impexp_api_impl::deseriali
     MDL::Execution_context default_context;
     MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
 
-    if( !MDL::get_encoded_names_enabled())
-        return nullptr;
     if( !transaction || !function_name)
         return nullptr;
 
@@ -387,8 +383,6 @@ const mi::neuraylib::IDeserialized_function_name* Mdl_impexp_api_impl::deseriali
     MDL::Execution_context default_context;
     MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
 
-    if( !MDL::get_encoded_names_enabled())
-        return nullptr;
     if( !transaction || !module_name || !function_name_without_module_name)
         return nullptr;
 
@@ -414,8 +408,6 @@ const mi::neuraylib::IDeserialized_module_name* Mdl_impexp_api_impl::deserialize
     MDL::Execution_context default_context;
     MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
 
-    if( !MDL::get_encoded_names_enabled())
-        return nullptr;
     if( !module_name)
         return nullptr;
 

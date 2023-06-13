@@ -49,9 +49,9 @@ class IMdl_execution_context;
 
 /// This interface represents a material instance.
 ///
-/// This interface is almost obsolete. See \ref mi_mdl_materials_are_functions and
-/// #mi::neuraylib::IFunction_call. The only remaining purpose is the method
-/// #create_compiled_material() and the associated enum #Compilation_options.
+/// This interface is almost obsolete. The only remaining purpose is the method
+/// #create_compiled_material() and the associated enum #Compilation_options. Use
+/// #mi::neuraylib::IFunction_call for all other purposes.
 class IMaterial_instance : public
     mi::base::Interface_declare<0x037ec156,0x281d,0x466a,0xa1,0x56,0x3e,0xd6,0x83,0xe9,0x5a,0x00,
                                 neuraylib::IScene_element>
@@ -124,42 +124,6 @@ public:
     virtual ICompiled_material* create_compiled_material(
         Uint32 flags,
         IMdl_execution_context* context = 0) const = 0;
-
-#ifdef MI_NEURAYLIB_DEPRECATED_13_0
-    virtual const char* get_material_definition() const = 0;
-
-    virtual const char* get_mdl_material_definition() const = 0;
-
-    virtual const IType* get_return_type() const = 0;
-
-    virtual Size get_parameter_count() const = 0;
-
-    virtual const char* get_parameter_name( Size index) const = 0;
-
-    virtual Size get_parameter_index( const char* name) const = 0;
-
-    virtual const IType_list* get_parameter_types() const = 0;
-
-    virtual const IExpression_list* get_arguments() const = 0;
-
-    virtual Sint32 set_arguments( const IExpression_list* arguments) = 0;
-
-    virtual Sint32 set_argument( Size index, const IExpression* argument) = 0;
-
-    virtual Sint32 set_argument( const char* name, const IExpression* argument) = 0;
-
-    virtual Sint32 reset_argument( Size index) = 0;
-
-    virtual Sint32 reset_argument( const char* name) = 0;
-
-    virtual bool is_default() const = 0;
-
-    virtual bool is_valid( IMdl_execution_context* context) const = 0;
-
-    virtual Sint32 repair(
-        Uint32 flags,
-        IMdl_execution_context* context) = 0;
-#endif // MI_NEURAYLIB_DEPRECATED_13_0
 };
 
 /**@}*/ // end group mi_neuray_mdl_elements

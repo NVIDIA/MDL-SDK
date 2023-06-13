@@ -109,9 +109,9 @@ mi::neuraylib::INeuray* load_mdl_sdk(const Mdl_browser_command_line_options& opt
 
     // Configure the MDL SDK
     // Load plugin required for loading textures
-    if (mi::examples::mdl::load_plugin(neuray.get(), "nv_freeimage" MI_BASE_DLL_FILE_EXT) != 0)
+    if (mi::examples::mdl::load_plugin(neuray.get(), "nv_openimageio" MI_BASE_DLL_FILE_EXT) != 0)
     {
-        std::cerr << "[MDL Browser] Failed to load 'nv_freeimage' library.\n";
+        std::cerr << "[MDL Browser] Failed to load 'nv_openimageio' library.\n";
         return nullptr;
     }
 

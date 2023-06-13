@@ -66,6 +66,32 @@ namespace MDL {
 
 namespace {
 
+/// Converts an absolute qualified name given as vector of strings into a string representation.
+std::string stringify(
+    const std::vector<std::string>& name, bool ignore_last_component = false)
+{
+    std::string result;
+    mi::Size n = name.size() - (ignore_last_component ? 1 : 0);
+    for( mi::Size i = 0; i < n; ++i)
+       result += "::" + name[i];
+    return result;
+}
+
+/// Converts a qualified name into a string representation.
+std::string stringify( const mi::mdl::IQualified_name* name)
+{
+    std::string result;
+    if( name->is_absolute())
+        result += "::";
+    for( mi::Uint32 i = 0, n = name->get_component_count(); i < n; ++i) {
+        const mi::mdl::ISimple_name* simple = name->get_component( i);
+        if( i > 0)
+            result += "::";
+        result += simple->get_symbol()->get_name();
+    }
+    return result;
+}
+
 /// Restores import entries in the constructor and drops them in the destructor.
 class Import_entries_holder : public boost::noncopyable
 {
@@ -101,66 +127,15 @@ class Version_upgrader : protected mi::mdl::Module_visitor, public mi::mdl::IClo
 {
 public:
     Version_upgrader(
-        mi::mdl::IMDL* mdl, mi::mdl::Module* module, mi::neuraylib::Mdl_version to_version)
-      : m_mdl( mdl),
-        m_module( module)
-    {
-        m_ef = m_module->get_expression_factory();
-        m_module->get_version( m_from_major, m_from_minor);
+        mi::mdl::IMDL* mdl,
+        mi::mdl::Module* module,
+        mi::neuraylib::Mdl_version to_version);
 
-        mi::mdl::Module::get_version(
-            convert_mdl_version( to_version), m_to_major, m_to_minor);
-
-        ASSERT( M_SCENE,
-                m_to_major > m_from_major
-            || (m_to_major == m_from_major && m_to_minor > m_from_minor));
-    }
-
-    void run()
-    {
-        // Update the MDL version first (queried by Module_inliner::promote_call_reference())
-        m_module->set_version(
-            impl_cast<mi::mdl::MDL>( m_mdl),
-            m_to_major,
-            m_to_minor,
-            /*enable_mdl_next=*/true,
-            /*enable_experimental=*/false);
-
-        visit( m_module);
-
-        // Add required imports
-        for( const auto& i: m_imports)
-            m_module->add_import( i.c_str());
-    }
+    void run();
 
 private:
-    /// Promotes call references and its arguments, returns new call expression.
-    mi::mdl::IExpression* post_visit( mi::mdl::IExpression_call* expr) final
-    {
-        const mi::mdl::IExpression_reference* ref
-            = as<mi::mdl::IExpression_reference>( expr->get_reference());
-        if( !ref)
-            return expr;
-
-        mi::Uint32 rules = mi::mdl::Module::PR_NO_CHANGE;
-        ref = mi::mdl::Module_inliner::promote_call_reference(
-            *m_module, m_from_major, m_from_minor, ref, this, rules);
-        if( rules == mi::mdl::Module::PR_NO_CHANGE)
-            return expr;
-
-        if( rules & mi::mdl::Module::PR_FRESNEL_LAYER_TO_COLOR)
-            m_imports.insert( "::df::color_fresnel_layer");
-        if( rules & mi::mdl::Module::PR_MEASURED_EDF_ADD_TANGENT_U)
-            m_imports.insert( "::state::texture_tangent_u");
-
-        mi::mdl::IExpression_call* call = m_ef->create_call( ref);
-        for( int i = 0, j = 0, n = expr->get_argument_count(); i < n; ++i, ++j) {
-            const mi::mdl::IArgument* arg = m_module->clone_arg( expr->get_argument( i), this);
-            call->add_argument( arg);
-            j = m_module->promote_call_arguments( call, arg, j, rules);
-        }
-        return call;
-    }
+    /// Promotes call references and its arguments.
+    mi::mdl::IExpression* post_visit( mi::mdl::IExpression_call* expr) final;
 
     /// Implement IClone_modifier by returning the argument.
     mi::mdl::IExpression* clone_expr_reference( const mi::mdl::IExpression_reference* ref) final
@@ -174,15 +149,355 @@ private:
 
     mi::mdl::IMDL* m_mdl;
     mi::mdl::Module* m_module;
+
     mi::mdl::IExpression_factory* m_ef;
 
-    int m_to_major   = 1;
-    int m_to_minor   = 0;
+    mi::mdl::IMDL::MDL_version m_from_version;
     int m_from_major = 1;
     int m_from_minor = 0;
 
-    std::set<std::string> m_imports;
+    mi::mdl::IMDL::MDL_version m_to_version;
+    int m_to_major = 1;
+    int m_to_minor = 0;
+
+    /// Newly required imports due to promoted call expressions.
+    std::set<std::string> m_new_imports;
 };
+
+Version_upgrader::Version_upgrader(
+    mi::mdl::IMDL* mdl,
+    mi::mdl::Module* module,
+    mi::neuraylib::Mdl_version to_version)
+  : m_mdl( mdl),
+    m_module( module)
+{
+    m_ef = m_module->get_expression_factory();
+    m_module->get_version( m_from_major, m_from_minor);
+    m_from_version = combine_mdl_version( m_from_major, m_from_minor);
+    m_to_version = convert_mdl_version( to_version);
+    std::tie( m_to_major, m_to_minor) = split_mdl_version( m_to_version);
+
+    ASSERT( M_SCENE, m_to_version > m_from_version);
+}
+
+void Version_upgrader::run()
+{
+    // Update the MDL version first (queried by Module_inliner::promote_call_reference())
+    m_module->set_version(
+        impl_cast<mi::mdl::MDL>( m_mdl),
+        m_to_major,
+        m_to_minor,
+        /*enable_mdl_next=*/true,
+        /*enable_experimental=*/false);
+
+    // Promote call expressions and its arguments.
+    visit( m_module);
+
+    // Add newly required imports due to promoted call expressions.
+    for( const auto& i: m_new_imports)
+        m_module->add_import( i.c_str());
+}
+
+mi::mdl::IExpression* Version_upgrader::post_visit( mi::mdl::IExpression_call* expr)
+{
+    const mi::mdl::IExpression_reference* ref
+        = as<mi::mdl::IExpression_reference>( expr->get_reference());
+    if( !ref)
+        return expr;
+
+    mi::Uint32 rules = mi::mdl::Module::PR_NO_CHANGE;
+    ref = mi::mdl::Module_inliner::promote_call_reference(
+        *m_module, m_from_major, m_from_minor, ref, this, rules);
+    if( rules == mi::mdl::Module::PR_NO_CHANGE)
+        return expr;
+
+    if( rules & mi::mdl::Module::PR_FRESNEL_LAYER_TO_COLOR)
+        m_new_imports.insert( "::df::color_fresnel_layer");
+    if( rules & mi::mdl::Module::PR_MEASURED_EDF_ADD_TANGENT_U)
+        m_new_imports.insert( "::state::texture_tangent_u");
+
+    mi::mdl::IExpression_call* call = m_ef->create_call( ref);
+    for( int i = 0, j = 0, n = expr->get_argument_count(); i < n; ++i, ++j) {
+        const mi::mdl::IArgument* arg = m_module->clone_arg( expr->get_argument( i), this);
+        call->add_argument( arg);
+        j = m_module->promote_call_arguments( call, arg, j, rules);
+    }
+    return call;
+}
+
+/// Removes all namespace alias declarations.
+///
+/// Expands import declarations and type names using namespace aliases.
+class Alias_remover : protected mi::mdl::Module_visitor, public mi::mdl::IClone_modifier
+{
+public:
+    Alias_remover( mi::mdl::Module* module, const std::vector<std::string>& module_name);
+
+    void run();
+
+private:
+    /// Adapts qualified names in import declarations to avoid aliases.
+    void handle_import_name( mi::mdl::IQualified_name* name);
+
+    /// Adapts qualified names in type names to avoid aliases.
+    void post_visit( mi::mdl::IType_name* type_name) final;
+
+    /// Implement IClone_modifier by returning the argument.
+    mi::mdl::IExpression* clone_expr_reference( const mi::mdl::IExpression_reference* ref) final
+    { return const_cast<mi::mdl::IExpression_reference*>( ref); }
+    mi::mdl::IExpression* clone_expr_call( const mi::mdl::IExpression_call* call) final
+    { return const_cast<mi::mdl::IExpression_call*>( call); }
+    mi::mdl::IExpression* clone_literal( const mi::mdl::IExpression_literal* lit) final
+    { return const_cast<mi::mdl::IExpression_literal*>( lit); }
+    mi::mdl::IQualified_name* clone_name( const mi::mdl::IQualified_name* qname) final
+    { return const_cast<mi::mdl::IQualified_name*>( qname); }
+
+    /// Returns a qualified name where the last component has been removed.
+    mi::mdl::IQualified_name* strip_last_component( mi::mdl::IQualified_name* name);
+
+    /// Returns an absolute name for \p name.
+    ///
+    /// Requires that \p name does not use any namespace aliases.
+    std::vector<std::string> get_absolute_name( const mi::mdl::IQualified_name* name) const;
+
+    /// Removes leading '.' and '..' components from relative names.
+    mi::mdl::IQualified_name* get_reference_name( mi::mdl::IQualified_name* name) const;
+
+    mi::mdl::Module* m_module;
+    const std::vector<std::string>& m_module_name;
+
+    mi::mdl::IName_factory* m_nf;
+
+    /// Stores for each modified import declaration the mapping from its import index to the newly
+    /// created name (suitable for later references, i.e., without leading '.' and '..'
+    /// components).
+    std::map<mi::Size, mi::mdl::IQualified_name*> m_mapping;
+};
+
+Alias_remover::Alias_remover(
+    mi::mdl::Module* module, const std::vector<std::string>& module_name)
+  : m_module( module),
+    m_module_name( module_name)
+{
+    m_nf = m_module->get_name_factory();
+}
+
+void Alias_remover::run()
+{
+    // Check whether the module contains any aliases.
+    bool aliases_found = false;
+    for( int i = 0, n = m_module->get_declaration_count(); i < n; ++i) {
+        const mi::mdl::IDeclaration* decl = m_module->get_declaration( i);
+        mi::mdl::IDeclaration::Kind kind = decl->get_kind();
+        if(    kind == mi::mdl::IDeclaration::DK_MODULE
+            || kind == mi::mdl::IDeclaration::DK_IMPORT)
+            continue;
+        if( kind == mi::mdl::IDeclaration::DK_NAMESPACE_ALIAS) {
+            aliases_found = true;
+            break;
+        }
+        break;
+    }
+    if( !aliases_found)
+        return;
+
+    // Adapt import declarations to avoid aliases.
+    for( int i = 0, n = m_module->get_declaration_count(); i < n; ++i) {
+
+        const mi::mdl::IDeclaration* decl = m_module->get_declaration( i);
+        mi::mdl::IDeclaration::Kind kind = decl->get_kind();
+        if(    kind == mi::mdl::IDeclaration::DK_MODULE
+            || kind == mi::mdl::IDeclaration::DK_NAMESPACE_ALIAS)
+            continue;
+        if( kind != mi::mdl::IDeclaration::DK_IMPORT)
+            break;
+
+        const mi::mdl::IDeclaration_import* import
+            = cast<mi::mdl::IDeclaration_import>( decl);
+
+        mi::mdl::IQualified_name* using_name
+            = const_cast<mi::mdl::IQualified_name*>( import->get_module_name());
+        if( using_name) {
+            handle_import_name( using_name);
+            std::vector<std::string> absolute_name = get_absolute_name( using_name);
+            std::string absolute_name_str = stringify( absolute_name);
+            mi::Size index = m_module->get_import_index( absolute_name_str.c_str());
+            ASSERT( M_SCENE, index != 0);
+            mi::mdl::IQualified_name* reference_name = get_reference_name( using_name);
+            m_mapping[index] = reference_name;
+            continue;
+        }
+
+        for( int j = 0, n2 = import->get_name_count(); j < n2; ++j) {
+            mi::mdl::IQualified_name* import_name
+                = const_cast<mi::mdl::IQualified_name*>( import->get_name( j));
+            handle_import_name( import_name);
+            mi::mdl::IQualified_name* module_name = strip_last_component( import_name);
+            std::vector<std::string> absolute_name = get_absolute_name( module_name);
+            std::string absolute_name_str = stringify( absolute_name);
+            mi::Size index = m_module->get_import_index( absolute_name_str.c_str());
+            ASSERT( M_SCENE, index != 0);
+            mi::mdl::IQualified_name* reference_name = get_reference_name( module_name);
+            m_mapping[index] = reference_name;
+        }
+    }
+
+    // Remove all alias declarations.
+    std::vector<const mi::mdl::IDeclaration*> declarations;
+    declarations.reserve( m_module->get_declaration_count());
+    for( int i = 0, n = m_module->get_declaration_count(); i < n; ++i) {
+        const mi::mdl::IDeclaration* decl = m_module->get_declaration( i);
+        switch( decl->get_kind()) {
+            case mi::mdl::IDeclaration::DK_NAMESPACE_ALIAS:
+                break;
+            default:
+                declarations.push_back( decl);
+                break;
+        }
+    }
+    m_module->replace_declarations( declarations.data(), declarations.size());
+
+    // Adapt names of expression references to avoid aliases.
+    visit( m_module);
+}
+
+void Alias_remover::handle_import_name( mi::mdl::IQualified_name* name)
+{
+    // Push components of \p name onto a stack.
+    std::stack<const mi::mdl::ISymbol*> components;
+    for( int i = name->get_component_count()-1; i >= 0; --i)
+        components.push( name->get_component( i)->get_symbol());
+
+    name->clear_components();
+    mi::mdl::Definition_table& def_table = m_module->get_definition_table();
+
+    // Loop over components on stack.
+    while( !components.empty()) {
+
+        const mi::mdl::ISymbol* sym = components.top();
+        components.pop();
+
+        const mi::mdl::Definition* def = def_table.get_namespace_alias( sym);
+
+        // Re-add component symbols which are not a namespace alias.
+        if( !def) {
+            name->add_component( m_nf->create_simple_name( sym));
+            continue;
+        }
+
+        // Re-add component symbol without declaration in this module.
+        const mi::mdl::IDeclaration_namespace_alias* decl
+            = as<mi::mdl::IDeclaration_namespace_alias>( def->get_declaration());
+        if( !decl) {
+            name->add_component( m_nf->create_simple_name( sym));
+            continue;
+        }
+
+        // Push components of namespace aliases onto the stack.
+        const mi::mdl::IQualified_name* namespace_name = decl->get_namespace();
+        if( namespace_name->is_absolute())
+            name->set_absolute();
+        for( int i = namespace_name->get_component_count()-1; i >= 0; --i)
+            components.push( namespace_name->get_component( i)->get_symbol());
+    }
+}
+
+void Alias_remover::post_visit( mi::mdl::IType_name* type_name)
+{
+    mi::mdl::IQualified_name* old_name = type_name->get_qualified_name();
+
+    // Skip unqualified names.
+    if( old_name->get_component_count() < 2)
+       return;
+
+    // Skip expression references without definition.
+    const mi::mdl::IDefinition* def = old_name->get_definition();
+    if( !def)
+        return;
+
+    // Skip non-imported definitions or definitions with unmodified import index.
+    mi::Size index = impl_cast<mi::mdl::Definition>( def)->get_original_import_idx();
+    if( index == 0)
+        return;
+    auto it = m_mapping.find( index);
+    if( it == m_mapping.end())
+        return;
+
+    mi::mdl::IQualified_name* module_name = it->second;
+
+    // Construct new name for the expression reference based on the new name from the import
+    // declaration and the symbol of the expression reference.
+    mi::mdl::IQualified_name* new_name = m_nf->create_qualified_name();
+    if( module_name->is_absolute())
+        new_name->set_absolute();
+    for( mi::Size i = 0, n = mi::Size( module_name->get_component_count()); i < n; ++i)
+        new_name->add_component( module_name->get_component( i));
+    new_name->add_component( m_nf->create_simple_name( def->get_symbol()));
+
+    type_name->set_qualified_name( new_name);
+}
+
+mi::mdl::IQualified_name* Alias_remover::strip_last_component( mi::mdl::IQualified_name* name)
+{
+    mi::mdl::IQualified_name* result = m_nf->create_qualified_name();
+    if( name->is_absolute())
+        result->set_absolute();
+
+    int n = name->get_component_count();
+    ASSERT( M_SCENE, n > 1);
+    for( int i = 0; i < n-1; ++i)
+        result->add_component( name->get_component( i));
+
+    return result;
+}
+
+std::vector<std::string> Alias_remover::get_absolute_name(
+    const mi::mdl::IQualified_name* name) const
+{
+    std::vector<std::string> result;
+
+    if( !name->is_absolute()) {
+        result = m_module_name;
+        result.pop_back();
+    }
+
+    for( mi::Uint32 i = 0, n = name->get_component_count(); i < n; ++i) {
+        const mi::mdl::ISymbol* sym = name->get_component( i)->get_symbol();
+        size_t id = sym->get_id();
+        if( id == mi::mdl::ISymbol::SYM_DOT) {
+            // pass
+        } else if( id == mi::mdl::ISymbol::SYM_DOTDOT) {
+            result.pop_back();
+        } else {
+            result.emplace_back( sym->get_name());
+        }
+    }
+
+    return result;
+}
+
+mi::mdl::IQualified_name* Alias_remover::get_reference_name(
+    mi::mdl::IQualified_name* name) const
+{
+    if( name->is_absolute())
+        return name;
+
+    mi::mdl::IQualified_name* result = m_nf->create_qualified_name();
+    for( int i = 0, n = name->get_component_count(); i < n; ++i) {
+        const mi::mdl::ISimple_name* sn = name->get_component( i);
+        const mi::mdl::ISymbol* sym = sn->get_symbol();
+        size_t id = sym->get_id();
+        if( id == mi::mdl::ISymbol::SYM_DOT) {
+            // pass
+        } else if( id == mi::mdl::ISymbol::SYM_DOTDOT) {
+            // pass
+        } else {
+            result->add_component( sn);
+        }
+    }
+
+    return result;
+}
 
 /// Provides common infrastructure for adjusting import declarations.
 class Import_declaration_replacer : protected mi::mdl::Module_visitor
@@ -198,6 +513,11 @@ public:
         m_counter( 0)
     {
         m_nf = m_module->get_name_factory();
+
+        int major = 0;
+        int minor = 0;
+        m_module->get_version( major, minor);
+        m_namespace_aliases_legal = major == 1 && minor <= 7;
     }
 
     void run();
@@ -209,7 +529,8 @@ protected:
     /// name of an entity inside a module.
     virtual void handle_name( mi::mdl::IQualified_name* name, bool name_refers_to_module) = 0;
 
-    /// To be implemented in derived classes to indicate which alias declarations need to be removed.
+    /// To be implemented in derived classes to indicate which alias declarations need to be
+    /// removed.
     ///
     /// Indicates whether the alias declaration is correct after the transformation, i.e., does not
     /// contradict the transformation.
@@ -250,16 +571,13 @@ protected:
     /// Indicates whether the symbol represents "." or "..".
     static bool is_dot_or_dotdot( const mi::mdl::ISymbol* sym);
 
-    /// Converts an absolute qualified name given as vector of strings into a string representation.
-    static std::string stringify( const std::vector<std::string>& name, bool ignore_last_component);
-
-    /// Converts a qualified name into a string representation.
-    static std::string stringify( const mi::mdl::IQualified_name* name);
-
 private:
     /// Adapts the names of the expression references if its import declaration is recorded in
     /// \c m_mapping.
     mi::mdl::IExpression* post_visit( mi::mdl::IExpression_reference* expr) final;
+
+    /// Indicates whether namespace aliases are legal (up to MDL 1.7).
+    bool m_namespace_aliases_legal;
 
 protected:
     mi::mdl::IMDL* m_mdl;
@@ -404,7 +722,7 @@ void Import_declaration_replacer::do_create_absolute_import_declaration(
         absolute_module_name_qn->add_component(
             m_nf->create_simple_name( name->get_component( static_cast<int>( i))->get_symbol()));
 
-    // Map import index to the relative module name.
+    // Map import index to the absolute module name.
     if( update_mapping) {
         auto it = m_mapping.find( import_index);
         if( it == m_mapping.end())
@@ -556,6 +874,9 @@ std::vector<std::string> Import_declaration_replacer::create_absolute_name(
 
 void Import_declaration_replacer::create_aliases( std::vector<std::string>& absolute_name)
 {
+   if( !m_namespace_aliases_legal)
+       return;
+
     mi::mdl::Symbol_table* st = &m_module->get_symbol_table();
 
     for( std::string& s: absolute_name) {
@@ -597,30 +918,6 @@ bool Import_declaration_replacer::is_dot_or_dotdot( const mi::mdl::ISymbol* sym)
 {
     size_t id = sym->get_id();
     return id == mi::mdl::ISymbol::SYM_DOT || id == mi::mdl::ISymbol::SYM_DOTDOT;
-}
-
-std::string Import_declaration_replacer::stringify(
-    const std::vector<std::string>& name, bool ignore_last_component)
-{
-    std::string result;
-    mi::Size n = name.size() - (ignore_last_component ? 1 : 0);
-    for( mi::Size i = 0; i < n; ++i)
-       result += "::" + name[i];
-    return result;
-}
-
-std::string Import_declaration_replacer::stringify( const mi::mdl::IQualified_name* name)
-{
-    std::string result;
-    if( name->is_absolute())
-        result += "::";
-    for( mi::Uint32 i = 0, n = name->get_component_count(); i < n; ++i) {
-        const mi::mdl::ISimple_name* simple = name->get_component( i);
-        if( i > 0)
-            result += "::";
-        result += simple->get_symbol()->get_name();
-    }
-    return result;
 }
 
 mi::mdl::IExpression* Import_declaration_replacer::post_visit( mi::mdl::IExpression_reference* expr)
@@ -1305,8 +1602,8 @@ mi::Sint32 Mdl_module_transformer::upgrade_mdl_version(
 
     Import_entries_holder import_entries( m_mdlc_module, m_transaction, m_module.get());
 
-    if(    from_version < mi::neuraylib::MDL_VERSION_1_6
-        && to_version >= mi::neuraylib::MDL_VERSION_1_6) {
+    if(    from_version <= mi::neuraylib::MDL_VERSION_1_5
+        && to_version   >= mi::neuraylib::MDL_VERSION_1_6) {
 
         // Convert all weak relative import declarations and resource file paths.
         Non_weak_relative_import_declaration_creator visitor1(
@@ -1318,7 +1615,19 @@ mi::Sint32 Mdl_module_transformer::upgrade_mdl_version(
         visitor2.run();
 
         // Do not run analyze_module() here. We might have created strict relative import
-        // declarations and/or resource file paths, and the module version might be below 1.3.
+        // declarations and/or resource file paths, and the module version might still be below 1.3.
+    }
+
+    if(    (   from_version >= mi::neuraylib::MDL_VERSION_1_6
+            && from_version <= mi::neuraylib::MDL_VERSION_1_7)
+        && to_version >= mi::neuraylib::MDL_VERSION_1_8) {
+
+        // Remove all aliases.
+        Alias_remover visitor( m_module.get(), m_module_name);
+        visitor.run();
+
+        // Do not run analyze_module() here. We might have created Unicode identifiers, and the
+        // module version might still be below 1.8.
     }
 
     Version_upgrader upgrader( m_mdl.get(), m_module.get(), to_version);

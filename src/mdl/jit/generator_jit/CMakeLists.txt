@@ -154,6 +154,14 @@ if(NOT MSVC)
         )
 endif()
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+    # Suppress warning from LLVM code
+    target_compile_options(${PROJECT_NAME}
+        PRIVATE
+            "-Wno-deprecated-declarations"
+        )
+endif()
+
 # add dependencies
 target_add_dependencies(TARGET ${PROJECT_NAME} 
     DEPENDS 

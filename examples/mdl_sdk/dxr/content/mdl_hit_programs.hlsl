@@ -30,7 +30,7 @@
     #define TARGET_CODE_ID 0
 #endif
 
-// macros the append the target code ID to the function name.
+// macros to append the target code ID to the function name.
 // this is required because the resulting DXIL libraries will be linked to same pipeline object
 // and for that, the entry point names have to be unique.
 #define export_name_impl(name, id) name ## _ ## id
@@ -79,14 +79,9 @@ StructuredBuffer<Environment_sample_data> environment_sample_buffer : register(t
 // ------------------------------------------------------------------------------------------------
 
 // mesh data
-ByteAddressBuffer vertices : register(t1, space0);
 StructuredBuffer<uint> indices: register(t2, space0);
 
-// instance data
-ByteAddressBuffer scene_data : register(t3, space0);
-StructuredBuffer<SceneDataInfo> scene_data_infos: register(t4, space0);
-
-// geomety data
+// geometry data
 // as long as there are only a few values here, place them directly instead of a constant buffer
 cbuffer _Geometry_constants_0 : register(b2, space0) { uint geometry_vertex_buffer_byte_offset; }
 cbuffer _Geometry_constants_1 : register(b3, space0) { uint geometry_vertex_stride; }
@@ -96,12 +91,14 @@ cbuffer _Geometry_constants_3 : register(b5, space0) { uint geometry_scene_data_
 cbuffer Material_constants : register(b0, MDL_MATERIAL_REGISTER_SPACE)
 {
     // shared for all material compiled from the same MDL material
+    int init_index;
     int scattering_function_index;
     int opacity_function_index;
     int emission_function_index;
     int emission_intensity_function_index;
     int thin_walled_function_index;
     int volume_absorption_coefficient_function_index;
+    int standalone_opacity_function_index;
 
     // individual properties of the different material instances
     int material_id;
@@ -287,10 +284,7 @@ void setup_mdl_shading_state(
     mdl_state.arg_block_offset = 0;
 
     // fill the renderer state information
-    mdl_state.renderer_state.scene_data_instance = scene_data;
-    mdl_state.renderer_state.scene_data_infos = scene_data_infos;
     mdl_state.renderer_state.scene_data_info_offset = geometry_scene_data_info_offset;
-    mdl_state.renderer_state.scene_data_vertex = vertices;
     mdl_state.renderer_state.scene_data_geometry_byte_offset = geometry_vertex_buffer_byte_offset;
     mdl_state.renderer_state.hit_vertex_indices = vertex_indices;
     mdl_state.renderer_state.barycentric = barycentric;
@@ -300,6 +294,17 @@ void setup_mdl_shading_state(
     // (see end of target code generation on application side)
     float2 texcoord0 = scene_data_lookup_float2(
         mdl_state, SCENE_DATA_ID_TEXCOORD_0, float2(0.0f, 0.0f), false);
+
+    // apply uv transformatins
+    texcoord0 = texcoord0 * uv_scale + uv_offset;
+    if (uv_repeat != 0)
+    {
+        texcoord0 = texcoord0 - floor(texcoord0);
+    }
+    if (uv_saturate != 0)
+    {
+        texcoord0 = saturate(texcoord0);
+    }
 
     #if defined(USE_DERIVS)
         // would make sense in a rasterizer. for a ray tracers this is not straight forward
@@ -336,7 +341,8 @@ void MDL_RADIANCE_ANY_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes attr
     setup_mdl_shading_state(mdl_state, attrib);
 
     // evaluate the cutout opacity
-    const float opacity = mdl_geometry_cutout_opacity(opacity_function_index, mdl_state);
+    const float opacity = mdl_standalone_geometry_cutout_opacity(
+        standalone_opacity_function_index, mdl_state);
 
     // do alpha blending the stochastically way
     if (rnd(payload.seed) < opacity)
@@ -352,8 +358,8 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
     Shading_state_material mdl_state;
     setup_mdl_shading_state(mdl_state, attrib);
 
-    // keep the shading normal, this has to be reset before calling a second df::init
-    float3 shading_normal = mdl_state.normal;
+    // pre-compute and cache data used by different generated MDL functions
+    mdl_init(init_index, mdl_state);
 
     // for thin walled materials there is no 'inside'
     const bool thin_walled = mdl_thin_walled(thin_walled_function_index, mdl_state);
@@ -384,9 +390,6 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
     //---------------------------------------------------------------------------------------------
     if (emission_function_index >= 0 && emission_intensity_function_index >= 0)
     {
-        // init for the use of the materials EDF
-        mdl_edf_init(emission_function_index, mdl_state);
-
         // evaluate EDF
         Edf_evaluate_data eval_data = (Edf_evaluate_data) 0;
         eval_data.k1 = -WorldRayDirection();
@@ -406,10 +409,6 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
             payload.contribution += payload.weight * intensity * eval_data.edf[0];
         #endif
     }
-
-    // pre-compute and cache data that shared among 'mdl_bsdf_evaluate' and 'mdl_bsdf_sample' calls
-    mdl_state.normal = shading_normal; // reset normal (init calls can change the normal due to maps)
-    mdl_bsdf_init(scattering_function_index, mdl_state);
 
     // Write Auxiliary Buffers
     //---------------------------------------------------------------------------------------------
@@ -482,6 +481,9 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
 
     // Sample direction of the next ray
     //---------------------------------------------------------------------------------------------
+
+    // not a camera ray anymore
+    remove_flag(payload.flags, FLAG_CAMERA_RAY);
 
     Bsdf_sample_data sample_data = (Bsdf_sample_data) 0;
     sample_data.ior1 = ior1;                    // IOR current medium
@@ -592,7 +594,8 @@ void MDL_SHADOW_ANY_HIT_PROGRAM(inout ShadowHitInfo payload, Attributes attrib)
     setup_mdl_shading_state(mdl_state, attrib);
 
     // evaluate the cutout opacity
-    const float opacity = mdl_geometry_cutout_opacity(opacity_function_index, mdl_state);
+    const float opacity = mdl_standalone_geometry_cutout_opacity(
+        standalone_opacity_function_index, mdl_state);
 
     // do alpha blending the stochastically way
     if (rnd(payload.seed) < opacity)

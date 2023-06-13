@@ -286,7 +286,7 @@ public:
     ///
     /// \param type   the LLVM type of the local
     /// \param name   its name
-    llvm::Value *create_local(llvm::Type *type, char const *name) {
+    llvm::AllocaInst *create_local(llvm::Type *type, char const *name) {
         const llvm::DataLayout &DL = m_function->getParent()->getDataLayout();
         return new llvm::AllocaInst(
             type, DL.getAllocaAddrSpace(), nullptr, name, &*m_function->front().begin());
@@ -297,7 +297,7 @@ public:
     /// \param type        the LLVM element type of the local
     /// \param array_size  the size of the array
     /// \param name        its name
-    llvm::Value *create_local(llvm::Type *type, unsigned array_size, char const *name) {
+    llvm::AllocaInst *create_local(llvm::Type *type, unsigned array_size, char const *name) {
         const llvm::DataLayout &DL = m_function->getParent()->getDataLayout();
         return new llvm::AllocaInst(
             type,
@@ -842,9 +842,6 @@ public:
 
     /// Get the current file name (computed from current position debug info)
     char const *get_dbg_curr_filename();
-
-    /// Get the current function name.
-    char const *get_dbg_curr_function();
 
     /// Returns true, if the value \p val is a constant with a value equal to \p int_val.
     ///

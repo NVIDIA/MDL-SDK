@@ -28,7 +28,6 @@
 
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
-#include <curand_kernel.h>
 #define _USE_MATH_DEFINES
 #include <math.h>
 
@@ -294,7 +293,36 @@ __device__ inline float3 cross(const float3 &u, const float3 &v)
         u.x * v.y - u.y * v.x);
 }
 
-typedef curandStatePhilox4_32_10_t Rand_state;
+// Random number generator based on the OptiX SDK
+template<uint32_t N>
+static __forceinline__ __device__ uint32_t tea(uint32_t v0, uint32_t v1)
+{
+    uint32_t s0 = 0;
+
+    for (uint32_t n = 0; n < N; n++)
+    {
+        s0 += 0x9e3779b9;
+        v0 += ((v1 << 4) + 0xa341316c) ^ (v1 + s0) ^ ((v1 >> 5) + 0xc8013ea4);
+        v1 += ((v0 << 4) + 0xad90777d) ^ (v0 + s0) ^ ((v0 >> 5) + 0x7e95761e);
+    }
+
+    return v0;
+}
+
+// Generate random uint32_t in [0, 2^24)
+static __forceinline__ __device__ uint32_t lcg(uint32_t& prev)
+{
+    const uint32_t LCG_A = 1664525u;
+    const uint32_t LCG_C = 1013904223u;
+    prev = (LCG_A * prev + LCG_C);
+    return prev & 0x00FFFFFF;
+}
+
+// Generate random float in [0, 1)
+static __forceinline__ __device__ float rnd(uint32_t& prev)
+{
+    return ((float)lcg(prev) / (float)0x01000000);
+}
 
 // direction to environment map texture coordinates
 __device__ inline float2 environment_coords(const float3 &dir)
@@ -395,7 +423,7 @@ struct Ray_state {
 };
 
 __device__ inline bool trace_sphere(
-    Rand_state &rand_state,
+    uint32_t &seed,
     Ray_state &ray_state,
     const Kernel_params &params)
 {
@@ -653,9 +681,9 @@ __device__ inline bool trace_sphere(
         // importance sample environment light
         if (params.mdl_test_type != MDL_TEST_SAMPLE && params.mdl_test_type != MDL_TEST_NO_ENV)
         {
-            const float xi0 = curand_uniform(&rand_state);
-            const float xi1 = curand_uniform(&rand_state);
-            const float xi2 = curand_uniform(&rand_state);
+            const float xi0 = rnd(seed);
+            const float xi1 = rnd(seed);
+            const float xi2 = rnd(seed);
 
             float3 light_dir;
             float pdf;
@@ -681,10 +709,10 @@ __device__ inline bool trace_sphere(
 
         // importance sample BSDF
         {
-            sample_data.xi.x = curand_uniform(&rand_state);
-            sample_data.xi.y = curand_uniform(&rand_state);
-            sample_data.xi.z = curand_uniform(&rand_state);
-            sample_data.xi.w = curand_uniform(&rand_state);
+            sample_data.xi.x = rnd(seed);
+            sample_data.xi.y = rnd(seed);
+            sample_data.xi.z = rnd(seed);
+            sample_data.xi.w = rnd(seed);
 
 
             // sample the materials BSDF
@@ -748,7 +776,7 @@ __device__ inline bool trace_sphere(
 }
 
 __device__ inline float3 render_sphere(
-    Rand_state &rand_state,
+    uint32_t &seed,
     const Kernel_params &params,
     const unsigned x,
     const unsigned y)
@@ -756,8 +784,8 @@ __device__ inline float3 render_sphere(
     const float inv_res_x = 1.0f / (float)params.resolution.x;
     const float inv_res_y = 1.0f / (float)params.resolution.y;
 
-    const float dx = params.disable_aa ? 0.5f : curand_uniform(&rand_state);
-    const float dy = params.disable_aa ? 0.5f : curand_uniform(&rand_state);
+    const float dx = params.disable_aa ? 0.5f : rnd(seed);
+    const float dy = params.disable_aa ? 0.5f : rnd(seed);
 
     const float2 screen_pos = make_float2(
         ((float)x + dx) * inv_res_x,
@@ -784,7 +812,7 @@ __device__ inline float3 render_sphere(
     const unsigned int max_num_intersections = params.max_path_length - 1;
     for (ray_state.intersection = 0; ray_state.intersection < max_num_intersections;
             ++ray_state.intersection)
-        if (!trace_sphere(rand_state, ray_state, params))
+        if (!trace_sphere(seed, ray_state, params))
             break;
 
     return
@@ -821,15 +849,13 @@ extern "C" __global__ void render_sphere_kernel(
         return;
 
     const unsigned int idx = y * kernel_params.resolution.x + x;
-    Rand_state rand_state;
-    const unsigned int num_dim = kernel_params.disable_aa ? 6 : 8; // 2 camera, 3 BSDF, 3 environment
-    curand_init(idx, /*subsequence=*/0, kernel_params.iteration_start * num_dim, &rand_state);
+    uint32_t seed = tea<4>(idx, kernel_params.iteration_start);
 
     float3 value = make_float3(0.0f, 0.0f, 0.0f);
     for (unsigned int s = 0; s < kernel_params.iteration_num; ++s)
     {
         value += render_sphere(
-            rand_state,
+            seed,
             kernel_params,
             x, y);
     }

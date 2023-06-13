@@ -37,9 +37,10 @@ public:
 	ArrayList();
 	virtual ~ArrayList();
 
-	void Add(void *value);
+	int Add(void *value);
 	void Remove(void *value);
 	void* operator[](int index);
+	void clear();
 
 	int Count;
 	int Capacity;

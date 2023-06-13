@@ -276,14 +276,18 @@ bool Base_application::initialize_internal(Base_options* options)
     m_options = options;
 
     UINT dxgi_factory_flags = 0;
-    D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_12_0;
+    D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_12_1;
 
     if(options->gpu_debug)
     {
-        ComPtr<ID3D12Debug> debugController;
+        ComPtr<ID3D12Debug3> debugController;
         if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))
         {
             debugController->EnableDebugLayer();
+            //debugController->SetEnableGPUBasedValidation(true);
+            //debugController->SetGPUBasedValidationFlags(
+            //    D3D12_GPU_BASED_VALIDATION_FLAGS_NONE);
+            //debugController->SetEnableSynchronizedCommandQueueValidation(true);
         }
 
         ComPtr<IDXGIInfoQueue> dxgiInfoQueue;
@@ -394,6 +398,110 @@ bool Base_application::initialize_internal(Base_options* options)
 
             // found a device that supports RTX
             log_info("Created context for D3D Device: " + name);
+
+            // get device feature level
+            {
+                D3D12_FEATURE_DATA_FEATURE_LEVELS dLevels;
+                D3D_FEATURE_LEVEL aLevels[] =
+                {
+                    //D3D_FEATURE_LEVEL_12_2,
+                    D3D_FEATURE_LEVEL_12_1,
+                    D3D_FEATURE_LEVEL_12_0,
+                };
+                dLevels.NumFeatureLevels = sizeof(aLevels) / sizeof(D3D_FEATURE_LEVEL);
+                dLevels.pFeatureLevelsRequested = aLevels;
+                m_device->CheckFeatureSupport(
+                    D3D12_FEATURE_FEATURE_LEVELS,
+                    &dLevels,
+                    sizeof(D3D12_FEATURE_DATA_FEATURE_LEVELS)
+                );
+
+                std::string level = "";
+                {
+                    switch (dLevels.MaxSupportedFeatureLevel)
+                    {
+                    case D3D_FEATURE_LEVEL_12_1:
+                        level = "D3D_FEATURE_LEVEL_12_1 (or higher)";
+                        break;
+                    case D3D_FEATURE_LEVEL_12_0:
+                        level = "D3D_FEATURE_LEVEL_12_0";
+                        break;
+                    default:
+                        level = "D3D_FEATURE_LEVEL_11_1 (or lower)";
+                        break;
+                    }
+                }
+                log_info("Supporting Feature Level: " + level);
+            }
+
+            // get device ray tracing tier
+            {
+                std::string tier = "";
+                {
+                    switch (data.RaytracingTier)
+                    {
+                    case D3D12_RAYTRACING_TIER_1_1:
+                        tier = "D3D12_RAYTRACING_TIER_1_1 (or higher)";
+                        break;
+                    case D3D12_RAYTRACING_TIER_1_0:
+                        tier = "D3D12_RAYTRACING_TIER_1_0";
+                        break;
+                    default:
+                        tier = "NOT_SUPPORTED";
+                        break;
+                    }
+                }
+                log_info("Supporting Raytracing Tier: " + tier);
+            }
+
+            // get shader model level
+            {
+                D3D12_FEATURE_DATA_SHADER_MODEL data_shader_model;
+                D3D_SHADER_MODEL all_model_versions[] =
+                {
+                    D3D_SHADER_MODEL_6_6,
+                    D3D_SHADER_MODEL_6_5,
+                    D3D_SHADER_MODEL_6_4,
+                    D3D_SHADER_MODEL_6_3
+                };
+                size_t num_versions = sizeof(all_model_versions) / sizeof(D3D_SHADER_MODEL);
+                for (size_t i = 0; i < num_versions; i++)
+                {
+                    data_shader_model.HighestShaderModel = all_model_versions[i];
+                    HRESULT hres = m_device->CheckFeatureSupport(
+                        D3D12_FEATURE_SHADER_MODEL, &data_shader_model, sizeof(D3D12_FEATURE_DATA_SHADER_MODEL));
+                    if (hres != E_INVALIDARG)
+                    {
+                        if (FAILED(hres))
+                        {
+                            data_shader_model.HighestShaderModel = static_cast<D3D_SHADER_MODEL>(0);
+                        }
+                        break;
+                    }
+                }
+                std::string model = "";
+                {
+                    switch (data_shader_model.HighestShaderModel)
+                    {
+                    case D3D_SHADER_MODEL_6_6:
+                        model = "D3D_SHADER_MODEL_6_6 (or higher)";
+                        break;
+                    case D3D_SHADER_MODEL_6_5:
+                        model = "D3D_SHADER_MODEL_6_5";
+                        break;
+                    case D3D_SHADER_MODEL_6_4:
+                        model = "D3D_SHADER_MODEL_6_4";
+                        break;
+                    case D3D_SHADER_MODEL_6_3:
+                        model = "D3D_SHADER_MODEL_6_3";
+                        break;
+                    default:
+                        model = "NOT_SUPPORTED";
+                        break;
+                    }
+                }
+                log_info("Supporting Shader Model: " + model);
+            }
             found_adapter = true;
             break;
         }

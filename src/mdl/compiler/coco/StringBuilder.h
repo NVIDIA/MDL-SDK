@@ -5,23 +5,23 @@
 
 namespace Coco {
 
-class StringBuilder  
+class StringBuilder
 {
 public:
 	StringBuilder(int capacity = 32);
-	StringBuilder(const wchar_t *val);
+	StringBuilder(char const *val);
 	
 	virtual ~StringBuilder();
-	void Append(const wchar_t val);
-	void Append(const wchar_t *val);
-	wchar_t* ToString();
-	int GetLength() { return length; };
+	void Append(char val);
+	void Append(char const *val);
+	char* ToString();
+	size_t GetLength() { return length; };
 
 private:
 	void Init(int capacity);
-	wchar_t *data;
-	int capacity;
-	int length;
+	char *data;
+	size_t capacity;
+	size_t length;
 };
 
 }; // namespace

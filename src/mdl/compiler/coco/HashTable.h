@@ -35,7 +35,7 @@ namespace Coco {
 
 class DictionaryEntry {
 public:
-	wchar_t *key;
+	char const *key;
 	void *val;
 };
 
@@ -45,15 +45,15 @@ public:
 	virtual DictionaryEntry* Next() = 0;
 };
 
-class HashTable  
+class HashTable
 {
 public:
 	HashTable(int size = 128);
 	virtual ~HashTable();
 	
-	virtual void Set(wchar_t *key, void *value);
-	virtual void* Get(wchar_t *key) const;
-	inline void* operator[](wchar_t *key) const { return Get(key); };
+	virtual void Set(char const *key, void *value);
+	virtual void* Get(char const *key) const;
+	inline void* operator[](char const *key) const { return Get(key); };
 	virtual Iterator* GetIterator();
 
 private:
@@ -74,7 +74,7 @@ private:
 		virtual DictionaryEntry* Next();
 	};
 	
-	Obj* Get0(wchar_t *key) const;
+	Obj* Get0(char const *key) const;
 	Obj **data;
 	int size;
 };

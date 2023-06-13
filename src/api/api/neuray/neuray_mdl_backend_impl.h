@@ -154,7 +154,7 @@ public:
 
     /// Add an MDL environment function call as a function to this link unit.
     /// (see #mi::neuraylib::ILink_unit::add_environment for details)
-    mi::Sint32 add_environment(
+    mi::Sint32 deprecated_add_environment(
         mi::neuraylib::IFunction_call const     *call,
         char const                              *fname,
         mi::neuraylib::IMdl_execution_context   *context) final;
@@ -183,12 +183,23 @@ public:
         mi::Size                                    description_count,
         mi::neuraylib::IMdl_execution_context      *context) final;
 
-    BACKENDS::Link_unit const *get_link_unit() const { return &m_link_unit; }
+    /// Add an MDL function call as a function to this link unit.
+    /// (see #mi::neuraylib::ILink_unit::add_function for details)
+    mi::Sint32 add_function(
+        mi::neuraylib::IFunction_call const                   *call,
+        mi::neuraylib::ILink_unit::Function_execution_context  fexc,
+        char const                                            *fname,
+        mi::neuraylib::IMdl_execution_context                 *context) final;
 
+    /// Add an MDL function definition as a function to this link unit.
+    /// (see #mi::neuraylib::ILink_unit::add_function for details)
     Sint32 add_function(
-        const mi::neuraylib::IFunction_definition* function,
-        char const* name,
-        mi::neuraylib::IMdl_execution_context* context) final;
+        mi::neuraylib::IFunction_definition const             *function,
+        mi::neuraylib::ILink_unit::Function_execution_context  fexc,
+        char const                                            *fname,
+        mi::neuraylib::IMdl_execution_context                 *context) final;
+
+    BACKENDS::Link_unit const *get_link_unit() const { return &m_link_unit; }
 
 private:
     BACKENDS::Link_unit m_link_unit;

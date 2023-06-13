@@ -83,21 +83,21 @@ public:
     ///                        - #mi::IString \b thumbnail_path \n
     ///                          Path to a thumbnail image representing the exported material or
     ///                          function.
-    ///                          Can be either an absolute MDL url or a file system path.
+    ///                          Can be either an absolute MDL file path or a file system path.
     ///                        - #mi::base::IInterface* \b user_files \n
     ///                          A static or dynamic array of structures of type \c Mdle_user_file
     ///                          pointing to additional user content (files) that should be added to
     ///                          the MDLE archive. Can be \c NULL.\n
     ///                          The structure has the two members
     ///                             - #mi::IString \b source_path \n
-    ///                               MDL url or file system path pointing to the file.
+    ///                               MDL file path or file system path pointing to the file.
     ///                             - #mi::IString \b target_path \n
     ///                               New path of the file in the archive.\n
     /// \param context      An execution context which can be queried
     ///                     for detailed error messages after the
     ///                     operation has finished. Can be \c NULL.
     ///
-    /// \return  
+    /// \return
     ///                     -   0: Success
     ///                     -  -1: An error occurred. If provided, please check
     ///                            the context for details.
@@ -127,11 +127,11 @@ public:
     /// \param mdle_file_name   The file name of the MDLE that contains the user file.
     /// \param user_file_name   The path and name of the file to read inside the MDLE.
     ///                         This equals the \b target_path during the creation.
-    /// \param context          An execution context which can be queried for detailed error 
+    /// \param context          An execution context which can be queried for detailed error
     ///                         messages after the operation has finished.
     ///                         Can be \c NULL.
     /// \return
-    ///                         A reader with access to the user file content or NULL in case of
+    ///                         A reader with access to the user file content or \c NULL in case of
     ///                         errors. Check the context for details in that case.
     virtual IReader* get_user_file(
         const char* mdle_file_name,

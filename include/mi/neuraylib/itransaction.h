@@ -433,7 +433,11 @@ public:
     ///                        #mi::neuraylib::IModule and #mi::neuraylib::IFunction_definition.
     ///                        It also applies to elements of type #mi::neuraylib::IFunction_call
     ///                        that are used as defaults in an #mi::neuraylib::IFunction_definition.
+#ifdef MI_NEURAYLIB_DEPRECATED_ITRANSACTION_COPY_DEFAULT_PRIVACY_LEVEL_ZERO
     virtual Sint32 copy( const char* source, const char* target, Uint8 privacy = 0) = 0;
+#else
+    virtual Sint32 copy( const char* source, const char* target, Uint8 privacy = LOCAL_SCOPE) = 0;
+#endif
 
     /// Removes the element with the name \p name from the database.
     ///

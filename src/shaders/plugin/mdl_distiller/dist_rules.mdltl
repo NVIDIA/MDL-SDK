@@ -1,0 +1,512 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+// Removes all MDL 1.4 and the 1.7 unbounded color mixes BSDFs.
+rules Reduce_1_4_to_1_3_rules topdown {
+    fresnel_factor(ior,k,base)
+        --> bsdf_tint(nvidia::distilling_support::refl_from_ior_k(ior,k),base);
+    bsdf_color_mix_1(w1,df1) --> bsdf_tint(w1,df1);
+    bsdf_color_mix_2(w1,df1,w2,df2) --> bsdf_mix_2( wp1,bsdf_tint(w1/wp1,df1),
+                                                    wp2,bsdf_tint(w2/wp2,df2))
+            where wp1 = math::clamp( math::luminance(w1), 0.001, 0.999)
+                  wp2 = math::clamp( math::luminance(w2), 0.001, 0.999);
+    bsdf_color_mix_3(w1,df1,w2,df2,w3,df3) --> bsdf_mix_3( wp1,bsdf_tint(w1/wp1,df1),
+                                                           wp2,bsdf_tint(w2/wp2,df2),
+                                                           wp3,bsdf_tint(w3/wp3,df3))
+            where wp1 = math::clamp( math::luminance(w1), 0.001, 0.999)
+                  wp2 = math::clamp( math::luminance(w2), 0.001, 0.999)
+                  wp3 = math::clamp( math::luminance(w3), 0.001, 0.999);
+    bsdf_color_clamped_mix_1(w1,df1) --> bsdf_tint(w1,df1);
+    bsdf_color_clamped_mix_2(w1,df1,w2,df2) --> bsdf_mix_2( wp1,bsdf_tint(w1/wp1,df1),
+                                                            wp2,bsdf_tint(w2/wp2,df2))
+            where wp1 = math::clamp( math::luminance(w1), 0.001, 0.999)
+                  wp2 = math::clamp( math::luminance(w2), 0.001, 0.999);
+
+    bsdf_color_clamped_mix_3(w1,df1,w2,df2,w3,df3) --> bsdf_mix_3( wp1,bsdf_tint(w1/wp1,df1),
+                                                                   wp2,bsdf_tint(w2/wp2,df2),
+                                                                   wp3,bsdf_tint(w3/wp3,df3))
+            where wp1 = math::clamp( math::luminance(w1), 0.001, 0.999)
+                  wp2 = math::clamp( math::luminance(w2), 0.001, 0.999)
+                  wp3 = math::clamp( math::luminance(w3), 0.001, 0.999);
+
+    bsdf_color_unbounded_mix_1(w1,df1) --> bsdf_tint(w1,df1);
+    bsdf_color_unbounded_mix_2(w1,df1,w2,df2) --> bsdf_mix_2( wp1,bsdf_tint(w1/wp1,df1),
+                                                              wp2,bsdf_tint(w2/wp2,df2))
+            where wp1 = math::clamp( math::luminance(w1), 0.001, 0.999)
+                  wp2 = math::clamp( math::luminance(w2), 0.001, 0.999);
+
+    bsdf_color_unbounded_mix_3(w1,df1,w2,df2,w3,df3) --> bsdf_mix_3( wp1,bsdf_tint(w1/wp1,df1),
+                                                                     wp2,bsdf_tint(w2/wp2,df2),
+                                                                     wp3,bsdf_tint(w3/wp3,df3))
+            where wp1 = math::clamp( math::luminance(w1), 0.001, 0.999)
+                  wp2 = math::clamp( math::luminance(w2), 0.001, 0.999)
+                  wp3 = math::clamp( math::luminance(w3), 0.001, 0.999);
+
+    color_weighted_layer(w,layer,base,n) --> weighted_layer(0.0,layer,base,n)
+        if w == color(0.0)
+        deadrule; // the optimizer in the compiler removes this case
+    color_weighted_layer(w,layer,base,n) --> weighted_layer(1.0,layer,base,n)
+        if w == color(1.0);
+    color_weighted_layer(w,layer,base,n)
+        --> weighted_layer( wp,bsdf_tint(w/color(wp),layer),
+                                 bsdf_tint((color(1.0)-w)/color(1.0-wp),base),n)
+        where wp = math::clamp( math::luminance(w), 0.001, 0.999);
+    color_fresnel_layer(ior,w,layer,base,n)
+        --> fresnel_layer(math::luminance(ior),0.0,layer,base,n)
+        if w == color(0.0)
+        deadrule; // the optimizer in the compiler removes this case
+    color_fresnel_layer(ior,w,layer,base,n)
+        --> fresnel_layer(math::luminance(ior),1.0,layer,base,n)
+        if w == color(1.0);
+    color_fresnel_layer(ior,w,layer,base,n)
+        --> fresnel_layer( math::luminance(ior),wp,
+                                bsdf_tint(w/color(wp),layer),
+                                bsdf_tint((color(1.0)-w)/color(1.0-wp),base),
+                                n)
+        where wp = math::clamp( math::luminance(w), 0.001, 0.999);
+    color_custom_curve_layer(refl_n,refl_g,exp,w,layer,base,n)
+        --> custom_curve_layer(rn,rg,exp,0.0,layer,base,n)
+        if w == color(0.0)
+        where rn = math::luminance(refl_n)
+              rg = math::luminance(refl_g)
+        deadrule; // the optimizer in the compiler removes this case
+
+    color_custom_curve_layer(refl_n,refl_g,exp,w,layer,base,n)
+        --> custom_curve_layer(rn,rg,exp,1.0,
+                                    bsdf_tint(refl_n/color(rn),layer),
+                                    bsdf_tint((color(1.0)-refl_n)/color(1.0-rn),base),
+                                    n)
+        if w == color(1.0)
+        where rn = math::clamp( math::luminance(refl_n), 0.001, 0.999)
+              rg = math::luminance(refl_g);
+    color_custom_curve_layer(refl_n,refl_g,exp,w,layer,base,n)
+        --> custom_curve_layer(rn,rg,exp,wp,
+                                    bsdf_tint(refl_n*w/color(rn*wp),layer),
+                                    bsdf_tint((color(1.0)-refl_n*w)/color(1.0-rn*wp),base),
+                                    n)
+        where rn = math::clamp( math::luminance(refl_n), 0.001, 0.999)
+              rg = math::luminance(refl_g)
+              wp = math::clamp( math::luminance(w), 0.001, 0.999);
+    color_measured_curve_layer(_,w,layer,base,n) --> fresnel_layer(1.5,0.0,layer,base,n)
+        if w == color(0.0);
+    color_measured_curve_layer(_,w,layer,base,n) --> fresnel_layer(1.5,1.0,layer,base,n)
+        if w == color(1.0);
+    color_measured_curve_layer(_,w,layer,base,n) -->
+        fresnel_layer( 1.5, wp,
+                            bsdf_tint(w/color(wp),layer),
+                            bsdf_tint((color(1.0)-w)/color(1.0-wp),base),
+                            n)
+        where wp = math::clamp( math::luminance(w), 0.001, 0.999);
+    postcond nonode(bsdf_color_mix_1)
+        && nonode(bsdf_color_mix_2)
+        && nonode(bsdf_color_mix_3)
+        && nonode(bsdf_color_clamped_mix_1)
+        && nonode(bsdf_color_clamped_mix_2)
+        && nonode(bsdf_color_clamped_mix_3)
+        && nonode(bsdf_color_unbounded_mix_1)
+        && nonode(bsdf_color_unbounded_mix_2)
+        && nonode(bsdf_color_unbounded_mix_3)
+        && nonode(color_weighted_layer)
+        && nonode(color_fresnel_layer)
+        && nonode(color_custom_curve_layer)
+        && nonode(color_measured_curve_layer);
+}
+
+
+// Rules to remove the conditional operators '?:' that can occur in class mode for
+// the node types from an MDL expression.
+rules Elide_conditional_operator_rules bottomup {
+    import df;
+    bsdf_conditional_operator( cond, bsdf1, bsdf2)
+        --> bsdf_mix_2( (cond ? 1.0 : 0.0), bsdf1, (cond ? 0.0 : 1.0), bsdf2);
+    edf_conditional_operator( cond, edf1, edf2)
+        --> edf_mix_2( (cond ? 1.0 : 0.0), edf1, (cond ? 0.0 : 1.0), edf2);
+    vdf_conditional_operator( cond, vdf1, vdf2)
+        --> vdf_mix_2( (cond ? 1.0 : 0.0), vdf1, (cond ? 0.0 : 1.0), vdf2);
+
+    postcond nonode(material_conditional_operator)
+        &&  nonode(bsdf_conditional_operator)
+        &&  nonode(edf_conditional_operator)
+        &&  nonode(vdf_conditional_operator);
+}
+
+// Rules to reduce an MDL expression to the 'simple' subset of distribution
+// functions.
+rules Make_simple_rules topdown { // bottomup would work too
+    import math;
+// Move transmission to a later stage for better color reproduction of tinted transmission
+//    specular_bsdf(_,mode) --> bsdf()
+//        if mode == scatter_transmit;
+//    specular_bsdf(tint,mode) --> fresnel_layer( option( global_float_ior),
+//                                                     1.0, specular_bsdf(tint), bsdf())
+//        maybe mode == scatter_reflect_transmit;
+//    simple_glossy_bsdf(ru,rv,tint,ms,t,mode) --> simple_glossy_bsdf(ru,rv,tint,ms,t)
+//        if mode == scatter_transmit;
+//    simple_glossy_bsdf(ru,rv,tint,ms,t,mode) --> fresnel_layer( option( global_float_ior),
+//                                                           1.0, simple_glossy_bsdf(ru,rv,tint,ms,t), bsdf())
+
+//        maybe mode == scatter_reflect_transmit;
+//    diffuse_transmission_bsdf(tint) --> diffuse_reflection_bsdf(tint);
+    microfacet_beckmann_smith_bsdf(ru,rv,tint,_,t,mode) --> simple_glossy_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
+    microfacet_beckmann_vcavities_bsdf(ru,rv,tint,_,t,mode)
+        --> simple_glossy_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
+    microfacet_ggx_smith_bsdf(ru,rv,tint,_,t,mode) --> simple_glossy_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
+    microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t,mode) --> simple_glossy_bsdf( ru,rv,tint,color(0.0),t,mode) repeat_rules;
+    ward_geisler_moroder_bsdf(ru,rv,tint,_,t) --> simple_glossy_bsdf( ru,rv,tint,color(0.0),t) repeat_rules;
+    backscattering_glossy_reflection_bsdf(ru,rv,tint,_,t,handle) -->
+        simple_glossy_bsdf(ru,rv,tint,color(0.0),t,scatter_reflect,handle);
+    sheen_bsdf(r,tint,tintt,_,handle) -->
+        simple_glossy_bsdf(r,r,tint,tintt,state::texture_tangent_u(0),scatter_reflect,handle);
+    measured_bsdf(_) --> bsdf();
+    thin_film(_,_,base) --> base repeat_rules;
+    bsdf_directional_factor(tint_n,tint_g,_,base) -->
+        fresnel_layer( nvidia::distilling_support::float_ior_from_refl(tint_n), 1.0,
+                            bsdf_tint( tint_g, base), bsdf());
+    measured_curve_factor(_,base) --> base repeat_rules;
+    measured_factor(_,base) --> base repeat_rules;
+    fresnel_factor(ior,k,base)
+        --> bsdf_tint(nvidia::distilling_support::refl_from_ior_k(ior,k),base);
+    bsdf_clamped_mix_1(w1,df1) --> bsdf_mix_1(w1,df1);
+    bsdf_clamped_mix_2(w1,df1,w2,df2) --> bsdf_mix_2(w1,df1,w2,df2);
+    bsdf_clamped_mix_3(w1,df1,w2,df2,w3,df3) --> bsdf_mix_3(w1,df1,w2,df2,w3,df3);
+    bsdf_unbounded_mix_1(w1,df1) --> bsdf_mix_1(w1,df1);
+    bsdf_unbounded_mix_2(w1,df1,w2,df2) --> bsdf_mix_2(w1,df1,w2,df2);
+    bsdf_unbounded_mix_3(w1,df1,w2,df2,w3,df3) --> bsdf_mix_3(w1,df1,w2,df2,w3,df3);
+    bsdf_color_clamped_mix_1(w1,df1) --> bsdf_color_mix_1(w1,df1);
+    bsdf_color_clamped_mix_2(w1,df1,w2,df2) --> bsdf_color_mix_2(w1,df1,w2,df2);
+    bsdf_color_clamped_mix_3(w1,df1,w2,df2,w3,df3) --> bsdf_color_mix_3(w1,df1,w2,df2,w3,df3);
+    bsdf_color_unbounded_mix_1(w1,df1) --> bsdf_color_mix_1(w1,df1);
+    bsdf_color_unbounded_mix_2(w1,df1,w2,df2) --> bsdf_color_mix_2(w1,df1,w2,df2);
+    bsdf_color_unbounded_mix_3(w1,df1,w2,df2,w3,df3) --> bsdf_color_mix_3(w1,df1,w2,df2,w3,df3);
+    custom_curve_layer(refl_n,refl_g,_,w,layer,base,n) -->
+        fresnel_layer( nvidia::distilling_support::float_ior_from_refl(refl_n), w,
+                            bsdf_tint( color(refl_g), layer), base, n);
+    color_custom_curve_layer(refl_n,refl_g,_,w,layer,base,n) -->
+        color_fresnel_layer( nvidia::distilling_support::ior_from_refl(refl_n), w,
+                                  bsdf_tint( refl_g, layer), base, n);
+    measured_curve_layer(_,w,layer,base,n) -->
+        fresnel_layer( 1.5, w, layer, base, n);
+    color_measured_curve_layer(_,w,layer,base,n) -->
+        color_fresnel_layer( color(1.5), w, layer, base, n);
+
+    dusty_diffuse_reflection_bsdf(tint) --> diffuse_reflection_bsdf(tint, 1.0);
+
+
+    // Fix wrong 0.0 initialization of the normal field in older materials.
+    material( tw,sf,bf,ior,vol,
+              material_geometry(dis,cutout,n),hair)
+        --> material(tw,sf,bf,ior,vol,material_geometry(dis,cutout,state::normal()),hair)
+        if n == 0.0;
+}
+
+// Removes all tint modifiers and applies them to elemental BSDFs. Differentiates
+// between reflection and transmission tint if needed.
+rules Elide_tint_rules topdown {
+    bsdf_tint( _, bsdf()) --> bsdf() skip_recursion;
+    bsdf_tint( c, diffuse_reflection_bsdf(tint,r)) --> diffuse_reflection_bsdf( c * tint, r) skip_recursion;
+    bsdf_tint( c, diffuse_transmission_bsdf(tint))
+        --> diffuse_transmission_bsdf( c * tint) skip_recursion;
+    bsdf_tint( c, simple_glossy_bsdf(ru,rv,tint,ms,t))
+        --> simple_glossy_bsdf( ru,rv,c * tint,ms,t) skip_recursion;
+    bsdf_tint( c, specular_bsdf(tint)) --> specular_bsdf( c * tint) skip_recursion;
+    bsdf_tint( c, bsdf_tint(tint,base)) --> bsdf_tint( c * tint, base) repeat_rules;
+    bsdf_tint( c, bsdf_tint_ex(tint,tintt,base))
+        --> bsdf_tint( c * tint, base) repeat_rules if tint == tintt;
+    bsdf_tint( c, bsdf_tint_ex(tint,tintt,base))
+        --> bsdf_tint_ex( c * tint, c * tintt, base) repeat_rules;
+    bsdf_tint( c, bsdf_mix_1(w,df)) --> bsdf_mix_1( w, bsdf_tint( c, df));
+    bsdf_tint( c, bsdf_color_mix_1(w,df)) --> bsdf_color_mix_1( w, bsdf_tint( c, df));
+    bsdf_tint( c, bsdf_mix_2(w1,df1,w2,df2))
+        --> bsdf_mix_2( w1, bsdf_tint( c, df1), w2, bsdf_tint( c, df2));
+    bsdf_tint( c, bsdf_color_mix_2(w1,df1,w2,df2))
+        --> bsdf_color_mix_2( w1, bsdf_tint( c, df1), w2, bsdf_tint( c, df2));
+    bsdf_tint( c, bsdf_mix_3(w1,df1,w2,df2,w3,df3))
+        --> bsdf_mix_3( w1, bsdf_tint( c, df1), w2, bsdf_tint( c, df2), w3, bsdf_tint( c, df3));
+    bsdf_tint( c, bsdf_color_mix_3(w1,df1,w2,df2,w3,df3))
+        --> bsdf_color_mix_3( w1, bsdf_tint( c, df1), w2, bsdf_tint( c, df2), w3, bsdf_tint( c, df3));
+    bsdf_tint( c, weighted_layer(w,layer,base,n))
+        --> weighted_layer( w, bsdf_tint( c, layer), bsdf_tint( c, base), n);
+    bsdf_tint( c, color_weighted_layer(w,layer,base,n))
+        --> color_weighted_layer( w, bsdf_tint( c, layer), bsdf_tint( c, base), n);
+    bsdf_tint( c, fresnel_layer(ior,w,layer,base,n))
+        --> fresnel_layer( ior, w, bsdf_tint( c, layer), bsdf_tint( c, base), n);
+    bsdf_tint( c, color_fresnel_layer(ior,w,layer,base,n))
+        --> color_fresnel_layer( ior, w, bsdf_tint( c, layer), bsdf_tint( c, base), n);
+
+    bsdf_tint_ex( c, ct, base) --> bsdf_tint( c, base) repeat_rules if c == ct;
+
+    bsdf_tint_ex( _, _,bsdf()) --> bsdf() skip_recursion;
+    bsdf_tint_ex( c, _, diffuse_reflection_bsdf(tint,r)) --> diffuse_reflection_bsdf( c * tint, r) skip_recursion;
+    bsdf_tint_ex( _, c, diffuse_transmission_bsdf(tint))
+        --> diffuse_transmission_bsdf( c * tint) skip_recursion;
+
+    bsdf_tint_ex( c, _, simple_glossy_bsdf(ru,rv,tint,ms,t,mode))
+        --> simple_glossy_bsdf( ru,rv,c * tint,ms,t,mode) skip_recursion if mode == scatter_reflect;
+    bsdf_tint_ex( _, ct, simple_glossy_bsdf(ru,rv,tint,ms,t,mode))
+        --> simple_glossy_bsdf( ru,rv,ct * tint,ms,t,mode) skip_recursion if mode == scatter_transmit;
+    bsdf_tint_ex( c, ct, simple_glossy_bsdf(ru,rv,tint,ms,t,mode))
+        --> simple_glossy_bsdf( ru,rv,cmix * tint,ms,t,mode) skip_recursion
+        where cmix = w * c + (1.0 - w) * ct
+              w = 2.0 * option( top_layer_weight);
+
+    bsdf_tint_ex( c, _, specular_bsdf(tint,mode))
+        --> specular_bsdf( c * tint, mode) skip_recursion if mode == scatter_reflect;
+    bsdf_tint_ex( _, ct, specular_bsdf(tint,mode))
+        --> specular_bsdf( ct * tint, mode) skip_recursion if mode == scatter_transmit;
+    bsdf_tint_ex( c, ct, specular_bsdf(tint,mode))
+        --> specular_bsdf( cmix * tint, mode) skip_recursion
+        where cmix = w * c + (1.0 - w) * ct
+              w = 2.0 * option( top_layer_weight);
+
+    bsdf_tint_ex( c, ct, bsdf_tint(tint,base))
+        --> bsdf_tint_ex( c * tint, ct * tint, base) repeat_rules;
+    bsdf_tint_ex( c, ct, bsdf_tint_ex(tint,tintt,base))
+        --> bsdf_tint_ex( c * tint, ct * tintt, base) repeat_rules;
+    bsdf_tint_ex( c, ct, bsdf_mix_1(w,df)) --> bsdf_mix_1( w, bsdf_tint_ex( c, ct, df));
+    bsdf_tint_ex( c, ct, bsdf_color_mix_1(w,df))
+        --> bsdf_color_mix_1( w, bsdf_tint_ex( c, ct, df));
+    bsdf_tint_ex( c, ct, bsdf_mix_2(w1,df1,w2,df2))
+        --> bsdf_mix_2( w1, bsdf_tint_ex( c, ct, df1), w2, bsdf_tint_ex( c, ct, df2));
+    bsdf_tint_ex( c, ct, bsdf_color_mix_2(w1,df1,w2,df2))
+        --> bsdf_color_mix_2( w1, bsdf_tint_ex( c, ct, df1), w2, bsdf_tint_ex( c, ct, df2));
+    bsdf_tint_ex( c, ct, bsdf_mix_3(w1,df1,w2,df2,w3,df3))
+        --> bsdf_mix_3( w1, bsdf_tint_ex( c, ct, df1),
+                        w2, bsdf_tint_ex( c, ct, df2),
+                        w3, bsdf_tint_ex( c, ct, df3));
+    bsdf_tint_ex( c, ct, bsdf_color_mix_3(w1,df1,w2,df2,w3,df3))
+        --> bsdf_color_mix_3( w1, bsdf_tint_ex( c, ct, df1),
+                              w2, bsdf_tint_ex( c, ct, df2),
+                              w3, bsdf_tint_ex( c, ct, df3));
+    bsdf_tint_ex( c, ct, weighted_layer(w,layer,base,n))
+        --> weighted_layer( w, bsdf_tint_ex( c, ct, layer), bsdf_tint_ex( c, ct, base), n);
+    bsdf_tint_ex( c, ct, color_weighted_layer(w,layer,base,n))
+        --> color_weighted_layer( w, bsdf_tint_ex( c, ct, layer),
+                                       bsdf_tint_ex( c, ct, base), n);
+    bsdf_tint_ex( c, ct, fresnel_layer(ior,w,layer,base,n))
+        --> fresnel_layer( ior, w, bsdf_tint_ex( c, ct, layer),
+                                bsdf_tint_ex( c, ct, base), n);
+    bsdf_tint_ex( c, ct, color_fresnel_layer(ior,w,layer,base,n))
+        --> color_fresnel_layer( ior, w, bsdf_tint_ex( c, ct, layer),
+                                      bsdf_tint_ex( c, ct, base), n);
+    postcond nonode(bsdf_tint) && nonode(bsdf_tint_ex);
+}
+
+
+// Bottom-up reduction to simplify an MDL expression's scattering fields to a single local normal.
+// \precond The input MDL expression shall only contain BSDF that are simple.
+//
+rules Make_normal_rules bottomup {
+    import state;
+    import math;
+
+    material( tw,
+              material_surface(
+                  df @ bsdf [[ local_normal_n ~ nl ]]),
+              bf,ior,vol,
+              material_geometry(d,cutout,n), hair)
+        --> material(tw,material_surface(df),bf,ior,vol,material_geometry(d,cutout,nprime),hair)
+        maybe n != nl
+        where nprime = nvidia::distilling_support::add_detail_normal( nl, n);
+
+
+    // Basic BSDFs: weight is 0, normal is state::normal().
+    b ~ bsdf() --> b [[ local_normal_w = 0.0, local_normal_n = state::normal() ]];
+    b ~ diffuse_reflection_bsdf(_,_) --> b [[ local_normal_w = 0.0, local_normal_n = state::normal() ]];
+    b ~ diffuse_transmission_bsdf(_) --> b [[ local_normal_w = 0.0, local_normal_n = state::normal() ]];
+    b ~ specular_bsdf(_) --> b [[ local_normal_w = 0.0, local_normal_n = state::normal() ]];
+    b ~ simple_glossy_bsdf(_,_,_,_,_) --> b [[ local_normal_w = 0.0, local_normal_n = state::normal() ]];
+
+    b ~ bsdf_mix_1(w1, _bs [[ local_normal_w ~ nw, local_normal_n ~ nl ]]) -->
+        b [[ local_normal_w = w1 * nw, local_normal_n = nl ]];
+    b ~ bsdf_color_mix_1(w1, _bs [[ local_normal_w ~ nw, local_normal_n ~ nl ]]) -->
+        b [[ local_normal_w = math::luminance(w1) * nw, local_normal_n = nl ]];
+
+    b ~ bsdf_mix_2(w1, _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                   w2, _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]])
+        --> b [[ local_normal_w = w1 * nw1 + w2 * nw2, local_normal_n = nl1 ]]
+        if nl1 == nl2;
+    b ~ bsdf_mix_2(w1, _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                   w2, _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]])
+        --> b [[ local_normal_w = w1 * nw1 + w2 * nw2,
+                 local_normal_n = nvidia::distilling_support::affine_normal_sum( w1 * nw1, nl1, w2 * nw2, nl2)]];
+
+    b ~ bsdf_color_mix_2(w1,_bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                         w2,_bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]])
+        --> b [[ local_normal_w = math::luminance(w1) * nw1 + math::luminance(w2) * nw2,
+                 local_normal_n = nl1 ]]
+        if nl1 == nl2;
+    b ~ bsdf_color_mix_2(w1, _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                         w2, _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]])
+        --> b [[ local_normal_w = w1p * nw1 + w2p * nw2,
+                 local_normal_n = nvidia::distilling_support::affine_normal_sum( w1p * nw1, nl1, w2p * nw2, nl2)]]
+        where w1p = math::luminance(w1)
+              w2p = math::luminance(w2);
+
+    b ~ bsdf_mix_3(w1, _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                   w2, _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                   w3, _bs3 [[ local_normal_w ~ nw3, local_normal_n ~ nl3 ]])
+        --> b [[ local_normal_w = w1 * nw1 + w2 * nw2 + w3 * nw3,
+                 local_normal_n = nl1 ]]
+        if (nl1 == nl2) && (nl1 == nl3);
+    b ~ bsdf_mix_3(w1, _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                   w2, _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                   w3, _bs3 [[ local_normal_w ~ nw3, local_normal_n ~ nl3 ]])
+         --> b [[ local_normal_w = w1 * nw1 + w2 * nw2 + w3 * nw3,
+                    local_normal_n = nvidia::distilling_support::affine_normal_sum(
+                        w1 * nw1, nl1, w2 * nw2, nl2, w3 * nw3, nl3)]];
+
+    b ~ bsdf_color_mix_3(w1, _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                         w2, _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                         w3, _bs3 [[ local_normal_w ~ nw3, local_normal_n ~ nl3 ]])
+        --> b [[ local_normal_w = math::luminance(w1) * nw1 + math::luminance(w2) * nw2
+                   + math::luminance(w3) * nw3,
+                 local_normal_n = nl1 ]]
+        if (nl1 == nl2) && (nl1 == nl3);
+    b ~ bsdf_color_mix_3(w1, _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                         w2, _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                         w3, _bs3 [[ local_normal_w ~ nw3, local_normal_n ~ nl3 ]])
+         --> b [[ local_normal_w = w1p * nw1 + w2p * nw2 + w3p * nw3,
+                  local_normal_n = nvidia::distilling_support::affine_normal_sum(
+                      w1p * nw1, nl1, w2p * nw2, nl2, w3p * nw3, nl3) ]]
+        where w1p = math::luminance(w1)
+              w2p = math::luminance(w2)
+              w3p = math::luminance(w3);
+
+    b ~ weighted_layer(w,
+                       _bs1 [[ local_normal_n ~ nl1 ]],
+                       _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                       n)
+        --> b [[ local_normal_w = nw2 * (1.0-w) + w,
+                 local_normal_n = n ]]
+        if (n == nl1) && (n == nl2);
+
+    b ~ weighted_layer(w,
+                       _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                       _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                       n)
+        --> b [[ local_normal_w = nw2 * (1.0-w) + w,
+                 local_normal_n = nvidia::distilling_support::affine_normal_sum(
+                    (1.0-w)*nw2, nl2, w*(1.0-nw1), n, w*nw1, nl1) ]];
+
+    b ~ color_weighted_layer(w,
+                             _bs1 [[ local_normal_n ~ nl1 ]],
+                             _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                             n)
+        --> b [[ local_normal_w = nw2 * (1.0-math::luminance(w)) + math::luminance(w),
+                 local_normal_n = n ]]
+        if (n == nl1) && (n == nl2);
+    b ~ color_weighted_layer(w,
+                             _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                             _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                             n)
+        --> b [[ local_normal_w = nw2 * (1.0-wp) + wp,
+                 local_normal_n = nvidia::distilling_support::affine_normal_sum(
+                    (1.0-wp)*nw2, nl2, wp*(1.0-nw1), n, wp*nw1, nl1) ]]
+        where wp = math::luminance(w);
+
+    b ~ fresnel_layer(_, w0,
+                      _bs1 [[ local_normal_n ~ nl1 ]],
+                      _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                      n)
+        --> b [[ local_normal_w = nw2 * (1.0-w) + w,
+                 local_normal_n = n ]]
+        if (n == nl1) && (n == nl2)
+        where w = w0 * option( top_layer_weight);
+    b ~ fresnel_layer(_, w0,
+                      _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                      _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                      n)
+        --> b [[ local_normal_w = nw2 * (1.0-w) + w,
+                 local_normal_n = nvidia::distilling_support::affine_normal_sum(
+                    (1.0-w)*nw2, nl2, w*(1.0-nw1), n, w*nw1, nl1) ]]
+        where w = w0 * option( top_layer_weight);
+    b ~ color_fresnel_layer(_, w0,
+                            _bs1 [[ local_normal_n ~ nl1 ]],
+                            _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                            n)
+        --> b [[ local_normal_w =  nw2 * (1.0-w) + w, local_normal_n = n ]]
+        if (n == nl1) && (n == nl2)
+                          where w = math::luminance(w0) * option( top_layer_weight);
+    b ~ color_fresnel_layer(_, w0,
+                            _bs1 [[ local_normal_w ~ nw1, local_normal_n ~ nl1 ]],
+                            _bs2 [[ local_normal_w ~ nw2, local_normal_n ~ nl2 ]],
+                            n)
+        --> b [[ local_normal_w = nw2 * (1.0-w) + w,
+                 local_normal_n = nvidia::distilling_support::affine_normal_sum(
+                    (1.0-w)*nw2, nl2, w*(1.0-nw1), n, w*nw1, nl1) ]]
+        where w = math::luminance(w0) * option( top_layer_weight);
+}
+
+// Rules to simplify an MDL expression's scattering fields to contain no layering
+// anymore.
+// \precond The input MDL expression shall only contain BSDF that are simple.
+rules Elide_layering_rules topdown {
+    // Handle thin_walled correctly, copying surface to backface if necessary
+    material(tw,surface, material_surface(bsdf(),material_emission(edf(),_)),ior,vol,geo,hair)
+        --> material(tw,surface,surface,ior,vol,geo,hair)
+        if tw == true;
+
+    fresnel_layer(_,w,layer,base,_) --> bsdf_mix_2( wprime, layer, 1.0 - wprime, base)
+        where wprime = option( top_layer_weight) * w;
+    color_fresnel_layer(_,w,layer,base,_) --> bsdf_color_mix_2( wprime, layer, color(1.0) - wprime, base)
+        where wprime = color(option( top_layer_weight)) * w;
+    weighted_layer(w,layer,base,_) --> bsdf_mix_2( w, layer, 1.0 - w, base);
+    color_weighted_layer(w,layer,base,_) --> bsdf_color_mix_2( w, layer, color(1.0) - w, base);
+    postcond nonode(fresnel_layer) && nonode(color_fresnel_layer) &&
+             nonode(weighted_layer) && nonode(color_weighted_layer);
+}
+
+// Bottom-up reduction to a diffuse-only BRDF
+// Precondition: no layering BSDFs.
+//
+rules Make_diffuse_rules bottomup {
+    import math;
+    import anno;
+    bsdf() --> diffuse_reflection_bsdf( color(0.0), 0.0);
+    diffuse_transmission_bsdf(tint) --> diffuse_reflection_bsdf( tint, 0.0);
+    specular_bsdf(tint) --> diffuse_reflection_bsdf( tint, 0.0);
+    simple_glossy_bsdf(ru,rv,tint,_,_) --> diffuse_reflection_bsdf(tint,0.5*(ru+rv));
+    // bsdf_tint(c,diffuse_reflection_bsdf(c1,r1)) --> diffuse_reflection_bsdf(c*c1,r1);
+    // bsdf_tint_ex(c,_,diffuse_reflection_bsdf(c1,r1)) --> diffuse_reflection_bsdf(c*c1,r1);
+    bsdf_mix_1(w1,diffuse_reflection_bsdf(c1,r1)) --> diffuse_reflection_bsdf(w1*c1,r1);
+    bsdf_color_mix_1(w1,diffuse_reflection_bsdf(c1,r1)) --> diffuse_reflection_bsdf(w1*c1,r1);
+    bsdf_mix_2(w1,diffuse_reflection_bsdf(c1,r1),w2,diffuse_reflection_bsdf(c2,r2))
+        --> diffuse_reflection_bsdf(w1*c1 + w2*c2,
+                         nvidia::distilling_support::combine_diffuse_roughness(w1,r1,w2,r2));
+    bsdf_color_mix_2(w1,diffuse_reflection_bsdf(c1,r1),w2,diffuse_reflection_bsdf(c2,r2))
+        --> diffuse_reflection_bsdf(w1*c1 + w2*c2,
+                         nvidia::distilling_support::combine_diffuse_roughness(w1,r1,w2,r2));
+    bsdf_mix_3(w1,diffuse_reflection_bsdf(c1,r1),w2,diffuse_reflection_bsdf(c2,r2),w3,diffuse_reflection_bsdf(c3,r3))
+        --> diffuse_reflection_bsdf(w1*c1 + w2*c2 + w3*c3,
+                         nvidia::distilling_support::combine_diffuse_roughness(w1,r1,w2,r2,w3,r3));
+    bsdf_color_mix_3(w1,diffuse_reflection_bsdf(c1,r1),w2,diffuse_reflection_bsdf(c2,r2),w3,diffuse_reflection_bsdf(c3,r3))
+        --> diffuse_reflection_bsdf(w1*c1 + w2*c2 + w3*c3,
+                         nvidia::distilling_support::combine_diffuse_roughness(w1,r1,w2,r2,w3,r3));
+
+    // add non-null emission to diffuse color for surface
+    material(tw,material_surface(diffuse_reflection_bsdf(t,r),material_emission(_,intens)),
+             back,_,_,geo,hair)
+        --> material(tw,material_surface(diffuse_reflection_bsdf(t+intens,r)),
+                     back,color(1.0,1.0,1.0),material_volume(),geo,hair)
+        repeat_rules
+        maybe intens != color(0.0,0.0,0.0);
+
+    // add non-null emission to diffuse color for backface
+    material(tw,front,material_surface(diffuse_reflection_bsdf(t,r),material_emission(_,intens)),
+             _,_,geo,hair)
+        --> material(tw,front,material_surface(diffuse_reflection_bsdf(t+intens,r)),
+                     color(1.0,1.0,1.0),material_volume(),geo,hair)
+        repeat_rules
+        maybe intens != color(0.0,0.0,0.0);
+
+    // remove unsupported volume and ior value
+    material(t,front,back,_,_,geo,hair)
+        --> material(t,front,back,color(1.0,1.0,1.0),material_volume(),geo,hair);
+
+    postcond match( material(_,
+                             material_surface(diffuse_reflection_bsdf(_,_),_),
+                             material_surface(diffuse_reflection_bsdf(_,_),_),
+                             _,_,_,_));
+}
+

@@ -279,7 +279,7 @@ string get_cwd(IAllocator *alloc)
     if (!GetCurrentDirectoryW(size, buf.data())) {
         return string(alloc);
     }
-    wchar_to_utf8(result, buf.data());
+    utf16_to_utf8(result, buf.data());
 #else
     char buf[PATH_MAX];
     if (getcwd(buf, PATH_MAX)) {
@@ -596,7 +596,7 @@ char const *Directory::read()
     if (m_dir->m_opened) {
         if (read_next_file()) {
             // We don't dup the returned data
-            return wchar_to_utf8(m_tmp, m_dir->m_find_data.cFileName);
+            return utf16_to_utf8(m_tmp, m_dir->m_find_data.cFileName);
         }
     }
     return NULL;

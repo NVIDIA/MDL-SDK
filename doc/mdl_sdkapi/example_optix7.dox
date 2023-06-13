@@ -86,7 +86,8 @@ performance at the cost of possibly higher compilation times.
         \c extern declared functions which the MDL SDK will generate.
 
         To create the LLVM bitcode of the closest hit shader, we use Clang in a version matching the version used by the MDL SDK.
-        Currently, this has to be Clang 7.0.0, which needs a CUDA 8 installation to be able to compile the closest hit shader.
+        Currently, this has to be Clang 12.0.1, which needs a CUDA 8 installation to be able to compile the closest hit shader.
+        The texture runtime used by CUDA 9 and higher is not supported by Clang 12.
         CUDA 8 will not be used at runtime.
         On the command line, you should provide these options to ensure fast code and good compatibility with the generated code:
         \code
@@ -125,7 +126,7 @@ performance at the cost of possibly higher compilation times.
         Also, the example disables the dummy scene data support and provides a set of simple own functions allowing
         to access example vertex colors and vertex row/column values of the generated sphere mesh.
 
-        To be able to compile the texture runtime with Clang 7.0.0, a set of \c __itex* functions is required
+        To be able to compile the texture runtime with Clang 12.0.1, a set of \c __itex* functions is required
         in \c optix7_mdl_closest_hit_radiance.cu to map the texture functions to the correct PTX assembler instructions.
     </dd>
 </dl>
@@ -133,7 +134,7 @@ performance at the cost of possibly higher compilation times.
 \section example_optix7 Example Source
 
 To compile the source code, you need OptiX 7.0 or higher (<a href="https://developer.nvidia.com/designworks/optix/download">https://developer.nvidia.com/designworks/optix/download</a>),
-Clang 7.0.0 (<a href="http://releases.llvm.org/download.html#7.0.0">http://releases.llvm.org/download.html#7.0.0</a>),
+Clang 12.0.1 (<a href="https://github.com/llvm/llvm-project/releases/tag/llvmorg-12.0.1">https://github.com/llvm/llvm-project/releases/tag/llvmorg-12.0.1</a>),
 CUDA 8 (<a href="https://developer.nvidia.com/cuda-toolkit-archive">https://developer.nvidia.com/cuda-toolkit-archive</a>), GLFW, and GLEW.
 For detailed instructions, please refer to the \link mi_neuray_getting_started Getting Started \endlink section.
 

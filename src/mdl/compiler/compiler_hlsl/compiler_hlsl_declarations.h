@@ -633,6 +633,12 @@ public:
     /// Returns true if this is a function proto type only.
     bool is_prototype() const { return m_body == NULL; }
 
+    /// Set the [noinline] attribute.
+    void set_attr_noinline(bool flag) { m_attr_no_inline = flag; }
+
+    /// Returns true if this function has the [noinline] attribute attached.
+    bool has_attr_noinline() const { return m_attr_no_inline; }
+
 private:
     /// Constructor.
     ///
@@ -652,8 +658,11 @@ private:
     /// The function parameters.
     Declaration_list m_params;
 
-    // The function body if this is a definition, else NULL.
+    /// The function body if this is a definition, else NULL.
     Stmt *m_body;
+
+    /// True, if this function is marked with "[noinline]".
+    bool m_attr_no_inline;
 };
 
 /// A HLSL Field declarator.

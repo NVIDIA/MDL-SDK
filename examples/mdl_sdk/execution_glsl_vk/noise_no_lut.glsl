@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright 2022 NVIDIA Corporation. All rights reserved.
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
  *****************************************************************************/
 
 const float PI = 3.14159265359;

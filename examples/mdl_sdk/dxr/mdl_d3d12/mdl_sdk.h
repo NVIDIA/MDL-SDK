@@ -215,10 +215,10 @@ namespace mi { namespace examples { namespace mdl_d3d12
     /// Information passed to the GPU for each BSDF measurement resource.
     struct Mdl_mbsdf_info
     {
-        // 32-bit booleans to specifiy if reflection and/or transmission data is present
+        // 32-bit booleans to specify if reflection and/or transmission data is present
         uint32_t has_data[2];
 
-        // indicies for the evualuation, sample and albedo data (for both parts)
+        // indices for the evaluation, sample and albedo data (for both parts)
         // - evaluation data texture consists of the bsdf measurement samples
         // - sample data buffer holds the CDFs for sampling
         // - albedo data buffer holds max albedos for each theta (isotropic)
@@ -265,6 +265,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
             bool enable_shader_cache; // note, this is not really an SDK option but fits here
 
+            bool distilling_support_enabled;
+            const char* distilling_target;
         };
 
         // ----------------------------------------------------------------------------------------
@@ -291,7 +293,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         mi::neuraylib::IImage_api& get_image_api() { return *m_image_api; }
         mi::neuraylib::IMdl_impexp_api& get_impexp_api() { return *m_mdl_impexp_api; }
         mi::neuraylib::IMdl_backend& get_backend() { return *m_hlsl_backend; }
-
+        mi::neuraylib::IMdl_distiller_api& get_distiller() { return *m_distiller_api; }
 
         /// Updates the mdl search paths.
         /// These include the default admin and user space paths, the example search path,
@@ -330,6 +332,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
         mi::base::Handle<mi::neuraylib::IMdl_backend> m_hlsl_backend;
         mi::base::Handle<mi::neuraylib::IMdl_impexp_api> m_mdl_impexp_api;
         mi::base::Handle<mi::neuraylib::IMdl_evaluator_api> m_evaluator_api;
+        mi::base::Handle<mi::neuraylib::IMdl_distiller_api> m_distiller_api;
+
         Mdl_transaction* m_transaction;
         Mdl_material_library* m_library;
         Options m_mdl_options;
@@ -424,4 +428,3 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
 }}} // mi::examples::mdl_d3d12
 #endif
-

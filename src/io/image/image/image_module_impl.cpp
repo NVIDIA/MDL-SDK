@@ -167,18 +167,19 @@ IMipmap* Image_module_impl::create_mipmap(
 }
 
 IMipmap* Image_module_impl::create_mipmap(
+    File_based,
     const std::string& filename,
     const char* selector,
     bool only_first_level,
     mi::Sint32* errors) const
 {
-    return new Mipmap_impl( filename, selector, only_first_level, errors);
+    return new Mipmap_impl( File_based(), filename, selector, only_first_level, errors);
 }
 
 IMipmap* Image_module_impl::create_mipmap(
     Container_based,
     mi::neuraylib::IReader* reader,
-    const std::string& archive_filename,
+    const std::string& container_filename,
     const std::string& member_filename,
     const char* selector,
     bool only_first_level,
@@ -187,7 +188,7 @@ IMipmap* Image_module_impl::create_mipmap(
     return new Mipmap_impl(
         Container_based(),
         reader,
-        archive_filename,
+        container_filename,
         member_filename,
         selector,
         only_first_level,
@@ -213,6 +214,27 @@ IMipmap* Image_module_impl::create_mipmap(
         errors);
 }
 
+void Image_module_impl::create_mipmap(
+    std::vector<mi::base::Handle<mi::neuraylib::ICanvas> >& mipmaps,
+    const mi::neuraylib::ICanvas* base_canvas,
+    mi::Float32 gamma) const
+{
+    const mi::Uint32 width  = base_canvas->get_resolution_x();
+    const mi::Uint32 height = base_canvas->get_resolution_y();
+
+    if( width == 1 || height == 1)
+        return;
+
+    const mi::Uint32 nr_of_levels = mi::math::log2_int( std::min( width, height));
+    mipmaps.resize( nr_of_levels);
+
+    const mi::neuraylib::ICanvas* prev_canvas = base_canvas;
+    for( mi::Size i = 0; i < nr_of_levels; ++i) {
+        mipmaps[i] = create_miplevel( prev_canvas, gamma);
+        prev_canvas = mipmaps[i].get();
+    }
+}
+
 IMipmap* Image_module_impl::create_mipmap(
     std::vector<mi::base::Handle<mi::neuraylib::ICanvas> >& canvases, bool is_cubemap) const
 {
@@ -227,32 +249,29 @@ IMipmap* Image_module_impl::create_mipmap(
     return new Mipmap_impl( canvases, is_cubemap);
 }
 
-
-void Image_module_impl::create_mipmaps(
-    std::vector<mi::base::Handle<mi::neuraylib::ICanvas> >& mipmaps,
-    const mi::neuraylib::ICanvas* base_canvas,
-    mi::Float32 gamma) const
-{
-    const mi::Uint32 width  = base_canvas->get_resolution_x();
-    const mi::Uint32 height = base_canvas->get_resolution_y();
-
-    if (width == 1 || height == 1)
-        return;
-
-    const mi::Uint32 nr_of_levels = mi::math::log2_int(std::min(width, height));
-    mipmaps.resize(nr_of_levels);
-
-    const mi::neuraylib::ICanvas* prev_canvas = base_canvas;
-    for (mi::Size i = 0; i < nr_of_levels; ++i)
-    {
-        mipmaps[i] = mi::base::make_handle(create_miplevel(prev_canvas, gamma));
-        prev_canvas = mipmaps[i].get();
-    }
-}
-
 IMipmap* Image_module_impl::create_dummy_mipmap()
 {
     return new Mipmap_impl();
+}
+
+bool Image_module_impl::is_dummy_mipmap( const IMipmap* mipmap) const
+{
+    if( mipmap->get_nlevels() != 1)
+        return false;
+    if( mipmap->get_is_cubemap())
+        return false;
+
+    mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( 0));
+    if( (canvas->get_resolution_x() != 1) || (canvas->get_resolution_y() != 1))
+        return false;
+    if( canvas->get_layers_size() != 1)
+        return false;
+
+    mi::base::Handle<const mi::neuraylib::ITile> tile( canvas->get_tile( 0));
+    mi::math::Color color;
+    tile->get_pixel( 0, 0, &color.r);
+    mi::math::Color pink( 1.0f, 0.0f, 1.0f, 1.0f);
+    return color == pink;
 }
 
 mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
@@ -277,19 +296,19 @@ mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
 }
 
 mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
+    File_based,
     const std::string& filename,
     const char* selector,
     mi::Uint32 miplevel,
     mi::Sint32* errors) const
 {
-    return new Canvas_impl(
-        filename, selector, miplevel, /*image_file*/ nullptr, errors);
+    return new Canvas_impl( File_based(), filename, selector, miplevel, errors);
 }
 
 mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
     Container_based,
     mi::neuraylib::IReader* reader,
-    const std::string& archive_filename,
+    const std::string& container_filename,
     const std::string& member_filename,
     const char* selector,
     mi::Uint32 miplevel,
@@ -298,11 +317,10 @@ mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
     return new Canvas_impl(
         Container_based(),
         reader,
-        archive_filename,
+        container_filename,
         member_filename,
         selector,
         miplevel,
-        /*image_file*/ nullptr,
         errors);
 }
 
@@ -315,9 +333,6 @@ mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
     mi::Uint32 miplevel,
     mi::Sint32* errors) const
 {
-    if( !reader || !image_format)
-        return nullptr;
-
     return new Canvas_impl(
         Memory_based(),
         reader,
@@ -325,7 +340,6 @@ mi::neuraylib::ICanvas* Image_module_impl::create_canvas(
         selector,
         mdl_file_path,
         miplevel,
-        /*image_file*/ nullptr,
         errors);
 }
 
@@ -928,7 +942,8 @@ bool Image_module_impl::export_canvas(
     }
 
     const char* const canvas_pixel_type = canvas->get_type();
-    const char* const export_pixel_type = find_best_pixel_type_for_export( canvas_pixel_type, plugin);
+    const char* const export_pixel_type
+        = find_best_pixel_type_for_export( canvas_pixel_type, plugin);
     if( !export_pixel_type) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin \"%s\" supports only the import, but not the export of images.",
@@ -1025,7 +1040,8 @@ bool Image_module_impl::export_mipmap(
         return false;
 
     const char* const canvas_pixel_type = canvas->get_type();
-    const char* const export_pixel_type = find_best_pixel_type_for_export( canvas_pixel_type, plugin);
+    const char* const export_pixel_type
+        = find_best_pixel_type_for_export( canvas_pixel_type, plugin);
     if( !export_pixel_type) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
             "The image plugin \"%s\" supports only the import, but not the export of images.",
@@ -1204,16 +1220,10 @@ mi::neuraylib::IBuffer* Image_module_impl::create_buffer_from_canvas(
 mi::neuraylib::IImage_plugin* Image_module_impl::find_plugin_for_import(
     const char* extension, mi::neuraylib::IReader* reader) const
 {
-    mi::Uint8 buffer[512];
-    mi::Sint64 file_size = 0;
-    if( reader) {
-        const mi::Sint64 bytes_read
-            = reader->read( static_cast<char*>( static_cast<void*>( buffer)), 512);
-        reader->rewind();
-        file_size = reader->get_file_size();
-        if( bytes_read != 512 && file_size >= 512)
-            return nullptr;
-    }
+    assert( extension);
+
+    if( reader && !reader->supports_absolute_access())
+        return nullptr;
 
     std::priority_queue<mi::neuraylib::IImage_plugin*,
                         std::vector<mi::neuraylib::IImage_plugin*>, Plugin_less> queue;
@@ -1228,8 +1238,12 @@ mi::neuraylib::IImage_plugin* Image_module_impl::find_plugin_for_import(
 
         while( plugin_extension) {
             if( !extension || STRING::compare_case_insensitive( extension, plugin_extension) == 0) {
-                if( !reader || plugin->test( buffer, static_cast<mi::Uint32>( file_size)))
+                if( !reader) {
                     queue.push( plugin);
+                } else if( plugin->test( reader)) {
+                    queue.push( plugin);
+                    reader->seek_absolute( 0);
+                }
             }
             plugin_extension = extension ? plugin->get_file_extension( ++extension_index) : nullptr;
         }
@@ -1546,7 +1560,8 @@ mi::neuraylib::ICanvas* Image_module_impl::create_miplevel(
     const mi::Uint32 prev_layers = prev_canvas->get_layers_size();
     const Pixel_type prev_pixel_type
         = convert_pixel_type_string_to_enum(prev_canvas->get_type());
-    const mi::Float32 prev_gamma = gamma_override != 0.0f ? gamma_override : prev_canvas->get_gamma();
+    const mi::Float32 prev_gamma
+        = gamma_override != 0.0f ? gamma_override : prev_canvas->get_gamma();
 
     // Compute properties of this miplevel
     const mi::Uint32 width = std::max(prev_width / 2, 1u);

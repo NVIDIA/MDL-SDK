@@ -35,14 +35,6 @@
 #include "texture_support_cuda.h"  // texture runtime
 
 
-// TODO: use matrix from OptiX
-__device__ const float4 identity[3] = {
-    { 1.0f, 0.0f, 0.0f, 0.0f },
-    { 0.0f, 1.0f, 0.0f, 0.0f },
-    { 0.0f, 0.0f, 1.0f, 0.0f }
-};
-
-
 #ifdef ENABLE_DERIVATIVES
 typedef mi::neuraylib::Material_expr_function_with_derivs   Mat_expr_func;
 typedef mi::neuraylib::Bsdf_init_function_with_derivs       Bsdf_init_func;
@@ -155,6 +147,11 @@ extern "C" __device__ __inline__ void __itexCubemap_float4(
 
 #define mdlcode_evaluate(data, state, res_data, exception_state, arg_block_data)       \
     optixDirectCall<void>(rt_data->mdl_callable_base_index + 2,                        \
+        data, state, res_data, nullptr, arg_block_data)
+
+// not used in this example
+#define mdlcode_pdf(data, state, res_data, exception_state, arg_block_data)            \
+    optixDirectCall<void>(rt_data->mdl_callable_base_index + 3,                        \
         data, state, res_data, nullptr, arg_block_data)
 
 #define mdlcode_thin_walled(result, state, res_data, exception_state, arg_block_data)  \
@@ -546,6 +543,20 @@ extern "C" __device__ int scene_data_lookup_int(
     return res4[0];
 }
 
+// Get the 3x4 object to world transform and its inverse.
+__forceinline__ __device__ void getTransforms(const OptixTraversableHandle handle, float4* mW, float4* mO)
+{
+    const float4* tW = optixGetInstanceTransformFromHandle(handle);
+    const float4* tO = optixGetInstanceInverseTransformFromHandle(handle);
+
+    mW[0] = tW[0];
+    mW[1] = tW[1];
+    mW[2] = tW[2];
+
+    mO[0] = tO[0];
+    mO[1] = tO[1];
+    mO[2] = tO[2];
+}
 
 //------------------------------------------------------------------------------
 //
@@ -573,32 +584,31 @@ extern "C" __global__ void __closesthit__radiance()
     const float3 P  = optixTransformPointFromObjectToWorldSpace(
         P0 * barycentrics.x + P1 * barycentrics.y + P2 * barycentrics.z);
 
-    float3 geom_normal = optixTransformNormalFromObjectToWorldSpace(
-        normalize(cross(P1 - P0, P2 - P0)));
+    float3 geom_normal = normalize(optixTransformNormalFromObjectToWorldSpace(
+        cross(P1 - P0, P2 - P0)));
 
-    const float3 N0 = v0.normal;
-    const float3 N1 = v1.normal;
-    const float3 N2 = v2.normal;
-    const float3 N  = optixTransformNormalFromObjectToWorldSpace(
-        normalize(N0 * barycentrics.x + N1 * barycentrics.y + N2 * barycentrics.z));
+    const float3 N  = normalize(optixTransformNormalFromObjectToWorldSpace(
+        v0.normal * barycentrics.x +
+        v1.normal * barycentrics.y +
+        v2.normal * barycentrics.z));
 
     if (dot(geom_normal, N) < 0.0f) // make sure that shading and geometry normal agree on sideness
         geom_normal = -geom_normal;
 
-    const float3 T0 = v0.tangent;
-    const float3 T1 = v1.tangent;
-    const float3 T2 = v2.tangent;
-    const float3 T  = normalize(T0 * barycentrics.x + T1 * barycentrics.y + T2 * barycentrics.z);
+    const float3 T  = normalize(optixTransformVectorFromObjectToWorldSpace(
+        v0.tangent * barycentrics.x +
+        v1.tangent * barycentrics.y +
+        v2.tangent * barycentrics.z));
 
-    const float3 B0 = v0.binormal;
-    const float3 B1 = v1.binormal;
-    const float3 B2 = v2.binormal;
-    const float3 B  = normalize(B0 * barycentrics.x + B1 * barycentrics.y + B2 * barycentrics.z);
+    const float3 B  = normalize(optixTransformVectorFromObjectToWorldSpace(
+        v0.binormal * barycentrics.x +
+        v1.binormal * barycentrics.y +
+        v2.binormal * barycentrics.z));
 
-    const float2 UV0 = v0.tex_coord;
-    const float2 UV1 = v1.tex_coord;
-    const float2 UV2 = v2.tex_coord;
-    const float2 UV  = UV0 * barycentrics.x + UV1 * barycentrics.y + UV2 * barycentrics.z;
+    const float2 UV =
+        v0.tex_coord * barycentrics.x +
+        v1.tex_coord * barycentrics.y +
+        v2.tex_coord * barycentrics.z;
 
 #ifdef ENABLE_DERIVATIVES
     // use fake derivatives just for testing
@@ -614,12 +624,18 @@ extern "C" __global__ void __closesthit__radiance()
     RadiancePRD* prd = get_radiance_prd();
 
     // setup state
-    float4 texture_results[16];
+    float4 texture_results[16];  // must match num_texture_results parameter given to Mdl_helper
+    float4 world_to_object[3];
+    float4 object_to_world[3];
+
+    // get single instance level transformation list only
+    getTransforms(optixGetTransformListHandle(0), object_to_world, world_to_object);
+
     Mdl_state state;
     state.normal = N;
     state.geom_normal = geom_normal;
 #ifdef ENABLE_DERIVATIVES
-    // use fake derivatives just for testing
+    // use fake derivatives just for testings
     state.position.val = P;
     state.position.dx = make_float3(1, 0, 0);
     state.position.dy = make_float3(0, 1, 0);
@@ -632,8 +648,8 @@ extern "C" __global__ void __closesthit__radiance()
     state.tangent_v = &B;
     state.text_results = texture_results;
     state.ro_data_segment = nullptr;
-    state.world_to_object = (float4 *)&identity;
-    state.object_to_world = (float4 *)&identity;
+    state.world_to_object = (float4 *) &world_to_object;
+    state.object_to_world = (float4 *) &object_to_world;
     state.object_id = 0;
     state.meters_per_scene_unit = 1.0f;
 
@@ -689,22 +705,22 @@ extern "C" __global__ void __closesthit__radiance()
             else
                 prd->last_pdf = sample_data.pdf;
 
+            float side = 1.0f;
+
             if ((sample_data.event_type & mi::neuraylib::BSDF_EVENT_TRANSMISSION) != 0)
             {
                 set_radiance_payload_ray_flags(
                     RayFlags(int(get_radiance_payload_ray_flags()) ^ RAY_FLAGS_INSIDE));
 
                 // continue on the opposite side
-                prd->origin = offset_ray(P, -geom_normal);
+                side = -1.0f;
             }
-            else
-            {
-                // continue on the current side
-                prd->origin = offset_ray(P, geom_normal);
-            }
+
+            prd->origin = offset_ray(P, side * geom_normal);
         }
     }
 
+    // sample and evaluate a light
     float3 to_light;
     float light_dist;
     float pdf = 0.0f;
@@ -747,9 +763,11 @@ extern "C" __global__ void __closesthit__radiance()
             light_contrib = make_float3(0);
         }
 
+        // Cast a shadow ray, assuming the light is always on the outside.
+        // We do this after the BSDF evaluation to minimize any state reloads after the trace
         const bool occluded = traceOcclusion(
             cos_theta > 0.0f && pdf != 0.0f ? params.handle : 0,
-            prd->origin,
+            offset_ray(P, geom_normal * (is_inside ? -1.0f : 1.0f)),
             to_light,
             0.01f,              // tmin
             light_dist - 0.01f  // tmax

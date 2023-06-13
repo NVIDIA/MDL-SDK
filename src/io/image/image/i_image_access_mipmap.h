@@ -66,7 +66,7 @@ class Access_mipmap
 {
 public:
     /// Constructor.
-    Access_mipmap( const IMipmap* mipmap = 0);
+    Access_mipmap( const IMipmap* mipmap = nullptr);
 
     /// Copy constructor. Explicit because locks are not copyable.
     Access_mipmap( const Access_mipmap& rhs);
@@ -174,7 +174,7 @@ class Edit_mipmap
 {
 public:
     /// Constructor.
-    Edit_mipmap( IMipmap* mipmap = 0);
+    Edit_mipmap( IMipmap* mipmap = nullptr);
 
     /// Copy constructor. Explicit because locks are not copyable.
     Edit_mipmap( const Edit_mipmap& rhs);

@@ -28,7 +28,7 @@
 
 /// \file
 /// \brief indexable document that is created from an element of the cache that stores 
-///        informations about materials, functions, ...
+///        information about materials, functions, ...
 
 
 #ifndef MDL_SDK_EXAMPLES_MDL_BROWSER_DOCUMENT_MDL_ELEMENT_H
@@ -39,7 +39,7 @@
 class IMdl_cache_element;
 class Tokenizer;
 
-// indexable document that is created from an element of the cache that stores informations about 
+// indexable document that is created from an element of the cache that stores information about 
 // materials, functions, ...
 class Index_document_cache_element : public Index_document
 {

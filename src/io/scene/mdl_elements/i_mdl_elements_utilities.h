@@ -58,6 +58,8 @@
 #include <base/lib/log/i_log_assert.h>
 #include <base/data/db/i_db_tag.h>
 
+#include "i_mdl_elements_type.h"
+
 namespace mi { namespace neuraylib {
 class IDeserialized_module_name;
 class IMdle_serialization_callback;
@@ -100,9 +102,10 @@ class IExpression_factory;
 class IExpression_list;
 class IExpression_parameter;
 class IExpression_temporary;
-class IType;
-class IType_list;
 class IValue;
+class IValue_texture;
+class IValue_light_profile;
+class IValue_bsdf_measurement;
 class IValue_list;
 class Mdl_compiled_material;
 class Mdl_function_definition;
@@ -277,27 +280,20 @@ const char* get_cast_operator_db_name();
 /// Returns the MDL name used for the cast operator.
 const char* get_cast_operator_mdl_name();
 
-/// Returns the DB name used for the builtins module ("mdl::<builtins>" or "mdl::%3Cbuiltins%3E").
+/// Returns the DB name used for the builtins module ("mdl::%3Cbuiltins%3E").
 const char* get_builtins_module_db_name();
 
-/// Returns the MDL name used for the builtins module ("::<builtins>" or "::%3Cbuiltins%3E").
+/// Returns the MDL name used for the builtins module ("::%3Cbuiltins%3E").
 const char* get_builtins_module_mdl_name();
 
-/// Returns the simple name used for the builtins module ("<builtins>" or "%3Cbuiltins%3E").
+/// Returns the simple name used for the builtins module ("%3Cbuiltins%3E").
 const char* get_builtins_module_simple_name();
 
-/// Returns the DB name used for the neuray module ("mdl::<neuray>" or "mdl::%3Cneuray%3E").
+/// Returns the DB name used for the neuray module ("mdl::%3Cneuray%3E").
 const char* get_neuray_module_db_name();
 
-/// Returns the MDL name used for the neuray module ("::<neuray>" or "::%3Cneuray%3E").
+/// Returns the MDL name used for the neuray module ("::%3Cneuray%3E").
 const char* get_neuray_module_mdl_name();
-
-/// Indicates whether encoded names are enabled. This flag also enables material names with
-/// signatures and removes the extra slash for MDLE names on Windows.
-bool get_encoded_names_enabled();
-
-/// Enabled or disabled encoded names.
-void set_encoded_names_enabled( bool value);
 
 /// Encodes a string with percent-encoding.
 ///
@@ -407,8 +403,7 @@ std::string encode_name_add_missing_signature(
 ///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
 ///                          implementing the identity transformation).
 /// \return                  The serialized function definition (and module) name, or \c NULL in
-///                          case of errors. The method always returns \c NULL if encoded
-///                          names are disabled.
+///                          case of errors.
 const mi::neuraylib::ISerialized_function_name* serialize_function_name(
     const char* definition_name,
     const IType_list* argument_types,
@@ -426,8 +421,7 @@ const mi::neuraylib::ISerialized_function_name* serialize_function_name(
 ///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
 ///                          implementing the identity transformation).
 /// \return                  The deserialized function name and argument types, or \c NULL in case
-///                          of errors. The method always returns \c NULL if encoded names are
-///                          disabled.
+///                          of errors.
 const IDeserialized_function_name* deserialize_function_name(
     DB::Transaction* transaction,
     const char* function_name,
@@ -446,8 +440,7 @@ const IDeserialized_function_name* deserialize_function_name(
 ///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
 ///                          implementing the identity transformation).
 /// \return                  The deserialized function name and argument types, or \c NULL in case
-///                          of errors. The method always returns \c NULL if encoded names are
-///                          disabled.
+///                          of errors.
 const IDeserialized_function_name* deserialize_function_name(
     DB::Transaction* transaction,
     const char* module_name,
@@ -463,8 +456,7 @@ const IDeserialized_function_name* deserialize_function_name(
 /// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
 ///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
 ///                          implementing the identity transformation).
-/// \return                  The deserialized module name, or \c NULL in case of errors. The method
-///                          always returns \c NULL if encoded names are disabled.
+/// \return                  The deserialized module name, or \c NULL in case of errors.
 const mi::neuraylib::IDeserialized_module_name* deserialize_module_name(
     const char* module_name,
     mi::neuraylib::IMdle_deserialization_callback* mdle_callback,
@@ -491,6 +483,10 @@ public:
 /// \param module   The core name of the module (including leading double colons, e.g., "::state").
 bool is_builtin_module( const std::string& module);
 
+/// Loads the builtin mdl module ::nvidia::distilling_support into the given transaction.
+///
+/// \param transaction  the transaction
+void load_distilling_support_module( DB::Transaction* transaction);
 
 /// Indicates whether a function of the given semantic is a valid prototype for prototype-based
 /// functions or variants.
@@ -520,26 +516,25 @@ public:
         MSG_FORCE_32_BIT = 0xffffffffU
     };
 
-    Message( mi::base::Message_severity severity, const std::string& message)
-        : m_severity( severity)
-        , m_code(-1)
-        , m_message( message)
-        , m_kind(MSG_UNCATEGORIZED) { }
+    Message(
+        mi::base::Message_severity severity, const std::string& message)
+      : m_severity( severity),
+        m_message( message) { }
 
-    Message(mi::base::Message_severity severity, const std::string& message, mi::Sint32 code, Kind kind)
-        : m_severity(severity)
-        , m_code(code)
-        , m_message(message)
-        , m_kind(kind) { }
+    Message(
+        mi::base::Message_severity severity, const std::string& message, mi::Sint32 code, Kind kind)
+      : m_severity( severity),
+        m_code( code),
+        m_message( message),
+        m_kind( kind) { }
 
-    Message(const mi::mdl::IMessage *message);
+    Message( const mi::mdl::IMessage*message);
 
     mi::base::Message_severity  m_severity;
-    mi::Sint32                  m_code;
+    mi::Sint32                  m_code = -1;
     std::string                 m_message;
-    Kind                        m_kind;
+    Kind                        m_kind = MSG_UNCATEGORIZED;
     std::vector<Message>        m_notes;
-
 };
 
 /// Simple Option class.
@@ -549,13 +544,17 @@ public:
 
     using Validator = bool (*)(const boost::any&);
 
-    Option(const std::string& name, const boost::any& default_value, bool is_interface, Validator validator=nullptr)
-        : m_name(name)
-        , m_value(default_value)
-        , m_default_value(default_value)
-        , m_validator(validator)
-        , m_is_interface(is_interface)
-        , m_is_set(false)
+    Option(
+        const std::string& name,
+        const boost::any& default_value,
+        bool is_interface,
+        Validator validator=nullptr)
+      : m_name(name)
+      , m_value(default_value)
+      , m_default_value(default_value)
+      , m_validator(validator)
+      , m_is_interface(is_interface)
+      , m_is_set(false)
     {}
 
     const char* get_name() const
@@ -711,6 +710,16 @@ public:
 
     mi::Sint32 set_option(const std::string& name, const boost::any& value);
 
+    /// The result is purely internal and not exposed in the API.
+    ///
+    /// It is meant to store a result code for functions with mi::Sint32 return type, either in
+    /// addition to an execution context, or without execution context. The following invariants
+    /// should be maintained:
+    /// - Result is zero => no error messages
+    /// - Result is non-zero => at least one error message
+    /// In case of non-zero result, there is typically also an error message with the same code.
+    /// But this is not necessarily the case if messages from the core compiler are passed and no
+    /// overall message for the result code is generated.
     void set_result(mi::Sint32 result);
 
     mi::Sint32 get_result() const;
@@ -752,23 +761,24 @@ void convert_messages( const Execution_context* context, mi::mdl::Messages& out_
 /// Does nothing if \p context is \c NULL. Returns \p result.
 mi::Sint32 add_message( Execution_context* context, const Message& message, mi::Sint32 result);
 
-/// Adds \p message as message and error message to the context, and sets the result to \p result.
+/// Adds \p message as message and error message to the context, and sets the result to
+/// \p result_and_code.
 ///
-/// Uses #Message::MSG_INTEGRATION as message kind, and -1 as message code.
-/// Does nothing if \p context is \c NULL. Returns \p result.
+/// Uses #Message::MSG_INTEGRATION as message kind, and \p result_and_code as message code.
+/// Does nothing if \p context is \c NULL. Returns \p result_and_code.
 mi::Sint32 add_error_message(
-    Execution_context* context, const std::string& message, mi::Sint32 result);
+    Execution_context* context, const std::string& message, mi::Sint32 result_and_code);
 
 /// Adds \p message as warning message to the context.
 ///
 /// Uses #Message::MSG_INTEGRATION as message kind, and -1 as message code.
-/// Does nothing if \p context is \c NULL. Returns \p result.
+/// Does nothing if \p context is \c NULL.
 void add_warning_message( Execution_context* context, const std::string& message);
 
 /// Adds \p message as info message to the context.
 ///
 /// Uses #Message::MSG_INTEGRATION as message kind, and -1 as message code.
-/// Does nothing if \p context is \c NULL. Returns \p result.
+/// Does nothing if \p context is \c NULL.
 void add_info_message( Execution_context* context, const std::string& message);
 
 /// Creates a thread context.
@@ -941,9 +951,10 @@ const mi::mdl::DAG_node* int_expr_to_mdl_dag_node(
 ///
 /// \tparam T   Either mi::mdl::IDag_builder or mi::mdl::IGenerated_code_dag::DAG_node_factory.
 ///
-/// \note The class behaves differently for temporaries. If T == IDag_builder, temporaries are
-///       re-converted each time they are encountered. If T == IGenerated_code_dag::DAG_node_factory,
-///       temporaries are converted only once, and referenced via DAG_temporary nodes.
+/// \note The class behaves differently for temporaries:
+///       If T == IDag_builder, temporaries are re-converted each time they are encountered.
+///       If T == IGenerated_code_dag::DAG_node_factory, temporaries are converted only once, and
+///       referenced via DAG_temporary nodes.
 template<class T>
 class Mdl_dag_builder
 {
@@ -1424,8 +1435,10 @@ private:
     DB::Transaction* m_transaction;
     Mdl_module_wait_queue* m_queue;
     mi::mdl::IModule_loaded_callback* m_module_load_callback;
-    mi::base::Handle<const mi::neuraylib::IMdl_loading_wait_handle_factory> m_default_wait_handle_factory;
-    mi::base::Handle<const mi::neuraylib::IMdl_loading_wait_handle_factory> m_user_wait_handle_factory;
+    mi::base::Handle<const mi::neuraylib::IMdl_loading_wait_handle_factory>
+        m_default_wait_handle_factory;
+    mi::base::Handle<const mi::neuraylib::IMdl_loading_wait_handle_factory>
+        m_user_wait_handle_factory;
     DB::Tag_set m_ignore_list;
 };
 
@@ -1663,9 +1676,96 @@ mi::mdl::IMDL::MDL_version convert_mdl_version( mi::neuraylib::Mdl_version versi
 /// Returns a string representation of mi::mdl::IMDL::MDL_version.
 const char* stringify_mdl_version( mi::mdl::IMDL::MDL_version version);
 
+/// Splits the mi::mdl::IMDL::MDL_version into major and minor version parts.
+std::pair<int,int> split_mdl_version( mi::mdl::IMDL::MDL_version version);
+
+/// Combines major and minor version parts into mi::mdl::IMDL::MDL_version.
+mi::mdl::IMDL::MDL_version combine_mdl_version( int major, int minor);
+
+/// Creates a value referencing a texture identified by an MDL file path.
+///
+/// \param transaction   The transaction to be used.
+/// \param file_path     The absolute MDL file path that identifies the texture. The MDL
+///                      search paths are used to resolve the file path. See section 2.2 in
+///                      [\ref MDLLS] for details.
+/// \param shape         The value that is returned by #IType_texture::get_shape() on the type
+///                      corresponding to the return value.
+/// \param gamma         The value that is returned by #TEXTURE::Texture::get_gamma()
+///                      on the DB element referenced by the return value.
+/// \param selector      The selector (or \c NULL).
+/// \param shared        Indicates whether you want to re-use the DB elements for that texture
+///                      if it has already been loaded, or if you want to create new DB elements
+///                      in all cases. Note that sharing is based on the location where the
+///                      texture is finally located and includes sharing with instances that
+///                      have not explicitly been loaded via this method, e.g., textures in
+///                      defaults.
+/// \param context       Execution context. The error codes have the following meaning:
+///                      -  0: Success.
+///                      - -1: Invalid parameters (\c NULL pointer).
+///                      - -2: The file path is not an absolute MDL file path.
+///                      - -3: Failed to resolve the given file path, or no suitable image
+///                            plugin available.
+/// \return              The value referencing the texture, or \c NULL in case of failure.
+IValue_texture* create_texture(
+    DB::Transaction* transaction,
+    const char* file_path,
+    IType_texture::Shape shape,
+    mi::Float32 gamma,
+    const char* selector,
+    bool shared,
+    Execution_context* context);
+
+/// Creates a value referencing a light profile identified by an MDL file path.
+///
+/// \param transaction   The transaction to be used.
+/// \param file_path     The absolute MDL file path that identifies the light profile. The MDL
+///                      search paths are used to resolve the file path. See section 2.2 in
+///                      [\ref MDLLS] for details.
+/// \param shared        Indicates whether you want to re-use the DB element for that light
+///                      profile if it has already been loaded, or if you want to create a new
+///                      DB element in all cases. Note that sharing is based on the location
+///                      where the light profile is finally located and includes sharing with
+///                      instances that have not explicitly been loaded via this method, e.g.,
+///                      light profiles in defaults.
+/// \param context       Execution context. The error codes have the following meaning:
+///                      -  0: Success.
+///                      - -1: Invalid parameters (\c NULL pointer).
+///                      - -2: The file path is not an absolute MDL file path.
+///                      - -3: Failed to resolve the given file path.
+/// \return              The value referencing the light profile, or \c NULL in case of failure.
+IValue_light_profile* create_light_profile(
+    DB::Transaction* transaction,
+    const char* file_path,
+    bool shared,
+    Execution_context* context);
+
+/// Creates a value referencing a BSDF measurement identified by an MDL file path.
+///
+/// \param transaction   The transaction to be used.
+/// \param file_path     The absolute MDL file path that identifies the BSDF measurement. The
+///                      MDL search paths are used to resolve the file path. See section 2.2 in
+///                      [\ref MDLLS] for details.
+/// \param shared        Indicates whether you want to re-use the DB element for that BSDF
+///                      measurement if it has already been loaded, or if you want to create a
+///                      new DB element in all cases. Note that sharing is based on the location
+///                      where the BSDF measurement is finally located and includes sharing with
+///                      instances that have not explicitly been loaded via this method, e.g.,
+///                      BSDF measurements in defaults.
+/// \param context       Execution context. The error codes have the following meaning:
+///                      -  0: Success.
+///                      - -1: Invalid parameters (\c NULL pointer).
+///                      - -2: The file path is not an absolute MDL file path.
+///                      - -3: Failed to resolve the given file path.
+/// \return              The value referencing the BSDF measurement, or \c NULL in case of
+///                      failure.
+IValue_bsdf_measurement* create_bsdf_measurement(
+    DB::Transaction* transaction,
+    const char* file_path,
+    bool shared,
+    Execution_context* context);
+
 } // namespace MDL
 
 } // namespace MI
 
 #endif // IO_SCENE_MDL_ELEMENTS_I_MDL_ELEMENTS_UTILITIES_H
-

@@ -25,7 +25,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
-#include "common.hlsl"
+#include "content/common.hlsl"
 
 // ------------------------------------------------------------------------------------------------
 // defined in the global root signature
@@ -66,7 +66,7 @@ float3 trace_path(inout RayDesc ray, inout uint seed)
     payload.weight = float3(1.0f, 1.0f, 1.0f);
     payload.seed = seed;
     payload.last_bsdf_pdf = DIRAC;
-    payload.flags = FLAG_FIRST_PATH_SEGMENT;
+    payload.flags = FLAG_FIRST_PATH_SEGMENT | FLAG_CAMERA_RAY;
 
     [loop]
     for (uint i = 0; i < max_ray_depth; ++i)
@@ -97,6 +97,12 @@ float3 trace_path(inout RayDesc ray, inout uint seed)
 
     // pick up the probably altered seed
     seed = payload.seed;
+
+    // replace the background with a constant color when visible to the camera
+    if (background_color_enabled != 0 && has_flag(payload.flags, FLAG_CAMERA_RAY))
+    {
+        return background_color;
+    }
 
     // clamp fireflies
     float3 contribution = payload.contribution;
@@ -155,7 +161,7 @@ void RayGenProgram()
         uint it = it_frame + (enable_animiation ? min(progressive_iteration, 32) : progressive_iteration);
 
         // random number seed
-        unsigned int seed = tea(
+        uint seed = tea(
             16, /*magic (see OptiX path tracing example)*/
             launch_dim.x * launch_index.y + launch_index.x,
             it + (enable_animiation ? asint(total_time) : 0));

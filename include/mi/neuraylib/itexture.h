@@ -81,8 +81,8 @@ mi_static_assert( sizeof( Filter_type) == sizeof( Uint32));
 /// #mi::neuraylib::IFunction_definition). The type of such an argument is
 /// #mi::neuraylib::IType_texture or an alias of it.
 ///
-/// Textures may also serve as references to volume data. Note that gamma and compression options
-/// are not available for volume data.
+/// \if IRAY_API Textures may also serve as references to volume data. Note that gamma and
+/// compression options are not available for volume data. \endif
 ///
 /// \see #mi::neuraylib::IImage
 /// \if IRAY_API \see #mi::neuraylib::IVolume_data \endif
@@ -111,9 +111,12 @@ public:
     virtual const char* get_image() const = 0;
 
     //@}
+    /// \if IRAY_API
     /// \name Methods related to the referenced volume instead of an image.
+    /// \endif
     //@{
 
+    /// \if IRAY_API
     /// Sets the referenced volume.
     ///
     /// \return
@@ -123,11 +126,14 @@ public:
     ///           - -3: The element can not be referenced because it is in a more private scope
     ///                 than the texture.
     ///           - -4: The element is not a volume.
+    /// \endif
     virtual Sint32 set_volume( const char* name) = 0;
 
+    /// \if IRAY_API
     /// Returns the referenced volume data.
     ///
     /// \return   The referenced volume, or \c NULL if no volume is referenced.
+    /// \endif
     virtual const char* get_volume() const = 0;
 
     //@}

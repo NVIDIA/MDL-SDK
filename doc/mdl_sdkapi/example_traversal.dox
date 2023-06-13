@@ -30,7 +30,7 @@
 
 <div align="right">
 \if MDL_BIN_RELEASE
-    [\link mi_neuray_example_distilling_glsl Previous\endlink]
+    [\link mi_neuray_example_distilling_target Previous\endlink]
 \else
     [\link mi_neuray_example_derivatives Previous\endlink]
 \endif

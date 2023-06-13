@@ -63,7 +63,7 @@ public:
     ///
     /// \return
     ///                             -  0: The modules are compatible.
-    ///                             - -1: Invalid parameters (NULL pointer).
+    ///                             - -1: Invalid parameters (\c NULL pointer).
     ///                             - -2: An error occurred during module comparison.
     ///                                   Please check the context for details.
     virtual Sint32 compare_modules(

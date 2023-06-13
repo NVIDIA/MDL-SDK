@@ -267,7 +267,8 @@ mi::Sint32 Mdl_function_call::repair(
     if (!module->is_valid(transaction, context))
         return -1;
 
-    mi::Sint32 ret = module->has_definition(m_is_material, m_definition_db_name, m_definition_ident);
+    mi::Sint32 ret
+        = module->has_definition(m_is_material, m_definition_db_name, m_definition_ident);
     if (ret == -1) {
         // a definition of that name does no longer exist
         m_definition_tag = DB::Tag();
@@ -910,11 +911,13 @@ Mdl_compiled_material* Mdl_function_call::create_compiled_material(
     const char* module_filename = module->get_filename();
     const char* module_name = module->get_mdl_name();
 
-    mi::Float32 mdl_meters_per_scene_unit = context->get_option<mi::Float32>(
-        MDL_CTX_OPTION_METERS_PER_SCENE_UNIT);
-    mi::Float32 mdl_wavelength_min = context->get_option<mi::Float32>(MDL_CTX_OPTION_WAVELENGTH_MIN);
-    mi::Float32 mdl_wavelength_max = context->get_option<mi::Float32>(MDL_CTX_OPTION_WAVELENGTH_MAX);
-    bool resolve_resources = context->get_option<bool>(MDL_CTX_OPTION_RESOLVE_RESOURCES);
+    mi::Float32 mdl_meters_per_scene_unit
+        = context->get_option<mi::Float32>( MDL_CTX_OPTION_METERS_PER_SCENE_UNIT);
+    mi::Float32 mdl_wavelength_min
+        = context->get_option<mi::Float32>( MDL_CTX_OPTION_WAVELENGTH_MIN);
+    mi::Float32 mdl_wavelength_max
+        = context->get_option<mi::Float32>( MDL_CTX_OPTION_WAVELENGTH_MAX);
+    bool resolve_resources = context->get_option<bool>( MDL_CTX_OPTION_RESOLVE_RESOURCES);
 
     return new Mdl_compiled_material(
         transaction, instance.get(), module_filename, module_name,
@@ -1207,6 +1210,9 @@ void Mdl_function_call::get_scene_element_references( DB::Tag_set* result) const
     ASSERT( M_SCENE, m_immutable || m_module_tag);
     if( m_module_tag)
         result->insert( m_module_tag);
+
+    if( m_definition_tag)
+        result->insert( m_definition_tag);
 
     collect_references( m_arguments.get(), result);
     collect_references( m_enable_if_conditions.get(), result);

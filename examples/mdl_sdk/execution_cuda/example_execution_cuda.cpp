@@ -34,7 +34,7 @@
 #include <iostream>
 #include <vector>
 
-// Enable this to dump the generated PTX code to stdout.
+// Enable this to dump the generated PTX code to files in the current directory.
 // #define DUMP_PTX
 
 #include "example_cuda_shared.h"
@@ -283,6 +283,7 @@ int MAIN_UTF8(int argc, char* argv[])
                 options.enable_derivatives,
                 options.fold_ternary_on_df,
                 /*enable_axuiliary_output*/ false,
+                /*enable_pdf*/ true,
                 /*use_adapt_normal*/ false,
                 /*df_handle_mode*/ "none");
 

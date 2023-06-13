@@ -35,18 +35,18 @@ namespace Coco {
 void StringBuilder::Init(int capacity) {
 	length = 0;
 	this->capacity = capacity;
-	data = new wchar_t[capacity + 1];
-	data[0] = 0;	
+	data = new char[capacity + 1];
+	data[0] = 0;
 }
 
 StringBuilder::StringBuilder(int capacity) {
 	Init(capacity);
 }
 
-StringBuilder::StringBuilder(const wchar_t *val) {
-	capacity = length = wcslen(val);
+StringBuilder::StringBuilder(char const *val) {
+	capacity = length = strlen(val);
 	Init(capacity);
-	wcscpy(data, val);
+	strcpy(data, val);
 }
 
 StringBuilder::~StringBuilder() {
@@ -58,12 +58,11 @@ StringBuilder::~StringBuilder() {
 	}
 }
 
-void StringBuilder::Append(const wchar_t value) {
-	if (length == capacity) {
-		int oldCap = capacity;
+void StringBuilder::Append(const char value) {
+	if (length >= capacity - 1) {
 		capacity = capacity * 2;
-		wchar_t *nData = new wchar_t[capacity + 1];
-		memcpy(nData, data, oldCap * sizeof(int));
+		char *nData = new char[capacity];
+		memcpy(nData, data, length * sizeof(char));
 		delete [] data;
 		data = nData;
 	}
@@ -73,15 +72,25 @@ void StringBuilder::Append(const wchar_t value) {
 	data[length] = '\0';
 }
 
-void StringBuilder::Append(const wchar_t *value) {
-	if (length + (int)wcslen(value) < capacity) {
-		wcscpy(data + length, value);
-		length += wcslen(value);
+void StringBuilder::Append(const char *value) {
+	size_t l = strlen(value);
+	if (length + l >= capacity - 1) {
+		do {
+			capacity = capacity * 2;
+		} while (length + l >= capacity);
+
+		char *nData = new char[capacity];
+		memcpy(nData, data, length * sizeof(char));
+		delete[] data;
+		data = nData;
 	}
+	strcpy(data + length, value);
+	length += l;
+	data[length] = '\0';
 }
 
 
-wchar_t* StringBuilder::ToString() {
+char* StringBuilder::ToString() {
 	return coco_string_create(data);
 }
 

@@ -69,6 +69,7 @@ target_add_cuda_ptx_rule(TARGET ${PROJECT_NAME}
     CUDA_SOURCES
         "example_execution_cuda.cu"
         "example_execution_cuda_derivatives.cu"
+    FAST_MATH
     )
 
 # -------------------------------------------------------------------------------------------------

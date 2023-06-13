@@ -40,7 +40,6 @@
 #include <io/scene/scene/i_scene_scene_element.h>
 
 #include "i_mdl_elements_utilities.h"
-#include "i_mdl_elements_type.h"
 #include "i_mdl_elements_resource_tag_tuple.h"
 
 namespace mi {
@@ -68,85 +67,13 @@ class IAnnotation_block;
 class IExpression_factory;
 class IExpression_list;
 class IType_factory;
+class IType_list;
 class IValue_factory;
-class IValue_bsdf_measurement;
-class IValue_light_profile;
 class IValue_resource;
-class IValue_texture;
 class Symbol_importer;
 
 using Mdl_ident = mi::Uint64;
 using Mdl_tag_ident = std::pair<DB::Tag, Mdl_ident>;
-
-/// Represents data to describe a parameter. Used by Material_data below.
-class Parameter_data
-{
-public:
-    /// The path that identifies the subexpression that becomes the default of a new parameter.
-    std::string m_path;
-    /// The name of the new parameter.
-    std::string m_name;
-    /// Indicates whether the parameter should be forced to be uniform.
-    bool m_enforce_uniform;
-    /// The annotations for the parameter. The annotation name is the MDL name. \n
-    /// Note that the values in \p m_annotations are copied; passing an annotation block obtained
-    /// from another MDL interface does not create a link between both instances. \n
-    /// \c NULL is a valid value which is handled like an empty annotation block.
-    mi::base::Handle<const IAnnotation_block> m_annotations;
-};
-
-/// Represents data needed to create a new material based on an existing material. Used by one of
-/// the #create_module() overloads below.
-class Mdl_data
-{
-public:
-    /// The simple name of the new definition.
-    std::string m_simple_name;
-    /// The tag of the prototype (material instance or function call) for the new definition.
-    /// Note: this is not really the prototype, but rather the expression for the material/function
-    /// body plus defaults.
-    DB::Tag m_prototype_tag;
-    /// The parameters of the new definition.
-    std::vector<Parameter_data> m_parameters;
-    /// The material does not inherit any annotations from the prototype. This member allows to
-    /// specify annotations for the definition, i.e., for the definition declaration itself (but
-    /// not for its arguments). The annotation name is the MDL name. \n
-    /// Note that the values in \p m_annotations are copied; passing an annotation block obtained
-    /// from another MDL interface does not create a link between both instances. \n
-    /// \c NULL is a valid value which is handled like an empty annotation block.
-    mi::base::Handle<const IAnnotation_block> m_annotations;
-
-    /// Return annotations in case of functions.
-    mi::base::Handle<const IAnnotation_block> m_return_annotations;
-
-    /// True, if a material should be created.
-    bool m_is_material;
-};
-
-/// Represents data needed to create a variant. Used by one of the #create_module() overloads below.
-class Variant_data
-{
-public:
-    /// The simple name of the variant (non-qualified, without module prefix). The DB name of the
-    /// variant is created by prefixing this name with the DB name of the new module plus "::".
-    std::string m_variant_name;
-    /// The tag of the prototype (material or function definition) for this variant.
-    DB::Tag m_prototype_tag;
-    /// The variant inherits the defaults from the prototype. This member allows to change the
-    /// defaults and/or to add new defaults. The type of an expression in the expression list must
-    /// match the type of the parameter of the same name of the prototype. \n
-    /// Note that the expressions in \p m_defaults are copied; passing an expression list obtained
-    /// from another MDL interface does not create a link between both instances. \n
-    /// \c NULL is a valid value which is handled like an empty expression list.
-    mi::base::Handle<const IExpression_list> m_defaults;
-    /// The variant does not inherit any annotations from the prototype. This member allows to
-    /// specify annotations for the variant, i.e., for the material declaration itself (but not for
-    /// its arguments). The annotation name is the MDL name. \n
-    /// Note that the values in \p m_annotations are copied; passing an annotation block obtained
-    /// from another MDL interface does not create a link between both instances. \n
-    /// \c NULL is a valid value which is handled like an empty annotation block.
-    mi::base::Handle<const IAnnotation_block> m_annotations;
-};
 
 /// The class ID for the #Mdl_module class.
 static const SERIAL::Class_id ID_MDL_MODULE = 0x5f4d6d6f; // '_Mmo'
@@ -207,156 +134,6 @@ public:
         const char* module_name,
         mi::neuraylib::IReader* module_source,
         Execution_context* context);
-
-    /// Factory (public, creates a module with multiple variants and creates the DB element if
-    /// needed).
-    ///
-    /// \param transaction     The DB transaction to use.
-    /// \param module_name     The MDL module name.
-    /// \param variant_data    An array with the data for each variant to be created. For details
-    ///                        see #Variant_data. Array elements which are \c NULL are replaced by
-    ///                        empty ennotation blocks.
-    /// \param variant_count   The length of \p variant_data.
-    /// \param[inout] context  Execution context used to pass options to and store messages from
-    ///                        the MDL compiler.
-    /// \return
-    ///           -   1: Success (module exists already, creating from \p variant_data was
-    ///                  skipped).
-    ///           -   0: Success (module was actually created with the variants as its only material
-    ///                  and function definitions).
-    ///           -  -1: The module name \p module_name is invalid.
-    ///           -  -2: Failed to compile the module \p module_name.
-    ///           -  -3: The DB name for an imported module is already in use but is not an MDL
-    ///                  module, or the DB name for a definition in this module is already in use.
-    ///           -  -5: The DB element of one of the prototypes has the wrong type.
-    ///           -  -4: Initialization of an imported module failed.
-    ///           -  -6: A default for a non-existing parameter was provided.
-    ///           -  -7: The type of a default does not have the correct type.
-    ///           -  -8: Unspecified error.
-    ///           -  -9: One of the annotation arguments is wrong (wrong argument name, not a
-    ///                  constant expression, or the argument type does not match the parameter
-    ///                  type).
-    ///           - -10: One of the annotations does not exist or it has a currently unsupported
-    ///                  parameter type like deferred-sized arrays.
-    static mi::Sint32 deprecated_create_module(
-        DB::Transaction* transaction,
-        const char* module_name,
-        Variant_data* variant_data,
-        mi::Size variant_count,
-        Execution_context* context);
-
-    /// Gets the database name of a loaded module.
-    ///
-    /// After successfully loading a module using #load_module() or #load_module_from_string() it is
-    /// often required to query the module or containing elements from the database. Therefore, the
-    /// database name of the module is required, which is returned by this method.
-    /// While MDL modules follow the simple rule 'mdl::<simple_name>{::<simple_name>}', this is more
-    /// evolved for MDLE, where the DB name contains the absolute, normalized file path of the MDLE.
-    /// Normalized means that there are no occurrences of '/../' and '/' is used as path separator,
-    /// independent of the platform. Furthermore must the normalized path start with a leading
-    /// forward slash, which has to be added in case there is none already.
-    ///
-    /// \param transaction   The DB transaction to be used for checking if the module is loaded.
-    /// \param module        The  MDL module name (for non-MDLE modules), or an MDLE filename
-    ///                      (absolute or relative to the current working directory). For MDLE, the
-    ///                      sub-path '/../' is allowed explicitly as long the resulting path is
-    ///                      not exceeding the root.
-    /// \param context       The execution context can be used to pass options to control the
-    ///                      behavior of the MDL compiler. Messages like errors or warnings are also
-    ///                      stored in the context. Can be \c NULL.
-    /// \return              The database name of the module that was loaded using the provided
-    ///                      \p module_name. NULL in case of the module was not found are the
-    ///                      provided module name was not a valid module name.
-    static const char* deprecated_get_module_db_name(
-        DB::Transaction* transaction,
-        const char* module,
-        Execution_context* context);
-
-
-    /// Creates a value referencing a texture identified by an MDL file path.
-    ///
-    /// \param transaction   The transaction to be used.
-    /// \param file_path     The absolute MDL file path that identifies the texture. The MDL
-    ///                      search paths are used to resolve the file path. See section 2.2 in
-    ///                      [\ref MDLLS] for details.
-    /// \param shape         The value that is returned by #IType_texture::get_shape() on the type
-    ///                      corresponding to the return value.
-    /// \param gamma         The value that is returned by #TEXTURE::Texture::get_gamma()
-    ///                      on the DB element referenced by the return value.
-    /// \param selector      The selector (or \c NULL).
-    /// \param shared        Indicates whether you want to re-use the DB elements for that texture
-    ///                      if it has already been loaded, or if you want to create new DB elements
-    ///                      in all cases. Note that sharing is based on the location where the
-    ///                      texture is finally located and includes sharing with instances that
-    ///                      have not explicitly been loaded via this method, e.g., textures in
-    ///                      defaults.
-    /// \param errors        An optional pointer to an #mi::Sint32 to which an error code will be
-    ///                      written. The error codes have the following meaning:
-    ///                      -  0: Success.
-    ///                      - -1: Invalid parameters (\c NULL pointer).
-    ///                      - -2: The file path is not an absolute MDL file path.
-    ///                      - -3: Failed to resolve the given file path, or no suitable image
-    ///                            plugin available.
-    /// \return              The value referencing the texture, or \c NULL in case of failure.
-    static IValue_texture* create_texture(
-        DB::Transaction* transaction,
-        const char* file_path,
-        IType_texture::Shape shape,
-        mi::Float32 gamma,
-        const char* selector,
-        bool shared,
-        mi::Sint32* errors = nullptr);
-
-    /// Creates a value referencing a light profile identified by an MDL file path.
-    ///
-    /// \param transaction   The transaction to be used.
-    /// \param file_path     The absolute MDL file path that identifies the light profile. The MDL
-    ///                      search paths are used to resolve the file path. See section 2.2 in
-    ///                      [\ref MDLLS] for details.
-    /// \param shared        Indicates whether you want to re-use the DB element for that light
-    ///                      profile if it has already been loaded, or if you want to create a new
-    ///                      DB element in all cases. Note that sharing is based on the location
-    ///                      where the light profile is finally located and includes sharing with
-    ///                      instances that have not explicitly been loaded via this method, e.g.,
-    ///                      light profiles in defaults.
-    /// \param errors        An optional pointer to an #mi::Sint32 to which an error code will be
-    ///                      written. The error codes have the following meaning:
-    ///                      -  0: Success.
-    ///                      - -1: Invalid parameters (\c NULL pointer).
-    ///                      - -2: The file path is not an absolute MDL file path.
-    ///                      - -3: Failed to resolve the given file path.
-    /// \return              The value referencing the light profile, or \c NULL in case of failure.
-    static IValue_light_profile* create_light_profile(
-        DB::Transaction* transaction,
-        const char* file_path,
-        bool shared,
-        mi::Sint32* errors = nullptr);
-
-    /// Creates a value referencing a BSDF measurement identified by an MDL file path.
-    ///
-    /// \param transaction   The transaction to be used.
-    /// \param file_path     The absolute MDL file path that identifies the BSDF measurement. The
-    ///                      MDL search paths are used to resolve the file path. See section 2.2 in
-    ///                      [\ref MDLLS] for details.
-    /// \param shared        Indicates whether you want to re-use the DB element for that BSDF
-    ///                      measurement if it has already been loaded, or if you want to create a
-    ///                      new DB element in all cases. Note that sharing is based on the location
-    ///                      where the BSDF measurement is finally located and includes sharing with
-    ///                      instances that have not explicitly been loaded via this method, e.g.,
-    ///                      BSDF measurements in defaults.
-    /// \param errors        An optional pointer to an #mi::Sint32 to which an error code will be
-    ///                      written. The error codes have the following meaning:
-    ///                      -  0: Success.
-    ///                      - -1: Invalid parameters (\c NULL pointer).
-    ///                      - -2: The file path is not an absolute MDL file path.
-    ///                      - -3: Failed to resolve the given file path.
-    /// \return              The value referencing the BSDF measurement, or \c NULL in case of
-    ///                      failure.
-    static IValue_bsdf_measurement* create_bsdf_measurement(
-        DB::Transaction* transaction,
-        const char* file_path,
-        bool shared,
-        mi::Sint32* errors = nullptr);
 
     /// Default constructor.
     ///
@@ -522,7 +299,8 @@ public:
 
     /// Indicates whether the module supports reloading (or editing).
     ///
-    /// Reloading is not supported for standard or builtin modules plus ::base.
+    /// Reloading is not supported for standard or builtin modules plus ::base and
+    /// ::nvidia::distilling_support.
     bool supports_reload() const;
 
     /// Returns the resource tag tuple for a given resource (low-level access to the resource
@@ -693,4 +471,3 @@ private:
 } // namespace MI
 
 #endif // IO_SCENE_MDL_ELEMENTS_I_MDL_ELEMENTS_MODULE_H
-

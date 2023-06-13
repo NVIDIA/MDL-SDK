@@ -110,7 +110,8 @@ mi_static_assert( sizeof( IExpression::Kind) == sizeof( Uint32));
 
 /// A constant expression.
 ///
-/// Constant expressions appear basically everywhere where expression are used.
+/// Constant expressions represent values (see #mi::neuraylib::IValue). They appear basically
+/// everywhere where expression are used.
 class IExpression_constant : public
     mi::base::Interface_declare<0x9da8d465,0x4058,0x46cb,0x83,0x6e,0x0e,0x38,0xa6,0x7f,0xcd,0xef,
                                 neuraylib::IExpression>
@@ -161,11 +162,35 @@ public:
 /// An indirect call expression.
 ///
 /// This call expression is called \em indirect since it just references another DB element
-/// representing the actual call. See also #mi::neuraylib::IExpression_direct_call for direct call
-/// expressions.
+/// representing the actual call. This contrasts with #mi::neuraylib::IExpression_direct_call for
+/// \em direct call expressions. See below for a more detailed comparison.
 ///
 /// Indirect call expressions appear as defaults of material or function definitions, as arguments
 /// of material instances or function calls, and as defaults in the module builder.
+///
+/// \par Indirect vs direct calls
+///
+/// There are two different types of call expressions, \em indirect calls (represented by this
+/// interface #mi::neuraylib::IExpression_call) and \em direct calls (represented by
+/// #mi::neuraylib::IExpression_direct_call). Both have their disjoint use cases, and they never
+/// appear together in the very same expression graph.
+///
+/// Indirect calls are used where the expression graph is frequently changed by the user, in
+/// particular for arguments of function calls and material instances. These indirect calls simply
+/// reference another DB element by name, which represents the actual call. Note that such an
+/// argument might not just be a constant or a single call (with constants as arguments), but can be
+/// a rather complex graph (so-called open material graphs). The indirection via DB elements allows
+/// to access any such graph node directly (assuming its name is known) in order to modify it,
+/// without traversing the entire expression graph first to reach a given node.
+///
+/// Direct calls are used where the expression graph is fixed (bodies of material and function
+/// definitions, and compiled materials), or where such a graph is constructed once and not
+/// modified later (bodies in the module builder). In these cases the indirection via DB elements
+/// is not necessary and would be rather cumbersome.
+///
+/// Note that defaults use indirect calls, even though they are fixed. This exception was made to
+/// stress the similarity to arguments, e.g., it allows to pass a default as a new argument to
+/// #mi::neuraylib::IFunction_call::set_argument().
 class IExpression_call : public
     mi::base::Interface_declare<0xcf625aec,0x8eb8,0x4743,0x9f,0xf6,0x76,0x82,0x2c,0x02,0x54,0xa3,
                                 neuraylib::IExpression>
@@ -196,7 +221,18 @@ public:
 
 /// A parameter reference expression.
 ///
-/// Parameter reference expressions appear as defaults of material or function definitions.
+/// Parameter reference expressions are used for defaults that reference earlier parameters. For
+/// example consider
+/// \code
+/// float foo(float a, float b, float c = b) { ... }
+/// \endcode
+/// The default for the parameter \c c is of type #mi::neuraylib::IExpression_parameter. Its index
+/// is 1, equal to the parameter index of parameter \c b.
+///
+/// Parameter reference expressions appear as defaults of material or function definitions. They are
+/// expanded during #mi::neuraylib::IFunction_definition::create_function_call(),
+/// #mi::neuraylib::IFunction_call::reset_argument(), and
+/// #mi::neuraylib::Definition_wrapper::create_instance().
 class IExpression_parameter : public
     mi::base::Interface_declare<0x206c4319,0x0b53,0x45a7,0x86,0x07,0x29,0x98,0xb3,0x44,0x7f,0xaa,
                                neuraylib::IExpression>
@@ -216,7 +252,8 @@ public:
 ///
 /// This call expression is called \em direct since it directly represents the actual call (and not
 /// simply references another DB element representing the actual call as for indirect call
-/// expressions, see #mi::neuraylib::IExpression_call).
+/// expressions). See #mi::neuraylib::IExpression_call for of comparison of direct and indirect call
+/// expressions.
 ///
 /// Direct call expressions appear in fields and temporaries of compiled materials, in the bodies
 /// of function and material definitions, and in bodies in the module builder.
@@ -237,8 +274,47 @@ public:
 
 /// A temporary reference expression.
 ///
-/// Temporary reference expressions appear in fields and temporaries of compiled materials, and in
-/// the bodies of function and material definitions.
+/// Temporary reference expressions are used to make the structure of DAGs (directed acyclic
+/// graphs) more explicit. Consider a diamond-shaped graph with four nodes A, B, C, and D. Node A
+/// references nodes B and C, and both nodes B and C reference node D.
+///
+/// \image html expressions1.png "Diamond-shaped graph"
+/// \image latex expressions1.png "Diamond-shaped graph"
+///
+/// When traversing this graph starting at node A, it could be important to realize when the node D
+/// is visited a second time (to avoid double work for node D, or to avoid misinterpreting the
+/// graph as a tree).
+///
+/// Note that in this example we use letters to identify the nodes. But expressions themselves do
+/// not have names. And the \neurayApiName does not guarantee identical pointer addresses for
+/// repeated accesses to the (logically) same object. For example, repeated calls of
+/// #mi::neuraylib::IExpression_direct_call::get_arguments() followed by
+/// #mi::neuraylib::IExpression_list::get_expression() result in different pointers, although
+/// logically the result is always the same (for the same input). Therefore, a different mechanism
+/// is needed to recognize nodes that can be visited several times in a traversal.
+///
+/// This is where temporary references come into play. In an expression graph for the example above,
+/// the nodes B and C do not point directly to node D, but to two temporary reference expressions,
+/// both with the same index. The node D can then be retrieved by passing that index to
+/// #mi::neuraylib::IFunction_definition::get_temporary() or
+/// #mi::neuraylib::ICompiled_material::get_temporary().
+///
+/// \image html expressions2.png "Same graph, but with temporary references"
+/// \image latex expressions2.png "Same graph, but with temporary references"
+///
+/// A common idiom is to traverse temporaries first, storing the result for each temporary, and to
+/// use them when encountering the corresponding temporary reference. Alternatively, one can
+/// traverse temporaries when encountered on-demand, store the result for each temporary, and reuse
+/// the result of the first encounter of a particular temporary on later encounters of that
+/// temporary.
+///
+/// Note that, despite the name #mi::neuraylib::IExpression_temporary, expressions of this type are
+/// not the temporaries themselves, but \em references to temporaries. Temporaries can be nested,
+/// i.e., a temporary with index i might contain temporary references for other temporaries with
+/// indices up to i-1.
+///
+/// Temporary reference expressions appear in fields (and temporaries) of compiled materials, and in
+/// the bodies (and temporaries) of function and material definitions.
 class IExpression_temporary : public
     mi::base::Interface_declare<0xd91f484b,0xdbf8,0x4585,0x9d,0xab,0xba,0xd9,0x91,0x7f,0xe1,0x4c,
                                 neuraylib::IExpression>
@@ -371,8 +447,10 @@ public:
         AS_MODIFIED_ANNOTATION,                  ///< This is the modified() annotation.
         AS_KEYWORDS_ANNOTATION,                  ///< This is the key_words() annotation.
         AS_ORIGIN_ANNOTATION,                    ///< This is the origin() annotation.
+        AS_NODE_OUTPUT_PORT_DEFAULT_ANNOTATION,  ///< This is the node_output_port_default()
+                                                 ///  annotation.
 
-        AS_ANNOTATION_LAST = AS_ORIGIN_ANNOTATION,
+        AS_ANNOTATION_LAST = AS_NODE_OUTPUT_PORT_DEFAULT_ANNOTATION,
         AS_FORCE_32_BIT = 0xffffffffU            //   Undocumented, for alignment only.
     };
 
@@ -687,8 +765,8 @@ public:
         /// identity. That is, the comparison is not done via
         /// #mi::neuraylib::IExpression::get_value(), but by traversing into the referenced
         /// function call, i.e., comparing the function definition reference and the arguments.
-        /// This option is useful if you want to decide whether an argument is \em semantically equal
-        /// to the corresponding default parameter.
+        /// This option is useful if you want to decide whether an argument is \em semantically
+        /// equal to the corresponding default parameter.
         DEEP_CALL_COMPARISONS           = 1,
         /// This option indicates that all type aliases should be skipped before types of
         /// expression are compared. Defaults and argument might sometimes differ in explicit type
@@ -830,12 +908,13 @@ public:
     /// If the type of \p src_expr and \p target_type are not compatible, \c NULL is returned.
     ///
     /// \param src_expr     The expression whose type is supposed to be casted.
-    /// \param target_type  The result type of the cast. Note that the inserted cast operator acts on
-    ///                     types without qualifiers, i.e., modifiers on \p target_type are ignored.
+    /// \param target_type  The result type of the cast. Note that the inserted cast operator acts
+    ///                     on types without qualifiers, i.e., modifiers on \p target_type are
+    ///                     ignored.
     /// \param cast_db_name This name is used when storing the instance
     ///                     of the cast-operator function into the database. If the name is already
     ///                     taken by another DB element, this string will be used as the base for
-    ///                     generating a unique name. If NULL, a unique name is generated.
+    ///                     generating a unique name. If \c NULL, a unique name is generated.
     /// \param force_cast   If \c true, the cast will be created even if the types are
     ///                     identical. Please note that a cast cannot be forced for
     ///                     incompatible types.

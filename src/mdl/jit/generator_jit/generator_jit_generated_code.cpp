@@ -923,8 +923,7 @@ size_t Generated_code_source::add_data_segment(
     char   *p = (char *)builder.malloc(sizeof(Source_segment) + size + l);
     char   *n = p + sizeof(Source_segment) - 1 + size;
 
-    strncpy(n, name, l);
-    n[l] = '\0';
+    strncpy(n, name, l+1);
 
     Source_segment *seg = (Source_segment *)p;
 

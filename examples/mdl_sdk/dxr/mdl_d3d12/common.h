@@ -39,11 +39,15 @@
     #define NOMINMAX
 #endif
 
+#ifndef _USE_MATH_DEFINES
+    #define _USE_MATH_DEFINES
+#endif
+#include <math.h>
+
 #include <D3d12.h>
 #include <d3dx12.h>
 #include <dxcapi.h>
 #include <dxgi1_4.h>
-#include <D3Dcompiler.h>
 #include <DirectXMath.h>
 #include <D3d12SDKLayers.h>
 #include <wrl.h>

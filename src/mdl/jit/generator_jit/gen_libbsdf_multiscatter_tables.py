@@ -34,7 +34,7 @@ import os
 import struct
 
 copyright_str = """/******************************************************************************
- * Copyright 2022 NVIDIA Corporation. All rights reserved.
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
  *****************************************************************************/
 """
 

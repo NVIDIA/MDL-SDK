@@ -47,8 +47,8 @@ namespace MI {
 namespace DB { class Transaction; }
 namespace MDL {
 class Mdl_function_call;
-class Mdl_compiled_material;
 class Mdl_function_definition;
+class Mdl_compiled_material;
 class IValue_list;
 class Execution_context; 
 };
@@ -75,9 +75,17 @@ public:
         DB::Transaction        *transaction,
         MDL::Execution_context *context);
 
-    /// Add an MDL environment function call as a function to this link unit.
+    /// Execution context for functions.
+    enum Function_execution_context {
+        FEC_ENVIRONMENT  = 0,   ///< This function will be executed inside the environment.
+        FEC_CORE         = 1,   ///< This function will be executed in the renderer core.
+        FEC_DISPLACEMENT = 2,   ///< This function will be executed inside displacement.
+    };
+
+    /// Add an MDL function call as a function to this link unit.
     ///
-    /// \param i_call                      The MDL function call for the environment.
+    /// \param i_call                      The MDL function call.
+    /// \param fxc                         The context inside which this function will be executed.
     /// \param fname                       The name of the function that is created.
     /// \param[inout] context              A pointer to an
     ///                                    #MDL::Execution_context which can be used
@@ -93,10 +101,11 @@ public:
     ///                   - -2: Invalid expression.
     ///                   - -3: invalid function name.
     ///                   - -3: The JIT backend failed to compile the function.
-    mi::Sint32 add_environment(
+    mi::Sint32 add_function(
         MDL::Mdl_function_call const *i_call,
+        Function_execution_context   fxc,
         char const                   *fname,
-        MDL::Execution_context*      context);
+        MDL::Execution_context       *context);
 
     /// Add an expression that is part of an MDL material instance as a function to this
     /// link unit.
@@ -224,10 +233,30 @@ public:
         mi::Size                                      function_count,
         MDL::Execution_context                       *context);
 
+    /// Add an MDL function definition as a function to this link unit.
+    ///
+    /// \param function                    The MDL function definition.
+    /// \param fxc                         The context inside which this function will be executed.
+    /// \param fname                       The name of the function that is created.
+    /// \param[inout] context              A pointer to an
+    ///                                    #MDL::Execution_context which can be used
+    ///                                    to pass compilation options to the MDL compiler.
+    ///                                    Currently, no options are supported by this operation.
+    ///                                    During material compilation messages like errors and
+    ///                                    warnings will be passed to the context for
+    ///                                    later evaluation by the caller.
+    ///
+    /// \return           A return code. The return codes have the following meaning:
+    ///                   -  0: Success.
+    ///                   - -1: The JIT backend is not available.
+    ///                   - -2: Invalid expression.
+    ///                   - -3: invalid function name.
+    ///                   - -3: The JIT backend failed to compile the function.
     mi::Sint32 add_function(
         MDL::Mdl_function_definition const *function,
-        char const                         *name,
-        MDL::Execution_context             * context);
+        Function_execution_context         fxc,
+        char const                         *fname,
+        MDL::Execution_context             *context);
 
     /// Get the number of functions inside this link unit.
     mi::Size get_num_functions() const;

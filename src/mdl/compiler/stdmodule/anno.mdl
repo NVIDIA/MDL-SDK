@@ -25,7 +25,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
-mdl 1.6;
+mdl 1.8;
 
 export annotation soft_range(int     min, int     max) [[ intrinsic() ]];
 export annotation soft_range(float   min, float   max) [[ intrinsic() ]];
@@ -57,9 +57,28 @@ export annotation hard_range(int4    min, int4    max) [[ intrinsic(), since(1,2
 
 export annotation display_name(string name) [[ intrinsic() ]];
 
-export annotation in_group(string group) [[ intrinsic() ]];
-export annotation in_group(string group, string subgroup) [[ intrinsic() ]];
-export annotation in_group(string group, string subgroup, string subsubgroup) [[ intrinsic() ]];
+export annotation in_group(
+    string group) [[ intrinsic(), removed(1,8) ]];
+export annotation in_group(
+    string group,
+    string subgroup) [[ intrinsic(), removed(1,8) ]];
+export annotation in_group(
+    string group,
+    string subgroup,
+    string subsubgroup) [[ intrinsic(), removed(1,8) ]];
+
+export annotation in_group(
+    string group,
+    bool collapsed = false) [[ intrinsic(), since(1,8) ]];
+export annotation in_group(
+    string group,
+    string subgroup,
+    bool collapsed = false) [[ intrinsic(), since(1,8) ]];
+export annotation in_group(
+    string group,
+    string subgroup,
+    string subsubgroup,
+    bool collapsed = false) [[ intrinsic(), since(1,8) ]];
 
 export annotation hidden() [[ intrinsic() ]];
 
@@ -107,3 +126,13 @@ export annotation enable_if(string condition) [[ intrinsic(), since(1,4) ]];
 export annotation thumbnail(string name) [[ intrinsic(), since(1,4) ]];
 
 export annotation origin(string name) [[ intrinsic(), since(1,5) ]];
+
+export enum node_port_mode [[ since(1, 8) ]] {
+    node_port_value_only,
+    node_port_fields_only,
+    node_port_value_and_fields
+};
+
+export annotation node_output_port_default(
+    node_port_mode mode = node_port_value_only
+) [[ intrinsic(), since(1,8) ]];

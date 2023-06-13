@@ -44,7 +44,7 @@
 #include "example_df_cuda.h"
 #include "lpe.h"
 
-// Enable this to dump the generated PTX code to stdout.
+// Enable this to dump the generated PTX code to files in the current directory.
 // #define DUMP_PTX
 
 #define OPENGL_INTEROP
@@ -449,6 +449,7 @@ struct Options {
     bool enable_derivatives;
     bool fold_ternary_on_df;
     bool enable_auxiliary_output;
+    bool enable_pdf;
     bool use_adapt_normal;
     unsigned int res_x, res_y;
     unsigned int iterations;
@@ -476,6 +477,7 @@ struct Options {
     , enable_derivatives(false)
     , fold_ternary_on_df(false)
     , enable_auxiliary_output(true)
+    , enable_pdf(true)
     , use_adapt_normal(false)
     , res_x(1024)
     , res_y(1024)
@@ -774,7 +776,7 @@ public:
         if (it != m_string_constants_map.end())
             return it->second;
 
-        // the user adds a sting that is NOT in the code and we have not seen so far, add it
+        // the user adds a string that is NOT in the code and we have not seen so far, add it
         // and assign a new id
         unsigned n_id = unsigned(m_string_constants_map.size() + 1);
 
@@ -2073,6 +2075,8 @@ static void usage(const char *name)
         << "--nogl                      don't open interactive display\n"
         << "--nocc                      don't use class-compilation\n"
         << "--noaux                     don't generate code for albedo and normal buffers\n"
+        << "--nopdf                     don't generate code for pdf\n"
+        << "                            (for simplicity implies --noaux)\n"
         << "--an                        use adapt normal function\n"
         << "--gui_scale <factor>        GUI scaling factor (default: 1.0)\n"
         << "--res <res_x> <res_y>       resolution (default: 1024x1024)\n"
@@ -2122,6 +2126,10 @@ int MAIN_UTF8(int argc, char* argv[])
             } else if (strcmp(opt, "--nocc") == 0) {
                 options.use_class_compilation = false;
             } else if (strcmp(opt, "--noaux") == 0) {
+                options.enable_auxiliary_output = false;
+            } else if (strcmp(opt, "--nopdf") == 0) {
+                options.enable_pdf = false;
+                // also disable aux to avoid function indices depending on command line options
                 options.enable_auxiliary_output = false;
             } else if (strcmp(opt, "--an") == 0) {
                 options.use_adapt_normal = false;
@@ -2187,6 +2195,9 @@ int MAIN_UTF8(int argc, char* argv[])
         else
             options.material_names.push_back(std::string(opt));
     }
+
+    if (options.mdl_test_type == 3 && !options.enable_pdf)
+        exit_failure("Cannot use \"mis + pdf\" test type when pdf is disabled.");
 
     // Use default material, if none was provided via command line
     if (options.material_names.empty())
@@ -2297,6 +2308,7 @@ int MAIN_UTF8(int argc, char* argv[])
                 options.enable_derivatives,
                 options.fold_ternary_on_df,
                 options.enable_auxiliary_output,
+                options.enable_pdf,
                 options.use_adapt_normal,
                 /*df_handle_mode=*/ "pointer");
 

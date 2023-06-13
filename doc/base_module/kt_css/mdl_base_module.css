@@ -14,3 +14,7 @@ td {
 .panelink {
     font-family: Consolas, "Courier New", monospace;
 }
+
+.desc {
+    margin: .75em 0em .75em 1em;
+}

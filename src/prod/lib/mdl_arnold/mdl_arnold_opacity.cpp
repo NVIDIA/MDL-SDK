@@ -49,6 +49,7 @@ float MdlOpacityCreate(const AtShaderGlobals* sg, const MdlShaderNodeDataCPU* sh
         /*arg_block_data=*/ nullptr,
         &opacity);
     assert(res == 0 && "execute opacity failed");
+    (void) res;
 
     return opacity;
 }

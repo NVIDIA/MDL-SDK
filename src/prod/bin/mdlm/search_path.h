@@ -57,7 +57,7 @@ namespace mdlm
 
         ~Search_path();
 
-        // Take a snapshot of the current search pathes
+        // Take a snapshot of the current search paths
         mi::Sint32 snapshot();
 
         // Restore search path since last snapshot

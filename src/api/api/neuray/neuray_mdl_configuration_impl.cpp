@@ -64,7 +64,6 @@ Mdl_configuration_impl::Mdl_configuration_impl( mi::neuraylib::INeuray* neuray)
   , m_implicit_cast_enabled(true)
   , m_expose_names_of_let_expressions(false)
   , m_simple_glossy_bsdf_legacy_enabled(false)
-  , m_materials_are_functions(true)
 {
     const std::string& separator = HAL::Ospath::get_path_set_separator();
 
@@ -219,46 +218,6 @@ bool Mdl_configuration_impl::get_simple_glossy_bsdf_legacy_enabled() const
     return m_simple_glossy_bsdf_legacy_enabled;
 }
 
-mi::Sint32 Mdl_configuration_impl::set_materials_are_functions( bool value)
-{
-    mi::neuraylib::INeuray::Status status = m_neuray->get_status();
-    if(    (status != mi::neuraylib::INeuray::PRE_STARTING)
-        && (status != mi::neuraylib::INeuray::SHUTDOWN))
-        return -1;
-
-    m_materials_are_functions = value;
-    if( !value)
-        LOG::mod_log->warning( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
-            "Disabling \"materials are functions\" is deprecated.");
-
-    return 0;
-}
-
-bool Mdl_configuration_impl::get_materials_are_functions() const
-{
-    return m_materials_are_functions;
-}
-
-mi::Sint32 Mdl_configuration_impl::set_encoded_names_enabled( bool value)
-{
-    mi::neuraylib::INeuray::Status status = m_neuray->get_status();
-    if(    (status != mi::neuraylib::INeuray::PRE_STARTING)
-        && (status != mi::neuraylib::INeuray::SHUTDOWN))
-        return -1;
-
-    MDL::set_encoded_names_enabled( value);
-    if( !value)
-        LOG::mod_log->warning( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
-            "Disabling encoded names is deprecated.");
-
-    return 0;
-}
-
-bool Mdl_configuration_impl::get_encoded_names_enabled() const
-{
-    return MDL::get_encoded_names_enabled();
-}
-
 mi::neuraylib::IMdl_entity_resolver* Mdl_configuration_impl::get_entity_resolver() const
 {
     mi::base::Handle<mi::mdl::IMDL> mdl( m_mdlc_module->get_mdl());
@@ -307,12 +266,6 @@ mi::Sint32 Mdl_configuration_impl::start()
             new Core_entity_resolver_impl(mdl.get(), m_entity_resolver.get()));
         mdl->set_external_entity_resolver(mdl_resolver.get());
     }
-
-    MDL::Neuray_impl* neuray_impl = static_cast<MDL::Neuray_impl*>( m_neuray);
-    neuray_impl->get_class_factory()->set_materials_are_functions( m_materials_are_functions);
-
-    LOG::mod_log->info( M_MDLC, LOG::Mod_log::C_COMPILER,
-        "Encoded names are %s.", MDL::get_encoded_names_enabled() ? "enabled" : "disabled");
 
     return 0;
 }

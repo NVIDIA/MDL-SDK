@@ -70,8 +70,9 @@ SLWriterPass<BasePass>::SLWriterPass(
     mi::mdl::Messages_impl                               &messages,
     bool                                                 enable_debug,
     mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list,
-    mi::mdl::Df_handle_slot_mode                         df_handle_slot_mode)
-: Base(ID, alloc, type_mapper, options, messages, enable_debug)
+    mi::mdl::Df_handle_slot_mode                         df_handle_slot_mode,
+    bool                                                 enable_opt_remarks)
+: Base(ID, alloc, type_mapper, options, messages, enable_debug, enable_opt_remarks)
 , m_code(code)
 , m_exp_func_list(exp_func_list)
 , m_dg(alloc)
@@ -419,7 +420,7 @@ bool SLWriterPass<BasePass>::runOnModule(llvm::Module &M)
     }
 
     // optimize the compilation unit and write it to the output stream
-    Base::finalize(&m_code, mapped);
+    Base::finalize(M, &m_code, mapped);
 
     return false;
 }
@@ -476,6 +477,11 @@ void SLWriterPass<BasePass>::translate_function(
         Base::zero_loc, mapper_sym != nullptr ? mapper_sym : func_sym);
     Declaration_function *decl_func  = Base::m_decl_factory.create_function(
         ret_type_name, func_name);
+
+    // copy the noinline attribute to the target language
+    if (llvm_func->hasFnAttribute(llvm::Attribute::NoInline)) {
+        Base::add_noinline_attribute(decl_func);
+    }
 
     func_def->set_declaration(decl_func);
     func_name->set_definition(func_def);
@@ -4385,9 +4391,11 @@ llvm::Pass *createHLSLWriterPass(
     mi::mdl::Messages_impl                               &messages,
     bool                                                 enable_debug,
     mi::mdl::Df_handle_slot_mode                         df_handle_slot_mode,
-    mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list)
+    mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list,
+    bool                                                 enable_opt_remarks,
+    bool                                                 enable_noinline_support)
 {
-    return new SLWriterPass<hlsl::HLSLWriterBasePass>(
+    SLWriterPass<hlsl::HLSLWriterBasePass> *pass = new SLWriterPass<hlsl::HLSLWriterBasePass>(
         alloc,
         type_mapper,
         code,
@@ -4397,7 +4405,15 @@ llvm::Pass *createHLSLWriterPass(
         messages,
         enable_debug,
         exp_func_list,
-        df_handle_slot_mode);
+        df_handle_slot_mode,
+        enable_opt_remarks);
+
+    pass->set_noinline_mode(
+        enable_noinline_support ?
+            hlsl::IPrinter::ATTR_NOINLINE_WRAP :
+            hlsl::IPrinter::ATTR_NOINLINE_IGNORE);
+
+    return pass;
 }
 
 // Creates a GLSL writer pass.
@@ -4423,7 +4439,8 @@ llvm::Pass *createGLSLWriterPass(
         messages,
         enable_debug,
         exp_func_list,
-        df_handle_slot_mode);
+        df_handle_slot_mode,
+        /*enable_opt_remarks=*/false);
 }
 
 }  // sl

@@ -80,7 +80,7 @@ mi::neuraylib::ITile* unassociate_alpha(
 
 /// Wraps a reader into an input proxy.
 OIIO::Filesystem::IOProxy* create_input_proxy(
-    mi::neuraylib::IReader* reader, bool use_buffer, std::vector<char>& buffer);
+    mi::neuraylib::IReader* reader, bool use_buffer, std::vector<char>* buffer);
 
 /// Wraps a writer into an output proxy. Unused (slower than local buffer).
 OIIO::Filesystem::IOProxy* create_output_proxy( mi::neuraylib::IWriter* writer);
@@ -95,6 +95,45 @@ OIIO::Filesystem::IOProxy* create_output_proxy( mi::neuraylib::IWriter* writer);
 /// \param data           Data buffer.
 void expand_ya_to_rgba(
     int bpc, mi::Uint32 resolution_x, mi::Uint32 resolution_y, mi::Uint8* data);
+
+/// Computes properties that depend on the selector (and the image spec).
+///
+/// \note The following limitations apply for layer:
+///       - Channels of a layer need to be contiguous.
+///       - Channels of a layer need be sorted in RGB(A) order, followed by other channels.
+///       The limitations should be met for OpenEXR images because:
+///       - OpenEXR seems to sort channels by layers (no interleaving).
+///       - OpenImageIO sorts channels within a layer (RGB(A), followed by other channels).
+///
+/// \note The selector needs to match a channel name, or the name of a layer (selector plus dot as
+///       a prefix) without further nested layers (no more dots). For multipart images, the selector
+///       contains additionally the part name plus a dot as prefix. The restriction of no further
+///       nested layers could be lifted if there is only a \em single nested layer (the selector
+///       would still be unambiguous then) by checking that the longest common prefix does not
+///       contain a dot (and adapting the YA expansion check).
+///
+/// \param input                The image input. The method seeks to the returned subimage.
+/// \param selector             The selector (can be \c NULL).
+/// \param[out] subimage        The index of the subimage.
+/// \param[out] resolution_x    The resolution of the subimage in x-direction.
+/// \param[out] resolution_y    The resolution of the subimage in y-direction.
+/// \param[out] resolution_z    The resolution of the subimage in z-direction.
+/// \param[out] pixel_type      The pixel type of the subimage.
+/// \param[out] channel_names   The channel names (for layers: after stripping the selector prefix).
+/// \param[out] channel_start   The first channel index to import.
+/// \param[out] channel_end     The last channel index+1 to import.
+/// \return                     Success or failure.
+bool compute_properties(
+    OIIO::ImageInput* input,
+    const char* selector,
+    mi::Uint32& subimage,
+    mi::Uint32& resolution_x,
+    mi::Uint32& resolution_y,
+    mi::Uint32& resolution_z,
+    IMAGE::Pixel_type& pixel_type,
+    std::vector<std::string>& channel_names,
+    mi::Sint32& channel_start,
+    mi::Sint32& channel_end);
 
 } // namespace MI_OIIO
 

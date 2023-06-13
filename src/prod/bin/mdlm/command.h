@@ -47,9 +47,9 @@ namespace mdlm
         virtual int execute();
     };
 
-    /// Archive compatibilty command
+    /// Archive compatibility command
     /// 
-    /// Compatibity command checks that a new archive does not break compatibility
+    /// Compatibility command checks that a new archive does not break compatibility
     /// with an old installed one
     class Compatibility : public Command
     {
@@ -84,7 +84,7 @@ namespace mdlm
         int execute() override;
 
         /// \return status of the compatibility 
-        /// Need ot invoke execute() first.
+        /// Need to invoke execute() first.
         COMPATIBILITY compatibility() const { return m_compatible; }
 
         /// Will only test versions if set to trus
@@ -204,7 +204,7 @@ namespace mdlm
         ///		- INVALID_MDL_PATH: Invalid MDL path
         int execute() override;
 
-        /// Control wheter to report or not the result
+        /// Control whether to report or not the result
         void set_report(bool report)
         {
             m_report = report;

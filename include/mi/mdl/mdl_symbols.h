@@ -214,8 +214,8 @@ public:
 /// The interface of the symbol table.
 ///
 /// In MDL Core we use the classic terminology, a symbol table is _just_
-/// the table of all symbols in a programm, the association from symbols
-/// to definitions is handled by teh definition table.
+/// the table of all symbols in a program, the association from symbols
+/// to definitions is handled by the definition table.
 ///
 /// An ISymbol_table interface can be obtained by calling
 /// the method get_symbol_table() on the interfaces IModule and IType_factory.

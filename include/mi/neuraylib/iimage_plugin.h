@@ -41,10 +41,10 @@ namespace mi {
 namespace neuraylib {
 
 class IImage_file;
-class IWriter;
+class IPlugin_api;
 class IReader;
-
-class IPlugin_api; class ITile;
+class ITile;
+class IWriter;
 
 /**
     \if MDL_SDK_API
@@ -60,7 +60,7 @@ class IPlugin_api; class ITile;
 */
 
 /// Type of image plugins
-#define MI_NEURAY_IMAGE_PLUGIN_TYPE "image v31"
+#define MI_NEURAY_IMAGE_PLUGIN_TYPE "image v34"
 
 /// Abstract interface for image plugins.
 ///
@@ -71,10 +71,10 @@ class IPlugin_api; class ITile;
 ///
 /// Image plugins need to return #MI_NEURAY_IMAGE_PLUGIN_TYPE in #mi::base::Plugin::get_type().
 ///
-/// A plugin to support a certain image format is selected as follows. For import operations
-/// the file header is presented to each plugin for testing. Each plugin indicates whether it
-/// recognizes the header format and whether it can handle the image format. For export operations
-/// a matching plugin is selected according to the file name extension (see
+/// A plugin to support a certain image format is selected as follows. For import operations the
+/// reader is presented to each plugin for testing. Each plugin indicates whether it recognizes the
+/// header format and whether it can handle the image format. For export operations a matching
+/// plugin is selected according to the file name extension (see
 /// #mi::neuraylib::IImage_plugin::get_file_extension()).
 class IImage_plugin : public base::Plugin
 {
@@ -115,25 +115,40 @@ public:
     ///                bounds.
     virtual const char* get_supported_type( Uint32 index) const = 0;
 
-    /// Indicates whether the image plugin can handle a given file header.
-    ///
-    /// \param buffer      A buffer containing the first 512 bytes of the file. For very short
-    ///                    files the buffer might be even smaller (as indicated by \p file_size).
-    /// \param file_size   The total size of the file.
-    /// \return            \c true if the plugin can handle the file, \c false otherwise.
-    virtual bool test( const Uint8* buffer, Uint32 file_size) const = 0;
-
     /// Returns the priority of the image plugin.
     ///
     /// The priority expresses the confidence of the plugin that its #test() method can identify the
-    /// file and that the file format is fully supported.
+    /// image format and that the image format is fully supported.
     virtual Impexp_priority get_priority() const = 0;
 
-    /// Creates an object that writes an image to a file.
+    /// Indicates whether the image plugin implements selector support.
+    ///
+    /// \return         \c true if #open_for_reading() handles the \c selector parameter,
+    ///                 \c false otherwise. In the latter case a generic, possibly less efficient,
+    ///                 support for RGBA channel selectors only is applied to the tiles returned by
+    ///                 #mi::neuraylib::IImage_file::read() by the caller.
+    virtual bool supports_selectors() const = 0;
+
+    /// Indicates whether the image plugin can handle a given image.
+    ///
+    /// \param reader   A reader representing the stream to read from.
+    /// \return         \c true if the plugin can handle the image, \c false otherwise.
+    virtual bool test( IReader* reader) const = 0;
+
+    /// Creates an object that reads an image from a stream.
+    ///
+    /// This method is called to start an image import operation.
+    ///
+    /// \param reader         A reader representing the stream to read from.
+    /// \param selector       The selector (or \c NULL).
+    /// \return               The object that reads the image from the reader.
+    virtual IImage_file* open_for_reading( IReader* reader, const char* selector) const = 0;
+
+    /// Creates an object that writes an image to a stream.
     ///
     /// This method is called to start an image export operation.
     ///
-    /// \param writer         A writer representing the file to write to.
+    /// \param writer         A writer representing the stream to write to.
     /// \param pixel_type     The pixel type of the image tiles. This is one of the pixel types
     ///                       returned by #get_supported_type().
     /// \param resolution_x   The resolution of the image in x direction.
@@ -146,7 +161,7 @@ public:
     ///                       integer in the range from 0 to 100, where 0 is the lowest quality,
     ///                       and 100 is the highest quality. Support for compression quality is
     ///                       optional.
-    /// \return               The object that writes the image to a file.
+    /// \return               The object that writes the image to a stream.
     virtual IImage_file* open_for_writing(
         IWriter* writer,
         const char* pixel_type,
@@ -157,14 +172,6 @@ public:
         bool is_cubemap,
         Float32 gamma,
         Uint32 quality) const = 0;
-
-    /// Creates an object that reads an image to file.
-    ///
-    /// This method is called to start an image import operation.
-    ///
-    /// \param reader       A reader representing the file to read from.
-    /// \return             The object that reads the image from file.
-    virtual IImage_file* open_for_reading( IReader* reader) const = 0;
 };
 
 /// Abstract interface for image files.
@@ -175,7 +182,7 @@ class IImage_file
   : public base::Interface_declare<0x26db4186,0xace2,0x42e8,0xa0,0x3d,0xe0,0xfa,0xfc,0xed,0x05,0xf3>
 {
 public:
-    /// Returns the pixel type of the image.
+    /// Returns the pixel type of the image (or the requested channel).
     ///
     /// See \ref mi_neuray_types for a list of supported pixel types.
     virtual const char* get_type() const = 0;

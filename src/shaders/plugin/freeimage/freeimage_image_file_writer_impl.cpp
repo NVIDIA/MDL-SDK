@@ -87,7 +87,7 @@ Image_file_writer_impl::Image_file_writer_impl(
         m_bitmap = FreeImage_AllocateT( FIT_RGBAF,  m_resolution_x, m_resolution_y);
     else {
         assert( false);
-        m_bitmap = 0;
+        m_bitmap = nullptr;
     }
 
     bool unused = true; // avoid compiler warning
@@ -135,7 +135,7 @@ Image_file_writer_impl::~Image_file_writer_impl()
 const char* Image_file_writer_impl::get_type() const
 {
     if( !m_bitmap)
-        return 0;
+        return nullptr;
 
     bool unused = true; // avoid compiler warning
     return convert_freeimage_pixel_type_to_neuray_pixel_type( m_bitmap, unused);
@@ -192,7 +192,7 @@ bool Image_file_writer_impl::write(
 #if defined(DUMP_PIXEL_X) && defined(DUMP_PIXEL_Y)
     mi::math::Color c;
     tile->get_pixel( DUMP_PIXEL_X, DUMP_PIXEL_Y, &c.r);
-    std::cout << "FreeImage plugin writer: " 
+    std::cout << "FreeImage plugin writer: "
               << c.r << ' ' << c.g << ' ' << c.b << ' ' << c.a << std::endl;
 #endif
 

@@ -251,6 +251,13 @@ public:
         return true;
     }
 
+    // Visitor for a literal expression.
+    // Makes sure, no derivatives are requested for them.
+    bool pre_visit(IExpression_literal *expr) MDL_FINAL
+    {
+        return true;
+    }
+
     /// Post-visitor for a variable declaration.
     /// Collects variable initializers.
     void post_visit(IDeclaration_variable *var_decl) MDL_FINAL
@@ -472,6 +479,8 @@ public:
             case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3:
             case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
             case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
+            case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4X4:
+            case IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4X4:
                 // want-derivatives also applies to all (derivable) arguments, if set
                 return true;
 

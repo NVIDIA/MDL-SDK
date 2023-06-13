@@ -70,12 +70,12 @@ public:
 	BitArray *allSyncSets;      // union of all synchronisation sets
 	HashTable *literals;        // symbols that are used as literals
 
-	wchar_t* srcName;            // name of the atg file (including path)
-	wchar_t* srcDir;             // directory path of the atg file
-	wchar_t* nsName;             // namespace for generated files
-	wchar_t* tokenPrefix;        // prefix for generated tokens
-	wchar_t* frameDir;           // directory containing the frame files
-	wchar_t* outDir;             // directory for generated files
+	char* srcName;            // name of the atg file (including path)
+	char* srcDir;             // directory path of the atg file
+	char* nsName;             // namespace for generated files
+	char* tokenPrefix;        // prefix for generated tokens
+	char* frameDir;           // directory containing the frame files
+	char* outDir;             // directory for generated files
 	bool checkEOF;               // should coco generate a check for EOF at
 	                             // the end of Parser.Parse():
 	bool emitLines;              // emit line directives in generated parser
@@ -89,16 +89,16 @@ public:
 
 	Errors *errors;
 
-	ArrayList *terminals;
-	ArrayList *pragmas;
-	ArrayList *nonterminals;
+	ArrayList terminals;
+	ArrayList pragmas;
+	ArrayList nonterminals;
 
 
-	ArrayList *nodes;
+	ArrayList nodes;
 	static const char* nTyp[];
 	Node *dummyNode;
 
-	ArrayList *classes;
+	ArrayList classes;
 	int dummyName;
 
 
@@ -111,8 +111,8 @@ public:
 
 	static const char* tKind[];
 
-	Symbol* NewSym(Node::Kind typ, const wchar_t* name, int line);
-	Symbol* FindSym(const wchar_t* name);
+	Symbol* NewSym(Node::Kind typ, const char* name, int line);
+	Symbol* FindSym(const char* name);
 	int Num(Node *p);
 	void PrintSym(Symbol *sym);
 	void PrintSymbolTable();
@@ -132,34 +132,34 @@ public:
 	void MakeOption(Graph *g);
 	void Finish(Graph *g);
 	void DeleteNodes();
-	Graph* StrToGraph(const wchar_t* str);
+	Graph* StrToGraph(const char* str);
 	void SetContextTrans(Node *p); // set transition code in the graph rooted at p
 
 	//------------ graph deletability check -----------------
 
-	bool DelGraph(Node* p);
-	bool DelSubGraph(Node* p);
-	bool DelNode(Node* p);
+	bool DelGraph(Node const *p);
+	bool DelSubGraph(Node const *p);
+	bool DelNode(Node const *p);
 
 	//----------------- graph printing ----------------------
 
 	int Ptr(Node *p, bool up);
-	wchar_t* Pos(Position *pos);
-	wchar_t* Name(const wchar_t* name);
+	char* Pos(Position *pos);
+	char* Name(char const *name);
 	void PrintNodes();
 
 	//---------------------------------------------------------------------
 	//  Character class management
 	//---------------------------------------------------------------------
 
-	CharClass* NewCharClass(const wchar_t* name, CharSet *s);
-	CharClass* FindCharClass(const wchar_t* name);
+	CharClass* NewCharClass(char const *name, CharSet *s);
+	CharClass* FindCharClass(char const *name);
 	CharClass* FindCharClass(CharSet *s);
 	CharSet* CharClassSet(int i);
 
 	//----------- character class printing
 
-	wchar_t* Ch(const wchar_t ch);
+	char* Ch(char ch);
 	void WriteCharSet(CharSet *s);
 	void WriteCharClasses ();
 
@@ -191,10 +191,10 @@ public:
 	//  String handling
 	//---------------------------------------------------------------------
 
-	wchar_t  Hex2Char(const wchar_t* s);
-	wchar_t* Char2Hex(const wchar_t ch);
-	wchar_t* Unescape(const wchar_t* s);
-	wchar_t* Escape(const wchar_t* s);
+	char  Hex2Char(char const *s);
+	char *Char2Hex(char ch);
+	char *Unescape(char const *s);
+	char* Escape(char const *s);
 
 	//---------------------------------------------------------------------
 	//  Grammar checks
@@ -218,14 +218,21 @@ public:
 
 	//--------------- check for LL(1) errors ----------------------
 
-	void LL1Error(int cond, Symbol *sym);
-	void CheckOverlap(BitArray *s1, BitArray *s2, int cond);
+	enum LL1_error {
+		START_OF_SEVERL_ALTERNATIVES,
+		START_AND_SUCCESSOR_OF_DELETABLE,
+		ANY_NODE_MATCHES_NO_SYMBOL,
+		OPTIONAL_CONTENT_MUST_NOT_BE_DELETABLE,
+	};
+
+	void LL1Error(LL1_error err, Symbol *sym);
+	void CheckOverlap(BitArray const &s1, BitArray const &s2, LL1_error cond);
 	void CheckAlts(Node *p);
 	void CheckLL1();
 
 	//------------- check if resolvers are legal  --------------------
 
-	void ResErr(Node *p, const wchar_t* msg);
+	void ResErr(Node *p, const char* msg);
 	void CheckRes(Node *p, bool rslvAllowed);
 	void CheckResolvers();
 
@@ -248,8 +255,8 @@ public:
 	//---------------------------------------------------------------------
 
 	void XRef();
-	void SetDDT(const wchar_t* s);
-	void SetOption(const wchar_t* s);
+	void SetDDT(char const *s);
+	void SetOption(char const *s);
 
 };
 

@@ -69,7 +69,7 @@ protected:
  * are also owned by higher level objects like IModule or IGenerated_code_dag
  * which then are reference counted.
  *
- * Note that the ownership cannot be transfered. Especially it is illegal
+ * Note that the ownership cannot be transferred. Especially it is illegal
  * to use a type owned by one IModule (through its type factory) inside another module.
  * This can be the source of bad crashes.
  *

@@ -77,7 +77,7 @@ public:
 
 	Parser(Scanner *scanner, Errors *err);
 	~Parser();
-	void SemErr(const wchar_t* msg);
+	void SemErr(char const *msg);
 
 -->productionsheader
 	void Parse();
@@ -96,7 +96,6 @@ Parser.cpp Specification
 
 -->begin
 
-#include <wchar.h>
 #include "Parser.h"
 #include "Scanner.h"
 
@@ -108,7 +107,7 @@ void Parser::SynErr(int n) {
 	errDist = 0;
 }
 
-void Parser::SemErr(const wchar_t* msg) {
+void Parser::SemErr(char const *msg) {
 	if (errDist >= minErrDist) errors->Error(t, msg);
 	errDist = 0;
 }
@@ -250,7 +249,7 @@ struct ParserDestroyCaller<T, true> {
 void Parser::Parse() {
 	t = NULL;
 	la = dummyToken = scanner->CreateToken();
-	la->val = L"Dummy Token";
+	la->val = "Dummy Token";
 	Get();
 -->parseRoot
 }
@@ -285,28 +284,33 @@ Errors::Errors()
 }
 
 void Errors::SynErr(Token const *la, int n) {
-	wchar_t format[20];
-	const wchar_t* s = format;
+	char format[20];
+	char const *s = format;
 	switch (n) {
 -->errors
 		default:
-			coco_swprintf(format, 20, L"error %d", n);
+			coco_snprintf(format, sizeof(format), "error %d", n);
 			break;
 	}
 	Error(la, s);
 }
 
-void Errors::Error(Token const *t, const wchar_t *s) {
-	wprintf(L"-- line %d col %d: %ls\n", t->line, t->col, s);
+void Errors::Error(Token const *t, const char *s) {
+	printf("-- line %d col %d: %s\n", t->line, t->col, s);
 	count++;
 }
 
-void Errors::Warning(int line, int col, const wchar_t *s) {
-	wprintf(L"-- line %d col %d: %ls\n", line, col, s);
+void Errors::Warning(int line, int col, char const *s) {
+	printf("-- line %d col %d: %s\n", line, col, s);
 }
 
 void Errors::Error(int line, int col, int code, Error_params const &params) {
-	wprintf(L"-- line %d col %d: Error code %d\n", line, col, code);
+	printf("-- line %d col %d: Error code %d\n", line, col, code);
+	count++;
+}
+
+void Errors::Warning(int line, int col, int code, Error_params const &params) {
+	printf("-- line %d col %d: Warning code %d\n", line, col, code);
 	count++;
 }
 

@@ -126,6 +126,11 @@ WARN_LOGFILE           =
 #---------------------------------------------------------------------------
 INPUT                  = . \
                          ../../include/mi/mdl_sdk.h \
+                         ../../include/mi/mdl/mdl_distiller_plugin.h \
+                         ../../include/mi/mdl/mdl_distiller_plugin_api.h \
+                         ../../include/mi/mdl/mdl_distiller_options.h \
+                         ../../include/mi/mdl/mdl_distiller_rules.h \
+                         ../../include/mi/mdl/mdl_generated_dag.h \
                          ../../include/mi/neuraylib/annotation_wrapper.h \
                          ../../include/mi/neuraylib/argument_editor.h \
                          ../../include/mi/neuraylib/assert.h \
@@ -160,7 +165,6 @@ INPUT                  = . \
                          ../../include/mi/neuraylib/iimpexp_base.h \
                          ../../include/mi/neuraylib/ilightprofile.h \
                          ../../include/mi/neuraylib/imap.h \
-                         ../../include/mi/neuraylib/imaterial_definition.h \
                          ../../include/mi/neuraylib/imaterial_instance.h \
                          ../../include/mi/neuraylib/imatrix.h \
                          ../../include/mi/neuraylib/imdl_archive_api.h \
@@ -170,6 +174,7 @@ INPUT                  = . \
                          ../../include/mi/neuraylib/imdl_compiler.h \
                          ../../include/mi/neuraylib/imdl_configuration.h \
                          ../../include/mi/neuraylib/imdl_discovery_api.h \
+                         ../../include/mi/neuraylib/imdl_distiller_api.h \
                          ../../include/mi/neuraylib/imdl_entity_resolver.h \
                          ../../include/mi/neuraylib/imdl_evaluator_api.h \
                          ../../include/mi/neuraylib/imdl_execution_context.h \
@@ -236,7 +241,7 @@ EXAMPLE_PATH           = . \
                          ../../examples/mdl_sdk
 EXAMPLE_PATTERNS       =
 EXAMPLE_RECURSIVE      = NO
-IMAGE_PATH             =
+IMAGE_PATH             = .
 INPUT_FILTER           = 
 FILTER_PATTERNS        =
 FILTER_SOURCE_FILES    = NO
@@ -265,10 +270,10 @@ IGNORE_PREFIX          =
 GENERATE_HTML          = YES
 HTML_OUTPUT            = html
 HTML_FILE_EXTENSION    = .html
-HTML_HEADER            = ../build/doxygen_header_1_9_4.html
-HTML_FOOTER            = ../build/doxygen_footer_1_9_4.html
+HTML_HEADER            = ../build/doxygen_header.html
+HTML_FOOTER            = ../build/doxygen_footer.html
 HTML_STYLESHEET        =
-HTML_EXTRA_STYLESHEET  = ../css/doxygen_custom_stylesheet_1_9_4.css
+HTML_EXTRA_STYLESHEET  = ../css/doxygen_custom_stylesheet.css
 HTML_EXTRA_FILES       =
 HTML_COLORSTYLE_HUE    = 120
 HTML_COLORSTYLE_SAT    = 8
@@ -327,7 +332,7 @@ EXTRA_SEARCH_MAPPINGS  =
 #---------------------------------------------------------------------------
 # Configuration options related to the LaTeX output
 #---------------------------------------------------------------------------
-GENERATE_LATEX         = YES
+GENERATE_LATEX         = NO
 LATEX_OUTPUT           = latex
 LATEX_CMD_NAME         = latex
 MAKEINDEX_CMD_NAME     = makeindex
@@ -448,7 +453,7 @@ DIRECTORY_GRAPH        = NO
 DIR_GRAPH_MAX_DEPTH    = 1
 DOT_IMAGE_FORMAT       = png
 INTERACTIVE_SVG        = NO
-DOT_PATH               = .
+DOT_PATH               = 
 DOTFILE_DIRS           =
 MSCFILE_DIRS           =
 DIAFILE_DIRS           =

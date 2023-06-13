@@ -42,7 +42,7 @@
 #include "pch.h"
 
 #include <base/lib/mem/i_mem_allocatable.h>
-#include <base/lib/log/log.h>
+#include <base/lib/log/i_log_stream.h>
 
 #include "i_serial_buffer_serializer.h"
 
@@ -56,22 +56,13 @@ namespace SERIAL
 // Constructor
 Buffer_serializer::Buffer_serializer()
 {
-    m_buffer = NULL;
     reset();
-}
-
-// Destructor
-Buffer_serializer::~Buffer_serializer()
-{
-    MEM::delete_array<Uint8>(m_buffer);
 }
 
 // Reset it so that it can be reused
 void Buffer_serializer::reset()
 {
-    MEM::delete_array<Uint8>(m_buffer);
-    m_buffer_size = 1024;
-    m_buffer = MEM::new_array<Uint8>(m_buffer_size);
+    m_buffer.resize(1024);
     m_written_size = 0;
     clear_shared_objects();
 }
@@ -79,15 +70,16 @@ void Buffer_serializer::reset()
 // Get the buffer holding the serialized data
 Uint8* Buffer_serializer::get_buffer()
 {
-    return m_buffer;
+    return m_buffer.empty() ? nullptr : m_buffer.data();
 }
 
 // Get the buffer, detaching it from the serializer
-Uint8* Buffer_serializer::takeover_buffer()
+std::vector<Uint8> Buffer_serializer::takeover_buffer()
 {
-    Uint8* buffer = m_buffer;
-    m_buffer = NULL;
-    return buffer;
+    std::vector<Uint8> buf;
+    buf.swap(m_buffer);
+    m_written_size = 0;
+    return buf;
 }
 
 // Get the size of the buffer holding the serialized data
@@ -100,15 +92,15 @@ size_t Buffer_serializer::get_buffer_size()
 void Buffer_serializer::ensure_size(
     size_t needed_size)					// the needed size
 {
-    if (m_buffer_size - m_written_size < needed_size)
+    size_t buffer_size = m_buffer.size();
+    if (buffer_size - m_written_size < needed_size)
     {
-    while (m_buffer_size - m_written_size < needed_size)
-        m_buffer_size *= 2;
-    Uint8* new_buffer = MEM::new_array<Uint8>(m_buffer_size);
-    memcpy(new_buffer, m_buffer, m_written_size);
-    MEM::delete_array<Uint8>(m_buffer);
-    m_buffer = new_buffer;
+    while (buffer_size - m_written_size < needed_size)
+        buffer_size *= 2;
+    ASSERT(M_SERIAL,buffer_size > m_buffer.size());
+    m_buffer.resize(buffer_size);
     }
+    ASSERT(M_SERIAL,m_buffer.size() >= m_written_size + needed_size);
 }
 
 // Write out various value types
@@ -117,20 +109,16 @@ void Buffer_serializer::write_impl(
     size_t size)					// write this amount of data
 {
     ensure_size(size);
-    memcpy(m_buffer + m_written_size, buffer, size);
+    memcpy(m_buffer.data() + m_written_size, buffer, size);
     m_written_size += size;
 }
 
 void Buffer_serializer::reserve(
     size_t needed_size)
 {
-    if (m_buffer_size - m_written_size < needed_size)
+    if (m_buffer.size() - m_written_size < needed_size)
     {
-    m_buffer_size = m_written_size + needed_size;
-    Uint8* new_buffer = MEM::new_array<Uint8>(m_buffer_size);
-    memcpy(new_buffer, m_buffer, m_written_size);
-    MEM::delete_array<Uint8>(m_buffer);
-    m_buffer = new_buffer;
+    m_buffer.resize(m_written_size + needed_size);
     }
 }
 
@@ -144,11 +132,6 @@ Buffer_deserializer::Buffer_deserializer(
       m_read_pointer(NULL),
       m_buffer_size(0),
       m_valid(true)
-{
-}
-
-// Destructor
-Buffer_deserializer::~Buffer_deserializer()
 {
 }
 
@@ -188,6 +171,10 @@ Serializable* Buffer_deserializer::deserialize(
     return serializable;
     }
 
+    LOG::MESSAGE::Error{M_SERIAL, LOG::Mod_log::C_MISC} << "Buffer deserializer: "
+            "buffer underflow while trying to read " << (m_read_pointer-m_buffer) << " B "
+            "of type 0x" << std::hex << serializable->get_class_id() << std::dec
+            << " with only " << buffer_size << " B available.";
     //fprintf(stderr, "Buffer underflow while deserializing object %u %u\n",
     //buffer_size, m_read_pointer - m_buffer);
     abort();
@@ -212,6 +199,10 @@ void Buffer_deserializer::deserialize(
     return;
     }
 
+    LOG::MESSAGE::Error{M_SERIAL, LOG::Mod_log::C_MISC} << "Buffer deserializer: "
+            "buffer underflow while trying to read " << (m_read_pointer-m_buffer) << " B "
+            "of type 0x" << std::hex << serializable->get_class_id() << std::dec
+            << " with only " << buffer_size << " B available.";
     //fprintf(stderr, "Buffer underflow while deserializing object\n");
     abort();
 }
@@ -227,8 +218,11 @@ void Buffer_deserializer::read_impl(
         // Note: this should really be fatal because there is no good way to recover from this.
         // However, a few code paths which use this function support a user defined callback that
         // is invoked for deserialization errors.
-        LOG::mod_log->error(M_SERIAL, LOG::Mod_log::C_MISC, "Buffer deserializer: "
-                            "reading beyond end of buffer");
+        LOG::MESSAGE::Error{M_SERIAL, LOG::Mod_log::C_MISC} << "Buffer deserializer: "
+                            "reading beyond end of buffer.\n"
+                            "Cannot read " << size << " B from buffer with "
+                            << (m_buffer_size - (m_read_pointer - m_buffer)) << " B out of "
+                            << m_buffer_size << " B remaining.";
         return;
     }
 

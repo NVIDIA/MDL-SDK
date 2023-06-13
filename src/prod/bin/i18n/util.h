@@ -107,14 +107,14 @@ public:
     /// Normalize path, see MI::HAL::Ospath::normpath()
     static std::string normalize(const std::string & path);
 
-    /// Remove directories wich are duplicates in the input list of directories.
+    /// Remove directories which are duplicates in the input list of directories.
     /// Implemented using boost Path and boost::filesystem::equivalent
     static bool remove_duplicate_directories(std::vector<std::string> & directories);
 
     /// Copy file
     static bool copy_file(std::string const & source, std::string const & destination);
 
-    /// Aray of char * to vector of strings
+    /// Array of char * to vector of strings
     ///
     static void array_to_vector(int ac, char *av[], std::vector<std::string> & v);
 

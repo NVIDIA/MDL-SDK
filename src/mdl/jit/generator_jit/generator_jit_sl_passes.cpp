@@ -93,19 +93,25 @@ private:
     ///
     /// \param select      the Select instruction
     /// \param to_remove   list of instructions to remove AFTER the transformation
-    void handlePointerSelect(
+    ///
+    /// \return false if the select instruction could not be removed
+    bool handlePointerSelect(
         llvm::SelectInst                          &select,
         llvm::SmallVector<llvm::Instruction *, 4> &to_remove);
+
+private:
+    std::queue<llvm::SelectInst *> m_queue;
 };
 
 // Constructor.
 HandlePointerSelects::HandlePointerSelects()
 : FunctionPass( ID )
+, m_queue()
 {
 }
 
 // Transform an identified Select instruction.
-void HandlePointerSelects::handlePointerSelect(
+bool HandlePointerSelects::handlePointerSelect(
     llvm::SelectInst                          &select,
     llvm::SmallVector<llvm::Instruction *, 4> &to_remove)
 {
@@ -130,6 +136,7 @@ void HandlePointerSelects::handlePointerSelect(
 
     llvm::IRBuilder<> ir_builder(&select);
 
+    bool all_users = true;
     for (auto user : select.users()) {
         if (llvm::LoadInst *load = llvm::dyn_cast<llvm::LoadInst>(user)) {
             llvm::Instruction *then_term = nullptr;
@@ -165,13 +172,30 @@ void HandlePointerSelects::handlePointerSelect(
 
                 to_remove.push_back(store);
             } else {
-                // the address is stored here, we cannot handle it
+                // the address is stored here, we cannot handle it, give up
                 MDL_ASSERT(!"Stores of pointers are unsupported");
+                return false;
             }
+        } else if (llvm::SelectInst *user_select = llvm::dyn_cast<llvm::SelectInst>(user)) {
+            if (llvm::isa<llvm::PointerType>(user_select->getType())) {
+                // a nested select, enqueue the first again, assume user_select will be in
+                // the queue
+                m_queue.push(&select);
+            }
+            all_users = false;
         } else {
-            // the user is neither a Load nor a Store, we cannot handle it
+            // the user is neither a Load nor a Store, we cannot handle it:
+            // as this could lead to an endless loop IFF this is a nested select, give up
+            // here
+            return false;
         }
     }
+    if (all_users) {
+        // note: we can remove the select itself, IFF all users where removed. This is necessary,
+        // so selects below will not stop because of "dead" select users
+        to_remove.push_back(&select);
+    }
+    return true;
 }
 
 // Return a nice clean name for a pass.
@@ -182,27 +206,40 @@ llvm::StringRef HandlePointerSelects::getPassName() const {
 // Process a function.
 bool HandlePointerSelects::runOnFunction(llvm::Function &function)
 {
-    llvm::SmallVector<llvm::Instruction *, 4> to_remove;
-
     // always insert new blocks after "end" to avoid iterating over them
     for (llvm::Function::iterator BI = function.begin(); BI != function.end(); ++BI) {
         for (llvm::BasicBlock::iterator II = BI->begin(); II != BI->end(); ++II) {
             if (llvm::SelectInst *select = llvm::dyn_cast<llvm::SelectInst>(II)) {
                 if (llvm::isa<llvm::PointerType>(select->getType())) {
-                    handlePointerSelect(*select, to_remove);
+                    // enqueue it
+                    m_queue.push(select);
                 }
             }
         }
     }
 
-    if (!to_remove.empty()) {
-        for (llvm::Instruction *inst : to_remove) {
-            inst->eraseFromParent();
+    bool result = false;
+    llvm::SmallVector<llvm::Instruction *, 4> to_remove;
+    while (!m_queue.empty()) {
+        llvm::SelectInst *select = m_queue.front();
+        m_queue.pop();
+
+        if (!handlePointerSelect(*select, to_remove)) {
+            // give up
+            break;
         }
-        return true;
+
+        if (!to_remove.empty()) {
+            // remove dead code, to move nested selects to top
+            for (llvm::Instruction *inst : to_remove) {
+                inst->eraseFromParent();
+                result = true;
+            }
+            to_remove.clear();
+        }
     }
 
-    return false;
+    return result;
 }
 
 char HandlePointerSelects::ID = 0;

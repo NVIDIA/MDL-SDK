@@ -53,7 +53,7 @@
 /// of the interfaces offered through the shared library have changed.
 ///
 /// Despite the name, this number tracks \em ABI changes, not \em API changes.
-#define MI_NEURAYLIB_API_VERSION  49
+#define MI_NEURAYLIB_API_VERSION  51
 
 // The following three to four macros define the API version.
 // The macros thereafter are defined in terms of the first four.
@@ -97,31 +97,11 @@
 #endif // MI_NEURAYLIB_VERSION_QUALIFIER_EMPTY
 
 /// \NeurayProductName product version number in a string representation, such as \c "2.0".
-#define MI_NEURAYLIB_PRODUCT_VERSION_STRING  "2022.1.7"
+#define MI_NEURAYLIB_PRODUCT_VERSION_STRING  "2023.0.0"
 
 /// Type of plugins for the \NeurayApiName.
 /// \see #mi::base::Plugin::get_type().
-#define MI_NEURAYLIB_PLUGIN_TYPE "neuray API v41"
-
-// Enables features that were deprecated with version 11.1.
-// #define MI_NEURAYLIB_DEPRECATED_11_1
-
-// Prefixes names of deprecated methods unless deprecated features are enabled.
-#ifdef MI_NEURAYLIB_DEPRECATED_11_1
-#define MI_NEURAYLIB_DEPRECATED_METHOD_11_1(X) X
-#else
-#define MI_NEURAYLIB_DEPRECATED_METHOD_11_1(X) deprecated_##X
-#endif
-
-// Enables features that were deprecated with version 12.0.
-// #define MI_NEURAYLIB_DEPRECATED_12_0
-
-// Prefixes names of deprecated methods unless deprecated features are enabled.
-#ifdef MI_NEURAYLIB_DEPRECATED_12_0
-#define MI_NEURAYLIB_DEPRECATED_METHOD_12_0(X) X
-#else
-#define MI_NEURAYLIB_DEPRECATED_METHOD_12_0(X) deprecated_##X
-#endif
+#define MI_NEURAYLIB_PLUGIN_TYPE "neuray API v43"
 
 // Enables features that were deprecated with version 12.1.
 // #define MI_NEURAYLIB_DEPRECATED_12_1
@@ -133,16 +113,19 @@
 #define MI_NEURAYLIB_DEPRECATED_METHOD_12_1(X) deprecated_##X
 #endif
 
-
-// Enables features that were deprecated with version 13.0.
-// #define MI_NEURAYLIB_DEPRECATED_13_0
+// Enables features that were deprecated with version 14.0.
+// #define MI_NEURAYLIB_DEPRECATED_14_0
 
 // Prefixes names of deprecated methods unless deprecated features are enabled.
-#ifdef MI_NEURAYLIB_DEPRECATED_13_0
-#define MI_NEURAYLIB_DEPRECATED_METHOD_13_0(X) X
+#ifdef MI_NEURAYLIB_DEPRECATED_14_0
+#define MI_NEURAYLIB_DEPRECATED_METHOD_14_0(X) X
 #else
-#define MI_NEURAYLIB_DEPRECATED_METHOD_13_0(X) deprecated_##X
+#define MI_NEURAYLIB_DEPRECATED_METHOD_14_0(X) deprecated_##X
 #endif
+
+// Enables the deprecated default privacy level of zero in
+// #mi::neuraylib::ITransaction::copy().
+// #define MI_NEURAYLIB_DEPRECATED_ITRANSACTION_COPY_DEFAULT_PRIVACY_LEVEL_ZERO
 
 #ifdef MI_NEURAYLIB_DEPRECATED_LEGACY_MDL_API
 #ifdef MI_PLATFORM_WINDOWS
@@ -239,6 +222,22 @@
 #pragma message("Support for macro MI_NEURAYLIB_DEPRECATED_9_1 has been removed")
 #else
 #warning Support for macro MI_NEURAYLIB_DEPRECATED_9_1 has been removed
+#endif
+#endif
+
+#ifdef MI_NEURAYLIB_DEPRECATED_11_1
+#ifdef MI_PLATFORM_WINDOWS
+#pragma message("Support for macro MI_NEURAYLIB_DEPRECATED_11_1 has been removed")
+#else
+#warning Support for macro MI_NEURAYLIB_DEPRECATED_11_1 has been removed
+#endif
+#endif
+
+#ifdef MI_NEURAYLIB_DEPRECATED_13_0
+#ifdef MI_PLATFORM_WINDOWS
+#pragma message("Support for macro MI_NEURAYLIB_DEPRECATED_13_0 has been removed")
+#else
+#warning Support for macro MI_NEURAYLIB_DEPRECATED_13_0 has been removed
 #endif
 #endif
 

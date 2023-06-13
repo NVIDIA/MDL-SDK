@@ -69,18 +69,22 @@ std::string hash_to_string( const mi::base::Uuid& hash)
 
 } // namespace
 
-IMAGE::IMipmap* Image_set::create_mipmap( mi::Size f, mi::Size i) const
+IMAGE::IMipmap* Image_set::create_mipmap( mi::Size f, mi::Size i, mi::Sint32& errors) const
 {
     ASSERT( M_SCENE, f < get_length());
     ASSERT( M_SCENE, i < get_frame_length( f));
+
+    errors = 0;
 
     SYSTEM::Access_module<IMAGE::Image_module> image_module( false);
 
     // mdl container based
     if( is_mdl_container()) {
         mi::base::Handle<mi::neuraylib::IReader> reader( open_reader( f, i));
-        if( !reader)
+        if( !reader) {
+            errors = 5;
             return image_module->create_dummy_mipmap();
+        }
 
         const char* container_filename = get_container_filename();
         const char* container_membername = get_container_membername( f, i);
@@ -93,7 +97,8 @@ IMAGE::IMipmap* Image_set::create_mipmap( mi::Size f, mi::Size i) const
             container_filename,
             container_membername,
             selector,
-            /*only_first_level*/ true);
+            /*only_first_level*/ true,
+            &errors);
     }
 
     // file based
@@ -101,9 +106,11 @@ IMAGE::IMipmap* Image_set::create_mipmap( mi::Size f, mi::Size i) const
     if( resolved_filename && (resolved_filename[0] != '\0')) {
         const char* selector = get_selector();
         return image_module->create_mipmap(
+            IMAGE::File_based(),
             resolved_filename,
             selector,
-            /*only_first_level*/ true);
+            /*only_first_level*/ true,
+            &errors);
     }
 
     // canvas based
@@ -127,9 +134,11 @@ IMAGE::IMipmap* Image_set::create_mipmap( mi::Size f, mi::Size i) const
             image_format,
             selector,
             mdl_file_path && (mdl_file_path[0] != '\0') ? mdl_file_path : nullptr,
-            /*only_first_level*/ true);
+            /*only_first_level*/ true,
+            &errors);
     }
 
+    errors = -99;
     return image_module->create_dummy_mipmap();
 }
 
@@ -452,7 +461,7 @@ mi::Sint32 Image::reset_file(
 {
     mi::base::Handle<Image_set> image_set( resolve_filename( original_filename, selector));
     if( !image_set)
-        return -2;
+        return -4;
 
     return reset_image_set( transaction, image_set.get(), impl_hash);
 }
@@ -464,7 +473,7 @@ mi::Sint32 Image::reset_reader(
     const char* selector,
     const mi::base::Uuid& impl_hash)
 {
-    mi::Sint32 result = 0;
+    mi::Sint32 errors = 0;
     SYSTEM::Access_module<IMAGE::Image_module> image_module( false);
     mi::base::Handle<IMAGE::IMipmap> mipmap( image_module->create_mipmap(
         IMAGE::Memory_based(),
@@ -473,9 +482,9 @@ mi::Sint32 Image::reset_reader(
         selector,
         /*mdl_file_path*/ nullptr,
         /*only_first_level*/ true,
-        &result));
-    if( result < 0)
-        return result;
+        &errors));
+    if( errors != 0)
+        return errors;
 
     // Convert data from mipmap into temporary variables
     Frames tmp_frames( 1);
@@ -531,7 +540,7 @@ mi::Sint32 Image::reset_image_set(
         const mi::Size frame_number = image_set->get_frame_number( f);
         if( (f > 0) && (frame_number <= tmp_frames.back().m_frame_number)) {
             ASSERT( M_SCENE, !"wrong frame order");
-            return -6;
+            return -99;
         }
 
         // Compute min/max u/v value of all tiles for this frame.
@@ -562,14 +571,15 @@ mi::Sint32 Image::reset_image_set(
 
             image_set->get_uvtile_uv( f, i, u, v);
             if( !frame.m_uv_to_id.set( u, v, static_cast<mi::Uint32>( i)))
-                return -7;
+                return -12;
 
             Uvtile& tile = frame.m_uvtiles[i];
             tile.m_u = u;
             tile.m_v = v;
-            tile.m_mipmap = image_set->create_mipmap( f, i);
-            if( !tile.m_mipmap)
-                return -3;
+            mi::Sint32 errors = 0;
+            tile.m_mipmap = image_set->create_mipmap( f, i, errors);
+            if( errors != 0)
+                return errors;
 
             Uvfilenames& filenames = frame_filenames[i];
             filenames.m_resolved_filename    = image_set->get_resolved_filename( f, i);
@@ -602,7 +612,10 @@ mi::Sint32 Image::reset_image_set(
 }
 
 void Image::set_mipmap(
-    DB::Transaction* transaction, IMAGE::IMipmap* mipmap, const mi::base::Uuid& impl_hash)
+    DB::Transaction* transaction,
+    IMAGE::IMipmap* mipmap,
+    const char* selector,
+    const mi::base::Uuid& impl_hash)
 {
     mi::base::Handle<IMAGE::IMipmap> tmp_mipmap;
     if( !mipmap) {
@@ -628,7 +641,7 @@ void Image::set_mipmap(
     m_mdl_file_path.clear();
     m_resolved_container_filename.clear();
     m_frames_filenames = tmp_frames_filenames;
-    m_selector.clear();
+    m_selector = selector ? selector : "";
 
     ASSERT( M_SCENE, m_frames_filenames.size() == m_cached_frames.size());
 }
@@ -1309,8 +1322,7 @@ Image_set* Image::resolve_filename( const std::string& filename, const char* sel
         if( !resolved_filename.empty())
             return new File_image_set( filename, selector, resolved_filename);
 
-        std::string lower( filename);
-        STRING::to_lower( lower);
+        std::string lower = STRING::to_lower( filename);
 
         auto p = lower.find( ".mdr:");
         if( p != std::string::npos) {

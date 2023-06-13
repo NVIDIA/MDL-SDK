@@ -49,63 +49,44 @@ Coco/R itself) does not fall under the GNU General Public License.
 
 using namespace Coco;
 
-#ifdef _WIN32
-int wmain(int argc, wchar_t *argv[]) {
-#elif defined __GNUC__
-int main(int argc, char *argv_[]) {
-	wchar_t ** argv = new wchar_t*[argc];
-	for (int i = 0; i < argc; ++i) {
-		argv[i] = coco_string_create(argv_[i]);
-	}
-#else
-#error unknown compiler!
-#endif
+int main(int argc, char *argv[]) {
 
-	wprintf(L"Coco/R (Jul 7, 2021, NVidia modified)\n");
+	printf("Coco/R (Mar 22, 2023, NVidia modified)\n");
 
-	wchar_t *srcName = NULL;
-	wchar_t *nsName = NULL;
-	wchar_t *tokenPrefix = NULL;
-	wchar_t *frameDir = NULL;
-	wchar_t *ddtString = NULL;
-	wchar_t *traceFileName = NULL;
-	wchar_t *outDir = NULL;
-	char *chTrFileName = NULL;
+	char *srcName = NULL;
+	char *nsName = NULL;
+	char *tokenPrefix = NULL;
+	char *frameDir = NULL;
+	char *ddtString = NULL;
+	char *traceFileName = NULL;
+	char *outDir = NULL;
 	bool emitLines = false;
 	bool suppressRslvWarning = false;
 
 	for (int i = 1; i < argc; i++) {
-		if (coco_string_equal(argv[i], L"-namespace") && i < argc - 1) nsName = coco_string_create(argv[++i]);
-		else if (coco_string_equal(argv[i], L"-token_prefix") && i < argc - 1) tokenPrefix = coco_string_create(argv[++i]);
-		else if (coco_string_equal(argv[i], L"-frames") && i < argc - 1) frameDir = coco_string_create(argv[++i]);
-		else if (coco_string_equal(argv[i], L"-trace") && i < argc - 1) ddtString = coco_string_create(argv[++i]);
-		else if (coco_string_equal(argv[i], L"-o") && i < argc - 1) outDir = coco_string_create_append(argv[++i], L"/");
-		else if (coco_string_equal(argv[i], L"-lines")) emitLines = true;
-		else if (coco_string_equal(argv[i], L"-no_misplaced_resolver")) suppressRslvWarning = true;
+		if (coco_string_equal(argv[i], "-namespace") && i < argc - 1) nsName = coco_string_create(argv[++i]);
+		else if (coco_string_equal(argv[i], "-token_prefix") && i < argc - 1) tokenPrefix = coco_string_create(argv[++i]);
+		else if (coco_string_equal(argv[i], "-frames") && i < argc - 1) frameDir = coco_string_create(argv[++i]);
+		else if (coco_string_equal(argv[i], "-trace") && i < argc - 1) ddtString = coco_string_create(argv[++i]);
+		else if (coco_string_equal(argv[i], "-o") && i < argc - 1) outDir = coco_string_create_append(argv[++i], "/");
+		else if (coco_string_equal(argv[i], "-lines")) emitLines = true;
+		else if (coco_string_equal(argv[i], "-no_misplaced_resolver")) suppressRslvWarning = true;
 		else srcName = coco_string_create(argv[i]);
 	}
-
-#if defined __GNUC__
-	for (int i = 0; i < argc; ++i) {
-		coco_string_delete(argv[i]);
-	}
-	delete [] argv; argv = NULL;
-#endif
 
 	if (argc > 0 && srcName != NULL) {
 		int pos = coco_string_lastindexof(srcName, '/');
 		if (pos < 0) pos = coco_string_lastindexof(srcName, '\\');
-		wchar_t* file = coco_string_create(srcName);
-		wchar_t* srcDir = coco_string_create(srcName, 0, pos+1);
+		char* file = coco_string_create(srcName);
+		char* srcDir = coco_string_create(srcName, 0, pos+1);
 
 		Coco::Scanner *scanner = new Coco::Scanner(file);
 		Coco::Parser  *parser  = new Coco::Parser(scanner);
 
-		traceFileName = coco_string_create_append(outDir != NULL ? outDir : srcDir, L"trace.txt");
-		chTrFileName = coco_string_create_char(traceFileName);
+		traceFileName = coco_string_create_append(outDir != NULL ? outDir : srcDir, "trace.txt");
 
-		if ((parser->trace = fopen(chTrFileName, "w")) == NULL) {
-			wprintf(L"-- could not open %hs\n", chTrFileName);
+		if ((parser->trace = fopen(traceFileName, "w")) == NULL) {
+			printf("-- could not open %s\n", traceFileName);
 			exit(1);
 		}
 
@@ -116,7 +97,7 @@ int main(int argc, char *argv_[]) {
 		parser->tab->srcName  = coco_string_create(srcName);
 		parser->tab->srcDir   = coco_string_create(srcDir);
 		parser->tab->nsName   = nsName ? coco_string_create(nsName) : NULL;
-		parser->tab->tokenPrefix = tokenPrefix ? coco_string_create(tokenPrefix) : coco_string_create(L"_");
+		parser->tab->tokenPrefix = tokenPrefix ? coco_string_create(tokenPrefix) : coco_string_create("_");
 		parser->tab->frameDir = coco_string_create(frameDir);
 		parser->tab->outDir   = coco_string_create(outDir != NULL ? outDir : srcDir);
 		parser->tab->emitLines = emitLines;
@@ -131,17 +112,17 @@ int main(int argc, char *argv_[]) {
 		fclose(parser->trace);
 
 		// obtain the FileSize
-		parser->trace = fopen(chTrFileName, "r");
+		parser->trace = fopen(traceFileName, "r");
 		fseek(parser->trace, 0, SEEK_END);
 		long fileSize = ftell(parser->trace);
 		fclose(parser->trace);
 		if (fileSize == 0) {
-			remove(chTrFileName);
+			remove(traceFileName);
 		} else {
-			wprintf(L"trace output is in %hs\n", chTrFileName);
+			printf("trace output is in %s\n", traceFileName);
 		}
 
-		wprintf(L"%d errors detected\n", parser->errors->count);
+		printf("%d errors detected\n", parser->errors->count);
 		if (parser->errors->count != 0) {
 			exit(1);
 		}
@@ -154,24 +135,24 @@ int main(int argc, char *argv_[]) {
 		coco_string_delete(file);
 		coco_string_delete(srcDir);
 	} else {
-		wprintf(L"Usage: Coco Grammar.ATG {Option}\n");
-		wprintf(L"Options:\n");
-		wprintf(L"  -namespace <namespaceName>\n");
-		wprintf(L"  -frames    <frameFilesDirectory>\n");
-		wprintf(L"  -trace     <traceString>\n");
-		wprintf(L"  -o         <outputDirectory>\n");
-		wprintf(L"  -lines\n");
-		wprintf(L"Valid characters in the trace string:\n");
-		wprintf(L"  A  trace automaton\n");
-		wprintf(L"  F  list first/follow sets\n");
-		wprintf(L"  G  print syntax graph\n");
-		wprintf(L"  I  trace computation of first sets\n");
-		wprintf(L"  J  list ANY and SYNC sets\n");
-		wprintf(L"  P  print statistics\n");
-		wprintf(L"  S  list symbol table\n");
-		wprintf(L"  X  list cross reference table\n");
-		wprintf(L"Scanner.frame and Parser.frame files needed in ATG directory\n");
-		wprintf(L"or in a directory specified in the -frames option.\n");
+		printf("Usage: Coco Grammar.ATG {Option}\n");
+		printf("Options:\n");
+		printf("  -namespace <namespaceName>\n");
+		printf("  -frames    <frameFilesDirectory>\n");
+		printf("  -trace     <traceString>\n");
+		printf("  -o         <outputDirectory>\n");
+		printf("  -lines\n");
+		printf("Valid characters in the trace string:\n");
+		printf("  A  trace automaton\n");
+		printf("  F  list first/follow sets\n");
+		printf("  G  print syntax graph\n");
+		printf("  I  trace computation of first sets\n");
+		printf("  J  list ANY and SYNC sets\n");
+		printf("  P  print statistics\n");
+		printf("  S  list symbol table\n");
+		printf("  X  list cross reference table\n");
+		printf("Scanner.frame and Parser.frame files needed in ATG directory\n");
+		printf("or in a directory specified in the -frames option.\n");
 	}
 
 	coco_string_delete(srcName);
@@ -179,7 +160,6 @@ int main(int argc, char *argv_[]) {
 	coco_string_delete(tokenPrefix);
 	coco_string_delete(frameDir);
 	coco_string_delete(ddtString);
-	coco_string_delete(chTrFileName);
 	coco_string_delete(traceFileName);
 
 	return 0;

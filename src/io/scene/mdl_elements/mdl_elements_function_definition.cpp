@@ -54,6 +54,7 @@
 #include <base/hal/disk/disk.h>
 #include <mdl/compiler/compilercore/compilercore_modules.h>
 #include <mdl/compiler/compilercore/compilercore_tools.h>
+#include <mdl/compiler/compilercore/compilercore_mangle.h>
 #include <mdl/integration/mdlnr/i_mdlnr.h>
 #include <io/scene/scene/i_scene_journal_types.h>
 
@@ -389,7 +390,8 @@ const IExpression* Mdl_function_definition::get_body( DB::Transaction* transacti
         /*resolve_resources*/ false,
         /*user_modules_seen*/ nullptr);
 
-    mi::base::Handle<const IExpression> body_int( converter.mdl_dag_node_to_int_expr( body, nullptr));
+    mi::base::Handle<const IExpression> body_int(
+        converter.mdl_dag_node_to_int_expr( body, nullptr));
     return body_int->get_interface<const IExpression>();
 }
 
@@ -485,7 +487,11 @@ std::string Mdl_function_definition::get_thumbnail() const
     mi::base::Handle<mi::mdl::IMDL> mdl( mdlc_module->get_mdl());
     mi::base::Handle<mi::mdl::IArchive_tool> archive_tool( mdl->create_archive_tool());
     return DETAIL::lookup_thumbnail(
-        m_module_filename, m_module_mdl_name, m_simple_name, m_annotations.get(), archive_tool.get());
+        m_module_filename,
+        m_module_mdl_name,
+        m_simple_name,
+        m_annotations.get(),
+        archive_tool.get());
 }
 
 Mdl_function_call* Mdl_function_definition::create_function_call(
@@ -520,6 +526,40 @@ Mdl_function_call* Mdl_function_definition::create_function_call(
 
     return create_function_call_internal(
         transaction, arguments, /*allow_ek_parameter*/ false, /*immutable*/ false, errors);
+}
+
+const char* Mdl_function_definition::get_mdl_mangled_name(
+    DB::Transaction* transaction) const
+{
+    if( is_material())
+        return m_simple_name.c_str();
+
+    DB::Tag module_tag = transaction->name_to_tag( m_module_db_name.c_str());
+    ASSERT( M_SCENE, module_tag);
+
+    DB::Access<Mdl_module> module( module_tag, transaction);
+    if( !module->is_valid( transaction, /*context*/ nullptr))
+        return nullptr;
+    if( module->has_definition( m_is_material, m_db_name, m_function_ident) != 0)
+        return nullptr;
+    mi::base::Handle<const mi::mdl::IModule> mdl_module( module->get_mdl_module());
+    mi::mdl::Module const *mod = mi::mdl::impl_cast<mi::mdl::Module>( mdl_module.get());
+    mi::mdl::IDefinition const *def = mod->find_signature(
+        decode_name_with_signature( m_mdl_name).c_str(),
+        /*only_export=*/false,
+        /*find_function=*/true);
+    if( def == nullptr) {
+        // no definition, assume DAG intrinsic
+        return m_simple_name.c_str();
+    }
+
+    mi::mdl::string mangled_name( mod->get_allocator());
+    mi::mdl::MDL_name_mangler mangler( mod->get_allocator(), mangled_name);
+
+    mangler.mangle( mod->is_builtins() ? NULL : mod->get_name(), def);
+
+    m_cached_mangled_name = mangled_name.c_str();
+    return m_cached_mangled_name.c_str();
 }
 
 IExpression_direct_call* Mdl_function_definition::create_direct_call(
@@ -1184,8 +1224,8 @@ bool Mdl_function_definition::is_compatible(const Mdl_function_definition& other
     }
 
     // check parameter annotations
-    if (m_parameter_annotations.is_valid_interface() !=
-        other.m_parameter_annotations.is_valid_interface()) {
+    if (m_parameter_annotations.is_valid_interface()
+        != other.m_parameter_annotations.is_valid_interface()) {
         return false;
     }
 
@@ -1214,7 +1254,8 @@ bool Mdl_function_definition::is_compatible(const Mdl_function_definition& other
     }
 
     // check return annotations
-    if (m_return_annotations.is_valid_interface() != other.m_return_annotations.is_valid_interface())
+    if (m_return_annotations.is_valid_interface()
+        != other.m_return_annotations.is_valid_interface())
         return false;
 
     if (m_return_annotations) {
@@ -1428,6 +1469,8 @@ Uint Mdl_function_definition::bundle( DB::Tag* results, Uint size) const
 void Mdl_function_definition::get_scene_element_references( DB::Tag_set* result) const
 {
     // skip m_function_tag (own tag)
+    if( m_prototype_tag)
+        result->insert( m_prototype_tag);
     collect_references( m_defaults.get(), result);
     collect_references( m_annotations.get(), result);
     collect_references( m_parameter_annotations.get(), result);
@@ -1781,7 +1824,8 @@ Mdl_function_definition::check_and_prepare_arguments_array_index_operator(
     if(    (base_type->get_all_type_modifiers()  & IType::MK_UNIFORM) != 0
         && (index_type->get_all_type_modifiers() & IType::MK_UNIFORM) != 0) {
         IType_factory *tf = get_type_factory();
-        ret_type = mi::base::make_handle( tf->create_alias( ret_type.get(), IType::MK_UNIFORM, nullptr));
+        ret_type = mi::base::make_handle(
+            tf->create_alias( ret_type.get(), IType::MK_UNIFORM, nullptr));
     }
 
     // clone arguments
@@ -1846,7 +1890,8 @@ Mdl_function_definition::check_and_prepare_arguments_array_length_operator(
     // result type is "uniform int"
     IType_factory *tf = get_type_factory();
     mi::base::Handle<const IType> ret_type( tf->create_int());
-    ret_type = mi::base::make_handle( tf->create_alias( ret_type.get(), IType::MK_UNIFORM, nullptr));
+    ret_type = mi::base::make_handle(
+        tf->create_alias( ret_type.get(), IType::MK_UNIFORM, nullptr));
 
     // clone arguments
     mi::base::Handle<IExpression_list> new_arguments(
@@ -1904,10 +1949,15 @@ Mdl_function_definition::check_and_prepare_arguments_array_constructor_operator(
 
     for( mi::Size i = 0; i < n; ++i) {
 
-        // Unique names are guaranteed by the expression list. If this check is passed for
-        // elements, then we have the names "0", "1", ... "n-1" (not necessarily in this order).
+        // Unique names are guaranteed by the expression list. If this check is passed in all
+        // iterations, then we have the argument names "value0", "value1", etc. (not necessarily in
+        // this order).
         const char* name = arguments->get_name( i);
-        STLEXT::Likely<mi::Size> name_likely = STRING::lexicographic_cast_s<mi::Size>( name);
+        if( strncmp( name, "value", 5) != 0) {
+            *errors = -3;
+            return std::make_tuple( nullptr, nullptr, nullptr);
+        }
+        STLEXT::Likely<mi::Size> name_likely = STRING::lexicographic_cast_s<mi::Size>( name+5);
         if( !name_likely.get_status() || *name_likely.get_ptr() >= n) {
             *errors = -3;
             return std::make_tuple( nullptr, nullptr, nullptr);
@@ -1959,7 +2009,7 @@ Mdl_function_definition::check_and_prepare_arguments_array_constructor_operator(
     mi::base::Handle<IExpression_list> new_arguments( m_ef->create_expression_list());
     mi::base::Handle<IType_list> parameter_types( m_tf->create_type_list());
     for( mi::Size i = 0; i < n; ++i) {
-        std::string name = std::to_string( i);
+        std::string name = "value" + std::to_string( i);
         mi::base::Handle<const IExpression> arg( arguments->get_expression( name.c_str()));
         mi::base::Handle<IExpression> new_arg(
             m_ef->clone( arg.get(), transaction, copy_immutable_calls));

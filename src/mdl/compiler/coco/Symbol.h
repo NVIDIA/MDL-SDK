@@ -49,7 +49,7 @@ public:
 
 	int      n;           // symbol number
 	Node::Kind typ;       // t, nt, pr, unknown, rslv /* ML 29_11_2002 slv added */ /* AW slv --> rslv */
-	wchar_t  *name;       // symbol name
+	char const *name;     // symbol name
 	Node     *graph;      // nt: to first node of syntax graph
 	TokenKind tokenKind;  // t:  token kind (fixedToken, classToken, ...)
 	bool     deletable;   // nt: true if nonterminal is deletable
@@ -63,7 +63,7 @@ public:
 	                      // nt: pos of local declarations in source text (or null)
 
 
-	Symbol(Node::Kind typ, const wchar_t* name, int line);
+	Symbol(Node::Kind typ, char const *name, int line);
 	virtual ~Symbol();
 };
 

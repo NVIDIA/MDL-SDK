@@ -529,7 +529,7 @@ public:
         size_t       idx,
         bool         valid) = 0;
 
-    /// Analyze one root of a lambda function or the body expression, in case ther are no roots.
+    /// Analyze one root of a lambda function or the body expression, in case there are no roots.
     ///
     /// \param[in]  proj           the root number, ignored if there are no roots but a body expression
     /// \param[in]  name_resolver  a call name resolver
@@ -678,7 +678,7 @@ public:
 ///    #mi::mdl::ILambda_function::set_parameter_mapping().
 ///  - Import the material constructor of the material instance into the root lambda
 ///    via #mi::mdl::ILambda_function::import_expr().
-///  - Create a list of #mi::mdl::IDistribution_function::Requested_function elements refering
+///  - Create a list of #mi::mdl::IDistribution_function::Requested_function elements referring
 ///    to the expressions, which shall be generated, and specifying the names / base-names of the
 ///    functions. These will be registered as main functions.
 ///  - Call #mi::mdl::IDistribution_function::initialize().
@@ -1580,15 +1580,17 @@ public:
 
     /// Compile a link unit into LLVM-IR, PTX or native code using the JIT.
     ///
-    /// \param ctx              the code generator thread context
-    /// \param unit             the link unit to compile
-    /// \param llvm_ir_output   if true generate LLVM-IR (prepared for the target language)
+    /// \param ctx                  the code generator thread context
+    /// \param module_cache         the module cache if any
+    /// \param unit                 the link unit to compile
+    /// \param llvm_ir_output       if true generate LLVM-IR (prepared for the target language)
     ///
     /// \return the compiled function or NULL on compilation errors
     ///
     /// \note the thread context should have the same value as in create_link_unit()
     virtual IGenerated_code_executable *compile_unit(
         ICode_generator_thread_context *ctx,
+        IModule_cache                  *module_cache,
         ILink_unit const               *unit,
         bool                           llvm_ir_output) = 0;
 

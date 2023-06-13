@@ -44,8 +44,8 @@
 #include <render/mdl/runtime/i_mdlrt_resource_handler.h>
 #include <render/mdl/backends/backends_target_code.h>
 #include <api/api/neuray/neuray_compiled_material_impl.h>
-#include <api/api/neuray/neuray_function_definition_impl.h>
 #include <api/api/neuray/neuray_function_call_impl.h>
+#include <api/api/neuray/neuray_function_definition_impl.h>
 #include <api/api/neuray/neuray_transaction_impl.h>
 #include <api/api/neuray/neuray_mdl_execution_context_impl.h>
 
@@ -78,10 +78,10 @@ static MDL::Mdl_compiled_material const *unwrap(
 }
 
 static MDL::Mdl_function_definition const *unwrap(
-    mi::neuraylib::IFunction_definition const* function_definition)
+    mi::neuraylib::IFunction_definition const *function_definition)
 {
-    Function_definition_impl const* function_definition_impl =
-        static_cast<Function_definition_impl const*>(function_definition);
+    Function_definition_impl const *function_definition_impl =
+        static_cast<Function_definition_impl const *>(function_definition);
     return function_definition_impl->get_db_element();
 }
 
@@ -115,12 +115,12 @@ Link_unit::Link_unit(
 }
 
 // Add an MDL environment function call as a function to this link unit.
-mi::Sint32 Link_unit::add_environment(
-    mi::neuraylib::IFunction_call const *call,
-    char const                          *fname,
-    mi::neuraylib::IMdl_execution_context* context)
+mi::Sint32 Link_unit::deprecated_add_environment(
+    mi::neuraylib::IFunction_call const   *call,
+    char const                            *fname,
+    mi::neuraylib::IMdl_execution_context *context)
 {
-    return m_link_unit.add_environment(unwrap(call), fname, unwrap_and_clear(context));
+    return add_function(call, mi::neuraylib::ILink_unit::FEC_ENVIRONMENT, fname, context);
 }
 
 // Add an expression that is part of an MDL material instance as a function to this link unit.
@@ -130,7 +130,11 @@ mi::Sint32 Link_unit::add_material_expression(
     char const                              *fname,
     mi::neuraylib::IMdl_execution_context   *context)
 {
-    return m_link_unit.add_material_expression(unwrap(material), path, fname, unwrap_and_clear(context));
+    return m_link_unit.add_material_expression(
+        unwrap(material),
+        path,
+        fname,
+        unwrap_and_clear(context));
 }
 
 // Add an MDL distribution function to this link unit.
@@ -141,7 +145,10 @@ mi::Sint32 Link_unit::add_material_df(
     mi::neuraylib::IMdl_execution_context   *context)
 {
     return m_link_unit.add_material_df(
-        unwrap(material), path, base_fname, unwrap_and_clear(context));
+        unwrap(material),
+        path,
+        base_fname,
+        unwrap_and_clear(context));
 }
 
 mi::Sint32 Link_unit::add_material(
@@ -157,14 +164,58 @@ mi::Sint32 Link_unit::add_material(
         unwrap_and_clear(context));
 }
 
-Sint32 Link_unit::add_function(
-    const mi::neuraylib::IFunction_definition* function,
-    char const* name,
-    mi::neuraylib::IMdl_execution_context* context)
+// Add an MDL function call as a function to this link unit.
+mi::Sint32 Link_unit::add_function(
+    mi::neuraylib::IFunction_call const                   *call,
+    mi::neuraylib::ILink_unit::Function_execution_context  fexc,
+    char const                                            *fname,
+    mi::neuraylib::IMdl_execution_context                 *context)
 {
+    BACKENDS::Link_unit::Function_execution_context bfexc = BACKENDS::Link_unit::FEC_CORE;
+    switch (fexc) {
+    case mi::neuraylib::ILink_unit::FEC_ENVIRONMENT:
+        bfexc = BACKENDS::Link_unit::FEC_ENVIRONMENT;
+        break;
+    case mi::neuraylib::ILink_unit::FEC_CORE:
+        bfexc = BACKENDS::Link_unit::FEC_CORE;
+        break;
+    case mi::neuraylib::ILink_unit::FEC_DISPLACEMENT:
+        bfexc = BACKENDS::Link_unit::FEC_DISPLACEMENT;
+        break;
+    case mi::neuraylib::ILink_unit::FEC_FORCE_32_BIT:
+        return MDL::add_error_message(unwrap_and_clear(context), "Invalid parameters.", -1);
+    }
+    return m_link_unit.add_function(
+        unwrap(call),
+        bfexc,
+        fname,
+        unwrap_and_clear(context));
+}
+
+Sint32 Link_unit::add_function(
+    mi::neuraylib::IFunction_definition const             *function,
+    mi::neuraylib::ILink_unit::Function_execution_context  fexc,
+    char const                                            *fname,
+    mi::neuraylib::IMdl_execution_context                 *context)
+{
+    BACKENDS::Link_unit::Function_execution_context bfexc = BACKENDS::Link_unit::FEC_CORE;
+    switch (fexc) {
+    case mi::neuraylib::ILink_unit::FEC_ENVIRONMENT:
+        bfexc = BACKENDS::Link_unit::FEC_ENVIRONMENT;
+        break;
+    case mi::neuraylib::ILink_unit::FEC_CORE:
+        bfexc = BACKENDS::Link_unit::FEC_CORE;
+        break;
+    case mi::neuraylib::ILink_unit::FEC_DISPLACEMENT:
+        bfexc = BACKENDS::Link_unit::FEC_DISPLACEMENT;
+        break;
+    case mi::neuraylib::ILink_unit::FEC_FORCE_32_BIT:
+        return MDL::add_error_message(unwrap_and_clear(context), "Invalid parameters.", -1);
+    }
     return m_link_unit.add_function(
         unwrap(function),
-        name,
+        bfexc,
+        fname,
         unwrap_and_clear(context));
 }
 

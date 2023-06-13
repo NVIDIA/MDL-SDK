@@ -544,7 +544,7 @@ class Type_factory : public IType_factory
                         IType const *ret_type = ft->get_return_type();
                         size_t n_params = size_t(ft->get_parameter_count());
 
-                        size_t t = ret_type - (IType const *)0;
+                        size_t t = size_t(ret_type) >> 4;
                         t = ((t) >> 3) ^ (t >> 16) ^                     //-V2007
                             size_t(KEY_FUNC_TYPE) ^ n_params;
 
@@ -555,48 +555,44 @@ class Type_factory : public IType_factory
                             ft->get_parameter(i, p_type, p_sym);
 
                             t *= 3;
-                            t ^=
-                                ((char *)p_type - (char *)0) ^
-                                ((char *)p_sym  - (char *)0);
+                            t ^= (size_t(p_type) >> 4) ^ (size_t(p_sym) >> 4);
                         }
                         return t;
                     }
                 case KEY_FUNC_KEY:
                     {
-                        size_t t = key.type - (IType const *)0;
+                        size_t t = size_t(key.type) >> 4;
                         t = ((t) >> 3) ^ (t >> 16) ^                     //-V2007
                             size_t(KEY_FUNC_TYPE) ^ key.u.func.n_params;
 
                         IType_factory::Function_parameter const *p = key.u.func.params;
                         for (size_t i = 0; i < key.u.func.n_params; ++i) {
                             t *= 3;
-                            t ^=
-                                ((char *)p[i].p_type - (char *)0) ^
-                                ((char *)p[i].p_sym  - (char *)0);
+                            t ^= (size_t(p[i].p_type) >> 4) ^ (size_t(p[i].p_sym) >> 4);
                         }
                         return t;
                     }
                 case KEY_ALIAS:
                     {
-                        size_t t = key.type - (IType const *)0;
+                        size_t t = size_t(key.type) >> 4;
                         return ((t) >> 3) ^ (t >> 16) ^
                             size_t(key.kind) ^
-                            ((char *)key.u.alias.sym - (char *)0) ^
+                            (size_t(key.u.alias.sym) >> 4) ^
                             size_t(key.u.alias.mod);
                     }
                 case KEY_SIZED_ARRAY:
                     {
-                        size_t t = key.type - (IType const *)0;
+                        size_t t = size_t(key.type) >> 4;
                         return ((t) >> 3) ^ (t >> 16) ^
                             size_t(key.kind) ^
                             size_t(key.u.fixed_array.size);
                     }
                 case KEY_ABSTRACT_ARRAY:
                     {
-                        size_t t = key.type - (IType const *)0;
+                        size_t t = size_t(key.type) >> 4;
                         return ((t) >> 3) ^ (t >> 16) ^
                             size_t(key.kind) ^
-                            ((char *)key.u.abstract_array.size - (char *)0);
+                            (size_t(key.u.abstract_array.size) >> 4);
                     }
                 default:
                     return 0;
@@ -610,8 +606,8 @@ class Type_factory : public IType_factory
             {
                 if (a.kind != b.kind) {
                     IType_function const *ft = NULL;
-                    IType const          *rt;
-                    Function_type const  *sk;
+                    IType const          *rt = NULL;
+                    Function_type const  *sk = NULL;
 
                     // compare a function type and a function search key
                     if (a.kind == KEY_FUNC_TYPE && b.kind == KEY_FUNC_KEY) {

@@ -33,6 +33,8 @@
 #ifndef EXAMPLE_SHARED_UTILS_STRINGS_H
 #define EXAMPLE_SHARED_UTILS_STRINGS_H
 
+#include <cstring>
+#include <ctime>
 #include <type_traits>
 #include <stdint.h>
 #include <locale>
@@ -68,65 +70,21 @@ namespace mi { namespace examples { namespace strings
 
     // --------------------------------------------------------------------------------------------
 
- // utility to convert from UTF8 to wide chars
- #define BOM8A ((unsigned char)0xEF)
- #define BOM8B ((unsigned char)0xBB)
- #define BOM8C ((unsigned char)0xBF)
-
- // Convert the given char input of UTF-8 format into a wchar.
-     inline std::wstring utf8_to_wchar(const char* str)
-     {
-         long b = 0, c = 0;
-         if ((unsigned char)str[0] == BOM8A && (unsigned char)str[1] == BOM8B && (unsigned char)str[2] == BOM8C)
-             str += 3;
-         for (const unsigned char* a = (unsigned char*)str; *a; a++)
-             if (((unsigned char)*a) < 128 || (*a & 192) == 192)
-                 c++;
-         wchar_t* buf = new wchar_t[c + 1];
-         buf[c] = 0;
-         for (unsigned char* a = (unsigned char*)str; *a; a++) {
-             if (!(*a & 128))
-                 //Byte represents an ASCII character. Direct copy will do.
-                 buf[b] = *a;
-             else if ((*a & 192) == 128)
-                 //Byte is the middle of an encoded character. Ignore.
-                 continue;
-             else if ((*a & 224) == 192)
-                 //Byte represents the start of an encoded character in the range U+0080 to U+07FF
-                 buf[b] = ((*a & 31) << 6) | (a[1] & 63);
-             else if ((*a & 240) == 224)
-                 //Byte represents the start of an encoded character in the range U+07FF to U+FFFF
-                 buf[b] = ((*a & 15) << 12) | ((a[1] & 63) << 6) | (a[2] & 63);
-             else if ((*a & 248) == 240) {
-                 //Byte represents the start of an encoded character beyond U+FFFF limit of 16-bit ints
-                 buf[b] = '?';
-             }
-             b++;
-         }
-
-         std::wstring wstr(buf, c);
-         delete[] buf;
-
-         return wstr;
-     }
-
-    // --------------------------------------------------------------------------------------------
-
     /// Converts a wchar_t * string into an utf8 encoded string.
     inline std::string wchar_to_utf8(const wchar_t* src)
     {
         std::string res;
 
-        for (wchar_t const *p = src; *p != L'\0'; ++p) 
+        for (wchar_t const *p = src; *p != L'\0'; ++p)
         {
             unsigned code = *p;
 
-            if (code <= 0x7F) 
+            if (code <= 0x7F)
             {
                 // 0xxxxxxx
                 res += char(code);
-            } 
-            else if (code <= 0x7FF) 
+            }
+            else if (code <= 0x7FF)
             {
                 // 110xxxxx 10xxxxxx
                 unsigned high = code >> 6;
@@ -153,13 +111,14 @@ namespace mi { namespace examples { namespace strings
                     res += char(0x80 + ml);
                     res += char(0x80 + low);
                 }
-                else 
+                else
                 {
                     // error, replace by (U+FFFD) (or EF BF BD in UTF-8)
                     res += char(0xEF);
                     res += char(0xBF);
                     res += char(0xBD);
                 }
+                ++p;
             }
             else if (code <= 0xFFFF)
             {
@@ -202,6 +161,128 @@ namespace mi { namespace examples { namespace strings
             }
         }
         return res;
+    }
+
+    // --------------------------------------------------------------------------------------------
+
+    namespace {
+
+    // Converts one utf8 character to a utf32 encoded unicode character.
+    inline char const *utf8_to_unicode_char(char const *up, unsigned &res)
+    {
+        bool error = false;
+        unsigned char ch = up[0];
+
+        // find start code: either 0xxxxxxx or 11xxxxxx
+        while ((ch >= 0x80) && ((ch & 0xC0) != 0xC0)) {
+            ++up;
+            ch = up[0];
+        }
+
+        if (ch <= 0x7F) {
+            // 0xxxxxxx
+            res = ch;
+            up += 1;
+        } else if ((ch & 0xF8) == 0xF0) {
+            // 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+            unsigned c1 = ch & 0x07; ch = up[1]; error |= (ch & 0xC0) != 0x80;
+            unsigned c2 = ch & 0x3F; ch = up[2]; error |= (ch & 0xC0) != 0x80;
+            unsigned c3 = ch & 0x3F; ch = up[3]; error |= (ch & 0xC0) != 0x80;
+            unsigned c4 = ch & 0x3F;
+            res = (c1 << 18) | (c2 << 12) | (c3 << 6) | c4;
+
+            // must be U+10000 .. U+10FFFF
+            error |= (res < 0x1000) || (res > 0x10FFFF);
+
+            // Because surrogate code points are not Unicode scalar values, any UTF-8 byte
+            // sequence that would otherwise map to code points U+D800..U+DFFF is illformed
+            error |= (0xD800 <= res) && (res <= 0xDFFF);
+
+            if (!error) {
+                up += 4;
+            } else {
+                res = 0xFFFD;  // replacement character
+                up += 1;
+            }
+        } else if ((ch & 0xF0) == 0xE0) {
+            // 1110xxxx 10xxxxxx 10xxxxxx
+            unsigned c1 = ch & 0x0F; ch = up[1]; error |= (ch & 0xC0) != 0x80;
+            unsigned c2 = ch & 0x3F; ch = up[2]; error |= (ch & 0xC0) != 0x80;
+            unsigned c3 = ch & 0x3F;
+            res = (c1 << 12) | (c2 << 6) | c3;
+
+            // must be U+0800 .. U+FFFF
+            error |= res < 0x0800;
+
+            // Because surrogate code points are not Unicode scalar values, any UTF-8 byte
+            // sequence that would otherwise map to code points U+D800..U+DFFF is illformed
+            error |= (0xD800 <= res) && (res <= 0xDFFF);
+
+            if (!error) {
+                up += 3;
+            } else {
+                res = 0xFFFD;  // replacement character
+                up += 1;
+            }
+        } else if ((ch & 0xE0) == 0xC0) {
+            // 110xxxxx 10xxxxxx
+            unsigned c1 = ch & 0x1F; ch = up[1]; error |= (ch & 0xC0) != 0x80;
+            unsigned c2 = ch & 0x3F;
+            res = (c1 << 6) | c2;
+
+            // must be U+0080 .. U+07FF
+            error |= res < 0x80;
+
+            if (!error) {
+                up += 2;
+            } else {
+                res = 0xFFFD;  // replacement character
+                up += 1;
+            }
+        } else {
+            // error
+            res = 0xFFFD;  // replacement character
+            up += 1;
+        }
+        return up;
+    }
+
+    } // namespace
+
+    void utf16_append(std::wstring &s, unsigned c);
+
+    // Convert the given char input of UTF-8 format into a wchar.
+    inline std::wstring utf8_to_wchar(char const *src)
+    {
+        std::wstring res;
+
+        // skip BOM
+        if (    (static_cast<unsigned char>(src[0]) == 0xEFu)
+            &&  (static_cast<unsigned char>(src[1]) == 0xBBu)
+            &&  (static_cast<unsigned char>(src[2]) == 0xBFu))
+            src += 3;
+
+        while (*src != '\0') {
+            unsigned unicode_char;
+
+            src = utf8_to_unicode_char(src, unicode_char);
+            utf16_append(res, unicode_char);
+        }
+        return res;
+    }
+
+    // Add an unicode utf32 character to an utf16 string.
+    inline void utf16_append(std::wstring &s, unsigned c)
+    {
+        // assume only valid utf32 characters added
+        if (c < 0x10000) {
+            s += static_cast<wchar_t>(c);
+        } else {
+                // encode as surrogate pair
+            c -= 0x10000;
+            s += static_cast<wchar_t>((c >> 10) + 0xD800);
+            s += static_cast<wchar_t>((c & 0x3FF) + 0xDC00);
+        }
     }
 
     // --------------------------------------------------------------------------------------------
@@ -256,6 +337,15 @@ namespace mi { namespace examples { namespace strings
             offset = pos + sep.length();
         }
         return chunks;
+    }
+
+    // --------------------------------------------------------------------------------------------
+
+    /// checks if a string contains a given substring.
+    inline bool contains(const std::string& s, const std::string& potential_substring)
+    {
+        const char* pos = strstr(s.c_str(), potential_substring.c_str());
+        return pos != nullptr;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -373,10 +463,10 @@ namespace mi { namespace examples { namespace strings
 
     // --------------------------------------------------------------------------------------------
 
-    /// create a formated string.
+    /// create a formatted string.
     /// \param  format  printf-like format string
     /// \param  args    arguments to insert into the format string
-    /// \return the formated string
+    /// \return the formatted string
     template <typename... Args>
     inline std::string format(const char *format_string, Args ... args)
     {
@@ -389,14 +479,14 @@ namespace mi { namespace examples { namespace strings
         return s.substr(0, size - 1);
     }
 
-    /// create a formated string (variadic base function).
+    /// create a formatted string (variadic base function).
     /// \return the unchanged \format_string
     inline std::string format(const char *format_string)
     {
         return format_string;
     }
 
-    /// create a formated string (variadic base function, needed for __VA_ARGS__ mappings).
+    /// create a formatted string (variadic base function, needed for __VA_ARGS__ mappings).
     /// \return the empty string
     inline std::string format()
     {
@@ -478,16 +568,23 @@ namespace mi { namespace examples { namespace strings
     }
 
     // --------------------------------------------------------------------------------------------
-    
-    /// Convert the given value into its string representation.
-    /// \return string resembling the given input parameter
-    template <typename T>
-    std::string lexicographic_cast(
-        T value)
+
+    // Get current date/time
+    inline const std::string current_date_time_local()
     {
-        std::stringstream s;
-        s << value;
-        return s.str();
+        std::time_t t = std::time(nullptr);
+        char buffer[100];
+        std::strftime(buffer, sizeof(buffer), "%F %T", std::localtime(&t));
+        return buffer;
+    }
+
+    // Get current date/time
+    inline const std::string current_date_time_UTC()
+    {
+        std::time_t t = std::time(nullptr);
+        char buffer[100];
+        std::strftime(buffer, sizeof(buffer), "%F %T", std::gmtime(&t));
+        return buffer;
     }
 
     // --------------------------------------------------------------------------------------------
@@ -504,6 +601,6 @@ namespace mi { namespace examples { namespace strings
         s >> result;
         return result;
     }
-    
+
 }}}
 #endif

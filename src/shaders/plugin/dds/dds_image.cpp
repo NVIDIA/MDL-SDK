@@ -372,7 +372,7 @@ bool Image::load( mi::neuraylib::IReader* reader)
         for( mi::Uint32 s = 0; s < header.m_mipmap_count; ++s) {
 
             mi::Uint32 size = get_layer_size( width, height) * depth;
-            Surface surface( width, height, depth, size, 0);
+            Surface surface( width, height, depth, size, nullptr);
             m_texture.add_surface( surface);
 
             width  = std::max( width  >> 1, 1u);

@@ -1,0 +1,420 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+// Rules to simplify an MDL expression's scattering fields to contain no
+// weighted layering anymore.
+rules Elide_weighted_layering_rules topdown {
+    // Handle thin_walled correctly, copying surface to backface if necessary
+    material(tw,surface, material_surface(bsdf(),material_emission(edf(),_)),ior,vol,geo,hair)
+        --> material(tw,surface,surface,ior,vol,geo,hair)
+        if tw == true deadrule;
+
+    weighted_layer(w,layer,base,_) --> bsdf_color_mix_2( color(w), layer, color(1.0 - w), base) deadrule;
+    color_weighted_layer(w,layer,base,_) --> bsdf_color_mix_2( w, layer, color(1.0) - w, base) deadrule;
+
+    // Generalize mixers to color mixers
+    bsdf_mix_1( w1, c1) --> bsdf_color_mix_1( color(w1), c1) deadrule;
+    bsdf_mix_2( w1, c1, w2, c2) --> bsdf_color_mix_2( color(w1), c1, color(w2), c2) deadrule;
+    bsdf_mix_3( w1, c1, w2, c2, w3, c3)
+        --> bsdf_color_mix_3( color(w1), c1, color(w2), c2, color(w3), c3) deadrule;
+
+    // Simplify color Fresnel layer to plain Fresnel layer
+    color_fresnel_layer( ior, w, layer, base, n)
+        --> fresnel_layer( math::luminance(ior), math::luminance(w), layer, base, n) deadrule;
+
+    postcond nonode(weighted_layer)
+        && nonode(color_weighted_layer)
+        && nonode(color_fresnel_layer)
+        && nonode(bsdf_mix_1) && nonode(bsdf_mix_2) && nonode(bsdf_mix_3);
+}
+
+// Rules to simplify an MDL expression's scattering fields to a DG material model.
+// \precond The input MDL expression shall only contain BSDF that are simple.
+rules Make_dg_rules bottomup {
+    import math;
+    import state;
+    import anno;
+    bsdf() --> diffuse_reflection_bsdf( color(0.0), 0.0) deadrule;
+    diffuse_transmission_bsdf(tint) --> diffuse_reflection_bsdf(tint,0.0) deadrule;
+    specular_bsdf(tint) --> simple_glossy_bsdf(0.0,0.0,tint,color(0.0),state::texture_tangent_u(0));
+
+    // // Integrated tint rules -----------------------------------------------------------
+    // bsdf_tint( tint, diffuse_reflection_bsdf(c1,r1)) --> diffuse_reflection_bsdf(tint*c1,r1);
+    // bsdf_tint( tint, simple_glossy_bsdf(ru1,rv1,c1,_,t1)) --> simple_glossy_bsdf(ru1,rv1,tint*c1,color(0.0),t1);
+    // bsdf_tint( tint, fresnel_layer( ior1, w11,
+    //                                      simple_glossy_bsdf(ru1,rv1,cg1,_,t1),
+    //                                      diffuse_reflection_bsdf(cd1,rd1),
+    //                                      n))
+    //     --> fresnel_layer( ior1, w11,
+    //                             simple_glossy_bsdf(ru1,rv1,tint*cg1,color(0.0),t1),
+    //                             diffuse_reflection_bsdf(tint*cd1,rd1),
+    //                             n);
+
+    // bsdf_tint_ex( tint, _, diffuse_reflection_bsdf(c1,r1)) --> diffuse_reflection_bsdf(tint*c1,r1);
+    // bsdf_tint_ex( tint, _, simple_glossy_bsdf(ru1,rv1,c1,_,t1)) --> simple_glossy_bsdf(ru1,rv1,tint*c1,color(0.0),t1);
+    // bsdf_tint_ex( tint, _, fresnel_layer( ior1, w11,
+    //                                      simple_glossy_bsdf(ru1,rv1,cg1,_,t1),
+    //                                      diffuse_reflection_bsdf(cd1,rd1),
+    //                                      n))
+    //     --> fresnel_layer( ior1, w11,
+    //                             simple_glossy_bsdf(ru1,rv1,tint*cg1,color(0.0),t1),
+    //                             diffuse_reflection_bsdf(tint*cd1,rd1),
+    //                             n);
+
+    // Mix 1 ---------------------------------------------------------------------------
+    bsdf_color_mix_1( w1, diffuse_reflection_bsdf(c1,r1)) --> diffuse_reflection_bsdf(w1*c1,r1) deadrule;
+    bsdf_color_mix_1( w1, simple_glossy_bsdf(ru1,rv1,c1,_,t1)) --> simple_glossy_bsdf(ru1,rv1,w1*c1,color(0.0),t1) deadrule;
+    bsdf_color_mix_1( w1, fresnel_layer( ior1, w11,
+                                       simple_glossy_bsdf(ru1,rv1,cg1,_,t1),
+                                       diffuse_reflection_bsdf(cd1,rd1),
+                                       _))
+        --> fresnel_layer( ior1, w11,
+                                simple_glossy_bsdf(ru1,rv1,w1*cg1,color(0.0),t1),
+                                diffuse_reflection_bsdf(w1*cd1,rd1),
+                                state::normal()) deadrule;
+
+    // Mix 2 ---------------------------------------------------------------------------
+    bsdf_color_mix_2( w1, diffuse_reflection_bsdf(c1,r1),
+                      w2, diffuse_reflection_bsdf(c2,r2))
+        --> diffuse_reflection_bsdf(w1*c1+w2*c2, nvidia::distilling_support::combine_diffuse_roughness(
+                             w1,r1,w2,r2)) deadrule;
+    bsdf_color_mix_2( w1, diffuse_reflection_bsdf(c1,r1),
+                      w2, simple_glossy_bsdf(ru2,rv2,c2,_,t2))
+        --> fresnel_layer( 50.0, w2p/wn, simple_glossy_bsdf(ru2,rv2,wn/math::max(0.0001,w2p)*w2*c2,color(0.0),t2),
+                                diffuse_reflection_bsdf(wn/math::max(0.0001,w1p)*w1*c1,r1),state::normal())
+        where wn  = math::max(0.0001,w1p+w2p)
+              w1p = math::max_value(w1)
+              w2p = math::max_value(w2) deadrule;
+
+    bsdf_color_mix_2( w1, diffuse_reflection_bsdf(c1,r1),
+                      w2, fresnel_layer( ior2, w21,
+                                              simple_glossy_bsdf(ru2,rv2,cg2,_,t2),
+                                              diffuse_reflection_bsdf(cd2,rd2),
+                                              _))
+        --> fresnel_layer( nvidia::distilling_support::ior_from_weighted_refl_from_ior(
+                                    math::luminance(w2),ior2), w21,
+                                simple_glossy_bsdf(ru2,rv2,cg2,color(0.0),t2),
+                                diffuse_reflection_bsdf(w1*c1+w2*cd2,
+                                     nvidia::distilling_support::combine_diffuse_roughness(
+                                         w1,r1,w2,rd2)),
+                                state::normal()) deadrule;
+    bsdf_color_mix_2( w1, simple_glossy_bsdf(ru1,rv1,c1,_,t1),
+                      w2, simple_glossy_bsdf(ru2,rv2,c2,_,t2))
+        --> simple_glossy_bsdf( nvidia::distilling_support::color_average(w1,ru1,w2,ru2),
+                         nvidia::distilling_support::color_average(w1,rv1,w2,rv2),
+                         w1*c1+w2*c2,
+                         color(0.0),
+                         nvidia::distilling_support::affine_sum_normalized(w1,t1,w2,t2)) deadrule;
+    bsdf_color_mix_2( w1, simple_glossy_bsdf(ru1,rv1,c1,_,t1),
+                      w2, fresnel_layer( ior2, w21,
+                                              simple_glossy_bsdf(ru2,rv2,cg2,_,t2),
+                                              diffuse_reflection_bsdf(cd2,rd2),
+                                              _))
+        --> fresnel_layer( ior, 1.0,
+                                simple_glossy_bsdf(nvidia::distilling_support::color_average(w1,ru1,w2,ru2),
+                                            nvidia::distilling_support::color_average(w1,rv1,w2,rv2),
+                                            w1*c1+w2*cg2,
+                                            color(0.0),
+                                            nvidia::distilling_support::affine_sum_normalized(
+                                            w1,t1,w2,t2)),
+                                diffuse_reflection_bsdf(w2*cd2,rd2),
+                                state::normal())
+        where ior = nvidia::distilling_support::float_ior_from_refl( w1 + w21
+                                     * nvidia::distilling_support::refl_from_ior( ior2) * w2) deadrule;
+
+    bsdf_color_mix_2( w1, fresnel_layer( ior1, w11,
+                                              simple_glossy_bsdf(ru1,rv1,cg1,_,t1),
+                                              diffuse_reflection_bsdf(cd1,rd1),
+                                              _),
+                      w2, fresnel_layer( ior2, w21,
+                                              simple_glossy_bsdf(ru2,rv2,cg2,_,t2),
+                                              diffuse_reflection_bsdf(cd2,rd2),
+                                              _))
+        --> fresnel_layer( ior, 1.0,
+                                simple_glossy_bsdf(nvidia::distilling_support::color_average(w1,ru1,w2,ru2),
+                                            nvidia::distilling_support::color_average(w1,rv1,w2,rv2),
+                                            w1*cg1+w2*cg2,
+                                            color(0.0),
+                                            nvidia::distilling_support::affine_sum_normalized(
+                                            w1,t1,w2,t2)),
+                                diffuse_reflection_bsdf(w1*cd1+w2*cd2,
+                                     nvidia::distilling_support::combine_diffuse_roughness(
+                                         w1,rd1,w2,rd2)),
+                                state::normal())
+        where ior = nvidia::distilling_support::float_ior_from_refl(
+            w11 * nvidia::distilling_support::refl_from_ior( ior1) * w1 +
+            w21 * nvidia::distilling_support::refl_from_ior( ior2) * w2) deadrule;
+
+    // Mix 3 ---------------------------------------------------------------------------
+    // component 1: diffuse
+    bsdf_color_mix_3( w1, diffuse_reflection_bsdf(c1,r1),
+                      w2, diffuse_reflection_bsdf(c2,r2),
+                      w3, diffuse_reflection_bsdf(c3,r3))
+        --> diffuse_reflection_bsdf(w1*c1+w2*c2+w3*c3,
+                         nvidia::distilling_support::combine_diffuse_roughness(w1,r1,w2,r2,w3,r3)) deadrule;
+    bsdf_color_mix_3( w1, diffuse_reflection_bsdf(c1,r1),
+                      w2, diffuse_reflection_bsdf(c2,r2),
+                      w3, simple_glossy_bsdf(ru3,rv3,c3,_,t3))
+        --> fresnel_layer( 50.0, w3p/wn,
+                                simple_glossy_bsdf(ru3,rv3,wn/math::max(0.0001,w3p)*w3*c3,color(0.0),t3),
+                                diffuse_reflection_bsdf(wn/math::max(0.0001,w1p)*w1*c1
+                                            +wn/math::max(0.0001,w2p)*w2*c2,
+                                             math::max(r1,r2)),state::normal())
+        where wn  = math::max(0.0001,w1p+w2p+w3p)
+              w1p = math::max_value(w1)
+              w2p = math::max_value(w2)
+              w3p = math::max_value(w3) deadrule;
+    bsdf_color_mix_3( w1, diffuse_reflection_bsdf(c1,r1),
+                      w2, diffuse_reflection_bsdf(c2,r2),
+                      w3, fresnel_layer( ior3, w31,
+                                              simple_glossy_bsdf(ru3,rv3,cg3,_,t3),
+                                              diffuse_reflection_bsdf(cd3,rd3),
+                                              _))
+        --> fresnel_layer( nvidia::distilling_support::ior_from_weighted_refl_from_ior(
+                                    math::luminance(w3),ior3), w31,
+                                simple_glossy_bsdf(ru3,rv3,cg3,color(0.0),t3),
+                                diffuse_reflection_bsdf(w1*c1+w2*c2+w3*cd3,
+                                  nvidia::distilling_support::combine_diffuse_roughness(
+                                      w1,r1,w2,r2,w3,rd3)),
+                                state::normal()) deadrule;
+    bsdf_color_mix_3( w1, diffuse_reflection_bsdf(c1,_),
+                      w2, simple_glossy_bsdf(ru2,rv2,c2,_,t2),
+                      w3, simple_glossy_bsdf(ru3,rv3,c3,_,t3))
+        --> simple_glossy_bsdf( nvidia::distilling_support::color_average(w2,ru2,w3,ru3),
+                         nvidia::distilling_support::color_average(w2,rv2,w3,rv3),
+                         w1*c1+w2*c2+w3*c3,
+                         color(0.0),
+                         nvidia::distilling_support::affine_sum_normalized(w2,t2,w3,t3));
+    bsdf_color_mix_3( w1, diffuse_reflection_bsdf(c1,r1),
+                      w2, simple_glossy_bsdf(ru2,rv2,c2,_,t2),
+                      w3, fresnel_layer( ior3, w31,
+                                              simple_glossy_bsdf(ru3,rv3,cg3,_,t3),
+                                              diffuse_reflection_bsdf(cd3,rd3),
+                                              _))
+        --> fresnel_layer( nvidia::distilling_support::ior_from_weighted_refl_from_ior(
+                                    math::luminance(w2+w3),ior), 1.0,
+                                simple_glossy_bsdf(nvidia::distilling_support::color_average(w2,ru2,w3,ru3),
+                                     nvidia::distilling_support::color_average(w2,rv2,w3,rv3),
+                                     w2*c2+w3*cg3,
+                                     color(0.0),
+                                     nvidia::distilling_support::affine_sum_normalized(
+                                         w2,t2,w3,t3)),
+                                diffuse_reflection_bsdf(w1*c1+w3*cd3,
+                                     nvidia::distilling_support::combine_diffuse_roughness(
+                                         w1,r1,w3,rd3)),
+                                state::normal())
+        where ior = nvidia::distilling_support::float_ior_from_refl( w2 + w31 *
+                                         nvidia::distilling_support::refl_from_ior( ior3) * w3) deadrule;
+
+    bsdf_color_mix_3( w1, diffuse_reflection_bsdf(c1,r1),
+                      w2, fresnel_layer( ior2, w21,
+                                              simple_glossy_bsdf(ru2,rv2,cg2,_,t2),
+                                              diffuse_reflection_bsdf(cd2,rd2),
+                                              _),
+                      w3, fresnel_layer( ior3, w31,
+                                              simple_glossy_bsdf(ru3,rv3,cg3,_,t3),
+                                              diffuse_reflection_bsdf(cd3,rd3),
+                                              _))
+        --> fresnel_layer( nvidia::distilling_support::ior_from_weighted_refl_from_ior(
+                                    math::luminance(w2+w3),ior), 1.0,
+                                simple_glossy_bsdf(nvidia::distilling_support::color_average(w2,ru2,w3,ru3),
+                                     nvidia::distilling_support::color_average(w2,rv2,w3,rv3),
+                                     w2*cg2+w3*cg3,
+                                     color(0.0),
+                                     nvidia::distilling_support::affine_sum_normalized(
+                                         w2,t2,w3,t3)),
+                                diffuse_reflection_bsdf(w1*c1+w2*cd2+w3*cd3,
+                                 nvidia::distilling_support::combine_diffuse_roughness(
+                                     w1,r1,w2,rd2,w3,rd3)),
+                                state::normal())
+        where ior = nvidia::distilling_support::float_ior_from_refl(
+            w21 * nvidia::distilling_support::refl_from_ior( ior2) * w2 +
+            w31 * nvidia::distilling_support::refl_from_ior( ior3) * w3) deadrule;
+
+    // component 1: glossy
+    bsdf_color_mix_3( w1, simple_glossy_bsdf(ru1,rv1,c1,_,t1),
+                      w2, simple_glossy_bsdf(ru2,rv2,c2,_,t2),
+                      w3, simple_glossy_bsdf(ru3,rv3,c3,_,t3))
+        --> simple_glossy_bsdf( nvidia::distilling_support::color_average(w1,ru1,w2,ru2,w3,ru3),
+                         nvidia::distilling_support::color_average(w1,rv1,w2,rv2,w3,rv3),
+                         w1*c1+w2*c2+w3*c3,
+                         color(0.0),
+                         nvidia::distilling_support::affine_sum_normalized(w1,t1,w2,t2,w3,t3)) deadrule;
+    bsdf_color_mix_3( w1, simple_glossy_bsdf(ru1,rv1,c1,_,t1),
+                      w2, simple_glossy_bsdf(ru2,rv2,c2,_,t2),
+                      w3, fresnel_layer( ior3, w31,
+                                              simple_glossy_bsdf(ru3,rv3,cg3,_,t3),
+                                              diffuse_reflection_bsdf(cd3,rd3),
+                                              _))
+        --> fresnel_layer( ior, 1.0,
+                            simple_glossy_bsdf(nvidia::distilling_support::color_average(w1,ru1,w2,ru2,w3,ru3),
+                              nvidia::distilling_support::color_average(w1,rv1,w2,rv2,w3,rv3),
+                              w1*c1+w2*c2+w3*cg3,
+                              color(0.0),
+                              nvidia::distilling_support::affine_sum_normalized(
+                                  w1,t1,w2,t2,w3,t3)),
+                                diffuse_reflection_bsdf(w3*cd3,rd3),
+                                state::normal())
+        where ior = nvidia::distilling_support::float_ior_from_refl( w1 + w2 + w31
+                                        * nvidia::distilling_support::refl_from_ior( ior3) * w3);
+    bsdf_color_mix_3( w1, simple_glossy_bsdf(ru1,rv1,c1,_,t1),
+                      w2, fresnel_layer( ior2, w21,
+                                              simple_glossy_bsdf(ru2,rv2,cg2,_,t2),
+                                              diffuse_reflection_bsdf(cd2,rd2),
+                                              _),
+                      w3, fresnel_layer( ior3, w31,
+                                              simple_glossy_bsdf(ru3,rv3,cg3,_,t3),
+                                              diffuse_reflection_bsdf(cd3,rd3),
+                                              _))
+        --> fresnel_layer( ior, 1.0,
+                            simple_glossy_bsdf(nvidia::distilling_support::color_average(w1,ru1,w2,ru2,w3,ru3),
+                               nvidia::distilling_support::color_average(w1,rv1,w2,rv2,w3,rv3),
+                               w1*c1+w2*cg2+w3*cg3,
+                               color(0.0),
+                               nvidia::distilling_support::affine_sum_normalized(
+                                   w1,t1,w2,t2,w3,t3)),
+                                diffuse_reflection_bsdf(w2*cd2+w3*cd3,
+                                   nvidia::distilling_support::combine_diffuse_roughness(
+                                       w2,rd2,w3,rd3)),
+                                state::normal())
+        where ior = nvidia::distilling_support::float_ior_from_refl(
+            w1 + w21 * nvidia::distilling_support::refl_from_ior( ior2) * w2
+            + w31 * nvidia::distilling_support::refl_from_ior( ior3) * w3) deadrule;
+
+
+
+    // component 1: fresnel
+    bsdf_color_mix_3( w1, fresnel_layer( ior1, w11,
+                                              simple_glossy_bsdf(ru1,rv1,cg1,_,t1),
+                                              diffuse_reflection_bsdf(cd1,rd1),
+                                              _),
+                      w2, fresnel_layer( ior2, w21,
+                                              simple_glossy_bsdf(ru2,rv2,cg2,_,t2),
+                                              diffuse_reflection_bsdf(cd2,rd2),
+                                              _),
+                      w3, fresnel_layer( ior3, w31,
+                                              simple_glossy_bsdf(ru3,rv3,cg3,_,t3),
+                                              diffuse_reflection_bsdf(cd3,rd3),
+                                              _))
+        --> fresnel_layer( ior, 1.0,
+                            simple_glossy_bsdf(nvidia::distilling_support::color_average(w1,ru1,w2,ru2,w3,ru3),
+                              nvidia::distilling_support::color_average(w1,rv1,w2,rv2,w3,rv3),
+                              w1*cg1+w2*cg2+w3*cg3,
+                              color(0.0),
+                              nvidia::distilling_support::affine_sum_normalized(
+                                  w1,t1,w2,t2,w3,t3)),
+                            diffuse_reflection_bsdf(w1*cd1+w2*cd2+w3*cd3,
+                              nvidia::distilling_support::combine_diffuse_roughness(
+                                  w1,rd1,w2,rd2,w3,rd3)),
+                                state::normal())
+        where ior = nvidia::distilling_support::float_ior_from_refl(
+            w11 * nvidia::distilling_support::refl_from_ior( ior1) * w1
+            + w21 * nvidia::distilling_support::refl_from_ior( ior2) * w2
+            + w31 * nvidia::distilling_support::refl_from_ior( ior3) * w3) deadrule;
+
+
+    // Fresnel layer -------------------------------------------------------------------
+    fresnel_layer( ior, w, diffuse_reflection_bsdf(c1,_), diffuse_reflection_bsdf(c2,r2), _)
+        --> fresnel_layer( ior, w, simple_glossy_bsdf(1.0,1.0,c1,color(0.0),state::texture_tangent_u(0)),
+                                        diffuse_reflection_bsdf(c2,r2),state::normal()) deadrule;
+    fresnel_layer( ior, w, diffuse_reflection_bsdf(c1,_), simple_glossy_bsdf(_,_,c2,_,_), _)
+        --> fresnel_layer( ior, w, simple_glossy_bsdf(1.0,1.0,c1,color(0.0),state::texture_tangent_u(0)),
+                                        diffuse_reflection_bsdf(c2,0.0),state::normal()) deadrule;
+    fresnel_layer( ior, w, diffuse_reflection_bsdf(c1,_),
+                        fresnel_layer( ior2, w2,
+                                            simple_glossy_bsdf(ru,rv,cg,_,t),
+                                            diffuse_reflection_bsdf(cd,rd), _),
+                        _)
+        --> fresnel_layer( fii.ior, 1.0,
+                                simple_glossy_bsdf(ru,rv,cg,color(0.0),t),
+                                diffuse_reflection_bsdf(fii.w1*c1 + fii.w2*cd,rd),
+                                state::normal())
+        where fii = nvidia::distilling_support::combined_fresnel_diffuse( ior, w, ior2, w2) deadrule;
+
+    fresnel_layer( ior, w, simple_glossy_bsdf(ru,rv,c1,_,t), simple_glossy_bsdf(_,_,c2,_,_), _)
+        --> fresnel_layer( ior, w, simple_glossy_bsdf(ru,rv,c1,color(0.0),t),
+                                diffuse_reflection_bsdf(c2,0.0), state::normal()) deadrule;
+    fresnel_layer( ior1, w,
+                        simple_glossy_bsdf(ru,rv,c1,_,t),
+                        fresnel_layer( ior2, w2,
+                                            simple_glossy_bsdf(gu,gv,cg,_,tg),
+                                            diffuse_reflection_bsdf(cd,rd), _),
+                        _)
+        --> fresnel_layer( fii.ior, 1.0,
+                                simple_glossy_bsdf( math::min(ru,gu),
+                                             math::min(rv,gv),
+                                             fii.w1 * c1 + fii.w2 * cg,
+                                             color(0.0),
+                                             math::normalize(fii.w1 * t + fii.w2 * tg)),
+                                diffuse_reflection_bsdf(cd,rd),
+                                state::normal())
+        where fii = nvidia::distilling_support::combined_fresnel_glossy( ior1, w, ior2, w2) deadrule;
+
+    fresnel_layer( ior, w,
+                        fresnel_layer( ior2, w2,
+                                            simple_glossy_bsdf(ru,rv,cg,_,t),
+                                            diffuse_reflection_bsdf(cd,_), _),
+                        diffuse_reflection_bsdf(c2,_),
+                        _)
+        --> fresnel_layer( ior, w,
+                                simple_glossy_bsdf(ru,rv,w2*ri2*cg + (1.0 - w2*ri2)*cd,color(0.0),t),
+                                diffuse_reflection_bsdf(c2,0.0),
+                                state::normal())
+        where ri2 = nvidia::distilling_support::refl_from_ior(ior2);
+    fresnel_layer( ior, w,
+                        fresnel_layer( ior2, w2,
+                                            simple_glossy_bsdf(ru,rv,cg,_,t),
+                                            diffuse_reflection_bsdf(cd,_), _),
+                        simple_glossy_bsdf(_,_,c2,_,_),
+                        _)
+        --> fresnel_layer( ior, w,
+                                simple_glossy_bsdf(ru,rv,w2*ri2*cg + (1.0 - w2*ri2)*cd,color(0.0),t),
+                                diffuse_reflection_bsdf(c2,0.0),
+                                state::normal())
+        where ri2 = nvidia::distilling_support::refl_from_ior(ior2) deadrule;
+    fresnel_layer( ior, w,
+                        fresnel_layer( ior1, w1,
+                                            simple_glossy_bsdf(ru1,rv1,c1,_,t1),
+                                            diffuse_reflection_bsdf(dc1,dr1),
+                                            _),
+                        fresnel_layer( ior2, w2,
+                                            simple_glossy_bsdf(ru2,rv2,c2,_,t2),
+                                            diffuse_reflection_bsdf(dc2,dr2),
+                                            _),
+                        _)
+        --> fresnel_layer( fii.ior, fii.w,
+                                simple_glossy_bsdf(
+                                    fii.g1 * ru1 + fii.g2 * ru2,
+                                    fii.g1 * rv1 + fii.g2 * rv2,
+                                    fii.g1 * c1  + fii.g2 * c2,
+                                    color(0.0),
+                                    math::normalize(fii.g1*t1 + fii.g2*t2)),
+                                diffuse_reflection_bsdf(
+                                    fii.d1*dc1+fii.d2*dc2,
+                                    fii.d1*dr1+fii.d2*dr2),
+                                state::normal())
+        where fii = nvidia::distilling_support::combined_fresnel_4( ior,w,ior1,w1,ior2,w2) deadrule;
+
+    postcond  (match( material(_,material_surface(diffuse_reflection_bsdf(_,_),_),_,_,_,_,_))
+               || match( material(_,material_surface(simple_glossy_bsdf(_,_,_,_,_),_),_,_,_,_,_))
+               || match( material(_,material_surface(fresnel_layer(
+                              _,_,simple_glossy_bsdf(_,_,_,_,_),diffuse_reflection_bsdf(_,_),_),_),_,_,_,_,_)))
+          &&  (match( material(_,_,material_surface(diffuse_reflection_bsdf(_,_),_),_,_,_,_))
+               || match( material(_,_,material_surface(simple_glossy_bsdf(_,_,_,_,_),_),_,_,_,_))
+               || match( material(_,_,material_surface(fresnel_layer(
+                              _,_,simple_glossy_bsdf(_,_,_,_,_),diffuse_reflection_bsdf(_,_),_),_),_,_,_,_)));
+}
+
+// Rules to normalize the Fresnel weight and the diffuse roughness for the DG-model
+// \precond The input MDL expression shall be DG-model
+rules Make_dg_normalize_rules bottomup {
+    fresnel_layer( ior, w, simple_glossy_bsdf(ru,rv,c1,_,t), diffuse_reflection_bsdf(c2,_), _)
+        --> fresnel_layer( nvidia::distilling_support::ior_from_weighted_refl_from_ior(
+                                    w,ior), 1.0,
+                                simple_glossy_bsdf(ru,rv,c1,color(0.0),t),
+                                diffuse_reflection_bsdf(w*c2,0.0),
+                                state::normal())
+        maybe w != 1.0
+        deadrule; // this rule set is currently not used at all
+}

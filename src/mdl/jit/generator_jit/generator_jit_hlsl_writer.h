@@ -170,16 +170,25 @@ protected:
     /// \param options              backend options
     /// \param messages             backend messages
     /// \param enable_debug         true, if debug info should be generated
+    /// \param enable_opt_remarks   true, if OptimizationRemarks should be enabled
     HLSLWriterBasePass(
         char                        &pid,
         mi::mdl::IAllocator         *alloc,
         Type_mapper const           &type_mapper,
         mi::mdl::Options_impl const &options,
         mi::mdl::Messages_impl      &messages,
-        bool                        enable_debug);
+        bool                        enable_debug,
+        bool                        enable_opt_remarks);
 
     /// Return the name for this pass.
     llvm::StringRef getPassName() const final;
+
+public:
+    /// Set how to handle the noinline attribute.
+    void set_noinline_mode(hlsl::IPrinter::Attribute_noinline_mode noinline_mode)
+    {
+        m_noinline_mode = noinline_mode;
+    }
 
 protected:
     /// Create a new compilation unit with the given name.
@@ -536,9 +545,11 @@ protected:
 
     /// Finalize the compilation unit and write it to the given output stream.
     ///
+    /// \param M       the LLVM module
     /// \param code    the generated source code
     /// \param remaps  list of remapped entities
     void finalize(
+        llvm::Module                     &M,
         Generated_code_source            *code,
         list<hlsl::Symbol *>::Type const &remaps);
 
@@ -552,8 +563,20 @@ protected:
     hlsl::Definition *create_global_const(
         llvm::StringRef name, hlsl::Expr *c_expr);
 
+    /// Mark the function with the noinline attribute.
+    static void add_noinline_attribute(
+        hlsl::Declaration_function *func)
+    {
+        func->set_attr_noinline(true);
+    }
+
     /// Dump the current AST.
     void dump_ast();
+
+    /// Add a JIT backend error message to the messages.
+    ///
+    /// \param code    the code of the error message
+    void error(int code);
 
 protected:
     /// MDL allocator used for generating the HLSL AST.
@@ -599,14 +622,23 @@ protected:
 
     typedef hash_map<string, unsigned, string_hash<string> >::Type Ref_fname_id_map;
 
-    /// References source files.
+    /// Referenced source files.
     Ref_fname_id_map m_ref_fnames;
+
+    /// Backend messages.
+    mi::mdl::Messages_impl &m_messages;
 
     /// ID used to create unique names.
     unsigned m_next_unique_name_id;
 
+    /// How to handle the noinline attribute.
+    hlsl::IPrinter::Attribute_noinline_mode m_noinline_mode;
+
     /// If true, use debug info.
     bool m_use_dbg;
+
+    /// If true, enable OptimizationRemarks.
+    bool m_opt_remarks;
 };
 
 }  // hlsl

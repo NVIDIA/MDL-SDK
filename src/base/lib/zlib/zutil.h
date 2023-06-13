@@ -247,7 +247,7 @@ extern z_const char * const z_errmsg[10]; /* indexed by 2-zlib_error */
 #ifdef __cplusplus
    } // extern "C"
 #endif
-   extern void ZLIB_INTERNAL z_error OF((char *m));
+   extern void ZLIB_INTERNAL z_error OF((const char *m));
 #  define Assert(cond,msg) {if(!(cond)) z_error(msg);}
 #  define Trace(x) {if (z_verbose>=0) fprintf x ;}
 #  define Tracev(x) {if (z_verbose>0) fprintf x ;}

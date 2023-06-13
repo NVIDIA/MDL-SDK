@@ -292,6 +292,8 @@ mi::mdl::IQualified_name* Mdl_ast_builder::create_scope_name( const std::string&
 }
 
 // Construct a Type_name AST element for a neuray type.
+//
+// TODO merge with MDL::type_to_type_name()
 mi::mdl::IType_name *Mdl_ast_builder::create_type_name(
     Handle<IType const> const &t)
 {
@@ -810,7 +812,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
 
             if (m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_3 && n_params == 1) {
                 if (mi::mdl::is_tex_2d(tex->get_type())) {
-                    // MDL 1.3 -> 1.4: insert the uv_tile parameter for width/heigth(tex_2d)
+                    // MDL 1.3 -> 1.4: insert the uv_tile parameter for width/height(tex_2d)
                     mi::mdl::IExpression const *expr =
                         m_ef.create_literal(mi::mdl::create_int2_zero(m_vf));
                     if (named_args) {
@@ -832,7 +834,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
                         /* width/height/depth(tex_3d tex) */
                         n_params == 1 && mi::mdl::is_tex_3d(tex->get_type())
                     )) {
-                    // MDL 1.6 -> 1.7: insert the frame parameter for width/heigth/depth()
+                    // MDL 1.6 -> 1.7: insert the frame parameter for width/height/depth()
                     mi::mdl::IExpression const *expr =
                         m_ef.create_literal(m_vf.create_float(0.0f));
                     mi::mdl::IArgument const *arg = nullptr;
@@ -1034,10 +1036,9 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
             mi::mdl::IExpression_call *call = m_ef.create_call(ref);
 
             for (mi::Size i = 0, n = n_params; i < n; ++i) {
-                Handle<IExpression const> arg(args->get_expression(i));
-
+                Handle<IExpression const> arg(
+                    args->get_expression(("value" + std::to_string(i)).c_str()));
                 mi::mdl::IExpression const *expr = transform_expr(arg.get());
-
                 call->add_argument(m_ef.create_positional_argument(expr));
             }
             return call;

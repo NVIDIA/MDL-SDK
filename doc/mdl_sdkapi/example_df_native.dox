@@ -57,8 +57,7 @@ void create_material_instance(
     mi::neuraylib::IMdl_impexp_api*         mdl_impexp_api,
     mi::neuraylib::IMdl_execution_context*  context,
     const char*                             material_name,
-    const char*                             instance_name,
-    bool                                    encoded_names_enabled);
+    const char*                             instance_name);
 \endcode
     
 - Compile the material instance:
@@ -84,6 +83,7 @@ void generate_native(
     mi::neuraylib::IMdl_execution_context*  context,
     const char*                             compiled_material_name,
     bool                                    use_custom_tex_runtime,
+    bool                                    use_adapt_normal,
     bool                                    enable_derivatives);
 \endcode
 
@@ -93,7 +93,7 @@ Let's have a more detailed look at the last step. First, the native backend is o
     mi::base::Handle<mi::neuraylib::IMdl_backend> be_native(
         mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_NATIVE));
     ...
-     mi::base::Handle<mi::neuraylib::ILink_unit> link_unit(
+    mi::base::Handle<mi::neuraylib::ILink_unit> link_unit(
         be_native->create_link_unit(transaction, context));
 \endcode
 
@@ -101,13 +101,14 @@ Next, the material sub-expressions are collected and passed to the link unit alo
 
 \code
     std::vector<mi::neuraylib::Target_function_description> descs;
+    descs.push_back(mi::neuraylib::Target_function_description("init"));
     descs.push_back(mi::neuraylib::Target_function_description("surface.scattering"));
     descs.push_back(mi::neuraylib::Target_function_description("surface.emission.emission"));
     descs.push_back(mi::neuraylib::Target_function_description("surface.emission.intensity"));
     
     ...
     
-    bool need_backface_bsdf = is_thing_walled && 
+    bool need_backface_bsdf = is_thin_walled &&
         compiled_material->get_slot_hash(mi::neuraylib::SLOT_SURFACE_SCATTERING) !=
         compiled_material->get_slot_hash(mi::neuraylib::SLOT_BACKFACE_SCATTERING);
     
@@ -127,14 +128,15 @@ Next, the material sub-expressions are collected and passed to the link unit alo
 
 \endcode
 
-where \c descs, of type #mi::neuraylib::Target_function_description, serves to collect the sub-expressions required later during rendering. Some sub-expressions are known to be required while others are added dynamically by inspecting different elements of the compiled material:
+where \c descs, of type #mi::neuraylib::Target_function_description, serves to collect the sub-expressions required later during rendering. The special expression path "init" enables the single-init mode, where for all added sub-expressions a common init function is generated to allow reusing evaluation results among all sub-expressions. Some sub-expressions are known to be required while others are added dynamically by inspecting different elements of the compiled material.
 
 Note that the renderer has to keep track of the indices of the sub-expressions in the array \c descs in order to lookup the functions later during rendering when executing any function of #mi::neuraylib::ITarget_code. In the example, the struct \c render_context is used for that:
 
 \code
-    render_context.surface_bsdf_function_index =                descs[0].function_index;
-    render_context.surface_edf_function_index =                 descs[1].function_index;
-    render_context.surface_emission_intensity_function_index =  descs[2].function_index;
+    render_context.init_function_index =                        descs[0].function_index;
+    render_context.surface_bsdf_function_index =                descs[1].function_index;
+    render_context.surface_edf_function_index =                 descs[2].function_index;
+    render_context.surface_emission_intensity_function_index =  descs[3].function_index;
     ...
 \endcode
 
@@ -145,7 +147,7 @@ Finally, the target code for the native backend (CPU) is generated:
         be_native->translate_link_unit(link_unit.get(), context));
 \endcode
 
-In the example the struct \c render_context is used to take ownership of \c code_native in order to extend its scope to the renderer application scope, otherwise it would be freed by the end of \c generate_native() :
+In the example the struct \c render_context is used to take ownership of \c code_native in order to extend its scope to the renderer application scope, otherwise it would be freed by the end of \c generate_native():
 
 \code
     render_context.target_code = code_native;
@@ -157,7 +159,18 @@ In the example the struct \c render_context is used to take ownership of \c code
 <dl>
 <dt><b>Using generated BSDF functions (CPU)</b></dt>
 <dd><br>
-At this point the target code for the native backend is available for the renderer and it can be used to query material properties and evaluate material distribution functions. Here for example, the renderer uses \c target_code to obtain the \c cutout_opacity and \c thin_walled material properties for the current \c shading_state:
+At this point the target code for the native backend is available for the renderer and it can be used to query material properties and evaluate material distribution functions. For a hit point, first, the init function has to be called, so the following calls to the generated code can reuse calculated expressions:
+
+\code
+    // shader initialization for the current hit point
+    ret_code = rc.target_code->execute_init(
+        rc.init_function_index,
+        *shading_state,
+        tex_handler,
+        /*arg_block_data=*/ nullptr);
+\endcode
+
+After that, the renderer can use \c target_code to obtain for example the \c cutout_opacity and \c thin_walled material properties for the current \c shading_state:
 
 \code
     // evaluate material cutout opacity state
@@ -166,8 +179,8 @@ At this point the target code for the native backend is available for the render
     {
         rc.target_code->execute(
             rc.cutout_opacity_function_index,
-            reinterpret_cast<mi::neuraylib::Shading_state_material&>(rc.shading_state),
-            /*texture_handler=*/ nullptr,
+            *shading_state,
+            tex_handler,
             /*arg_block_data=*/ nullptr,
             &cutout_opacity);
     }
@@ -180,46 +193,45 @@ At this point the target code for the native backend is available for the render
     {
         rc.target_code->execute(
             rc.thin_walled_function_index,
-            reinterpret_cast<mi::neuraylib::Shading_state_material&>(rc.shading_state),
-            /*texture_handler=*/ nullptr,
+            *shading_state,
+            tex_handler,
             /*arg_block_data=*/ nullptr,
             &is_thin_walled);
     }    
 \endcode
 
-and here, the renderer uses three \c target_code functions to evaluate the material emission contribution for the current \c shading_state.
-- \c target_code->execute_edf_init() to initialize the emission distribution function for the current \c shading_state and function index \c edf_function_index.
-- \c target_code->execute_edf_evaluate() to evaluate material emission distribution function for the current view direction \c eval_data.k1 and function index \c edf_function_index.
-- \c target_code->execute() to obtain the emission \c intensity for the function index \c surface_emission_intensity_function_index.
+To evaluate the material emission contribution for the current \c shading_state, the renderer uses two \c target_code functions:
+- \c target_code->execute_edf_evaluate() to evaluate the material emission distribution function for the current view direction \c eval_data.k1 and function index \c edf_function_index.
+- \c target_code->execute() to obtain the emission \c intensity for the function index \c emission_intensity_function_index.
 
 \code
-    uint64_t edf_function_index = ray.is_inside ? rc.backface_edf_function_index : rc.surface_edf_function_index;
-    // shader initialization for the current hit point
-    rc.target_code->execute_edf_init(
-        edf_function_index,
-        rc.shading_state,
-        nullptr,
-        nullptr);
+    uint64_t edf_function_index = (is_thin_walled && ray.is_inside)
+        ? rc.backface_edf_function_index : rc.surface_edf_function_index
 
     mi::neuraylib::Edf_evaluate_data<mi::neuraylib::DF_HSM_NONE> eval_data;
     eval_data.k1 = -ray.dir;
 
-    // evaluate material surface edf
+    // evaluate material surface emission contribution
     rc.target_code->execute_edf_evaluate(
-        edf_function_index + 2,     // edf_function_index corresponds to 'init'
-                                    // edf_function_index + 2 to 'evaluate'
+        edf_function_index + 1,     // edf_function_index corresponds to 'sample'
+                                    // edf_function_index + 1 to 'evaluate'
         &eval_data,
-        rc.shading_state,
-        /*texture_handler=*/ nullptr,
+        *shading_state,
+        tex_handler,
         /*arg_block_data=*/ nullptr);
 
+    // emission contribution is only valid for positive pdf
     if (eval_data.pdf > 1.e-6f)
     {
+        uint64_t emission_intensity_function_index = (is_thin_walled && ray.is_inside)
+            ? rc.backface_emission_intensity_function_index
+            : rc.surface_emission_intensity_function_index;
+
         mi::Float32_3 intensity(1.f);
         rc.target_code->execute(
-            rc.surface_emission_intensity_function_index,
-            reinterpret_cast<mi::neuraylib::Shading_state_material&>(rc.shading_state),
-            /*texture_handler=*/ nullptr,
+            emission_intensity_function_index,
+            *shading_state,
+            tex_handler,
             /*arg_block_data=*/ nullptr,
             &intensity);
 

@@ -118,8 +118,6 @@ void LLVM_code_generator::sl_compile(
         mpm.add(llvm::createLoopSimplifyCFGPass());    // ensure all exit blocks are dominated by
                                                        // the loop header
         mpm.add(llvm::sl::createLoopExitEnumerationPass());  // ensure all loops have <= 1 exits
-        mpm.add(llvm::sl::createUnswitchPass());       // get rid of all switch instructions
-                                                       // introduced by the loop exit enumeration
         mpm.add(llvm::sl::createRemovePointerPHIsPass());
         mpm.add(llvm::sl::createHandlePointerSelectsPass());
         mpm.add(llvm::sl::createASTComputePass(m_type_mapper));
@@ -135,7 +133,9 @@ void LLVM_code_generator::sl_compile(
                 m_messages,
                 m_enable_full_debug,
                 m_link_libbsdf_df_handle_slot_mode,
-                m_exported_func_list));
+                m_exported_func_list,
+                m_jitted_code->opt_remarks_enabled(),
+                m_enable_noinline));
             break;
         case ICode_generator::TL_GLSL:
             mpm.add(sl::createGLSLWriterPass(
@@ -236,6 +236,8 @@ llvm::Function *LLVM_code_generator::get_sl_intrinsic_function(
         case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3:
         case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
         case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
+        case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4X4:
+        case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4X4:
             can_return_derivs = true;
             module_name = "scene";
             module_id = ME_SCENE;
@@ -361,6 +363,7 @@ llvm::Function *LLVM_code_generator::get_sl_intrinsic_function(
                 case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT3:
                 case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4:
                 case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_COLOR:
+                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4X4:
                     uniform = true;
                     break;
 
@@ -441,6 +444,16 @@ llvm::Function *LLVM_code_generator::get_sl_intrinsic_function(
                         runtime_func_name = "scene_data_lookup_color";
                     }
                     break;
+                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_FLOAT4X4:
+                case mi::mdl::IDefinition::DS_INTRINSIC_SCENE_DATA_LOOKUP_UNIFORM_FLOAT4X4:
+                    if (return_derivs) {
+                        runtime_func = &m_sl_funcs.m_scene_data_lookup_deriv_float4x4;
+                        runtime_func_name = "scene_data_lookup_deriv_float4x4";
+                    } else {
+                        runtime_func = &m_sl_funcs.m_scene_data_lookup_float4x4;
+                        runtime_func_name = "scene_data_lookup_float4x4";
+                    }
+                    break;
 
                 default:
                     MDL_ASSERT(!"unexpected semantics");
@@ -455,7 +468,8 @@ llvm::Function *LLVM_code_generator::get_sl_intrinsic_function(
                     mdl_func_type->param_begin(), mdl_func_type->param_end());
                 arg_types.push_back(m_type_mapper.get_bool_type());
                 *runtime_func = llvm::Function::Create(
-                    llvm::FunctionType::get(mdl_func_type->getReturnType(), arg_types, false),
+                    llvm::FunctionType::get(
+                        mdl_func_type->getReturnType(), arg_types, /*isVarArg=*/false),
                     llvm::GlobalValue::ExternalLinkage,
                     runtime_func_name,
                     m_module);
