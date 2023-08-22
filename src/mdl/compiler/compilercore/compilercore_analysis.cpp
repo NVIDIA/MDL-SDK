@@ -5796,6 +5796,7 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
                 // an invalid statement, we are ready
                 visit(body);
             } else {
+                // expect single expression body
                 bool single_expr_func = false;
                 if (m_module.get_mdl_version() >= IMDL::MDL_VERSION_1_6) {
                    if (is<IStatement_expression>(body)) {
@@ -5813,14 +5814,19 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
                         FUNCTION_BODY_NOT_BLOCK,
                         body->access_position(),
                         Error_params(*this));
-                }
-
-                if (is_auto_return) {
-                    // has auto return type
+                } else {
                     if (IStatement_expression const *expr_stmt = as<IStatement_expression>(body)) {
                         if (IExpression const *expr = expr_stmt->get_expression()) {
-                            // return type is the type of the expression
-                            curr_func->set_deduced_ret_type(expr->get_type());
+                            IExpression const *ret_expr = handle_return_expression(expr);
+
+                            if (ret_expr != expr) {
+                                const_cast<IStatement_expression *>(expr_stmt)->set_expression(
+                                    ret_expr);
+                            }
+                            if (is_auto_return) {
+                                // has auto return type: return type is the type of the expression
+                                curr_func->set_deduced_ret_type(ret_expr->get_type());
+                            }
                         }
                     }
                 }
@@ -10237,16 +10243,7 @@ Definition const *NT_analysis::reformat_default_struct_constructor(
     IType_struct const   *s_type = cast<IType_struct>(f_type->get_return_type());
 
     // first step: find the elementary constructor inside THIS module
-    Definition const *c_def = NULL;
-    for (c_def = m_module.get_first_constructor(s_type);
-        c_def != NULL;
-        c_def = m_module.get_next_constructor(c_def))
-    {
-        if (c_def->get_semantics() == IDefinition::DS_ELEM_CONSTRUCTOR) {
-            // found
-            break;
-        }
-    }
+    Definition const *c_def = m_module.get_elemental_constructor(s_type);
     MDL_ASSERT(c_def != NULL && "could not find default constructor");
 
     // lookup the original definition to get default arguments
@@ -12524,14 +12521,14 @@ bool NT_analysis::pre_visit(IStatement_for *for_stmt)
     return false;
 }
 
-// end of a return statement
-void NT_analysis::post_visit(IStatement_return *ret_stmt)
+IExpression const *NT_analysis::handle_return_expression(
+    IExpression const *expr)
 {
-    IExpression const *expr      = ret_stmt->get_expression();
     IType const       *expr_type = expr->get_type();
+    IExpression const *ret_expr  = expr;
 
     if (is<IType_error>(expr_type)) {
-        return;
+        return ret_expr;
     }
 
     // check the return type and add conversions if necessary
@@ -12541,7 +12538,7 @@ void NT_analysis::post_visit(IStatement_return *ret_stmt)
     IType const      *ret_type  = get_result_type(func_def)->skip_type_alias();
 
     if (is<IType_error>(ret_type)) {
-        return;
+        return ret_expr;
     }
 
     if (curr_func->is_auto_return()) {
@@ -12588,14 +12585,18 @@ void NT_analysis::post_visit(IStatement_return *ret_stmt)
     bool has_error          = true;
     bool new_bound          = false;
     bool need_explicit_conv = false;
-    if (can_assign_param(ret_type, expr_type, new_bound, need_explicit_conv)) {
+    if (curr_func->is_auto_return() && is<IType_function>(expr_type->skip_type_alias())) {
+        has_error = true;
+        curr_func->set_deduced_ret_type(m_tc.error_type);
+        curr_func->set_error();
+    } else if (can_assign_param(ret_type, expr_type, new_bound, need_explicit_conv)) {
         has_error = false;
         if (need_type_conversion(ret_type, expr_type)) {
             if (is<IType_array>(ret_type->skip_type_alias())) {
                 // cannot convert arrays
                 has_error = true;
             } else if (IExpression const *conv = convert_to_type_implicit(expr, ret_type)) {
-                ret_stmt->set_expression(conv);
+                ret_expr = conv;
             } else {
                 // no conversion possible
                 has_error = true;
@@ -12613,6 +12614,22 @@ void NT_analysis::post_visit(IStatement_return *ret_stmt)
                 INVALID_CONVERSION_RETURN,
                 expr->access_position(),
                 Error_params(*this).add(expr_type).add(ret_type));
+        }
+    }
+    return ret_expr;
+}
+
+// end of a return statement
+void NT_analysis::post_visit(
+    IStatement_return *ret_stmt)
+{
+    IExpression const *expr      = ret_stmt->get_expression();
+    IType const       *expr_type = expr->get_type();
+
+    if (!is<IType_error>(expr_type)) {
+        IExpression const *ret_expr = handle_return_expression(expr);
+        if (ret_expr != expr) {
+            ret_stmt->set_expression(ret_expr);
         }
     }
 }
@@ -13133,9 +13150,24 @@ IExpression *NT_analysis::post_visit(IExpression_call *call_expr)
     }
 
     Definition const *initial_def = impl_cast<Definition>(callee_ref->get_definition());
-    if (initial_def->get_kind() == Definition::DK_CONSTRUCTOR) {
+    IDefinition::Kind initial_kind = initial_def->get_kind();
+    switch (initial_kind) {
+    case Definition::DK_CONSTRUCTOR:
         // if we identified a constructor, we are always bound to scope
         bound_to_scope = true;
+        break;
+
+    case Definition::DK_ARRAY_SIZE:
+        // It is possible to reach this place with invalid
+        // MDL code. In that case, mark this call as an
+        // erroneous call.
+        // Error was already reported when we get here.
+        call_expr->set_type(m_tc.error_type);
+        return call_expr;
+
+    default:
+        // For other cases, continue with the analysis.
+        break;
     }
 
     if (callee_ref->is_array_constructor()) {
@@ -13506,6 +13538,18 @@ bool NT_analysis::pre_visit(IType_name *type_name)
         }
         // set the type, so it will be recognized as a type
         type_name->set_type(type);
+    }
+
+    if (type_name->is_array() && type_name->is_concrete_array()) {
+        IExpression const* arr_size = type_name->get_array_size();
+        if (arr_size != NULL && is<IExpression_let>(arr_size)) {
+            // When the array size is a let expression, later analysis fails (since let
+            // expressions introduce variables and therefore nodes in the data dependency
+            // graph), so we replace them with an error node. An error message is produced
+            // when visiting the let expression itself.
+            type_name->set_array_size(m_module.get_expression_factory()->create_invalid());
+            type_name->set_type(type);
+        }
     }
     return false;
 }

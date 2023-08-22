@@ -629,10 +629,15 @@ public:
 /// The interface for creating types.
 ///
 /// A type factory can be obtained from #mi::neuraylib::IMdl_factory::create_type_factory().
+///
+/// \see #mi::neuraylib::IValue_factory, #mi::neuraylib::IExpression_factory
 class IType_factory : public
     mi::base::Interface_declare<0x353803c0,0x74a6,0x48ac,0xab,0xa1,0xe4,0x25,0x42,0x1d,0xa1,0xbc>
 {
 public:
+    /// \name Creation of types and type lists
+    //@{
+
     /// Creates a new instance of the type alias.
     virtual const IType_alias* create_alias(
         const IType* type, Uint32 modifiers, const char* symbol) const = 0;
@@ -718,8 +723,19 @@ public:
     /// Returns a registered struct type, or \c NULL if \p id is unknown.
     virtual const IType_struct* get_predefined_struct( IType_struct::Predefined_id id) const = 0;
 
+    //@}
+    /// \name Cloning of type lists
+    //@{
+
     /// Clones the given type list.
+    ///
+    /// \note There is no method clone a type itself. Types themselves are always \c const and
+    ///       there is no scenario where cloning of a type makes sense.
     virtual IType_list* clone( const IType_list* type_list) const = 0;
+
+    //@}
+    /// \name Comparison of types and type lists
+    //@{
 
     /// Compares two instances of #mi::neuraylib::IType.
     ///
@@ -786,6 +802,10 @@ public:
     ///           - -1 if \p src cannot be casted to \p dst.
     virtual Sint32 is_compatible( const IType* src, const IType* dst) const = 0;
 
+    //@}
+    /// \name Dumping of types and type lists
+    //@{
+
     /// Returns a textual representation of a type.
     ///
     /// The representation of the type might contain line breaks, for example for structures and
@@ -807,6 +827,8 @@ public:
     ///       future releases. The textual representation is primarily meant as a debugging aid. Do
     ///       \em not base application logic on it.
     virtual const IString* dump( const IType_list* list, Size depth = 0) const = 0;
+
+    //@}
 };
 
 /**@}*/ // end group mi_neuray_mdl_types

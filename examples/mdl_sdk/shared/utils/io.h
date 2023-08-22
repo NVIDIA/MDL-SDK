@@ -79,6 +79,7 @@ namespace mi { namespace examples { namespace io
         if (remove_dir_ups)
         {
             bool isAbsolute = path[0] == '/';
+            bool isAbsoluteUNC = isAbsolute && path[1] == '/';
             std::vector<std::string> chunks = mi::examples::strings::split(path, '/');
             std::stack<std::string> pathStack;
             for (const std::string& c : chunks)
@@ -108,6 +109,8 @@ namespace mi { namespace examples { namespace io
             }
 
             if (isAbsolute)
+                path = "/" + path;
+            if (isAbsoluteUNC)
                 path = "/" + path;
         }
         return path;

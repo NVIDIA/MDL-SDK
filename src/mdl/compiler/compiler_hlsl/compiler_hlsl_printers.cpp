@@ -542,7 +542,7 @@ void Printer::print_value(Value *value)
 
             float f = v->get_value();
             if (isfinite(f)) {
-                snprintf(buf, sizeof(buf) - 2, "%.7g", f);
+                snprintf(buf, sizeof(buf) - 2, "%.10g", f);
                 buf[sizeof(buf) - 3] = '\0';
                 print(to_float_constant(buf));
                 print('h');
@@ -562,19 +562,20 @@ void Printer::print_value(Value *value)
 
             float f = v->get_value();
             if (isfinite(f)) {
-                snprintf(buf, sizeof(buf) - 2, "%.7g", f);
+                snprintf(buf, sizeof(buf) - 2, "%.10g", f);
                 buf[sizeof(buf) - 3] = '\0';
                 print(to_float_constant(buf));
+                print('f');
             } else if (f == +HUGE_VAL) {
-                print("(+1.0/0.0)");
+                print("(+1.0f/0.0f)");
             } else if (f == -HUGE_VAL) {
-                print("(-1.0/0.0)");
+                print("(-1.0f/0.0f)");
             } else if (is_encoded_value(f)) {
                 print("asfloat(");
                 print(decode_value_as_uint(f));
                 print("u)");
             } else {
-                print("(0.0/0.0)");
+                print("(0.0f/0.0f)");
             }
             break;
         }
@@ -585,7 +586,7 @@ void Printer::print_value(Value *value)
 
             double d = v->get_value();
             if (isfinite(d)) {
-                snprintf(buf, sizeof(buf) - 2, "%.16g", d);
+                snprintf(buf, sizeof(buf) - 2, "%.18g", d);
                 buf[sizeof(buf) - 3] = '\0';
                 print(to_float_constant(buf));
                 print('l');

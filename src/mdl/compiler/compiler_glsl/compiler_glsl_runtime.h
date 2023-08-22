@@ -153,6 +153,13 @@
 /// Defines the end of a builtin matrix type.
 #define MATRIX_TYPE_END  TYPE_END
 #endif
+#ifndef TYPE_ALIAS
+/// Defines the alias name of a builtin type.
+///
+/// \param aliasname     the name of the alias type
+/// \param typename      the name of the builtin type
+#define TYPE_ALIAS(aliasname, typename)
+#endif
 
 // typical predicates
 
@@ -324,8 +331,7 @@ BEND(basic_types_non_es)
 //
 BLOCK(non_quadratic_matrices_types, PRED_NON_QUADRATIC_MATRICES)
 
-    MATRIX_TYPE_BEGIN(mat2x2)
-    MATRIX_TYPE_END
+    TYPE_ALIAS(mat2x2, mat2)
 
     MATRIX_TYPE_BEGIN(mat2x3)
     MATRIX_TYPE_END
@@ -336,8 +342,7 @@ BLOCK(non_quadratic_matrices_types, PRED_NON_QUADRATIC_MATRICES)
     MATRIX_TYPE_BEGIN(mat3x2)
     MATRIX_TYPE_END
 
-    MATRIX_TYPE_BEGIN(mat3x3)
-    MATRIX_TYPE_END
+    TYPE_ALIAS(mat3x3, mat3)
 
     MATRIX_TYPE_BEGIN(mat3x4)
     MATRIX_TYPE_END
@@ -348,8 +353,7 @@ BLOCK(non_quadratic_matrices_types, PRED_NON_QUADRATIC_MATRICES)
     MATRIX_TYPE_BEGIN(mat4x3)
     MATRIX_TYPE_END
 
-    MATRIX_TYPE_BEGIN(mat4x4)
-    MATRIX_TYPE_END
+    TYPE_ALIAS(mat4x4, mat4)
 
 BEND(non_quadratic_matrices_types)
 
@@ -519,17 +523,13 @@ BLOCK(explicit_size_int_types, HAS_EXPLICIT_SIZED_INT_TYPES)
     VECTOR_TYPE_BEGIN(i16vec4)
     VECTOR_TYPE_END
 
-    TYPE_BEGIN(int32_t)
-    TYPE_END
+    TYPE_ALIAS(int32_t, int)
 
-    VECTOR_TYPE_BEGIN(i32vec2)
-    VECTOR_TYPE_END
+    TYPE_ALIAS(i32vec2, ivec2)
 
-    VECTOR_TYPE_BEGIN(i32vec3)
-    VECTOR_TYPE_END
+    TYPE_ALIAS(i32vec3, ivec3)
 
-    VECTOR_TYPE_BEGIN(i32vec4)
-    VECTOR_TYPE_END
+    TYPE_ALIAS(i32vec4, ivec4)
 
     TYPE_BEGIN(uint8_t)
     TYPE_END
@@ -555,17 +555,13 @@ BLOCK(explicit_size_int_types, HAS_EXPLICIT_SIZED_INT_TYPES)
     VECTOR_TYPE_BEGIN(u16vec4)
     VECTOR_TYPE_END
 
-    TYPE_BEGIN(uint32_t)
-    TYPE_END
+    TYPE_ALIAS(uint32_t, uint)
 
-    VECTOR_TYPE_BEGIN(u32vec2)
-    VECTOR_TYPE_END
+    TYPE_ALIAS(u32vec2, uvec2)
 
-    VECTOR_TYPE_BEGIN(u32vec3)
-    VECTOR_TYPE_END
+    TYPE_ALIAS(u32vec3, uvec3)
 
-    VECTOR_TYPE_BEGIN(u32vec4)
-    VECTOR_TYPE_END
+    TYPE_ALIAS(u32vec4, uvec4)
 BEND(explicit_size_int_types)
 
 //
@@ -1895,6 +1891,7 @@ UVARIABLE(gl_DepthRangeParameters, gl_DepthRange)
 
 BEND(depth_range_parameters_es)
 
+#undef TYPE_ALIAS
 #undef MATRIX_TYPE_END
 #undef MATRIX_TYPE_BEGIN
 #undef VECTOR_TYPE_END

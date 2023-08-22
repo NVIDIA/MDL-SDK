@@ -307,7 +307,7 @@ public:
     , m_dg(dg)
     , m_dag_builder(dg.m_dag_builder)
     , m_curr(NULL)
-    , m_module(dg.m_dag_builder.tos_module())
+    , m_module(impl_cast<Module>(dg.m_dag_builder.tos_module()))
     , m_known_callees(map)
     , m_wait_q(Def_wait_queue::container_type(arena.get_allocator()))
     , m_marker(0, Def_set::hasher(), Def_set::key_equal(), arena.get_allocator())
@@ -469,7 +469,7 @@ private:
         }
         if (ref->is_array_constructor()) {
             // add a reference to the DAG array constructor here
-            IType_factory   *fact = m_module->get_type_factory();
+            Type_factory    *fact = m_module->get_type_factory();
             Dependence_node *node = m_dg.get_node(
                 get_array_constructor_signature(),
                 get_array_constructor_signature_without_suffix(),
@@ -493,32 +493,32 @@ private:
             return call;
         }
 
-        Dependence_node *node = NULL;
+        add_reference_to_callee(callee);
+        return call;
+    }
 
-        if (m_restricted) {
-            Def_node_map::const_iterator it = m_known_callees.find(callee);
-            if (it == m_known_callees.end()) {
-                return call;
-            }
+    /// Given an lvalue expression, add reference to all elemental constructors that
+    /// will be needed to create the DAG.
+    void reference_elem_constructors(IExpression const *l_value)
+    {
+        if (IExpression_binary const *select = as<IExpression_binary>(l_value)) {
+            if (select->get_operator() == IExpression_binary:: OK_SELECT) {
+                IExpression const *base      = select->get_left_argument();
+                IType const       *base_type = base->get_type()->skip_type_alias();
+                IType::Kind       tp_kind    = base_type->get_kind();
 
-            node = it->second;
-        } else {
-            node = m_dg.get_node(callee);
+                if (tp_kind == IType::TK_STRUCT || tp_kind == IType::TK_VECTOR) {
+                    Definition const *c_def = m_module->get_elemental_constructor(base_type);
 
-            if (m_marker.insert(callee).second) {
-                // new node discovered
-                IDeclaration const *decl = callee->get_declaration();
+                    MDL_ASSERT(c_def != NULL && "could not find elemental constructor");
 
-                // the dependency graph is restricted to one module, so stop at imports;
-                // for compiler generated entities decl can be NULL
-                if (decl != NULL && !callee->get_property(IDefinition::DP_IS_IMPORTED)) {
-                    m_wait_q.push(node);
+                    add_reference_to_callee(c_def);
+
+                    // recurse down
+                    reference_elem_constructors(base);
                 }
             }
         }
-
-        m_curr->add_edge(m_arena, node, m_inside_parameter);
-        return call;
     }
 
     /// Post-visit a binary expression.
@@ -531,8 +531,16 @@ private:
 
         IExpression_binary::Operator op = expr->get_operator();
 
+        if (op == IExpression_binary::OK_ASSIGN) {
+            IExpression const *lvalue = expr->get_left_argument();
+
+            reference_elem_constructors(lvalue);
+
+            // the assign itself operator is NEVER used inside DAG, ignore it
+            return expr;
+        }
         if (op == IExpression_binary::OK_ASSIGN || op == IExpression_binary::OK_SEQUENCE) {
-            // these operators are NEVER used inside DAG, ignore them
+            // the sequence operator is NEVER used inside DAG, ignore it
             return expr;
         }
 
@@ -767,6 +775,37 @@ private:
         return ref_expr;
     }
 
+    /// Add a reference to the given callee.
+    ///
+    /// \param callee  the definition of the callee
+    void add_reference_to_callee(IDefinition const *callee)
+    {
+        Dependence_node *node = NULL;
+
+        if (m_restricted) {
+            Def_node_map::const_iterator it = m_known_callees.find(callee);
+            if (it == m_known_callees.end()) {
+                return;
+            }
+            node = it->second;
+        } else {
+            node = m_dg.get_node(callee);
+
+            if (m_marker.insert(callee).second) {
+                // new node discovered
+                IDeclaration const *decl = callee->get_declaration();
+
+                // the dependency graph is restricted to one module, so stop at imports;
+                // for compiler generated entities decl can be NULL
+                if (decl != NULL && !callee->get_property(IDefinition::DP_IS_IMPORTED)) {
+                    m_wait_q.push(node);
+                }
+            }
+        }
+
+        m_curr->add_edge(m_arena, node, m_inside_parameter);
+    }
+
     // Find a parameter for a given array size.
     IDefinition const *find_parameter_for_size(ISymbol const *sym) const
     {
@@ -842,7 +881,7 @@ private:
     Dependence_node *m_curr;
 
     /// The current module.
-    IModule const *m_module;
+    Module const *m_module;
 
     /// The node map of known callees.
     Def_node_map const &m_known_callees;
@@ -868,7 +907,6 @@ private:
     /// if true, we are inside a material/function preset.
     bool m_inside_preset;
 };
-
 
 namespace {
 

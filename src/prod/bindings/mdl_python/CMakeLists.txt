@@ -103,6 +103,11 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
         PUBLIC
             -Wno-delete-abstract-non-virtual-dtor
     )
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    target_compile_options(${PROJECT_NAME}
+        PRIVATE
+            /bigobj
+    )
 endif()
 
 # copy content

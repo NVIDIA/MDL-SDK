@@ -141,6 +141,8 @@ void dump_metadata(mi::base::Handle<const mi::neuraylib::ITarget_code> code, std
     for (mi::Size i = 0, n = code->get_texture_count(); i < n; ++i)
     {
         const char* c = code->get_texture(i);
+        if (!c || strlen(c) == 0)
+            c = code->get_texture_url(i);
         const char* b = code->get_texture_is_body_resource(i) ? "(body)" : "(non-body)";
         out << "   " << i << ": \"" << c << "\" " << b << "\n";
     }
@@ -150,6 +152,8 @@ void dump_metadata(mi::base::Handle<const mi::neuraylib::ITarget_code> code, std
     for (mi::Size i = 0, n = code->get_light_profile_count(); i < n; ++i)
     {
         const char* c = code->get_light_profile(i);
+        if (!c || strlen(c) == 0)
+            c = code->get_light_profile_url(i);
         const char* b = code->get_light_profile_is_body_resource(i) ? "(body)" : "(non-body)";
         out << "   " << i << ": \"" << c << "\" " << b << "\n";
     }
@@ -159,6 +163,8 @@ void dump_metadata(mi::base::Handle<const mi::neuraylib::ITarget_code> code, std
     for (mi::Size i = 0, n = code->get_bsdf_measurement_count(); i < n; ++i)
     {
         const char* c = code->get_bsdf_measurement(i);
+        if (!c || strlen(c) == 0)
+            c = code->get_bsdf_measurement_url(i);
         const char* b = code->get_bsdf_measurement_is_body_resource(i) ? "(body)" : "(non-body)";
         out << "   " << i << ": \"" << c << "\" " << b << "\n";
     }

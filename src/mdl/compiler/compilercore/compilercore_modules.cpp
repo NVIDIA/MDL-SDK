@@ -695,7 +695,22 @@ Definition const *Module::get_next_conversion_operator(Definition const *op_def)
         }
     }
     return NULL;
+}
 
+// Get the elemental constructor of a given type.
+Definition const *Module::get_elemental_constructor(IType const *type) const
+{
+    Definition const *c_def = NULL;
+    for (c_def = get_first_constructor(type);
+        c_def != NULL;
+        c_def = get_next_constructor(c_def))
+    {
+        if (c_def->get_semantics() == IDefinition::DS_ELEM_CONSTRUCTOR) {
+            // found
+            break;
+        }
+    }
+    return c_def;
 }
 
 // Get the the number of constructors of a given type.

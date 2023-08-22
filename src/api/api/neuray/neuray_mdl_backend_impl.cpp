@@ -362,10 +362,11 @@ const mi::neuraylib::ITarget_code* Mdl_llvm_backend::deserialize_target_code(
 
     // make sure the info is of the same back-end kind
     if (info->get_backend_kind() != m_backend.get_kind()) {
-        context->add_message(mi::neuraylib::IMessage::MSG_COMILER_BACKEND,
-            mi::base::details::MESSAGE_SEVERITY_ERROR, -1,
-            "Deserialization failed. The deserialized object was created by different kind of "
-            "back-end.");
+        if (context)
+            context->add_message(mi::neuraylib::IMessage::MSG_COMILER_BACKEND,
+                mi::base::details::MESSAGE_SEVERITY_ERROR, -1,
+                "Deserialization failed. The deserialized object was created by different kind of "
+                "backend.");
         return nullptr;
     }
 

@@ -1774,6 +1774,13 @@ void Mdl_printer::analyze_material()
 {
     Handle<const IExpression_direct_call> body(m_material->get_body());
 
+    mi::Size param_count = m_material->get_parameter_count();
+   
+    for (mi::Size i = 0; i < param_count; i++) {
+        Handle <IValue const> param_value(m_material->get_argument(i));
+        analyze_value(param_value.get(), "");
+    }
+    
     if (preserve_temporaries()) {
         mi::Size temp_count = m_material->get_temporary_count();
         if (temp_count > 0) {

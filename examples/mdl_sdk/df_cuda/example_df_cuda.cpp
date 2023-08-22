@@ -1099,7 +1099,7 @@ static void render_scene(
                             switch (val_type->get_size()) {
                             case 2: param_kind = Param_info::PK_FLOAT2; break;
                             case 3: param_kind = Param_info::PK_FLOAT3; break;
-                            default: assert(false || "Vector Size invalid or unhandled.");
+                            default: assert(false && "Vector Size invalid or unhandled.");
                             }
                         }
                     }
@@ -1143,13 +1143,13 @@ static void render_scene(
                                         param_array_elem_kind = Param_info::PK_FLOAT3;
                                         break;
                                     default:
-                                        assert(false || "Vector Size invalid or unhandled.");
+                                        assert(false && "Vector Size invalid or unhandled.");
                                     }
                                 }
                             }
                             break;
                         default:
-                            assert(false || "Array element type invalid or unhandled.");
+                            assert(false && "Array element type invalid or unhandled.");
                         }
                         if (param_array_elem_kind != Param_info::PK_UNKNOWN) {
                             param_kind = Param_info::PK_ARRAY;
@@ -1576,7 +1576,7 @@ static void render_scene(
                                         int(param.range_max()));
                                     break;
                                 default:
-                                    assert(false || "Array element type invalid or unhandled.");
+                                    assert(false && "Array element type invalid or unhandled.");
                                 }
                                 ptr += param.array_pitch();
                             }

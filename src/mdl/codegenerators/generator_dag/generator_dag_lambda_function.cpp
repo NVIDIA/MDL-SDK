@@ -3273,7 +3273,7 @@ public:
 
                 // remap "geometry.normal" to state::normal(), if it will be included
                 if (include_geometry_normal &&
-                    path_parts.size() > 1 &&
+                    path_parts.size() == 2 &&
                     strcmp(path_parts[1], "normal") == 0)
                 {
                     IType const *float3_type = mat_builder.m_type_factory.create_vector(

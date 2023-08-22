@@ -2615,7 +2615,7 @@ double MDL::get_compiler_double_option(
     double res = def_value;
     if (char const *fv = get_compiler_option(ctx, name)) {
         char *end;
-        double f = float(strtod(fv, &end));
+        double f = strtod(fv, &end);
         if (*end == '\0') {
             res = f;
         }

@@ -40,6 +40,7 @@
 #include <llvm/Support/raw_ostream.h>
 
 #include <mdl/compiler/compilercore/compilercore_allocator.h>
+#include <mdl/compiler/compilercore/compilercore_errors.h>
 #include <mdl/compiler/compilercore/compilercore_messages.h>
 #include <mdl/compiler/compiler_hlsl/compiler_hlsl_tools.h>
 #include <mdl/compiler/compiler_glsl/compiler_glsl_tools.h>
@@ -607,6 +608,7 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_region(
         return translate_return(llvm::sl::cast<llvm::sl::RegionReturn>(region));
     default:
         MDL_ASSERT(!"Region kind not supported, yet");
+        Base::error(mi::mdl::INTERNAL_JIT_BACKEND_ERROR);
         return Base::m_stmt_factory.create_invalid(Base::zero_loc);
     }
 }
@@ -1306,6 +1308,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::create_compound_e
         }
 
         MDL_ASSERT(!"unexpected type kind");
+        Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
         return Base::m_expr_factory.create_invalid(Base::zero_loc);
     }
 
@@ -1932,6 +1935,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_constan
                 break;
             default:
                 MDL_ASSERT(!"invalid integer vector literal type");
+                Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
                 return Base::m_expr_factory.create_invalid(Base::zero_loc);
             }
             break;
@@ -1970,6 +1974,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_constan
         // fallthrough
     default:
         MDL_ASSERT(!"invalid vector literal type");
+        Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
         return Base::m_expr_factory.create_invalid(Base::zero_loc);
     }
 
@@ -2304,6 +2309,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_expr(
         case llvm::Instruction::VAArg:
         case llvm::Instruction::LandingPad:
             MDL_ASSERT(!"unexpected LLVM instruction");
+            Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
             result = Base::m_expr_factory.create_invalid(Base::convert_location(inst));
             break;
 
@@ -2328,6 +2334,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_expr(
         return translate_constant_expr(ci, /*is_global=*/ false);
     }
     MDL_ASSERT(!"unexpected LLVM value");
+    Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
     return Base::m_expr_factory.create_invalid(Base::zero_loc);
 }
 
@@ -2545,6 +2552,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_expr_bi
                 }
             default:
                 MDL_ASSERT(!"unexpected LLVM comparison predicate");
+                Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
                 return Base::m_expr_factory.create_invalid(Base::convert_location(inst));
             }
             break;
@@ -2552,6 +2560,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_expr_bi
 
     default:
         MDL_ASSERT(!"unexpected LLVM binary instruction");
+        Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
         return Base::m_expr_factory.create_invalid(Base::convert_location(inst));
     }
 
@@ -2644,6 +2653,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_expr_ca
     llvm::Function *func = call->getCalledFunction();
     if (func == nullptr) {
         MDL_ASSERT(func && "indirection function calls not supported");
+        Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
         return Base::m_expr_factory.create_invalid(Base::convert_location(call));
     }
 
@@ -2830,6 +2840,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_expr_ca
                 }
             }
             MDL_ASSERT(!"unsupported LLVM SExt cast instruction");
+            Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
             return Base::m_expr_factory.create_invalid(Base::convert_location(inst));
         }
 
@@ -2916,6 +2927,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_expr_ca
             }
 
             MDL_ASSERT(!"unexpected LLVM BitCast instruction");
+            Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
             return Base::m_expr_factory.create_invalid(Base::convert_location(inst));
         }
 
@@ -2924,6 +2936,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_expr_ca
     case llvm::Instruction::AddrSpaceCast:
     default:
         MDL_ASSERT(!"unexpected LLVM cast instruction");
+        Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
         return Base::m_expr_factory.create_invalid(Base::convert_location(inst));
     }
 }
@@ -2968,6 +2981,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_expr_lo
             llvm_elem_type = st->getElementType(0);
         } else {
             MDL_ASSERT(!"Unexpected LLVM type for an HLSL vector");
+            Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
             return Base::m_expr_factory.create_invalid(Base::zero_loc);
         }
 
@@ -3023,6 +3037,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_expr_lo
 
         // go to next element
         if (!move_to_next_compound_elem(stack)) {
+            Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
             return Base::m_expr_factory.create_invalid(Base::zero_loc);
         }
     }
@@ -3068,6 +3083,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_lval_ex
         llvm::ConstantInt *zero_idx = llvm::dyn_cast<llvm::ConstantInt>(gep->getOperand(1));
         if (zero_idx == nullptr || !zero_idx->isZero()) {
             MDL_ASSERT(!"invalid gep, first index not zero");
+            Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
             return Base::m_expr_factory.create_invalid(Base::convert_location(gep));
         }
 
@@ -3113,6 +3129,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_lval_ex
                 llvm::ConstantInt *idx = llvm::dyn_cast<llvm::ConstantInt>(gep->getOperand(i + 1));
                 if (idx == nullptr) {
                     MDL_ASSERT(!"invalid field index for a struct type");
+                    Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
                     return Base::m_expr_factory.create_invalid(Base::convert_location(gep));
                 }
                 unsigned idx_val = unsigned(idx->getZExtValue());
@@ -3144,6 +3161,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_lval_ex
         return Base::create_reference(it->second);
     }
     MDL_ASSERT(!"unexpected unmapped alloca or pointer parameter");
+    Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
     return Base::m_expr_factory.create_invalid(Base::zero_loc);
 }
 
@@ -3234,6 +3252,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_expr_sh
                 shuffle_name.append(index_name);
             } else {
                 MDL_ASSERT(!"invalid shuffle mask");
+                Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
                 return Base::m_expr_factory.create_invalid(Base::convert_location(inst));
             }
         }
@@ -3301,6 +3320,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::create_vector_acc
     Type_vector *vt = as<Type_vector>(vec->get_type());
     if (vt == nullptr) {
         MDL_ASSERT(!"create_vector_access on non-vector expression");
+        Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
         return Base::m_expr_factory.create_invalid(Base::zero_loc);
     }
 
@@ -3349,6 +3369,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_expr_in
             uint64_t index_val = ci->getZExtValue();
             if (index_val >= num_elems) {
                 MDL_ASSERT(!"invalid InsertElement instruction");
+                Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
                 return Base::m_expr_factory.create_invalid(Base::zero_loc);
             }
             if (vec_elems[index_val] == nullptr) {
@@ -3361,6 +3382,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_expr_in
             }
         } else {
             MDL_ASSERT(!"InsertElement with non-constant index not supported");
+            Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
             return Base::m_expr_factory.create_invalid(Base::zero_loc);
         }
 
@@ -3607,6 +3629,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_expr_ex
                     Expr_binary::OK_SELECT, res, index_ref);
             } else {
                 MDL_ASSERT(!"ExtractValue index too high");
+                Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
                 res = Base::m_expr_factory.create_invalid(Base::zero_loc);
             }
         }
@@ -3819,6 +3842,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::create_field_acce
     Type_struct *type = as<Type_struct>(struct_expr->get_type());
     if (type == nullptr) {
         MDL_ASSERT(!"create_field_access on non-struct expression");
+        Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
         return Base::m_expr_factory.create_invalid(Base::zero_loc);
     }
 
@@ -3852,6 +3876,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::create_field_acce
 
     typename Type_struct::Field *field = type->get_field(field_index);
     if (field == nullptr) {
+        Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
         return Base::m_expr_factory.create_invalid(Base::zero_loc);
     }
 
@@ -3876,6 +3901,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::create_array_acce
     Type_array *type = as<Type_array>(array->get_type());
     if (type == nullptr) {
         MDL_ASSERT(!"create_array_access on non-array expression");
+        Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
         return Base::m_expr_factory.create_invalid(Base::zero_loc);
     }
 
@@ -3908,6 +3934,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::create_matrix_acc
     Type_matrix *type = as<Type_matrix>(matrix->get_type());
     if (type == nullptr) {
         MDL_ASSERT(!"create_matrix_access on non-matrix expression");
+        Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
         return Base::m_expr_factory.create_invalid(Base::zero_loc);
     }
 
@@ -3949,6 +3976,7 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::create_compound_a
 
     default:
         MDL_ASSERT(!"create_compound_access on invalid expression");
+        Base::error(mi::mdl::INTERNAL_JIT_UNSUPPORTED_EXPR);
         return Base::m_expr_factory.create_invalid(Base::zero_loc);
     }
 }

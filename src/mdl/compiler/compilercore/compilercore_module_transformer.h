@@ -160,7 +160,7 @@ protected:
     void post_visit(IAnnotation *anno) MDL_FINAL;
 
     template <typename T>
-    void clone_declaration(T* decl, char const *prefix)
+    void clone_declaration(T *decl, char const *prefix)
     {
         if (m_is_root) {
             m_target_module->add_declaration(clone_declaration(
@@ -366,6 +366,9 @@ private:
 
     /// True, if the current module is the root of the traversal.
     bool m_is_root;
+
+    /// True, if we are in restricted annotation visit mode
+    bool m_restricted_anno_visit;
 
     /// Map holding the inlined functions and its new symbol.
     Reference_map &m_references;

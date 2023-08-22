@@ -1935,7 +1935,7 @@ mi::mdl::IAnnotation* Mdl_module_builder::int_anno_to_mdl_anno(
                 STRING::formatted_string( "Invalid annotation argument \"%s\".", arg_name), -45);
             return nullptr;
         }
-        mdl_parameter_type = m_tf->import( mdl_parameter_type);
+        m_tf->import( mdl_parameter_type);
 
         const mi::mdl::IExpression* mdl_arg_expr = ast_builder.transform_value( arg_value.get());
         if( !mdl_arg_expr) {

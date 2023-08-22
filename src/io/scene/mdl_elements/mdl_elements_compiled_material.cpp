@@ -57,13 +57,13 @@ namespace MI {
 namespace MDL {
 
 Mdl_compiled_material::Mdl_compiled_material()
-  : m_hash(mi::base::Uuid{ 0, 0, 0, 0 }),
-    m_mdl_meters_per_scene_unit(1.0f),   // avoid warning
+  : m_hash( mi::base::Uuid{ 0, 0, 0, 0 }),
+    m_mdl_meters_per_scene_unit( 1.0f),   // avoid warning
     m_mdl_wavelength_min( 0.0f),
     m_mdl_wavelength_max( 0.0f),
     m_properties( 0),  // avoid ubsan warning with swap() and temporaries
-    m_opacity(mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN),
-    m_surface_opacity(mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN),
+    m_opacity( mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN),
+    m_surface_opacity( mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN),
     m_cutout_opacity( -1.0f),
     m_has_cutout_opacity( false)
 {
@@ -71,30 +71,32 @@ Mdl_compiled_material::Mdl_compiled_material()
     m_vf = get_value_factory();
     m_ef = get_expression_factory();
 
-    memset(m_slot_hashes, 0, sizeof(m_slot_hashes));
+    memset( m_slot_hashes, 0, sizeof( m_slot_hashes));
 }
 
 Mdl_compiled_material::Mdl_compiled_material(
     DB::Transaction* transaction,
     const mi::mdl::IGenerated_code_dag::IMaterial_instance* instance,
-    const char* module_filename,
     const char* module_name,
     mi::Float32 mdl_meters_per_scene_unit,
     mi::Float32 mdl_wavelength_min,
     mi::Float32 mdl_wavelength_max,
     bool resolve_resources)
-: m_tf(get_type_factory())
-, m_vf(get_value_factory())
-, m_ef(get_expression_factory())
-, m_mdl_meters_per_scene_unit(mdl_meters_per_scene_unit)
-, m_mdl_wavelength_min(mdl_wavelength_min)
-, m_mdl_wavelength_max(mdl_wavelength_max)
-, m_properties(instance->get_properties())
-, m_internal_space(instance->get_internal_space())
-, m_opacity(mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN)
-, m_cutout_opacity(-1.0f)
-, m_has_cutout_opacity(false)
+  : m_tf( get_type_factory()),
+    m_vf( get_value_factory()),
+    m_ef( get_expression_factory()),
+    m_mdl_meters_per_scene_unit( mdl_meters_per_scene_unit),
+    m_mdl_wavelength_min( mdl_wavelength_min),
+    m_mdl_wavelength_max( mdl_wavelength_max),
+    m_properties( instance->get_properties()),
+    m_internal_space( instance->get_internal_space()),
+    m_opacity( mi::mdl::IGenerated_code_dag::IMaterial_instance::OPACITY_UNKNOWN),
+    m_cutout_opacity( -1.0f),
+    m_has_cutout_opacity( false)
 {
+    // Do *not* pass module_name to the DAG converter. This is only necessary for localization of
+    // annnotations, which does matter here. Avoids misuse of this information for other (wrong)
+    // purposes.
     Mdl_dag_converter converter(
         m_ef.get(),
         transaction,
@@ -102,14 +104,14 @@ Mdl_compiled_material::Mdl_compiled_material(
         /*code_dag*/ nullptr,
         /*immutable*/ true,
         /*create_direct_calls*/ true,
-        module_name,
+        /*module_name*/ nullptr,
         /*prototype_tag*/ DB::Tag(),
         resolve_resources,
         &m_module_idents);
 
     const mi::mdl::DAG_call* constructor = instance->get_constructor();
     mi::base::Handle<IExpression> body(
-        converter.mdl_dag_node_to_int_expr(constructor, /*type_int*/ nullptr));
+        converter.mdl_dag_node_to_int_expr( constructor, /*type_int*/ nullptr));
     ASSERT( M_SCENE, body);
     m_body = body->get_interface<IExpression_direct_call>();
     ASSERT( M_SCENE, m_body);
@@ -120,7 +122,7 @@ Mdl_compiled_material::Mdl_compiled_material(
         std::string name( std::to_string( i));
         const mi::mdl::DAG_node* mdl_temporary = instance->get_temporary_value( i);
         mi::base::Handle<const IExpression> temporary(
-            converter.mdl_dag_node_to_int_expr(mdl_temporary, /*type_int*/ nullptr));
+            converter.mdl_dag_node_to_int_expr( mdl_temporary, /*type_int*/ nullptr));
         ASSERT( M_SCENE, temporary);
         m_temporaries->add_expression( name.c_str(), temporary.get());
     }
@@ -129,8 +131,8 @@ Mdl_compiled_material::Mdl_compiled_material(
     for (mi::Size i = 0, n = instance->get_parameter_count(); i < n; ++i) {
         const char* name = instance->get_parameter_name( i);
         const mi::mdl::IValue* mdl_argument = instance->get_parameter_default( i);
-        mi::base::Handle<const IValue> argument( converter.mdl_value_to_int_value(
-            nullptr, mdl_argument));
+        mi::base::Handle<const IValue> argument(
+            converter.mdl_value_to_int_value( /*type_int*/ nullptr, mdl_argument));
         ASSERT( M_SCENE, argument);
         m_arguments->add_value( name, argument.get());
     }
@@ -155,6 +157,7 @@ Mdl_compiled_material::Mdl_compiled_material(
         m_has_cutout_opacity = true;
         m_cutout_opacity = v_cutout->get_value();
     }
+
     if( module_name) {
         DB::Tag module_tag = transaction->name_to_tag( get_db_name( module_name).c_str());
         DB::Access<Mdl_module> module( module_tag, transaction);
@@ -389,7 +392,7 @@ DB::Tag get_next_call(const T* mdl_instance, const std::string& parameter_name)
     return expr_call->get_call();
 }
 
-}
+} // namespace
 
 DB::Tag Mdl_compiled_material::get_connected_function_db_name(
     DB::Transaction* transaction,
@@ -587,22 +590,22 @@ void Mdl_compiled_material::dump( DB::Transaction* transaction) const
 }
 
 bool Mdl_compiled_material::is_valid(
-    DB::Transaction* transaction,
-    Execution_context* context) const
+    DB::Transaction* transaction, Execution_context* context) const
 {
-    for (const auto& id : m_module_idents) {
+    for( const auto& id : m_module_idents) {
 
-        DB::Access<Mdl_module> module(id.first, transaction);
-        if (module->get_ident() != id.second) {
+        DB::Access<Mdl_module> module( id.first, transaction);
+        if( module->get_ident() != id.second) {
             std::string message = "The identifier of the imported module '"
-                + get_db_name(module->get_mdl_name())
+                + get_db_name( module->get_mdl_name())
                 + "' has changed.";
-            add_error_message(context, message, -1);
+            add_error_message( context, message, -1);
             return false;
         }
-        if (!module->is_valid(transaction, context))
+        if( !module->is_valid( transaction, context))
             return false;
     }
+
     return true;
 }
 

@@ -102,6 +102,9 @@ void usage(bool ok = false) {
         "    -no-std-plugin         do not load standard 'mdl_{lod_}distiller.{so|dll} plugins.\n"
         "    -test <type>           run test mode. type is one of: normal, spec.\n"
         "    -test_log <path>       path where to store test results (default is '.').\n"
+        "    -test-targets <list>   override targets for -spec test mode. list is a comma-separated\n"
+        "                           list of target names.\n"
+        "                           (default is 'diffuse,specular_glossy,transmissive_pbr,ue4').\n"
         "\n";
     exit( ok ? EXIT_SUCCESS : EXIT_FAILURE);
 }
@@ -370,9 +373,15 @@ mi::Sint32 run_test_suite(INeuray *neuray,
         // 'spec' test mode --> Distill to all targets in spec_test_targets
         out_path += name;
         mdl_spec old_export_spec = options->export_spec;
+        if (options->test_targets.size() == 0) {
+            for (mi::Size idx = 0; idx < dimension_of(spec_test_targets); ++idx) {
+                const char* test_target = spec_test_targets[idx];
+                options->test_targets.push_back(test_target);
+            }
+        }
 
-        for ( mi::Size idx = 0; idx < dimension_of(spec_test_targets); ++idx) {
-            const char* test_target = spec_test_targets[idx];
+        for ( mi::Size idx = 0; idx < options->test_targets.size(); ++idx) {
+            const char* test_target = options->test_targets[idx].c_str();
             // Distill to mode
             options->export_spec = old_export_spec;  // mdl_distill overwrites this
             std::string out_dump( out_path + '_' + test_target + ".mdl");
@@ -763,7 +772,8 @@ int main( int argc, char* argv[]) {
             }
         } else if (0 == strcmp( "-no-std-plugin", argv[i])) {
              no_std_plugin= true;
-        } else if (0 == strcmp("-test", argv[i])) {
+        }
+        else if (0 == strcmp("-test", argv[i])) {
             options.test_suite = true;
             options.trace = 1;
             ++i;
@@ -783,6 +793,36 @@ int main( int argc, char* argv[]) {
                     std::cerr << "Error: command line argument -test misses <type> value.\n";
                     usage();
                 }
+            }
+        } else if (0 == strcmp("-test-targets", argv[i])) {
+            ++i;
+            if (i < argc) {
+                std::string tmp(argv[i]);
+                std::vector<std::string> test_targets;
+                size_t from = 0;
+                while (true) {
+                    size_t pos = tmp.find(',', from);
+                    if (pos == std::string::npos) {
+                        if (from < tmp.size()) {
+                            test_targets.push_back(tmp.substr(from, tmp.size() - from));
+                        }
+                        break;
+                    }
+                    else {
+                        if (pos > from) {
+                            test_targets.push_back(tmp.substr(from, pos - from));
+                        }
+                        from = pos + 1;
+                    }
+                }
+                if (test_targets.size() == 0) {
+                    std::cerr << "Error: command line argument -test-targets requires at least one target.\n";
+                    usage();
+                }
+                options.test_targets = test_targets;
+            } else {
+                std::cerr << "Error: command line argument -test_log misses <path> value.\n";
+                usage();
             }
         } else if (0 == strcmp("-test_log", argv[i])) {
             ++i;
@@ -844,6 +884,15 @@ int main( int argc, char* argv[]) {
         usage();
     }
     const char* material_name = args[0];
+
+    for (auto& test_target : options.test_targets) {
+        // Check for valid target names for all test targets from the command line
+        if (!check_target(neuray.get(), test_target.c_str())) {
+            std::cerr << "Error: unknown target '" << test_target << "' for command line argument -test-targets\n";
+            usage();
+        }
+
+    }
 
     // Check for valid target name
     if ( ! check_target( neuray.get(), target)) {

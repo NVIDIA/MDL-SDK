@@ -125,10 +125,15 @@ public:
     /// \param tname  the type name
     void visit(IType_name const *tname);
 
-    /// Visit an annotation and all its children.
+    /// Visit an annotation block and all its children.
     ///
     /// \param block  the annotation block
     void visit(IAnnotation_block const *block);
+
+    /// Visit an annotation and all its children.
+    ///
+    /// \param anno  the annotation
+    void visit(IAnnotation const *anno);
 
     /// Visit a qualified name and all its children.
     ///

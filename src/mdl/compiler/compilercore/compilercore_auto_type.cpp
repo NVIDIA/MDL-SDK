@@ -459,6 +459,10 @@ IExpression *AT_check::post_visit(IExpression_call *call_expr)
     IExpression_reference const *callee = cast<IExpression_reference>(call_expr->get_reference());
     Definition const            *f_def  = impl_cast<Definition>(callee->get_definition());
 
+    if (f_def == NULL || is_error(f_def)) {
+        // Error was already reported.
+        return call_expr;
+    }
     if (callee->is_array_constructor()) {
         // array constructors are uniform calls with auto-typed parameters
         int n_args = call_expr->get_argument_count();

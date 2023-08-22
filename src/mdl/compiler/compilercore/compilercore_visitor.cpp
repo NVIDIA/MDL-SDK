@@ -97,6 +97,12 @@ void Module_visitor::visit(
 }
 
 void Module_visitor::visit(
+    IAnnotation const *anno)
+{
+    do_annotation(anno);
+}
+
+void Module_visitor::visit(
     IQualified_name const *qual_name)
 {
     do_qualified_name(qual_name);

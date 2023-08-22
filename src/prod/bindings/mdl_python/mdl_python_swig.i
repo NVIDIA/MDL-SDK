@@ -17,6 +17,7 @@
 #endif
 %}
 
+%include <typemaps.i>
 
 // TODO: Doxygen
 // Extrract aliases from Doxyfile automatically
@@ -317,13 +318,36 @@ namespace mi
                 return  self._ ## FUNCTION_NAME ## (*args)
 
             def FUNCTION_NAME ## _as(self, type, *args):
-                iinterface = self._ ## FUNCTION_NAME ## (*args)
+                iinterface = self. ## FUNCTION_NAME ## (*args)
                 if iinterface.is_valid_interface():
                     typed_interface = iinterface.get_interface(type)
                     iinterface = None
                     return typed_interface
                 else:
                     return iinterface
+        }
+    }
+%enddef
+
+// Wrap mi data types manually for the templated get_value function.
+// Addionally, the data types are defined above.
+%define WRAP_MI_NUMBER_DATA_TYPES(IINTERFACE_TYPE, DATA_TYPE)
+    %rename(_get_value) IINTERFACE_TYPE::get_value;
+    %extend SmartPtr<IINTERFACE_TYPE> {
+        DATA_TYPE get_value() const
+        {
+            return $self->get()->get_value<DATA_TYPE>();
+        }
+    }
+%enddef
+%define WRAP_MI_COMPOUND_DATA_TYPES(IINTERFACE_TYPE, DATA_TYPE)
+    %rename(_get_value) IINTERFACE_TYPE::get_value;
+    %extend SmartPtr<IINTERFACE_TYPE> {
+        DATA_TYPE get_value() const
+        {
+            DATA_TYPE v;
+            $self->get()->get_value(v);
+            return v;
         }
     }
 %enddef
@@ -337,51 +361,126 @@ typedef unsigned char      Uint8;   ///<  8-bit unsigned integer.
 typedef unsigned short     Uint16;  ///< 16-bit unsigned integer.
 typedef unsigned int       Uint32;  ///< 32-bit unsigned integer.
 
-//TODO: Fix for MSVC?
+#if defined(MI_COMPILER_MSC)
+typedef signed __int64     Sint64;  ///< 64-bit   signed integer.
+typedef unsigned __int64   Uint64;  ///< 64-bit unsigned integer.
+#elif defined(MI_COMPILER_GCC)
 typedef long long          Sint64;  ///< 64-bit   signed integer.
 typedef unsigned long long Uint64;  ///< 64-bit unsigned integer.
+#else
+typedef signed   long long Sint64;  ///< 64-bit   signed integer.
+typedef unsigned long long Uint64;  ///< 64-bit unsigned integer.
+#endif
 
 typedef float              Float32; ///< 32-bit float.
 typedef double             Float64; ///< 64-bit float.
 
-// Define Size to be signed, otherwise Java would use BigInteger
-//TODO: Add a typemap to map this to Sint64 for the wrapper, possibly adding a check for negative values
-typedef Sint64             Size;
+//TODO: Define Size to be signed, otherwise Java would use BigInteger
+//      Add a typemap to map this to Sint64 for the wrapper, possibly adding a check for negative values
+#ifdef MI_ARCH_64BIT
+typedef Uint64             Size;
+typedef Sint64             Difference;
+#else // MI_ARCH_64BIT
+typedef Uint32             Size;
+typedef Sint32             Difference;
+#endif // MI_ARCH_64BIT
 
 } // namespace
 
+
+
 namespace mi {
+
 namespace base {
-struct Uuid
-{
-    Uint32 m_id1; ///< First  value.
-    Uint32 m_id2; ///< Second value.
-    Uint32 m_id3; ///< Third  value.
-    Uint32 m_id4; ///< Fourth value.
-};
-} // namespace
-} // namespace
+    struct Uuid
+    {
+        Uint32 m_id1; ///< First  value.
+        Uint32 m_id2; ///< Second value.
+        Uint32 m_id3; ///< Third  value.
+        Uint32 m_id4; ///< Fourth value.
+    };
+} // base
 
-namespace mi {
 namespace math {
-struct Color_struct
-{
-    /// Red color component
-    Float32 r;
-    /// Green color component
-    Float32 g;
-    /// Blue color component
-    Float32 b;
-    /// Alpha value, 0.0 is fully transparent and 1.0 is opaque; value can lie outside that range.
-    Float32 a;
-};
-enum Clip_mode {
-    CLIP_RGB,   ///< First clip RGB to [0,1], then clip A to [max(R,G,B),1].
-    CLIP_ALPHA, ///< First clip A to [0,1], then clip RGB to [0,A].
-    CLIP_RAW    ///< Clip RGB and A to [0,1].
-};
-} // namespace
-} // namespace
+    struct Color_struct { Float32 r, g, b, a; };
+    enum Clip_mode {
+        CLIP_RGB,   ///< First clip RGB to [0,1], then clip A to [max(R,G,B),1].
+        CLIP_ALPHA, ///< First clip A to [0,1], then clip RGB to [0,A].
+        CLIP_RAW    ///< Clip RGB and A to [0,1].
+    };
+} // math
+
+
+    struct Boolean_2_struct { bool x, y; };
+    struct Boolean_3_struct { bool x, y, z; };
+    struct Boolean_4_struct { bool x, y, z, w; };
+
+    struct Sint32_2_struct { Sint32 x, y; };
+    struct Sint32_3_struct { Sint32 x, y, z; };
+    struct Sint32_4_struct { Sint32 x, y, z, w; };
+
+    struct Uint32_2_struct { Uint32 x, y; };
+    struct Uint32_3_struct { Uint32 x, y, z; };
+    struct Uint32_4_struct { Uint32 x, y, z, w; };
+
+    struct Float32_2_struct { Float32 x, y; };
+    struct Float32_3_struct { Float32 x, y, z; };
+    struct Float32_4_struct { Float32 x, y, z, w; };
+
+    struct Float64_2_struct { Float64 x, y; };
+    struct Float64_3_struct { Float64 x, y, z; };
+    struct Float64_4_struct { Float64 x, y, z, w; };
+
+    struct Boolean_2_2_struct { bool xx, xy, yx, yy; };
+    struct Boolean_2_3_struct { bool xx, xy, xz, yx, yy, yz; };
+    struct Boolean_2_4_struct { bool xx, xy, xz, xw, yx, yy, yz, yw; };
+    struct Boolean_3_2_struct { bool xx, xy, yx, yy, zx ,zy; };
+    struct Boolean_3_3_struct { bool xx, xy, xz, yx, yy, yz, zx ,zy, zz; };
+    struct Boolean_3_4_struct { bool xx, xy, xz, xw, yx, yy, yz, yw, zx, zy, zz, zw; };
+    struct Boolean_4_2_struct { bool xx, xy, yx, yy, zx ,zy, wx, wy; };
+    struct Boolean_4_3_struct { bool xx, xy, xz, yx, yy, yz, zx ,zy, zz, wx, wy, wz; };
+    struct Boolean_4_4_struct { bool xx, xy, xz, xw, yx, yy, yz, yw, zx ,zy, zz, zw, wx, wy, wz, ww; };
+
+    struct Sint32_2_2_struct { Sint32 xx, xy, yx, yy; };
+    struct Sint32_2_3_struct { Sint32 xx, xy, xz, yx, yy, yz; };
+    struct Sint32_2_4_struct { Sint32 xx, xy, xz, xw, yx, yy, yz, yw; };
+    struct Sint32_3_2_struct { Sint32 xx, xy, yx, yy, zx, zy; };
+    struct Sint32_3_3_struct { Sint32 xx, xy, xz, yx, yy, yz, zx, zy, zz; };
+    struct Sint32_3_4_struct { Sint32 xx, xy, xz, xw, yx, yy, yz, yw, zx, zy, zz, zw; };
+    struct Sint32_4_2_struct { Sint32 xx, xy, yx, yy, zx, zy, wx, wy; };
+    struct Sint32_4_3_struct { Sint32 xx, xy, xz, yx, yy, yz, zx, zy, zz, wx, wy, wz; };
+    struct Sint32_4_4_struct { Sint32 xx, xy, xz, xw, yx, yy, yz, yw, zx, zy, zz, zw, wx, wy, wz, ww; };
+
+    struct Uint32_2_2_struct { Uint32 xx, xy, yx, yy; };
+    struct Uint32_2_3_struct { Uint32 xx, xy, xz, yx, yy, yz; };
+    struct Uint32_2_4_struct { Uint32 xx, xy, xz, xw, yx, yy, yz, yw; };
+    struct Uint32_3_2_struct { Uint32 xx, xy, yx, yy, zx, zy; };
+    struct Uint32_3_3_struct { Uint32 xx, xy, xz, yx, yy, yz, zx, zy, zz; };
+    struct Uint32_3_4_struct { Uint32 xx, xy, xz, xw, yx, yy, yz, yw, zx, zy, zz, zw; };
+    struct Uint32_4_2_struct { Uint32 xx, xy, yx, yy, zx, zy, wx, wy; };
+    struct Uint32_4_3_struct { Uint32 xx, xy, xz, yx, yy, yz, zx, zy, zz, wx, wy, wz; };
+    struct Uint32_4_4_struct { Uint32 xx, xy, xz, xw, yx, yy, yz, yw, zx, zy, zz, zw, wx, wy, wz, ww; };
+
+    struct Float32_2_2_struct { Float32 xx, xy, yx, yy; };
+    struct Float32_2_3_struct { Float32 xx, xy, xz, yx, yy, yz; };
+    struct Float32_2_4_struct { Float32 xx, xy, xz, xw, yx, yy, yz, yw; };
+    struct Float32_3_2_struct { Float32 xx, xy, yx, yy, zx, zy; };
+    struct Float32_3_3_struct { Float32 xx, xy, xz, yx, yy, yz, zx, zy, zz; };
+    struct Float32_3_4_struct { Float32 xx, xy, xz, xw, yx, yy, yz, yw, zx, zy, zz, zw; };
+    struct Float32_4_2_struct { Float32 xx, xy, yx, yy, zx, zy, wx, wy; };
+    struct Float32_4_3_struct { Float32 xx, xy, xz, yx, yy, yz, zx, zy, zz, wx, wy, wz; };
+    struct Float32_4_4_struct { Float32 xx, xy, xz, xw, yx, yy, yz, yw, zx, zy, zz, zw, wx, wy, wz, ww; };
+
+    struct Float64_2_2_struct { Float64 xx, xy, yx, yy; };
+    struct Float64_2_3_struct { Float64 xx, xy, xz, yx, yy, yz; };
+    struct Float64_2_4_struct { Float64 xx, xy, xz, xw, yx, yy, yz, yw; };
+    struct Float64_3_2_struct { Float64 xx, xy, yx, yy, zx, zy; };
+    struct Float64_3_3_struct { Float64 xx, xy, xz, yx, yy, yz, zx, zy, zz; };
+    struct Float64_3_4_struct { Float64 xx, xy, xz, xw, yx, yy, yz, yw, zx, zy, zz, zw; };
+    struct Float64_4_2_struct { Float64 xx, xy, yx, yy, zx, zy, wx, wy; };
+    struct Float64_4_3_struct { Float64 xx, xy, xz, yx, yy, yz, zx, zy, zz, wx, wy, wz; };
+    struct Float64_4_4_struct { Float64 xx, xy, xz, xw, yx, yy, yz, yw, zx, zy, zz, zw, wx, wy, wz, ww; };
+} // mi
 
 #define mi_static_assert(ignored)
 
@@ -403,7 +502,6 @@ NEURAY_CREATE_HANDLE_TEMPLATE(mi::base, IInterface)
 // mi
 // ----------------------------------------------------------------------------
 
-
 DICE_INTERFACE_MI(IArray);
 DICE_INTERFACE_MI(ICompound);
 DICE_INTERFACE_MI(IBoolean);
@@ -422,8 +520,10 @@ DICE_INTERFACE_MI(IFloat32_4);
 DICE_INTERFACE_MI(IFloat64_2);
 DICE_INTERFACE_MI(IFloat64_3);
 DICE_INTERFACE_MI(IFloat64_4);
+DICE_INTERFACE_MI(IDynamic_array);
 DICE_INTERFACE_MI(IDifference);
 DICE_INTERFACE_MI(IString);
+DICE_INTERFACE_MI(IStructure);
 DICE_INTERFACE_MI(IData);
 DICE_INTERFACE_MI(IData_simple);
 DICE_INTERFACE_MI(IData_collection);
@@ -444,16 +544,159 @@ DICE_INTERFACE_MI(IUint64);
 DICE_INTERFACE_MI(IVoid);
 DICE_INTERFACE_MI(IEnum_decl);
 DICE_INTERFACE_MI(IEnum);
+DICE_INTERFACE_MI(IBoolean_2_2)
+DICE_INTERFACE_MI(IBoolean_2_3)
+DICE_INTERFACE_MI(IBoolean_2_4)
+DICE_INTERFACE_MI(IBoolean_3_2)
+DICE_INTERFACE_MI(IBoolean_3_3)
+DICE_INTERFACE_MI(IBoolean_3_4)
+DICE_INTERFACE_MI(IBoolean_4_2)
+DICE_INTERFACE_MI(IBoolean_4_3)
+DICE_INTERFACE_MI(IBoolean_4_4)
+DICE_INTERFACE_MI(ISint32_2_2)
+DICE_INTERFACE_MI(ISint32_2_3)
+DICE_INTERFACE_MI(ISint32_2_4)
+DICE_INTERFACE_MI(ISint32_3_2)
+DICE_INTERFACE_MI(ISint32_3_3)
+DICE_INTERFACE_MI(ISint32_3_4)
+DICE_INTERFACE_MI(ISint32_4_2)
+DICE_INTERFACE_MI(ISint32_4_3)
+DICE_INTERFACE_MI(ISint32_4_4)
+DICE_INTERFACE_MI(IUint32_2_2)
+DICE_INTERFACE_MI(IUint32_2_3)
+DICE_INTERFACE_MI(IUint32_2_4)
+DICE_INTERFACE_MI(IUint32_3_2)
+DICE_INTERFACE_MI(IUint32_3_3)
+DICE_INTERFACE_MI(IUint32_3_4)
+DICE_INTERFACE_MI(IUint32_4_2)
+DICE_INTERFACE_MI(IUint32_4_3)
+DICE_INTERFACE_MI(IUint32_4_4)
+DICE_INTERFACE_MI(IFloat32_2_2)
+DICE_INTERFACE_MI(IFloat32_2_3)
+DICE_INTERFACE_MI(IFloat32_2_4)
+DICE_INTERFACE_MI(IFloat32_3_2)
+DICE_INTERFACE_MI(IFloat32_3_3)
+DICE_INTERFACE_MI(IFloat32_3_4)
+DICE_INTERFACE_MI(IFloat32_4_2)
+DICE_INTERFACE_MI(IFloat32_4_3)
+DICE_INTERFACE_MI(IFloat32_4_4)
+DICE_INTERFACE_MI(IFloat64_2_2)
+DICE_INTERFACE_MI(IFloat64_2_3)
+DICE_INTERFACE_MI(IFloat64_2_4)
+DICE_INTERFACE_MI(IFloat64_3_2)
+DICE_INTERFACE_MI(IFloat64_3_3)
+DICE_INTERFACE_MI(IFloat64_3_4)
+DICE_INTERFACE_MI(IFloat64_4_2)
+DICE_INTERFACE_MI(IFloat64_4_3)
+DICE_INTERFACE_MI(IFloat64_4_4)
+
+%ignore mi::INumber::get_value;
+WRAP_MI_NUMBER_DATA_TYPES(mi::ISint8, mi::Sint8);
+WRAP_MI_NUMBER_DATA_TYPES(mi::ISint16, mi::Sint16);
+WRAP_MI_NUMBER_DATA_TYPES(mi::ISint32, mi::Sint32);
+WRAP_MI_NUMBER_DATA_TYPES(mi::ISint64, mi::Sint64);
+
+WRAP_MI_NUMBER_DATA_TYPES(mi::IUint8, mi::Uint8);
+WRAP_MI_NUMBER_DATA_TYPES(mi::IUint16, mi::Uint16);
+WRAP_MI_NUMBER_DATA_TYPES(mi::IUint32, mi::Uint32);
+WRAP_MI_NUMBER_DATA_TYPES(mi::IUint64, mi::Uint64);
+WRAP_MI_NUMBER_DATA_TYPES(mi::ISize, mi::Size);
+WRAP_MI_NUMBER_DATA_TYPES(mi::IDifference, mi::Difference);
+
+WRAP_MI_NUMBER_DATA_TYPES(mi::IFloat32, mi::Float32);
+WRAP_MI_NUMBER_DATA_TYPES(mi::IFloat64, mi::Float64);
+
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IBoolean_2, mi::Boolean_2_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IBoolean_3, mi::Boolean_3_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IBoolean_4, mi::Boolean_4_struct);
+
+WRAP_MI_COMPOUND_DATA_TYPES(mi::ISint32_2, mi::Sint32_2_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::ISint32_3, mi::Sint32_3_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::ISint32_4, mi::Sint32_4_struct);
+
+WRAP_MI_COMPOUND_DATA_TYPES(mi::Uint32_2, mi::Uint32_2_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::Uint32_3, mi::Uint32_3_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::Uint32_4, mi::Uint32_4_struct);
+
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat32_2, mi::Float32_2_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat32_3, mi::Float32_3_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat32_4, mi::Float32_4_struct);
+
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat64_2, mi::Float64_2_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat64_3, mi::Float64_3_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat64_4, mi::Float64_4_struct);
+
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IBoolean_2_2, mi::Boolean_2_2_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IBoolean_2_3, mi::Boolean_2_3_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IBoolean_2_4, mi::Boolean_2_4_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IBoolean_3_2, mi::Boolean_3_2_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IBoolean_3_3, mi::Boolean_3_3_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IBoolean_3_4, mi::Boolean_3_4_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IBoolean_4_2, mi::Boolean_4_2_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IBoolean_4_3, mi::Boolean_4_3_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IBoolean_4_4, mi::Boolean_4_4_struct);
+
+WRAP_MI_COMPOUND_DATA_TYPES(mi::ISint32_2_2, mi::Sint32_2_2_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::ISint32_2_3, mi::Sint32_2_3_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::ISint32_2_4, mi::Sint32_2_4_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::ISint32_3_2, mi::Sint32_3_2_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::ISint32_3_3, mi::Sint32_3_3_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::ISint32_3_4, mi::Sint32_3_4_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::ISint32_4_2, mi::Sint32_4_2_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::ISint32_4_3, mi::Sint32_4_3_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::ISint32_4_4, mi::Sint32_4_4_struct);
+
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IUint32_2_2, mi::Uint32_2_2_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IUint32_2_3, mi::Uint32_2_3_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IUint32_2_4, mi::Uint32_2_4_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IUint32_3_2, mi::Uint32_3_2_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IUint32_3_3, mi::Uint32_3_3_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IUint32_3_4, mi::Uint32_3_4_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IUint32_4_2, mi::Uint32_4_2_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IUint32_4_3, mi::Uint32_4_3_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IUint32_4_4, mi::Uint32_4_4_struct);
+
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat32_2_2, mi::Float32_2_2_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat32_2_3, mi::Float32_2_3_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat32_2_4, mi::Float32_2_4_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat32_3_2, mi::Float32_3_2_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat32_3_3, mi::Float32_3_3_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat32_3_4, mi::Float32_3_4_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat32_4_2, mi::Float32_4_2_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat32_4_3, mi::Float32_4_3_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat32_4_4, mi::Float32_4_4_struct);
+
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat64_2_2, mi::Float64_2_2_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat64_2_3, mi::Float64_2_3_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat64_2_4, mi::Float64_2_4_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat64_3_2, mi::Float64_3_2_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat64_3_3, mi::Float64_3_3_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat64_3_4, mi::Float64_3_4_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat64_4_2, mi::Float64_4_2_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat64_4_3, mi::Float64_4_3_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IFloat64_4_4, mi::Float64_4_4_struct);
+
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IColor, mi::Color_struct);
+WRAP_MI_COMPOUND_DATA_TYPES(mi::IColor3, mi::Color_struct);
+
+WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::IArray, get_element)
+WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::IDynamic_array, get_element)
+WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::IDynamic_array, front)
+WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::IDynamic_array, back)
+WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::IStructure, get_value)
 
 %include "mi/neuraylib/vector_typedefs.h"
 %include "mi/neuraylib/typedefs.h"
 %include "mi/neuraylib/idata.h"
 %include "mi/neuraylib/istring.h"
+%include "mi/neuraylib/istructure.h"
 %include "mi/neuraylib/iarray.h"
+%include "mi/neuraylib/idynamic_array.h"
 %include "mi/neuraylib/inumber.h"
 %include "mi/neuraylib/icompound.h"
 %include "mi/neuraylib/icolor.h"
 %include "mi/neuraylib/ivector.h"
+%include "mi/neuraylib/imatrix.h"
 
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IArray)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::ICompound);
@@ -474,10 +717,11 @@ NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat64_2)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat64_3)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat64_4)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IDifference)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IDynamic_array)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IString)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IStructure)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IData)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IData_simple)
-NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IString)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IData_collection)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat32)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IColor)
@@ -496,6 +740,51 @@ NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint64)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IVoid)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IEnum_decl)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IEnum)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IBoolean_2_2)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IBoolean_2_3)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IBoolean_2_4)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IBoolean_3_2)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IBoolean_3_3)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IBoolean_3_4)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IBoolean_4_2)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IBoolean_4_3)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IBoolean_4_4)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::ISint32_2_2)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::ISint32_2_3)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::ISint32_2_4)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::ISint32_3_2)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::ISint32_3_3)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::ISint32_3_4)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::ISint32_4_2)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::ISint32_4_3)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::ISint32_4_4)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint32_2_2)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint32_2_3)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint32_2_4)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint32_3_2)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint32_3_3)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint32_3_4)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint32_4_2)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint32_4_3)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IUint32_4_4)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat32_2_2)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat32_2_3)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat32_2_4)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat32_3_2)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat32_3_3)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat32_3_4)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat32_4_2)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat32_4_3)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat32_4_4)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat64_2_2)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat64_2_3)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat64_2_4)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat64_3_2)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat64_3_3)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat64_3_4)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat64_4_2)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat64_4_3)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::IFloat64_4_4)
 
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IArray)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, ICompound)
@@ -516,7 +805,9 @@ NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat64_2)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat64_3)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat64_4)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IDifference)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IDynamic_array)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IString)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IStructure)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IData)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IData_simple)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IData_collection)
@@ -537,6 +828,51 @@ NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint64)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IVoid)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IEnum_decl)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi, IEnum)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IBoolean_2_2)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IBoolean_2_3)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IBoolean_2_4)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IBoolean_3_2)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IBoolean_3_3)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IBoolean_3_4)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IBoolean_4_2)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IBoolean_4_3)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IBoolean_4_4)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, ISint32_2_2)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, ISint32_2_3)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, ISint32_2_4)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, ISint32_3_2)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, ISint32_3_3)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, ISint32_3_4)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, ISint32_4_2)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, ISint32_4_3)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, ISint32_4_4)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint32_2_2)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint32_2_3)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint32_2_4)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint32_3_2)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint32_3_3)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint32_3_4)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint32_4_2)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint32_4_3)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IUint32_4_4)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat32_2_2)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat32_2_3)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat32_2_4)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat32_3_2)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat32_3_3)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat32_3_4)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat32_4_2)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat32_4_3)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat32_4_4)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat64_2_2)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat64_2_3)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat64_2_4)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat64_3_2)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat64_3_3)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat64_3_4)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat64_4_2)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat64_4_3)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi, IFloat64_4_4)
 
 // ----------------------------------------------------------------------------
 // mi::neuray
@@ -639,45 +975,6 @@ DICE_INTERFACE(IValue_string_localized)
 DICE_INTERFACE(IValue_struct)
 DICE_INTERFACE(IValue_texture)
 DICE_INTERFACE(IValue_vector)
-
-%extend mi::neuraylib::ITile {
-
-        mi::math::Color_struct get_pixel(
-            Uint32 x_offset,
-            Uint32 y_offset
-            ) const
-        {
-            mi::math::Color_struct color;
-            $self->get_pixel(x_offset, y_offset, (mi::Float32*)(& color.r));
-            return color;
-        }
-
-        void set_pixel(
-            Uint32 x_offset,
-            Uint32 y_offset,
-            const mi::math::Color_struct* color)
-        {
-            $self->set_pixel(x_offset, y_offset, (mi::Float32*)(& color->r));
-        }
-
- }
-
- %extend mi::IFloat32 {
-        float get_value() const
-        {
-            float v;
-            $self->get_value(v);
-            return v;
-        }
-}
-
-%extend mi::IColor {
-        mi::math::Color_struct get_value(mi::math::Color_struct& value) const
-        {
-            mi::math::Color_struct v = $self->get_value();
-            return v;
-        }
-}
 
 // special handling for: mi::neuraylib::INeuray
 // ----------------------------------------------------------------------------
@@ -1167,6 +1464,24 @@ WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::neuraylib::IValue_structure, get_field)
 WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::neuraylib::ITransaction, access)
 WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::neuraylib::ITransaction, edit)
 
+%rename(_create) mi::neuraylib::ITransaction::create; // omit the last two parameters of the create function
+%extend SmartPtr<mi::neuraylib::ITransaction> {
+    %pythoncode{
+        def create(self, type_name: str, argc = 0, argv = None):
+            return  self._create(type_name, argc, argv)
+
+        def create_as(self, type, type_name:str, argc = 0, argv = None):
+            iinterface = self.create(type_name, argc, argv)
+            if iinterface.is_valid_interface():
+                typed_interface = iinterface.get_interface(type)
+                iinterface = None
+                return typed_interface
+            else:
+                return iinterface
+    }
+}
+
+
 // special handling for: mi::neuraylib::IImage
 // ----------------------------------------------------------------------------
 %ignore mi::neuraylib::IImage::set_from_canvas(ICanvas const*);
@@ -1178,6 +1493,25 @@ WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::neuraylib::ITransaction, edit)
 %ignore mi::neuraylib::IImage::set_from_canvas(IArray const*,char const *);
 %ignore mi::neuraylib::IImage::set_from_canvas(IArray*,char const *);
 
+// special handling for: mi::neuraylib::ITile
+// ----------------------------------------------------------------------------
+%ignore mi::neuraylib::ITile::get_pixel const;
+%ignore mi::neuraylib::ITile::set_pixel;
+%extend SmartPtr<mi::neuraylib::ITile> {
+
+    mi::math::Color_struct get_pixel(Uint32 x_offset, Uint32 y_offset) const
+    {
+        mi::math::Color_struct color;
+        $self->get()->get_pixel(x_offset, y_offset, (mi::Float32*)(&color.r));
+        return color;
+    }
+
+    void set_pixel(Uint32 x_offset, Uint32 y_offset, const mi::math::Color_struct* color)
+    {
+        $self->get()->set_pixel(x_offset, y_offset, (mi::Float32*)(&color->r));
+    }
+
+}
 // ----------------------------------------------------------------------------
 
 // from now on we handle mi::Sint32* as out parameter (this could be changed or later)

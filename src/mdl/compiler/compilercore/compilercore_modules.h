@@ -749,6 +749,12 @@ public:
     /// \param op_def  a previous conversion operator definition
     Definition const *get_next_conversion_operator(Definition const *op_def) const;
 
+    /// Get the elemental constructor of a given type.
+    /// The type must exists in this module, or NULL will be returned.
+    ///
+    /// \param type  the type
+    Definition const *get_elemental_constructor(IType const *type) const;
+
     /// Return the filename of an imported module.
     ///
     /// \param mod_id  the module ID of the searched module

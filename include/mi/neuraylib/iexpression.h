@@ -638,12 +638,21 @@ public:
 ///
 /// An expression factory can be obtained from
 /// #mi::neuraylib::IMdl_factory::create_expression_factory().
+///
+/// \see #mi::neuraylib::IType_factory, #mi::neuraylib::IValue_factory
 class IExpression_factory : public
     mi::base::Interface_declare<0x9fd3b2d4,0xb5b8,0x4ccd,0x9b,0x5f,0x7b,0xd9,0x9d,0xeb,0x62,0x64>
 {
 public:
+    /// \name Access to related factories.
+    //@{
+
     /// Returns the value factory associated with this expression factory.
     virtual IValue_factory* get_value_factory() const = 0;
+
+    //@}
+    /// \name Creation of expressions and expression lists
+    //@{
 
     /// Creates a constant (mutable).
     ///
@@ -714,6 +723,10 @@ public:
     /// Creates a new expression list.
     virtual IExpression_list* create_expression_list() const = 0;
 
+    //@}
+    /// \name Creation of annotations, annotation blocks, and annotations lists
+    //@{
+
     /// Creates a new annotation.
     ///
     /// Returns \c NULL if one of the arguments is not a constant expression.
@@ -725,6 +738,10 @@ public:
 
     /// Creates a new annotation list.
     virtual IAnnotation_list* create_annotation_list() const = 0;
+
+    //@}
+    /// \name Cloning of expressions and expression lists
+    //@{
 
     /// Clones the given expression.
     ///
@@ -755,6 +772,10 @@ public:
     /// and material instances in call expressions, are not copied, but shared.
     virtual IExpression_list* clone( const IExpression_list* expression_list) const = 0;
 
+    //@}
+    /// \name Comparison of expression and expression lists
+    //@{
+
     /// Various options for the comparison of expressions or expression lists.
     ///
     /// \see The \p flags parameter of #compare()
@@ -776,8 +797,6 @@ public:
         // Undocumented, for alignment only
         COMPARISON_OPTIONS_FORCE_32_BIT = 0xffffffffU
     };
-
-    mi_static_assert( sizeof( Comparison_options) == sizeof( mi::Uint32));
 
     /// Compares two instances of #mi::neuraylib::IExpression.
     ///
@@ -839,6 +858,10 @@ public:
         Uint32 flags = 0,
         Float64 epsilon = 0.0) const = 0;
 
+    //@}
+    /// \name Dumping of expression and expression lists
+    //@{
+
     /// Returns a textual representation of an expression.
     ///
     /// The parameter \p depth is only relevant for constants, where the argument is passed to
@@ -861,6 +884,10 @@ public:
     ///       \em not base application logic on it.
     virtual const IString* dump(
         const IExpression_list* list, const char* name, Size depth = 0) const = 0;
+
+    //@}
+    /// \name Dumping of annotations, annotation blocks, and annotation lists
+    //@{
 
     /// Returns a textual representation of an annotation.
     ///
@@ -898,6 +925,10 @@ public:
     virtual const IString* dump( const IAnnotation_list* list, const char* name, Size depth = 0)
         const = 0;
 
+    //@}
+    /// \name Miscellaneous methods
+    //@{
+
     /// Returns an expression which casts the source expression to the \p target_type.
     ///
     /// This is a convenience function that creates an instance of the cast operator with
@@ -931,7 +962,11 @@ public:
         const char* cast_db_name,
         bool force_cast,
         Sint32 *errors = 0) const = 0;
+
+    //@}
 };
+
+mi_static_assert( sizeof( IExpression_factory::Comparison_options) == sizeof( mi::Uint32));
 
 /**@}*/ // end group mi_neuray_mdl_types
 

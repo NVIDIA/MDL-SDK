@@ -1413,6 +1413,7 @@ std::string encode_name_add_missing_signature(
     // creation of compiled materials).
     std::string mdl_name = encode_name_without_signature( name);
     std::string mdl_module_name = get_mdl_module_name( mdl_name);
+    ASSERT( M_SCENE, transaction);
     DB::Tag tag = transaction->name_to_tag( get_db_name( mdl_module_name).c_str());
     DB::Access<Mdl_module> module( tag, transaction);
     ASSERT( M_SCENE,
@@ -3402,13 +3403,15 @@ const IType* mdl_type_to_int_type(
     const Mdl_annotation_block_vector* member_annotations)
 {
     mi::mdl::IType::Kind kind = type->get_kind();
-    mi::mdl::IType::Kind skipped_kind = type->skip_type_alias()->get_kind();
 
-    bool enum_or_struct = skipped_kind == mi::mdl::IType::TK_ENUM ||
-        skipped_kind == mi::mdl::IType::TK_STRUCT;
-    ASSERT( M_SCENE, enum_or_struct || !annotations);
-    ASSERT( M_SCENE, enum_or_struct || !member_annotations);
-    boost::ignore_unused( enum_or_struct);
+    if( kind == mi::mdl::IType::TK_ALIAS) {
+        ASSERT( M_SCENE, !annotations        || annotations->empty());
+        ASSERT( M_SCENE, !member_annotations || member_annotations->empty());
+    } else if(    kind != mi::mdl::IType::TK_ENUM
+               && kind != mi::mdl::IType::TK_STRUCT) {
+        ASSERT( M_SCENE, !annotations);
+        ASSERT( M_SCENE, !member_annotations);
+    }
 
     switch( kind) {
         case mi::mdl::IType::TK_BOOL:             return tf->create_bool();
@@ -3679,8 +3682,8 @@ IValue* Mdl_dag_converter::mdl_value_to_int_value(
             Float32 gamma = 0.0f;
             const char* selector = nullptr;
             std::string selector_buf;
-            bool needs_owner = false;
             std::string string_value_buf;
+            std::string owner;
 
             if( m_resolve_resources) {
 
@@ -3705,14 +3708,14 @@ IValue* Mdl_dag_converter::mdl_value_to_int_value(
                     selector = nullptr;
                 const char* string_value = value_texture->get_string_value();
                 string_value_buf = strip_resource_owner_prefix( string_value);
-                needs_owner = string_value_buf != string_value;
+                owner = encode_module_name( get_resource_owner_prefix( string_value));
             }
 
             return m_vf->create_texture(
                 type_texture_int.get(),
                 tag,
                 string_value_buf.c_str(),
-                needs_owner ? m_module_mdl_name : nullptr,
+                !owner.empty() ? owner.c_str() : nullptr,
                 gamma,
                 selector);
         }
@@ -3723,8 +3726,8 @@ IValue* Mdl_dag_converter::mdl_value_to_int_value(
                 = cast<mi::mdl::IValue_light_profile>( value);
 
             DB::Tag tag;
-            bool needs_owner = false;
             std::string string_value_buf;
+            std::string owner;
 
             if( m_resolve_resources) {
 
@@ -3737,11 +3740,11 @@ IValue* Mdl_dag_converter::mdl_value_to_int_value(
                 tag = DB::Tag( value_light_profile->get_tag_value());
                 const char* string_value = value_light_profile->get_string_value();
                 string_value_buf = strip_resource_owner_prefix( string_value);
-                needs_owner = string_value_buf != string_value;
+                owner = encode_module_name( get_resource_owner_prefix( string_value));
             }
 
             return m_vf->create_light_profile(
-                tag, string_value_buf.c_str(), needs_owner ? m_module_mdl_name : nullptr);
+                tag, string_value_buf.c_str(), !owner.empty() ? owner.c_str() : nullptr);
         }
 
         case mi::mdl::IValue::VK_BSDF_MEASUREMENT: {
@@ -3750,8 +3753,8 @@ IValue* Mdl_dag_converter::mdl_value_to_int_value(
                 = cast<mi::mdl::IValue_bsdf_measurement>( value);
 
             DB::Tag tag;
-            bool needs_owner = false;
             std::string string_value_buf;
+            std::string owner;
 
             if( m_resolve_resources) {
 
@@ -3764,11 +3767,11 @@ IValue* Mdl_dag_converter::mdl_value_to_int_value(
                 tag = DB::Tag( value_bsdf_measurement->get_tag_value());
                 const char* string_value = value_bsdf_measurement->get_string_value();
                 string_value_buf = strip_resource_owner_prefix( string_value);
-                needs_owner = string_value_buf != string_value;
+                owner = encode_module_name( get_resource_owner_prefix( string_value));
             }
 
             return m_vf->create_bsdf_measurement(
-                tag, string_value_buf.c_str(), needs_owner ? m_module_mdl_name : nullptr);
+                tag, string_value_buf.c_str(), !owner.empty() ? owner.c_str() : nullptr);
         }
     }
 
@@ -3795,8 +3798,8 @@ Mdl_dag_converter::Mdl_dag_converter(
     , m_code_dag(code_dag)
     , m_immutable_callees(immutable_callees)
     , m_create_direct_calls(create_direct_calls)
-    , m_module_mdl_name(module_mdl_name)
-    , m_prototype_tag(prototype_tag)
+    , m_loc_module_mdl_name(module_mdl_name)
+    , m_loc_prototype_tag(prototype_tag)
     , m_resolve_resources(resolve_resources)
     , m_user_modules_seen(user_modules_seen)
 {
@@ -4146,6 +4149,9 @@ IExpression* Mdl_dag_converter::mdl_dag_node_to_int_expr_localized(
     const IType* type_int,
     const char* qualified_name) const
 {
+    if (!m_loc_module_mdl_name)
+        return mdl_dag_node_to_int_expr(argument, /*type_int*/ nullptr);
+
     if (argument->get_kind() == mi::mdl::DAG_node::EK_CONSTANT) {
         // If the qualified name is set and the annotation is one we translate the translate it
         SYSTEM::Access_module<I18N::Mdl_translator_module> mdl_translator(false);
@@ -4160,8 +4166,8 @@ IExpression* Mdl_dag_converter::mdl_dag_node_to_int_expr_localized(
                 setup_translation_unit(
                     translation_unit
                     , m_transaction
-                    , m_prototype_tag
-                    , m_module_mdl_name
+                    , m_loc_prototype_tag
+                    , m_loc_module_mdl_name
                     , qualified_name
                     , value_string->get_value()
                 );
@@ -4199,8 +4205,8 @@ IExpression* Mdl_dag_converter::mdl_dag_node_to_int_expr_localized(
                         setup_translation_unit(
                             translation_unit
                             , m_transaction
-                            , m_prototype_tag
-                            , m_module_mdl_name
+                            , m_loc_prototype_tag
+                            , m_loc_module_mdl_name
                             , qualified_name
                             , value_string->get_value()
                         );

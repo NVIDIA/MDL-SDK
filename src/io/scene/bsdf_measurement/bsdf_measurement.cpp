@@ -751,6 +751,9 @@ mi::neuraylib::IBuffer* create_buffer_from_bsdf_measurement(
         success &= export_to_file( &writer, transmission);
     }
 
+    if( !success)
+        return nullptr;
+
     mi::neuraylib::IBuffer* buffer = writer.get_buffer();
     return buffer;
 }

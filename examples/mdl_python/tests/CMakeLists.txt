@@ -1,5 +1,5 @@
 #*****************************************************************************
-# Copyright (c) 2018-2023, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -26,25 +26,14 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #*****************************************************************************
 
-function(FIND_BOOST_EXT)
+set(PROJECT_NAME examples-mdl_python-tests)
 
-    if(NOT CMAKE_TOOLCHAIN_FILE)
-        set(Boost_NO_SYSTEM_PATHS OFF CACHE INTERNAL "")
-    else()
-        set(Boost_NO_SYSTEM_PATHS ON CACHE INTERNAL "")
-    endif()
-
-    set(Boost_NO_BOOST_CMAKE ON CACHE INTERNAL "")
-    set(Boost_NO_WARN_NEW_VERSIONS ON CACHE INTERNAL "")
-    #set(Boost_DEBUG ON)
-
-    find_package(Boost COMPONENTS filesystem thread)
-
-    set(Boost_FOUND ${Boost_FOUND} CACHE INTERNAL "Dependency boost has been resolved.")
-
-    if(NOT Boost_FOUND)
-        message(FATAL_ERROR "The dependency \"boost\" could not be resolved. "
-            "Please specify 'CMAKE_TOOLCHAIN_FILE'.")
-    endif()
-    
-endfunction()
+# create target from template
+create_from_python_preset(
+    TARGET ${PROJECT_NAME}
+    MAIN "__init__.py"
+    SOURCES
+        "__init__.py"
+        "setup.py"
+        "test_mi_idata.py"
+    )

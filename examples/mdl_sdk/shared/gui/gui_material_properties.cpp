@@ -198,7 +198,7 @@ public:
         auto found = m_argument_block_infos.find(name);
         if (found != m_argument_block_infos.end())
         {
-            mi_neuray_assert(false && "argument block info name is not unique");
+            assert(false && "argument block info name is not unique");
             return;
         }
         m_argument_block_infos[name] = info;
@@ -1188,7 +1188,7 @@ protected:
         TTCTValue& target)
     {
         // see explicit specializations and overrides
-        mi_neuray_assert(false || "Missing specialization or override");
+        assert(false && "Missing specialization or override");
     }
 
     // --------------------------------------------------------------------------------------------
@@ -1198,7 +1198,7 @@ protected:
         TIValue* target)
     {
         // see explicit specializations and overrides
-        mi_neuray_assert(false || "Missing specialization or override");
+        assert(false && "Missing specialization or override");
     }
 
     // --------------------------------------------------------------------------------------------
@@ -1286,7 +1286,7 @@ public:
         // get current value infos
         mi::base::Handle<mi::neuraylib::IValue_resource> resource(
             value->get_interface<mi::neuraylib::IValue_resource>());
-        mi_neuray_assert(resource && "value is not a resource");
+        assert(resource && "value is not a resource");
 
         m_resource_kind = resource->get_kind();
 
@@ -1746,24 +1746,22 @@ public:
         if (child_value)
         {
             // handle material instances and functions calls
-            base::Handle<mi::neuraylib::IFunction_call> mati(
-                access->get_interface<mi::neuraylib::IFunction_call>());
             base::Handle<mi::neuraylib::IFunction_call> fc(
                 access->get_interface<mi::neuraylib::IFunction_call>());
 
-            mi_neuray_assert((mati || fc) &&
+            assert(fc &&
                 "Database element to update is not a function call nor a material instance");
 
             base::Handle<const mi::neuraylib::IExpression_list> arguments(
-                mati ? mati->get_arguments() : fc->get_arguments());
+                fc->get_arguments());
 
             base::Handle<const mi::neuraylib::IExpression> argument(
                 arguments->get_expression(param_index));
-            mi_neuray_assert(argument && "Parameter_index is out of range");
+            assert(argument && "Parameter_index is out of range");
 
             base::Handle<const mi::neuraylib::IType> argument_type(argument->get_type());
             base::Handle<const mi::neuraylib::IType> value_type(child_value->get_type());
-            mi_neuray_assert(argument_type->get_kind() == value_type->get_kind() &&
+            assert(argument_type->get_kind() == value_type->get_kind() &&
                 "The type of the argument and the value do not match");
 
             mi::base::Handle<mi::neuraylib::IValue_factory> vf(
@@ -1775,12 +1773,10 @@ public:
             base::Handle<mi::neuraylib::IValue> new_value(vf->clone(child_value.get()));
             base::Handle<mi::neuraylib::IExpression> new_expression(
                 ef->create_constant(new_value.get()));
-            Sint32 result = mati
-                ? mati->set_argument(param_index, new_expression.get())
-                : fc->set_argument(param_index, new_expression.get());
+            Sint32 result = fc->set_argument(param_index, new_expression.get());
 
             if (result != 0)
-                mi_neuray_assert(false && "Setting value failed");
+                assert(false && "Setting value failed");
         }
 
         return change;
@@ -2218,7 +2214,7 @@ void Section_material::bind_material(
             param_defaults->get_expression(name));
 
         mi::Size root_parameter_index = mat_definition->get_parameter_index(name);
-        mi_neuray_assert(root_parameter_index == j);
+        assert(root_parameter_index == j);
 
         Parameter_node_base* param = static_cast<Parameter_node_base*>(create(
             transaction,
@@ -2232,7 +2228,7 @@ void Section_material::bind_material(
 
         if (!param)
         {
-            mi_neuray_assert(param && "Parameter node creation failed.");
+            assert(param && "Parameter node creation failed.");
             continue;
         }
 

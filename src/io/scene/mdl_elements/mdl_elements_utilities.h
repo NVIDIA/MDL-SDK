@@ -340,8 +340,8 @@ public:
     ///                               signature for materials, otherwise DB accesses are used.
     /// \param immutable_callees      \c true for defaults, \c false for arguments
     /// \param create_direct_calls    \c true creates EK_DIRECT_CALLs, \c false creates EK_CALLs
-    /// \param module_mdl_name        The MDL module name.
-    /// \param prototype_tag          The prototype_tag if relevant.
+    /// \param module_mdl_name        The MDL module name. Optional, used for localization only.
+    /// \param prototype_tag          The prototype tag. Optional, used for localization only.
     /// \param resolve_resources      \c true, if resources are supposed to be loaded into the DB
     /// \param user_modules_seen      If non - \c NULL, visited user module tags and identifiers
     ///                               are put here.
@@ -359,12 +359,11 @@ public:
 
     /// Converts mi::mdl::IValue to MI::MDL::IValue.
     ///
-    /// \param type_int               The expected type of the return value. Used to control
-    ///                               whether array arguments are converted to immediate-sized or
-    ///                               deferred-sized arrays. If \c NULL, the type of \p value is
-    ///                               used.
-    /// \param value                  The value to convert.
-    /// \return                       The converted value, or \c NULL in case of failures.
+    /// \param type_int   The expected type of the return value. Used to control whether array
+    ///                   arguments are converted to immediate-sized or deferred-sized arrays. If
+    ///                   \c NULL, the type of \p value is used.
+    /// \param value      The value to convert.
+    /// \return           The converted value, or \c NULL in case of failures.
     IValue* mdl_value_to_int_value(
         const IType* type_int,
         const mi::mdl::IValue* value) const;
@@ -372,10 +371,9 @@ public:
     /// Converts mi::mdl::DAG_node to MI::MDL::IExpression.
     ///
     /// \param node       The DAG node to convert.
-    /// \param type_int   The expected type of the return value. Used to control whether
-    ///                   array arguments are converted to immediate-sized or deferred-sized
-    ///                   arrays. If \c NULL, the type of \p value is used.
-    ///
+    /// \param type_int   The expected type of the return value. Used to control whether array
+    ///                   arguments are converted to immediate-sized or deferred-sized arrays. If
+    ///                   \c NULL, the type of \p value is used.
     /// \return           The converted expression, or \c NULL in case of failures.
     IExpression* mdl_dag_node_to_int_expr(
         const mi::mdl::DAG_node* node,
@@ -390,7 +388,7 @@ private:
 
     /// Find the tag for a given resource.
     DB::Tag find_resource_tag(
-        mi::mdl::IValue_resource const *res) const;
+        const mi::mdl::IValue_resource* res) const;
 
     /// Converts mi::mdl::DAG_call to MI::MDL::IExpression.
     /// (creates IExpression_direct_call)
@@ -426,8 +424,11 @@ private:
     bool m_immutable_callees;
     bool m_create_direct_calls;
 
-    const char* m_module_mdl_name;
-    DB::Tag     m_prototype_tag; ///< The prototype of the mat. def. converted if relevant
+    /// The MDL module name. Optional, used for localization only.
+    const char* m_loc_module_mdl_name;
+    /// The prototype of the converted definition. Optional, used for localization only.
+    DB::Tag     m_loc_prototype_tag;
+
     bool        m_resolve_resources;
     mutable std::set<Mdl_tag_ident>* m_user_modules_seen;
 };

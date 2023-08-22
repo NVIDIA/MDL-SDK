@@ -906,9 +906,8 @@ Mdl_compiled_material* Mdl_function_call::create_compiled_material(
     if( !instance.is_valid_interface())
         return nullptr;
 
-    ASSERT(M_SCENE, m_module_tag);
+    ASSERT( M_SCENE, m_module_tag);
     DB::Access<Mdl_module> module( m_module_tag, transaction);
-    const char* module_filename = module->get_filename();
     const char* module_name = module->get_mdl_name();
 
     mi::Float32 mdl_meters_per_scene_unit
@@ -920,7 +919,7 @@ Mdl_compiled_material* Mdl_function_call::create_compiled_material(
     bool resolve_resources = context->get_option<bool>( MDL_CTX_OPTION_RESOLVE_RESOURCES);
 
     return new Mdl_compiled_material(
-        transaction, instance.get(), module_filename, module_name,
+        transaction, instance.get(), module_name,
         mdl_meters_per_scene_unit, mdl_wavelength_min, mdl_wavelength_max, resolve_resources);
 }
 

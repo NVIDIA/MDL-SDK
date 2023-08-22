@@ -134,7 +134,7 @@ namespace mi { namespace examples { namespace dxr
         << "                                        has no camera. Parameters specify position and\n"
         << "                                        focus point.\n"
 
-        << "--mdl_path <path>         MDL search path, can occur multiple times.\n"
+        << "-p|--mdl_path <path>      MDL search path, can occur multiple times.\n"
 
         << "--mdl_next                Enable features from upcoming MDL version.\n"
 
@@ -283,7 +283,7 @@ namespace mi { namespace examples { namespace dxr
 
                     if (!mi::examples::strings::remove_quotes(options.output_file))
                     {
-                        log_error("Unexpected quotes in: '" + options.output_file + "'.", SRC);
+                        log_error("Unexpected quotes in: '" + options.output_file + "'.");
                         return_code = EXIT_FAILURE;
                         return false;
                     }
@@ -295,7 +295,7 @@ namespace mi { namespace examples { namespace dxr
 
                     if (!mi::examples::strings::remove_quotes(options.generated_mdl_path))
                     {
-                        log_error("Unexpected quotes in: '" + options.generated_mdl_path + "'.", SRC);
+                        log_error("Unexpected quotes in: '" + options.generated_mdl_path + "'.");
                         return_code = EXIT_FAILURE;
                         return false;
                     }
@@ -305,7 +305,7 @@ namespace mi { namespace examples { namespace dxr
                     log_path = mi::examples::io::normalize(mi::examples::strings::wstr_to_str(argv[++i]));
                     if (!mi::examples::strings::remove_quotes(log_path))
                     {
-                        log_error("Unexpected quotes in: '" + log_path + "'.", SRC);
+                        log_error("Unexpected quotes in: '" + log_path + "'.");
                         return_code = EXIT_FAILURE;
                         return false;
                     }
@@ -317,7 +317,7 @@ namespace mi { namespace examples { namespace dxr
                         options.lpe != "albedo" &&
                         options.lpe != "normal")
                     {
-                        log_error("Invalid LPE option: '" + options.lpe + "'.", SRC);
+                        log_error("Invalid LPE option: '" + options.lpe + "'.");
                         return_code = EXIT_FAILURE;
                         return false;
                     }
@@ -329,7 +329,7 @@ namespace mi { namespace examples { namespace dxr
 
                     if (!mi::examples::strings::remove_quotes(environment))
                     {
-                        log_error("Unexpected quotes in: '" + environment + "'.", SRC);
+                        log_error("Unexpected quotes in: '" + environment + "'.");
                         return_code = EXIT_FAILURE;
                         return false;
                     }
@@ -442,16 +442,21 @@ namespace mi { namespace examples { namespace dxr
                 {
                     options.ray_depth = std::max(2, std::min(_wtoi(argv[++i]), 100));
                 }
-                else if (wcscmp(opt, L"--mdl_path") == 0 && i < argc - 1)
+                else if ((wcscmp(opt, L"-p") == 0 || wcscmp(opt, L"--mdl_path") == 0) && i < argc - 1)
                 {
                     std::string mdl_path = mi::examples::strings::wstr_to_str(argv[++i]);
                     if (!mi::examples::strings::remove_quotes(mdl_path))
                     {
-                        log_error("Unexpected quotes in: '" + mdl_path + "'.", SRC);
+                        log_error("Unexpected quotes in: '" + mdl_path + "'.");
                         return_code = EXIT_FAILURE;
                         return false;
                     }
-                    options.mdl_paths.push_back(mi::examples::io::normalize(mdl_path));
+                    if (!mi::examples::io::is_absolute_path(mdl_path))
+                    {
+                        // make MDL search paths absolute
+                        mdl_path = mi::examples::io::get_working_directory() + "/" + mdl_path;
+                    }
+                    options.mdl_paths.push_back(mi::examples::io::normalize(mdl_path, true));
                 }
                 else if (wcscmp(opt, L"--mdl_next") == 0)
                 {
@@ -512,7 +517,7 @@ namespace mi { namespace examples { namespace dxr
                     std::string opt = mi::examples::strings::wstr_to_str(argv[++i]);
                     if (opt != "Od" && opt != "O0" && opt != "O1" && opt != "O2" && opt != "O3")
                     {
-                        log_error("Unexpected shader optimization level: '" + opt + "'.", SRC);
+                        log_error("Unexpected shader optimization level: '" + opt + "'.");
                         return_code = EXIT_FAILURE;
                         return false;
                     }
@@ -532,7 +537,7 @@ namespace mi { namespace examples { namespace dxr
                         std::string path = mi::examples::strings::wstr_to_str(argv[++i]);
                         if (!mi::examples::strings::remove_quotes(path))
                         {
-                            log_error("Unexpected quotes in: '" + path + "'.", SRC);
+                            log_error("Unexpected quotes in: '" + path + "'.");
                             return_code = EXIT_FAILURE;
                             return false;
                         }
@@ -543,7 +548,7 @@ namespace mi { namespace examples { namespace dxr
                         std::string path = mi::examples::strings::wstr_to_str(argv[++i]);
                         if (!mi::examples::strings::remove_quotes(path))
                         {
-                            log_error("Unexpected quotes in: '" + path + "'.", SRC);
+                            log_error("Unexpected quotes in: '" + path + "'.");
                             return_code = EXIT_FAILURE;
                             return false;
                         }

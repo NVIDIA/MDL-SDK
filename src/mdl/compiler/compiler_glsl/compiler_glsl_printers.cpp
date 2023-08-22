@@ -654,7 +654,7 @@ void Printer::print_value(
 
             float f = v->get_value();
             if (isfinite(f)) {
-                snprintf(buf, sizeof(buf) - 2, "%.7g", f);
+                snprintf(buf, sizeof(buf) - 2, "%.10g", f);
                 buf[sizeof(buf) - 3] = '\0';
                 print(to_float_constant(buf));
                 print("hf");
@@ -674,7 +674,7 @@ void Printer::print_value(
 
             float f = v->get_value();
             if (isfinite(f)) {
-                snprintf(buf, sizeof(buf) - 2, "%.7g", f);
+                snprintf(buf, sizeof(buf) - 2, "%.10g", f);
                 buf[sizeof(buf) - 3] = '\0';
                 print(to_float_constant(buf));
             } else if (f == +HUGE_VAL) {
@@ -693,7 +693,7 @@ void Printer::print_value(
 
             double d = v->get_value();
             if (isfinite(d)) {
-                snprintf(buf, sizeof(buf) - 2, "%.16g", d);
+                snprintf(buf, sizeof(buf) - 2, "%.18g", d);
                 buf[sizeof(buf) - 3] = '\0';
                 print(to_float_constant(buf));
                 print("lf");
@@ -1773,7 +1773,7 @@ void Printer::print(Type_qualifier const *tq)
         print(") ");
     }
 
-    // §4.8 Order of Qualification
+    // 4.8 Order of Qualification
     // When multiple qualifications are present, they must follow a strict order.
     // This order is as follows.
     //  precise - qualifier

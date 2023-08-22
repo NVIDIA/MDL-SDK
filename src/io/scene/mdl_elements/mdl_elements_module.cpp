@@ -564,14 +564,15 @@ mi::Sint32 Mdl_module::create_module_internal(
 
     lock.lock();
 
-    // Collect tags of imported modules, create DB elements on the fly if necessary.
-    mi::Uint32 import_count = module->get_import_count();
+    // Collect tags of imported modules, create DB elements on the fly if necessary. Use DAG imports
+    // instead of AST imports since the former can be a true superset of the latter, e.g., contain
+    // additionally ::nvidia::df or ::anno.
+    mi::Uint32 import_count = code_dag->get_import_count();
     std::vector<Mdl_tag_ident> imports;
     imports.reserve( import_count);
 
     for( mi::Uint32 i = 0; i < import_count; ++i) {
-        mi::base::Handle<const mi::mdl::IModule> import( module->get_import( i));
-        std::string core_import_name = import->get_name();
+        std::string core_import_name = code_dag->get_import( i);
         std::string mdl_import_name  = encode_module_name( core_import_name);
         std::string db_import_name   = get_db_name( mdl_import_name);
         LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_DATABASE,
@@ -1655,6 +1656,10 @@ mi::Sint32 Mdl_module::reload_module_internal(
     Execution_context* context)
 {
     // check imports
+    //
+    // This should use the DAG imports to avoid missing additional imports that might occur, e.g.
+    // for ::nvidia::df or ::anno. But this requires disabling the shortcut below, and these two
+    // modules are fixed anyway. Use the faster, but slightly inaccurate version for now.
     mi::Uint32 import_count = module->get_import_count();
     std::vector<Mdl_tag_ident> imports( import_count);
 

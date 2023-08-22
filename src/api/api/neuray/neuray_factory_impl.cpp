@@ -787,7 +787,8 @@ mi::IPointer* Factory_impl::clone( const mi::IPointer* source, mi::Uint32 option
         mi::IPointer* target = create_with_transaction<mi::IPointer>( source_type_name, source);
         if( !target)
             return nullptr;
-        mi::Uint32 result = target->set_pointer( source->get_pointer());
+        mi::base::Handle<mi::base::IInterface> pointer( source->get_pointer());
+        mi::Uint32 result = target->set_pointer( pointer.get());
         ASSERT( M_NEURAY_API, result == 0);
         boost::ignore_unused( result);
         return target;
@@ -828,7 +829,8 @@ mi::IConst_pointer* Factory_impl::clone( const mi::IConst_pointer* source, mi::U
             = create_with_transaction<mi::IConst_pointer>( source_type_name, source);
         if( !target)
             return nullptr;
-        mi::Uint32 result = target->set_pointer( source->get_pointer());
+        mi::base::Handle<const mi::base::IInterface> pointer( source->get_pointer());
+        mi::Uint32 result = target->set_pointer( pointer.get());
         ASSERT( M_NEURAY_API, result == 0);
         boost::ignore_unused( result);
         return target;

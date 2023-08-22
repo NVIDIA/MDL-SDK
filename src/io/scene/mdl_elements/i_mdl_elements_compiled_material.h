@@ -76,8 +76,7 @@ public:
     ///
     /// \param transaction                 The DB transaction to use.
     /// \param instance                    The wrapped MDL material instance.
-    /// \param module_filename             The filename of the module.
-    /// \param module_name                 The MDL module name.
+    /// \param module_name                 The MDL module name. Optional, used by is_valid().
     /// \param mdl_meters_per_scene_unit   Conversion ratio between meters and scene units.
     /// \param mdl_wavelength_min          The smallest supported wavelength.
     /// \param mdl_wavelength_max          The largest supported wavelength.
@@ -86,7 +85,6 @@ public:
     Mdl_compiled_material(
         DB::Transaction* transaction,
         const mi::mdl::IGenerated_code_dag::IMaterial_instance* instance,
-        const char* module_filename,
         const char* module_name,
         mi::Float32 mdl_meters_per_scene_unit,
         mi::Float32 mdl_wavelength_min,
@@ -144,7 +142,7 @@ public:
 
     mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity get_surface_opacity() const;
 
-    bool get_cutout_opacity(mi::Float32* cutout_opacity) const;
+    bool get_cutout_opacity( mi::Float32* cutout_opacity) const;
 
     // internal methods
 
@@ -177,9 +175,7 @@ public:
     /// \param transaction   The DB transaction (for name lookups and tag versions). Can be \c NULL.
     void dump( DB::Transaction* transaction) const;
 
-    bool is_valid(
-        DB::Transaction* transaction,
-        Execution_context* context) const;
+    bool is_valid( DB::Transaction* transaction, Execution_context* context) const;
 
     // methods of SERIAL::Serializable
 
@@ -240,7 +236,13 @@ private:
     mi::Float32 m_cutout_opacity;                     ///< Material cutout opacity.
     bool m_has_cutout_opacity;                        ///< True if the cutout opacity is known.
 
-    std::set<Mdl_tag_ident> m_module_idents;        ///< Module identifiers of all used expressions.
+    /// Module identifiers of all remaining call expressions plus the module given in the constructor.
+    ///
+    /// Used by is_valid().
+    ///
+    /// TODO Just considering the remaining call expressions is wrong. We need to consider all used
+    /// call expressions in the input (before optimization), including their imports.
+    std::set<Mdl_tag_ident> m_module_idents;
 };
 
 } // namespace MDL

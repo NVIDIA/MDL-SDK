@@ -47,7 +47,7 @@ char const * const RUID_FILE = "rule_matches.txt";
 
 /// Distilling targets used for '-test spec' option.
 static char const * const spec_test_targets[]
-= { "diffuse", "specular_glossy", "transmissive_pbr", "ue4", "lod"};
+= { "diffuse", "specular_glossy", "transmissive_pbr", "ue4" };
 
 /// Returns the dimension of an array.
 template<typename T, size_t n>
@@ -102,6 +102,7 @@ public:
     bool                target_material_model_mode; ///< Compile material in target material model mode.
     std::vector<const char*> additional_modules;
                                           ///< Modules to load (e.g. those defining custom target materials)
+    std::vector<std::string> test_targets;///< Targets to use for '-test spec' mode.
 
     /// Create options with default settings.
     Options()
@@ -127,5 +128,6 @@ public:
         , emission(false)
         , target_material_model_mode(false)
         , additional_modules()
+        , test_targets()
         {}
 };

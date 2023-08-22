@@ -41,7 +41,6 @@
 #include <iostream>
 
 #include "dist_rules.h"
-#include "dist_rules_dg.h"
 #include "dist_rules_ue.h"
 #include "dist_rules_transmissive_pbr.h"
 

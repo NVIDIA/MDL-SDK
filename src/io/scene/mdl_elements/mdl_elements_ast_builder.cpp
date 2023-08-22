@@ -537,6 +537,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
 
             mi::mdl::IExpression const *tex_expr = nullptr;
 
+            ASSERT( M_SCENE, n_params > 0);
             for (mi::Size i = 0, n = n_params; i < n; ++i) {
                 Handle<IExpression const> arg(args->get_expression(i));
 
@@ -862,6 +863,7 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
 
             mi::mdl::IExpression const *tex_expr = nullptr;
 
+            ASSERT( M_SCENE, n_params > 0);
             for (mi::Size i = 0, n = n_params; i < n; ++i) {
                 Handle<IExpression const> arg(args->get_expression(i));
 

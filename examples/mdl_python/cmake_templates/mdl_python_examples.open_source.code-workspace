@@ -18,11 +18,18 @@
 		}
 	],
 	"settings": {
-		"python.pythonPath": "@MDL_DEPENDENCY_PYTHON_DEV_EXE@",
+		"python.defaultInterpreterPath": "@MDL_DEPENDENCY_PYTHON_DEV_EXE@",
 		"files.exclude": {
 			"cmake_templates": true,
 			"**/CMakeLists.txt": true
-		}
+		},
+		"python.analysis.extraPaths": [
+			// unfortunately this is not working well with different configurations, so enable it for debug
+			"@BINDING_MODULE_PATH@/Debug"
+		],
+		"cSpell.words": [
+			"pymdlsdk"
+		]
 	},
 	"launch": {
 		"configurations": [

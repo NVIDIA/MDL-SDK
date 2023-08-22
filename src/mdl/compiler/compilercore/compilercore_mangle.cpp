@@ -1195,6 +1195,7 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
                 char const *qualifier_start = ptr;
                 int num_qualifiers = 0;
                 int skip_from_qualifier = 0x7fffffff;
+                string qualifiers(m_alloc);
                 while (ptr < endptr && (*ptr == 'R' || *ptr == 'K' || *ptr == 'P' || *ptr == 'U')) {
                     if (*ptr == 'P') {
                         skip_parameter = true;
@@ -1205,8 +1206,8 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
                         if (!demangle_name(ptr, endptr, qualifier)) {
                             return false;
                         }
-                        m_out += qualifier;
-                        m_out += ' ';
+                        qualifiers += qualifier;
+                        qualifiers += ' ';
                         --ptr;
                         skip_from_qualifier = num_qualifiers;
                     }
@@ -1384,6 +1385,7 @@ bool MDL_name_mangler::demangle(char const *mangled_name, size_t len)
                     } else {
                         m_out += ',';
                     }
+                    m_out += qualifiers;
                     m_out += name;
                 }
 

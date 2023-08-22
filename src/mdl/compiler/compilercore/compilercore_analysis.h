@@ -1955,6 +1955,12 @@ private:
     /// \param expr  the expression to check
     bool is_lvalue(IExpression const *expr) const;
 
+    /// Process the return expression (or the single body expression).
+    ///
+    /// \param expr  the return expression
+    IExpression const *handle_return_expression(
+        IExpression const *expr);
+
     bool pre_visit(IDeclaration_import *import_decl) MDL_OVERRIDE;
 
     bool pre_visit(IDeclaration_constant *con_decl) MDL_OVERRIDE;

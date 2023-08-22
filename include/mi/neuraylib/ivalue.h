@@ -675,13 +675,21 @@ public:
 /// The interface for creating values.
 ///
 /// A value factory can be obtained from #mi::neuraylib::IMdl_factory::create_value_factory().
+///
+/// \see #mi::neuraylib::IType_factory, #mi::neuraylib::IExpression_factory
 class IValue_factory : public
     mi::base::Interface_declare<0x82595c0d,0x3687,0x4b45,0xa3,0x38,0x42,0x20,0x02,0xea,0x3f,0x9b>
 {
 public:
+    /// \name Access to related factories.
+    //@{
 
     /// Returns the type factory associated with this value factory.
     virtual IType_factory* get_type_factory() const = 0;
+
+    //@}
+    /// \name Creation of values and value lists
+    //@{
 
     /// Creates a new value of type boolean.
     virtual IValue_bool* create_bool( bool value = false) const = 0;
@@ -801,6 +809,10 @@ public:
     /// Creates a new value list.
     virtual IValue_list* create_value_list() const = 0;
 
+    //@}
+    /// \name Cloning of values and value lists
+    //@{
+
     /// Clones the given value.
     ///
     /// Note that referenced DB elements, e.g., resources, are not copied, but shared.
@@ -824,6 +836,10 @@ public:
     ///
     /// Note that referenced DB elements, e.g., resources, are not copied, but shared.
     virtual IValue_list* clone( const IValue_list* value_list) const = 0;
+
+    //@}
+    /// \name Comparison of values and value lists
+    //@{
 
     /// Compares two instances of #mi::neuraylib::IValue.
     ///
@@ -866,6 +882,10 @@ public:
     virtual Sint32 compare(
         const IValue_list* lhs, const IValue_list* rhs, Float64 epsilon = 0.0) const = 0;
 
+    //@}
+    /// \name Dumping of values and value lists
+    //@{
+
     /// Returns a textual representation of a value.
     ///
     /// The textual representation is of the form "type name = value" if \p name is not \c NULL, and
@@ -889,6 +909,8 @@ public:
     ///       \em not base application logic on it.
     virtual const IString* dump(
         const IValue_list* list, const char* name, Size depth = 0) const = 0;
+
+    //@}
 };
 
 /// Simplifies setting the value of #mi::neuraylib::IValue from the corresponding classes from the
@@ -907,7 +929,7 @@ public:
 ///
 /// There is no support for inner-most components of multi-dimensional compounds (arrays of
 /// compounds or structs of compounds) -- this would require additional overloads accepting two
-/// or more component indices and/or field names.    
+/// or more component indices and/or field names.
 ///
 /// \param value           The instance of #mi::neuraylib::IValue to modify.
 /// \param v               The new value to be set.

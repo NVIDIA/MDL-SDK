@@ -1,5 +1,57 @@
 Change Log
 ==========
+MDL SDK 2023.0.2 (367100.3997): 01 Aug 2023
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2023.0.2 (367100.3997) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+    - Improved installation instructions (mention `VCPKG_PLATFORM_TOOLSET` for
+      Windows, add 7.5 as the currently highest supported OptiX version).
+
+**Fixed Bugs**
+
+- General
+    - Fixed export of `uvtile` textures referenced in MDL modules.
+    - Improved installation instructions for installation of thirdparty dependencies via
+      `apt-get`.
+    - Fixed wrong reference counts when cloning instances of `IPointer` and
+      `IConst_pointer` via `IFactory::clone()` without using the option
+      `DEEP_ASSIGNMENT_OR_CLONE`.
+
+- MDL Compiler and Backends
+    - All backends: Fixed code generation for material expressions with path prefix
+      "geometry.normal".
+    - Any unsupported code in GLSL/HLSL code generation will now issue an "Internal JIT backend"
+      error. The `<ERROR>` marker in the generated source will remain.
+    - Fixed GLSL alias type definitions inside the GLSL backend
+      (no more "missing conversion constructor" errors).
+    - Module transformer: Fixed missing constant declarations when used in some annotations
+      in non-root modules that are inlined.
+    - Module transformer: Do not loose `anno::native()` annotations when inlining a module.
+    - Fixed MDL compiler options containing double typed values
+      (causing wrong `limits::DOUBLE_M[IN|AX]`).
+    - Fixed the necessary precision to print floats and doubles so it can read back
+      without losses.
+    - Fixed missing elemental constructor for locally defined structs in the DAG- representation.
+    - Fixed compiler crashes for: 
+        - Invalid call expressions.
+        - Invalid array types with a let expression as the array size.
+    - Compiler now reports proper errors when a function is returned from a function.
+    - Fixed PTX code generation that causes a GPU crash when the load/store instructions
+      are generated with a wrong address space.
+    - Fixed HLSL/GLSL backends generating float constants with not enough precision.
+      In particular, the `::limits::MIN_FLOAT` constant was generated wrong,
+      causing rounding to zero later.
+
+- MDL Distiller and Baker
+    - Fixed bug in command line `mdl_distiller` MDL printer for `::tex` module imports
+      when textures are used in material parameter defaults.
+    - Fixed mixer normalization in mdltlc for patterns with attributes.
+
 MDL SDK 2023.0.0 (367100.2992): 03 Jun 2023
 -----------------------------------------------
 

@@ -32,8 +32,6 @@ set(PROJECT_NAME shaders-plugin-mdl_distiller)
 # generated Files
 set(_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 set(_GENERATED_SOURCES
-    ${_GENERATED_DIR}/dist_rules_dg.h
-    ${_GENERATED_DIR}/dist_rules_dg.cpp
     ${_GENERATED_DIR}/dist_rules.h
     ${_GENERATED_DIR}/dist_rules.cpp
     ${_GENERATED_DIR}/dist_rules_transmissive_pbr.h
@@ -44,7 +42,6 @@ set(_GENERATED_SOURCES
 
 # scripts/files used to generate the sources above
 set(_GENERATOR_FILES_ORIGINAL
-    ${CMAKE_CURRENT_SOURCE_DIR}/dist_rules_dg.mdltl
     ${CMAKE_CURRENT_SOURCE_DIR}/dist_rules.mdltl
     ${CMAKE_CURRENT_SOURCE_DIR}/dist_rules_transmissive_pbr.mdltl
     ${CMAKE_CURRENT_SOURCE_DIR}/dist_rules_ue.mdltl

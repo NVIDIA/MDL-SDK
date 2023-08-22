@@ -240,54 +240,53 @@ struct Res_data
 // Argument block access for dynamic parameters in class compilation mode
 // ------------------------------------------------------------------------------------------------
 
-float mdl_read_argblock_as_float(uint offs)
+float mdl_read_argblock_as_float(int offs)
 {
     return asfloat(mdl_argument_block.Load(offs));
 }
 
-double mdl_read_argblock_as_double(uint offs)
+double mdl_read_argblock_as_double(int offs)
 {
     return asdouble(mdl_argument_block.Load(offs), mdl_argument_block.Load(offs + 4));
 }
 
-int mdl_read_argblock_as_int(uint offs)
+int mdl_read_argblock_as_int(int offs)
 {
     return asint(mdl_argument_block.Load(offs));
 }
 
-uint mdl_read_argblock_as_uint(uint offs)
+uint mdl_read_argblock_as_uint(int offs)
 {
     return mdl_argument_block.Load(offs);
 }
 
-bool mdl_read_argblock_as_bool(uint offs)
+bool mdl_read_argblock_as_bool(int offs)
 {
     uint val = mdl_argument_block.Load(offs & ~3);
     return (val & (0xffU << (8 * (offs & 3)))) != 0;
 }
 
-
-float mdl_read_rodata_as_float(uint offs)
+float mdl_read_rodata_as_float(int offs)
 {
     return asfloat(mdl_ro_data_segment.Load(offs));
 }
 
-double mdl_read_rodata_as_double(uint offs)
+double mdl_read_rodata_as_double(int offs)
 {
     return asdouble(mdl_ro_data_segment.Load(offs), mdl_ro_data_segment.Load(offs + 4));
 }
 
-int mdl_read_rodata_as_int(uint offs)
+int mdl_read_rodata_as_int(int offs)
 {
     return asint(mdl_ro_data_segment.Load(offs));
 }
 
-uint mdl_read_rodata_as_uint(uint offs)
+int mdl_read_rodata_as_uint(int offs)
 {
     return mdl_ro_data_segment.Load(offs);
 }
 
-bool mdl_read_rodata_as_bool(uint offs)
+bool mdl_read_rodata_as_bool(int offs)
 {
     uint val = mdl_ro_data_segment.Load(offs & ~3);
     return (val & (0xffU << (8 * (offs & 3)))) != 0;
@@ -301,7 +300,7 @@ bool mdl_read_rodata_as_bool(uint offs)
 // corresponds to ::tex::texture_isvalid(uniform texture_3d tex)
 // corresponds to ::tex::texture_isvalid(uniform texture_cube tex) // not supported by this example
 // corresponds to ::tex::texture_isvalid(uniform texture_ptex tex) // not supported by this example
-bool tex_texture_isvalid(RES_DATA_PARAM_DECL uint tex)
+bool tex_texture_isvalid(RES_DATA_PARAM_DECL int tex)
 {
     // assuming that there is no indexing out of bounds of the resource_infos and the view arrays
     return tex != 0; // invalid texture
@@ -362,7 +361,7 @@ float2 apply_smootherstep_filter(float2 uv, uint2 size)
 // Texturing functions, 2D
 // ------------------------------------------------------------------------------------------------
 
-uint2 tex_res_2d(RES_DATA_PARAM_DECL uint tex, int2 uv_tile, float frame)
+int2 tex_res_2d(RES_DATA_PARAM_DECL int tex, int2 uv_tile, float frame)
 {
     if (tex == 0) return uint2(0, 0); // invalid texture
 
@@ -374,23 +373,23 @@ uint2 tex_res_2d(RES_DATA_PARAM_DECL uint tex, int2 uv_tile, float frame)
 
     uint2 res;
     mdl_textures_2d[NonUniformResourceIndex(array_index)].GetDimensions(res.x, res.y);
-    return res;
+    return int2(res);
 }
 
 // corresponds to ::tex::width(uniform texture_2d tex, int2 uv_tile, float frame)
-uint tex_width_2d(RES_DATA_PARAM_DECL uint tex, int2 uv_tile, float frame)
+int tex_width_2d(RES_DATA_PARAM_DECL int tex, int2 uv_tile, float frame)
 {
     return tex_res_2d(RES_DATA_PARAM tex, uv_tile, frame).x;
 }
 
 // corresponds to ::tex::height(uniform texture_2d tex, int2 uv_tile)
-uint tex_height_2d(RES_DATA_PARAM_DECL uint tex, int2 uv_tile, float frame)
+int tex_height_2d(RES_DATA_PARAM_DECL int tex, int2 uv_tile, float frame)
 {
     return tex_res_2d(RES_DATA_PARAM tex, uv_tile, frame).y;
 }
 
 // corresponds to ::tex::first__frame(uniform texture_2d)
-int tex_first_frame_2d(RES_DATA_PARAM_DECL uint tex)
+int tex_first_frame_2d(RES_DATA_PARAM_DECL int tex)
 {
     if (tex == 0) return 0; // invalid texture
 
@@ -400,7 +399,7 @@ int tex_first_frame_2d(RES_DATA_PARAM_DECL uint tex)
 }
 
 // corresponds to ::tex::last_frame(uniform texture_2d)
-int tex_last_frame_2d(RES_DATA_PARAM_DECL uint tex)
+int tex_last_frame_2d(RES_DATA_PARAM_DECL int tex)
 {
     if (tex == 0) return 0; // invalid texture
 
@@ -412,7 +411,7 @@ int tex_last_frame_2d(RES_DATA_PARAM_DECL uint tex)
 // corresponds to ::tex::lookup_float4(uniform texture_2d tex, float2 coord, ...)
 float4 tex_lookup_float4_2d(
     RES_DATA_PARAM_DECL
-    uint tex,
+    int tex,
     float2 coord,
     int wrap_u,
     int wrap_v,
@@ -434,12 +433,12 @@ float4 tex_lookup_float4_2d(
     if (wrap_v == TEX_WRAP_CLIP && (coord.y < 0.0 || coord.y >= 1.0))
         return float4(0, 0, 0, 0);
 
-    uint width, height;
-    mdl_textures_2d[NonUniformResourceIndex(array_index)].GetDimensions(width, height);
-    coord.x = apply_wrap_and_crop(coord.x, wrap_u, crop_u, width);
-    coord.y = apply_wrap_and_crop(coord.y, wrap_v, crop_v, height);
+    uint2 res;
+    mdl_textures_2d[NonUniformResourceIndex(array_index)].GetDimensions(res.x, res.y);
+    coord.x = apply_wrap_and_crop(coord.x, wrap_u, crop_u, res.x);
+    coord.y = apply_wrap_and_crop(coord.y, wrap_v, crop_v, res.y);
 
-    coord = apply_smootherstep_filter(coord, uint2(width, height));
+    coord = apply_smootherstep_filter(coord, res);
 
     // Note, since we don't have ddx and ddy in the compute pipeline, TextureObject::Sample() is not
     // available, we use SampleLevel instead and go for the most detailed level. Therefore, we don't
@@ -448,22 +447,22 @@ float4 tex_lookup_float4_2d(
         mdl_sampler_tex, coord, /*lod=*/ 0.0f, /*offset=*/ int2(0, 0));
 }
 
-float3 tex_lookup_float3_2d(RES_DATA_PARAM_DECL uint tex, float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
+float3 tex_lookup_float3_2d(RES_DATA_PARAM_DECL int tex, float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
 {
     return tex_lookup_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v, frame).xyz;
 }
 
-float3 tex_lookup_color_2d(RES_DATA_PARAM_DECL uint tex, float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
+float3 tex_lookup_color_2d(RES_DATA_PARAM_DECL int tex, float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
 {
     return tex_lookup_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v, frame).xyz;
 }
 
-float2 tex_lookup_float2_2d(RES_DATA_PARAM_DECL uint tex, float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
+float2 tex_lookup_float2_2d(RES_DATA_PARAM_DECL int tex, float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
 {
     return tex_lookup_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v, frame).xy;
 }
 
-float tex_lookup_float_2d(RES_DATA_PARAM_DECL uint tex, float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
+float tex_lookup_float_2d(RES_DATA_PARAM_DECL int tex, float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
 {
     return tex_lookup_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v, frame).x;
 }
@@ -471,7 +470,7 @@ float tex_lookup_float_2d(RES_DATA_PARAM_DECL uint tex, float2 coord, int wrap_u
 // corresponds to ::tex::lookup_float4(uniform texture_2d tex, float2 coord, ...) when derivatives are enabled
 float4 tex_lookup_deriv_float4_2d(
     RES_DATA_PARAM_DECL
-    uint tex,
+    int tex,
     Derived_float2 coord,
     int wrap_u,
     int wrap_v,
@@ -498,7 +497,7 @@ float4 tex_lookup_deriv_float4_2d(
     coord.val.x = apply_wrap_and_crop(coord.val.x, wrap_u, crop_u, res.x);
     coord.val.y = apply_wrap_and_crop(coord.val.y, wrap_v, crop_v, res.y);
 
-    coord.val = apply_smootherstep_filter(coord.val, uint2(res.x, res.y));
+    coord.val = apply_smootherstep_filter(coord.val, res);
 
     // Note, since we don't have ddx and ddy in the compute pipeline, TextureObject::Sample() is not
     // available, we use SampleLevel instead and go for the most detailed level. Therefore, we don't
@@ -507,22 +506,22 @@ float4 tex_lookup_deriv_float4_2d(
         mdl_sampler_tex, coord.val, coord.dx, coord.dy, /*offset=*/ int2(0, 0));
 }
 
-float3 tex_lookup_deriv_float3_2d(RES_DATA_PARAM_DECL uint tex, Derived_float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
+float3 tex_lookup_deriv_float3_2d(RES_DATA_PARAM_DECL int tex, Derived_float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
 {
     return tex_lookup_deriv_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v, frame).xyz;
 }
 
-float3 tex_lookup_deriv_color_2d(RES_DATA_PARAM_DECL uint tex, Derived_float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
+float3 tex_lookup_deriv_color_2d(RES_DATA_PARAM_DECL int tex, Derived_float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
 {
     return tex_lookup_deriv_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v, frame).xyz;
 }
 
-float2 tex_lookup_deriv_float2_2d(RES_DATA_PARAM_DECL uint tex, Derived_float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
+float2 tex_lookup_deriv_float2_2d(RES_DATA_PARAM_DECL int tex, Derived_float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
 {
     return tex_lookup_deriv_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v, frame).xy;
 }
 
-float tex_lookup_deriv_float_2d(RES_DATA_PARAM_DECL uint tex, Derived_float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
+float tex_lookup_deriv_float_2d(RES_DATA_PARAM_DECL int tex, Derived_float2 coord, int wrap_u, int wrap_v, float2 crop_u, float2 crop_v, float frame)
 {
     return tex_lookup_deriv_float4_2d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, crop_u, crop_v, frame).x;
 }
@@ -531,7 +530,7 @@ float tex_lookup_deriv_float_2d(RES_DATA_PARAM_DECL uint tex, Derived_float2 coo
 // corresponds to ::tex::texel_float4(uniform texture_2d tex, float2 coord, int2 uv_tile)
 float4 tex_texel_float4_2d(
     RES_DATA_PARAM_DECL
-    uint tex,
+    int tex,
     int2 coord,
     int2 uv_tile,
     float frame)
@@ -553,22 +552,22 @@ float4 tex_texel_float4_2d(
     return mdl_textures_2d[NonUniformResourceIndex(array_index)].Load(int3(coord, /*mipmaplevel=*/ 0));
 }
 
-float3 tex_texel_float3_2d(RES_DATA_PARAM_DECL uint tex, int2 coord, int2 uv_tile, float frame)
+float3 tex_texel_float3_2d(RES_DATA_PARAM_DECL int tex, int2 coord, int2 uv_tile, float frame)
 {
     return tex_texel_float4_2d(RES_DATA_PARAM tex, coord, uv_tile, frame).xyz;
 }
 
-float3 tex_texel_color_2d(RES_DATA_PARAM_DECL uint tex, int2 coord, int2 uv_tile, float frame)
+float3 tex_texel_color_2d(RES_DATA_PARAM_DECL int tex, int2 coord, int2 uv_tile, float frame)
 {
     return tex_texel_float3_2d(RES_DATA_PARAM tex, coord, uv_tile, frame);
 }
 
-float2 tex_texel_float2_2d(RES_DATA_PARAM_DECL uint tex, int2 coord, int2 uv_tile, float frame)
+float2 tex_texel_float2_2d(RES_DATA_PARAM_DECL int tex, int2 coord, int2 uv_tile, float frame)
 {
     return tex_texel_float4_2d(RES_DATA_PARAM tex, coord, uv_tile, frame).xy;
 }
 
-float tex_texel_float_2d(RES_DATA_PARAM_DECL uint tex, int2 coord, int2 uv_tile, float frame)
+float tex_texel_float_2d(RES_DATA_PARAM_DECL int tex, int2 coord, int2 uv_tile, float frame)
 {
     return tex_texel_float4_2d(RES_DATA_PARAM tex, coord, uv_tile, frame).x;
 }
@@ -578,7 +577,7 @@ float tex_texel_float_2d(RES_DATA_PARAM_DECL uint tex, int2 coord, int2 uv_tile,
 // Texturing functions, 3D
 // ------------------------------------------------------------------------------------------------
 
-uint3 tex_res_3d(RES_DATA_PARAM_DECL uint tex, float frame)
+int3 tex_res_3d(RES_DATA_PARAM_DECL int tex, float frame)
 {
     if (tex == 0) return uint3(0, 0, 0); // invalid texture
 
@@ -590,11 +589,11 @@ uint3 tex_res_3d(RES_DATA_PARAM_DECL uint tex, float frame)
 
     uint3 res;
     mdl_textures_3d[NonUniformResourceIndex(array_index)].GetDimensions(res.x, res.y, res.z);
-    return res;
+    return int3(res);
 }
 
 // corresponds to ::tex::first__frame(uniform texture_3d)
-int tex_first_frame_3d(RES_DATA_PARAM_DECL uint tex)
+int tex_first_frame_3d(RES_DATA_PARAM_DECL int tex)
 {
     if (tex == 0) return 0; // invalid texture
 
@@ -604,7 +603,7 @@ int tex_first_frame_3d(RES_DATA_PARAM_DECL uint tex)
 }
 
 // corresponds to ::tex::last_frame(uniform texture_3d)
-int tex_last_frame_3d(RES_DATA_PARAM_DECL uint tex)
+int tex_last_frame_3d(RES_DATA_PARAM_DECL int tex)
 {
     if (tex == 0) return 0; // invalid texture
 
@@ -614,18 +613,18 @@ int tex_last_frame_3d(RES_DATA_PARAM_DECL uint tex)
 }
 
 // corresponds to ::tex::width(uniform texture_3d tex, int2 uv_tile)
-uint tex_width_3d(RES_DATA_PARAM_DECL uint tex, float frame) { return tex_res_3d(RES_DATA_PARAM tex, frame).x; }
+int tex_width_3d(RES_DATA_PARAM_DECL int tex, float frame) { return tex_res_3d(RES_DATA_PARAM tex, frame).x; }
 
 // corresponds to ::tex::height(uniform texture_3d tex, int2 uv_tile)
-uint tex_height_3d(RES_DATA_PARAM_DECL uint tex, float frame) { return tex_res_3d(RES_DATA_PARAM tex, frame).y; }
+int tex_height_3d(RES_DATA_PARAM_DECL int tex, float frame) { return tex_res_3d(RES_DATA_PARAM tex, frame).y; }
 
 // corresponds to ::tex::depth(uniform texture_3d tex, int2 uv_tile)
-uint tex_depth_3d(RES_DATA_PARAM_DECL uint tex, float frame) { return tex_res_3d(RES_DATA_PARAM tex, frame).z; }
+int tex_depth_3d(RES_DATA_PARAM_DECL int tex, float frame) { return tex_res_3d(RES_DATA_PARAM tex, frame).z; }
 
 // corresponds to ::tex::lookup_float4(uniform texture_3d tex, float2 coord, ...)
 float4 tex_lookup_float4_3d(
     RES_DATA_PARAM_DECL
-    uint tex,
+    int tex,
     float3 coord,
     int wrap_u,
     int wrap_v,
@@ -663,22 +662,22 @@ float4 tex_lookup_float4_3d(
         mdl_sampler_tex, coord, /*lod=*/ 0.0f, /*offset=*/ int3(0, 0, 0));
 }
 
-float3 tex_lookup_float3_3d(RES_DATA_PARAM_DECL uint tex, float3 coord, int wrap_u, int wrap_v, int wrap_w,float2 crop_u, float2 crop_v, float2 crop_w, float frame)
+float3 tex_lookup_float3_3d(RES_DATA_PARAM_DECL int tex, float3 coord, int wrap_u, int wrap_v, int wrap_w,float2 crop_u, float2 crop_v, float2 crop_w, float frame)
 {
     return tex_lookup_float4_3d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w, frame).xyz;
 }
 
-float3 tex_lookup_color_3d(RES_DATA_PARAM_DECL uint tex, float3 coord, int wrap_u, int wrap_v, int wrap_w, float2 crop_u, float2 crop_v, float2 crop_w, float frame)
+float3 tex_lookup_color_3d(RES_DATA_PARAM_DECL int tex, float3 coord, int wrap_u, int wrap_v, int wrap_w, float2 crop_u, float2 crop_v, float2 crop_w, float frame)
 {
     return tex_lookup_float4_3d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w, frame).xyz;
 }
 
-float2 tex_lookup_float2_3d(RES_DATA_PARAM_DECL uint tex, float3 coord, int wrap_u, int wrap_v, int wrap_w, float2 crop_u, float2 crop_v, float2 crop_w, float frame)
+float2 tex_lookup_float2_3d(RES_DATA_PARAM_DECL int tex, float3 coord, int wrap_u, int wrap_v, int wrap_w, float2 crop_u, float2 crop_v, float2 crop_w, float frame)
 {
     return tex_lookup_float4_3d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w, frame).xy;
 }
 
-float tex_lookup_float_3d(RES_DATA_PARAM_DECL uint tex, float3 coord, int wrap_u, int wrap_v, int wrap_w, float2 crop_u, float2 crop_v, float2 crop_w, float frame)
+float tex_lookup_float_3d(RES_DATA_PARAM_DECL int tex, float3 coord, int wrap_u, int wrap_v, int wrap_w, float2 crop_u, float2 crop_v, float2 crop_w, float frame)
 {
     return tex_lookup_float4_3d(RES_DATA_PARAM tex, coord, wrap_u, wrap_v, wrap_w, crop_u, crop_v, crop_w, frame).x;
 }
@@ -686,7 +685,7 @@ float tex_lookup_float_3d(RES_DATA_PARAM_DECL uint tex, float3 coord, int wrap_u
 // corresponds to ::tex::texel_float4(uniform texture_3d tex, float3 coord)
 float4 tex_texel_float4_3d(
     RES_DATA_PARAM_DECL
-    uint tex,
+    int tex,
     int3 coord,
     float frame)
 {
@@ -706,22 +705,22 @@ float4 tex_texel_float4_3d(
     return mdl_textures_3d[NonUniformResourceIndex(array_index)].Load(int4(coord, /*mipmaplevel=*/ 0));
 }
 
-float3 tex_texel_float3_3d(RES_DATA_PARAM_DECL uint tex, int3 coord, float frame)
+float3 tex_texel_float3_3d(RES_DATA_PARAM_DECL int tex, int3 coord, float frame)
 {
     return tex_texel_float4_3d(RES_DATA_PARAM tex, coord, frame).xyz;
 }
 
-float3 tex_texel_color_3d(RES_DATA_PARAM_DECL uint tex, int3 coord, float frame)
+float3 tex_texel_color_3d(RES_DATA_PARAM_DECL int tex, int3 coord, float frame)
 {
     return tex_texel_float3_3d(RES_DATA_PARAM tex, coord, frame);
 }
 
-float2 tex_texel_float2_3d(RES_DATA_PARAM_DECL uint tex, int3 coord, float frame)
+float2 tex_texel_float2_3d(RES_DATA_PARAM_DECL int tex, int3 coord, float frame)
 {
     return tex_texel_float4_3d(RES_DATA_PARAM tex, coord, frame).xy;
 }
 
-float tex_texel_float_3d(RES_DATA_PARAM_DECL uint tex, int3 coord, float frame)
+float tex_texel_float_3d(RES_DATA_PARAM_DECL int tex, int3 coord, float frame)
 {
     return tex_texel_float4_3d(RES_DATA_PARAM tex, coord, frame).x;
 }
@@ -731,55 +730,55 @@ float tex_texel_float_3d(RES_DATA_PARAM_DECL uint tex, int3 coord, float frame)
 // Texturing functions, Cube (not supported by this example)
 // ------------------------------------------------------------------------------------------------
 
-uint tex_width_cube(RES_DATA_PARAM_DECL uint tex) { return 0; }
-uint tex_height_cube(RES_DATA_PARAM_DECL uint tex) { return 0; }
+int tex_width_cube(RES_DATA_PARAM_DECL int tex) { return 0; }
+int tex_height_cube(RES_DATA_PARAM_DECL int tex) { return 0; }
 
-float4 tex_lookup_float4_cube(RES_DATA_PARAM_DECL uint tex, float3 coord)
+float4 tex_lookup_float4_cube(RES_DATA_PARAM_DECL int tex, float3 coord)
 {
     return float4(0, 0, 0, 0);
 }
 
-float3 tex_lookup_float3_cube(RES_DATA_PARAM_DECL uint tex, float3 coord)
+float3 tex_lookup_float3_cube(RES_DATA_PARAM_DECL int tex, float3 coord)
 {
     return tex_lookup_float4_cube(RES_DATA_PARAM tex, coord).xyz;
 }
 
-float3 tex_lookup_color_cube(RES_DATA_PARAM_DECL uint tex, float3 coord)
+float3 tex_lookup_color_cube(RES_DATA_PARAM_DECL int tex, float3 coord)
 {
     return tex_lookup_float4_cube(RES_DATA_PARAM tex, coord).xyz;
 }
 
-float2 tex_lookup_float2_cube(RES_DATA_PARAM_DECL uint tex, float3 coord)
+float2 tex_lookup_float2_cube(RES_DATA_PARAM_DECL int tex, float3 coord)
 {
     return tex_lookup_float4_cube(RES_DATA_PARAM tex, coord).xy;
 }
 
-float tex_lookup_float_cube(RES_DATA_PARAM_DECL uint tex, float3 coord)
+float tex_lookup_float_cube(RES_DATA_PARAM_DECL int tex, float3 coord)
 {
     return tex_lookup_float4_cube(RES_DATA_PARAM tex, coord).x;
 }
 
-float4 tex_texel_float4_cube(RES_DATA_PARAM_DECL uint tex, int3 coord)
+float4 tex_texel_float4_cube(RES_DATA_PARAM_DECL int tex, int3 coord)
 {
     return float4(0, 0, 0, 0);
 }
 
-float3 tex_texel_float3_cube(RES_DATA_PARAM_DECL uint tex, int3 coord)
+float3 tex_texel_float3_cube(RES_DATA_PARAM_DECL int tex, int3 coord)
 {
     return tex_texel_float4_cube(RES_DATA_PARAM tex, coord).xyz;
 }
 
-float3 tex_texel_color_cube(RES_DATA_PARAM_DECL uint tex, int3 coord)
+float3 tex_texel_color_cube(RES_DATA_PARAM_DECL int tex, int3 coord)
 {
     return tex_texel_float4_cube(RES_DATA_PARAM tex, coord).xyz;
 }
 
-float2 tex_texel_float2_cube(RES_DATA_PARAM_DECL uint tex, int3 coord)
+float2 tex_texel_float2_cube(RES_DATA_PARAM_DECL int tex, int3 coord)
 {
     return tex_texel_float4_cube(RES_DATA_PARAM tex, coord).xy;
 }
 
-float tex_texel_float_cube(RES_DATA_PARAM_DECL uint tex, int3 coord)
+float tex_texel_float_cube(RES_DATA_PARAM_DECL int tex, int3 coord)
 {
     return tex_texel_float4_cube(RES_DATA_PARAM tex, coord).x;
 }
@@ -789,27 +788,27 @@ float tex_texel_float_cube(RES_DATA_PARAM_DECL uint tex, int3 coord)
 // ------------------------------------------------------------------------------------------------
 
 
-float4 tex_lookup_float4_ptex(RES_DATA_PARAM_DECL uint tex, int channel)
+float4 tex_lookup_float4_ptex(RES_DATA_PARAM_DECL int tex, int channel)
 {
     return float4(0, 0, 0, 0);
 }
 
-float3 tex_lookup_float3_ptex(RES_DATA_PARAM_DECL uint tex, int channel)
+float3 tex_lookup_float3_ptex(RES_DATA_PARAM_DECL int tex, int channel)
 {
     return tex_lookup_float4_ptex(RES_DATA_PARAM tex, channel).xyz;
 }
 
-float3 tex_lookup_color_ptex(RES_DATA_PARAM_DECL uint tex, int channel)
+float3 tex_lookup_color_ptex(RES_DATA_PARAM_DECL int tex, int channel)
 {
     return tex_lookup_float3_ptex(RES_DATA_PARAM tex, channel);
 }
 
-float2 tex_lookup_float2_ptex(RES_DATA_PARAM_DECL uint tex, int channel)
+float2 tex_lookup_float2_ptex(RES_DATA_PARAM_DECL int tex, int channel)
 {
     return tex_lookup_float4_ptex(RES_DATA_PARAM tex, channel).xy;
 }
 
-float tex_lookup_float_ptex(RES_DATA_PARAM_DECL uint tex, int channel)
+float tex_lookup_float_ptex(RES_DATA_PARAM_DECL int tex, int channel)
 {
     return tex_lookup_float4_ptex(RES_DATA_PARAM tex, channel).x;
 }
@@ -835,13 +834,13 @@ uint sample_cdf(StructuredBuffer<float> cdf, uint cdf_offset, uint cdf_size, flo
     return m;
 }
 
-bool df_light_profile_isvalid(RES_DATA_PARAM_DECL uint lp_idx)
+bool df_light_profile_isvalid(RES_DATA_PARAM_DECL int lp_idx)
 {
     // assuming that there is no indexing out of bounds of the light_profile_infos and the view arrays
     return lp_idx != 0; // 0 is the invalid light profile
 }
 
-float df_light_profile_power(RES_DATA_PARAM_DECL uint lp_idx)
+float df_light_profile_power(RES_DATA_PARAM_DECL int lp_idx)
 {
     if (lp_idx == 0) return 0; // invalid light profile
 
@@ -849,7 +848,7 @@ float df_light_profile_power(RES_DATA_PARAM_DECL uint lp_idx)
     return lp.total_power;
 }
 
-float df_light_profile_maximum(RES_DATA_PARAM_DECL uint lp_idx)
+float df_light_profile_maximum(RES_DATA_PARAM_DECL int lp_idx)
 {
     if (lp_idx == 0) return 0; // invalid light profile
 
@@ -859,7 +858,7 @@ float df_light_profile_maximum(RES_DATA_PARAM_DECL uint lp_idx)
 
 float df_light_profile_evaluate(
     RES_DATA_PARAM_DECL
-    uint   lp_idx,
+    int   lp_idx,
     float2 theta_phi)
 {
     if (lp_idx == 0) return 0; // invalid light profile
@@ -895,7 +894,7 @@ float df_light_profile_evaluate(
 
 float3 df_light_profile_sample(
     RES_DATA_PARAM_DECL
-    uint   lp_idx,
+    int   lp_idx,
     float3 xi)
 {
     float3 result = float3(
@@ -968,7 +967,7 @@ float3 df_light_profile_sample(
 
 float df_light_profile_pdf(
     RES_DATA_PARAM_DECL
-    uint   lp_idx,
+    int   lp_idx,
     float2 theta_phi)
 {
     if (lp_idx == 0) return 0; // invalid light profile
@@ -1039,13 +1038,13 @@ float3 bsdf_compute_uvw(float2 theta_phi_in, float2 theta_phi_out)
     return float3(u, v, w);
 }
 
-bool df_bsdf_measurement_isvalid(RES_DATA_PARAM_DECL uint bm_idx)
+bool df_bsdf_measurement_isvalid(RES_DATA_PARAM_DECL int bm_idx)
 {
     // assuming that there is no indexing out of bounds of the mbsdf_infos and the view arrays
     return bm_idx != 0; // 0 is the invalid bsdf measurement
 }
 
-int3 df_bsdf_measurement_resolution(RES_DATA_PARAM_DECL uint bm_idx, int part)
+int3 df_bsdf_measurement_resolution(RES_DATA_PARAM_DECL int bm_idx, int part)
 {
     if (bm_idx == 0) return int3(0, 0, 0); // invalid bsdf measurement
     
@@ -1061,7 +1060,7 @@ int3 df_bsdf_measurement_resolution(RES_DATA_PARAM_DECL uint bm_idx, int part)
 
 float3 df_bsdf_measurement_evaluate(
     RES_DATA_PARAM_DECL
-    uint   bm_idx,
+    int   bm_idx,
     float2 theta_phi_in,
     float2 theta_phi_out,
     int    part)
@@ -1083,7 +1082,7 @@ float3 df_bsdf_measurement_evaluate(
 // output: theta, phi, pdf
 float3 df_bsdf_measurement_sample(
     RES_DATA_PARAM_DECL
-    uint   bm_idx,
+    int   bm_idx,
     float2 theta_phi_out,
     float3 xi,
     int    part)
@@ -1172,7 +1171,7 @@ float3 df_bsdf_measurement_sample(
 
 float df_bsdf_measurement_pdf(
     RES_DATA_PARAM_DECL
-    uint   bm_idx,
+    int   bm_idx,
     float2 theta_phi_in,
     float2 theta_phi_out,
     int    part)
@@ -1221,7 +1220,7 @@ float df_bsdf_measurement_pdf(
 }
 
 // output: max (in case of color) albedo for the selected direction (x) and global (y)
-float2 df_bsdf_measurement_albedo(RES_DATA_PARAM_DECL uint bm_idx, float2 theta_phi, uint part)
+float2 df_bsdf_measurement_albedo(RES_DATA_PARAM_DECL int bm_idx, float2 theta_phi, int part)
 {
     const Mdl_mbsdf_info bm = mdl_mbsdf_infos[bm_idx - 1]; // assuming this is in bounds
 
@@ -1238,7 +1237,7 @@ float2 df_bsdf_measurement_albedo(RES_DATA_PARAM_DECL uint bm_idx, float2 theta_
     return float2(albedo_data[idx_theta], bm.max_albedo[part]);
 }
 
-float4 df_bsdf_measurement_albedos(RES_DATA_PARAM_DECL uint bm_idx, float2 theta_phi)
+float4 df_bsdf_measurement_albedos(RES_DATA_PARAM_DECL int bm_idx, float2 theta_phi)
 {
     if (bm_idx == 0) return float4(0, 0, 0, 0); // invalid bsdf measurement
 
@@ -1257,7 +1256,7 @@ float4 df_bsdf_measurement_albedos(RES_DATA_PARAM_DECL uint bm_idx, float2 theta
 
 bool scene_data_isvalid_internal(
     Shading_state_material state,   // MDL state that also contains a custom renderer state
-    uint scene_data_id,             // the scene_data_id (from target code or manually added)
+    int scene_data_id,              // the scene_data_id (from target code or manually added)
     bool uniform_lookup)
 {
     // invalid id
@@ -1281,8 +1280,8 @@ bool scene_data_isvalid_internal(
 }
 
 bool scene_data_isvalid(
-    Shading_state_material state,   // MDL state that also contains a custom renderer state
-    uint scene_data_id)             // the scene_data_id (from target code or manually added)
+    inout Shading_state_material state, // MDL state that also contains a custom renderer state
+    int scene_data_id)                  // the scene_data_id (from target code or manually added)
 {
     return scene_data_isvalid_internal(state, scene_data_id, false);
 }
@@ -1290,7 +1289,7 @@ bool scene_data_isvalid(
 // try to avoid a lot of redundant code, always return float4 but (statically) switch on components
 float4 scene_data_lookup_floatX(
     Shading_state_material state,   // MDL state that also contains a custom renderer state
-    uint scene_data_id,             // the scene_data_id (from target code or manually added)
+    int scene_data_id,              // the scene_data_id (from target code or manually added)
     float4 default_value,           // default value in case the requested data is not valid
     bool uniform_lookup,            // true if a uniform lookup is requested
     int number_of_components)       // 1, 2, 3, or 4
@@ -1415,8 +1414,8 @@ float4 scene_data_lookup_floatX(
 }
 
 float4 scene_data_lookup_float4(
-    Shading_state_material state,
-    uint scene_data_id,
+    inout Shading_state_material state,
+    int scene_data_id,
     float4 default_value,
     bool uniform_lookup)
 {
@@ -1424,8 +1423,8 @@ float4 scene_data_lookup_float4(
 }
 
 float3 scene_data_lookup_float3(
-    Shading_state_material state,
-    uint scene_data_id,
+    inout Shading_state_material state,
+    int scene_data_id,
     float3 default_value,
     bool uniform_lookup)
 {
@@ -1433,8 +1432,8 @@ float3 scene_data_lookup_float3(
 }
 
 float3 scene_data_lookup_color(
-    Shading_state_material state,
-    uint scene_data_id,
+    inout Shading_state_material state,
+    int scene_data_id,
     float3 default_value,
     bool uniform_lookup)
 {
@@ -1442,8 +1441,8 @@ float3 scene_data_lookup_color(
 }
 
 float2 scene_data_lookup_float2(
-    Shading_state_material state,
-    uint scene_data_id,
+    inout Shading_state_material state,
+    int scene_data_id,
     float2 default_value,
     bool uniform_lookup)
 {
@@ -1451,8 +1450,8 @@ float2 scene_data_lookup_float2(
 }
 
 float scene_data_lookup_float(
-    Shading_state_material state,
-    uint scene_data_id,
+    inout Shading_state_material state,
+    int scene_data_id,
     float default_value,
     bool uniform_lookup)
 {
@@ -1460,8 +1459,8 @@ float scene_data_lookup_float(
 }
 
 float4x4 scene_data_lookup_float4x4(
-    Shading_state_material state,
-    uint scene_data_id,
+    inout Shading_state_material state,
+    int scene_data_id,
     float4x4 default_value,
     bool uniform_lookup)
 {
@@ -1469,10 +1468,9 @@ float4x4 scene_data_lookup_float4x4(
     return default_value;
 }
 
-
 int4 scene_data_lookup_intX(
     Shading_state_material state,
-    uint scene_data_id,
+    int scene_data_id,
     int4 default_value,
     bool uniform_lookup,
     int number_of_components)
@@ -1596,8 +1594,8 @@ int4 scene_data_lookup_intX(
 }
 
 int4 scene_data_lookup_int4(
-    Shading_state_material state,
-    uint scene_data_id,
+    inout Shading_state_material state,
+    int scene_data_id,
     int4 default_value,
     bool uniform_lookup)
 {
@@ -1605,8 +1603,8 @@ int4 scene_data_lookup_int4(
 }
 
 int3 scene_data_lookup_int3(
-    Shading_state_material state,
-    uint scene_data_id,
+    inout Shading_state_material state,
+    int scene_data_id,
     int3 default_value,
     bool uniform_lookup)
 {
@@ -1614,8 +1612,8 @@ int3 scene_data_lookup_int3(
 }
 
 int2 scene_data_lookup_int2(
-    Shading_state_material state,
-    uint scene_data_id,
+    inout Shading_state_material state,
+    int scene_data_id,
     int2 default_value,
     bool uniform_lookup)
 {
@@ -1623,8 +1621,8 @@ int2 scene_data_lookup_int2(
 }
 
 int scene_data_lookup_int(
-    Shading_state_material state,
-    uint scene_data_id,
+    inout Shading_state_material state,
+    int scene_data_id,
     int default_value,
     bool uniform_lookup)
 {
@@ -1633,8 +1631,8 @@ int scene_data_lookup_int(
 
 // currently no scene data with derivatives is supported
 Derived_float4 scene_data_lookup_deriv_float4(
-    Shading_state_material state,
-    uint scene_data_id,
+    inout Shading_state_material state,
+    int scene_data_id,
     Derived_float4 default_value,
     bool uniform_lookup)
 {
@@ -1650,8 +1648,8 @@ Derived_float4 scene_data_lookup_deriv_float4(
 }
 
 Derived_float3 scene_data_lookup_deriv_float3(
-    Shading_state_material state,
-    uint scene_data_id,
+    inout Shading_state_material state,
+    int scene_data_id,
     Derived_float3 default_value,
     bool uniform_lookup)
 {
@@ -1667,8 +1665,8 @@ Derived_float3 scene_data_lookup_deriv_float3(
 }
 
 Derived_float3 scene_data_lookup_deriv_color(
-    Shading_state_material state,
-    uint scene_data_id,
+    inout Shading_state_material state,
+    int scene_data_id,
     Derived_float3 default_value,
     bool uniform_lookup)
 {
@@ -1677,8 +1675,8 @@ Derived_float3 scene_data_lookup_deriv_color(
 }
 
 Derived_float2 scene_data_lookup_deriv_float2(
-    Shading_state_material state,
-    uint scene_data_id,
+    inout Shading_state_material state,
+    int scene_data_id,
     Derived_float2 default_value,
     bool uniform_lookup)
 {
@@ -1694,8 +1692,8 @@ Derived_float2 scene_data_lookup_deriv_float2(
 }
 
 Derived_float scene_data_lookup_deriv_float(
-    Shading_state_material state,
-    uint scene_data_id,
+    inout Shading_state_material state,
+    int scene_data_id,
     Derived_float default_value,
     bool uniform_lookup)
 {

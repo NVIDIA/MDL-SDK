@@ -330,8 +330,8 @@ public:
     ///
     /// \param marker   String containing a valid frame and/or uv-tile marker.
     /// \param f        The frame number of the uv-tile.
-    /// \param u        The u coordinate of the uv-tile.
-    /// \param v        The v coordinate of the uv-tile.
+    /// \param u        The u-coordinate of the uv-tile.
+    /// \param v        The v-coordinate of the uv-tile.
     /// \return         String with the frame and/or uv-tile marker replaced by the coordinates of
     ///                 the uv-tile, or \c NULL in case of errors.
     virtual const IString* frame_uvtile_marker_to_string(

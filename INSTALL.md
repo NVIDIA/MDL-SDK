@@ -34,8 +34,13 @@ The following third-party libraries and tools are required to build the MDL SDK:
     install other dependencies like Boost and OpenImageIO. The vcpkg version
     mentioned above corresponds to the versions mentioned for these
     dependencies below.  
-    Windows: Add the vcpkg option *--triplet=x64-windows-static* to the
-    *install* command. There is no need to run the *integrate* command.
+    Windows: It is strongly recommended to select the same toolset that is used
+    later to build the MDL SDK, e.g., by adding
+    *set(VCPKG_PLATFORM_TOOLSET v142)* (or similar) to
+    *triplets/x64-windows-static.cmake*. See the corresponding section in the
+    [vcpkg documentation](https://learn.microsoft.com/en-us/vcpkg/users/triplets#windows-specific-variables)
+    for further details. Add the vcpkg option *--triplet=x64-windows-static* to
+    the *install* command. There is no need to run the *integrate* command.
 
 -   **Boost** *(1.81.0)*  
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
@@ -162,7 +167,7 @@ features.
     The old version is available in the
     [CUDA Toolkit Archive](https://developer.nvidia.com/cuda-toolkit-archive).
 
--   **OptiX** *(7.x)*  
+-   **OptiX** *(7.0 to 7.5)*  
     This dependency is required to build the OptiX 7 example.  
     Please follow the instructions on the [OptiX Website](https://developer.nvidia.com/designworks/optix/download).
 
@@ -304,7 +309,9 @@ features.
 
     ```bash
     sudo apt-get install git git-lfs build-essential python cmake
-    sudo apt-get install libboost-dev libopenimageio-dev libglew-dev libglfw3-dev
+    sudo apt-get install libboost-dev libboost-filesystem-dev libboost-thread-dev
+    sudo apt-get install libopenimageio-dev libopenexr-dev libopencv-core-dev
+    sudo apt-get install libglew-dev libglfw3-dev
     ```
 
     Please note that the build also requires clang 12.0.1. Please download the

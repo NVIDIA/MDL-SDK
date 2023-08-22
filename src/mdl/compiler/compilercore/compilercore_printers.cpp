@@ -1071,7 +1071,7 @@ void Printer::print(IValue const *value)
 
             float f = v->get_value();
             if (isfinite(f)) {
-                snprintf(buf, sizeof(buf) - 2, "%.9g", f);
+                snprintf(buf, sizeof(buf) - 2, "%.10g", f);
                 buf[sizeof(buf) - 2] = '\0';
                 print(to_float_constant(buf, 'f'));
             } else if (f == +HUGE_VAL) {
@@ -1090,7 +1090,7 @@ void Printer::print(IValue const *value)
 
             double d = v->get_value();
             if (isfinite(d)) {
-                snprintf(buf, sizeof(buf) - 2, "%.17g", d);
+                snprintf(buf, sizeof(buf) - 2, "%.18g", d);
                 buf[sizeof(buf) - 2] = '\0';
                 print(to_float_constant(buf, 'd'));
             } else if (d == +HUGE_VAL) {

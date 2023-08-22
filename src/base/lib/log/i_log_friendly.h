@@ -384,7 +384,7 @@ inline std::ostream& operator<<(std::ostream& str, const Seconds& value)
         return str;
     }
     else {
-        int i = 0;
+        unsigned i = 0;
         const char* units[] = {" s", " ms", " us", " ns"};
         double scaled = value.value;
         for (; i+1 < sizeof(units)/sizeof(units[0]) && scaled < 1.; ++i) {

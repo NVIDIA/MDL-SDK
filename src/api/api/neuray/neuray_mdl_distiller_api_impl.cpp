@@ -281,7 +281,6 @@ mi::neuraylib::ICompiled_material* Mdl_distiller_api_impl::distill_material(
     auto new_db_material = std::make_shared<MDL::Mdl_compiled_material>(
         db_transaction,
         new_dag_material_instance.get(),
-        /*module_filename*/ nullptr,
         /*module_name*/ nullptr,
         db_material->get_mdl_meters_per_scene_unit(),
         db_material->get_mdl_wavelength_min(),

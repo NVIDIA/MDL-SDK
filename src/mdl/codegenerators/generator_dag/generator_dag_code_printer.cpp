@@ -660,8 +660,10 @@ void DAG_code_printer::print_types(IGenerated_code_dag const *code_dag) const
             pop_color();
         }
 
-        keyword("export");
-        print(" ");
+        if (code_dag->is_type_exported(i)) {
+            keyword("export");
+            print(" ");
+        }
         print_mdl_type(type, /*full=*/true);
 
         size_t sub_count = code_dag->get_type_sub_entity_count(i);

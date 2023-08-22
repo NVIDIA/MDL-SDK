@@ -169,7 +169,17 @@ public:
         return m_pointee;
     }
 
+    const T* operator->() const
+    {
+        return m_pointee;
+    }
+
     T& operator*()
+    {
+        return *m_pointee;
+    }
+
+    const T& operator*() const
     {
         return *m_pointee;
     }
@@ -202,6 +212,11 @@ public:
     }
 
     T* get()
+    {
+        return m_pointee;
+    }
+
+    const T* get() const
     {
         return m_pointee;
     }

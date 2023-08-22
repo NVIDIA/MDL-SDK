@@ -370,6 +370,7 @@ Module_inliner::Module_inliner(
 , m_inline_imports(inline_imports)
 , m_omit_anno_origin(omit_anno_origin)
 , m_is_root(is_root_module)
+, m_restricted_anno_visit(false)
 , m_references(references)
 , m_imports(imports)
 , m_exports(visible_definitions)
@@ -417,8 +418,31 @@ void Module_inliner::run()
 }
 
 // Called, before an annotation block is visited.
-bool Module_inliner::pre_visit(IAnnotation_block *anno)
+bool Module_inliner::pre_visit(IAnnotation_block *block)
 {
+    if (m_restricted_anno_visit) {
+        // we are in restricted annotation visit mode: visit only *selected* annotations
+        // keep this is sync with create_annotation_block()
+        for (size_t i = 0, n = block->get_annotation_count(); i < n; ++i) {
+            IAnnotation const     *anno = block->get_annotation(i);
+            IQualified_name const *qn = anno->get_name();
+            IDefinition const     *anno_def = qn->get_definition();
+
+            switch (anno_def->get_semantics()) {
+            case IDefinition::DS_DISPLAY_NAME_ANNOTATION:
+            case IDefinition::DS_DESCRIPTION_ANNOTATION:
+            case IDefinition::DS_NOINLINE_ANNOTATION:
+            case IDefinition::DS_NATIVE_ANNOTATION:
+                // this annotations are copied even for non-root modules, hence visit them
+                visit(anno);
+                break;
+            default:
+                // ignore this annotation
+                break;
+            }
+        }
+        return false;
+    }
     // traverse children (aka annotations) only for the root module
     return m_is_root;
 }
@@ -624,14 +648,22 @@ void Module_inliner::post_visit(IDeclaration_type_enum *decl)
 // Checks, if the non-root declaration has already been copied.
 bool Module_inliner::pre_visit(IDeclaration_function *decl)
 {
-    if (m_is_root) {
+    // visit annotations, but restrict them for non-root modules
+    {
+        Store<bool> restricted_anno_visit(m_restricted_anno_visit, !m_is_root);
+
         if (IAnnotation_block const *anno = decl->get_annotations()) {
             visit(anno);
         }
+    }
+
+    if (m_is_root) {
+        // only visit return annotations for the top level module
         if (IAnnotation_block const *ranno = decl->get_return_annotations()) {
             visit(ranno);
         }
     } else {
+        // for imported modules we assume that we will not copy return annotations
         MDL_ASSERT(m_references.find(
             decl->get_definition()) == m_references.end() &&
             "visited function is already inlined");
@@ -700,43 +732,67 @@ IExpression *Module_inliner::clone_expr_reference(IExpression_reference const *r
         Definition::Kind kind = def->get_kind();
 
         ISymbol const *new_local_sym = NULL;
-        if (kind == IDefinition::DK_FUNCTION) {
-            Definition const *orig_def = def;
-            bool is_imported = def->get_original_import_idx() != 0;
-
-            if (is_imported) {
-                orig_def = m_module->get_original_definition(def);
+        switch (kind) {
+        case IDefinition::DK_ERROR:
+            // there should be no errors at this point
+            MDL_ASSERT(!"Unexpected errr definition");
+            break;
+        case IDefinition::DK_ENUM_VALUE:
+            {
+                IType_name *tname = m_target_module->clone_name(ref->get_name(), this);
+                return m_ef.create_reference(tname);
             }
+        case IDefinition::DK_CONSTANT:
+        case IDefinition::DK_FUNCTION:
+            {
+                Definition const *orig_def = def;
+                bool is_imported = def->get_original_import_idx() != 0;
 
-            Reference_map::iterator const &p = m_references.find(orig_def);
-            if (p != m_references.end()) {
-                new_local_sym = p->second;
-            } else if (is_imported) {
-                // always rewrite the reference
-                return create_imported_reference(def, orig_def);
-            }
-        } else if (kind == IDefinition::DK_CONSTRUCTOR) {
-            IType_function const *tf = cast<IType_function>(def->get_type());
-            IType const          *t  = tf->get_return_type();
-            if (need_type_import(t)) {
-                Definition const *type_def      = get_type_definition(m_module.get(), t);
-                Definition const *orig_type_def = type_def;
-
-                bool is_imported = type_def->has_flag(Definition::DEF_IS_IMPORTED);
                 if (is_imported) {
-                    orig_type_def = m_module->get_original_definition(type_def);
+                    orig_def = m_module->get_original_definition(def);
                 }
-                Reference_map::iterator const &p = m_references.find(orig_type_def);
+
+                Reference_map::iterator const &p = m_references.find(orig_def);
                 if (p != m_references.end()) {
                     new_local_sym = p->second;
                 } else if (is_imported) {
                     // always rewrite the reference
-                    return create_imported_reference(type_def, orig_type_def);
+                    return create_imported_reference(def, orig_def);
                 }
             }
-        } else if (kind == IDefinition::DK_ENUM_VALUE || kind == IDefinition::DK_CONSTANT) {
-            IType_name *tname = m_target_module->clone_name(ref->get_name(), this);
-            return m_ef.create_reference(tname);
+            break;
+        case IDefinition::DK_CONSTRUCTOR:
+            {
+                IType_function const *tf = cast<IType_function>(def->get_type());
+                IType const          *t  = tf->get_return_type();
+                if (need_type_import(t)) {
+                    Definition const *type_def      = get_type_definition(m_module.get(), t);
+                    Definition const *orig_type_def = type_def;
+
+                    bool is_imported = type_def->has_flag(Definition::DEF_IS_IMPORTED);
+                    if (is_imported) {
+                        orig_type_def = m_module->get_original_definition(type_def);
+                    }
+                    Reference_map::iterator const &p = m_references.find(orig_type_def);
+                    if (p != m_references.end()) {
+                        new_local_sym = p->second;
+                    } else if (is_imported) {
+                        // always rewrite the reference
+                        return create_imported_reference(type_def, orig_type_def);
+                    }
+                }
+            }
+            break;
+        case IDefinition::DK_ANNOTATION:
+        case IDefinition::DK_TYPE:
+        case IDefinition::DK_VARIABLE:
+        case IDefinition::DK_MEMBER:
+        case IDefinition::DK_PARAMETER:
+        case IDefinition::DK_ARRAY_SIZE:
+        case IDefinition::DK_OPERATOR:
+        case IDefinition::DK_NAMESPACE:
+            // no nothing
+            break;
         }
 
         if (new_local_sym != NULL) {
@@ -1202,23 +1258,30 @@ IAnnotation_block *Module_inliner::create_annotation_block(
 
             if (!is_anno) {
                 // only for non-annotations
+                // BEWARE: keep this list in sync with pre_visit(IAnnotation_block *)
                 switch (anno_def->get_semantics()) {
                 case IDefinition::DS_DISPLAY_NAME_ANNOTATION:
                     // copy and remember the display_name annotation
-                    anno_display_name = m_target_module->clone_annotation(anno, /*modifier=*/NULL);
+                    anno_display_name = m_target_module->clone_annotation(anno, /*modifier=*/this);
                     continue;
                 case IDefinition::DS_DESCRIPTION_ANNOTATION:
                     // copy the description annotation
                     register_import("::anno", "description");
                     new_block->add_annotation(
-                        m_target_module->clone_annotation(anno, /*modifier=*/NULL));
+                        m_target_module->clone_annotation(anno, /*modifier=*/this));
                     continue;
                 case IDefinition::DS_NOINLINE_ANNOTATION:
                     // copy the noinline annotation, this is necessary for the function hash
                     // based replacement
                     register_import("::anno", "noinline");
                     new_block->add_annotation(
-                        m_target_module->clone_annotation(anno, /*modifier=*/NULL));
+                        m_target_module->clone_annotation(anno, /*modifier=*/this));
+                    continue;
+                case IDefinition::DS_NATIVE_ANNOTATION:
+                    // copy the native annotation
+                    register_import("::anno", "native");
+                    new_block->add_annotation(
+                        m_target_module->clone_annotation(anno, /*modifier=*/this));
                     continue;
                 default:
                     // ignore
@@ -1229,7 +1292,7 @@ IAnnotation_block *Module_inliner::create_annotation_block(
             // for all entities
             if (anno_def->get_semantics() == IDefinition::DS_ORIGIN_ANNOTATION) {
                 // copy and remember the origin annotation
-                anno_origin = m_target_module->clone_annotation(anno, /*modifier=*/ NULL);
+                anno_origin = m_target_module->clone_annotation(anno, /*modifier=*/this);
             }
         }
     }

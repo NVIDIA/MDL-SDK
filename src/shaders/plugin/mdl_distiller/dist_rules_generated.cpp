@@ -27,6 +27,5 @@
  *****************************************************************************/
 
 #include "dist_rules.cpp"
-#include "dist_rules_dg.cpp"
 #include "dist_rules_ue.cpp"
 #include "dist_rules_transmissive_pbr.cpp"

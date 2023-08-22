@@ -99,7 +99,7 @@ private:
 
         // build the vector splat constructor:
         // "If there is a single scalar parameter to a vector constructor, it is used to
-        // initialize all components of the constructed vector to that scalar’s value."
+        // initialize all components of the constructed vector to that scalar's value."
         {
             m_params.clear();
 
@@ -352,6 +352,9 @@ void Builtins::build(Compilation_unit *unit)
 // a matrix type (including the copy, elemental, and matrix elemental constructors)
 #define MATRIX_TYPE_BEGIN(T)  matrix_type_begin(m_tc. T##_type);
 #define MATRIX_TYPE_END       m_deftab.leave_scope();
+
+// a type alias
+#define TYPE_ALIAS(A, T)  GLSL_ASSERT(m_tc. A##_type == m_tc. T##_type && "wrong alias type");
 
 #include "compiler_glsl_runtime.h"
 

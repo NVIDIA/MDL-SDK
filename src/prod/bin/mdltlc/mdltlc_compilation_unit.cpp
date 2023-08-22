@@ -2319,6 +2319,13 @@ int Compilation_unit::get_node_selector(Expr *expr, Selector_kind &sel_kind) {
         break;
     }
 
+    case Expr::EK_ATTRIBUTE:
+    {
+        Expr_attribute *c = cast<Expr_attribute>(expr);
+        Expr *arg = c->get_argument();
+        return get_node_selector(arg, sel_kind);
+    }
+
     case Expr::EK_LITERAL:
     {
         Expr_literal const *c = cast<Expr_literal>(expr);
@@ -2463,6 +2470,7 @@ int Compilation_unit::get_node_selector(Expr *expr, Selector_kind &sel_kind) {
         break;
     }
     default:
+        MDL_ASSERT(!"invalid node type in pattern");
         break;
     }
     return selector;
