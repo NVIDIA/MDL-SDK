@@ -91,19 +91,23 @@ cbuffer _Geometry_constants_3 : register(b5, space0) { uint geometry_scene_data_
 cbuffer Material_constants : register(b0, MDL_MATERIAL_REGISTER_SPACE)
 {
     // shared for all material compiled from the same MDL material
-    int init_index;
-    int scattering_function_index;
-    int opacity_function_index;
-    int emission_function_index;
-    int emission_intensity_function_index;
-    int thin_walled_function_index;
-    int volume_absorption_coefficient_function_index;
-    int standalone_opacity_function_index;
+    // - none -
 
     // individual properties of the different material instances
     int material_id;
     uint material_flags;
 }
+
+// Defined in the code generator, enable everything here for source code editing only
+#if !defined(MDL_HAS_SURFACE_SCATTERING)
+#define MDL_HAS_SURFACE_SCATTERING 1
+#define MDL_HAS_SURFACE_EMISSION 1
+#define MDL_HAS_BACKFACE_SCATTERING 1
+#define MDL_HAS_BACKFACE_EMISSION 1
+#define MDL_HAS_VOLUME_ABSORPTION 1
+#define MDL_CAN_BE_THIN_WALLED 1
+#define MDL_HAS_INIT 1
+#endif
 
 // ------------------------------------------------------------------------------------------------
 // helper
@@ -247,7 +251,8 @@ void setup_mdl_shading_state(
     world_binormal = cross(world_normal, world_tangent) * tangent0.w;
 
     // flip normals to the side of the incident ray
-    if (dot(world_geom_normal, WorldRayDirection()) > 0.0)
+    const bool backfacing_primitive = dot(world_geom_normal, WorldRayDirection()) > 0.0;
+    if (backfacing_primitive)
         world_geom_normal *= -1.0f;
 
     if (dot(world_normal, WorldRayDirection()) > 0.0)
@@ -280,7 +285,7 @@ void setup_mdl_shading_state(
     mdl_state.world_to_object = world_to_object;
     mdl_state.object_to_world = object_to_world;
     mdl_state.object_id = 0;
-    mdl_state.meters_per_scene_unit = 1.0f;
+    mdl_state.meters_per_scene_unit = meters_per_scene_unit;
     mdl_state.arg_block_offset = 0;
 
     // fill the renderer state information
@@ -288,6 +293,7 @@ void setup_mdl_shading_state(
     mdl_state.renderer_state.scene_data_geometry_byte_offset = geometry_vertex_buffer_byte_offset;
     mdl_state.renderer_state.hit_vertex_indices = vertex_indices;
     mdl_state.renderer_state.barycentric = barycentric;
+    mdl_state.renderer_state.hit_backface = backfacing_primitive;
 
     // get texture coordinates using a manually added scene data element with the scene data id
     // defined as `SCENE_DATA_ID_TEXCOORD_0`
@@ -295,7 +301,7 @@ void setup_mdl_shading_state(
     float2 texcoord0 = scene_data_lookup_float2(
         mdl_state, SCENE_DATA_ID_TEXCOORD_0, float2(0.0f, 0.0f), false);
 
-    // apply uv transformatins
+    // apply uv transformations
     texcoord0 = texcoord0 * uv_scale + uv_offset;
     if (uv_repeat != 0)
     {
@@ -341,8 +347,7 @@ void MDL_RADIANCE_ANY_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes attr
     setup_mdl_shading_state(mdl_state, attrib);
 
     // evaluate the cutout opacity
-    const float opacity = mdl_standalone_geometry_cutout_opacity(
-        standalone_opacity_function_index, mdl_state);
+    const float opacity = mdl_standalone_geometry_cutout_opacity(mdl_state);
 
     // do alpha blending the stochastically way
     if (rnd(payload.seed) < opacity)
@@ -359,36 +364,47 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
     setup_mdl_shading_state(mdl_state, attrib);
 
     // pre-compute and cache data used by different generated MDL functions
-    mdl_init(init_index, mdl_state);
+    #if (MDL_HAS_INIT == 1)
+        mdl_init(mdl_state);
+    #endif
 
-    // for thin walled materials there is no 'inside'
-    const bool thin_walled = mdl_thin_walled(thin_walled_function_index, mdl_state);
+    // thin-walled materials are allowed to have a different back side
+    // buy the can't have volumetric properties
+    #if (MDL_CAN_BE_THIN_WALLED == 1)
+        const bool thin_walled = mdl_thin_walled(mdl_state);
+    #else
+        const bool thin_walled = false;
+    #endif
 
+    // for thin-walled materials there is no 'inside'
     const bool inside = has_flag(payload.flags, FLAG_INSIDE);
-    const float ior1 = (inside && !thin_walled) ? BSDF_USE_MATERIAL_IOR : 1.0f;
-    const float ior2 = (inside && !thin_walled) ? 1.0f : BSDF_USE_MATERIAL_IOR;
+    const float ior1 = (inside &&!thin_walled) ? BSDF_USE_MATERIAL_IOR : 1.0f;
+    const float ior2 = (inside &&!thin_walled) ? 1.0f : BSDF_USE_MATERIAL_IOR;
+
 
     // apply volume attenuation
     //---------------------------------------------------------------------------------------------
-    if (!thin_walled && inside && volume_absorption_coefficient_function_index >= 0)
-    {
-        const float3 abs_coeff =
-            mdl_absorption_coefficient(volume_absorption_coefficient_function_index, mdl_state);
+    #if (MDL_HAS_VOLUME_ABSORPTION == 1)
+        if (inside && !thin_walled) // compute absorption only on exit
+        {
+            const float3 abs_coeff = mdl_volume_absorption_coefficient(mdl_state);
 
-        #if defined(USE_DERIVS)
-            const float distance = length(mdl_state.position.val - payload.ray_origin_next);
-        #else
-            const float distance = length(mdl_state.position - payload.ray_origin_next);
-        #endif
+            // distance in meters
+            #if defined(USE_DERIVS)
+                const float distance = length(mdl_state.position.val - payload.ray_origin_next) * meters_per_scene_unit;
+            #else
+                const float distance = length(mdl_state.position - payload.ray_origin_next) * meters_per_scene_unit;
+            #endif
 
-        payload.weight.x *= abs_coeff.x > 0.0f ? exp(-abs_coeff.x * distance) : 1.0f;
-        payload.weight.y *= abs_coeff.y > 0.0f ? exp(-abs_coeff.y * distance) : 1.0f;
-        payload.weight.z *= abs_coeff.z > 0.0f ? exp(-abs_coeff.z * distance) : 1.0f;
-    }
+            payload.weight.x *= abs_coeff.x > 0.0f ? exp(-abs_coeff.x * distance) : 1.0f;
+            payload.weight.y *= abs_coeff.y > 0.0f ? exp(-abs_coeff.y * distance) : 1.0f;
+            payload.weight.z *= abs_coeff.z > 0.0f ? exp(-abs_coeff.z * distance) : 1.0f;
+        }
+    #endif
 
     // add emission
     //---------------------------------------------------------------------------------------------
-    if (emission_function_index >= 0 && emission_intensity_function_index >= 0)
+    #if (MDL_HAS_SURFACE_EMISSION == 1 || MDL_HAS_BACKFACE_EMISSION == 1)
     {
         // evaluate EDF
         Edf_evaluate_data eval_data = (Edf_evaluate_data) 0;
@@ -396,11 +412,28 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
         #if (MDL_DF_HANDLE_SLOT_MODE != -1)
             eval_data.handle_offset = 0;
         #endif
+        float3 intensity = float3(0.0f, 0.0f, 0.0f);
 
-        mdl_edf_evaluate(emission_function_index, eval_data, mdl_state);
+        if (thin_walled && mdl_state.renderer_state.hit_backface && (MDL_HAS_BACKFACE_EMISSION == 1))
+        {
+            #if (MDL_HAS_BACKFACE_EMISSION == 1)
+                // evaluate the distribution function
+                mdl_backface_emission_evaluate(eval_data, mdl_state);
 
-        // evaluate intensity expression
-        float3 intensity = mdl_emission_intensity(emission_intensity_function_index, mdl_state);
+                // evaluate intensity expression
+                intensity = mdl_backface_emission_intensity(mdl_state);
+            #endif
+        }
+        else
+        {
+            #if (MDL_HAS_SURFACE_EMISSION == 1)
+                // evaluate the distribution function
+                mdl_surface_emission_evaluate(eval_data, mdl_state);
+
+                // evaluate intensity expression
+                intensity = mdl_surface_emission_intensity(mdl_state);
+            #endif
+        }
 
         // add emission
         #if (MDL_DF_HANDLE_SLOT_MODE == -1)
@@ -409,6 +442,7 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
             payload.contribution += payload.weight * intensity * eval_data.edf[0];
         #endif
     }
+    #endif
 
     // Write Auxiliary Buffers
     //---------------------------------------------------------------------------------------------
@@ -422,7 +456,20 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
         #if (MDL_DF_HANDLE_SLOT_MODE != -1)
             aux_data.handle_offset = 0;
         #endif
-        mdl_bsdf_auxiliary(scattering_function_index, aux_data, mdl_state);
+
+        // use backface instead of surface scattering?
+        if (thin_walled && mdl_state.renderer_state.hit_backface && (MDL_HAS_BACKFACE_SCATTERING == 1))
+        {
+            #if (MDL_HAS_BACKFACE_SCATTERING == 1)
+                mdl_backface_scattering_auxiliary(aux_data, mdl_state);
+            #endif
+        }
+        else
+        {
+            #if (MDL_HAS_SURFACE_SCATTERING == 1)
+                mdl_surface_scattering_auxiliary(aux_data, mdl_state);
+            #endif
+        }
 
         uint3 launch_index =  DispatchRaysIndex();
         #if (MDL_DF_HANDLE_SLOT_MODE == -1)
@@ -458,7 +505,20 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
         #if (MDL_DF_HANDLE_SLOT_MODE != -1)
             eval_data.handle_offset = 0;
         #endif
-        mdl_bsdf_evaluate(scattering_function_index, eval_data, mdl_state);
+
+        // use backface instead of surface scattering?
+        if (thin_walled && mdl_state.renderer_state.hit_backface && (MDL_HAS_BACKFACE_SCATTERING == 1))
+        {
+            #if (MDL_HAS_BACKFACE_SCATTERING == 1)
+                mdl_backface_scattering_evaluate(eval_data, mdl_state);
+            #endif
+        }
+        else
+        {
+            #if (MDL_HAS_SURFACE_SCATTERING == 1)
+                mdl_surface_scattering_evaluate(eval_data, mdl_state);
+            #endif
+        }
 
         // compute lighting for this light
         if(eval_data.pdf > 0.0f)
@@ -491,7 +551,19 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
     sample_data.k1 = -WorldRayDirection();      // outgoing direction
     sample_data.xi = rnd4(payload.seed);        // random sample number
 
-    mdl_bsdf_sample(scattering_function_index, sample_data, mdl_state);
+    // use backface instead of surface scattering?
+    if (thin_walled && mdl_state.renderer_state.hit_backface && (MDL_HAS_BACKFACE_SCATTERING == 1))
+    {
+        #if (MDL_HAS_BACKFACE_SCATTERING == 1)
+            mdl_backface_scattering_sample(sample_data, mdl_state);
+        #endif
+    }
+    else
+    {
+        #if (MDL_HAS_SURFACE_SCATTERING == 1)
+            mdl_surface_scattering_sample(sample_data, mdl_state);
+        #endif
+    }
 
     // stop on absorb
     if (sample_data.event_type == BSDF_EVENT_ABSORB)
@@ -543,7 +615,7 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
     #endif
     ray.Direction = to_light;
     ray.TMin = 0.0f;
-    ray.TMax = 10000.0f;
+    ray.TMax = far_plane_distance;
 
     // prepare the ray and payload but trace at the end to reduce the amount of data that has
     // to be recovered after coming back from the shadow trace
@@ -594,8 +666,7 @@ void MDL_SHADOW_ANY_HIT_PROGRAM(inout ShadowHitInfo payload, Attributes attrib)
     setup_mdl_shading_state(mdl_state, attrib);
 
     // evaluate the cutout opacity
-    const float opacity = mdl_standalone_geometry_cutout_opacity(
-        standalone_opacity_function_index, mdl_state);
+    const float opacity = mdl_standalone_geometry_cutout_opacity(mdl_state);
 
     // do alpha blending the stochastically way
     if (rnd(payload.seed) < opacity)

@@ -405,6 +405,24 @@ public:
         IType const *type,
         int         index) = 0;
 
+    /// Enable common subexpression elimination.
+    ///
+    /// \param flag  If true, CSE will be enabled, else disabled.
+    /// \return      The old value of the flag.
+    virtual bool enable_cse(bool flag) = 0;
+
+    /// Enable optimization.
+    ///
+    /// \param flag  If true, optimizations in general will be enabled, else disabled.
+    /// \return      The old value of the flag.
+    virtual bool enable_opt(bool flag) = 0;
+
+    /// Enable unsafe math optimizations.
+    ///
+    /// \param flag  If true, unsafe math optimizations will be enabled, else disabled.
+    /// \return      The old value of the flag.
+    virtual bool enable_unsafe_math_opt(bool flag) = 0;
+
     // ----------------- own methods -----------------
 
     /// Get the body of this function.

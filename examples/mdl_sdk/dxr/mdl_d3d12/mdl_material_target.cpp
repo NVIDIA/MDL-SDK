@@ -281,58 +281,176 @@ bool Mdl_material_target::add_material_to_link_unit(
     mi::neuraylib::ILink_unit* link_unit,
     mi::neuraylib::IMdl_execution_context* context)
 {
-    // since all expressions will be in the same link unit, they need to be identified
-    std::string id_str = std::to_string(material->get_id());
-    std::string init_name = "mdl_init_" + id_str;
-    std::string scattering_name = "mdl_df_scattering_" + id_str;
-    std::string opacity_name = "mdl_opacity_" + id_str;
-    std::string emission_name = "mdl_df_emission_" + id_str;
-    std::string emission_intensity_name = "mdl_emission_intensity_" + id_str;
-    std::string thin_walled_name = "mdl_thin_walled_" + id_str;
-    std::string volume_absorption_coefficient = "mdl_absorption_coefficient_" + id_str;
-    std::string standalone_opacity_name = "mdl_standalone_opacity_" + id_str;
-
-    // select expressions to generate HLSL code for
-    std::vector<mi::neuraylib::Target_function_description> selected_functions;
-
-    selected_functions.push_back(mi::neuraylib::Target_function_description(
-        "init", init_name.c_str()));
-
-    selected_functions.push_back(mi::neuraylib::Target_function_description(
-        "surface.scattering", scattering_name.c_str()));
-
-    selected_functions.push_back(mi::neuraylib::Target_function_description(
-        "geometry.cutout_opacity", opacity_name.c_str()));
-
-    selected_functions.push_back(mi::neuraylib::Target_function_description(
-        "surface.emission.emission", emission_name.c_str()));
-
-    selected_functions.push_back(mi::neuraylib::Target_function_description(
-        "surface.emission.intensity", emission_intensity_name.c_str()));
-
-    selected_functions.push_back(mi::neuraylib::Target_function_description(
-        "thin_walled", thin_walled_name.c_str()));
-
-    selected_functions.push_back(mi::neuraylib::Target_function_description(
-        "volume.absorption_coefficient", volume_absorption_coefficient.c_str()));
-
     // get the compiled material and add the material to the link unit
     mi::base::Handle<const mi::neuraylib::ICompiled_material> compiled_material(
         m_sdk->get_transaction().access<const mi::neuraylib::ICompiled_material>(
             material->get_material_compiled_db_name().c_str()));
 
-    link_unit->add_material(
-        compiled_material.get(),
-        selected_functions.data(), selected_functions.size(),
-        context);
+    // Selecting expressions to generate code for is one of the most important parts
+    // You can either choose to generate all supported functions and just use them which is fine.
+    // To reduce the effort in the code generation and compilation steps later it makes sense
+    // to reduce the code size as good as possible. Therefore, we inspect the compiled
+    // material before selecting functions for code generation.
 
-    if (!m_sdk->log_messages("Failed to select functions for code generation.", context, SRC))
-        return false;
+    // third, either the bsdf or the edf need to be non-default (black)
+
+    // helper function to check if a distribution function is invalid
+    // if true, the distribution function needs no eval because it has no contribution
+    auto is_invalid_df = [&compiled_material](const char* expression_path)
+    {
+        // fetch the constant expression
+        mi::base::Handle<const mi::neuraylib::IExpression> expr(
+            compiled_material->lookup_sub_expression(expression_path));
+        if (expr->get_kind() != mi::neuraylib::IExpression::EK_CONSTANT)
+            return false;
+
+        // get the constant value
+        mi::base::Handle<const mi::neuraylib::IExpression_constant> expr_constant(
+            expr->get_interface<mi::neuraylib::IExpression_constant>());
+        mi::base::Handle<const mi::neuraylib::IValue> value(
+            expr_constant->get_value());
+
+        return value->get_kind() == mi::neuraylib::IValue::VK_INVALID_DF;
+    };
+
+    // helper function to check if a color function needs to be evaluted
+    // returns true if the expression value is constant black, otherwise true
+    auto is_constant_black_color = [&compiled_material](const char* expression_path)
+    {
+        // fetch the constant expression
+        mi::base::Handle<const mi::neuraylib::IExpression> expr(
+            compiled_material->lookup_sub_expression(expression_path));
+        if (expr->get_kind() != mi::neuraylib::IExpression::EK_CONSTANT)
+            return false;
+
+        // get the constant value
+        mi::base::Handle<const mi::neuraylib::IExpression_constant> expr_constant(
+            expr->get_interface<mi::neuraylib::IExpression_constant>());
+        mi::base::Handle<const mi::neuraylib::IValue_color> value(
+            expr_constant->get_value<mi::neuraylib::IValue_color>());
+        if (!value)
+            return false;
+
+        // check for black
+        for (mi::Size i = 0; i < value->get_size(); ++i)
+        {
+            mi::base::Handle<mi::neuraylib::IValue_float const> element(value->get_value(i));
+            if (element->get_value() != 0.0f)
+                return false;
+        }
+        return true;
+    };
+
+    // helper function to check if a bool function needs to be evaluted
+    // returns true if the expression value is constant false, otherwise true
+    auto is_constant_false = [&compiled_material](const char* expression_path)
+    {
+        // fetch the constant expression
+        mi::base::Handle<const mi::neuraylib::IExpression> expr(
+            compiled_material->lookup_sub_expression(expression_path));
+        if (expr->get_kind() != mi::neuraylib::IExpression::EK_CONSTANT)
+            return false;
+
+        // get the constant value
+        mi::base::Handle<const mi::neuraylib::IExpression_constant> expr_constant(
+            expr->get_interface<mi::neuraylib::IExpression_constant>());
+        mi::base::Handle<const mi::neuraylib::IValue_bool> value(
+            expr_constant->get_value<mi::neuraylib::IValue_bool>());
+        if (!value)
+            return false;
+
+        // check for "false"
+        return value->get_value() == false;
+    };
+
+    // select expressions to generate HLSL code for
+    std::vector<mi::neuraylib::Target_function_description> selected_functions;
+
+    selected_functions.push_back(mi::neuraylib::Target_function_description(
+        "init", "mdl_init"));
+
+    // add surface scattering if available
+    if (!is_invalid_df("surface.scattering"))
+    {
+        selected_functions.push_back(mi::neuraylib::Target_function_description(
+            "surface.scattering", "mdl_surface_scattering"));
+        interface_data.has_surface_scattering = true;
+    }
+
+    // add surface emission if available
+    if (!is_invalid_df("surface.emission.emission") && !is_constant_black_color("surface.emission.intensity"))
+    {
+        selected_functions.push_back(mi::neuraylib::Target_function_description(
+            "surface.emission.emission", "mdl_surface_emission"));
+        selected_functions.push_back(mi::neuraylib::Target_function_description(
+            "surface.emission.intensity", "mdl_surface_emission_intensity"));
+        interface_data.has_surface_emission = true;
+    }
+
+    // add absorption
+    if (!is_constant_black_color("volume.absorption_coefficient"))
+    {
+        selected_functions.push_back(mi::neuraylib::Target_function_description(
+            "volume.absorption_coefficient", "mdl_volume_absorption_coefficient"));
+        interface_data.has_volume_absorption = true;
+    }
+
+    // thin walled and potentially with a different backface
+    if (!is_constant_false("thin_walled"))
+    {
+        selected_functions.push_back(mi::neuraylib::Target_function_description(
+            "thin_walled", "mdl_thin_walled"));
+        interface_data.can_be_thin_walled = true;
+
+        // back faces could be different for thin walled materials
+        // we only need to generate new code
+        // 1. if surface and backface are different
+        bool need_backface_bsdf =
+            compiled_material->get_slot_hash(mi::neuraylib::SLOT_SURFACE_SCATTERING) !=
+            compiled_material->get_slot_hash(mi::neuraylib::SLOT_BACKFACE_SCATTERING);
+        bool need_backface_edf =
+            compiled_material->get_slot_hash(mi::neuraylib::SLOT_SURFACE_EMISSION_EDF_EMISSION) !=
+            compiled_material->get_slot_hash(mi::neuraylib::SLOT_BACKFACE_EMISSION_EDF_EMISSION);
+
+        // 2. either the bsdf or the edf need to be non-default (black)
+        bool none_default_backface = 
+            !is_invalid_df("backface.scattering") || !is_invalid_df("backface.emission.emission");
+        need_backface_bsdf &= none_default_backface;
+        need_backface_edf &= none_default_backface;
+
+        if (need_backface_bsdf || need_backface_edf)
+        {
+            // generate code for both backface functions here, even if they are black
+            // because it could be requested to have black backsides
+            selected_functions.push_back(mi::neuraylib::Target_function_description(
+                "backface.scattering", "mdl_backface_scattering"));
+            interface_data.has_backface_scattering = true;
+
+            selected_functions.push_back(mi::neuraylib::Target_function_description(
+                "backface.emission.emission", "mdl_backface_emission"));
+            selected_functions.push_back(mi::neuraylib::Target_function_description(
+                "backface.emission.intensity", "mdl_backface_emission_intensity"));
+            interface_data.has_backface_emission = true;
+        }
+    }
+
+    // it's possible that the material does not contain any feature this renderer supports
+    if (selected_functions.size() > 1) // note, the 1 function added is 'init'
+    {
+        interface_data.has_init = true;
+        link_unit->add_material(
+            compiled_material.get(),
+            selected_functions.data(), selected_functions.size(),
+            context);
+
+        if (!m_sdk->log_messages("Failed to select functions for code generation.", context, SRC))
+            return false;
+    }
 
     // compile cutout_opacity also as standalone version to be used in the anyhit programs,
     // to avoid costly precalculation of expressions only used by other expressions
     mi::neuraylib::Target_function_description standalone_opacity(
-        "geometry.cutout_opacity", standalone_opacity_name.c_str());
+        "geometry.cutout_opacity", "mdl_standalone_geometry_cutout_opacity");
 
     link_unit->add_material(
         compiled_material.get(),
@@ -343,56 +461,7 @@ bool Mdl_material_target::add_material_to_link_unit(
         return false;
 
     // get the resulting target code information
-
-    // function index for "init"
-    interface_data.indices.init_index =
-        selected_functions[0].function_index == static_cast<mi::Size>(-1)
-        ? -1
-        : static_cast<int32_t>(selected_functions[0].function_index);
-
-    // function index for "surface.scattering"
-    interface_data.indices.scattering_function_index =
-        selected_functions[1].function_index == static_cast<mi::Size>(-1)
-        ? -1
-        : static_cast<int32_t>(selected_functions[1].function_index);
-
-    // function index for "geometry.cutout_opacity"
-    interface_data.indices.opacity_function_index =
-        selected_functions[2].function_index == static_cast<mi::Size>(-1)
-        ? -1
-        : static_cast<int32_t>(selected_functions[2].function_index);
-
-    // function index for "surface.emission.emission"
-    interface_data.indices.emission_function_index =
-        selected_functions[3].function_index == static_cast<mi::Size>(-1)
-        ? -1
-        : static_cast<int32_t>(selected_functions[3].function_index);
-
-    // function index for "surface.emission.intensity"
-    interface_data.indices.emission_intensity_function_index =
-        selected_functions[4].function_index == static_cast<mi::Size>(-1)
-        ? -1
-        : static_cast<int32_t>(selected_functions[4].function_index);
-
-    // function index for "thin_walled"
-    interface_data.indices.thin_walled_function_index =
-        selected_functions[5].function_index == static_cast<mi::Size>(-1)
-        ? -1
-        : static_cast<int32_t>(selected_functions[5].function_index);
-
-    // function index for "volume.absorption_coefficient"
-    interface_data.indices.volume_absorption_coefficient_function_index =
-        selected_functions[6].function_index == static_cast<mi::Size>(-1)
-        ? -1
-        : static_cast<int32_t>(selected_functions[6].function_index);
-
-    // function index for standalone version of "geometry.cutout_opacity"
-    interface_data.indices.standalone_opacity_function_index =
-        standalone_opacity.function_index == static_cast<mi::Size>(-1)
-        ? -1
-        : static_cast<int32_t>(standalone_opacity.function_index);
-
-    // also constant for the entire material
+    // constant for the entire material, for one material per link unit 0
     interface_data.argument_layout_index = selected_functions[0].argument_block_index;
     return true;
 }
@@ -494,18 +563,10 @@ bool Mdl_material_target::generate()
     // a new context for is created
     mi::base::Handle<mi::neuraylib::IMdl_execution_context> context(m_sdk->create_context());
 
-    // check if the target has multiple materials with different
-    // with the current implementation this should be always one
-    const std::string& hash = m_materials.begin()->second->get_material_compiled_hash();
-    bool is_single_material_target = true;
-    for (auto& pair : m_materials)
-        is_single_material_target &= (hash == pair.second->get_material_compiled_hash());
-
     // use shader caching if enabled
-    // only if there is one material (hash) registered for this target
     bool loaded_from_shader_cache = false;
     Mdl_material_target_interface interface_data;
-    if (m_sdk->get_options().enable_shader_cache && is_single_material_target)
+    if (m_sdk->get_options().enable_shader_cache)
     {
         auto p = m_app->get_profiling().measure("loading from shader cache");
 
@@ -603,6 +664,10 @@ bool Mdl_material_target::generate()
     mi::base::Handle<mi::neuraylib::ILink_unit> link_unit(nullptr);
     if (!loaded_from_shader_cache)
     {
+        // in order to change the scene scale setting at runtime we need to preserve the conversions
+        // in the generated code and expose the factor in the MDL material state of the shader.
+        context->set_option("fold_meters_per_scene_unit", false);
+
         link_unit = m_sdk->get_backend().create_link_unit(
             m_sdk->get_transaction().get(), context.get());
         if (!m_sdk->log_messages("MDL creating a link unit failed.", context.get(), SRC))
@@ -617,14 +682,15 @@ bool Mdl_material_target::generate()
     }
 
     // add materials to link unit
-    std::unordered_map<std::string, Mdl_material_target_interface> processed_hashes;
+    std::string process_hash;
     for (auto& pair : m_materials)
     {
         // add materials with the same hash only once
         const std::string& hash = pair.second->get_material_compiled_hash();
-        auto found = processed_hashes.find(hash);
-        if (found == processed_hashes.end())
+        if (process_hash.empty())
         {
+            process_hash = hash;
+
             // add this material to the link unit
             if (!loaded_from_shader_cache && !add_material_to_link_unit(
                 interface_data, pair.second, link_unit.get(), context.get()))
@@ -632,12 +698,18 @@ bool Mdl_material_target::generate()
                 log_error("Adding to link unit failed: " + pair.second->get_name(), SRC);
                 return false;
             }
-
-            processed_hashes.emplace(hash, interface_data);
+        }
+        else
+        {
+            if (process_hash != hash)
+            {
+                log_error("Material added to the wrong target: " + pair.second->get_name(), SRC);
+                return false;
+            }
         }
 
         // pass target information to the material
-        pair.second->set_target_interface(this, processed_hashes[hash]);
+        pair.second->set_target_interface(this, interface_data);
     }
 
     // generate HLSL code
@@ -864,6 +936,9 @@ bool Mdl_material_target::generate()
     // generate the actual shader code with the help of some snippets
     m_hlsl_source_code.clear();
 
+    // all the following defines could be passed to the compiler as argument as well 
+    // but for reading the HLSL code we choose to add them in source
+
     // per target data
     m_hlsl_source_code += "#define MDL_TARGET_REGISTER_SPACE space2\n";
     m_hlsl_source_code += "#define MDL_TARGET_RO_DATA_SEGMENT_SLOT t0\n";
@@ -882,6 +957,30 @@ bool Mdl_material_target::generate()
     m_hlsl_source_code += "\n";
     m_hlsl_source_code += "#define MDL_MATERIAL_BUFFER_REGISTER_SPACE space6\n";
     m_hlsl_source_code += "#define MDL_MATERIAL_BUFFER_SLOT_BEGIN t0\n";
+    m_hlsl_source_code += "\n";
+
+    // depending on the functions selected for code generation
+    m_hlsl_source_code += interface_data.has_init
+        ? "#define MDL_HAS_INIT 1\n"
+        : "#define MDL_HAS_INIT 0\n";
+    m_hlsl_source_code += interface_data.has_surface_scattering
+        ? "#define MDL_HAS_SURFACE_SCATTERING 1\n"
+        : "#define MDL_HAS_SURFACE_SCATTERING 0\n";
+    m_hlsl_source_code += interface_data.has_surface_emission
+        ? "#define MDL_HAS_SURFACE_EMISSION 1\n"
+        : "#define MDL_HAS_SURFACE_EMISSION 0\n";
+    m_hlsl_source_code += interface_data.has_backface_scattering
+        ? "#define MDL_HAS_BACKFACE_SCATTERING 1\n"
+        : "#define MDL_HAS_BACKFACE_SCATTERING 0\n";
+    m_hlsl_source_code += interface_data.has_backface_emission
+        ? "#define MDL_HAS_BACKFACE_EMISSION 1\n"
+        : "#define MDL_HAS_BACKFACE_EMISSION 0\n";
+    m_hlsl_source_code += interface_data.has_volume_absorption
+        ? "#define MDL_HAS_VOLUME_ABSORPTION 1\n"
+        : "#define MDL_HAS_VOLUME_ABSORPTION 0\n";
+    m_hlsl_source_code += interface_data.can_be_thin_walled
+        ? "#define MDL_CAN_BE_THIN_WALLED 1\n"
+        : "#define MDL_CAN_BE_THIN_WALLED 0\n";
     m_hlsl_source_code += "\n";
 
     // global data
@@ -910,229 +1009,6 @@ bool Mdl_material_target::generate()
     m_hlsl_source_code += "#include \"content/mdl_target_code_types.hlsl\"\n";
     m_hlsl_source_code += "#include \"content/mdl_renderer_runtime.hlsl\"\n\n";
     m_hlsl_source_code += m_target_code->get_code();
-
-    // assuming multiple materials that have been compiled to this target/link unit
-    // it has to be possible to select the individual functions based on the hit object
-
-    std::string init_switch_function =
-        "void mdl_init(in uint function_index, inout Shading_state_material state) {\n"
-        "   switch(function_index) {\n";
-
-    std::string sample_switch_function[2] = {
-        "void mdl_bsdf_sample(in uint function_index, inout Bsdf_sample_data sret_ptr, "
-        "in Shading_state_material state) {\n"
-        "   switch(function_index) {\n",
-
-        "void mdl_edf_sample(in uint function_index, inout Edf_sample_data sret_ptr, "
-        "in Shading_state_material state) {\n"
-        "   switch(function_index) {\n"
-    };
-
-    std::string evaluate_switch_function[2] = {
-        "void mdl_bsdf_evaluate(in uint function_index, inout Bsdf_evaluate_data sret_ptr, "
-        "in Shading_state_material state) {\n"
-        "   switch(function_index) {\n",
-
-        "void mdl_edf_evaluate(in uint function_index, inout Edf_evaluate_data sret_ptr, "
-        "in Shading_state_material state) {\n"
-        "   switch(function_index) {\n"
-    };
-
-    std::string pdf_switch_function[2] = {
-        "void mdl_bsdf_pdf(in uint function_index, inout Bsdf_pdf_data sret_ptr, "
-        "in Shading_state_material state) {\n"
-        "   switch(function_index) {\n",
-
-        "void mdl_edf_pdf(in uint function_index, inout Edf_pdf_data sret_ptr, "
-        "in Shading_state_material state) {\n"
-        "   switch(function_index) {\n"
-    };
-
-    std::string auxiliary_switch_function[2] = {
-        "void mdl_bsdf_auxiliary(in uint function_index, inout Bsdf_auxiliary_data sret_ptr, "
-        "in Shading_state_material state) {\n"
-        "   switch(function_index) {\n",
-
-        "void mdl_edf_auxiliary(in uint function_index, inout Edf_auxiliary_data sret_ptr, "
-        "in Shading_state_material state) {\n"
-        "   switch(function_index) {\n"
-    };
-
-    std::string opacity_switch_function =
-        "float mdl_geometry_cutout_opacity(in uint function_index, "
-        "in Shading_state_material state) {\n"
-        "   switch(function_index) {\n";
-
-    std::string emission_intensity_switch_function =
-        "float3 mdl_emission_intensity(in uint function_index, "
-        "in Shading_state_material state) {\n"
-        "   switch(function_index) {\n";
-
-    std::string thin_walled_switch_function =
-        "bool mdl_thin_walled(in uint function_index, "
-        "in Shading_state_material state) {\n"
-        "   switch(function_index) {\n";
-
-    std::string abs_coefficient_switch_function =
-        "float3 mdl_absorption_coefficient(in uint function_index, "
-        "in Shading_state_material state) {\n"
-        "   switch(function_index) {\n";
-
-    std::string standalone_opacity_switch_function =
-        "float mdl_standalone_geometry_cutout_opacity(in uint function_index, "
-        "in Shading_state_material state) {\n"
-        "   switch(function_index) {\n";
-
-    for (size_t f = 0, n = m_target_code->get_callable_function_count(); f < n; ++f)
-    {
-        mi::neuraylib::ITarget_code::Function_kind func_kind =
-            m_target_code->get_callable_function_kind(f);
-
-        mi::neuraylib::ITarget_code::Distribution_kind dist_kind =
-            m_target_code->get_callable_function_distribution_kind(f);
-
-        std::string name = m_target_code->get_callable_function(f);
-
-
-        if (dist_kind == mi::neuraylib::ITarget_code::DK_NONE)
-        {
-            if (func_kind == mi::neuraylib::ITarget_code::FK_DF_INIT)
-            {
-                init_switch_function +=
-                    "       case " + std::to_string(f) + ": " +
-                    name + "(state); return;\n";
-            }
-            else if (mi::examples::strings::starts_with(name, "mdl_opacity_"))
-            {
-                opacity_switch_function += "       case " + std::to_string(f) + ": " +
-                    "return " + name + "(state);\n";
-            }
-            else if (mi::examples::strings::starts_with(name, "mdl_emission_intensity_"))
-            {
-                emission_intensity_switch_function += "       case " + std::to_string(f) + ": " +
-                    "return " + name + "(state);\n";
-            }
-            else if (mi::examples::strings::starts_with(name, "mdl_thin_walled_"))
-            {
-                thin_walled_switch_function += "       case " + std::to_string(f) + ": " +
-                    "return " + name + "(state);\n";
-            }
-            else if (mi::examples::strings::starts_with(name, "mdl_absorption_coefficient_"))
-            {
-                abs_coefficient_switch_function += "       case " + std::to_string(f) + ": " +
-                    "return " + name + "(state);\n";
-            }
-            else if (mi::examples::strings::starts_with(name, "mdl_standalone_opacity_"))
-            {
-                standalone_opacity_switch_function += "       case " + std::to_string(f) + ": " +
-                    "return " + name + "(state);\n";
-            }
-        }
-        else if (dist_kind == mi::neuraylib::ITarget_code::DK_BSDF ||
-                    dist_kind == mi::neuraylib::ITarget_code::DK_HAIR_BSDF ||
-                    dist_kind == mi::neuraylib::ITarget_code::DK_EDF)
-        {
-            // store BSDFs and Hair BSDFs at index 0 and EDFs at index 1
-            size_t index = dist_kind == mi::neuraylib::ITarget_code::DK_EDF ? 1 : 0;
-
-            switch (func_kind)
-            {
-            case mi::neuraylib::ITarget_code::FK_DF_SAMPLE:
-                sample_switch_function[index] +=
-                    "       case " + std::to_string(f) + ": " +
-                    name + "(sret_ptr, state); return;\n";
-                break;
-
-            case mi::neuraylib::ITarget_code::FK_DF_EVALUATE:
-                evaluate_switch_function[index] +=
-                    "       case " + std::to_string(f - 1) + ": " +
-                    name + "(sret_ptr, state); return;\n";
-                break;
-
-            case mi::neuraylib::ITarget_code::FK_DF_PDF:
-                pdf_switch_function[index] +=
-                    "       case " + std::to_string(f - 2) + ": " +
-                    name + "(sret_ptr, state); return;\n";
-                break;
-
-            case mi::neuraylib::ITarget_code::FK_DF_AUXILIARY:
-                auxiliary_switch_function[index] +=
-                    "       case " + std::to_string(f - 3) + ": " +
-                    name + "(sret_ptr, state); return;\n";
-                break;
-            }
-        }
-
-    }
-
-    init_switch_function +=
-        "       default: break;\n"
-        "   }\n"
-        "}\n\n";
-    m_hlsl_source_code += init_switch_function;
-
-    for (size_t i = 0; i < 2; ++i)
-    {
-        sample_switch_function[i] +=
-            "       default: break;\n"
-            "   }\n"
-            "}\n\n";
-        m_hlsl_source_code += sample_switch_function[i];
-
-        evaluate_switch_function[i] +=
-            "       default: break;\n"
-            "   }\n"
-            "}\n\n";
-        m_hlsl_source_code += evaluate_switch_function[i];
-
-        pdf_switch_function[i] +=
-            "       default: break;\n"
-            "   }\n"
-            "}\n\n";
-        m_hlsl_source_code += pdf_switch_function[i];
-
-        auxiliary_switch_function[i] +=
-            "       default: break;\n"
-            "   }\n"
-            "}\n\n";
-        m_hlsl_source_code += auxiliary_switch_function[i];
-    }
-
-    opacity_switch_function +=
-        "       default: break;\n"
-        "   }\n"
-        "   return 1.0f;\n"
-        "}\n\n";
-    m_hlsl_source_code += opacity_switch_function;
-
-    emission_intensity_switch_function +=
-        "       default: break;\n"
-        "   }\n"
-        "   return float3(1.0f, 1.0f, 1.0f);\n"
-        "}\n\n";
-    m_hlsl_source_code += emission_intensity_switch_function;
-
-    thin_walled_switch_function +=
-        "       default: break;\n"
-        "   }\n"
-        "   return false;\n"
-        "}\n\n";
-    m_hlsl_source_code += thin_walled_switch_function;
-
-    abs_coefficient_switch_function+=
-        "       default: break;\n"
-        "   }\n"
-        "   return float3(0.0f, 0.0f, 0.0f);\n"
-        "}\n\n";
-    m_hlsl_source_code += abs_coefficient_switch_function;
-
-    standalone_opacity_switch_function +=
-        "       default: break;\n"
-        "   }\n"
-        "   return 1.0f;\n"
-        "}\n\n";
-    m_hlsl_source_code += standalone_opacity_switch_function;
-
 
     // this last snipped contains the actual hit shader and the renderer logic
     // ideally, this is the only part that is handwritten

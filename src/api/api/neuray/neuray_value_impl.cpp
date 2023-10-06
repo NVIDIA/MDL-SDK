@@ -275,6 +275,11 @@ const char* Value_texture::get_selector() const
     return !m_cached_selector.empty() ? m_cached_selector.c_str() : nullptr;
 }
 
+const char* Value_texture::get_owner_module() const
+{
+    return m_value->get_owner_module();
+}
+
 const char* Value_light_profile::get_value() const
 {
     Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
@@ -309,6 +314,11 @@ const char* Value_light_profile::get_file_path() const
     return m_value->get_file_path( db_transaction);
 }
 
+const char* Value_light_profile::get_owner_module() const
+{
+    return m_value->get_owner_module();
+}
+
 const char* Value_bsdf_measurement::get_value() const
 {
     Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
@@ -341,6 +351,11 @@ const char* Value_bsdf_measurement::get_file_path() const
     Transaction_impl* transaction_impl = static_cast<Transaction_impl*>( m_transaction.get());
     DB::Transaction* db_transaction = transaction_impl->get_db_transaction();
     return m_value->get_file_path( db_transaction);
+}
+
+const char* Value_bsdf_measurement::get_owner_module() const
+{
+    return m_value->get_owner_module();
 }
 
 const mi::neuraylib::IValue* Value_list::get_value( mi::Size index) const

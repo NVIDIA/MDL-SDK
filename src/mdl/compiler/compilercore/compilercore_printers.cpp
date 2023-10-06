@@ -47,6 +47,7 @@
 
 #include <string>
 
+#include <iostream>
 #include <cstdio>
 #include <cstdarg>
 #include <cassert>
@@ -799,10 +800,13 @@ namespace {
     }
 
     // Return true if name is an identifier that must be quoted as a
-    // Unicode identifier. If is_special is true, it should be handled
-    // like ., .. or * in an import statement (that is, not quoted.)
-    bool must_quote(char const* name) {
-        return !is_identifier(name);
+    // Unicode identifier.
+    bool must_quote(char const* name, bool in_scope) {
+        if (in_scope) {
+            return !MDL::valid_mdl_identifier(name);
+        } else {
+            return !is_identifier(name);
+        }
     }
 
     // Return true if the given symbol is one of the special symbols
@@ -819,7 +823,7 @@ namespace {
 void Printer::print(ISymbol const *sym)
 {
     char const *name = sym->get_name();
-    bool quote_needed = must_quote(name) && !is_special_import_symbol(sym);
+    bool quote_needed = must_quote(name, false) && !is_special_import_symbol(sym);
     if (quote_needed)
         print('\'');
     print(name);
@@ -3295,7 +3299,7 @@ bool Sema_printer::print_scope(IDefinition const *idef)
                 Base::print("::");
             }
             char const *name = sym->get_name();
-            bool quote_needed = must_quote(name) && !is_special_import_symbol(sym);
+            bool quote_needed = must_quote(name, true) && !is_special_import_symbol(sym);
             if (quote_needed) {
                 Base::print('\'');
             }

@@ -125,19 +125,41 @@ bool Bsdf_measurement::prepare_mbsdf_part(
 	float max_albedo = 0.0f;
 	for (mi::Uint32 t_in = 0; t_in < res_x; ++t_in)
 	{
+		/*
+		the projected area of a sphere patch (in lat-long parameterization):
+			\int_{\phi_0}^{\phi_1} \int_{\theta_0}^{\theta_1} sin(\theta) cos(\theta) d\theta d\phi
+				= 1/2 (\phi_1-\phi_0) (sin^2(\theta_1) - sin^2(\theta_0))
+
+		combining the double angular formula:
+			\cos(2\theta) = cos^2(\theta) - sin^2(\theta)
+
+		and the Pythagorean identity
+			cos^2(\theta)+sin^2(\theta) = 1
+		->	cos^2(\theta) = 1 - sin^2(\theta)
+
+		gives:
+			cos(2\theta) = 1 - 2 sin^2(\theta)
+		->	sin^2(\theta) = -1/2 (cos(2\theta) - 1)
+
+		inserting twice into the patch formula gives:
+			  1/2 (\phi_1-\phi_0) (-1/2 (cos(2\theta_1) - 1)) - (-1/2 (cos(2\theta_0) - 1))
+			= 1/2 (\phi_1-\phi_0) -1/2 ((cos(2\theta_1) - 1) - (cos(2\theta_0) - 1))
+			= 1/2 (\phi_1-\phi_0) 1/2 (cos(2\theta_0) - 1 - cos(2\theta_1) + 1)
+			= 1/4 (\phi_1-\phi_0) (cos(2\theta_0) - cos(2\theta_1))
+		*/
+
 		float sum_theta = 0.0f;
-		float sin_theta0_sqd = 0.0f;
+		float cos_2theta0 = 1.0f;
 		for (mi::Uint32 t_out = 0; t_out < res_x; ++t_out)
 		{
-			const float sin_theta1 = std::sin(float(t_out + 1) * step_theta);
-			const float sin_theta1_sqd = sin_theta1 * sin_theta1;
-
 			// BSDFs are symmetric: f(w_in, w_out) = f(w_out, w_in)
 			// take the average of both measurements
 
-			// area of the two surface elements (the ones we are averaging)
-			const float area = (sin_theta1_sqd - sin_theta0_sqd) * step_phi;
-			sin_theta0_sqd = sin_theta1_sqd;
+			// projected area of the surface elements (the ones we are averaging)
+			// we are integrating only half of the sphere and sum up the values of two patches
+			const float cos_2theta1 = std::cos(2 * float(t_out + 1) * step_theta);
+			const float proj_area = (cos_2theta0 - cos_2theta1) * step_phi * 0.25f;
+			cos_2theta0 = cos_2theta1;
 
 			// offset for both the thetas into the measurement data (select row in the volume)
 			const mi::Uint32 offset_phi = (t_in * res_x + t_out) * res_y;
@@ -162,9 +184,8 @@ bool Bsdf_measurement::prepare_mbsdf_part(
 				{
 					value = std::max(data[idx], 0.0f) + std::max(data[idx2], 0.0f);
 				}
-				value *= 0.5f; // take average
 
-				sum_phi += value * area;
+				sum_phi += value * proj_area;
 				sample_data_phi[idx] = sum_phi;
 			}
 

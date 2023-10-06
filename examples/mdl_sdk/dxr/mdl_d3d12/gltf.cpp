@@ -132,13 +132,6 @@ void apply_transform(
         if (Transform::try_from_matrix(m, from_matrix) || !from_matrix.is_identity())
             target = from_matrix; // use identity
     }
-
-    float scale = 1.0f / options.units_per_meter;
-    target.translation = {
-        target.translation.x * scale,
-        target.translation.y * scale,
-        target.translation.z * scale
-    };
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -296,7 +289,8 @@ void compute_tangent_frame(
     IScene_loader::Primitive part,
     uint8_t* vertex_buffer_part,
     uint32_t* indices,
-    size_t index_count)
+    size_t index_count, 
+    const IScene_loader::Scene_options& options)
 {
     // TODO fix this, its not working correctly
 
@@ -351,8 +345,8 @@ void compute_tangent_frame(
 
             float s1 = texcoord_b.x - texcoord_a.x;
             float s2 = texcoord_c.x - texcoord_a.x;
-            float t1 = texcoord_b.y - texcoord_a.y;
-            float t2 = texcoord_c.y - texcoord_a.y;
+            float t1 = options.uv_flip ? (texcoord_b.y - texcoord_a.y) : (texcoord_a.y - texcoord_b.y);
+            float t2 = options.uv_flip ? (texcoord_c.y - texcoord_a.y) : (texcoord_a.y - texcoord_c.y);
 
             if ((s1 * s1 + t1 * t1) < 0.000001f && (s2 * s2 + t2 * t2) < 0.000001f)
                 continue;
@@ -743,6 +737,25 @@ void add_volume(
         gltf_volume.attenuationColor[2] };
 }
 
+// ------------------------------------------------------------------------------------------------
+
+void add_iridescence(
+    const fx::gltf::Document& doc,
+    IScene_loader::Material::Model_data_materials_iridescence& material_iridescene,
+    const fx::gltf::Material::KHR_MaterialsIridescence& gltf_iridescene,
+    const IScene_loader::Scene& scene)
+{
+    if (gltf_iridescene.empty())
+        return;
+
+    material_iridescene.iridescence_factor = gltf_iridescene.iridescenceFactor;
+    material_iridescene.iridescence_texture = get_texture(doc, gltf_iridescene.iridescenceTexture, scene);
+    material_iridescene.iridescence_ior = gltf_iridescene.iridescenceIor;
+    material_iridescene.iridescence_thickness_minimum = gltf_iridescene.iridescenceThicknessMinimum;
+    material_iridescene.iridescence_thickness_maximum = gltf_iridescene.iridescenceThicknessMaximum;
+    material_iridescene.iridescence_thickness_texture = get_texture(doc, gltf_iridescene.iridescenceThicknessTexture, scene);
+}
+
 
 } // anonymous
 
@@ -893,14 +906,6 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
                         auto vec = reinterpret_cast<DirectX::XMFLOAT3*>(dest_ptr);
                         *vec = {vec->x, -vec->z, vec->y};
                     }
-                    if (is_position && options.units_per_meter != 1.0f)
-                    {
-                        float scale = 1.0f / options.units_per_meter;
-                        auto vec = reinterpret_cast<DirectX::XMFLOAT3*>(dest_ptr);
-                        vec->x *= scale;
-                        vec->y *= scale;
-                        vec->z *= scale;
-                    }
                     if (is_normal)
                     {
                         found_normals = true;
@@ -928,7 +933,7 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
                         // approach that keeps continuity across the texture space,
                         // especially in the context of UDIM and uv-tiles.
                         auto vec2 = reinterpret_cast<DirectX::XMFLOAT2*>(dest_ptr);
-                        if (options.uv_flip == false/*!*/)
+                        if (options.uv_flip == true)
                             vec2->y = 1.0f - vec2->y;
                     }
                 }
@@ -989,7 +994,7 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
             {
                 compute_tangent_frame(
                     part, vertex_buffer_part.data(),
-                    mesh.indices.data() + part.index_offset, part.index_count);
+                    mesh.indices.data() + part.index_offset, part.index_count, options);
             }
 
             // copy vertex buffer to mesh
@@ -1286,6 +1291,7 @@ bool Loader_gltf::load(Mdl_sdk& sdk, const std::string& file_name, const Scene_o
             add_specular(doc, mat.metallic_roughness.specular, m.materialsSpecular, *m_scene);
             mat.metallic_roughness.ior.ior = m.materialsIOR.ior;
             add_volume(doc, mat.metallic_roughness.volume, m.materialsVolume);
+            add_iridescence(doc, mat.metallic_roughness.iridescence, m.materialsIridescence, *m_scene);
             mat.emissive_strength.emissive_strength = m.materialEmissiveStrength.emissiveStrength;
         }
 

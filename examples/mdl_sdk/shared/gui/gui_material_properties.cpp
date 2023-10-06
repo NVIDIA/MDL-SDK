@@ -284,6 +284,7 @@ public:
         , m_description("")
         , m_context(context)
         , m_groups()
+        , m_collapsed_by_default(false)
         , m_usages()
         , m_marked_unused(false)
         , m_marked_unused_description("")
@@ -359,16 +360,16 @@ protected:
 
             // groups
             mi::Size levels = 3;
-            idx = anno_wrapper.get_annotation_index("::anno::in_group(string,string,string)");
+            idx = anno_wrapper.get_annotation_index("::anno::in_group(string,string,string,bool)");
             if (idx == mi::Size(-1))
             {
                 levels = 2;
-                idx = anno_wrapper.get_annotation_index("::anno::in_group(string,string)");
+                idx = anno_wrapper.get_annotation_index("::anno::in_group(string,string,bool)");
             }
             if (idx == mi::Size(-1))
             {
                 levels = 1;
-                idx = anno_wrapper.get_annotation_index("::anno::in_group(string)");
+                idx = anno_wrapper.get_annotation_index("::anno::in_group(string,bool)");
             }
             if (idx != mi::Size(-1))
             {
@@ -379,6 +380,7 @@ protected:
                     anno_wrapper.get_annotation_param_value(idx, i, group_name);
                     m_groups[i] = std::string(group_name);
                 }
+                anno_wrapper.get_annotation_param_value(idx, levels, m_collapsed_by_default);
                 for (mi::Size i = 0; i < levels; ++i)
                     if (m_groups.back().empty())
                         m_groups.pop_back();
@@ -565,6 +567,11 @@ public:
 
     // --------------------------------------------------------------------------------------------
 
+    /// Set the default collapsed state based on group annotations.
+    void default_collapse();
+
+    // --------------------------------------------------------------------------------------------
+
     /// get the name of the property shown during rendering
     const std::string& get_name()
     {
@@ -669,6 +676,7 @@ protected:
     std::string m_description;
     const Parameter_context* m_context;
     std::vector<std::string> m_groups;
+    bool m_collapsed_by_default;
     std::vector<std::string> m_usages;
     bool m_marked_unused;
     std::string m_marked_unused_description;
@@ -974,7 +982,7 @@ public:
         Parameter_node_call* parenting_call,
         const Parameter_context* context)
         : Parameter_node_base(Kind::Group, name, parenting_call, context)
-        , m_expanded(true)
+        , m_collapsed(false)
     {
     }
 
@@ -992,15 +1000,21 @@ public:
     // --------------------------------------------------------------------------------------------
 
     /// Flag that is bound to the ImGui element to store the state (collapsed or not)
-    bool is_expanded() const
+    bool is_collapsed() const
     {
-        return m_expanded;
+        return m_collapsed;
+    }
+
+    /// Marks the node as collapsed. Used for specifying the initial state.
+    void set_collapsed(bool value)
+    {
+        m_collapsed = value;
     }
 
     // --------------------------------------------------------------------------------------------
 
 private:
-    bool m_expanded;
+    bool m_collapsed;
 };
 
 //-------------------------------------------------------------------------------------------------
@@ -2150,22 +2164,65 @@ void Section_material::bind_material(
         string_handler);
 
     // iterate over all parameters exposed in the compiled material
-    for (mi::Size j = 0, n = compiled_material->get_parameter_count(); j < n; ++j)
-    {
-        mi::base::Handle<mi::neuraylib::IValue const> arg(compiled_material->get_argument(j));
 
+    // collect the parameter info recursively
+    std::function<void(mi::base::Handle<const mi::neuraylib::IValue>&, const char*, mi::neuraylib::Target_value_layout_state)>
+        collectParamInfoLambda = [&compiled_material, &argument_block, &argument_block_layout, &parameter_context, &collectParamInfoLambda](
+            mi::base::Handle<const mi::neuraylib::IValue>& value, const char* name,
+            mi::neuraylib::Target_value_layout_state state)
+    {
         Argument_block_field_info info;
-        info.name = compiled_material->get_parameter_name(j);
+        info.state = state;
+        info.name = name;
         info.argument_block = argument_block;
         info.argument_layout = argument_block_layout;
+        info.offset = argument_block_layout->get_layout(info.kind, info.size, info.state);
 
-        // get the offset of the argument within the argument block
-        if (info.argument_layout && info.argument_block)
+        // instead of adding a struct as a whole
+        // we add the individual fields and create a name by chaining the parameter names separated by a dot
+        if (info.kind == mi::neuraylib::IValue::VK_STRUCT)
         {
-            info.state = argument_block_layout->get_nested_state(j);
-            info.offset = argument_block_layout->get_layout(info.kind, info.size, info.state);
+            mi::base::Handle<const mi::neuraylib::IValue_struct> structValue(
+                value.get_interface<const mi::neuraylib::IValue_struct>());
+            mi::base::Handle<const mi::neuraylib::IType_struct> structType(structValue->get_type());
+
+            for (mi::Size i = 0, n = structType->get_size(); i < n; ++i)
+            {
+                mi::base::Handle<const mi::neuraylib::IValue> field_value(structValue->get_value(i));
+                std::string field_name = name + std::string(".") + structType->get_field_name(i);
+                mi::neuraylib::Target_value_layout_state nestedState = argument_block_layout->get_nested_state(i, state);
+                collectParamInfoLambda(field_value, field_name.c_str(), nestedState);
+            }
         }
-        parameter_context->add_argument_block_info(info.name, info);
+        // for arrays we do something similar but we use the index in the names
+        else if (info.kind == mi::neuraylib::IValue::VK_ARRAY)
+        {
+            mi::base::Handle<const mi::neuraylib::IValue_array> arrayValue(
+                value.get_interface<const mi::neuraylib::IValue_array>());
+
+            for (mi::Size i = 0, n = arrayValue->get_size(); i < n; ++i)
+            {
+                mi::base::Handle<const mi::neuraylib::IValue> field_value(arrayValue->get_value(i));
+                std::string field_name = name + std::string(".value") + std::to_string(i);
+                mi::neuraylib::Target_value_layout_state nestedState = argument_block_layout->get_nested_state(i, state);
+                collectParamInfoLambda(field_value, field_name.c_str(), nestedState);
+            }
+        }
+        else
+        {
+            // all other types can just be pushed directly
+            parameter_context->add_argument_block_info(info.name, info);
+        }
+    };
+
+    // start the recursion with the top level parameters
+    if (parameter_context->get_class_compilation_mode())
+    {
+        for (mi::Size j = 0, n = compiled_material->get_parameter_count(); j < n; ++j)
+        {
+            mi::base::Handle<mi::neuraylib::IValue const> arg(compiled_material->get_argument(j));
+            collectParamInfoLambda(arg, compiled_material->get_parameter_name(j), argument_block_layout->get_nested_state(j));
+        }
     }
 
     mi::base::Handle<const mi::neuraylib::IFunction_definition> mat_definition(
@@ -2243,6 +2300,9 @@ void Section_material::bind_material(
 
     // sort parameters based on the order annotation
     new_material_parameters->sort();
+
+    // collapse groups if needed
+    new_material_parameters->default_collapse();
 
     // replace the old hierarchy with the new one
     unbind_material();
@@ -2892,7 +2952,7 @@ Section_material_update_state Section_material::update_material_parameters(
             {
                 Parameter_node_group* child_group = static_cast<Parameter_node_group*>(param);
                 change = max(change, Control::group<Section_material_update_state>(
-                    child_group->get_name().c_str(), child_group->is_expanded(), [&]()
+                    child_group->get_name().c_str(), !child_group->is_collapsed(), [&]()
                     {
                         return show_children(parent, child_group->get_childeren());
                     }));
@@ -2906,6 +2966,52 @@ Section_material_update_state Section_material::update_material_parameters(
     auto c = static_cast<Parameter_node_call*>(call);
     Section_material_update_state change = show_children(c, c->get_childeren());
     return change;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+void Parameter_node_base::default_collapse()
+{
+    bool atleast_one_child_collapsed = false;
+    bool has_none_group_children = false;
+    bool has_expanded_group_children = false;
+    for (auto& e : m_child_nodes)
+    {
+        e->default_collapse();
+        if (e->get_kind() == Parameter_node_base::Kind::Group)
+        {
+            Parameter_node_group* g = static_cast<Parameter_node_group*>(e);
+            has_expanded_group_children |= !g->is_collapsed();
+        }
+        else
+        {
+            atleast_one_child_collapsed |= e->m_collapsed_by_default;
+            has_none_group_children = true;
+        }
+    }
+
+    if (get_kind() != Parameter_node_base::Kind::Group)
+        return;
+
+    Parameter_node_group* current = static_cast<Parameter_node_group*>(this);
+
+    // A group that contains parameters is now collapsed if at least one of its parameters
+    // has the collapsed parameter set to true.
+    if (atleast_one_child_collapsed)
+    {
+        current->set_collapsed(true);
+        return;
+    }
+
+    // A group that has no parameters but subgroups is now collapsed if all of its subgroups 
+    // are collapsed.
+    if (!has_none_group_children)
+    {
+        current->set_collapsed(!has_expanded_group_children);
+    }
+
+    // In all other cases a group is expanded.
+    current->set_collapsed(false);
 }
 
 }}}

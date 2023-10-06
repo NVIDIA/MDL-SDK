@@ -18,7 +18,7 @@ the examples.
 The build with the following 64-bit platform-compiler combinations has been
 successfully tested:
 
--   **Windows 10:**            Microsoft Visual Studio 2017 (msvc v141) or 2019 (msvc v142)
+-   **Windows 10:**            Microsoft Visual Studio 2019 (msvc v142)
 -   **CentOS 7, Debian 11:**   GCC 7 or GCC 10 (on x86-64 or aarch64)
 -   **Mac OS X 12.6:**         Xcode 12.4 (Apple Clang 12.0.0)
 
@@ -52,6 +52,17 @@ The following third-party libraries and tools are required to build the MDL SDK:
 -   **OpenImageIO** *(2.4.5)*  
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
     package *openimageio*.  
+    Since the release of the above vcpkg version, the hash of the source code
+    archive on GitHub has changed (the name of the top-level directory inside
+    the archive changed).
+    Thus you need to patch the SHA512 argument to *vcpkg_from_github()* near
+    the beginning of the file *ports/openimageio/portfile.cmake* in the vcpkg
+    directory to:
+
+        REF v${VERSION}
+        SHA512 3d42d266d69119bf48f69b053948b4218d29c99f9a58007d24b0df0e4d111abbec26d65629b9754a868e33c5c00d2425de241368f1bf20182f5c7a96c0acb56f
+        HEAD_REF master
+
     Linux: Alternatively, install the *libopenimageio-dev* package from your
     native package manager. Do **not** mix packages for Boost (see previous
     item) and OpenImageIO from your native package manager and from vcpkg.
@@ -199,12 +210,12 @@ features.
     binaries.
 
     It is recommended that you build into a subdirectory, not into the repository root.
-    *C:/projects/mdl-sdk/build/vs2017* for example is fine, assuming you cloned the repository to:
+    *C:/projects/mdl-sdk/build/vs2019* for example is fine, assuming you cloned the repository to:
 
         C:/projects/mdl-sdk
 
 3.  After clicking ``Configure``, CMake asks you to choose the Generator.
-    Select `Visual Studio 15 2017` (or higher), enter `host=x64` as toolset
+    Select `Visual Studio 16 2019` (or higher), enter `host=x64` as toolset
     and click `Finish`. CMake starts to configure the build and stops several
     times when user input is required to resolve dependencies.
 

@@ -66,7 +66,10 @@ namespace mi { namespace examples { namespace mdl_d3d12
     public:
         struct Constants
         {
-            Mdl_material_function_indices function_indices;
+            // shared for all material compiled from the same MDL material
+            // - none -
+
+            // individual properties of the different material instances
             int32_t material_id;
             uint32_t material_flags;
         };

@@ -82,7 +82,7 @@ IMAGE::IMipmap* Image_set::create_mipmap( mi::Size f, mi::Size i, mi::Sint32& er
     if( is_mdl_container()) {
         mi::base::Handle<mi::neuraylib::IReader> reader( open_reader( f, i));
         if( !reader) {
-            errors = 5;
+            errors = -5;
             return image_module->create_dummy_mipmap();
         }
 

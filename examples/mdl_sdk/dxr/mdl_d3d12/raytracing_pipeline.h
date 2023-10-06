@@ -325,6 +325,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
         /// Constructs the acceleration data structure.
         bool build(D3DCommandList* command_list);
 
+        /// Update the acceleration data structure to handle new mesh transformations.
+        bool update(D3DCommandList* command_list);
+
         /// After executing the command list that created to the acceleration structure,
         /// temporary data can be deleted. This will free all temporary buffers that are
         /// not required for potential dynamic updates.
@@ -371,7 +374,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         ComPtr<ID3D12Resource> m_scratch_resource;
 
         bool build_bottom_level_structure(D3DCommandList* command_list, size_t blas_index);
-        bool build_top_level_structure(D3DCommandList* command_list);
+        bool build_top_level_structure(D3DCommandList* command_list, bool update);
 
         bool allocate_resource(
             ID3D12Resource** resource,

@@ -2853,8 +2853,9 @@ DAG_node const *DAG_builder::try_inline(
         return NULL;
     }
 
-    def = tos_module()->get_original_definition(def);
-    IDeclaration_function const *func_decl = cast<IDeclaration_function>(def->get_declaration());
+    IDefinition const *orig_def = tos_module()->get_original_definition(def);
+    IDeclaration_function const *func_decl =
+        cast<IDeclaration_function>(orig_def->get_declaration());
     if (func_decl == NULL) {
         // might happen for compiler generated
         return NULL;

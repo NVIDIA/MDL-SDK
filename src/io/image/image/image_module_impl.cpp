@@ -995,7 +995,8 @@ bool Image_module_impl::export_canvas(
         pixel_type, image_width, image_height, nr_of_layers, 1, is_cubemap, gamma, quality));
     if( !image_file) {
         LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-            "The image plugin \"%s\" failed to export \"%s\" due to unsupported properties.",
+            "The image plugin \"%s\" failed to export \"%s\" due to unsupported properties "
+            "or an out-of-memory exception.",
             plugin->get_name(), output_filename);
         return false;
     }
@@ -1008,8 +1009,9 @@ bool Image_module_impl::export_canvas(
         mi::base::Handle<const mi::neuraylib::ITile> tile( canvas->get_tile( z));
         if( !image_file->write( tile.get(), z, 0)) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-                "The image plugin \"%s\" failed to export \"%s\" due to unsupported "
-                "properties.", plugin->get_name(), output_filename);
+                "The image plugin \"%s\" failed to export \"%s\" due to unsupported properties "
+                "or an out-of-memory exception.",
+                plugin->get_name(), output_filename);
             return false;
         }
     }
@@ -1079,7 +1081,8 @@ bool Image_module_impl::export_mipmap(
             image_width, image_height, nr_of_layers, 1, is_cubemap, gamma, quality);
         if( !image_file) {
             LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-                "The image plugin \"%s\" failed to export \"%s\" due to unsupported properties.",
+                "The image plugin \"%s\" failed to export \"%s\" due to unsupported properties "
+                "or an out-of-memory exception.",
                 plugin->get_name(), output_filename);
             return false;
         } else {
@@ -1124,8 +1127,9 @@ bool Image_module_impl::export_mipmap(
             mi::base::Handle<const mi::neuraylib::ITile> tile( canvas_l->get_tile( z));
             if( !image_file->write( tile.get(), z, l)) {
                 LOG::mod_log->error( M_IMAGE, LOG::Mod_log::C_IO,
-                    "The image plugin \"%s\" failed to export \"%s\" due to unsupported "
-                    "properties.", plugin->get_name(), output_filename);
+                    "The image plugin \"%s\" failed to export \"%s\" due to unsupported properties "
+                    "or an out-of-memory exception.",
+                    plugin->get_name(), output_filename);
                 return false;
             }
         }

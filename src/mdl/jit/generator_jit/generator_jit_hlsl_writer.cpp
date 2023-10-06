@@ -476,18 +476,39 @@ hlsl::Type *HLSLWriterBasePass::convert_struct_type(
         // retrieve debug info if there is any for non-API types
         di_type = api_info == nullptr ? find_composite_type_info(name) : nullptr;
 
+        bool mangle_name = true;
+
         // strip the leading "::" from the fully qualified MDL type name
-        size_t skip = 0;
         if (name.startswith("::")) {
-            skip = 2;
+            name = name.substr(2);
+        } else {
+            // not an MDL name
+            mangle_name = false;
         }
 
-        struct_name = string(name.begin() + skip, name.end(), m_alloc);
+        if (!mangle_name) {
+            // these are types from the interface, do not mangle them, just replace "some" bad
+            struct_name = string(name.begin(), name.end(), m_alloc);
 
-        // replace all ':' and '.' by '_'
-        for (char &ch : struct_name) {
-            if (ch == ':' || ch == '.') {
-                ch = '_';
+            // replace all ':' and '.' by '_'
+            for (char &ch : struct_name) {
+                if (ch == ':' || ch == '.') {
+                    ch = '_';
+                }
+            }
+        } else {
+            // use default MDL mangler
+            mi::mdl::MDL_name_mangler mangler(m_alloc, struct_name);
+
+            size_t pos = name.rfind("::");
+
+            if (pos != llvm::StringRef::npos) {
+                string prefix(name.begin(), name.begin() + pos, m_alloc);
+                string n(name.begin() + pos + 2, name.end(), m_alloc);
+
+                mangler.mangle_name(prefix.c_str(), n.c_str());
+            } else {
+                mangler.mangle_name(nullptr, name.str().c_str());
             }
         }
     }

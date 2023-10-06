@@ -38,6 +38,8 @@
 namespace mi {
 namespace mdl {
 
+class Lambda_function;
+
 #if !defined(NDEBUG) || defined(DEBUG)
 
 /// Checks a DAG-IR.
@@ -74,6 +76,11 @@ public:
     ///
     /// \param inst   the instance to check
     bool check_instance(Generated_code_dag::Material_instance const *inst);
+
+    /// Check the given lambda function.
+    ///
+    /// \param lambda   the lambda function to check
+    bool check_lambda(Lambda_function const *lambda);
 
     /// Check a DAG node.
     size_t check_node(DAG_node const *node);
@@ -216,6 +223,13 @@ public:
     ///
     /// \param inst   the instance to check
     bool check_instance(Generated_code_dag::Material_instance const *inst) {
+        return true;
+    }
+
+    /// Check the given lambda function.
+    ///
+    /// \param lambda   the lambda function to check
+    bool check_lambda(Lambda_function const *lambda) {
         return true;
     }
 

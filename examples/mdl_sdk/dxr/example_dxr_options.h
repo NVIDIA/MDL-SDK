@@ -174,8 +174,8 @@ namespace mi { namespace examples { namespace dxr
         
         << "--uv_repeat               Wraps the texture coordinates to (0, 1). (default: false).\n"
 
-        << "--upm <value>             units per meter. the inverse is applied while loading the\n"
-           "                          the scene. (default: " << defaults.units_per_meter << ")\n"
+        << "--mpsu <value>            meters per scene unit. Defines the scale of the scene.\n"
+           "                          (default: " << defaults.meters_per_scene_unit << ")\n"
 
         << "--lpe <value>             LPE expression used on startup. Currently only 'beauty',\n"
            "                          'albedo', and 'normal' are valid options.\n"
@@ -466,13 +466,13 @@ namespace mi { namespace examples { namespace dxr
                 {
                     options.handle_z_axis_up = true;
                 }
-                else if (wcscmp(opt, L"--upm") == 0 && i < argc - 1)
+                else if (wcscmp(opt, L"--mpsu") == 0 && i < argc - 1)
                 {
-                    options.units_per_meter = static_cast<float>(_wtof(argv[++i]));
+                    options.meters_per_scene_unit = static_cast<float>(_wtof(argv[++i]));
                 }
                 else if (wcscmp(opt, L"--uv_flip") == 0)
                 {
-                    options.uv_flip = true;
+                    options.uv_flip = false;
                 }
                 else if (wcscmp(opt, L"--uv_scale") == 0 && i < argc - 2)
                 {

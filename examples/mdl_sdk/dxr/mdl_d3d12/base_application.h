@@ -111,8 +111,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
             , texture_results_cache_size(16)
             , automatic_derivatives(false)
             , handle_z_axis_up(false)
-            , units_per_meter(1.0f)
-            , uv_flip(false)
+            , meters_per_scene_unit(1.0f)
+            , uv_flip(true)
             , uv_scale(1.0f, 1.0f)
             , uv_offset(0.0f, 0.0f)
             , uv_repeat(false)
@@ -151,7 +151,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         size_t texture_results_cache_size;
         bool automatic_derivatives;
         bool handle_z_axis_up;
-        float units_per_meter;
+        float meters_per_scene_unit;
         bool uv_flip;
         DirectX::XMFLOAT2 uv_scale;
         DirectX::XMFLOAT2 uv_offset;

@@ -632,6 +632,13 @@ namespace // anonymous
         else
         {
             // load/get the module that contains the type definition
+            if (gltf_type.module < 0 || gltf_type.module >= scene->ext_NV_materials_mdl.modules.size())
+            {
+                log_error(
+                    "User gltf_type '" + gltf_type.typeName +
+                    "' not found. The module index '" + std::to_string(gltf_type.module) + "' is out of bounds.");
+                return nullptr;
+            }
             std::string type_module_name;
             const auto& gltf_module = scene->ext_NV_materials_mdl.modules[gltf_type.module];
             if (gltf_module.bufferView != static_cast<int32_t>(-1) || gltf_module.IsEmbeddedResource())
@@ -1891,8 +1898,7 @@ void Mdl_material_description::parameterize_gltf_support_material(
             add_float(m_parameter_list.get(), "sheen_roughness_factor",
                 sheen.sheen_roughness_factor);
             add_texture(m_parameter_list.get(), "sheen_roughness_texture",
-                sheen.sheen_roughness_texture, 2.2f); // alpha channel is not affected by gamma
-                                                      // chance to reuse the sheen color texture
+                sheen.sheen_roughness_texture, 1.0f); // alpha channel is affected by gamma
         };
 
         // helper to add specular
@@ -1902,8 +1908,7 @@ void Mdl_material_description::parameterize_gltf_support_material(
             add_float(m_parameter_list.get(), "specular_factor",
                 specular.specular_factor);
             add_texture(m_parameter_list.get(), "specular_texture",
-                specular.specular_texture, 2.2f);   // alpha channel is not affected by gamma
-                                                    // chance to reuse the sheen color texture
+                specular.specular_texture, 1.0f);   // alpha channel is affected by gamma
             add_color(m_parameter_list.get(), "specular_color_factor",
                 specular.specular_color_factor.x,
                 specular.specular_color_factor.y,
@@ -1922,6 +1927,20 @@ void Mdl_material_description::parameterize_gltf_support_material(
                 volume.attenuation_color.x,
                 volume.attenuation_color.y,
                 volume.attenuation_color.z);
+        };
+
+        // helper to add iridescence
+        auto add_iridescence = [&](
+            const mdl_d3d12::IScene_loader::Material::Model_data_materials_iridescence& iridescence)
+        {
+            add_float(m_parameter_list.get(), "iridescence_factor", iridescence.iridescence_factor);
+            add_texture(m_parameter_list.get(), "iridescence_texture",
+                iridescence.iridescence_texture, 1.0f);
+            add_float(m_parameter_list.get(), "iridescence_ior", iridescence.iridescence_ior);
+            add_float(m_parameter_list.get(), "iridescence_thickness_minimum", iridescence.iridescence_thickness_minimum);
+            add_float(m_parameter_list.get(), "iridescence_thickness_maximum", iridescence.iridescence_thickness_maximum);
+            add_texture(m_parameter_list.get(), "iridescence_thickness_texture",
+                iridescence.iridescence_thickness_texture, 1.0f);
         };
 
         // add the actual parameters to the parameter list
@@ -2003,6 +2022,7 @@ void Mdl_material_description::parameterize_gltf_support_material(
                 add_specular(m_scene_material.metallic_roughness.specular);
                 add_float(m_parameter_list.get(), "ior", m_scene_material.metallic_roughness.ior.ior);
                 add_volume(m_scene_material.metallic_roughness.volume);
+                add_iridescence(m_scene_material.metallic_roughness.iridescence);
                 return;
             }
         }

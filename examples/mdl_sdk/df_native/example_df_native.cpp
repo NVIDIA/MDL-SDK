@@ -483,7 +483,7 @@ struct Isect_info
     mi::Float32_3 normal; // surface normal
     mi::Float32_3 uvw;    // uvw coordinates
     mi::Float32_3 tan_u;  // tangent vector in u direction
-    mi::Float32_3 tan_v;  // tangent vector in u direction
+    mi::Float32_3 tan_v;  // tangent vector in v direction
 };
 
 // Render context
@@ -606,15 +606,15 @@ struct Render_context
     mi::base::Handle<const mi::neuraylib::ITarget_code> target_code;
     Texture_handler *tex_handler;
     Texture_handler_deriv *tex_handler_deriv;
-    uint64_t init_function_index;
-    uint64_t surface_bsdf_function_index;
-    uint64_t surface_edf_function_index;
-    uint64_t surface_emission_intensity_function_index;
-    uint64_t backface_bsdf_function_index;
-    uint64_t backface_edf_function_index;
-    uint64_t backface_emission_intensity_function_index;
-    uint64_t cutout_opacity_function_index;
-    uint64_t thin_walled_function_index;
+    mi::Size init_function_index;
+    mi::Size surface_bsdf_function_index;
+    mi::Size surface_edf_function_index;
+    mi::Size surface_emission_intensity_function_index;
+    mi::Size backface_bsdf_function_index;
+    mi::Size backface_edf_function_index;
+    mi::Size backface_emission_intensity_function_index;
+    mi::Size cutout_opacity_function_index;
+    mi::Size thin_walled_function_index;
 
     Render_context(bool use_derivatives)
         : use_derivatives(use_derivatives)

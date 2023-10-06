@@ -787,6 +787,23 @@ namespace gltf
             }
         };
 
+        struct KHR_MaterialsIridescence
+        {
+            float iridescenceFactor = 0.0f;
+            Texture iridescenceTexture = {};
+            float iridescenceIor = 1.3f;
+            float iridescenceThicknessMinimum = 100.0f;
+            float iridescenceThicknessMaximum = 400.0f;
+            Texture iridescenceThicknessTexture = {};
+
+            nlohmann::json extensionsAndExtras{};
+
+            bool empty() const
+            {
+                return iridescenceFactor == 0.0f;
+            }
+        };
+
         float alphaCutoff{ defaults::MaterialAlphaCutoff };
         AlphaMode alphaMode{ AlphaMode::Opaque };
 
@@ -803,6 +820,7 @@ namespace gltf
         KHR_MaterialsIOR materialsIOR;
         KHR_MaterialsVolume materialsVolume;
         KHR_MaterialsEmissiveStrength materialEmissiveStrength;
+        KHR_MaterialsIridescence materialsIridescence;
 
         Texture emissiveTexture;
         std::array<float, 3> emissiveFactor = { defaults::NullVec3 };
@@ -1355,6 +1373,18 @@ namespace gltf
         detail::ReadExtensionsAndExtras(json, materialsEmissiveStrength.extensionsAndExtras);
     }
 
+    inline void from_json(nlohmann::json const& json, Material::KHR_MaterialsIridescence& materialsIridescence)
+    {
+        detail::ReadOptionalField("iridescenceFactor", json, materialsIridescence.iridescenceFactor);
+        detail::ReadOptionalField("iridescenceTexture", json, materialsIridescence.iridescenceTexture);
+        detail::ReadOptionalField("iridescenceIor", json, materialsIridescence.iridescenceIor);
+        detail::ReadOptionalField("iridescenceThicknessMinimum", json, materialsIridescence.iridescenceThicknessMinimum);
+        detail::ReadOptionalField("iridescenceThicknessMaximum", json, materialsIridescence.iridescenceThicknessMaximum);
+        detail::ReadOptionalField("iridescenceThicknessTexture", json, materialsIridescence.iridescenceThicknessTexture);
+
+        detail::ReadExtensionsAndExtras(json, materialsIridescence.extensionsAndExtras);
+    }
+
     inline void from_json(nlohmann::json const & json, Material & material)
     {
         detail::ReadOptionalField("alphaMode", json, material.alphaMode);
@@ -1378,6 +1408,7 @@ namespace gltf
             detail::ReadOptionalField("KHR_materials_ior", *iterExtensions, material.materialsIOR);
             detail::ReadOptionalField("KHR_materials_volume", *iterExtensions, material.materialsVolume);
             detail::ReadOptionalField("KHR_materials_emissive_strength", *iterExtensions, material.materialEmissiveStrength);
+            detail::ReadOptionalField("KHR_materials_iridescence", *iterExtensions, material.materialsIridescence);
         }
 
         detail::ReadExtensionsAndExtras(json, material.extensionsAndExtras);

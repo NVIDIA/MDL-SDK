@@ -405,12 +405,14 @@ DB::Tag Mdl_compiled_material::get_connected_function_db_name(
     std::vector <std::string> path_tokens;
     boost::split(path_tokens, parameter_name, boost::is_any_of("."));
 
-    // there need to be at least two items, last one is the param name
-    if (path_tokens.size() < 2)
+    // There needs to be at least one item, last one is the param name.
+    // For struct constructors attached to the material, there is only one token.
+    // For other attached functions there are more.
+    if (path_tokens.size() == 0)
         return DB::Tag();
 
     DB::Tag call_tag = material_instance_tag;
-    for (std::size_t i = 0; i < path_tokens.size() - 1; ++i)
+    for (std::size_t i = 0; i < path_tokens.size(); ++i)
     {
         SERIAL::Class_id class_id = transaction->get_class_id(call_tag);
         if (class_id == MDL::ID_MDL_FUNCTION_CALL) {
@@ -418,17 +420,20 @@ DB::Tag Mdl_compiled_material::get_connected_function_db_name(
             DB::Access<Mdl_function_call> mdl_instance(call_tag, transaction);
             ASSERT(M_SCENE, mdl_instance.is_valid());
 
-            call_tag = get_next_call(mdl_instance.get_ptr(), path_tokens[i]);
+            DB::Tag next_tag = get_next_call(mdl_instance.get_ptr(), path_tokens[i]);
+            if (next_tag.is_invalid())
+                break;
+
+            call_tag = next_tag;
+            continue;
         }
         else {
             ASSERT(M_SCENE, false);
-            return  DB::Tag();
-        }
-
-        if (call_tag.is_invalid())
             return DB::Tag();
+        }
     }
-    return call_tag;
+    // if no function is attached, the zero-tag is returned
+    return call_tag == material_instance_tag ? DB::Tag() : call_tag;
 }
 
 mi::mdl::IGenerated_code_dag::IMaterial_instance::Opacity

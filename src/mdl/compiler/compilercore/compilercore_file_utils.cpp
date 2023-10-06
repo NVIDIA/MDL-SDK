@@ -53,13 +53,16 @@ string join_path(
     string const &path1,
     string const &path2)
 {
-    if (path1.empty())
+    if (path1.empty()) {
         return path2;
-    if (path2.empty())
+    }
+    if (path2.empty()) {
         return path1;
+    }
     size_t l = path1.length() - 1;
-    if (path1[l] == os_separator())
+    if (path1[l] == os_separator()) {
         return path1 + path2;
+    }
     return path1 + os_separator() + path2;
 }
 
@@ -74,10 +77,12 @@ bool utf8_match(
     file_name = utf8_to_unicode_char(file_name, name_c);
 
     for (;;) {
-        if (name_c == '\0')
+        if (name_c == '\0') {
             return mask_c == '\0';
-        if (mask_c == '\0')
-            return name_c == '\0';
+        }
+        if (mask_c == '\0') {
+            return false;
+        }
 
         // we do NOT support the whole regular expression set here, just the cases we need
         // for UDIM support:
@@ -93,8 +98,9 @@ bool utf8_match(
                     // [0-9]+: match any number of digits
                     file_mask += 5;
 
-                    if (!isdigit(name_c))
+                    if (!isdigit(name_c)) {
                         return false;
+                    }
                     do {
                         file_name = utf8_to_unicode_char(file_name, name_c);
                     } while (isdigit(name_c));
@@ -105,8 +111,9 @@ bool utf8_match(
                     // [0-9]: match ONE digit
                     file_mask += 4;
 
-                    if (!isdigit(name_c))
+                    if (!isdigit(name_c)) {
                         return false;
+                    }
 
                     file_mask = utf8_to_unicode_char(file_mask, mask_c);
                     file_name = utf8_to_unicode_char(file_name, name_c);
@@ -129,8 +136,9 @@ bool utf8_match(
         }
 
         // normal match
-        if (mask_c != name_c)
+        if (mask_c != name_c) {
             return false;
+        }
 
         file_mask = utf8_to_unicode_char(file_mask, mask_c);
         file_name = utf8_to_unicode_char(file_name, name_c);
@@ -202,19 +210,22 @@ bool has_file_utf8(
         mask = p + 1;
     }
 
-    if (!dir.open(dname.c_str()))
+    if (!dir.open(dname.c_str())) {
         return false;
+    }
 
     for (;;) {
         char const *name = dir.read();
 
-        if (dir.eof() || name == NULL)
+        if (dir.eof() || name == NULL) {
             break;
+        }
 
         if (utf8_match(mask, name)) {
             string fname = join_path(dname, string(name, alloc));
-            if (is_file_utf8(alloc, fname.c_str()))
+            if (is_file_utf8(alloc, fname.c_str())) {
                 return true;
+            }
         }
     }
     return false;
@@ -301,11 +312,13 @@ static inline bool is_path_separator(
 bool is_path_absolute(
     char const *path)
 {
-    if (path == NULL || path[0] == 0)
+    if (path == NULL || path[0] == 0) {
         return false;
+    }
 
-    if (is_path_separator(path[0]))
+    if (is_path_separator(path[0])) {
         return true;
+    }
 
     if (path[1] == ':' && is_path_separator(path[2]) &&
         ((path[0] >= 'a' && path[0] <= 'z') || (path[0] >= 'A' && path[0] <= 'Z')))
@@ -331,8 +344,9 @@ string simplify_path(
     size_t slash;
     do {
         slash = file_path.find(sep, start);
-        if (slash == string::npos)
+        if (slash == string::npos) {
             slash = length;
+        }
         string directory_name = file_path.substr(start, slash - start);
         if (directory_name == ".") {
             // ignore
@@ -345,8 +359,7 @@ string simplify_path(
             } else {
                 directory_names.pop_back();
             }
-        }
-        else if (!directory_name.empty()) {
+        } else if (!directory_name.empty()) {
             directory_names.push_back(directory_name);
         }
         start = slash + sep_length;
@@ -360,14 +373,17 @@ string simplify_path(
             result += sep;
         }
     }
-    if (!directory_names.empty())
+    if (!directory_names.empty()) {
         result += directory_names[0];
+    }
     for (size_t i = 1, n = directory_names.size(); i < n; ++i) {
         result += sep + directory_names[i];
     }
-    if (file_path.find(sep, length - sep_length) == (length - sep_length) && 
+    if (file_path.find(sep, length - sep_length) == (length - sep_length) &&
         (result.length() != sep_length || result.find(sep, 0) != 0))
-            result += sep;
+    {
+        result += sep;
+    }
 
     return result;
 }
@@ -387,14 +403,16 @@ string simplify_path(
 string convert_os_separators_to_slashes(string const &s)
 {
     char sep = os_separator();
-    if (sep == '/')
+    if (sep == '/') {
         return s;
+    }
 
     string r(s);
 
     for (size_t i = 0, n = r.length(); i < n; ++i) {
-        if (r[i] == sep)
+        if (r[i] == sep) {
             r[i] = '/';
+        }
     }
     return r;
 }
@@ -403,14 +421,16 @@ string convert_os_separators_to_slashes(string const &s)
 string convert_slashes_to_os_separators(string const &s)
 {
     char sep = os_separator();
-    if (sep == '/')
+    if (sep == '/') {
         return s;
+    }
 
     string r(s);
 
     for (size_t i = 0, n = r.length(); i < n; ++i) {
-        if (r[i] == '/')
+        if (r[i] == '/') {
             r[i] = sep;
+        }
     }
     return r;
 }
@@ -440,14 +460,16 @@ static bool directory_exists(
     size_t len = newpath.size();
     while (len > 0) {
         wchar_t c = newpath[len-1];
-        if (c != L'*' && c != L'/' && c != L'\\')
+        if (c != L'*' && c != L'/' && c != L'\\') {
             break;
+        }
         --len;
     }
     newpath = newpath.substr(0, len);
     DWORD res = ::GetFileAttributesW(newpath.c_str());
-    if (res == INVALID_FILE_ATTRIBUTES)
+    if (res == INVALID_FILE_ATTRIBUTES) {
         return false;
+    }
     return (res & FILE_ATTRIBUTE_DIRECTORY) != 0;
 }
 
@@ -485,8 +507,9 @@ bool Directory::open(
     char const *utf8_filter)
 {
     m_eof = false;
-    if (m_dir->m_opened && !close())
+    if (m_dir->m_opened && !close()) {
         return false;
+    }
 
     string new_path(utf8_path != NULL ? utf8_path : "", m_alloc);
     m_opath = new_path;
@@ -511,8 +534,9 @@ bool Directory::open(
         }
 
         m_path = temp_path;
-    } else
+    } else {
         m_path = new_path;
+    }
 
     // check for existence -- user is not going to be able to find anything
     // in a directory that isn't there
@@ -551,8 +575,9 @@ bool Directory::close()
 bool Directory::read_next_file()
 {
     // return if we haven't been opened already
-    if (!m_dir->m_opened)
+    if (!m_dir->m_opened) {
         return false;
+    }
 
     bool success = false;
     if (m_dir->m_first_file) {
@@ -650,8 +675,9 @@ bool Directory::open(
     char const *utf8_filter)
 {
     m_eof = false;
-    if (m_dir->m_dp && !close())
+    if (m_dir->m_dp && !close()) {
         return false;
+    }
 
     m_path  = utf8_path != NULL ? utf8_path : "";
     m_opath = m_path;

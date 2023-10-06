@@ -133,7 +133,7 @@ void RayGenProgram()
     // Generate a ray from a perspective camera
     RayDesc ray;
     ray.TMin = 0.0f;
-    ray.TMax = 10000.0f;
+    ray.TMax = far_plane_distance;
 
     #if defined(ENABLE_AUXILIARY)
         // in order to limit the payload size, this data is written directly from the hit programs

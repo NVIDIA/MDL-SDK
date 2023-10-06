@@ -263,6 +263,7 @@ bool Example_dxr::load()
     scene_data.point_light_intensity = options->point_light_intensity;
     scene_data.environment_intensity_factor = options->hdr_scale;
     scene_data.environment_rotation = options->hdr_rotate;
+    scene_data.meters_per_scene_unit = options->meters_per_scene_unit;
     scene_data.background_color_enabled = options->background_color_enabled ? 1u : 0u;
     scene_data.background_color = options->background_color;
 
@@ -421,7 +422,6 @@ bool Example_dxr::load_scene(
     Loader_gltf loader;
 
     IScene_loader::Scene_options scene_options;
-    scene_options.units_per_meter = options->units_per_meter;
     scene_options.handle_z_axis_up = options->handle_z_axis_up;
     scene_options.uv_flip = options->uv_flip;
 
@@ -556,6 +556,9 @@ bool Example_dxr::load_scene(
         camera_node->get_camera()->set_field_of_view(options->camera_fov);
         camera_node->update(Update_args{});
     }
+
+    m_scene_constants->data().far_plane_distance =
+        m_camera_controls->get_target()->get_camera()->get_far_plane_distance();
 
     // process materials, generate and compile HLSL Code
     // ----------------------------------------------------------------------------------------
@@ -1428,9 +1431,26 @@ void Example_dxr::update(const Update_args& args)
 
     // update scene graph
     // ----------------------------------------------------------------------------------------
-    // TODO updates of mesh transformations are not applied to the acceleration structure yet
+
+    // a simple rigid transformation used for testing
+    m_scene->visit(mi::examples::mdl_d3d12::Scene_node::Kind::Mesh, [&args](Scene_node* node)
+        {
+            auto& trafo = node->get_local_transformation();
+            // trafo.translation.y += 0.1f * args.elapsed_time;
+            // if (trafo.translation.y >= 1.0f)
+            // {
+            //     trafo.translation.y = 0.0f;
+            // }
+            return true;
+        });
+
     if (m_scene->update(args))
-        m_scene_constants->data().restart_progressive_rendering();
+    {
+        scene_data.far_plane_distance = 
+            m_camera_controls->get_target()->get_camera()->get_far_plane_distance();
+
+        scene_data.restart_progressive_rendering();
+    }
 
     // Update scene constants
     // ----------------------------------------------------------------------------------------

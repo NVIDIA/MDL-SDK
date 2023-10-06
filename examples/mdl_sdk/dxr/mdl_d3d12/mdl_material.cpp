@@ -214,6 +214,10 @@ bool Mdl_material::recompile_material(mi::neuraylib::IMdl_execution_context* con
         context->set_option("fold_all_enum_parameters", mdl_options.fold_all_enum_parameters);
         context->set_option("ignore_noinline", true);
 
+        // in order to change the scene scale setting at runtime we need to preserve the conversions
+        // in the generated code and expose the factor in the MDL material state of the shader.
+        context->set_option("fold_meters_per_scene_unit", false);
+
         mi::base::Handle<const mi::neuraylib::IMaterial_instance> material_instance2(
             material_instance->get_interface<mi::neuraylib::IMaterial_instance>());
         mi::base::Handle<mi::neuraylib::ICompiled_material> compiled_material(
@@ -293,7 +297,6 @@ void Mdl_material::set_target_interface(
     const Mdl_material_target_interface& target_data)
 {
     m_target = target;
-    m_constants.data.function_indices = target_data.indices;
     m_argument_layout_index = target_data.argument_layout_index;
     m_material_target_interface = target_data;
 }

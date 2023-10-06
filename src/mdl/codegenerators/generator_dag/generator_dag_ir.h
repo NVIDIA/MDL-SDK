@@ -100,6 +100,24 @@ public:
     /// \returns           The created parameter.
     DAG_parameter const *create_parameter(IType const *type, int index) MDL_FINAL;
 
+    /// Enable common subexpression elimination.
+    ///
+    /// \param flag  If true, CSE will be enabled, else disabled.
+    /// \return      The old value of the flag.
+    bool enable_cse(bool flag) MDL_FINAL;
+
+    /// Enable optimization.
+    ///
+    /// \param flag  If true, optimizations in general will be enabled, else disabled.
+    /// \return      The old value of the flag.
+    bool enable_opt(bool flag) MDL_FINAL;
+
+    /// Enable unsafe math optimizations.
+    ///
+    /// \param flag  If true, unsafe math optimizations will be enabled, else disabled.
+    /// \return      The old value of the flag.
+    bool enable_unsafe_math_opt(bool flag) MDL_FINAL;
+
     /// Get the type factory associated with this node factory.
     /// \returns            The type factory.
     Type_factory *get_type_factory() MDL_FINAL;
@@ -121,26 +139,6 @@ public:
 
     /// Check if the value table is empty.
     bool identify_empty() const { return m_value_table.empty(); }
-
-    /// Enable common subexpression elimination.
-    ///
-    /// \param flag  If true, CSE will be enabled, else disabled.
-    /// \return      The old value of the flag.
-    bool enable_cse(bool flag) { bool res = m_cse_enabled; m_cse_enabled = flag; return res; }
-
-    /// Enable optimization.
-    ///
-    /// \param flag  If true, optimizations in general will be enabled, else disabled.
-    /// \return      The old value of the flag.
-    bool enable_opt(bool flag) { bool res = m_opt_enabled; m_opt_enabled = flag; return res; }
-
-    /// Enable unsafe math optimizations.
-    ///
-    /// \param flag  If true, unsafe math optimizations will be enabled, else disabled.
-    /// \return      The old value of the flag.
-    bool enable_unsafe_math_opt(bool flag) {
-        bool res = m_unsafe_math_opt; m_unsafe_math_opt = flag; return res;
-    }
 
     /// Enable exposing names of let expressions.
     ///

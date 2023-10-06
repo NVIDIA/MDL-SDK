@@ -991,21 +991,31 @@ Mdl_function_call::create_dag_material_instance(
     }
 
     // convert m_arguments to DAG nodes
-    Mdl_dag_builder<mi::mdl::IDag_builder> builder(
-        transaction, instance.get(), /*compiled_material*/ nullptr);
-    mi::Size n = code_dag->get_material_parameter_count( material_index);
-    std::vector<const mi::mdl::DAG_node*> mdl_arguments( n);
+    mi::Size n_args = code_dag->get_material_parameter_count( material_index);
+    std::vector<const mi::mdl::DAG_node*> mdl_arguments( n_args);
 
-    for( mi::Size i = 0; i < n; ++i) {
-        const mi::mdl::IType* parameter_type
-            = code_dag->get_material_parameter_type( material_index, i);
-        mi::base::Handle<const IExpression> argument( m_arguments->get_expression( i));
-        mdl_arguments[i] = builder.int_expr_to_mdl_dag_node( parameter_type, argument.get());
-        if( !mdl_arguments[i]) {
-            add_error_message( context,
-                "Type mismatch, call of an unsuitable DB element, or call cycle in a graph rooted "
-                "at the material definition \"" + m_definition_db_name + "\".", -1);
-            return nullptr;
+    // scope for the builder: Beware, this is a wrapper on the DAG builder of the instance,
+    // so ensure its scope is small to restore optimization settings
+    {
+        Mdl_dag_builder<mi::mdl::IDag_builder> builder(
+            transaction, instance.get(), /*compiled_material*/ nullptr);
+
+        // disable optimizations on created arguments, or some arguments might get lost
+        // in class compilation
+        builder.enable_opt(!class_compilation);
+
+        for (mi::Size i = 0; i < n_args; ++i) {
+            const mi::mdl::IType *parameter_type
+                = code_dag->get_material_parameter_type(material_index, i);
+            mi::base::Handle<const IExpression> argument(m_arguments->get_expression(i));
+            mdl_arguments[i] = builder.int_expr_to_mdl_dag_node(parameter_type, argument.get());
+            if (!mdl_arguments[i]) {
+                add_error_message(context,
+                    "Type mismatch, call of an unsuitable DB element,"
+                    " or call cycle in a graph rooted "
+                    "at the material definition \"" + m_definition_db_name + "\".", -1);
+                return nullptr;
+            }
         }
     }
 
@@ -1045,7 +1055,7 @@ Mdl_function_call::create_dag_material_instance(
         &resolver,
         /*resource_modifier=*/ nullptr,
         code_dag.get(),
-        n,
+        n_args,
         mdl_arguments.data(),
         use_temporaries,
         flags,

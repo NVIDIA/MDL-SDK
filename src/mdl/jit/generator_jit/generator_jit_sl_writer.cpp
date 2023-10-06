@@ -630,6 +630,12 @@ static bool part_of_InsertValue_chain(llvm::Instruction &inst)
     return true;
 }
 
+static bool has_non_const_index(llvm::InsertElementInst *inst)
+{
+    llvm::Value *index = inst->getOperand(2);
+    return !llvm::isa<llvm::ConstantInt>(index);
+}
+
 // Translate a block-region into an AST.
 template<typename BasePass>
 typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
@@ -729,6 +735,10 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
                 llvm::isa<llvm::StructType>(value.getType())) {
             // conditional operator only supports results with numeric scalar, vector
             // or matrix types, so we need to generate an if-statement for it
+            gen_statement = true;
+        } else if (llvm::isa<llvm::InsertElementInst>(value) &&
+                has_non_const_index(llvm::cast<llvm::InsertElementInst>(&value))) {
+            // InsertElement with non-constant index needs a statement
             gen_statement = true;
         } else {
             if (llvm::CallInst *call = llvm::dyn_cast<llvm::CallInst>(&value)) {
@@ -877,6 +887,35 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
         Def_variable *var_def = create_local_var(
             value, /*do_not_register=*/ true, /*add_decl_statement=*/ false);
 
+        if (llvm::InsertElementInst *insert = llvm::dyn_cast<llvm::InsertElementInst>(value)) {
+            if (has_non_const_index(insert)) {
+                // For dynamic indices, we cannot just create a constructor expression statement,
+                // as in translate_expr_insertelement().
+                // First initialize the new local variable with the input vector.
+                Expr *input_vector = translate_expr(insert->getOperand(0));
+                Declaration_variable *decl_var = var_def->get_declaration();
+                for (Init_declarator &init_decl : *decl_var) {
+                    if (init_decl.get_name()->get_symbol() == var_def->get_symbol()) {
+                        init_decl.set_initializer(input_vector);
+                    }
+                }
+                // insert variable declaration here
+                stmts.push_back(Base::m_stmt_factory.create_declaration(decl_var));
+
+                // then assign the new value to the dynamic index in a second statement.
+                Expr *elem_index = translate_expr(insert->getOperand(2));
+                Expr *elem_access = Base::create_binary(
+                    Expr_binary::OK_ARRAY_SUBSCRIPT, Base::create_reference(var_def), elem_index);
+                Expr *new_value = translate_expr(insert->getOperand(1));
+                stmts.push_back(create_assign_stmt(elem_access, new_value));
+
+                // register now
+                if (var_def != nullptr) {
+                    m_local_var_map[value] = var_def;
+                }
+                continue;
+            }
+        }
         Expr *res = translate_expr(value);
         if (var_def != nullptr) {
             // don't initialize with itself

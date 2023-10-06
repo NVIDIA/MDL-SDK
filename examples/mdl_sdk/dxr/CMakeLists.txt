@@ -186,6 +186,7 @@ if(MDL_ENABLE_MATERIALX)
             "libraries/bxdf/lama/lama_layer.mtlx"
             "libraries/bxdf/lama/lama_sheen.mtlx"
             "libraries/bxdf/lama/lama_translucent.mtlx"
+            "libraries/bxdf/translation/standard_surface_to_gltf_pbr.mtlx"
             "libraries/bxdf/translation/standard_surface_to_usd.mtlx"
             "libraries/bxdf/disney_brdf_2012.mtlx"
             "libraries/bxdf/disney_brdf_2015.mtlx"

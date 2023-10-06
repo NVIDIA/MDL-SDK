@@ -19,7 +19,6 @@ add_llvm_component_library(LLVMOrcJIT
   OrcV2CBindings.cpp
   RTDyldObjectLinkingLayer.cpp
   Speculation.cpp
-  SpeculateAnalyses.cpp
   TargetProcessControl.cpp
   ThreadSafeModule.cpp
   TPCDynamicLibrarySearchGenerator.cpp

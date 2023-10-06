@@ -137,6 +137,14 @@ void Gui_section_rendering::update(mi::neuraylib::ITransaction* /*transaction*/)
         m_scene_data->enable_animiation = m_enable_animation ? 1u : 0u;
         m_scene_data->restart_progressive_rendering();
     }
+
+    if (Gui_control::drag(
+        "Meters per Scene Unit", "Defines the scale of the scene.",
+        &m_scene_data->meters_per_scene_unit, &m_options->meters_per_scene_unit,
+        Gui_control::Flags::None, 0.0f))
+    {
+        m_scene_data->restart_progressive_rendering();
+    }
 }
 
 // ------------------------------------------------------------------------------------------------

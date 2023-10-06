@@ -152,6 +152,24 @@ public:
         IType const *type,
         int         index) MDL_FINAL;
 
+    /// Enable common subexpression elimination.
+    ///
+    /// \param flag  If true, CSE will be enabled, else disabled.
+    /// \return      The old value of the flag.
+    bool enable_cse(bool flag) MDL_FINAL;
+
+    /// Enable optimization.
+    ///
+    /// \param flag  If true, optimizations in general will be enabled, else disabled.
+    /// \return      The old value of the flag.
+    bool enable_opt(bool flag) MDL_FINAL;
+
+    /// Enable unsafe math optimizations.
+    ///
+    /// \param flag  If true, unsafe math optimizations will be enabled, else disabled.
+    /// \return      The old value of the flag.
+    bool enable_unsafe_math_opt(bool flag) MDL_FINAL;
+
     /// Get the body of this function.
     ///
     /// \return The body expression or NULL if this is a switch function.
@@ -488,21 +506,16 @@ public:
     /// Checks if the uniform state was set.
     bool is_uniform_state_set() const;
 
-    /// Enable common subexpression elimination.
-    ///
-    /// \param flag  If true, CSE will be enabled, else disabled.
-    ///
-    /// \return      The old value of the flag.
-    bool enable_cse(bool flag) { return m_node_factory.enable_cse(flag); }
-
-    /// Enable optimization.
-    ///
-    /// \param flag  If true, optimizations in general will be enabled, else disabled.
-    ///
-    /// \return      The old value of the flag.
-    bool enable_opt(bool flag) { return m_node_factory.enable_opt(flag); }
-
     // for debugging only
+
+    /// Get the node factory.
+    DAG_node_factory_impl const &get_node_factory() const { return m_node_factory; }
+
+    /// Get the type factory.
+    Type_factory const &get_type_factory() const { return m_type_factory; }
+
+    /// Get the value factory.
+    Value_factory const &get_value_factory() const { return m_value_factory; }
 
     /// Dump a lambda expression to a .gv file.
     ///

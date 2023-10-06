@@ -415,17 +415,18 @@ DB::Tag mdl_texture_to_tag(
     Execution_context* context)
 {
     // Check for volume textures.
-    std::string extension = STRING::to_lower( HAL::Ospath::get_ext( file_path));
-    if( extension == ".vdb" && shape == mi::mdl::IType_texture::TS_3D) {
-        return mdl_volume_texture_to_tag(
-            transaction,
-            file_path,
-            module_filename,
-            module_name,
-            errors_are_warnings,
-            selector,
-            /*shared*/ true,
-            context);
+    if( shape == mi::mdl::IType_texture::TS_3D) {
+        if (".vdb" == STRING::to_lower( HAL::Ospath::get_ext( file_path))) {
+            return mdl_volume_texture_to_tag(
+                transaction,
+                file_path,
+                module_filename,
+                module_name,
+                errors_are_warnings,
+                selector,
+                /*shared*/ true,
+                context);
+        }
     }
 
     mi::base::Handle<mi::mdl::IMDL_resource_set> resource_set( get_resource_set(

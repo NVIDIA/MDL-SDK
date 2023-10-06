@@ -55,6 +55,7 @@ bool g_keep_compiled_structure = false;
 std::vector<std::string> g_mdl_paths;
 bool g_nostdpath = false;
 
+std::string g_distilling_target = "";
 
 int MAIN_UTF8(int argc, char* argv[])
 {
@@ -77,6 +78,9 @@ int MAIN_UTF8(int argc, char* argv[])
         configure_options.add_example_search_path = false;
     }
 
+    // Load the distilling plugin
+    if (mi::examples::mdl::load_plugin(neuray.get(), "mdl_distiller" MI_BASE_DLL_FILE_EXT) != 0)
+        exit_failure("Failed to load the mdl_distiller plugin.");
 
     // Configure the MDL SDK
     if (!mi::examples::mdl::configure(neuray.get(), configure_options))
@@ -186,6 +190,22 @@ int MAIN_UTF8(int argc, char* argv[])
                 material_instance->create_compiled_material(
                     flags));
 
+            // Distill the material
+            if (!g_distilling_target.empty())
+            {
+                mi::base::Handle<mi::neuraylib::IMdl_distiller_api> distiller(
+                    neuray->get_api_component<mi::neuraylib::IMdl_distiller_api>());
+
+                mi::Sint32 result = 0;
+                compiled_material = distiller->distill_material(
+                    compiled_material.get(), g_distilling_target.c_str(), nullptr, &result);
+                if (result < 0)
+                {
+                    std::cerr << "[EXAMPLE] error: Failed to distill the material instance of '"
+                        << material_name << "'\n";
+                    continue;
+                }
+            }
 
             if (!material_instance)
             {
@@ -324,8 +344,8 @@ options:
   --class                       Use class compilation (Default).
   --instance                    Use instance mode instead of class compilation.
   --keep                        Keep the structure produced by the compiler
-                                (output may not compile!).)";
-
+                                (output may not compile!).
+  --distill <target>            Distill the material before running the traversal.)";
 
 std::cerr << std::endl;
 }
@@ -368,6 +388,11 @@ bool consume_cmd_options(int argc, char *argv[])
                 continue;
             }
 
+            if (cmd == "--distill")
+            {
+                g_distilling_target = argv[++i]; // default is ""
+                continue;
+            }
 
             if (cmd == "-n" || cmd == "--nostdpath")
             {
@@ -408,4 +433,3 @@ bool consume_cmd_options(int argc, char *argv[])
 
 // Convert command line arguments to UTF8 on Windows
 COMMANDLINE_TO_UTF8
-

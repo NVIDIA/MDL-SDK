@@ -560,6 +560,8 @@ public:
 
     /// Returns the selector of this texture, or \c NULL.
     virtual const char* get_selector() const = 0;
+
+    virtual const char* get_owner_module() const = 0;
 };
 
 /// A light profile value.
@@ -573,6 +575,8 @@ public:
 
     /// Returns the type of this value.
     virtual const IType_light_profile* get_type() const = 0;
+
+    virtual const char* get_owner_module() const = 0;
 };
 
 /// A BSDF measurement value.
@@ -586,6 +590,8 @@ public:
 
     /// Returns the type of this value.
     virtual const IType_bsdf_measurement* get_type() const = 0;
+
+    virtual const char* get_owner_module() const = 0;
 };
 
 /// An invalid distribution function value.

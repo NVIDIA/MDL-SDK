@@ -34,3 +34,5 @@ Changes:
  - applied llvm-project commit 1d9086bf "Fix use of uninitialized member in constructor"
  - fix race-condition in LLVM Orc JIT notifying other threads of an emitted object before the memory manager
    for the object is properly registered
+ - removed lib/ExecutionEngine/Orc/SpeculateAnalyses.cpp, this file is not used anywhere but adds a dependency
+   to the PassBuilder class (we want to avoid)

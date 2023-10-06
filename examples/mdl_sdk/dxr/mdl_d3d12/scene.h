@@ -366,7 +366,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
                 DirectX::XMFLOAT2 offset = { 0.0f, 0.0f };
                 float rotation = 0.0f;
-                DirectX::XMFLOAT2 scale = { 0.0f, 0.0f };
+                DirectX::XMFLOAT2 scale = { 1.0f, 1.0f };
 
                 // Note, if KHR_texture_transform data is available, it will override the
                 // the `texCoord` of the parenting texture.
@@ -432,6 +432,17 @@ namespace mi { namespace examples { namespace mdl_d3d12
                 float emissive_strength = 1.0f;
             };
 
+            // corresponds to glTF Extension: KHR_materials_emissive_iridescence
+            struct Model_data_materials_iridescence
+            {
+                float iridescence_factor = 0.0f;
+                Texture_info iridescence_texture = {};
+                float iridescence_ior = 1.3f;
+                float iridescence_thickness_minimum = 100.0f;
+                float iridescence_thickness_maximum = 400.0f;
+                Texture_info iridescence_thickness_texture = {};
+            };
+
             struct Pbr_model_data_metallic_roughness
             {
                 Texture_info base_color_texture = {};
@@ -446,6 +457,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
                 Model_data_materials_specular specular;
                 Model_data_materials_ior ior;
                 Model_data_materials_volume volume;
+                Model_data_materials_iridescence iridescence;
             };
 
             // corresponds to glTF Extension: KHR_materials_pbrSpecularGlossiness
@@ -523,9 +535,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
             explicit Scene_options() = default;
             virtual ~Scene_options() = default;
 
-            float units_per_meter = 1.0f; // todo
             bool handle_z_axis_up = false;
-            bool uv_flip = true;
+            bool uv_flip = false;
         };
 
         // --------------------------------------------------------------------
@@ -757,6 +768,24 @@ namespace mi { namespace examples { namespace mdl_d3d12
             m_projection_changed = true;
         }
 
+        // get the far plane distance in scene units
+        float get_far_plane_distance() const { return m_far_plane_distance; }
+
+        // set the far plane distance in scene units
+        void set_far_plane_distance(float distance_in_su) {
+            m_far_plane_distance = distance_in_su;
+            m_projection_changed = true;
+        }
+
+        // get the near plane distance in scene units
+        float get_near_plane_distance() const { return m_near_plane_distance; }
+
+        // set the near plane distance in scene units
+        void set_near_plane_distance(float distance_in_su) {
+            m_near_plane_distance = distance_in_su;
+            m_projection_changed = true;
+        }
+
     private:
         void update(const DirectX::XMMATRIX& global_transform, bool transform_changed);
 
@@ -929,7 +958,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
         Scene_node* get_root() { return &m_root; }
 
-        bool update(const Update_args& args) { return m_root.update(args); }
+        bool update(const Update_args& args);
 
     private:
         Base_application* m_app;
@@ -943,6 +972,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
         Scene_node m_root;
         Raytracing_acceleration_structure* m_acceleration_structure;
+        UINT64 m_acceleration_structure_update_handle;
+        bool m_acceleration_structure_update_scheduled;
     };
 
 }}} // mi::examples::mdl_d3d12

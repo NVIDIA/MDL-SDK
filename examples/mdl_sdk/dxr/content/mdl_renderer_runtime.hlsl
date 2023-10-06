@@ -50,6 +50,15 @@
 // - MDL_MBSDF_SAMPLER_SLOT
 
 
+// MDL defines UV origin bottom left, D3D top left.
+// Because GLTF defines the UV origin also top left we end up flipping twice.
+// 1: from GLTF to MDL, in gltf.cpp when proccessing vertex data because it seems to be the common way.
+// 2: from MDL to D3D, implicity while uploading the texture data to the CPU
+// i.e., no flip required here.
+#if !defined(TEXTURE_VERTICAL_FLIP)
+    #define TEXTURE_VERTICAL_FLIP 0
+#endif
+
 /// Information passed to GPU for mapping id requested in the runtime functions to texture
 /// views of the corresponding type.
 struct Mdl_texture_info
@@ -104,24 +113,14 @@ struct Mdl_texture_info
     // the index of the resource is returned while the uv mapped into the uv-tile
     // if uv-tiles are not used, the data is just passed through
     // returning of -1 indicates out of bounds, 0 refers to the invalid resource.
-    int compute_uvtile_and_update_uv(float frame, inout float2 uv)
+    int compute_uvtile_id_and_update_uv(float frame, inout float2 uv)
     {
         if(gpu_resource_array_size == 1) // means no uv-tiles
             return int(gpu_resource_array_start);
 
         // uv-coordinate in the tile
-        const int2 uv_tile = int2(floor(uv)); // floor
+        const int2 uv_tile = abs(int2(floor(uv))); // abs because there are negative tile addresses
         uv = frac(uv);
-
-        // compute a linear index
-        return compute_uvtile_id(frame, uv_tile);
-    }
-
-    // for texel fetches the uv tile is given explicitly
-    int compute_uvtile_and_update_uv(float frame, int2 uv_tile)
-    {
-        if (gpu_resource_array_size == 1) // means no uv-tiles
-            return int(gpu_resource_array_start);
 
         // compute a linear index
         return compute_uvtile_id(frame, uv_tile);
@@ -425,7 +424,7 @@ float4 tex_lookup_float4_2d(
     Mdl_texture_info info = mdl_texture_infos[tex - 1]; // assuming this is in bounds
 
     // handle uv-tiles and/or get texture array index
-    int array_index = info.compute_uvtile_and_update_uv(frame, coord);
+    int array_index = info.compute_uvtile_id_and_update_uv(frame, coord);
     if (array_index < 0) return float4(0, 0, 0, 0); // out of bounds or no uv-tile
 
     if (wrap_u == TEX_WRAP_CLIP && (coord.x < 0.0 || coord.x >= 1.0))
@@ -439,6 +438,10 @@ float4 tex_lookup_float4_2d(
     coord.y = apply_wrap_and_crop(coord.y, wrap_v, crop_v, res.y);
 
     coord = apply_smootherstep_filter(coord, res);
+
+#if (TEXTURE_VERTICAL_FLIP == 1)
+    coord.y = 1.0 - coord.y;
+#endif
 
     // Note, since we don't have ddx and ddy in the compute pipeline, TextureObject::Sample() is not
     // available, we use SampleLevel instead and go for the most detailed level. Therefore, we don't
@@ -484,7 +487,7 @@ float4 tex_lookup_deriv_float4_2d(
     Mdl_texture_info info = mdl_texture_infos[tex - 1]; // assuming this is in bounds
 
     // handle uv-tiles and/or get texture array index
-    int array_index = info.compute_uvtile_and_update_uv(frame, coord.val);
+    int array_index = info.compute_uvtile_id_and_update_uv(frame, coord.val);
     if (array_index < 0) return float4(0, 0, 0, 0); // out of bounds or no uv-tile
 
     if (wrap_u == TEX_WRAP_CLIP && (coord.val.x < 0.0 || coord.val.x >= 1.0))
@@ -498,6 +501,12 @@ float4 tex_lookup_deriv_float4_2d(
     coord.val.y = apply_wrap_and_crop(coord.val.y, wrap_v, crop_v, res.y);
 
     coord.val = apply_smootherstep_filter(coord.val, res);
+
+#if (TEXTURE_VERTICAL_FLIP == 1)
+    coord.val.y = 1.0 - coord.val.y;
+    coord.dx.y *= -1.0;
+    coord.dy.y *= -1.0;
+#endif
 
     // Note, since we don't have ddx and ddy in the compute pipeline, TextureObject::Sample() is not
     // available, we use SampleLevel instead and go for the most detailed level. Therefore, we don't
@@ -541,13 +550,17 @@ float4 tex_texel_float4_2d(
     Mdl_texture_info info = mdl_texture_infos[tex - 1]; // assuming this is in bounds
 
     // handle uv-tiles and/or get texture array index
-    int array_index = info.compute_uvtile_and_update_uv(frame, uv_tile);
+    int array_index = info.compute_uvtile_id(frame, uv_tile);
     if (array_index < 0) return float4(0, 0, 0, 0); // out of bounds or no uv-tile
 
     uint2 res;
     mdl_textures_2d[NonUniformResourceIndex(array_index)].GetDimensions(res.x, res.y);
     if (0 > coord.x || res.x <= coord.x || 0 > coord.y || res.y <= coord.y)
         return float4(0, 0, 0, 0); // out of bounds
+
+#if (TEXTURE_VERTICAL_FLIP == 1)
+    coord.y = res.y - coord.y - 1;
+#endif
 
     return mdl_textures_2d[NonUniformResourceIndex(array_index)].Load(int3(coord, /*mipmaplevel=*/ 0));
 }
@@ -655,6 +668,10 @@ float4 tex_lookup_float4_3d(
     coord.y = apply_wrap_and_crop(coord.y, wrap_v, crop_v, height);
     coord.z = apply_wrap_and_crop(coord.z, wrap_w, crop_w, depth);
 
+#if (TEXTURE_VERTICAL_FLIP == 1)
+    coord.y = 1.0 - coord.y;
+#endif
+
     // Note, since we don't have ddx and ddy in the compute pipeline, TextureObject::Sample() is not
     // available, we use SampleLevel instead and go for the most detailed level. Therefore, we don't
     // need mipmaps. Manual mip level computation is possible though.
@@ -701,6 +718,10 @@ float4 tex_texel_float4_3d(
     mdl_textures_3d[NonUniformResourceIndex(array_index)].GetDimensions(res.x, res.y, res.z);
     if (0 > coord.x || res.x <= coord.x || 0 > coord.y || res.y <= coord.y || 0 > coord.z || res.z <= coord.z)
         return float4(0, 0, 0, 0); // out of bounds
+
+#if (TEXTURE_VERTICAL_FLIP == 1)
+    coord.y = res.y - coord.y - 1;
+#endif
 
     return mdl_textures_3d[NonUniformResourceIndex(array_index)].Load(int4(coord, /*mipmaplevel=*/ 0));
 }

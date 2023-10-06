@@ -120,6 +120,12 @@ namespace mi { namespace examples { namespace dxr
         /// rotation of the environment [0, 1]
         float environment_rotation;
 
+        /// defines the scale of the scene
+        float meters_per_scene_unit;
+
+        /// far plane that defines the maximum ray travel distance
+        float far_plane_distance;
+
         /// resets the progressive iteration counter to restart the rendering in the next frame.
         void restart_progressive_rendering();
 

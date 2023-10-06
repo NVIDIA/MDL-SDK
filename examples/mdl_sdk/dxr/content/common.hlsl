@@ -80,6 +80,12 @@ cbuffer SceneConstants : register(b1)
 
     // rotation of the environment [0, 1]
     float environment_rotation;
+
+    // defines the scale of the scene
+    float meters_per_scene_unit;
+
+    // far plane that defines the maximum ray travel distance
+    float far_plane_distance;
 }
 
 
@@ -266,6 +272,9 @@ struct DXRRendererState
 
     // barycentric coordinates of the hit point within the triangle
     float3 barycentric;
+
+    // true if the hit point was on the backside of a triangle, based on geom normal and ray direction
+    bool hit_backface;
 };
 // use this structure as renderer state in the MDL shading state material
 #define RENDERER_STATE_TYPE DXRRendererState

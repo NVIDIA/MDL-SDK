@@ -143,6 +143,8 @@ mi::neuraylib::ITile* Image_file_reader_impl::read( mi::Uint32 z, mi::Uint32 lev
     const char* pixel_type = convert_pixel_type_enum_to_string( m_pixel_type);
     mi::base::Handle<mi::neuraylib::ITile> tile(
         m_image_api->create_tile( pixel_type, m_resolution_x, m_resolution_y));
+    if( !tile)
+        return nullptr;
 
     int cpp = m_channel_end - m_channel_start;
     int bpc = IMAGE::get_bytes_per_component( m_pixel_type);
@@ -151,25 +153,29 @@ mi::neuraylib::ITile* Image_file_reader_impl::read( mi::Uint32 z, mi::Uint32 lev
     OIIO::TypeDesc format( get_base_type( m_pixel_type));
     mi::Uint8* data = static_cast<mi::Uint8*>( tile->get_data());
 
-    // Note that read_image() does not support specifying a range in z direction. This should not
-    // become necessary for the registered file formats. If this changes we need to read the entire
-    // image and extract the requested layer. Note that read_scanlines() allows to specify a range
-    // in z direction, but does not work for tiled images.
-    assert( m_resolution_z == 1);
-    if( m_resolution_z != 1)
+    try {
+        // Note that read_image() does not support specifying a range in z direction. This should not
+        // become necessary for the registered file formats. If this changes we need to read the entire
+        // image and extract the requested layer. Note that read_scanlines() allows to specify a range
+        // in z direction, but does not work for tiled images.
+        assert( m_resolution_z == 1);
+        if( m_resolution_z != 1)
+            return nullptr;
+        bool success = m_image_input->read_image(
+            m_subimage,
+            /*miplevel*/ level,
+            m_channel_start,
+            m_channel_end,
+            format,
+            data + (m_resolution_y - 1) * static_cast<size_t>( bytes_per_row),
+            /*xstride*/ OIIO::AutoStride,
+            /*ystride*/ -bytes_per_row,
+            /*zstride*/ OIIO::AutoStride);
+        if( !success)
+            return nullptr;
+    } catch( const std::bad_alloc&) {
         return nullptr;
-    bool success = m_image_input->read_image(
-        m_subimage,
-        /*miplevel*/ level,
-        m_channel_start,
-        m_channel_end,
-        format,
-        data + (m_resolution_y - 1) * static_cast<size_t>( bytes_per_row),
-        /*xstride*/ OIIO::AutoStride,
-        /*ystride*/ -bytes_per_row,
-        /*zstride*/ OIIO::AutoStride);
-    if( !success)
-        return nullptr;
+    }
 
     if( (m_channel_names.size() == 2) && (m_channel_names[0] == "Y") && (m_channel_names[1] == "A"))
         expand_ya_to_rgba( bpc, m_resolution_x, m_resolution_y, data);

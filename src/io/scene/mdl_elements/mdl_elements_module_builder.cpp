@@ -1791,6 +1791,15 @@ mi::Sint32 Mdl_module_builder::add_prototype_based(
     return 0;
 }
 
+namespace {
+
+bool is_namespace_alias_legal( mi::mdl::IMDL::MDL_version version)
+{
+    return version == mi::mdl::IMDL::MDL_VERSION_1_6 || version == mi::mdl::IMDL::MDL_VERSION_1_7;
+}
+
+} // namespace
+
 void Mdl_module_builder::upgrade_mdl_version(
     mi::neuraylib::Mdl_version version, Execution_context* context)
 {
@@ -1824,6 +1833,10 @@ void Mdl_module_builder::upgrade_mdl_version(
     // The module transformer is about to be destroyed, no need to serialize the module.
     m_module = const_cast<mi::mdl::IModule*>( transformer.get_module());
     update_module();
+
+    // Re-create name mangler of namespace aliases legality changed.
+    if( is_namespace_alias_legal( current_version) != is_namespace_alias_legal( new_version))
+        m_name_mangler.reset( new Name_mangler( m_mdl.get(), m_module.get()));
 }
 
 mi::mdl::IAnnotation* Mdl_module_builder::int_anno_to_mdl_anno(

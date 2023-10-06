@@ -89,6 +89,7 @@ set(_LLVM_LIB_NAMES
     LLVMOption
     LLVMOrcJIT
     LLVMOrcShared
+    LLVMOrcTargetProcess
     LLVMProfileData
     LLVMRemarks
     LLVMRuntimeDyld

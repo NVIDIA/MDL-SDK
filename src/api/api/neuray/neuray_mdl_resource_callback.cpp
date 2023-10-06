@@ -635,7 +635,7 @@ std::string Resource_callback::export_texture_image(
             // Actual filenames without frame/uvtile markers.
             const std::string& old_filename_fuv = image->get_filename( i, j);
             mi::Sint32 u, v;
-            image->get_uvtile_uv( frame_number, j, u, v);
+            image->get_uvtile_uv( i, j, u, v);
             std::string new_filename_fuv
                 = (add_sequence_marker || add_uvtile_marker)
                 ? MDL::frame_uvtile_marker_to_string( new_filename, frame_number, u, v)

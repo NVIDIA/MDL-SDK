@@ -118,6 +118,10 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         ${LINKER_NO_WHOLE_ARCHIVE}
     )
 
+# target alias for the custom name
+add_library(mdl_distiller ALIAS ${PROJECT_NAME})
+add_library(mdl::mdl_distiller ALIAS ${PROJECT_NAME})
+
 # -------------------------------------------------------------------------------------------------
 # Create installation rules to copy the build directory
 # -------------------------------------------------------------------------------------------------

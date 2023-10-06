@@ -52,16 +52,20 @@ using MdlStringResolverPtr = std::shared_ptr<MdlStringResolver>;
 
 class MdlStringResolver : public mx::StringResolver
 {
+    MdlStringResolver(Mdl_sdk& mdl_sdk)
+        : m_mdl_sdk(mdl_sdk)
+    {}
+
 public:
 
     /// Create a new string resolver.
-    static MdlStringResolverPtr create()
+    static MdlStringResolverPtr create(Mdl_sdk& mdl_sdk)
     {
-        return MdlStringResolverPtr(new MdlStringResolver());
+        return MdlStringResolverPtr(new MdlStringResolver(mdl_sdk));
     }
     ~MdlStringResolver() = default;
 
-    void initialize(mx::DocumentPtr document, mi::neuraylib::IMdl_configuration* config)
+    void initialize(mx::DocumentPtr document)
     {
         // remove duplicates and keep order by using a set
         auto less = [](const mx::FilePath& lhs, const mx::FilePath& rhs) { return lhs.asString() < rhs.asString(); };
@@ -82,9 +86,9 @@ public:
         }
 
         // add all search paths known to MDL
-        for (size_t i = 0, n = config->get_mdl_paths_length(); i < n; i++)
+        for (size_t i = 0, n = m_mdl_sdk.get_config().get_mdl_paths_length(); i < n; i++)
         {
-            mi::base::Handle<const mi::IString> sp_istring(config->get_mdl_path(i));
+            mi::base::Handle<const mi::IString> sp_istring(m_mdl_sdk.get_config().get_mdl_path(i));
             p = mx::FilePath(sp_istring->get_c_str()).getNormalized();
             if (p.exists() && mtlx_paths.insert(p).second)
                 m_mtlx_document_paths.append(p);
@@ -97,6 +101,7 @@ public:
     std::string resolve(const std::string& str, const std::string& type) const override
     {
         mx::FilePath normalizedPath = mx::FilePath(str).getNormalized();
+        std::string resource_path;
 
         // in case the path is absolute we need to find a proper search path to put the file in
         if (normalizedPath.isAbsolute())
@@ -121,13 +126,29 @@ public:
                     continue;
 
                 // found a search path that is a prefix of the resource
-                std::string resource_path =
-                    normalizedPath.asString(mx::FilePath::FormatPosix).substr(
-                        sp.asString(mx::FilePath::FormatPosix).size());
+                resource_path = normalizedPath.asString(mx::FilePath::FormatPosix).substr(
+                    sp.asString(mx::FilePath::FormatPosix).size());
                 if (resource_path[0] != '/')
                     resource_path = "/" + resource_path;
                 return resource_path;
             }
+        }
+        else
+        {
+            // for relative paths we can try to find them in the MDL search paths, assuming
+            // they are specified "relative" to a search path root.
+            mi::base::Handle<mi::neuraylib::IMdl_entity_resolver> resolver(
+                m_mdl_sdk.get_config().get_entity_resolver());
+
+            resource_path = str;
+            if (resource_path[0] != '/')
+                resource_path = "/" + resource_path;
+
+            mi::base::Handle<const mi::neuraylib::IMdl_resolved_resource> result(
+                resolver->resolve_resource(resource_path.c_str(), nullptr, nullptr, 0, 0));
+
+            if (result && result->get_count() > 0)
+                return resource_path;
         }
 
         log_error("MaterialX resource can not be accessed through an MDL search path. "
@@ -144,6 +165,9 @@ public:
     const mx::FileSearchPath& get_search_paths() const { return m_mtlx_document_paths; }
 
 private:
+
+    // SDK to get access to the entity resolver and the search path config
+    Mdl_sdk& m_mdl_sdk;
 
     // List of paths from which MaterialX can locate resources.
     // This includes the document folder and the search paths used to load the document.
@@ -272,7 +296,9 @@ bool Mdl_generator::generate(Mdl_sdk& mdl_sdk, Mdl_generator_result& inout_resul
     cms->loadLibrary(mtlx_std_lib);
     generator_context.getShaderGenerator().setColorManagementSystem(cms);
     generator_context.getOptions().targetColorSpaceOverride = "lin_rec709";
-    generator_context.getOptions().fileTextureVerticalFlip = false;
+    // The MDL and Mtlx spec define the origin (0,0) of the uv spaces at the bottom left.
+    // No flipping requiered.
+    generator_context.getOptions().fileTextureVerticalFlip = false; 
 
     // Initialize unit management.
     mx::UnitSystemPtr unitSystem = mx::UnitSystem::create(
@@ -319,8 +345,8 @@ bool Mdl_generator::generate(Mdl_sdk& mdl_sdk, Mdl_generator_result& inout_resul
 
     // flatten the resource paths of the document using a custom resolver allows
     // the change the resource URIs into valid MDL paths.
-    auto custom_resolver = MdlStringResolver::create();
-    custom_resolver->initialize(material_document, &mdl_sdk.get_config());
+    auto custom_resolver = MdlStringResolver::create(mdl_sdk);
+    custom_resolver->initialize(material_document);
     mx::flattenFilenames(material_document, custom_resolver->get_search_paths(), custom_resolver);
 
     // Validate the document.
@@ -358,7 +384,7 @@ bool Mdl_generator::generate(Mdl_sdk& mdl_sdk, Mdl_generator_result& inout_resul
     {
         // find the first render-able element
         std::vector<mx::TypedElementPtr> elems;
-        mx::findRenderableElements(material_document, elems);
+        elems = mx::findRenderableElements(material_document);
         if (elems.size() > 0)
         {
             element_to_generate_code_for = elems[0];

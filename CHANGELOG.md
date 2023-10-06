@@ -1,5 +1,80 @@
 Change Log
 ==========
+MDL SDK 2023.0.4 (367100.4957): 05 Oct 2023
+-----------------------------------------------
+
+
+ABI compatible with the MDL SDK 2023.0.4 (367100.4957) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+    - Python Bindings:
+        - Added binding for the (built-in) entity resolver and added unit tests.
+        - Accessing functions of invalid interfaces do not crash anymore but
+          instead throw python exceptions.
+        - Added more unit tests.
+        - Extend the wrapper around MDL type (`Type`):
+            - Give access to vectors and arrays size and element type.
+            - Give access to matrices size.
+        - Convert low level `IValues` to python friendly data types:
+            - Extended to give access to file path for textures, light profiles
+              and BSDF measurements.
+
+- MDL SDK examples
+    - Example DXR:
+        - Reduced the HLSL glue code and added dynamic function selection
+          for generated shader functions.
+        - Added support for backface scattering and emission.
+        - Handle `meters_per_scene_unit` at runtime and expose the parameter to the UI.
+        - MaterialX resource resolution now uses the MDL entity resolver as fallback
+          to handle tiled resources.
+        - Handle the collapse flag of the `in_group` annotations.
+        - Improved measured BSDF runtime implementation numerically.
+        - Camera pose fitting now sets near and far plane distances.
+        - Added support for `KHR_materials_iridescence` glTF extension.
+    - Example Traversal:
+        - Removed the preprocessor directive that disabled the distiller option.
+
+**Fixed Bugs**
+
+- General
+    - Catch memory allocation failures in the OpenImageIO plugin while exporting images.
+    - Python Bindings: Fixed the mdl_distiller plugin path in the scripts for
+      running the examples.
+    - Argument expressions that are created by the API are no longer optimized by the MDL
+      compiler, but stay "unmodified" until arguments in class compilation mode are created.
+      This makes the generated arguments more "deterministic" for users.
+    - Fixed export of uv-tile textures. Only first tile was exported.
+    - Fixed export of animated textures when frame number differs from frame ID.
+        
+- MDL Compiler and Backends
+    - Fixed translation of vector access with non-constant index in some cases for HLSL/GLSL.
+    - Fixed bit-operations on integer fields in structs containing derivable values.
+    - HLSL/GLSL: The compiler uses now name mangling on struct types instead of
+      the very simple old connection with '_'.
+    - Fixed bug that caused crashes when several MDL modules import each other
+      within a special order.
+    - Material expressions which path prefix is "`geometry.displacement`" are now created in
+      the displacement context.
+    - Fixed code generation for re-exported MDL entities.
+    - Fixed parsing of resource sets inside container files (MDLE).
+    - Fixed ownership of types in created distribution functions which could lead to crashes
+      under certain complex conditions.
+    - Fixed crashes due to "missing functions" which are requested from wrong modules,
+      for instance `state::cos()`.
+    - Fixed printing of package name components which are MDL keywords and require
+      quoting as Unicode identifiers.
+
+- MDL SDK examples
+    - Example DXR:
+        - Fixed the UI parameter mapping for struct parameters.
+        - Reviewed the UV coordinate handling and improved its documentation.
+        - Added missing out of bounds check when reading `NV_materials_mdl` nodes.
+        - Treat alpha channels in glTF textures as linear in cases where the RGB data
+          is in sRGB color space.
+
 MDL SDK 2023.0.2 (367100.3997): 01 Aug 2023
 -----------------------------------------------
 

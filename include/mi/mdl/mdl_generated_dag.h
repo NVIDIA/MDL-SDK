@@ -339,6 +339,24 @@ public:
     virtual DAG_parameter const *create_parameter(
         IType const *type,
         int         index) = 0;
+
+    /// Enable common subexpression elimination.
+    ///
+    /// \param flag  If true, CSE will be enabled, else disabled.
+    /// \return      The old value of the flag.
+    virtual bool enable_cse(bool flag) = 0;
+
+    /// Enable optimization.
+    ///
+    /// \param flag  If true, optimizations in general will be enabled, else disabled.
+    /// \return      The old value of the flag.
+    virtual bool enable_opt(bool flag) = 0;
+
+    /// Enable unsafe math optimizations.
+    ///
+    /// \param flag  If true, unsafe math optimizations will be enabled, else disabled.
+    /// \return      The old value of the flag.
+    virtual bool enable_unsafe_math_opt(bool flag) = 0;
 };
 
 /// A Helper interface to do renderer specific constant folding.
@@ -438,6 +456,24 @@ public:
         /// \param index       The index of the parameter.
         /// \returns           The created parameter reference.
         virtual DAG_parameter const *create_parameter(IType const *type, int index) = 0;
+
+        /// Enable common subexpression elimination.
+        ///
+        /// \param flag  If true, CSE will be enabled, else disabled.
+        /// \return      The old value of the flag.
+        virtual bool enable_cse(bool flag) = 0;
+
+        /// Enable optimization.
+        ///
+        /// \param flag  If true, optimizations in general will be enabled, else disabled.
+        /// \return      The old value of the flag.
+        virtual bool enable_opt(bool flag) = 0;
+
+        /// Enable unsafe math optimizations.
+        ///
+        /// \param flag  If true, unsafe math optimizations will be enabled, else disabled.
+        /// \return      The old value of the flag.
+        virtual bool enable_unsafe_math_opt(bool flag) = 0;
 
         /// Get the type factory associated with this expression factory.
         ///

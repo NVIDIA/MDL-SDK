@@ -200,8 +200,9 @@ inline T const *cast(F const *arg) {
 /// \param type  the type to check
 static inline bool is_material_type(IType const *type)
 {
-    if (IType_struct const *s_type = as<IType_struct>(type))
+    if (IType_struct const *s_type = as<IType_struct>(type)) {
         return s_type->get_predefined_id() == IType_struct::SID_MATERIAL;
+    }
     return false;
 }
 
@@ -210,8 +211,9 @@ static inline bool is_material_type(IType const *type)
 /// \param type  the type to check
 static inline bool is_material_type_or_sub_type(IType const *type)
 {
-    if (IType_struct const *s_type = as<IType_struct>(type))
+    if (IType_struct const *s_type = as<IType_struct>(type)) {
         return s_type->get_predefined_id() != IType_struct::SID_USER;
+    }
     return false;
 }
 
@@ -220,8 +222,9 @@ static inline bool is_material_type_or_sub_type(IType const *type)
 /// \param type  the type to check
 static inline bool is_material_volume_type(IType const *type)
 {
-    if (IType_struct const *s_type = as<IType_struct>(type))
+    if (IType_struct const *s_type = as<IType_struct>(type)) {
         return s_type->get_predefined_id() == IType_struct::SID_MATERIAL_VOLUME;
+    }
     return false;
 }
 

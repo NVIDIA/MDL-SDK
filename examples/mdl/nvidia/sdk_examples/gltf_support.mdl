@@ -379,7 +379,7 @@ export material gltf_material(
     // KHR_materials_ior
     uniform float ior = 1.5
     [[
-        anno::hard_range(1.00, 5.0),
+        anno::soft_range(1.0, 5.0),
         anno::in_group("Metallic Roughness"),
         anno::display_name("IOR"),
         anno::description("The index of refraction.")
@@ -472,6 +472,50 @@ export material gltf_material(
         anno::display_name("Clearcoat Normal"),
         anno::description("The clearcoat normal map texture."),
         anno::enable_if("clearcoat_factor>0.0")
+    ]],
+
+    // KHR_materials_iridescence
+    uniform float iridescence_factor = 0.0
+    [[
+        anno::hard_range(0.0, 1.0),
+        anno::in_group("Iridescence"),
+        anno::display_name("Iridescence Factor"),
+        anno::description("Strength of the iridescence. Multiplied to the 'Iridescence Texture' if available.")
+    ]],
+    gltf_texture_lookup_value iridescence_texture = gltf_texture_lookup()
+    [[
+        anno::in_group("Iridescence"),
+        anno::display_name("Iridescence Texture"),
+        anno::description("Strength of the iridescence. Uses only the red channel, assuming linear space. Influenced by the 'Iridescence Factor'."),
+        anno::enable_if("iridescence_factor>0")
+    ]],
+    uniform float iridescence_ior = 1.3
+    [[
+        anno::soft_range(1.0, 5.0),
+        anno::in_group("Iridescence"),
+        anno::display_name("Iridescence IOR"),
+        anno::description("The index of refraction of the dielectric thin-film layer.")
+    ]],
+    uniform float iridescence_thickness_minimum = 100
+    [[
+        anno::soft_range(0.0, 600.0),
+        anno::in_group("Iridescence"),
+        anno::display_name("Iridescence Thickness Minimum"),
+        anno::description("The minimum thickness of the thin-film layer given in nanometers.")
+    ]],
+    uniform float iridescence_thickness_maximum = 400
+    [[
+        anno::soft_range(0.0, 1000.0),
+        anno::in_group("Iridescence"),
+        anno::display_name("Iridescence Thickness Maximum"),
+        anno::description("The maximum thickness of the thin-film layer given in nanometers. Used as thickness if no 'Iridescence Thickness Texture' if available.")
+    ]],
+    gltf_texture_lookup_value iridescence_thickness_texture = gltf_texture_lookup()
+    [[
+        anno::in_group("Iridescence"),
+        anno::display_name("Iridescence Thickness Texture"),
+        anno::description("The thickness texture of the thin-film layer.  Uses only the red channel, assuming linear space. Used to blend between 'Iridescence Thickness Minimum' and 'Iridescence Thickness Maximum'."),
+        anno::enable_if("iridescence_factor>0")
     ]],
 
     // emission
@@ -568,7 +612,7 @@ export material gltf_material(
     // ------------------------------------------------------------------------
     float4 base_float4 = gltf_prepare_tex_float4(base_color_texture) * scene::data_lookup_float4("COLOR_0", float4(1.0)); // apply vertex color
     color base_color = base_color_factor * color(base_float4.x, base_float4.y, base_float4.z);
-    float alpha = base_alpha * base_float4.w;
+    float alpha = base_alpha * math::pow(base_float4.w, 1.0/2.2);
 
     float3 metallic_roughness = gltf_prepare_tex_float3(metallic_roughness_texture);
     float metallic = metallic_factor * metallic_roughness.z;
@@ -600,6 +644,11 @@ export material gltf_material(
     float3 clearcoat_normal = gltf_prepare_normal(clearcoat_normal_texture);
     float grazing_refl_coat = math::max((1.0 - clearcoat_roughness), 0.0);
 
+    // KHR_materials_iridescence
+    // ------------------------------------------------------------------------
+    float iridescence_strength = gltf_prepare_tex_float3(iridescence_texture).x * iridescence_factor;
+    float iridescence_thickness = math::lerp(iridescence_thickness_minimum, iridescence_thickness_maximum, gltf_prepare_tex_float3(iridescence_thickness_texture).x);
+
     // metallic roughness model
     // ------------------------------------------------------------------------
 
@@ -630,13 +679,41 @@ export material gltf_material(
         normal: normal
         );
 
-    // the metallic component doesn't have a diffuse component, 
+    // apply iridescence and make the strength adjustable using a weighted layer 
+    bsdf dielectric_component_with_thin_film = df::weighted_layer(
+        weight: iridescence_strength,
+        base: dielectric_component,
+        layer: df::thin_film(
+            thickness: iridescence_thickness,
+            ior: color(iridescence_ior),
+            base: dielectric_component
+        )
+    );
+
+    // the metallic component doesn't have a diffuse component,
     // its only glossy base_color is applied to tint it
     bsdf metallic_component = df::microfacet_ggx_vcavities_bsdf(
-        tint: base_color * occlusion, 
+        tint: base_color * occlusion,
         roughness_u: roughness2);
 
-    // apply sheen to the dielectic component
+    // apply iridescence and make the strength adjustable using a weighted layer 
+    // according to KHR_materials_iridescence spec: using dielectric thin film fresnel for metals, too
+    color base_color_sqrt = math::min(math::sqrt(math::saturate(base_color * occlusion)), color(0.99f));
+    color dielectric_ior = (color(1.0f) + base_color_sqrt) / (color(1.0f) - base_color_sqrt);
+    bsdf metallic_component_with_thin_film = df::weighted_layer(
+        weight: iridescence_strength,
+        base: metallic_component,
+        layer: df::thin_film(
+            thickness: iridescence_thickness,
+            ior: color(iridescence_ior),
+            base: df::fresnel_factor(
+                ior: dielectric_ior,
+                extinction_coefficient: color(0.0f),
+                base: df::microfacet_ggx_vcavities_bsdf(roughness_u: roughness2))
+        )
+    );
+
+    // apply sheen to the dielectric component
     // add the sheen_color as weight in an outer layer to be able to blend and disable on default 
     // otherwise, sheen would be applied and tinted black
     bsdf dielectric_sheen_component = df::color_weighted_layer(
@@ -645,15 +722,15 @@ export material gltf_material(
             roughness: sheen_roughness * sheen_roughness,
             tint:  color(1.0),
             multiscatter_tint: color(1.0),
-            multiscatter: dielectric_component
+            multiscatter: dielectric_component // don't apply thin_film
         ),
-        base: dielectric_component);
+        base: dielectric_component_with_thin_film);
 
     // final BSDF is a linear blend between dielectric and metallic component
     bsdf dielectric_metal_mix = df::weighted_layer(
         weight: metallic,
         base: dielectric_sheen_component,
-        layer: metallic_component,
+        layer: metallic_component_with_thin_film,
         normal: normal);
 
     bsdf clearcoated = df::custom_curve_layer(
@@ -806,11 +883,11 @@ export material gltf_material_khr_specular_glossiness(
     // ------------------------------------------------------------------------
     float4 diffuse_float4 = gltf_prepare_tex_float4(diffuse_texture) * scene::data_lookup_float4("COLOR_0", float4(1.0)); // apply vertex color
     color diffuse = diffuse_factor * color(diffuse_float4.x, diffuse_float4.y, diffuse_float4.z);
-    float alpha = base_alpha * diffuse_float4.w;
+    float alpha = base_alpha * math::pow(diffuse_float4.w, 1.0/2.2);
 
     float4 specular_glossiness = gltf_prepare_tex_float4(specular_glossiness_texture);
     color specular = specular_factor * color(specular_glossiness.x, specular_glossiness.y, specular_glossiness.z);
-    float glossiness = glossiness_factor * specular_glossiness.w;
+    float glossiness = glossiness_factor * math::pow(specular_glossiness.w, 1.0/2.2);
 
     float3 normal = gltf_prepare_normal(normal_texture);
     float occlusion = gltf_prepare_occlusion(occlusion_texture, occlusion_strength);

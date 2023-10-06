@@ -891,6 +891,24 @@ public:
             IType const *type,
             int         index) MDL_FINAL;
 
+        /// Enable common subexpression elimination.
+        ///
+        /// \param flag  If true, CSE will be enabled, else disabled.
+        /// \return      The old value of the flag.
+        bool enable_cse(bool flag) MDL_FINAL;
+
+        /// Enable optimization.
+        ///
+        /// \param flag  If true, optimizations in general will be enabled, else disabled.
+        /// \return      The old value of the flag.
+        bool enable_opt(bool flag) MDL_FINAL;
+
+        /// Enable unsafe math optimizations.
+        ///
+        /// \param flag  If true, unsafe math optimizations will be enabled, else disabled.
+        /// \return      The old value of the flag.
+        bool enable_unsafe_math_opt(bool flag) MDL_FINAL;
+
         /// Initialize this material instance.
         ///
         /// \param resolver                   The call name resolver.

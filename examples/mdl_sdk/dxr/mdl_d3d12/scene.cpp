@@ -1017,9 +1017,11 @@ void Scene_node::update_bounding_volumes()
 Scene::Scene(Base_application* app, const std::string& debug_name, size_t ray_type_count)
     : m_app(app)
     , m_debug_name(debug_name)
+    , m_root(app, this, Scene_node::Kind::Empty, "Root")
     , m_acceleration_structure(
         new Raytracing_acceleration_structure(app, ray_type_count, "AccelerationStructure"))
-    , m_root(app, this, Scene_node::Kind::Empty, "Root")
+    , m_acceleration_structure_update_handle(0)
+    , m_acceleration_structure_update_scheduled(false)
 {
 }
 
@@ -1216,7 +1218,7 @@ bool Scene::build_scene(std::unique_ptr<const IScene_loader::Scene> scene)
 
     // build acceleration data structure
     // ----------------------------------------------------------------------------------------
-    update(Update_args());
+    m_root.update(Update_args());
 
     command_list = command_queue->get_command_list();
 
@@ -1226,11 +1228,42 @@ bool Scene::build_scene(std::unique_ptr<const IScene_loader::Scene> scene)
     command_queue->flush();
 
     // free unused temp data - required for construction
-    m_acceleration_structure->release_static_scratch_buffers();
+    // m_acceleration_structure->release_static_scratch_buffers();
 
-    // update transformations and bounding box structure
-    update(Update_args{});
     return true;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+bool Scene::update(const Update_args& args)
+{
+    // run update on all the scene nodes
+    bool sceneChanged = m_root.update(args);
+
+    // update acceleration structure
+    Command_queue* command_queue = m_app->get_command_queue(D3D12_COMMAND_LIST_TYPE_DIRECT);
+
+    // last update is finished
+    bool finished = true;
+    if (m_acceleration_structure_update_handle != 0)
+        finished = command_queue->get_fence()->is_completed(m_acceleration_structure_update_handle);
+
+    // if not yet done, we schedue an update for the next frame
+    if (!finished)
+    {
+        m_acceleration_structure_update_scheduled |= sceneChanged;
+        return sceneChanged;
+    }
+
+    if (m_acceleration_structure_update_scheduled || sceneChanged)
+    {
+        // simplified update that only updates the top level acceleration structure
+        m_acceleration_structure_update_scheduled = false;
+        D3DCommandList* command_list = command_queue->get_command_list();
+        m_acceleration_structure->update(command_list);
+        m_acceleration_structure_update_handle = command_queue->execute_command_list(command_list);
+    }
+    return sceneChanged;
 }
 
 // ------------------------------------------------------------------------------------------------

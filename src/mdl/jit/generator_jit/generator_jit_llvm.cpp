@@ -6472,8 +6472,13 @@ Expression_result LLVM_code_generator::translate_assign(
     mi::mdl::IExpression const *lhs = call->get_left_argument();
     mi::mdl::IExpression const *rhs = call->get_right_argument();
 
+    // is_deriv_var is only defined on the top level variables. For a variable in a struct, this
+    // would be the struct. While the struct could be a derivative value, it could also contain
+    // values which cannot be used as derivatives like integers.
     IDefinition const *lhs_base_def = Analysis::get_lvalue_base(lhs);
-    bool lhs_is_deriv = is_deriv_var(lhs_base_def);
+    bool lhs_base_is_deriv = is_deriv_var(lhs_base_def);
+    bool lhs_is_deriv = lhs_base_is_deriv &&
+        m_type_mapper.is_floating_point_based_type(lhs->get_type());
 
     llvm::Value *res = NULL;
 
@@ -6506,9 +6511,14 @@ Expression_result LLVM_code_generator::translate_assign(
         }
     }
 
-    if (lhs_is_deriv) {
+    if (lhs_base_is_deriv) {
         llvm::Value *adr_val, *adr_dx, *adr_dy;
         translate_lval_expression_dual(ctx, lhs, adr_val, adr_dx, adr_dy);
+
+        // if the left hand side was not a derivative value (for example an integer in a
+        // derivative struct), first convert it to a dual with dx and dy set to zero
+        if (!lhs_is_deriv)
+            res = ctx.get_dual(res);
 
         // check if the result must be converted into a vector first
         llvm::Type *res_tp = llvm::cast<llvm::PointerType>(adr_val->getType())->getElementType();

@@ -34,6 +34,7 @@
 #include "mdl/compiler/compilercore/compilercore_modules.h"
 #include "mdl/compiler/compilercore/compilercore_tools.h"
 
+#include "generator_dag_lambda_function.h"
 #include "generator_dag_ir_checker.h"
 
 namespace mi {
@@ -102,6 +103,30 @@ bool DAG_ir_checker::check_instance(Generated_code_dag::Material_instance const 
     return m_errors == 0;
 }
 
+// Check the given lambda function.
+bool DAG_ir_checker::check_lambda(Lambda_function const *lambda)
+{
+    Store<DAG_node_factory_impl const *> node_fact(m_node_fact, &lambda->get_node_factory());
+    Store<Type_factory const *>          type_fact(m_tf, &lambda->get_type_factory());
+    Store<Value_factory const *>         value_fact(m_vf, &lambda->get_value_factory());
+
+    DAG_ir_walker walker(m_alloc);
+
+    m_errors = 0;
+
+    // lambdas may have parameters, but no temporaries
+    Store<bool> collect_temporary(m_collect_temporary, false);
+    Store<bool> allow_parameters(m_allow_parameters, true);
+
+    for (size_t i = 0, n = lambda->get_root_expr_count(); i < n; ++i) {
+        walker.walk_node(const_cast<DAG_node *>(lambda->get_root_expr(i)), this);
+    }
+    if (DAG_node const *body = lambda->get_body()) {
+        walker.walk_node(const_cast<DAG_node *>(body), this);
+    }
+    return m_errors == 0;
+}
+
 // Check a DAG node.
 size_t DAG_ir_checker::check_node(DAG_node const *node)
 {
@@ -137,12 +162,14 @@ size_t DAG_ir_checker::check_const(DAG_constant const *cnst)
     }
 
     IValue const *v = cnst->get_value();
-    if (v == NULL)
+    if (v == NULL) {
         error(cnst, EC_NULL_VALUE);
-    else if (!m_vf->is_owner(v))
+    } else if (!m_vf->is_owner(v)) {
         error(cnst, EC_VALUE_NOT_OWNED);
-    if (!m_node_fact->is_owner(cnst))
+    }
+    if (!m_node_fact->is_owner(cnst)) {
         error(cnst, EC_DAG_NOT_OWNED);
+    }
     return m_errors;
 }
 
@@ -157,12 +184,14 @@ size_t DAG_ir_checker::check_call(DAG_call const *call)
     }
 
     IType const *type = call->get_type();
-    if (type == NULL)
+    if (type == NULL) {
         error(call, EC_NULL_TYPE);
-    else if (!m_tf->is_owner(type))
+    } else if (!m_tf->is_owner(type)) {
         error(call, EC_TYPE_NOT_OWNED);
-    if (!m_node_fact->is_owner(call))
+    }
+    if (!m_node_fact->is_owner(call)) {
         error(call, EC_DAG_NOT_OWNED);
+    }
 
     char const *signature = call->get_name();
 
@@ -211,6 +240,11 @@ size_t DAG_ir_checker::check_call(DAG_call const *call)
         def_is_uniform = true;
         n_params       = 3;
 //      names          = { "world_to_object", "object_to_world", "expr" };
+        break;
+    case IDefinition::DS_INTRINSIC_DAG_CALL_LAMBDA:
+        has_def        = false;
+        def_is_uniform = false;
+        n_params       = 0;
         break;
     default:
         if (sema == operator_to_semantic(IExpression::OK_TERNARY)) {
@@ -345,16 +379,16 @@ size_t DAG_ir_checker::check_parameter(DAG_parameter const *param)
     }
 
     IType const *type = param->get_type();
-    if (type == NULL)
+    if (type == NULL) {
         error(param, EC_NULL_TYPE);
-    else if (!m_tf->is_owner(type))
+    } else if (!m_tf->is_owner(type)) {
         error(param, EC_TYPE_NOT_OWNED);
-    if (!m_node_fact->is_owner(param))
+    }
+    if (!m_node_fact->is_owner(param)) {
         error(param, EC_DAG_NOT_OWNED);
+    }
 
-    if (m_allow_parameters) {
-
-    } else {
+    if (!m_allow_parameters) {
         error(param, EC_PARAMETER_NOT_ALLOWED);
     }
     return m_errors;
@@ -371,12 +405,14 @@ size_t DAG_ir_checker::check_temp(DAG_temporary const *tmp)
     }
 
     IType const *type = tmp->get_type();
-    if (type == NULL)
+    if (type == NULL) {
         error(tmp, EC_NULL_TYPE);
-    else if (!m_tf->is_owner(type))
+    } else if (!m_tf->is_owner(type)) {
         error(tmp, EC_TYPE_NOT_OWNED);
-    if (!m_node_fact->is_owner(tmp))
+    }
+    if (!m_node_fact->is_owner(tmp)) {
         error(tmp, EC_DAG_NOT_OWNED);
+    }
 
     if (m_allow_temporary) {
         DAG_node const *expr = tmp->get_expr();
@@ -478,8 +514,9 @@ void DAG_ir_checker::error(DAG_node const *node, Error_code code)
         MDL_ASSERT(!"Temporary index to high");
         break;
     }
-    if (code != EC_OK)
+    if (code != EC_OK) {
         ++m_errors;
+    }
 }
 
 // Post-visit a Constant.
@@ -515,16 +552,18 @@ void DAG_ir_checker::visit(int index, DAG_node *init)
 // Check that two symbols (potentially from different modules) are equal.
 bool DAG_ir_checker::equal_symbols(ISymbol const *s1, ISymbol const *s2) const
 {
-    if (s1 == s2)
+    if (s1 == s2) {
         return true;
+    }
     return strcmp(s1->get_name(), s2->get_name()) == 0;
 }
 
 // Check that two types (potentially from different modules) are equal.
 bool DAG_ir_checker::equal_types(IType const *t1, IType const *t2) const
 {
-    if (t1 == t2)
+    if (t1 == t2) {
         return true;
+    }
 
     t1 = m_tf->get_equal(t1);
     t2 = m_tf->get_equal(t2);

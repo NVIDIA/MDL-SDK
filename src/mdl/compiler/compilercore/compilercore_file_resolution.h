@@ -924,9 +924,9 @@ private:
     ///
     /// \param alloc   the allocator
     /// \param s       the resource set to fill up
-    /// \param name    the file name of one UDIM part
+    /// \param name    the file name of one UDIM part (WITHOUT the directory)
     /// \param url     the already (already updated) url name of the entry
-    /// \param prefix  the (directory or archive name) prefix
+    /// \param prefix  the (directory or archive name + directory) prefix
     /// \param sep     the separator to be used between prefix and file name
     /// \param info    the marker info
     /// \param hash    if non-NULL, the hash value of the resource file

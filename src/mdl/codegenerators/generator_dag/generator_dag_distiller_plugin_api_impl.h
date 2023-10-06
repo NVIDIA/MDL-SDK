@@ -45,7 +45,7 @@ class ICall_name_resolver;
 ///
 /// The rule engine handles the transformation of a compiled material by a rule set.
 ///
-class Distiller_plugin_api_impl : 
+class Distiller_plugin_api_impl :
         public IDistiller_plugin_api,
         private IGenerated_code_dag::DAG_node_factory
 {
@@ -67,18 +67,18 @@ public:
     void dump_attributes(IGenerated_code_dag::IMaterial_instance const *inst,
                          DAG_node const *node);
 
-    virtual void set_attribute(DAG_node const * node, char const *name,
-                               DAG_node const *value) MDL_FINAL;
-    virtual void set_attribute(IGenerated_code_dag::IMaterial_instance const *inst,
-                               DAG_node const * node, char const *name,
-                               mi::Float32 value) MDL_FINAL;
-    virtual void set_attribute(IGenerated_code_dag::IMaterial_instance const *inst,
-                               DAG_node const * node, char const *name,
-                               mi::Sint32 value) MDL_FINAL;
-    virtual void remove_attributes(DAG_node const * node) MDL_FINAL;
-    virtual DAG_node const * get_attribute(DAG_node const * node, char const *name) MDL_FINAL;
-    virtual bool attribute_exists(DAG_node const * node, char const *name) MDL_FINAL;
-    virtual void move_attributes(DAG_node const *to_node, DAG_node const *from_node) MDL_FINAL;
+    void set_attribute(DAG_node const * node, char const *name,
+                       DAG_node const *value) MDL_FINAL;
+    void set_attribute(IGenerated_code_dag::IMaterial_instance const *inst,
+                       DAG_node const * node, char const *name,
+                       mi::Float32 value) MDL_FINAL;
+    void set_attribute(IGenerated_code_dag::IMaterial_instance const *inst,
+                       DAG_node const * node, char const *name,
+                       mi::Sint32 value) MDL_FINAL;
+    void remove_attributes(DAG_node const * node) MDL_FINAL;
+    DAG_node const * get_attribute(DAG_node const * node, char const *name) MDL_FINAL;
+    bool attribute_exists(DAG_node const * node, char const *name) MDL_FINAL;
+    void move_attributes(DAG_node const *to_node, DAG_node const *from_node) MDL_FINAL;
 
     /// Apply rules using a strategy.
     ///
@@ -88,7 +88,7 @@ public:
     /// \param strategy       the strategy to use
     ///
     /// \return a new compiled material
-    virtual IGenerated_code_dag::IMaterial_instance *apply_rules(
+    IGenerated_code_dag::IMaterial_instance *apply_rules(
         IGenerated_code_dag::IMaterial_instance const *inst,
         IRule_matcher                                 &matcher,
         IRule_matcher_event                           *event_handler,
@@ -104,7 +104,7 @@ public:
     /// \param field_selector    mask to select the fields from m0 or m1 respectively.
     ///
     /// \return a new compiled material instance.
-    virtual IGenerated_code_dag::IMaterial_instance *merge_materials(
+    IGenerated_code_dag::IMaterial_instance *merge_materials(
         IGenerated_code_dag::IMaterial_instance const *m0,
         IGenerated_code_dag::IMaterial_instance const *m1,
         IDistiller_plugin_api::Field_selector  field_selector)  MDL_FINAL;
@@ -114,7 +114,7 @@ public:
     /// \param  value       The value of the constant.
     ///
     /// \returns            The created constant.
-    virtual DAG_constant const *create_constant(
+    DAG_constant const *create_constant(
         IValue const *value)  MDL_FINAL;
 
     /// Create a temporary reference.
@@ -123,7 +123,7 @@ public:
     /// \param index        The index of the temporary.
     ///
     /// \returns            The created temporary reference.
-    virtual DAG_temporary const *create_temporary(DAG_node const *node, int index)  MDL_FINAL;
+    DAG_temporary const *create_temporary(DAG_node const *node, int index)  MDL_FINAL;
 
     /// Create a call.
     ///
@@ -134,7 +134,7 @@ public:
     /// \param  ret_type        The return type of the function.
     ///
     /// \returns                The created call or an equivalent expression.
-    virtual DAG_node const *create_call(
+    DAG_node const *create_call(
         char const                    *name,
         IDefinition::Semantics        sema,
         DAG_call::Call_argument const call_args[],
@@ -149,18 +149,18 @@ public:
     /// \param  num_call_args   The number of call arguments.
     ///
     /// \returns                The created call or an equivalent expression.
-    virtual DAG_node const *create_function_call(
+    DAG_node const *create_function_call(
         char const             *name,
         DAG_node const * const call_args[],
         size_t                 num_call_args)  MDL_FINAL;
 
     /// Create a 1-, 2-, or 3-mixer call, with 2, 4, or 6 parameters respectively.
-    virtual DAG_node const *create_mixer_call(
+    DAG_node const *create_mixer_call(
         DAG_call::Call_argument const call_args[],
         int                           num_call_args)  MDL_FINAL;
 
     /// Create a 1-, 2-, or 3-color-mixer call, with 2, 4, or 6 parameters respectively.
-    virtual DAG_node const *create_color_mixer_call(
+    DAG_node const *create_color_mixer_call(
         DAG_call::Call_argument const call_args[],
         int                           num_call_args)  MDL_FINAL;
 
@@ -170,56 +170,74 @@ public:
     /// \param  index       The index of the parameter.
     ///
     /// \returns            The created parameter reference.
-    virtual DAG_parameter const *create_parameter(IType const *type, int index)  MDL_FINAL;
+    DAG_parameter const *create_parameter(IType const *type, int index)  MDL_FINAL;
+
+    /// Enable common subexpression elimination.
+    ///
+    /// \param flag  If true, CSE will be enabled, else disabled.
+    /// \return      The old value of the flag.
+    bool enable_cse(bool flag) MDL_FINAL;
+
+    /// Enable optimization.
+    ///
+    /// \param flag  If true, optimizations in general will be enabled, else disabled.
+    /// \return      The old value of the flag.
+    bool enable_opt(bool flag) MDL_FINAL;
+
+    /// Enable unsafe math optimizations.
+    ///
+    /// \param flag  If true, unsafe math optimizations will be enabled, else disabled.
+    /// \return      The old value of the flag.
+    bool enable_unsafe_math_opt(bool flag) MDL_FINAL;
 
     /// Get the type factory associated with this expression factory.
     ///
     /// \returns            The type factory.
-    virtual IType_factory *get_type_factory()  MDL_FINAL;
+    IType_factory *get_type_factory()  MDL_FINAL;
 
     /// Get the value factory associated with this expression factory.
     ///
     /// \returns            The value factory.
-    virtual IValue_factory *get_value_factory()  MDL_FINAL;
+    IValue_factory *get_value_factory()  MDL_FINAL;
 
     /// Return the type for ::df::bsdf_component
-    virtual IType const *get_bsdf_component_type()  MDL_FINAL;
+    IType const *get_bsdf_component_type()  MDL_FINAL;
 
     /// Return the type for ::df::edf_component
-    virtual IType const *get_edf_component_type()  MDL_FINAL;
+    IType const *get_edf_component_type()  MDL_FINAL;
 
     /// Return the type for ::df::vdf_component
-    virtual IType const *get_vdf_component_type()  MDL_FINAL;
+    IType const *get_vdf_component_type()  MDL_FINAL;
 
     /// Return the type for ::df::bsdf_component
-    virtual IType const *get_bsdf_component_array_type( int n_values)  MDL_FINAL;
+    IType const *get_bsdf_component_array_type( int n_values)  MDL_FINAL;
 
     /// Return the type for ::df::edf_component
-    virtual IType const *get_edf_component_array_type( int n_values)  MDL_FINAL;
+    IType const *get_edf_component_array_type( int n_values)  MDL_FINAL;
 
     /// Return the type for ::df::vdf_component
-    virtual IType const *get_vdf_component_array_type( int n_values)  MDL_FINAL;
+    IType const *get_vdf_component_array_type( int n_values)  MDL_FINAL;
 
     /// Return the type for ::df::color_bsdf_component
-    virtual IType const *get_color_bsdf_component_type()  MDL_FINAL;
+    IType const *get_color_bsdf_component_type()  MDL_FINAL;
 
     /// Return the type for ::df::color_edf_component
-    virtual IType const *get_color_edf_component_type()  MDL_FINAL;
+    IType const *get_color_edf_component_type()  MDL_FINAL;
 
     /// Return the type for ::df::color_vdf_component
-    virtual IType const *get_color_vdf_component_type()  MDL_FINAL;
+    IType const *get_color_vdf_component_type()  MDL_FINAL;
 
     /// Return the type for ::df::color_bsdf_component
-    virtual IType const *get_color_bsdf_component_array_type( int n_values)  MDL_FINAL;
+    IType const *get_color_bsdf_component_array_type( int n_values)  MDL_FINAL;
 
     /// Return the type for ::df::color_edf_component
-    virtual IType const *get_color_edf_component_array_type( int n_values)  MDL_FINAL;
+    IType const *get_color_edf_component_array_type( int n_values)  MDL_FINAL;
 
     /// Return the type for ::df::color_vdf_component
-    virtual IType const *get_color_vdf_component_array_type( int n_values)  MDL_FINAL;
+    IType const *get_color_vdf_component_array_type( int n_values)  MDL_FINAL;
 
     /// Return the type for bool
-    virtual IType const *get_bool_type()  MDL_FINAL;
+    IType const *get_bool_type()  MDL_FINAL;
 
     /// Creates an operator, handles types.
     ///
@@ -227,7 +245,7 @@ public:
     /// \param o         the operand
     ///
     /// \returns a DAG representing l op r
-    virtual DAG_node const *create_unary(
+    DAG_node const *create_unary(
         Unary_operator op,
         DAG_node const  *o)  MDL_FINAL;
 
@@ -238,7 +256,7 @@ public:
     /// \param r         the right operand
     ///
     /// \returns a DAG representing l op r
-    virtual DAG_node const *create_binary(
+    DAG_node const *create_binary(
         Binary_operator op,
         DAG_node const  *l,
         DAG_node const  *r)  MDL_FINAL;
@@ -250,7 +268,7 @@ public:
     /// \param f_expr    the false expression
     ///
     /// \returns a DAG representing cond ? t_expr : f_expr
-    virtual DAG_node const *create_ternary(
+    DAG_node const *create_ternary(
         DAG_node const *cond,
         DAG_node const *t_expr,
         DAG_node const *f_expr)  MDL_FINAL;
@@ -259,7 +277,7 @@ public:
     ///
     /// \param s       a node producing a struct typed result
     /// \param member  the name of the member to select
-    virtual DAG_node const *create_select(
+    DAG_node const *create_select(
         DAG_node const *s,
         char const     *member)  MDL_FINAL;
 
@@ -270,120 +288,120 @@ public:
     /// \param n_values   number of values
     ///
     /// \note the element type cannot be derived from the values for zero-length arrays
-    virtual DAG_node const *create_array(
+    DAG_node const *create_array(
         IType const            *elem_type,
         DAG_node const * const values[],
         size_t                 n_values)  MDL_FINAL;
 
     /// Creates a boolean constant.
-    virtual DAG_constant const *create_bool_constant(bool f)  MDL_FINAL;
+    DAG_constant const *create_bool_constant(bool f)  MDL_FINAL;
 
     /// Creates an integer constant.
-    virtual DAG_constant const *create_int_constant(int i)  MDL_FINAL;
+    DAG_constant const *create_int_constant(int i)  MDL_FINAL;
 
     /// Creates a constant of the predefined intensity_mode enum.
     ///
     /// \param i  the index of the enum value
-    virtual DAG_constant const *create_emission_enum_constant(int i)  MDL_FINAL;
+    DAG_constant const *create_emission_enum_constant(int i)  MDL_FINAL;
 
     /// Creates a constant of the df::scatter_mode enum.
     ///
     /// \param i  the index of the enum value
-    virtual DAG_constant const *create_scatter_enum_constant(int i)  MDL_FINAL;
+    DAG_constant const *create_scatter_enum_constant(int i)  MDL_FINAL;
 
     /// Creates a constant of the tex::wrap_mode enum.
     ///
     /// \param i  the index of the enum value
-    virtual DAG_constant const *create_wrap_mode_enum_constant(int i)  MDL_FINAL;
+    DAG_constant const *create_wrap_mode_enum_constant(int i)  MDL_FINAL;
 
     /// Creates a floating point constant.
-    virtual DAG_constant const *create_float_constant(float f)  MDL_FINAL;
+    DAG_constant const *create_float_constant(float f)  MDL_FINAL;
 
     /// Creates a float3 constant.
-    virtual DAG_constant const *create_float3_constant(float x, float y, float z)  MDL_FINAL;
+    DAG_constant const *create_float3_constant(float x, float y, float z)  MDL_FINAL;
 
     /// Creates a RGB color constant.
-    virtual DAG_constant const *create_color_constant( float r, float g, float b)  MDL_FINAL;
+    DAG_constant const *create_color_constant( float r, float g, float b)  MDL_FINAL;
 
     /// Creates a RGB color constant of the global material IOR value.
-    virtual DAG_constant const *create_global_ior() MDL_FINAL;
+    DAG_constant const *create_global_ior() MDL_FINAL;
 
     /// Creates a float constant of the global material IOR green value.
-    virtual DAG_constant const *create_global_float_ior() MDL_FINAL;
+    DAG_constant const *create_global_float_ior() MDL_FINAL;
 
     /// Creates a string constant.
-    virtual DAG_constant const *create_string_constant(char const *s)  MDL_FINAL;
+    DAG_constant const *create_string_constant(char const *s)  MDL_FINAL;
 
     /// Creates an invalid bsdf.
-    virtual DAG_constant const *create_bsdf_constant()  MDL_FINAL;
+    DAG_constant const *create_bsdf_constant()  MDL_FINAL;
 
     /// Creates an invalid edf.
-    virtual DAG_constant const *create_edf_constant()  MDL_FINAL;
+    DAG_constant const *create_edf_constant()  MDL_FINAL;
 
     /// Creates an invalid vdf.
-    virtual DAG_constant const *create_vdf_constant()  MDL_FINAL;
+    DAG_constant const *create_vdf_constant()  MDL_FINAL;
 
     /// Creates an invalid hair_bsdf.
-    virtual DAG_constant const *create_hair_bsdf_constant()  MDL_FINAL;
+    DAG_constant const *create_hair_bsdf_constant()  MDL_FINAL;
 
     /// Create a bsdf_component for a mixer; can be a call or a constant.
-    virtual DAG_node const *create_bsdf_component(
+    DAG_node const *create_bsdf_component(
         DAG_node const* weight_arg,
         DAG_node const* bsdf_arg)  MDL_FINAL;
 
     /// Create a edf_component for a mixer; can be a call or a constant.
-    virtual DAG_node const *create_edf_component(
+    DAG_node const *create_edf_component(
         DAG_node const* weight_arg,
         DAG_node const* edf_arg)  MDL_FINAL;
 
     /// Create a vdf_component for a mixer; can be a call or a constant.
-    virtual DAG_node const *create_vdf_component(
+    DAG_node const *create_vdf_component(
         DAG_node const* weight_arg,
         DAG_node const* vdf_arg)  MDL_FINAL;
 
     /// Create a bsdf_color_component for a color mixer; can be a call or a constant.
-    virtual DAG_node const *create_color_bsdf_component(
+    DAG_node const *create_color_bsdf_component(
         DAG_node const* weight_arg,
         DAG_node const* bsdf_arg)  MDL_FINAL;
 
     /// Create a edf_color_component for a color mixer; can be a call or a constant.
-    virtual DAG_node const *create_color_edf_component(
+    DAG_node const *create_color_edf_component(
         DAG_node const* weight_arg,
         DAG_node const* edf_arg)  MDL_FINAL;
 
     /// Create a vdf_color_component for a color mixer; can be a call or a constant.
-    virtual DAG_node const *create_color_vdf_component(
+    DAG_node const *create_color_vdf_component(
         DAG_node const* weight_arg,
         DAG_node const* edf_arg)  MDL_FINAL;
 
     /// Create a constant node for a given type and value.
-    virtual DAG_constant const* mk_constant( const char* const_type, const char* value)  MDL_FINAL;
+    DAG_constant const* mk_constant( const char* const_type, const char* value)  MDL_FINAL;
 
     /// Create DAG_node's for possible default values of Node_types parameter.
-    virtual DAG_node const* mk_default( const char* param_type, const char* param_default)  MDL_FINAL;
+    DAG_node const* mk_default( const char* param_type, const char* param_default)  MDL_FINAL;
 
     /// Returns the argument count if node is non-null and of the call kind or a compound constant,
     /// and 0 otherwise.
-    virtual size_t get_compound_argument_size(DAG_node const* node)  MDL_FINAL;
+    size_t get_compound_argument_size(DAG_node const* node)  MDL_FINAL;
 
     /// Return the i-th argument if node is non-null and of the call kind, or a compound constant,
     /// and NULL otherwise.
-    virtual DAG_node const *get_compound_argument(DAG_node const* node, size_t i)  MDL_FINAL;
+    DAG_node const *get_compound_argument(DAG_node const* node, size_t i)  MDL_FINAL;
 
     /// Return the i-th argument if node is non-null and of the call kind, or a compound constant,
     /// and NULL otherwise; remaps index for special case handling of mixers and parameter
     /// order of glossy BSDFs.
-    virtual DAG_node const *get_remapped_argument(DAG_node const* node, size_t i)  MDL_FINAL;
+    DAG_node const *get_remapped_argument(DAG_node const* node, size_t i)  MDL_FINAL;
 
     /// Returns the name of the i-th parameter of node, or NULL if there is none or node is NULL.
-    virtual char const *get_compound_parameter_name(DAG_node const *node, size_t i) const  MDL_FINAL;
+    char const *get_compound_parameter_name(DAG_node const *node, size_t i) const  MDL_FINAL;
 
     /// Returns true if node evaluates to true
-    virtual bool eval_if( DAG_node const* node)  MDL_FINAL;
+    bool eval_if( DAG_node const* node)  MDL_FINAL;
 
     /// Returns true if node is not evaluating to false, i.e., it either evaluates
     /// to true or cannot be evaluated.
-    virtual bool eval_maybe_if( DAG_node const* node)  MDL_FINAL;
+    bool eval_maybe_if( DAG_node const* node)  MDL_FINAL;
 
     /// Compute the node selector for the matcher, either the semantic for a DAG_call
     /// node, or one of the Distiller_extended_node_semantics covering DAG_constant 
@@ -391,25 +409,25 @@ public:
     /// one of the material structs, and selectors for mix_1, mix_2, mix_3, 
     /// clamped_mix_1, ..., as well as a special selector for local_normal.
     /// All other nodes return 0.
-    virtual int get_selector( DAG_node const* node) const  MDL_FINAL;
+    int get_selector( DAG_node const* node) const  MDL_FINAL;
 
     /// Checks recursively for all call nodes if the property test_fct returns true.
-    virtual bool all_nodes(
+    bool all_nodes(
         IRule_matcher::Checker_function test_fct,
         DAG_node const *node) MDL_FINAL;
 
     /// Set the normalization of mixer node flag and return its previous value.
-    virtual bool set_normalize_mixers( bool new_value)  MDL_FINAL;
+    bool set_normalize_mixers( bool new_value)  MDL_FINAL;
 
     /// Normalize mixer nodes and set respective flag to keep them normalized
-    virtual IGenerated_code_dag::IMaterial_instance *normalize_mixers(
+    IGenerated_code_dag::IMaterial_instance *normalize_mixers(
         IGenerated_code_dag::IMaterial_instance const *inst,
         IRule_matcher_event                           *event_handler,
         const mi::mdl::Distiller_options              *options,
         mi::Sint32                                    &error) MDL_FINAL;
 
     /// Immediately deletes this distiller plugin API
-    virtual void release() const MDL_FINAL; 
+    void release() const MDL_FINAL;
 
 private:
     /// Convert a enum typed value to int.

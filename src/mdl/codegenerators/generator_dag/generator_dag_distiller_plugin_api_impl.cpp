@@ -832,6 +832,24 @@ DAG_parameter const *Distiller_plugin_api_impl::create_parameter(IType const *ty
     return res;
 }
 
+// Enable common subexpression elimination.
+bool Distiller_plugin_api_impl::enable_cse(bool flag)
+{
+    return m_node_factory->enable_cse(flag);
+}
+
+// Enable optimization.
+bool Distiller_plugin_api_impl::enable_opt(bool flag)
+{
+    return m_node_factory->enable_opt(flag);
+}
+
+// Enable unsafe math optimizations.
+bool Distiller_plugin_api_impl::enable_unsafe_math_opt(bool flag)
+{
+    return m_node_factory->enable_unsafe_math_opt(flag);
+}
+
 // Get the type factory associated with this expression factory.
 IType_factory *Distiller_plugin_api_impl::get_type_factory()
 {

@@ -1469,7 +1469,7 @@ private:
 /// the callback).
 ///
 /// \param module_name    The DB name of the MDLE module.
-/// \param mdle_callback  A callback to map the filename of MDLE modules.
+/// \param mdle_callback  A callback to map the filename of MDLE modules.
 /// \return               The serialized module name (not necessarily a syntactically valid
 ///                       DB module name), or the empty string in case of errors.
 std::string serialize_mdle_module_name(
@@ -1523,7 +1523,7 @@ std::string serialize_mdle_module_name(
 /// the callback).
 ///
 /// \param type_name      The (core) name of the MDLE type.
-/// \param mdle_callback  A callback to map the filename of MDLE modules.
+/// \param mdle_callback  A callback to map the filename of MDLE modules.
 /// \return               The serialized type name (not necessarily a syntactically valid
 ///                       (core) type name, or the empty string in case of errors.
 std::string serialize_mdle_type_name(
@@ -1760,7 +1760,7 @@ private:
 /// the callback).
 ///
 /// \param module_name    The serialized name of the MDLE module.
-/// \param mdle_callback  A callback to map the filename of MDLE modules.
+/// \param mdle_callback  A callback to map the filename of MDLE modules.
 /// \return               The DB module name, or the empty string in case of errors.
 std::string deserialize_mdle_module_name(
     const std::string& module_name,
@@ -1813,7 +1813,7 @@ std::string deserialize_mdle_module_name(
 /// the callback).
 ///
 /// \param type_name      The serialized name of the MDLE type.
-/// \param mdle_callback  A callback to map the filename of MDLE modules.
+/// \param mdle_callback  A callback to map the filename of MDLE modules.
 /// \return               The (core) type name, or the empty string in case of errors.
 std::string deserialize_mdle_type_name(
     const std::string& type_name,
@@ -2604,8 +2604,12 @@ Mdl_dag_builder<T>::Mdl_dag_builder(
     m_dag_builder( dag_builder),
     m_type_factory( dag_builder->get_type_factory()),
     m_value_factory( dag_builder->get_value_factory()),
-    m_compiled_material( compiled_material)
+    m_compiled_material( compiled_material),
+    m_enable_opt( dag_builder->enable_opt( true))
 {
+    // reset the flag of the builder
+    dag_builder->enable_opt( m_enable_opt);
+
     if( !compiled_material)
        return;
 
@@ -2899,6 +2903,15 @@ const mi::mdl::DAG_node* Mdl_dag_builder<T>::int_expr_call_to_mdl_dag_node_share
     const char* definition_core_name = code_dag.get_name( definition_index);
 
     mi::mdl::IDefinition::Semantics sema = code_dag.get_semantics( definition_index);
+
+    if( sema == mi::mdl::IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS) {
+        // use the original name if exists, the core expects that the name of field_access
+        // functions use always the original name
+        if( const char* orig_name = code_dag.get_original_name( definition_index)) {
+            definition_core_name = orig_name;
+        }
+    }
+
     bool is_array_constructor = sema == mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR;
     bool is_array_length      = sema == mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_LENGTH;
 
@@ -6316,7 +6329,7 @@ Name_mangler::Name_mangler( mi::mdl::IMDL* mdl, mi::mdl::IModule* module)
     int major = 0;
     int minor = 0;
     m_module->get_version( major, minor);
-    m_namespace_aliases_legal = major == 1 && minor <= 7;
+    m_namespace_aliases_legal = major == 1 && (minor == 6 || minor == 7);
 
     for( int i = 0, n = m_module->get_declaration_count(); i < n; ++i) {
 

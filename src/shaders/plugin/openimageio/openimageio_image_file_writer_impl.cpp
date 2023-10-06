@@ -231,17 +231,21 @@ bool Image_file_writer_impl::write(
     const mi::Uint8* data = static_cast<const mi::Uint8*>( tile2->get_data());
     data += (m_resolution_y - 1) * static_cast<size_t>( bytes_per_row);
 
-    // Use write_scanlines() instead of write_image(). The latter does not allow to specify a
-    // single layer.
-    bool success = m_image_output->write_scanlines(
-        /*ybegin*/ 0,
-        /*yend*/ m_resolution_y,
-        /*z*/ z,
-        format,
-        data,
-        /*xstride*/ OIIO::AutoStride,
-        /*ystride*/ -bytes_per_row);
-    return success;
+    try {
+        // Use write_scanlines() instead of write_image(). The latter does not allow to specify a
+        // single layer.
+        bool success = m_image_output->write_scanlines(
+            /*ybegin*/ 0,
+            /*yend*/ m_resolution_y,
+            /*z*/ z,
+            format,
+            data,
+            /*xstride*/ OIIO::AutoStride,
+            /*ystride*/ -bytes_per_row);
+        return success;
+    } catch( const std::bad_alloc&) {
+        return false;
+    }
 }
 
 bool Image_file_writer_impl::is_valid() const

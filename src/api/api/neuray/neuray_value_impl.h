@@ -388,6 +388,8 @@ public:
 
     const char* get_selector() const;
 
+    const char* get_owner_module() const;
+
 private:
     const mi::base::Handle<mi::neuraylib::ITransaction> m_transaction;
     mutable std::string m_cached_selector;
@@ -412,6 +414,8 @@ public:
 
     const char* get_file_path() const;
 
+    const char* get_owner_module() const;
+
 private:
     const mi::base::Handle<mi::neuraylib::ITransaction> m_transaction;
 };
@@ -434,6 +438,8 @@ public:
     mi::Sint32 set_value( const char* value);
 
     const char* get_file_path() const;
+
+    const char* get_owner_module() const;
 
 private:
     const mi::base::Handle<mi::neuraylib::ITransaction> m_transaction;

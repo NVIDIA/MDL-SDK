@@ -3434,6 +3434,24 @@ DAG_parameter const *Generated_code_dag::Material_instance::create_parameter(
     return NULL;
 }
 
+// Enable common subexpression elimination.
+bool Generated_code_dag::Material_instance::enable_cse(bool flag)
+{
+    return m_node_factory.enable_cse(flag);
+}
+
+// Enable optimization.
+bool Generated_code_dag::Material_instance::enable_opt(bool flag)
+{
+    return m_node_factory.enable_opt(flag);
+}
+
+// Enable unsafe math optimizations.
+bool Generated_code_dag::Material_instance::enable_unsafe_math_opt(bool flag)
+{
+    return m_node_factory.enable_unsafe_math_opt(flag);
+}
+
 // Add a temporary.
 int Generated_code_dag::Material_instance::add_temporary(DAG_node const *value) {
     int count = m_temporaries.size();

@@ -972,6 +972,9 @@ public:
         T* dag_builder,
         const Mdl_compiled_material* compiled_material);
 
+    /// Destructor.
+    ~Mdl_dag_builder() { m_dag_builder->enable_opt(m_enable_opt); }
+
     /// Converts an MDL::IExpression plus mi::mdl::IType into an mi::mdl::DAG_node.
     ///
     /// \note This method is meant for external callers. Do \em not use this method from within the
@@ -998,6 +1001,9 @@ public:
     /// Returns the cached parameter types.
     const std::vector<const mi::mdl::IType*>& get_parameter_types() const
     { return m_parameter_types; }
+
+    /// Disable optimizations on DAG_node construction and return the old value.
+    bool enable_opt(bool flag) { return m_dag_builder->enable_opt(flag); }
 
 private:
     const mi::mdl::DAG_node* int_expr_constant_to_mdl_dag_node(
@@ -1059,6 +1065,8 @@ private:
     std::set<DB::Tag> m_set_indirect_calls;
     /// Cache of already converted function calls or material instances.
     std::map<DB::Tag, const mi::mdl::DAG_node*> m_converted_call_expressions;
+    /// Original setting of the optimize flag.
+    bool m_enable_opt;
 };
 
 

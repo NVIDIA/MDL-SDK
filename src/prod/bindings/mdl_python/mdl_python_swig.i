@@ -58,6 +58,36 @@
 
 #include "mdl_python.h"
 
+namespace {
+#if __cplusplus >= 201703L
+    constexpr bool starts_with(const char* str, const char* prefix)
+    {
+        size_t n = std::char_traits<char>::length(str);
+        size_t pn = std::char_traits<char>::length(prefix);
+        return (pn > n) ? false : std::char_traits<char>::compare(str, prefix, pn) == 0;
+    }
+    constexpr bool ends_with(const char* str, const char* suffix)
+    {
+        size_t n = std::char_traits<char>::length(str);
+        size_t sn = std::char_traits<char>::length(suffix);
+        return (sn > n) ? false : std::char_traits<char>::compare(str + n - sn, suffix, sn) == 0;
+    }
+#else
+    bool starts_with(const char* str, const char* prefix)
+    {
+        size_t n = strlen(str);
+        size_t pn = strlen(prefix);
+        return (pn > n) ? false : strncmp(str, prefix, pn) == 0;
+    }
+    bool ends_with(const char* str, const char* suffix)
+    {
+        size_t n = strlen(str);
+        size_t sn = strlen(suffix);
+        return (sn > n) ? false : strncmp(str + n - sn, suffix, sn) == 0;
+    }
+#endif
+}
+
 std::mutex SmartPtrBase::s_lock_open_handles;
 std::map<void*, SmartPtrBase::Open_handle>SmartPtrBase::s_open_handles;
 bool SmartPtrBase::s_print_ref_counts = false;
@@ -287,6 +317,32 @@ namespace mi
             }
         }
     }
+
+    %typemap(check) SmartPtr<IINTERFACE_TYPE ARGS> *self {
+        // filter cases that are supposed to work with nullptrs
+        %#if __cplusplus >= 201703L
+            constexpr bool filtered = 
+        %#else
+            const bool filtered =
+        %#endif
+            ends_with("$symname", "is_valid_interface") ||  // when an returned IInterface is null, we get a nullptr in the SmartPtr, which is expected
+            ends_with("$symname", "__enter__") ||           // when an returned IInterface is used in a `with .. as ..` statement
+            ends_with("$symname", "__exit__") ||            // when an returned IInterface is used in a `with .. as ..` statement
+            starts_with("$symname", "delete_");             // when exiting a `with .. as ..` statement, the refcount of the SmartPtr is already zero
+        if (!$1->is_valid_interface() && !filtered)
+        {
+            // __debugbreak(); // can be used for debugging, don't enable in production because users could use these exceptions intentionally
+            SWIG_exception_fail(SWIG_ArgError(SWIG_NullReferenceError), "called wrapped " "IINTERFACE_TYPE" " which is not a valid interface (None)");
+        }
+    }
+    %typemap(check) IINTERFACE_TYPE ARGS *self {
+        if (!$1) {
+            // __debugbreak();
+            PyErr_SetString(PyExc_RuntimeError, "called " "IINTERFACE_TYPE" " that is not a valid interface (None)");
+            SWIG_fail;
+        }
+    }
+
 %enddef
 
 // Instantiate Handle template for Neuray IInterfaces
@@ -895,6 +951,10 @@ DICE_INTERFACE(IMdl_evaluator_api);
 DICE_INTERFACE(IMessage);
 DICE_INTERFACE(IMdl_distiller_api);
 DICE_INTERFACE(IMdl_execution_context);
+DICE_INTERFACE(IMdl_resolved_module);
+DICE_INTERFACE(IMdl_resolved_resource);
+DICE_INTERFACE(IMdl_resolved_resource_element);
+DICE_INTERFACE(IMdl_entity_resolver);
 DICE_INTERFACE(IMdl_factory);
 DICE_INTERFACE(IMdl_impexp_api);
 DICE_INTERFACE(IMdl_module_builder)
@@ -1542,6 +1602,7 @@ WRAP_TEMPLATE_RETURN_IN_FUNCTION(mi::neuraylib::ITransaction, edit)
 %include "mi/neuraylib/imdl_configuration.h"
 %include "mi/neuraylib/imdl_distiller_api.h"
 %include "mi/neuraylib/imdl_evaluator_api.h"
+%include "mi/neuraylib/imdl_entity_resolver.h"
 %include "mi/neuraylib/imdl_execution_context.h"
 %include "mi/neuraylib/imdl_factory.h"
 %include "mi/neuraylib/imdl_impexp_api.h"
@@ -1575,6 +1636,10 @@ NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_configuration)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_distiller_api)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_evaluator_api)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_execution_context)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_resolved_module)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_resolved_resource)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_resolved_resource_element)
+NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_entity_resolver)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_factory)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_impexp_api)
 NEURAY_DEFINE_HANDLE_TYPEMAP(mi::neuraylib::IMdl_module_builder)
@@ -1672,6 +1737,10 @@ NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_configuration)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_distiller_api)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_evaluator_api)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_execution_context)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_resolved_module)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_resolved_resource)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_resolved_resource_element)
+NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_entity_resolver)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdle_deserialization_callback)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdle_serialization_callback)
 NEURAY_CREATE_HANDLE_TEMPLATE(mi::neuraylib, IMdl_factory)

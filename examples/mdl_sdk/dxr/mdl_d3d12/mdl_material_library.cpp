@@ -810,6 +810,8 @@ Mdl_texture_set* Mdl_material_library::access_texture_resource(
             {
                 mi::base::Handle<const mi::neuraylib::ITile> tile(canvas->get_tile(l));
                 const uint8_t* tex_data = static_cast<const uint8_t*>(tile->get_data());
+                // Note, the data is alligned bottom up. So the first pixel row we get is from the bottom.
+                // Direct3D expects the data the other way around.
 
                 // copy line by line if required
                 uint8_t* buffer_layer = buffer + gpu_row_pitch * tex_height * l;

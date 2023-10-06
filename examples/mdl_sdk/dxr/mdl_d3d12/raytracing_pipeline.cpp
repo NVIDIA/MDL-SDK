@@ -695,10 +695,10 @@ bool Raytracing_acceleration_structure::set_instance_transform(
 // ------------------------------------------------------------------------------------------------
 
 bool Raytracing_acceleration_structure::build_top_level_structure(
-    D3DCommandList* command_list)
+    D3DCommandList* command_list, bool update)
 {
-    if (m_instance_buffer) {
-        log_error("Acceleration structure already build. Update not implemented: " +
+    if (m_instance_buffer && !update) {
+        log_error("Acceleration structure already build: " +
                     m_debug_name, SRC);
         return false;
     }
@@ -748,7 +748,11 @@ bool Raytracing_acceleration_structure::build_top_level_structure(
 
     // create the actual top level structure
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS buildFlags =
-        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE |
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE;
+
+    if (update)
+        buildFlags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
 
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS accel_inputs = {};
     accel_inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
@@ -771,7 +775,7 @@ bool Raytracing_acceleration_structure::build_top_level_structure(
             "_ScratchResource"))
             return false;
     }
-    if (!allocate_resource(
+    if (!update && !allocate_resource(
         &m_top_level_structure,
         prebuild_info.ResultDataMaxSizeInBytes,
         D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
@@ -782,6 +786,12 @@ bool Raytracing_acceleration_structure::build_top_level_structure(
     build_desc.Inputs = accel_inputs;
     build_desc.ScratchAccelerationStructureData = m_scratch_resource->GetGPUVirtualAddress();
     build_desc.DestAccelerationStructureData = m_top_level_structure->GetGPUVirtualAddress();
+
+    if (update)
+    {
+        // in place update
+        build_desc.SourceAccelerationStructureData = m_top_level_structure->GetGPUVirtualAddress();
+    }
 
     auto resource_barrier = CD3DX12_RESOURCE_BARRIER::UAV(m_top_level_structure.Get());
     command_list->BuildRaytracingAccelerationStructure(&build_desc, 0, 0);
@@ -797,7 +807,14 @@ bool Raytracing_acceleration_structure::build(D3DCommandList* command_list)
     for (size_t i = 0, n = m_bottom_level_structures.size(); i < n; ++i)
         if (!build_bottom_level_structure(command_list, i)) return false;
 
-    return build_top_level_structure(command_list);
+    return build_top_level_structure(command_list, false);
+}
+
+// ------------------------------------------------------------------------------------------------
+
+bool Raytracing_acceleration_structure::update(D3DCommandList* command_list)
+{
+    return build_top_level_structure(command_list, true);
 }
 
 // ------------------------------------------------------------------------------------------------

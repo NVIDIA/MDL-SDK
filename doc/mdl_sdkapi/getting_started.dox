@@ -79,7 +79,7 @@ The example source code requires a C++17 compiler. Some examples require additio
 The build with the following x64-platform-compiler combinations has been 
 successfully tested:
 
--   **Windows 10:**            Microsoft Visual Studio 2017 (msvc v141) or 2019 (msvc v142)
+-   **Windows 10:**            Microsoft Visual Studio 2019 (msvc v142)
 -   **CentOS 7, Debian 11**:   GCC 7 or GCC 10 (on x86-64 or aarch64)
 -   **Mac OS X 12.6:**         Xcode 12.4 (Apple Clang 12.0.0)
 
@@ -193,12 +193,12 @@ features.
     example binaries.
 
     It is recommended that you build into a subdirectory, not into the example root.
-    C:/projects/mdl-sdk/examples/build/vs2017 for example is fine, assuming you extracted the mdl-sdk to:
+    C:/projects/mdl-sdk/examples/build/vs2019 for example is fine, assuming you extracted the mdl-sdk to:
 
         C:/projects/mdl-sdk
 
 3.  After clicking ``Configure``, CMake asks you to choose the
-    Generator. Select `Visual Studio 15 2017` (or higher) and click
+    Generator. Select `Visual Studio 16 2019` (or higher) and click
     `Finish`. CMake starts to configure the build and stops several
     times when user input is required to resolve dependencies.
 

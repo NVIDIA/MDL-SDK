@@ -368,6 +368,11 @@ void Camera_controls::fit_into_view(const Bounding_box& worldspace_aabb)
     float distance = radius / tanf(0.5f * min_fov);
     trafo = Transform::look_at(center - view_dir * distance, center, { 0.0f, 1.0f, 0.0f });
 
+    // adjust far and near plane
+    float farplane = std::max(1000.0f, (length(trafo.translation - center) + radius) * 2.0f);
+    m_target->get_camera()->set_far_plane_distance(farplane);
+    m_target->get_camera()->set_near_plane_distance(farplane * 0.00001f);
+
     // re-compute the local node transformation
     DirectX::XMMATRIX local_trafo = trafo.get_matrix();
     if (m_target->get_parent())

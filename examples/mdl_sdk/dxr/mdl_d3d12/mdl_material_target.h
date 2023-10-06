@@ -48,26 +48,16 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
     // --------------------------------------------------------------------------------------------
 
-    /// Part of the per material constant buffer layout
-    /// Contains the function indices required for evaluating mdl functions in the shader.
-    struct Mdl_material_function_indices
-    {
-        int32_t init_index;
-        int32_t scattering_function_index;
-        int32_t opacity_function_index;
-        int32_t emission_function_index;
-        int32_t emission_intensity_function_index;
-        int32_t thin_walled_function_index;
-        int32_t volume_absorption_coefficient_function_index;
-        int32_t standalone_opacity_function_index;
-    };
-
-    // --------------------------------------------------------------------------------------------
-
     /// Information about a target that is required by a material.
     struct Mdl_material_target_interface
     {
-        Mdl_material_function_indices indices;
+        bool has_init = false;
+        bool has_surface_scattering = false;
+        bool has_surface_emission = false;
+        bool has_backface_scattering = false;
+        bool has_backface_emission = false;
+        bool has_volume_absorption = false;
+        bool can_be_thin_walled = false;
         mi::Size argument_layout_index;
     };
 

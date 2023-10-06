@@ -550,8 +550,12 @@ char const *Module::get_owner_module_name(IDefinition const *idef) const
 {
     Definition const *def = impl_cast<Definition>(idef);
 
-    if (def->has_flag(Definition::DEF_IS_PREDEFINED))
+    if (def->has_flag(Definition::DEF_IS_PREDEFINED)) {
         return "";
+    }
+
+    MDL_ASSERT(def->get_owner_module_id() == m_unique_id && "Definition belongs to other module");
+
     size_t import_idx = def->get_original_import_idx();
     if (import_idx == 0) {
         // from this module
@@ -567,6 +571,8 @@ char const *Module::get_owner_module_name(IDefinition const *idef) const
 Module const *Module::get_owner_module(IDefinition const *idef) const
 {
     Definition const *def = impl_cast<Definition>(idef);
+
+    MDL_ASSERT(def->get_owner_module_id() == m_unique_id && "Definition belongs to other module");
 
     if (def->has_flag(Definition::DEF_IS_PREDEFINED)) {
         this->retain();
@@ -615,12 +621,23 @@ Definition const *Module::get_original_definition(
         Definition const *def_def = def->get_definite_definition();
         return def_def != NULL ? def_def : def;
     }
+
     size_t import_idx = def->get_original_import_idx();
     if (import_idx == 0) {
         // not imported
         Definition const *def_def = def->get_definite_definition();
         return def_def != NULL ? def_def : def;
     }
+
+    // Beware: Currently the builtins module is wrong, becaue it uses state::normal()
+    // from the state module directly, instead of importing it. Unfortunately
+    // because the builtins module is a neuray "invention", it is not possible
+    // to implement it right(because every module imports builtins)...
+    //
+    // Hence we life with this ugliness, but need either an extra case in
+    // this assert OR move it a little bit down, so we do not fall into the bad case ...
+    MDL_ASSERT(def->get_owner_module_id() == m_unique_id && "Definition belongs to other module");
+
     if (Import_entry const *entry = get_import_entry(import_idx)) {
         if (Module const *owner = entry->get_module()) {
             def = owner->lookup_original_definition(def);
@@ -2513,11 +2530,15 @@ Module const *Module::do_find_imported_module(char const *absname, bool &direct)
 
     for (size_t i = 0, n = m_imported_modules.size(); i < n; ++i) {
         Import_entry const &entry = m_imported_modules[i];
+        Module const *direct_imp = entry.get_module();
 
-        Module const *imp_mod = entry.get_module()->find_imported_module(absname, direct);
-        if (imp_mod != NULL) {
-            direct = false;
-            return imp_mod;
+        // import modules might be released, so check here
+        if (direct_imp != NULL) {
+            Module const *imp_mod = direct_imp->find_imported_module(absname, direct);
+            if (imp_mod != NULL) {
+                direct = false;
+                return imp_mod;
+            }
         }
     }
     return NULL;

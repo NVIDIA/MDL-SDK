@@ -2835,6 +2835,16 @@ MDL_resource_set *MDL_resource_set::from_mask_container(
         string forward(file_mask, alloc);
         forward = convert_os_separators_to_slashes(forward);
 
+        // get the length of the "directory" inside the archive
+        string dname(alloc);
+        size_t dname_len = forward.rfind('/');
+        if (dname_len != string::npos) {
+            // length of directory PLUS separator
+            ++dname_len;
+        } else {
+            dname_len = 0;
+        }
+
         string container_name_str(container_name, alloc);
 
         for (int i = 0, n = container->get_num_entries(); i < n; ++i) {
@@ -2862,8 +2872,25 @@ MDL_resource_set *MDL_resource_set::from_mask_container(
                     }
                 }
 
+                // this is ugly: parse_name_mapping() expects a file name AND the "directory",
+                // we cannot split at the container, because the info offsets are computed for the
+                // file name only, so fix it...
+
+                string container_plus_dname = container_name_str;
+                if (dname_len > 0) {
+                    // add the directory WITHOUT the separator
+                    container_plus_dname.append(':');
+                    container_plus_dname.append(fname.substr(0, dname_len - 1));
+                }
+
                 parse_name_mapping(
-                    alloc, res_set, fname.c_str(), url, container_name_str, ':', info,
+                    alloc,
+                    res_set,
+                    fname.c_str() + dname_len,
+                    url,
+                    container_plus_dname,
+                    dname_len == 0 ? ':' : os_separator(),
+                    info,
                     has_hash ? hash : NULL);
             }
         }

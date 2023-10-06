@@ -51,8 +51,9 @@ namespace {
 static size_t calc_name_hash(char const *name)
 {
     size_t hash = 0;
-    for (size_t i = 0; name[i] != '\0'; ++i)
+    for (size_t i = 0; name[i] != '\0'; ++i) {
         hash = hash * 9 ^ size_t(name[i]);
+    }
     return hash;
 }
 
@@ -112,7 +113,7 @@ private:
     Constant_impl(size_t id, IValue const *value)
     : Base(id)
     , m_value(value)
-    {   
+    {
     }
 
 private:
@@ -174,8 +175,9 @@ public:
     /// Get the name of the parameter corresponding to the argument at position index.
     char const *get_parameter_name(int index) const MDL_FINAL
     {
-        if ((index < 0) || (m_parameter_names.size() <= size_t(index)))
+        if ((index < 0) || (m_parameter_names.size() <= size_t(index))) {
             return NULL;
+        }
         return m_parameter_names[index];
 
     }
@@ -183,17 +185,20 @@ public:
     /// Get the argument at position index.
     DAG_node const *get_argument(int index) const MDL_FINAL
     {
-        if ((index < 0) || (m_arguments.size() <= size_t(index)))
+        if ((index < 0) || (m_arguments.size() <= size_t(index))) {
             return NULL;
+        }
         return m_arguments[index];
     }
 
     /// Get the argument for parameter name.
     DAG_node const *get_argument(const char *name) const MDL_FINAL
     {
-        for (size_t i = 0, n = m_parameter_names.size(); i < n; ++i)
-            if (strcmp(m_parameter_names[i], name) == 0)
+        for (size_t i = 0, n = m_parameter_names.size(); i < n; ++i) {
+            if (strcmp(m_parameter_names[i], name) == 0) {
                 return m_arguments[i];
+            }
+        }
         return NULL;
     }
 
@@ -203,8 +208,9 @@ public:
     /// Set the argument expression of a call.
     void set_argument(int index, DAG_node const *arg) MDL_FINAL
     {
-        if (0 <= index && size_t(index) < m_arguments.size())
+        if (0 <= index && size_t(index) < m_arguments.size()) {
             m_arguments[index] = arg;
+        }
     }
 
     /// Get the name hash.
@@ -356,18 +362,21 @@ bool DAG_node_factory_impl::Equal_dag_node::operator()(
 {
     DAG_node::Kind kind = a->get_kind();
 
-    if (kind != b->get_kind())
+    if (kind != b->get_kind()) {
         return false;
+    }
 
     auto it_a = m_temp_name_map.find(a);
     auto it_b = m_temp_name_map.find(b);
     bool has_name_a = it_a != m_temp_name_map.end();
     bool has_name_b = it_b != m_temp_name_map.end();
-    if (has_name_a != has_name_b)
+    if (has_name_a != has_name_b) {
         return false;
+    }
 
-    if (has_name_a && strcmp(it_a->second, it_b->second) != 0)
+    if (has_name_a && strcmp(it_a->second, it_b->second) != 0) {
         return false;
+    }
 
     switch (kind) {
     case DAG_node::EK_CONSTANT:
@@ -392,18 +401,23 @@ bool DAG_node_factory_impl::Equal_dag_node::operator()(
             DAG_call const *cb = cast<DAG_call>(b);
 
             int n_args = ca->get_argument_count();
-            if (n_args != cb->get_argument_count())
+            if (n_args != cb->get_argument_count()) {
                 return false;
+            }
 
-            if (ca->get_semantic() != cb->get_semantic())
+            if (ca->get_semantic() != cb->get_semantic()) {
                 return false;
+            }
 
-            if (strcmp(ca->get_name(), cb->get_name()) != 0)
+            if (strcmp(ca->get_name(), cb->get_name()) != 0) {
                 return false;
+            }
 
-            for (int i = 0; i < n_args; ++i)
-                if (ca->get_argument(i) != cb->get_argument(i))
+            for (int i = 0; i < n_args; ++i) {
+                if (ca->get_argument(i) != cb->get_argument(i)) {
                     return false;
+                }
+            }
 
             MDL_ASSERT(ca->get_type() == cb->get_type());
             return true;
@@ -413,8 +427,9 @@ bool DAG_node_factory_impl::Equal_dag_node::operator()(
             DAG_parameter const *pa = cast<DAG_parameter>(a);
             DAG_parameter const *pb = cast<DAG_parameter>(b);
 
-            if (pa->get_index() != pb->get_index())
+            if (pa->get_index() != pb->get_index()) {
                 return false;
+            }
 
             MDL_ASSERT(pa->get_type() == pb->get_type());
             return true;
@@ -680,8 +695,9 @@ static bool equal_op_types(IType const *t, IType const *s)
 /// Check if the given DAG IR node represents a call to state::normal().
 static bool is_state_normal_call(DAG_node const *node)
 {
-    if (is<DAG_call>(node))
+    if (is<DAG_call>(node)) {
         return cast<DAG_call>(node)->get_semantic() == IDefinition::DS_INTRINSIC_STATE_NORMAL;
+    }
     return false;
 }
 
@@ -690,8 +706,9 @@ static bool is_float_one(DAG_node const *node)
 {
     if (is<DAG_constant>(node)) {
         IValue const *v = cast<DAG_constant>(node)->get_value();
-        if (is<IValue_float>(v))
+        if (is<IValue_float>(v)) {
             return v->is_one();
+        }
     }
     return false;
 }
@@ -701,8 +718,9 @@ static bool is_float_zero(DAG_node const *node)
 {
     if (is<DAG_constant>(node)) {
         IValue const *v = cast<DAG_constant>(node)->get_value();
-        if (is<IValue_float>(v))
+        if (is<IValue_float>(v)) {
             return v->is_zero();
+        }
     }
     return false;
 }
@@ -838,8 +856,9 @@ static bool is_color_from_float(DAG_node const *n)
             IValue_float const *r = rgb->get_value(0);
             IValue_float const *g = rgb->get_value(1);
 
-            if (r != g)
+            if (r != g) {
                 return false;
+            }
 
             IValue_float const *b = rgb->get_value(2);
 
@@ -990,8 +1009,9 @@ DAG_node const *DAG_node_factory_impl::normalize_thin_film(
     DAG_node const *base_arg = skip_temporaries(call_args[2].arg);
 
     // cannot handle parameters
-    if (is<DAG_parameter>(base_arg))
+    if (is<DAG_parameter>(base_arg)) {
         return NULL;
+    }
 
     // elimination: thin_film(..., bsdf()) -> bsdf()
     if (is<DAG_constant>(base_arg)) {
@@ -1018,23 +1038,23 @@ DAG_node const *DAG_node_factory_impl::normalize_thin_film(
     case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_FACTOR:
     case IDefinition::DS_INTRINSIC_DF_MEASURED_FACTOR:
     case IDefinition::DS_INTRINSIC_DF_TINT:
-    {
-        Call_clone<3> thin_film_clone(
-            this, name, sema, call_args, num_call_args, ret_type);
-        Call_clone<3> modifier_clone(this, base_call);
+        {
+            Call_clone<3> thin_film_clone(
+                this, name, sema, call_args, num_call_args, ret_type);
+            Call_clone<3> modifier_clone(this, base_call);
 
-        // base is the last argument for all propagating modifier bsdfs
-        size_t tint_base_arg_index = modifier_clone.size() - 1;
-        DAG_node const *tint_base = modifier_clone[tint_base_arg_index].arg;
+            // base is the last argument for all propagating modifier bsdfs
+            size_t tint_base_arg_index = modifier_clone.size() - 1;
+            DAG_node const *tint_base = modifier_clone[tint_base_arg_index].arg;
 
-        // create new thin_film call with base of tint
-        thin_film_clone[2].arg = tint_base;
-        DAG_node const *new_thin_film = thin_film_clone.create_call();
+            // create new thin_film call with base of tint
+            thin_film_clone[2].arg = tint_base;
+            DAG_node const *new_thin_film = thin_film_clone.create_call();
 
-        // create new modifier call with thin_film as base
-        modifier_clone[tint_base_arg_index].arg = new_thin_film;
-        return modifier_clone.create_call();
-    }
+            // create new modifier call with thin_film as base
+            modifier_clone[tint_base_arg_index].arg = new_thin_film;
+            return modifier_clone.create_call();
+        }
 
     // propagation:
     //   thin_film(..., mixer(bsdf_component[](bsdf_component(w_i, bsdf_i), ...)))
@@ -1045,53 +1065,57 @@ DAG_node const *DAG_node_factory_impl::normalize_thin_film(
     case IDefinition::DS_INTRINSIC_DF_COLOR_CLAMPED_MIX:
     case IDefinition::DS_INTRINSIC_DF_UNBOUNDED_MIX:
     case IDefinition::DS_INTRINSIC_DF_COLOR_UNBOUNDED_MIX:
-    {
-        Call_clone<3> thin_film_clone(
-            this, name, sema, call_args, num_call_args, ret_type);
-        Call_clone<1> mixer_clone(this, base_call);
+        {
+            Call_clone<3> thin_film_clone(
+                this, name, sema, call_args, num_call_args, ret_type);
+            Call_clone<1> mixer_clone(this, base_call);
 
-        if (DAG_call const *components_arg = as<DAG_call>(mixer_clone[0].arg)) {
-            if (components_arg->get_semantic() != IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR) {
-                MDL_ASSERT(!"Unexpected argument for a mixer");
-                return NULL;
-            }
-
-            // apply the thin_film to all components
-            Call_clone<8> array_constr_clone(this, components_arg);
-            for (size_t i = 0; i < array_constr_clone.size(); ++i) {
-                DAG_node const *bsdf_comp = array_constr_clone[i].arg;
-                if (DAG_call const *bsdf_comp_call = as<DAG_call>(bsdf_comp)) {
-                    if (bsdf_comp_call->get_semantic() != IDefinition::DS_ELEM_CONSTRUCTOR) {
-                        MDL_ASSERT(!"Expected bsdf_component constructor");
-                        return NULL;
-                    }
-
-                    Call_clone<2> comp_constr_clone(this, bsdf_comp_call);
-
-                    // create new thin_film call with the component of the bsdf_component as base
-                    thin_film_clone[2].arg = comp_constr_clone[1].arg;
-                    DAG_node const *new_thin_film = thin_film_clone.create_call();
-
-                    // create new bsdf_component constructor call with the new call as component
-                    comp_constr_clone[1].arg = new_thin_film;
-                    array_constr_clone[i].arg = comp_constr_clone.create_call();
-                } else if (is<DAG_constant>(bsdf_comp)) {
-                    // if bsdf_comp is a constant, the component part is bsdf(), thus nothing to do
-                } else {
-                    // we cannot handle parameters
+            if (DAG_call const *components_arg = as<DAG_call>(mixer_clone[0].arg)) {
+                if (components_arg->get_semantic() !=
+                    IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR)
+                {
+                    MDL_ASSERT(!"Unexpected argument for a mixer");
                     return NULL;
                 }
+
+                // apply the thin_film to all components
+                Call_clone<8> array_constr_clone(this, components_arg);
+                for (size_t i = 0; i < array_constr_clone.size(); ++i) {
+                    DAG_node const *bsdf_comp = array_constr_clone[i].arg;
+                    if (DAG_call const *bsdf_comp_call = as<DAG_call>(bsdf_comp)) {
+                        if (bsdf_comp_call->get_semantic() != IDefinition::DS_ELEM_CONSTRUCTOR) {
+                            MDL_ASSERT(!"Expected bsdf_component constructor");
+                            return NULL;
+                        }
+
+                        Call_clone<2> comp_constr_clone(this, bsdf_comp_call);
+
+                        // create new thin_film call with the component of the
+                        // bsdf_component as base
+                        thin_film_clone[2].arg = comp_constr_clone[1].arg;
+                        DAG_node const *new_thin_film = thin_film_clone.create_call();
+
+                        // create new bsdf_component constructor call with the new call as component
+                        comp_constr_clone[1].arg = new_thin_film;
+                        array_constr_clone[i].arg = comp_constr_clone.create_call();
+                    } else if (is<DAG_constant>(bsdf_comp)) {
+                        // if bsdf_comp is a constant, the component part is bsdf(),
+                        // thus nothing to do
+                    } else {
+                        // we cannot handle parameters
+                        return NULL;
+                    }
+                }
+
+                // create new call to the array constructor with the modified component constructors
+                mixer_clone[0].arg = array_constr_clone.create_call();
+
+                // create new call to the mixer with the modified array constructor
+                return mixer_clone.create_call();
             }
 
-            // create new call to the array constructor with the modified component constructors
-            mixer_clone[0].arg = array_constr_clone.create_call();
-
-            // create new call to the mixer with the modified array constructor
-            return mixer_clone.create_call();
+            return NULL;
         }
-
-        return NULL;
-    }
 
     // propagation: thin_film(..., layerer(..., bsdf_i, ...))
     // -> layerer(..., thin_film(..., bsdf_i), ...)
@@ -1099,30 +1123,30 @@ DAG_node const *DAG_node_factory_impl::normalize_thin_film(
     case IDefinition::DS_INTRINSIC_DF_COLOR_WEIGHTED_LAYER:
     case IDefinition::DS_INTRINSIC_DF_MEASURED_CURVE_LAYER:
     case IDefinition::DS_INTRINSIC_DF_COLOR_MEASURED_CURVE_LAYER:
-    {
-        Call_clone<3> thin_film_clone(
-            this, name, sema, call_args, num_call_args, ret_type);
-        Call_clone<5> layerer_clone(this, base_call);
+        {
+            Call_clone<3> thin_film_clone(
+                this, name, sema, call_args, num_call_args, ret_type);
+            Call_clone<5> layer_clone(this, base_call);
 
-        // for all these layerers, the layer argument is always the third to last
-        size_t layer_arg_index = layerer_clone.size() - 3;
-        if (DAG_call const *layer_call = as<DAG_call>(layerer_clone[layer_arg_index].arg)) {
-            // create new thin_film call with layer argument and use it as new layer
-            thin_film_clone[2].arg = layer_call;
-            layerer_clone[layer_arg_index].arg = thin_film_clone.create_call();
+            // for all these layers, the layer argument is always the third to last
+            size_t layer_arg_index = layer_clone.size() - 3;
+            if (DAG_call const *layer_call = as<DAG_call>(layer_clone[layer_arg_index].arg)) {
+                // create new thin_film call with layer argument and use it as new layer
+                thin_film_clone[2].arg = layer_call;
+                layer_clone[layer_arg_index].arg = thin_film_clone.create_call();
+            }
+
+            // for all these layers, the base argument is always the second to last
+            size_t base_arg_index = layer_clone.size() - 2;
+            if (DAG_call const *base_call = as<DAG_call>(layer_clone[base_arg_index].arg)) {
+                // create new thin_film call with base argument and use it as new base
+                thin_film_clone[2].arg = base_call;
+                layer_clone[base_arg_index].arg = thin_film_clone.create_call();
+            }
+
+            // create new call to the layer with the modified layer and base arguments
+            return layer_clone.create_call();
         }
-
-        // for all these layerers, the base argument is always the second to last
-        size_t base_arg_index = layerer_clone.size() - 2;
-        if (DAG_call const *base_call = as<DAG_call>(layerer_clone[base_arg_index].arg)) {
-            // create new thin_film call with base argument and use it as new base
-            thin_film_clone[2].arg = base_call;
-            layerer_clone[base_arg_index].arg = thin_film_clone.create_call();
-        }
-
-        // create new call to the layerer with the modified layer and base arguments
-        return layerer_clone.create_call();
-    }
 
     default:
         return NULL;
@@ -2328,13 +2352,15 @@ DAG_node const *DAG_node_factory_impl::create_call(
 
                         IValue const *v = cast<DAG_constant>(base)->get_value();
                         v = v->extract(&m_value_factory, idx);
-                        if (!is<IValue_bad>(v))
+                        if (!is<IValue_bad>(v)) {
                             return create_constant(v);
+                        }
                     }
                 }
             }
-            if (op != IExpression::OK_CALL)
+            if (op != IExpression::OK_CALL) {
                 return create_operator_call(name, op, call_args, ret_type);
+            }
         } else if (sema == IDefinition::DS_CONV_OPERATOR || mi::mdl::is_constructor(sema)) {
             return create_constructor_call(name, sema, call_args, num_call_args, ret_type);
         }
@@ -2456,10 +2482,12 @@ DAG_node const *DAG_node_factory_impl::create_call(
                 bool           final       = false;
                 DAG_node const *reduced    = remove_zero_components(components, final);
 
-                if (final)
+                if (final) {
                     return reduced;
-                if (DAG_node const *res = create_mix_call(name, sema, reduced, p_name, ret_type))
+                }
+                if (DAG_node const *res = create_mix_call(name, sema, reduced, p_name, ret_type)) {
                     return res;
+                }
             }
             break;
         case IDefinition::DS_INTRINSIC_DF_CLAMPED_MIX:
@@ -2470,10 +2498,12 @@ DAG_node const *DAG_node_factory_impl::create_call(
                 bool           final       = false;
                 DAG_node const *reduced    = remove_clamped_components(components, final);
 
-                if (final)
+                if (final) {
                     return reduced;
-                if (DAG_node const *res = create_mix_call(name, sema, reduced, p_name, ret_type))
+                }
+                if (DAG_node const *res = create_mix_call(name, sema, reduced, p_name, ret_type)) {
                     return res;
+                }
             }
             break;
         case IDefinition::DS_INTRINSIC_DF_TINT:
@@ -2833,8 +2863,9 @@ DAG_node const *DAG_node_factory_impl::create_call(
             for (i = 0; i < num_call_args; ++i) {
                 DAG_node const *arg = call_args[i].arg;
 
-                if (!is<DAG_constant>(arg))
+                if (!is<DAG_constant>(arg)) {
                     break;
+                }
                 arguments[i] = cast<DAG_constant>(arg)->get_value();
             }
 
@@ -2842,8 +2873,9 @@ DAG_node const *DAG_node_factory_impl::create_call(
                 IValue const *res =
                     evaluate_intrinsic_function(sema, arguments.data(), num_call_args);
 
-                if (res != NULL)
+                if (res != NULL) {
                     return create_constant(res);
+                }
             }
         }
     }
@@ -2860,6 +2892,30 @@ DAG_parameter const *DAG_node_factory_impl::create_parameter(
 {
     DAG_node *res = m_builder.create<Parameter_impl>(m_next_id++, type, index);
     return static_cast<Parameter_impl *>(identify_remember(res));
+}
+
+// Enable common subexpression elimination.
+bool DAG_node_factory_impl::enable_cse(bool flag)
+{
+    bool res = m_cse_enabled;
+    m_cse_enabled = flag;
+    return res;
+}
+
+// Enable optimization.
+bool DAG_node_factory_impl::enable_opt(bool flag)
+{
+    bool res = m_opt_enabled;
+    m_opt_enabled = flag;
+    return res;
+}
+
+// Enable unsafe math optimizations.
+bool DAG_node_factory_impl::enable_unsafe_math_opt(bool flag)
+{
+    bool res = m_unsafe_math_opt;
+    m_unsafe_math_opt = flag;
+    return res;
 }
 
 // Get the type factory associated with this expression factory.
@@ -2899,15 +2955,17 @@ IValue_matrix const *DAG_node_factory_impl::create_identity_matrix(
 
 /// Check if the given expression is of matrix type.
 static bool is_matrix_typed(IType const *type) {
-    if (is_deriv_type(type))
+    if (is_deriv_type(type)) {
         type = get_deriv_base_type(type);
+    }
     return as<IType_matrix>(type) != NULL;
 }
 
 /// Check if the given expression is of vector type.
 static bool is_vector_typed(IType const *type) {
-    if (is_deriv_type(type))
+    if (is_deriv_type(type)) {
         type = get_deriv_base_type(type);
+    }
     return as<IType_vector>(type) != NULL;
 }
 
@@ -3031,8 +3089,9 @@ IValue const *DAG_node_factory_impl::apply_unary_op(
     default:
         return NULL;
     }
-    if (!is<IValue_bad>(res))
+    if (!is<IValue_bad>(res)) {
         return res;
+    }
     return NULL;
 }
 
@@ -3142,8 +3201,9 @@ IValue const *DAG_node_factory_impl::convert(
     IValue const   *value)
 {
     IValue const *res = value->convert(&value_factory, target_type);
-    if (!is<IValue_bad>(res))
+    if (!is<IValue_bad>(res)) {
         return res;
+    }
     return NULL;
 }
 
@@ -3256,8 +3316,9 @@ IValue const *DAG_node_factory_impl::evaluate_constructor(
     case IDefinition::DS_INVALID_REF_CONSTRUCTOR:
         // this constructor creates an invalid reference.
         MDL_ASSERT(arguments.size() == 0);
-        if (IType_reference const *r_type = as<IType_reference>(ret_type))
+        if (IType_reference const *r_type = as<IType_reference>(ret_type)) {
             return value_factory.create_invalid_ref(r_type);
+        }
         break;
     case IDefinition::DS_DEFAULT_STRUCT_CONSTRUCTOR:
         // This is the default constructor for a struct
@@ -3330,15 +3391,17 @@ IValue const *DAG_node_factory_impl::evaluate_intrinsic_function(
                 // try call evaluator first
                 IValue const *res = m_call_evaluator->evaluate_intrinsic_function(
                     &m_value_factory, sema, arguments, n_args);
-                if (!is<IValue_bad>(res))
+                if (!is<IValue_bad>(res)) {
                     return res;
+                }
             }
 
             // try compiler evaluator
             IValue const *res = m_mdl->evaluate_intrinsic_function(
                 &m_value_factory, sema, arguments, n_args);
-            if (!is<IValue_bad>(res))
+            if (!is<IValue_bad>(res)) {
                 return res;
+            }
         }
         break;
     }
@@ -3388,8 +3451,9 @@ bool DAG_node_factory_impl::all_args_without_name(
     }
 
     for (size_t i = 0; i < n_args; ++i) {
-        if (m_temp_name_map.find(args[i]) != m_temp_name_map.end())
+        if (m_temp_name_map.find(args[i]) != m_temp_name_map.end()) {
             return false;
+        }
     }
     return true;
 }
@@ -3405,8 +3469,9 @@ bool DAG_node_factory_impl::all_args_without_name(
     }
 
     for (size_t i = 0; i < n_args; ++i) {
-        if (m_temp_name_map.find(args[i].arg) != m_temp_name_map.end())
+        if (m_temp_name_map.find(args[i].arg) != m_temp_name_map.end()) {
             return false;
+        }
     }
     return true;
 }
@@ -3415,29 +3480,28 @@ DAG_node const *DAG_node_factory_impl::shallow_copy(DAG_node const *node)
 {
     No_CSE_scope scope(*this);
 
-    switch (node->get_kind())
-    {
-        case DAG_node::EK_CONSTANT:
+    switch (node->get_kind()) {
+    case DAG_node::EK_CONSTANT:
         {
             DAG_constant const *c     = cast<DAG_constant>(node);
             IValue const       *value = c->get_value();
             return create_constant(value);
         }
-        case DAG_node::EK_PARAMETER:
+    case DAG_node::EK_PARAMETER:
         {
             DAG_parameter const *p    = cast<DAG_parameter>(node);
             IType const         *type = p->get_type();
             int                 index = p->get_index();
             return create_parameter(type, index);
         }
-        case DAG_node::EK_TEMPORARY:
+    case DAG_node::EK_TEMPORARY:
         {
             DAG_temporary const *t    = cast<DAG_temporary>(node);
             DAG_node const      *expr = t->get_expr();
             int                 index = t->get_index();
             return create_temporary(expr, index);
         }
-        case DAG_node::EK_CALL:
+    case DAG_node::EK_CALL:
         {
             DAG_call const         *call    = cast<DAG_call>(node);
             int                    n_params = call->get_argument_count();
@@ -3481,8 +3545,9 @@ DAG_node_factory_impl::create_operator_call(
             IValue const *a = cast<DAG_constant>(arg)->get_value();
 
             IValue const *v = apply_unary_op(m_value_factory, uop, a);
-            if (v != NULL)
+            if (v != NULL) {
                 return create_constant(v);
+            }
         }
 
         // check for idempotent operators
@@ -3530,8 +3595,9 @@ DAG_node_factory_impl::create_operator_call(
             IValue const *r = cast<DAG_constant>(right)->get_value();
 
             IValue const *v = apply_binary_op(m_value_factory, bop, l, r);
-            if (v != NULL)
+            if (v != NULL) {
                 return create_constant(v);
+            }
         }
 
         bool args_swapped = normalize(bop, left, right);
@@ -3658,8 +3724,9 @@ DAG_node_factory_impl::create_operator_call(
             if (is_zero(right)) {
                 // x + 0 ==> PROMOTE(x)
                 // x - 0 ==> PROMOTE(x)
-                if (equal_op_types(ret_type, left->get_type()))
+                if (equal_op_types(ret_type, left->get_type())) {
                     return left;
+                }
             }
             break;
         case IExpression_binary::OK_MULTIPLY:
@@ -3669,8 +3736,9 @@ DAG_node_factory_impl::create_operator_call(
                     // does not work for matrix * vector, vector(1) is NOT the
                     // neutral element
                 } else {
-                    if (equal_op_types(ret_type, left->get_type()))
+                    if (equal_op_types(ret_type, left->get_type())) {
                         return left;
+                    }
                 }
             } else if (is_zero(right)) {
                 if (m_unsafe_math_opt || is_finite(left)) {
@@ -3685,8 +3753,9 @@ DAG_node_factory_impl::create_operator_call(
                     // does not work for vector * matrix, vector(1) is NOT the
                     // neutral element
                 } else {
-                    if (equal_op_types(ret_type, right->get_type()))
+                    if (equal_op_types(ret_type, right->get_type())) {
                         return right;
+                    }
                 }
             } else if (is_zero(left)) {
                 if (m_unsafe_math_opt || is_finite(right)) {
@@ -3699,8 +3768,9 @@ DAG_node_factory_impl::create_operator_call(
         case IExpression_binary::OK_DIVIDE:
             if (is_one(right)) {
                 // x / 1 ==> PROMOTE(x)
-                if (equal_op_types(ret_type, left->get_type()))
+                if (equal_op_types(ret_type, left->get_type())) {
                     return left;
+                }
             }
             break;
         case IExpression_binary::OK_MODULO:
@@ -3802,8 +3872,9 @@ DAG_call const *DAG_node_factory_impl::value_to_constructor(
         args[i].param_name = f_sym->get_name();
         args[i].arg = create_constant(v->get_value(i));
 
-        if (i != 0)
+        if (i != 0) {
             printer.print(',');
+        }
 
         printer.print(f_type->skip_type_alias());
     }
@@ -3850,13 +3921,14 @@ DAG_node const *DAG_node_factory_impl::move_ternary_down(
             // only t_expr must be converted
             t_const = cast<DAG_constant>(t_expr);
 
-            if (!is<DAG_call>(f_expr))
+            if (!is<DAG_call>(f_expr)) {
                 return NULL;
+            }
             f_call = cast<DAG_call>(f_expr);
 
-            if (f_call->get_semantic() != IDefinition::DS_ELEM_CONSTRUCTOR)
+            if (f_call->get_semantic() != IDefinition::DS_ELEM_CONSTRUCTOR) {
                 return NULL;
-
+            }
             t_call = value_to_constructor(t_const);
         }
     } else {
@@ -3864,19 +3936,22 @@ DAG_node const *DAG_node_factory_impl::move_ternary_down(
             // only f_expr must be converted
             f_const = cast<DAG_constant>(f_expr);
 
-            if (!is<DAG_call>(t_expr))
+            if (!is<DAG_call>(t_expr)) {
                 return NULL;
+            }
             t_call = cast<DAG_call>(t_expr);
 
-            if (t_call->get_semantic() != IDefinition::DS_ELEM_CONSTRUCTOR)
+            if (t_call->get_semantic() != IDefinition::DS_ELEM_CONSTRUCTOR) {
                 return NULL;
+            }
 
             f_call = value_to_constructor(f_const);
         } else {
             // both are non-const, easy
 
-            if (!is<DAG_call>(t_expr) || !is<DAG_call>(f_expr))
+            if (!is<DAG_call>(t_expr) || !is<DAG_call>(f_expr)) {
                 return NULL;
+            }
 
             t_call = cast<DAG_call>(t_expr);
             f_call = cast<DAG_call>(f_expr);
@@ -3951,8 +4026,9 @@ DAG_node_factory_impl::create_ternary_call(
         // we cannot switch over material subtypes, try to move the ternary operator down
         DAG_node const *res = move_ternary_down(cond, t_expr, f_expr, ret_type);
 
-        if (res != NULL)
+        if (res != NULL) {
             return res;
+        }
 
         // failed
     }
@@ -4148,20 +4224,25 @@ DAG_node_factory_impl::create_constructor_call(
                                 unsigned num_fields = 0;
                                 for (int i = 0; i < num_call_args; ++i) {
                                     DAG_call const *arg = as<DAG_call>(call_args[i].arg);
-                                    if (arg == NULL)
+                                    if (arg == NULL) {
                                         break;
+                                    }
                                     if (arg->get_semantic() !=
-                                        operator_to_semantic(IExpression::OK_ARRAY_INDEX))
+                                        operator_to_semantic(IExpression::OK_ARRAY_INDEX)) {
                                         break;
-                                    if (arg->get_argument(0) != x)
+                                    }
+                                    if (arg->get_argument(0) != x) {
                                         break;
+                                    }
 
                                     DAG_constant const *c = as<DAG_constant>(arg->get_argument(1));
-                                    if (c == NULL)
+                                    if (c == NULL) {
                                         break;
+                                    }
                                     IValue_int const *iv = cast<IValue_int>(c->get_value());
-                                    if (iv->get_value() != i)
+                                    if (iv->get_value() != i) {
                                         break;
+                                    }
                                     ++num_fields;
                                 }
 
@@ -4196,8 +4277,9 @@ DAG_node_factory_impl::create_constructor_call(
         }
     }
 
-    if (res == NULL)
+    if (res == NULL) {
         res = alloc_call(name, sema, call_args, num_call_args, ret_type);
+    }
 
     return static_cast<Call_impl *>(identify_remember(res));
 }
@@ -4219,8 +4301,9 @@ DAG_node const *DAG_node_factory_impl::remove_zero_components(
     if (is<DAG_call>(components)) {
         DAG_call const *c = cast<DAG_call>(components);
 
-        if (c->get_semantic() != IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR)
+        if (c->get_semantic() != IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR) {
             return components;
+        }
 
         int n_args = c->get_argument_count();
         VLA<DAG_call::Call_argument> f_args(get_allocator(), n_args);
@@ -4237,8 +4320,9 @@ DAG_node const *DAG_node_factory_impl::remove_zero_components(
 
                 if (c_arg->get_semantic() == IDefinition::DS_ELEM_CONSTRUCTOR) {
                     DAG_node const *w = c_arg->get_argument("weight");
-                    if (w == NULL)
+                    if (w == NULL) {
                         continue;
+                    }
 
                     if (is<DAG_constant>(w)) {
                         DAG_constant const *wc = cast<DAG_constant>(w);
@@ -4335,8 +4419,9 @@ DAG_node const *DAG_node_factory_impl::remove_clamped_components(
     if (is<DAG_call>(components)) {
         DAG_call const *c = cast<DAG_call>(components);
 
-        if (c->get_semantic() != IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR)
+        if (c->get_semantic() != IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR) {
             return components;
+        }
 
         int n_args = c->get_argument_count();
         VLA<DAG_call::Call_argument> f_args(get_allocator(), n_args);
@@ -4544,8 +4629,9 @@ void set_parameter_index(DAG_parameter *param, Uint32 param_idx)
 // Skip DAG temporaries if necessary.
 DAG_node const *skip_temporaries(DAG_node const *node)
 {
-    while (DAG_temporary const *tmp = as<DAG_temporary>(node))
+    while (DAG_temporary const *tmp = as<DAG_temporary>(node)) {
         node = tmp->get_expr();
+    }
     return node;
 }
 

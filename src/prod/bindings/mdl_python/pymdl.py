@@ -99,6 +99,7 @@ def DowncastIType(itype : pymdlsdk.IType) -> pymdlsdk.IType: # or derived type
     if not itype.is_valid_interface():
         return itype
     k = itype.get_kind()
+    t = None
     if   k == pymdlsdk.IType.Kind.TK_ALIAS:              t = itype.get_interface(pymdlsdk.IType_alias)
     elif k == pymdlsdk.IType.Kind.TK_BOOL:               t = itype.get_interface(pymdlsdk.IType_bool)
     elif k == pymdlsdk.IType.Kind.TK_INT:                t = itype.get_interface(pymdlsdk.IType_int)
@@ -339,13 +340,13 @@ def IValueToPyValues(ivalue : pymdlsdk.IValue):
 
     elif kind == pymdlsdk.IValue.Kind.VK_INVALID_DF:
         return None
-
-    elif kind == pymdlsdk.IValue.Kind.VK_TEXTURE:
-        return ( ivalue.get_value(), ivalue.get_gamma() )
         
+    elif kind == pymdlsdk.IValue.Kind.VK_TEXTURE:
+        return (ivalue.get_value(), ivalue.get_gamma(), ivalue.get_file_path())
+
     elif kind == pymdlsdk.IValue.Kind.VK_LIGHT_PROFILE or \
-         kind == pymdlsdk.IValue.Kind.VK_BSDF_MEASUREMENT:
-        return ivalue.get_value()
+        kind == pymdlsdk.IValue.Kind.VK_BSDF_MEASUREMENT:
+        return (ivalue.get_value(), ivalue.get_file_path())
 
     return None
 
@@ -379,6 +380,12 @@ class Type(object):
     enumValues: (str,int)
         If type is enum, this list of pairs holds the enum values along with their numeric value.
         Otherwise this is empty.
+
+    size: int
+        In case of structs, vectors, matrices, arrays, colors, this is the compound size.
+
+    element_type: Type
+        In case of vectors, arrays this is the type of the elements.
     """
     def __init__(self, itype: pymdlsdk.IType) -> None:
         super().__init__()
@@ -391,6 +398,8 @@ class Type(object):
         itype = DowncastIType(itype.skip_all_type_aliases())
         self.kind = itype.get_kind()
         self.symbol = None
+        self.size = 0
+        self.element_type = None
 
         self.enumValues = []
         if self.kind == pymdlsdk.IType.Kind.TK_ENUM:
@@ -402,7 +411,22 @@ class Type(object):
 
         elif self.kind == pymdlsdk.IType.Kind.TK_STRUCT:
             self.symbol = itype.get_symbol()
-            
+            self.size = itype.get_size()
+
+        elif self.kind == pymdlsdk.IType.Kind.TK_VECTOR:
+            self.size = itype.get_size()
+            self.element_type = Type(itype.get_element_type())
+        
+        elif self.kind == pymdlsdk.IType.Kind.TK_MATRIX:
+            self.size = itype.get_size()
+
+        elif self.kind == pymdlsdk.IType.Kind.TK_ARRAY:
+            self.size = itype.get_size()
+            self.element_type = Type(itype.get_element_type())
+
+        elif self.kind == pymdlsdk.IType.Kind.TK_COLOR:
+            self.size = itype.get_size()
+
         self.name = self.__printName(itype)
 
     r"""
