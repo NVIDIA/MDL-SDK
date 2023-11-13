@@ -178,7 +178,7 @@ add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/i18n)
 add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdlc)
 add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdlm)
 add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdltlc)
-add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdl_distiller)
+add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdl_distiller_cli)
 
 # PLUGINS
 #--------------------------------------------------------------------------------------------------

@@ -1046,6 +1046,74 @@ void State_usage_analysis::register_function(llvm::Function *func)
     m_func_state_usage_info_map[func] = info;
 }
 
+// Register a mapped function to set the "expected" usage.
+void State_usage_analysis::register_mapped_function(
+    llvm::Function              *func,
+    mdl::IDefinition::Semantics sema)
+{
+    Function_state_usage_info *info =
+        m_arena_builder.create<Function_state_usage_info>(&m_arena);
+    m_func_state_usage_info_map[func] = info;
+
+    State_usage flag_to_add;
+
+    // If a state function is mapped, assume its state is accessed. This might be
+    // not enough, but probably an educated guess.
+    switch (sema) {
+    default:
+    case mi::mdl::IDefinition::DS_UNKNOWN:
+        return;
+
+#define CASE(state) \
+    case mi::mdl::IDefinition::DS_INTRINSIC_STATE_##state: \
+        flag_to_add = mi::mdl::IGenerated_code_executable::SU_##state; \
+        break;
+
+#define CASE_TEXTURE_TANGENTS(state) \
+    case mi::mdl::IDefinition::DS_INTRINSIC_STATE_##state: \
+        flag_to_add = mi::mdl::IGenerated_code_executable::SU_TEXTURE_TANGENTS; \
+        break;
+
+#define CASE_GEOMETRY_TANGENTS(state) \
+    case mi::mdl::IDefinition::DS_INTRINSIC_STATE_##state: \
+        flag_to_add = mi::mdl::IGenerated_code_executable::SU_GEOMETRY_TANGENTS; \
+        break;
+
+#define CASE_TRANSFORMS(state) \
+    case mi::mdl::IDefinition::DS_INTRINSIC_STATE_##state: \
+        flag_to_add = mi::mdl::IGenerated_code_executable::SU_TRANSFORMS; \
+        break;
+
+    CASE(POSITION)
+    CASE(NORMAL)
+    CASE(GEOMETRY_NORMAL)
+    CASE(MOTION)
+    CASE(TEXTURE_COORDINATE)
+    CASE_TEXTURE_TANGENTS(TEXTURE_TANGENT_U)
+    CASE_TEXTURE_TANGENTS(TEXTURE_TANGENT_V)
+    CASE(TANGENT_SPACE)
+    CASE_GEOMETRY_TANGENTS(GEOMETRY_TANGENT_U)
+    CASE_GEOMETRY_TANGENTS(GEOMETRY_TANGENT_V)
+    CASE(DIRECTION)
+    CASE(ANIMATION_TIME)
+    CASE_TRANSFORMS(TRANSFORM)
+    CASE_TRANSFORMS(TRANSFORM_POINT)
+    CASE_TRANSFORMS(TRANSFORM_VECTOR)
+    CASE_TRANSFORMS(TRANSFORM_NORMAL)
+    CASE_TRANSFORMS(TRANSFORM_SCALE)
+    CASE(ROUNDED_CORNER_NORMAL)
+    CASE(OBJECT_ID)
+
+#undef CASE_TRANSFORMS
+#undef CASE_GEOMETRY_TANGENTS
+#undef CASE_TEXTURE_TANGENTS
+#undef CASE
+    }
+
+    info->state_usage    |= flag_to_add;
+    m_module_state_usage |= flag_to_add;
+}
+
 // Add a state usage flag to the currently compiled function.
 void State_usage_analysis::add_state_usage(llvm::Function *func, State_usage flag_to_add)
 {
@@ -1082,8 +1150,9 @@ void State_usage_analysis::update_exported_functions_state_usage()
 
         while (!worklist.empty()) {
             llvm::Function *cur = worklist.pop_back_val();
-            if (visited.count(cur))
+            if (visited.count(cur)) {
                 continue;
+            }
             visited.insert(cur);
             Function_state_usage_info const *info = m_func_state_usage_info_map[cur];
             exported_func.state_usage |= info->state_usage;
@@ -1199,6 +1268,8 @@ LLVM_code_generator::LLVM_code_generator(
     MDL_JIT_OPTION_USE_RENDERER_ADAPT_NORMAL))
 , m_in_intrinsic_generator(false)
 , m_target_lang(target_lang)
+, m_func_remap(
+    jitted_code->get_allocator(), options.get_string_option(MDL_JIT_OPTION_REMAP_FUNCTIONS))
 , m_runtime(create_mdl_runtime(
     m_arena_builder,
     this,
@@ -2900,10 +2971,26 @@ LLVM_context_data *LLVM_code_generator::declare_function(
         }
     }
 
+    bool is_native = def->get_property(IDefinition::DP_IS_NATIVE);
+
     string func_name(mangle(inst, name_prefix));
 
-    Func_deriv_info const *func_deriv_info = NULL;
-    if (m_deriv_infos != NULL) {
+    if (char const *mapped_name = m_func_remap.get_mapper_symbol(func_name.c_str())) {
+        // mapped to an external one
+        flags |= LLVM_context_data::FL_IS_MAPPED;
+
+        // Note: there is no check if this external name will clash with any existing symbol
+        func_name = mapped_name;
+
+        // also mark it as native here, so it is marked as no-inline AND external
+        is_native = true;
+
+        // Note: so far we do NOT set entry point here. so the calling convention is
+        // "internal"
+    }
+
+    Func_deriv_info const *func_deriv_info = nullptr;
+    if (m_deriv_infos != nullptr) {
         func_deriv_info = m_deriv_infos->get_function_derivative_infos(inst);
     }
 
@@ -2918,7 +3005,7 @@ LLVM_context_data *LLVM_code_generator::declare_function(
         // instantiate parameter types
         int arr_size = inst.instantiate_type_size(p_type);
         llvm::Type *tp;
-        if (func_deriv_info != NULL && func_deriv_info->args_want_derivatives.test_bit(i + 1)) {
+        if (func_deriv_info != nullptr && func_deriv_info->args_want_derivatives.test_bit(i + 1)) {
             tp = m_type_mapper.lookup_deriv_type(p_type, arr_size);
 
             // pass by reference if supported by target
@@ -2937,8 +3024,6 @@ LLVM_context_data *LLVM_code_generator::declare_function(
             }
         }
     }
-
-    bool const is_native = def->get_property(IDefinition::DP_IS_NATIVE);
 
     // entry points and native functions must have external linkage
     llvm::GlobalValue::LinkageTypes const linkage =
@@ -2989,10 +3074,7 @@ LLVM_context_data *LLVM_code_generator::declare_function(
         ++arg_it;
     }
     if (flags & LLVM_context_data::FL_HAS_RES) {
-        if (target_supports_pointers())
-            arg_it->setName("res_data_pair");
-        else
-            arg_it->setName("res_data");
+        arg_it->setName(target_supports_pointers() ? "res_data_pair" : "res_data");
 
         // the resource data pointer does not alias and is not captured
         func->addParamAttr(arg_it->getArgNo(), llvm::Attribute::NoAlias);
@@ -3041,7 +3123,11 @@ LLVM_context_data *LLVM_code_generator::declare_function(
     }
 
     if (is_prototype) {
+        // set external linkage and do NOT enqueue
         func->setLinkage(llvm::GlobalValue::ExternalLinkage);
+    } else if (flags & LLVM_context_data::FL_IS_MAPPED) {
+        // do not enqueue, BUT register for "expected" state usage
+        m_state_usage_analysis.register_mapped_function(func, def->get_semantics());
     } else {
         // put this function on the wait queue
         m_functions_q.push(Wait_entry(owner, inst));
@@ -9378,8 +9464,9 @@ void LLVM_code_generator::compile_waiting_functions()
 
             if (func_decl != NULL) {
                 MDL_module_scope scope(*this, owner);
-                if (m_deriv_infos != NULL)
+                if (m_deriv_infos != NULL) {
                     m_cur_func_deriv_info = m_deriv_infos->get_function_derivative_infos(func_inst);
+                }
 
                 compile_function_instance(func_inst, func_decl);
 
@@ -10930,6 +11017,73 @@ mi::mdl::IValue_string const *LLVM_code_generator::get_internalized_string(
     // the given string value object will be our representative for the contained cstring
     m_internalized_string_map[s->get_value()] = s;
     return s;
+}
+
+// Fills the function remap map from a comma separated list.
+void Function_remap::fill_function_remap(
+    char const *list)
+{
+    for (char const *e = nullptr, *s = list; s != nullptr; s = e != nullptr ? e + 1 : nullptr) {
+        char const *start = s;
+        while (*start != '\0' && isspace(*start)) {
+            ++start;
+        }
+
+        e = strchr(start, ',');
+
+        char const *p = strchr(start, '=');
+        if (p == nullptr || (p >= e && e != nullptr)) {
+            // wrong entry
+            continue;
+        }
+
+        char const *end = p - 1;
+        while (end > start && isspace(*end)) {
+            --end;
+        }
+
+        if (start == end) {
+            // wrong entry
+            continue;
+        }
+
+        string from(start, end + 1, m_arena.get_allocator());
+
+        start = p + 1;
+        while (*start != '\0' && isspace(*start)) {
+            ++start;
+        }
+
+        end = e == nullptr ? start + strlen(start) - 1 : e - 1;
+        while (end > start && isspace(*end)) {
+            --end;
+        }
+
+        if (start == end) {
+            // wrong entry
+            continue;
+        }
+        string to(start, end + 1, m_arena.get_allocator());
+
+        char const *f_sym = Arena_strdup(m_arena, from.c_str());
+        char const *t_sym = Arena_strdup(m_arena, to.c_str());
+
+        m_first = Arena_builder(m_arena).create<Remap_entry>(f_sym, t_sym, m_first);
+        m_func_remap_map[f_sym] = m_first;
+    }
+}
+
+// Get the mapped name if there is any.
+char const *Function_remap::get_mapper_symbol(
+    char const *src) const
+{
+    typename Remap_map::const_iterator it(m_func_remap_map.find(src));
+    if (it != m_func_remap_map.end()) {
+        Remap_entry const *re = it->second;
+        re->used = true;
+        return re->to;
+    }
+    return nullptr;
 }
 
 } // mdl

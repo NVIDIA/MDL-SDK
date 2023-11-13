@@ -859,6 +859,17 @@ public:
         bool       only_exported,
         bool       find_function = true) const;
 
+    /// Check if the given definition is owned by this module.
+    bool is_owner(IDefinition const *def) const;
+
+private:
+    /// Find the definition of a signature (internal implementation).
+    ///
+    /// \param signature         a (function or annotation) signature
+    Definition const *find_signature_impl(
+        char const *signature) const;
+
+public:
     /// Find the definition of a signature of a standard library function.
     ///
     /// \param module_name  the absolute name of a standard library module
@@ -1359,6 +1370,12 @@ private:
 
     /// The function hash map.
     Func_hash_map m_func_hashes;
+
+    typedef hash_map<string, Definition const*, string_hash<string> >::Type
+        Definition_map;
+
+    /// Cache for the find_signature function (not-serialized).
+    mutable Definition_map m_find_signature_cache;
 };
 
 /// Construct a Type_name AST element for an MDL type.

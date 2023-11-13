@@ -203,16 +203,16 @@ public:
     /// If the entity name does not contain a colon, you should return the builtins module,
     /// which you can identify by IModule::is_builtins().
     ///
-    /// \param entity_name    the entity name
+    /// \param entity_name    the entity name (note: this cannot be a module name)
     ///
     /// \returns the owning module of this entity if found, NULL otherwise
     virtual IModule const *get_owner_module(char const *entity_name) const = 0;
 
     /// Find the owner code DAG of a given entity name.
     /// If the entity name does not contain a colon, you should return the builtins DAG,
-    /// which you can identify by calling its oner module's IModule::is_builtins().
+    /// which you can identify by calling its owner module's IModule::is_builtins().
     ///
-    /// \param entity_name    the entity name
+    /// \param entity_name    the entity name (note: this cannot be a module name)
     ///
     /// \returns the owning module of this entity if found, NULL otherwise
     virtual IGenerated_code_dag const *get_owner_dag(char const *entity_name) const = 0;
@@ -1125,6 +1125,9 @@ class ICode_generator_jit : public
     /// The name of the option to use bitangent instead of tangent_u, tangent_v in the MDL state.
     #define MDL_JIT_OPTION_USE_BITANGENT "jit_use_bitangent"
 
+    /// The name of the option that sets the function replacement list.
+    #define MDL_JIT_OPTION_REMAP_FUNCTIONS "jit_remap_functions"
+
     /// The name of the option to generate auxiliary methods on distribution functions.
     #define MDL_JIT_OPTION_ENABLE_AUXILIARY "jit_enable_auxiliary"
 
@@ -1224,9 +1227,6 @@ class ICode_generator_jit : public
 
     /// The name of the option to enable the HLSL/GLSL resource data struct argument.
     #define MDL_JIT_OPTION_SL_USE_RESOURCE_DATA "jit_sl_use_resource_data"
-
-    /// The name of the option that sets the function replacement list for GLSL/HLSL.
-    #define MDL_JIT_OPTION_SL_REMAP_FUNCTIONS "jit_sl_remap_functions"
 
     /// The name of the option that sets the name of the Core State struct for GLSL/HLSL.
     #define MDL_JIT_OPTION_SL_CORE_STATE_API_NAME "jit_sl_core_state_api_name"

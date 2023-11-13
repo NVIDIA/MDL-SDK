@@ -223,6 +223,7 @@ Module::Module(
 , m_archive_versions(&m_arena)
 , m_res_table(&m_arena)
 , m_func_hashes(Func_hash_map::key_compare(), alloc)
+, m_find_signature_cache(0, Definition_map::hasher(), Definition_map::key_equal(), alloc)
 {
     MDL_ASSERT(file_name != NULL);
     if (!m_is_compiler_owned) {
@@ -406,8 +407,9 @@ int Module::get_import_count() const
 // Get the import at index.
 Module const *Module::get_import(int index) const
 {
-    if (index < 0 || index >= get_import_count())
+    if (index < 0 || index >= get_import_count()) {
         return NULL;
+    }
     Import_entry const &entry = m_imported_modules[index];
 
     Module const *res = entry.get_module();
@@ -429,8 +431,9 @@ int Module::get_exported_definition_count() const
 // Get the exported definition at index.
 Definition const *Module::get_exported_definition(int index) const
 {
-    if (index < 0 || index >= get_exported_definition_count())
+    if (index < 0 || index >= get_exported_definition_count()) {
         return NULL;
+    }
     return m_exported_definitions[index];
 }
 
@@ -586,8 +589,9 @@ Module const *Module::get_owner_module(IDefinition const *idef) const
     }
     if (Import_entry const *entry = get_import_entry(import_idx)) {
         Module const *owner = entry->get_module();
-        if (owner)
+        if (owner != NULL) {
             owner->retain();
+        }
         return owner;
     }
     return NULL;
@@ -643,8 +647,9 @@ Definition const *Module::get_original_definition(
             def = owner->lookup_original_definition(def);
             if (def != NULL) {
                 Definition const *def_def = def->get_definite_definition();
-                if (def_def != NULL)
+                if (def_def != NULL) {
                     def = def_def;
+                }
                 mod_owner = owner;
             }
             return def;
@@ -734,8 +739,9 @@ Definition const *Module::get_elemental_constructor(IType const *type) const
 int Module::get_type_constructor_count(IType const *type) const
 {
     Definition const *def = get_first_constructor(type);
-    if (def == NULL)
+    if (def == NULL) {
         return -1;
+    }
     int count = 0;
     do {
         def = get_next_constructor(def);
@@ -747,8 +753,9 @@ int Module::get_type_constructor_count(IType const *type) const
 // Get the i'th constructor of a type or NULL.
 Definition const *Module::get_type_constructor(IType const *type, int index) const
 {
-    if (index < 0)
+    if (index < 0) {
         return NULL;
+    }
 
     Definition const *def = get_first_constructor(type);
     for (; index > 0 && def != NULL; def = get_next_constructor(def)) {
@@ -761,8 +768,9 @@ Definition const *Module::get_type_constructor(IType const *type, int index) con
 int Module::get_conversion_operator_count(IType const *type) const
 {
     Definition const *def = get_first_conversion_operator(type);
-    if (def == NULL)
+    if (def == NULL) {
         return -1;
+    }
     int count = 0;
     do {
         def = get_next_conversion_operator(def);
@@ -774,8 +782,9 @@ int Module::get_conversion_operator_count(IType const *type) const
 // Get the i'th conversion operator of a type or NULL.
 Definition const *Module::get_conversion_operator(IType const *type, int index) const
 {
-    if (index < 0)
+    if (index < 0) {
         return NULL;
+    }
 
     Definition const *def = get_first_conversion_operator(type);
     for (; index > 0 && def != NULL; def = get_next_conversion_operator(def)) {
@@ -808,8 +817,9 @@ int Module::get_builtin_definition_count() const
 // Get the builtin definition at index.
 IDefinition const *Module::get_builtin_definition(int index) const
 {
-    if (0 <= index && size_t(index) < m_builtin_definitions.size())
+    if (0 <= index && size_t(index) < m_builtin_definitions.size()) {
         return m_builtin_definitions[index];
+    }
     return NULL;
 }
 
@@ -853,16 +863,18 @@ void Module::drop_import_entries() const
     // Don't do that for standard library modules, it is pointless
     // because stdlib module import only other stdlib modules ...
     // Moreover, to deserialize a module, at least state must be complete ...
-    if (is_stdlib())
+    if (is_stdlib()) {
         return;
+    }
 
     mi::base::Lock &weak_lock = m_compiler->get_weak_module_lock();
 
     for (size_t i = 0, n = m_imported_modules.size(); i < n; ++i) {
         Import_entry &entry = m_imported_modules[i];
 
-        if (Module const *import = entry.get_module())
+        if (Module const *import = entry.get_module()) {
             import->drop_import_entries();
+        }
         entry.drop_module(weak_lock);
     }
 }
@@ -872,8 +884,9 @@ bool Module::restore_import_entries(IModule_cache *cache) const
 {
     // don't do that for standard library modules, it is pointless
     // because stdlib module import only other stdlib modules ...
-    if (is_stdlib())
+    if (is_stdlib()) {
         return true;
+    }
 
     bool result = true;
 
@@ -884,8 +897,9 @@ bool Module::restore_import_entries(IModule_cache *cache) const
 
         Module const *import = entry.lock_module(weak_lock);
         if (import == NULL) {
-            if (cache == NULL)
+            if (cache == NULL) {
                 return false;
+            }
 
             mi::base::Handle<IModule const> imod(cache->lookup(entry.get_absolute_name(), NULL));
             if (imod.is_valid_interface()) {
@@ -1207,31 +1221,37 @@ IOverload_result_set const *Module::find_overload_by_signature(
     if (!is_builtins()) {
         // func_name must be an absolute name, so check the module name first
         size_t l = strlen(m_absname);
-        if (strncmp(func_name, m_absname, l) != 0)
+        if (strncmp(func_name, m_absname, l) != 0) {
             return NULL;
-        if (func_name[l] != ':' || func_name[l + 1] != ':')
+        }
+        if (func_name[l] != ':' || func_name[l + 1] != ':') {
             return NULL;
+        }
         func_name += l + 2;
     } else {
-        if (func_name[0] != ':' || func_name[1] != ':')
+        if (func_name[0] != ':' || func_name[1] != ':') {
             return NULL;
+        }
         func_name += 2;
     }
 
     // the rest must be an identifier, we do not allow to access an imported entity in
     // a namespace
     ISymbol const *sym = m_sym_tab.lookup_symbol(func_name);
-    if (sym == NULL)
+    if (sym == NULL) {
         sym = m_sym_tab.lookup_operator_symbol(func_name, num_param_type_names);
-    if (sym == NULL)
+    }
+    if (sym == NULL) {
         return NULL;
+    }
 
     // create a type list from the parameter signature
     IAllocator *alloc = get_allocator();
     vector<IType const *>::Type arg_types(alloc);
     if (num_param_type_names > 0) {
-        if (!parse_parameter_signature(this, param_type_names, num_param_type_names, arg_types))
+        if (!parse_parameter_signature(this, param_type_names, num_param_type_names, arg_types)) {
             return NULL;
+        }
     }
 
     Definition const *def = NULL;
@@ -1312,21 +1332,26 @@ IOverload_result_set const *Module::find_overload_by_signature(
     Scope const *search_scope =
         is_builtins() ? m_def_tab.get_predef_scope() : m_def_tab.get_global_scope();
     def = search_scope->find_definition_in_scope(sym);
-    if (def == NULL)
+    if (def == NULL) {
         return NULL;
+    }
 
     if (def->get_kind() == IDefinition::DK_TYPE) {
         // a type, check for constructors
         if (Scope *type_scope = def->get_own_scope()) {
             // search for constructors
             def = type_scope->find_definition_in_scope(sym);
-            if (def == NULL)
+            if (def == NULL) {
                 return NULL;
+            }
         }
     }
 
     Definition::Kind kind = def->get_kind();
-    if (kind != IDefinition::DK_FUNCTION && kind != IDefinition::DK_CONSTRUCTOR && kind != IDefinition::DK_OPERATOR) {
+    if (kind != IDefinition::DK_FUNCTION &&
+        kind != IDefinition::DK_CONSTRUCTOR &&
+        kind != IDefinition::DK_OPERATOR)
+    {
         // neither a function, nor a constructor, nor an operator
         return NULL;
     }
@@ -1414,29 +1439,34 @@ Definition const *Module::parse_annotation_params(
     if (!is_builtins()) {
         // func_name must be an absolute name, so check the module name first
         size_t l = strlen(m_absname);
-        if (strncmp(anno_name, m_absname, l) != 0)
+        if (strncmp(anno_name, m_absname, l) != 0) {
             return NULL;
-        if (anno_name[l] != ':' || anno_name[l + 1] != ':')
+        }
+        if (anno_name[l] != ':' || anno_name[l + 1] != ':') {
             return NULL;
+        }
         anno_name += l + 2;
     } else {
-        if (anno_name[0] != ':' || anno_name[1] != ':')
+        if (anno_name[0] != ':' || anno_name[1] != ':') {
             return NULL;
+        }
         anno_name += 2;
     }
 
     // the rest must be an identifier, we do not allow to access an imported entity in
     // a namespace
     ISymbol const *sym = m_sym_tab.lookup_symbol(anno_name);
-    if (sym == NULL)
+    if (sym == NULL) {
         return NULL;
+    }
 
     // we have a symbol, look into the definition table
     Scope const *search_scope =
         is_builtins() ? m_def_tab.get_predef_scope() : m_def_tab.get_global_scope();
     Definition const *def = search_scope->find_definition_in_scope(sym);
-    if (def == NULL)
+    if (def == NULL) {
         return NULL;
+    }
 
     Definition::Kind kind = def->get_kind();
     if (kind != IDefinition::DK_ANNOTATION) {
@@ -1445,8 +1475,9 @@ Definition const *Module::parse_annotation_params(
     }
 
     if (num_param_type_names > 0) {
-        if (!parse_parameter_signature(this, param_type_names, num_param_type_names, arg_types))
+        if (!parse_parameter_signature(this, param_type_names, num_param_type_names, arg_types)) {
             return NULL;
+        }
     }
     return def;
 }
@@ -1481,14 +1512,16 @@ IDefinition const *Module::find_annotation(
     Overload_solver::Definition_list l = os.find_positional_overload(
         def, num_args > 0 ? &arg_types[0] : NULL, num_args);
 
-    if (l.empty())
+    if (l.empty()) {
         return NULL;
+    }
 
     def = l.front();
     l.pop_front();
 
-    if (!l.empty())
+    if (!l.empty()) {
         return NULL;
+    }
 
     IType_function const *ft = cast<IType_function>(def->get_type());
     int n = ft->get_parameter_count();
@@ -1554,8 +1587,9 @@ IDeclaration_module const *Module::get_module_declaration() const
     for (size_t i = 0, n = m_declarations.size(); i < n; ++i) {
         IDeclaration const *decl = m_declarations[i];
 
-        if (decl->get_kind() == IDeclaration::DK_MODULE)
+        if (decl->get_kind() == IDeclaration::DK_MODULE) {
             return cast<IDeclaration_module>(decl);
+        }
     }
     return NULL;
 }
@@ -1619,8 +1653,9 @@ bool Module::has_function_hashes() const
 Module::Function_hash const *Module::get_function_hash(IDefinition const *def) const
 {
     Func_hash_map::const_iterator it = m_func_hashes.find(def);
-    if (it != m_func_hashes.end())
+    if (it != m_func_hashes.end()) {
         return &it->second;
+    }
     return NULL;
 }
 
@@ -1654,8 +1689,9 @@ ISymbol const *Module::import_symbol(ISymbol const *sym)
         return sym;
     }
     ISymbol const *psym = m_sym_tab.get_predefined_symbol(id);
-    if (psym != NULL)
+    if (psym != NULL) {
         return psym;
+    }
     return m_sym_tab.get_symbol(sym->get_name());
 }
 
@@ -1700,8 +1736,9 @@ size_t Module::register_import(
     bool         *first)
 {
     bool dummy;
-    if (first == NULL)
+    if (first == NULL) {
         first = &dummy;
+    }
     *first = false;
 
     size_t idx = get_import_index(imp_mod);
@@ -1774,13 +1811,15 @@ IParameter const *Module::clone_param(
     ISimple_name const *sn = clone_name(param->get_name());
 
     IExpression *new_init = NULL;
-    if (clone_init)
+    if (clone_init) {
         if (IExpression const *init_expr = param->get_init_expr()) {
             new_init = clone_expr(init_expr, modifier);
         }
+    }
     IAnnotation_block *new_annos = NULL;
-    if (clone_anno)
+    if (clone_anno) {
         new_annos = clone_annotation_block(param->get_annotations(), modifier);
+    }
 
     return m_decl_factory.create_parameter(tn, sn, new_init, new_annos);
 }
@@ -1810,7 +1849,9 @@ IAnnotation_block *Module::clone_annotation_block(
     IAnnotation_block const *anno_block,
     IClone_modifier         *modifier)
 {
-    if (!anno_block) return NULL;
+    if (anno_block == NULL) {
+        return NULL;
+    }
 
     IAnnotation_block *new_block = m_anno_factory.create_annotation_block();
     for (size_t i = 0, n = anno_block->get_annotation_count(); i < n; ++i) {
@@ -1881,8 +1922,8 @@ IExpression *Module::clone_expr(
                 }
                 res = ref;
             }
-            break;
         }
+        break;
     case IExpression::EK_UNARY:
         {
             IExpression_unary const *unexpr = cast<IExpression_unary>(expr);
@@ -1892,16 +1933,16 @@ IExpression *Module::clone_expr(
                 res_unexpr->set_type_name(clone_name(unexpr->get_type_name(), modifier));
             }
             res = res_unexpr;
-            break;
         }
+        break;
     case IExpression::EK_BINARY:
         {
             IExpression_binary const *binexpr = cast<IExpression_binary>(expr);
             IExpression const *lhs = clone_expr(binexpr->get_left_argument(), modifier);
             IExpression const *rhs = clone_expr(binexpr->get_right_argument(), modifier);
             res = m_expr_factory.create_binary(binexpr->get_operator(), lhs, rhs);
-            break;
         }
+        break;
     case IExpression::EK_CONDITIONAL:
         {
             IExpression_conditional const *c_expr = cast<IExpression_conditional>(expr);
@@ -1909,8 +1950,8 @@ IExpression *Module::clone_expr(
             IExpression const *t_ex = clone_expr(c_expr->get_true(), modifier);
             IExpression const *f_ex = clone_expr(c_expr->get_false(), modifier);
             res = m_expr_factory.create_conditional(cond, t_ex, f_ex);
-            break;
         }
+        break;
     case IExpression::EK_CALL:
         {
             IExpression_call const *c_expr = cast<IExpression_call>(expr);
@@ -1926,8 +1967,8 @@ IExpression *Module::clone_expr(
                 }
                 res = call;
             }
-            break;
         }
+        break;
     case IExpression::EK_LET:
         {
             IExpression_let const *l_expr = cast<IExpression_let>(expr);
@@ -1940,8 +1981,8 @@ IExpression *Module::clone_expr(
                 let->add_declaration(decl);
             }
             res = let;
-            break;
         }
+        break;
     }
     MDL_ASSERT(res != NULL && "Unsupported expression kind");
 
@@ -2307,8 +2348,9 @@ restart:
             IExpression const *expr = c_def->get_default_param_initializer(0);
             IValue const      *pval = import_value(
                 expr->fold(c_mod.get(), c_mod->get_value_factory(), NULL));
-            if (is<IValue_bad>(pval))
+            if (is<IValue_bad>(pval)) {
                 return pval;
+            }
 
             IValue const *values[3] = { pval, pval, pval };
             return factory->create_compound(cast<IType_compound>(type), values, 3);
@@ -2337,8 +2379,9 @@ restart:
                     pval = create_default_value(factory, ptype);
                 }
 
-                if (is<IValue_bad>(pval))
+                if (is<IValue_bad>(pval)) {
                     return pval;
+                }
 
                 values[i] = pval;
             }
@@ -2352,8 +2395,9 @@ restart:
 void Module::replace_declarations(IDeclaration const * const decls[], size_t len)
 {
     m_declarations.resize(len);
-    for (size_t i = 0; i < len; ++i)
+    for (size_t i = 0; i < len; ++i) {
         m_declarations[i] = decls[i];
+    }
 }
 
 // Get the imported definition for an outside definition if it is imported.
@@ -2386,19 +2430,34 @@ Definition const *Module::find_imported_definition(Definition const *def) const
     Scope *scope = NULL;
 
     if (def->get_kind() == Definition::DK_CONSTRUCTOR) {
-        // a constructor: search in the type scope
         IType_function const *fct_type = as<IType_function>(def->get_type());
-        if (fct_type == NULL)
+        if (fct_type == NULL) {
             return NULL;
+        }
 
-        IType const *ret_type = fct_type->get_return_type();
-        ret_type = m_type_factory.get_equal(ret_type);
-        if (ret_type == NULL)
-            return NULL;
+        IType const *scope_type = NULL;
 
-        scope = m_def_tab.get_type_scope(ret_type);
-        if (scope == NULL)
+        if (def->get_semantics() == Definition::DS_CONV_OPERATOR) {
+            // a conversion operator: search in the type scope of the argument type
+            ISymbol const *dummy = NULL;
+
+            MDL_ASSERT(fct_type->get_parameter_count() == 1);
+            fct_type->get_parameter(0, scope_type, dummy);
+            scope_type = m_type_factory.get_equal(scope_type);
+        } else {
+            // a constructor: search in the type scope
+
+            scope_type = fct_type->get_return_type();
+            scope_type = m_type_factory.get_equal(scope_type);
+        }
+        if (scope_type == NULL) {
             return NULL;
+        }
+
+        scope = m_def_tab.get_type_scope(scope_type);
+        if (scope == NULL) {
+            return NULL;
+        }
     } else if (def->has_flag(Definition::DEF_IS_PREDEFINED)) {
         // a predefined entity, search for it in predefined scope
         scope = m_def_tab.get_predef_scope();
@@ -2598,8 +2657,9 @@ Definition const *Module::find_stdlib_symbol(
 
     Definition const *def = scope->find_definition_in_scope(sym);
     if (def != NULL) {
-        if (def->has_flag(Definition::DEF_IS_EXPORTED))
+        if (def->has_flag(Definition::DEF_IS_EXPORTED)) {
             return def;
+        }
     }
     return NULL;
 }
@@ -2654,8 +2714,9 @@ Definition const *Module::lookup_original_definition(Definition const *imported)
                 continue;
             }
             orig = s->find_definition_in_scope(imported->get_original_unique_id());
-            if (orig != NULL)
+            if (orig != NULL) {
                 break;
+            }
         }
     } else {
         // search only at global scope
@@ -2688,51 +2749,34 @@ exit_loop:
     m_declarations.insert(it, decl);
 }
 
-
-static IDefinition const *find_matching_def(
+static Definition const *find_matching_def(
     Scope const       *search_scope,
     ISymbol const     *sym,
-    Signature_matcher &matcher,
-    bool              only_exported,
-    bool              find_function)
+    ISymbol const     *member_sym,  // optional
+    Signature_matcher &matcher)
 {
     Definition const *def = search_scope->find_definition_in_scope(sym);
-    if (def == NULL)
+    if (def == NULL) {
         return NULL;
+    }
 
     if (def->get_kind() == IDefinition::DK_TYPE) {
         // a type, check for constructors
         if (Scope *type_scope = def->get_own_scope()) {
             // search for constructors
-            def = type_scope->find_definition_in_scope(sym);
-            if (def == NULL)
+            def = type_scope->find_definition_in_scope(member_sym != NULL ? member_sym : sym);
+            if (def == NULL) {
                 return NULL;
+            }
         }
+    } else if (member_sym != NULL) {
+        return NULL;  // members are only allowed in combination with types
     }
 
     for (Definition const *cdef = def; cdef != NULL; cdef = cdef->get_prev_def()) {
-        Definition::Kind kind = cdef->get_kind();
-        if (find_function && kind != IDefinition::DK_FUNCTION &&
-            kind != IDefinition::DK_CONSTRUCTOR && kind != IDefinition::DK_OPERATOR)
-        {
-            // neither a function nor a constructor nor an operator
-            continue;
-        }
-
-        if (!find_function && kind != IDefinition::DK_ANNOTATION)
-        {
-            // not an annotation
-            continue;
-        }
-
         // check all overloads
         if (matcher.match_param(cdef)) {
-            if (!only_exported || cdef->has_flag(Definition::DEF_IS_EXPORTED))
-                return cdef;
-            else {
-                // found it, but is not exported
-                break;
-            }
+            return cdef;
         }
     }
 
@@ -2753,20 +2797,10 @@ static bool is_latin_digit(unsigned char c) {
 }
 
 // Find the definition of a signature.
-IDefinition const *Module::find_signature(
-    char const *signature,
-    bool       only_exported,
-    bool       find_function) const
+Definition const *Module::find_signature_impl(
+    char const *signature) const
 {
-    // skip module name if the signature starts with it
-    size_t l = strlen(m_absname);
-    if (strncmp(signature, m_absname, l) == 0 && signature[l] == ':' && signature[l + 1] == ':')
-        signature = signature + l + 2;
-
-    char const *start = NULL, *end = NULL;
-
-    char const *p = start = end = signature;
-
+    char const *start = signature, *end = start, *p = start;
     bool is_operator = false;
 
     // a valid entity name is LETTER(_|LETTER|DIGIT)+($DIGIT+.DIGIT+)?
@@ -2882,10 +2916,11 @@ IDefinition const *Module::find_signature(
         return NULL;
     }
 
+    Scope const *search_scope =
+        is_builtins() ? m_def_tab.get_predef_scope() : m_def_tab.get_global_scope();
+
     // check for conversion operator; currently only conversion to int is supported
     if (sym->get_id() == ISymbol::SYM_TYPE_INT && *p == '(') {
-        Definition const *def = NULL;
-
         size_t l = strlen(p);
         if (p[l - 1] == ')') {
 
@@ -2904,40 +2939,12 @@ IDefinition const *Module::find_signature(
             }
 
             if (!error) {
-                ISymbol const *tsym = m_sym_tab.lookup_symbol(tname.c_str());
-                if (tsym != NULL) {
-                    Scope const *search_scope =
-                        is_builtins() ?
-                        m_def_tab.get_predef_scope() :
-                        m_def_tab.get_global_scope();
-                    def = search_scope->find_definition_in_scope(tsym);
-                }
-            }
-        }
-
-        if (def != NULL && def->get_kind() == IDefinition::DK_TYPE) {
-            Scope *search_scope = def->get_own_scope();
-
-            Definition const *def = search_scope->find_definition_in_scope(sym);
-            if (def != NULL) {
-                for (Definition const *cdef = def; cdef != NULL; cdef = cdef->get_prev_def()) {
-                    Definition::Kind kind = cdef->get_kind();
-                    if (kind != IDefinition::DK_FUNCTION &&
-                        kind != IDefinition::DK_CONSTRUCTOR &&
-                        kind != IDefinition::DK_OPERATOR)
-                    {
-                        // neither a function nor a constructor nor an operator
-                        continue;
-                    }
-
-                    // check all overloads
-                    if (matcher.match_param(cdef)) {
-                        if (!only_exported || cdef->has_flag(Definition::DEF_IS_EXPORTED))
-                            return cdef;
-                        else {
-                            // found it, but is not exported
-                            break;
-                        }
+                ISymbol const *type_sym = m_sym_tab.lookup_symbol(tname.c_str());
+                if (type_sym != NULL) {
+                    Definition const *def =
+                        find_matching_def(search_scope, type_sym, /*member_sym=*/ sym, matcher);
+                    if (def != NULL) {
+                        return def;
                     }
                 }
             }
@@ -2945,15 +2952,72 @@ IDefinition const *Module::find_signature(
     }
 
     // we have a symbol, look into the definition table
-    Scope const *search_scope =
-        is_builtins() ? m_def_tab.get_predef_scope() : m_def_tab.get_global_scope();
+    Definition const *def = find_matching_def(search_scope, sym, /*member_sym=*/ NULL, matcher);
+    if (def == NULL && second_sym != NULL) {
+        def = find_matching_def(search_scope, second_sym, /*member_sym=*/ NULL, matcher);
+    }
 
-    IDefinition const *def =
-        find_matching_def(search_scope, sym, matcher, only_exported, find_function);
-    if (def != NULL)
-        return def;
-    if (second_sym != NULL)
-        def = find_matching_def(search_scope, second_sym, matcher, only_exported, find_function);
+    return def;
+}
+
+// Find the definition of a signature.
+IDefinition const *Module::find_signature(
+    char const *signature,
+    bool       only_exported,
+    bool       find_function) const
+{
+    // skip module name if the signature starts with it
+    size_t l = strlen(m_absname);
+    if (strncmp(signature, m_absname, l) == 0 && signature[l] == ':' && signature[l + 1] == ':') {
+        signature = signature + l + 2;
+    }
+
+    // check cache for result
+    mi::base::Lock &weak_lock = m_compiler->get_weak_module_lock();
+    bool found = false;
+    Definition const *def = NULL;
+    string signature_str(signature, get_allocator());
+    {
+        mi::base::Lock::Block block(&weak_lock);
+        Definition_map::const_iterator it = m_find_signature_cache.find(signature_str);
+        if (it != m_find_signature_cache.end()) {
+            found = true;
+            def = it->second;
+        }
+    }
+
+    if (!found) {
+        def = find_signature_impl(signature);
+
+        // store found (or not found) definition in cache
+        {
+            mi::base::Lock::Block block(&weak_lock);
+            m_find_signature_cache[signature_str] = def;
+        }
+    }
+
+    // check additional conditions
+    if (def == NULL) {
+        return NULL;
+    }
+
+    if (only_exported && !def->has_flag(Definition::DEF_IS_EXPORTED)) {
+        return NULL;
+    }
+
+    Definition::Kind kind = def->get_kind();
+    if (find_function &&
+        kind != IDefinition::DK_FUNCTION &&
+        kind != IDefinition::DK_CONSTRUCTOR &&
+        kind != IDefinition::DK_OPERATOR)
+    {
+        return NULL;  // neither a function nor a constructor nor an operator
+    }
+    if (!find_function && kind != IDefinition::DK_ANNOTATION)
+    {
+        return NULL;  // not an annotation
+    }
+
     return def;
 }
 
@@ -2975,8 +3039,9 @@ void Module::set_deprecated_message(Definition const *def, IValue_string const *
 IValue_string const *Module::get_deprecated_message(Definition const *def) const
 {
     Deprecated_msg_map::const_iterator it = m_deprecated_msg_map.find(def);
-    if (it != m_deprecated_msg_map.end())
+    if (it != m_deprecated_msg_map.end()) {
         return it->second;
+    }
     return NULL;
 }
 
@@ -3068,10 +3133,11 @@ void Module::serialize(Module_serializer &serializer) const
         serializer.write_cstring(imp_fname);
 
         Module const *imp_mod = import.get_module();
-        if (serializer.is_known_module(imp_mod))
+        if (serializer.is_known_module(imp_mod)) {
             t = serializer.get_module_tag(import.get_module());
-        else
+        } else {
             t = Tag_t(0);
+        }
         serializer.write_encoded_tag(t);
         DOUT(("imported '%s', tag %u\n", imp_absname, unsigned(t)));
     }
@@ -3200,7 +3266,7 @@ void Module::serialize(Module_serializer &serializer) const
 
 /// visit all default arguments of the material constructors.
 static void replace_in_material_geometry(
-    Module *mod,
+    Module           *mod,
     Definition const *old_def,
     Definition const *new_def)
 {
@@ -3239,8 +3305,9 @@ static void replace_in_material_geometry(
         def != NULL;
         def = def->get_next_def_in_scope())
     {
-        if (def->get_kind() != Definition::DK_CONSTRUCTOR)
+        if (def->get_kind() != Definition::DK_CONSTRUCTOR) {
             continue;
+        }
 
         for (Definition const *cd = def; cd != NULL; cd = cd->get_next_def()) {
             IType_function const *ftype = cast<IType_function>(cd->get_type());
@@ -3336,11 +3403,13 @@ public:
     /// Check matching semantics, checks name, types, NO default values.
     bool check_sema(Definition const *def, Definition const *odef) const
     {
-        if (def->get_kind() != odef->get_kind())
+        if (def->get_kind() != odef->get_kind()) {
             return false;
+        }
 
-        if (def->get_semantics() != odef->get_semantics())
+        if (def->get_semantics() != odef->get_semantics()) {
             return false;
+        }
 
         if (strcmp(def->get_sym()->get_name(), odef->get_sym()->get_name()) != 0) {
             return false;
@@ -3351,8 +3420,9 @@ public:
     /// Check matching types.
     bool check_types(IType const *tp, IType const *otp) const
     {
-        if (tp->get_kind() != otp->get_kind())
+        if (tp->get_kind() != otp->get_kind()) {
             return false;
+        }
 
         switch (tp->get_kind()) {
         case IType::TK_ALIAS:
@@ -3360,8 +3430,9 @@ public:
                 IType_alias const *atp  = cast<IType_alias>(tp);
                 IType_alias const *oatp = cast<IType_alias>(otp);
 
-                if (atp->get_type_modifiers() != oatp->get_type_modifiers())
+                if (atp->get_type_modifiers() != oatp->get_type_modifiers()) {
                     return false;
+                }
                 return check_types(atp->get_aliased_type(), oatp->get_aliased_type());
             }
 
@@ -3388,8 +3459,9 @@ public:
                 IType_vector const *vtp  = cast<IType_vector>(tp);
                 IType_vector const *ovtp = cast<IType_vector>(otp);
 
-                if (vtp->get_size() != ovtp->get_size())
+                if (vtp->get_size() != ovtp->get_size()) {
                     return false;
+                }
                 return check_types(vtp->get_element_type(), ovtp->get_element_type());
             }
 
@@ -3398,8 +3470,9 @@ public:
                 IType_matrix const *mtp  = cast<IType_matrix>(tp);
                 IType_matrix const *omtp = cast<IType_matrix>(otp);
 
-                if (mtp->get_columns() != omtp->get_columns())
+                if (mtp->get_columns() != omtp->get_columns()) {
                     return false;
+                }
                 return check_types(mtp->get_element_type(), omtp->get_element_type());
             }
 
@@ -3409,8 +3482,9 @@ public:
                 IType_array const *oatp = cast<IType_array>(otp);
 
                 bool imm = atp->is_immediate_sized();
-                if (imm != oatp->is_immediate_sized())
+                if (imm != oatp->is_immediate_sized()) {
                     return false;
+                }
                 if (imm) {
                     if (atp->get_size() != oatp->get_size()) {
                         return false;
@@ -3435,8 +3509,9 @@ public:
                 IType_function const *oftp = cast<IType_function>(otp);
 
                 int n_params = ftp->get_parameter_count();
-                if (n_params != oftp->get_parameter_count())
+                if (n_params != oftp->get_parameter_count()) {
                     return false;
+                }
 
                 for (int i = 0; i < n_params; ++i) {
                     ISymbol const *p_sym, *op_sym;
@@ -3445,19 +3520,23 @@ public:
                     ftp->get_parameter(i, p_tp, p_sym);
                     oftp->get_parameter(i, op_tp, op_sym);
 
-                    if (strcmp(p_sym->get_name(), op_sym->get_name()) != 0)
+                    if (strcmp(p_sym->get_name(), op_sym->get_name()) != 0) {
                         return false;
+                    }
 
-                    if (!check_types(p_tp, op_tp))
+                    if (!check_types(p_tp, op_tp)) {
                         return false;
+                    }
                 }
 
                 if (ftp->get_return_type() == NULL) {
-                    if (oftp->get_return_type() != NULL)
+                    if (oftp->get_return_type() != NULL) {
                         return false;
+                    }
                 } else {
-                    if (!check_types(ftp->get_return_type(), oftp->get_return_type()))
+                    if (!check_types(ftp->get_return_type(), oftp->get_return_type())) {
                         return false;
+                    }
                 }
                 return true;
             }
@@ -3467,15 +3546,18 @@ public:
                 IType_enum const *etp  = cast<IType_enum>(tp);
                 IType_enum const *oetp = cast<IType_enum>(otp);
 
-                if (etp->get_predefined_id() != oetp->get_predefined_id())
+                if (etp->get_predefined_id() != oetp->get_predefined_id()) {
                     return false;
+                }
 
                 int n_vals = etp->get_value_count();
-                if (n_vals != oetp->get_value_count())
+                if (n_vals != oetp->get_value_count()) {
                     return false;
+                }
 
-                if (strcmp(etp->get_symbol()->get_name(), oetp->get_symbol()->get_name()) != 0)
+                if (strcmp(etp->get_symbol()->get_name(), oetp->get_symbol()->get_name()) != 0) {
                     return false;
+                }
 
                 for (int i = 0; i < n_vals; ++i) {
                     ISymbol const *v_sym, *ov_sym;
@@ -3484,10 +3566,12 @@ public:
                     etp->get_value(i, v_sym, code);
                     oetp->get_value(i, ov_sym, ocode);
 
-                    if (code != ocode)
+                    if (code != ocode) {
                         return false;
-                    if (strcmp(v_sym->get_name(), ov_sym->get_name()) != 0)
+                    }
+                    if (strcmp(v_sym->get_name(), ov_sym->get_name()) != 0) {
                         return false;
+                    }
                 }
                 return true;
             }
@@ -3497,15 +3581,18 @@ public:
                 IType_struct const *stp  = cast<IType_struct>(tp);
                 IType_struct const *ostp = cast<IType_struct>(otp);
 
-                if (stp->get_predefined_id() != ostp->get_predefined_id())
+                if (stp->get_predefined_id() != ostp->get_predefined_id()) {
                     return false;
+                }
 
                 int n_fields = stp->get_field_count();
-                if (n_fields != ostp->get_field_count())
+                if (n_fields != ostp->get_field_count()) {
                     return false;
+                }
 
-                if (strcmp(stp->get_symbol()->get_name(), ostp->get_symbol()->get_name()) != 0)
+                if (strcmp(stp->get_symbol()->get_name(), ostp->get_symbol()->get_name()) != 0) {
                     return false;
+                }
 
                 for (int i = 0; i < n_fields; ++i) {
                     ISymbol const *s_f, *os_f;
@@ -3514,10 +3601,12 @@ public:
                     stp->get_field(i, f_tp, s_f);
                     ostp->get_field(i, of_tp, os_f);
 
-                    if (strcmp(s_f->get_name(), os_f->get_name()) != 0)
+                    if (strcmp(s_f->get_name(), os_f->get_name()) != 0) {
                         return false;
-                    if (!check_types(f_tp, of_tp))
+                    }
+                    if (!check_types(f_tp, of_tp)) {
                         return false;
+                    }
                 }
                 return true;
             }
@@ -3568,8 +3657,9 @@ void Module::check_owned_imports()
 
         // if the checker is called inside deserialization, non-builtin modules
         // are not set, so ignore these entries.
-        if (imp_mod == NULL)
+        if (imp_mod == NULL) {
             continue;
+        }
 
         if (imp_mod->m_is_compiler_owned) {
             // found owned module
@@ -3578,8 +3668,9 @@ void Module::check_owned_imports()
         }
     }
 
-    if (!has_owned_import)
+    if (!has_owned_import) {
         return;
+    }
 
     Owned_module_version_checker checker(*this, owned_idxs);
 
@@ -3901,8 +3992,9 @@ bool Module::set_semantic_version(
     int            patch,
     char const     *prelease)
 {
-    if (m_sema_version != NULL)
+    if (m_sema_version != NULL) {
         return false;
+    }
 
     Arena_builder builder(m_arena);
 
@@ -3947,8 +4039,9 @@ void Module::set_archive_info(
 // Get the owner archive version if any.
 Module::Archive_version const *Module::get_owner_archive_version() const
 {
-    if (m_archive_versions.size() > 0)
+    if (m_archive_versions.size() > 0) {
         return &m_archive_versions[0];
+    }
     return NULL;
 }
 
@@ -3957,16 +4050,18 @@ size_t Module::get_archive_dependencies_count() const
 {
     size_t res = m_archive_versions.size();
 
-    if (res > 0)
+    if (res > 0) {
         res -= 1;
+    }
     return res;
 }
 
 // Get the i'th archive dependency.
 Module::Archive_version const *Module::get_archive_dependency(size_t i) const
 {
-    if (i < get_archive_dependencies_count())
+    if (i < get_archive_dependencies_count()) {
         return &m_archive_versions[i + 1];
+    }
     return NULL;
 }
 
@@ -4333,6 +4428,12 @@ int Module::promote_call_arguments(
     return param_index;
 }
 
+// Check if the given definition is owned by this module.
+bool Module::is_owner(IDefinition const *def) const
+{
+    return m_unique_id == impl_cast<Definition>(def)->m_owner_module_id;
+}
+
 namespace {
 
 /// Helper class to enumerate referenced resources.
@@ -4676,8 +4777,9 @@ static IType_name const *promote_name(
     unsigned         &rules)
 {
     rules = Module::PR_NO_CHANGE;
-    if (tn->is_array())
+    if (tn->is_array()) {
         return tn;
+    }
 
     int mod_major = 0, mod_minor = 0;
     mod.get_version(mod_major, mod_minor);
@@ -4710,8 +4812,9 @@ static IType_name const *promote_name(
         char const *name = sym->get_name();
 
         char const *suffix = strrchr(name, '$');
-        if (suffix == NULL)
+        if (suffix == NULL) {
             return tn;
+        }
         int major = 0, minor = 0;
 
         char const *p = suffix;
@@ -4732,8 +4835,9 @@ static IType_name const *promote_name(
                 return tn;
             }
         }
-        if (*p != '.')
+        if (*p != '.') {
             return tn;
+        }
 
         for (++p; *p != '\0'; ++p) {
             minor *= 10;
@@ -4752,8 +4856,9 @@ static IType_name const *promote_name(
                 return tn;
             }
         }
-        if (*p != '\0')
+        if (*p != '\0') {
             return tn;
+        }
 
         n = string(name, suffix, mod.get_allocator());
 
@@ -4850,21 +4955,26 @@ static IType_name const *promote_name(
     sn = name_fact->create_simple_name(sym);
     n_qn->add_component(sn);
 
-    if (qn->is_absolute())
+    if (qn->is_absolute()) {
         n_qn->set_absolute();
+    }
     n_qn->set_definition(qn->get_definition());
 
     IType_name *n_tn = name_fact->create_type_name(n_qn);
 
-    if (tn->is_absolute())
+    if (tn->is_absolute()) {
         n_tn->set_absolute();
-    if (IExpression const *array_size = tn->get_array_size())
+    }
+    if (IExpression const *array_size = tn->get_array_size()) {
         n_tn->set_array_size(promote_expr(mod, array_size));
-    if (tn->is_incomplete_array())
+    }
+    if (tn->is_incomplete_array()) {
         n_tn->set_incomplete_array();
+    }
     n_tn->set_qualifier(tn->get_qualifier());
-    if (ISimple_name const *size_name = tn->get_size_name())
+    if (ISimple_name const *size_name = tn->get_size_name()) {
         n_tn->set_size_name(size_name);
+    }
     n_tn->set_type(tn->get_type());
     return n_tn;
 }

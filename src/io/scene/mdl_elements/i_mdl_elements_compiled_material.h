@@ -236,7 +236,8 @@ private:
     mi::Float32 m_cutout_opacity;                     ///< Material cutout opacity.
     bool m_has_cutout_opacity;                        ///< True if the cutout opacity is known.
 
-    /// Module identifiers of all remaining call expressions plus the module given in the constructor.
+    /// Module identifiers of all remaining call expressions plus the module given in the
+    /// constructor.
     ///
     /// Used by is_valid().
     ///

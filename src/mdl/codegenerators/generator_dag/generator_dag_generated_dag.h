@@ -599,7 +599,7 @@ public:
 
     typedef vector<Annotation_info>::Type Annotation_vector;
 
-    //// Helper class describing a user defined type.
+    /// Helper class describing a user defined type.
     class User_type_info {
         // Helper for dynamic memory consumption: Arena strings have no EXTRA memory allocated.
         friend bool has_dynamic_memory_consumption(User_type_info const &);
@@ -2409,8 +2409,17 @@ public:
 
     // --------------------------- non interface methods ---------------------------
 
+    /// Get the type factory of this generated code.
+    Type_factory *get_type_factory() { return &m_type_factory; }
+
+    /// Get the type factory of this generated code.
+    Type_factory const *get_type_factory() const { return &m_type_factory; }
+
     /// Get the value factory of this code.
     Value_factory *get_value_factory() { return &m_value_factory; }
+
+    /// Get the value factory of this code.
+    Value_factory const *get_value_factory() const { return &m_value_factory; }
 
     /// Find the tag for a given resource.
     ///
@@ -2460,9 +2469,6 @@ public:
         char const     *suffix,
         size_t         argc = 0,
         DAG_node const *argv[] = NULL) const;
-
-    /// Get the type factory of this generated code.
-    IType_factory *get_type_factory() { return &m_type_factory; }
 
     /// Get the MDL compiler, increases the ref_count.
     IMDL *get_mdl() const {m_mdl->retain(); return m_mdl.get(); }
@@ -3033,9 +3039,6 @@ private:
 
     /// The names of imported modules.
     String_vector m_module_imports;
-
-    /// The "invisible" symbol, used to express "unsized arrays".
-    ISymbol const *m_invisible_sym;
 
     /// The builder for DAG nodes.
     mutable Allocator_builder m_builder;

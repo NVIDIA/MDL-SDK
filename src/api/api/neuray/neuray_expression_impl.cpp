@@ -598,7 +598,8 @@ mi::neuraylib::IExpression_temporary* Expression_factory::create_temporary(
 
 mi::neuraylib::IExpression_list* Expression_factory::create_expression_list() const
 {
-    mi::base::Handle<MDL::IExpression_list> result_int( m_ef->create_expression_list());
+    mi::base::Handle<MDL::IExpression_list> result_int(
+        m_ef->create_expression_list( /*initial_capacity*/ 0));
     return create_expression_list( result_int.get(), /*owner*/ nullptr);
 }
 
@@ -617,14 +618,14 @@ mi::neuraylib::IAnnotation* Expression_factory::create_annotation(
 mi::neuraylib::IAnnotation_block* Expression_factory::create_annotation_block() const
 {
     mi::base::Handle<MDL::IAnnotation_block> result_int(
-        m_ef->create_annotation_block());
+        m_ef->create_annotation_block( /*initial_capacity*/ 0));
     return create_annotation_block( result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IAnnotation_list* Expression_factory::create_annotation_list() const
 {
     mi::base::Handle<MDL::IAnnotation_list> result_int(
-        m_ef->create_annotation_list());
+        m_ef->create_annotation_list( /*initial_capacity*/ 0));
     return create_annotation_list( result_int.get(), /*owner*/ nullptr);
 }
 

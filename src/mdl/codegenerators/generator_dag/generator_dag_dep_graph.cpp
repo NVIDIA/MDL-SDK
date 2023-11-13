@@ -1089,6 +1089,7 @@ void Dumper::visit(Dependence_node const *n, Order order)
 Dependence_node::Dependence_node(
     Memory_arena      *arena,
     size_t            id,
+    IModule const     *owner,
     IDefinition const *def,
     char const        *dag_name,
     char const        *dag_simple_name,
@@ -1096,7 +1097,8 @@ Dependence_node::Dependence_node(
     char const        *dag_preset_name,
     unsigned          flags,
     Dependence_node   *next)
-: m_def(def)
+: m_owner(owner)
+, m_def(def)
 , m_sema(def->get_semantics())
 , m_ret_type(NULL)
 , m_params(NULL)
@@ -1138,6 +1140,10 @@ Dependence_node::Dependence_node(
         m_params   = params;
         m_n_params = n_params;
     }
+
+    MDL_ASSERT(
+        impl_cast<Module>(m_owner)->is_owner(m_def) &&
+        "Definition belongs to other module");
 }
 
 // Constructor from a name + semantic.
@@ -1153,7 +1159,8 @@ Dependence_node::Dependence_node(
     char const                 *dag_preset_name,
     unsigned                   flags,
     Dependence_node            *next)
-: m_def(NULL)
+: m_owner(NULL)
+, m_def(NULL)
 , m_sema(sema)
 , m_ret_type(ret_type)
 , m_params(NULL)
@@ -1288,13 +1295,11 @@ DAG_dependence_graph::DAG_dependence_graph(
     IAllocator           *alloc,
     Generated_code_dag   &dag,
     DAG_builder          &dag_builder,
-    ISymbol const        *invisible_sym,
     bool                 include_locals)
 : m_arena(alloc)
 , m_builder(m_arena)
 , m_dag(dag)
 , m_dag_builder(dag_builder)
-, m_invisible_sym(invisible_sym)
 , m_exported_nodes(&m_arena)
 , m_list(&m_arena)
 , m_def_node_map(0, Def_node_map::hasher(), Def_node_map::key_equal(), alloc)
@@ -1393,7 +1398,8 @@ DAG_dependence_graph::Node_list const &DAG_dependence_graph::get_module_entities
 }
 
 // Get the dependency node for the given definition.
-Dependence_node *DAG_dependence_graph::get_node(IDefinition const *idef)
+Dependence_node *DAG_dependence_graph::get_node(
+    IDefinition const *idef)
 {
     Definition const *def = impl_cast<Definition>(idef);
 
@@ -1401,6 +1407,7 @@ Dependence_node *DAG_dependence_graph::get_node(IDefinition const *idef)
         def = def_def;
     }
 
+    // defs are unique, so they can be used as key
     Def_node_map::iterator it = m_def_node_map.find(def);
     if (it != m_def_node_map.end()) {
         // already known
@@ -1483,6 +1490,7 @@ Dependence_node *DAG_dependence_graph::get_node(IDefinition const *idef)
     Dependence_node *n = m_builder.create<Dependence_node>(
         &m_arena,
         m_next_id++,
+        module,
         def,
         dag_name,
         dag_simple_name,

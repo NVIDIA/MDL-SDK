@@ -134,6 +134,7 @@ void LLVM_code_generator::sl_compile(
                 m_enable_full_debug,
                 m_link_libbsdf_df_handle_slot_mode,
                 m_exported_func_list,
+                m_func_remap,
                 m_jitted_code->opt_remarks_enabled(),
                 m_enable_noinline));
             break;
@@ -148,7 +149,8 @@ void LLVM_code_generator::sl_compile(
                 m_messages,
                 m_enable_full_debug,
                 m_link_libbsdf_df_handle_slot_mode,
-                m_exported_func_list));
+                m_exported_func_list,
+                m_func_remap));
             break;
         default:
             MDL_ASSERT(!"unsupported target language in sl_compile()");

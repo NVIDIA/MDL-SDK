@@ -108,11 +108,15 @@ static void fill_default_cg_options(
     options.add_option(
         MDL_JIT_OPTION_LINK_LIBBSDF_DF_HANDLE_SLOT_MODE,
         "none",
-        "Defines the libbsdf version to link into the ouput.");
+        "Defines the libbsdf version to link into the output");
     options.add_option(
         MDL_JIT_OPTION_USE_BITANGENT,
         "false",
         "Use bitangent instead of tangent_u, tangent_v in the generated MDL core state");
+    options.add_option(
+        MDL_JIT_OPTION_REMAP_FUNCTIONS,
+        "",
+        "Function remap list in the form src1=dst1, src2=dst2, ...");
     options.add_option(
         MDL_JIT_OPTION_INCLUDE_UNIFORM_STATE,
         "false",
@@ -273,10 +277,6 @@ static void fill_default_cg_options(
         MDL_JIT_OPTION_SL_USE_RESOURCE_DATA,
         "false",
         "GLSL/HLSL: Pass an extra user defined resource data struct to resource callbacks");
-    options.add_option(
-        MDL_JIT_OPTION_SL_REMAP_FUNCTIONS,
-        "",
-        "GLSL/HLSL: Function remap list");
     options.add_option(
         MDL_JIT_OPTION_SL_CORE_STATE_API_NAME,
         "",

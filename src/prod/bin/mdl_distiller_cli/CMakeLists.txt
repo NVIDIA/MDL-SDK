@@ -27,7 +27,7 @@
 #*****************************************************************************
 
 # name of the target and the resulting library
-set(PROJECT_NAME prod-bin-mdl_distiller)
+set(PROJECT_NAME prod-bin-mdl_distiller_cli)
 
 # collect sources
 set(PROJECT_HEADERS
@@ -47,7 +47,7 @@ set(PROJECT_SOURCES
     "condition_checker.cpp"
     "logger.cpp"
     "mdl_assert.cpp"
-    "mdl_distiller.cpp"
+    "mdl_distiller_cli.cpp"
     "mdl_distiller_utils.cpp"
     "mdl_printer.cpp"
     "user_timer.cpp"
@@ -58,7 +58,7 @@ set(PROJECT_SOURCES
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
     TYPE EXECUTABLE
-    OUTPUT_NAME "mdl_distiller"
+    OUTPUT_NAME "mdl_distiller_cli"
     SOURCES ${PROJECT_SOURCES}
     WINDOWS_UNICODE
 )

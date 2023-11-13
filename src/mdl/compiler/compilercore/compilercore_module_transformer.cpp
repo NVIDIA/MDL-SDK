@@ -985,6 +985,9 @@ IExpression_call *Module_inliner::make_constructor(
     qname->add_component(sname);
 
     IExpression_reference *ref_new = m_ef.create_reference(tname);
+    if (is<IType_array>(vs_ori->get_type())) {
+        ref_new->set_array_constructor();
+    }
 
     IExpression_call *c = m_ef.create_call(ref_new);
     IValue const * const *values = vs_ori->get_values();

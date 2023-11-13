@@ -3370,7 +3370,7 @@ Mdl_llvm_backend::Mdl_llvm_backend(
     options.set_option(MDL_JIT_OPTION_SL_USE_RESOURCE_DATA, "false");
 
     // by default, no function remap
-    options.set_option(MDL_JIT_OPTION_SL_REMAP_FUNCTIONS, "");
+    options.set_option(MDL_JIT_OPTION_REMAP_FUNCTIONS, "");
 
     // Argh, why are the defaults for HLSl/GLSL different
     if (kind == mi::neuraylib::IMdl_backend_api::MB_HLSL) {
@@ -3771,7 +3771,7 @@ mi::Sint32 Mdl_llvm_backend::set_option(
             return 0;
         }
         if (strcmp(name, "glsl_remap_functions") == 0) {
-            jit_options.set_option(MDL_JIT_OPTION_SL_REMAP_FUNCTIONS, value);
+            jit_options.set_option(MDL_JIT_OPTION_REMAP_FUNCTIONS, value);
             return 0;
         }
         if (strcmp(name, "glsl_state_animation_time_mode") == 0) {
@@ -3887,6 +3887,10 @@ mi::Sint32 Mdl_llvm_backend::set_option(
                 return -2;
             }
             jit_options.set_option(MDL_JIT_OPTION_SL_USE_RESOURCE_DATA, value);
+            return 0;
+        }
+        if (strcmp(name, "hlsl_remap_functions") == 0) {
+            jit_options.set_option(MDL_JIT_OPTION_REMAP_FUNCTIONS, value);
             return 0;
         }
         break;

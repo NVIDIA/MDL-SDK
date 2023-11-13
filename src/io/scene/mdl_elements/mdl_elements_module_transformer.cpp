@@ -34,6 +34,7 @@
 #include <memory>
 #include <regex>
 #include <set>
+#include <stack>
 
 #include <mi/mdl/mdl_modules.h>
 #include <mi/mdl/mdl_names.h>
@@ -47,6 +48,7 @@
 #include <base/data/db/i_db_transaction.h>
 #include <mdl/compiler/compilercore/compilercore_serializer.h>
 #include <mdl/compiler/compilercore/compilercore_analysis.h>
+#include <mdl/compiler/compilercore/compilercore_def_table.h>
 #include <mdl/compiler/compilercore/compilercore_modules.h>
 #include <mdl/compiler/compilercore/compilercore_module_transformer.h>
 #include <mdl/compiler/compilercore/compilercore_tools.h>
@@ -120,11 +122,209 @@ private:
     mi::base::Handle<mi::mdl::Module> m_module;
 };
 
+/// Converts constants of user types back to references and constructor calls.
+/// This is necessary whenever the analyzer is called again after a module transformation,
+/// because the analyzer will add new instances of the user types, while the user constants
+/// would still point to the old instances.
+class User_constant_remover : protected mi::mdl::Module_visitor
+{
+public:
+    User_constant_remover(
+        mi::mdl::Module* module);
+
+protected:
+    /// Converts the literal, if it contains a user constant, otherwise keeps it unmodified.
+    mi::mdl::IExpression *post_visit( mi::mdl::IExpression_literal* expr) override;
+
+private:
+    /// Converts a value, if it contains a user constant, otherwise returns nullptr.
+    mi::mdl::IExpression *convert_user_value( mi::mdl::IValue const *value);
+
+    // Converts an enum value to a reference expression.
+    mi::mdl::IExpression *convert_enum_value( mi::mdl::IValue_enum const *value);
+
+    /// Converts a struct or array value to a call expression to the corresponding constructor.
+    mi::mdl::IExpression *convert_compound_value( mi::mdl::IValue_compound const *value);
+
+    /// Creates a qualified name from a scope.
+    mi::mdl::IQualified_name *create_qualified_name( mi::mdl::Scope const *scope);
+
+protected:
+    mi::mdl::Module* m_module;
+    mi::mdl::IExpression_factory* m_ef;
+    mi::mdl::IValue_factory* m_vf;
+    mi::mdl::IName_factory* m_nf;
+
+private:
+    typedef std::stack<mi::mdl::ISymbol const *> Symbol_stack;
+
+    /// Temporarily used symbol stack.
+    Symbol_stack m_sym_stack;
+};
+
+User_constant_remover::User_constant_remover(
+    mi::mdl::Module* module)
+  : m_module( module)
+{
+    m_ef = m_module->get_expression_factory();
+    m_vf = m_module->get_value_factory();
+    m_nf = m_module->get_name_factory();
+}
+
+// Creates a qualified name from a scope.
+mi::mdl::IQualified_name *User_constant_remover::create_qualified_name( mi::mdl::Scope const *scope)
+{
+    mi::mdl::Definition_table const &def_tab = m_module->get_definition_table();
+    mi::mdl::Scope const *global = def_tab.get_global_scope();
+    mi::mdl::Scope const *owner_scope = scope;
+
+    // Collect scope symbols from bottom to top
+    for( ; scope != global && scope != nullptr; scope = scope->get_parent()) {
+        if( mi::mdl::ISymbol const *sym = scope->get_scope_name()) {
+            m_sym_stack.push( sym);
+        }
+    }
+
+    mi::mdl::IQualified_name *qname = m_nf->create_qualified_name();
+    // need "::" in front?
+    qname->set_absolute( m_sym_stack.empty() && owner_scope == global);
+
+    // Add the in reverse order to the qualified name
+    while( !m_sym_stack.empty()) {
+        mi::mdl::ISymbol const *sym = m_sym_stack.top();
+
+        mi::mdl::ISimple_name *sname = m_nf->create_simple_name( sym);
+        qname->add_component( sname);
+
+        m_sym_stack.pop();
+    }
+
+    return qname;
+}
+
+// Converts an enum value to a reference expression.
+mi::mdl::IExpression *User_constant_remover::convert_enum_value( mi::mdl::IValue_enum const *value)
+{
+    mi::mdl::IType_enum const *type = value->get_type();
+    mi::mdl::Definition_table const &def_tab = m_module->get_definition_table();
+    mi::mdl::Scope const *scope = def_tab.get_type_scope( type);
+    MDL_ASSERT( scope);
+
+    // Enums are referenced without mentioning the enum type name, so skip it
+    scope = scope->get_parent();
+
+    mi::mdl::IQualified_name *qname = create_qualified_name( scope);
+
+    // Get name of enum value and add it to the qualified name
+    mi::mdl::ISymbol const *value_symbol;
+    int value_code;
+    type->get_value( value->get_index(), value_symbol, value_code);
+
+    mi::mdl::ISimple_name *value_sname = m_nf->create_simple_name( value_symbol);
+    qname->add_component( value_sname);
+
+    mi::mdl::IType_name *tname = m_nf->create_type_name( qname);
+    mi::mdl::IExpression_reference *ref = m_ef->create_reference( tname);
+    ref->set_type( type);
+    return ref;
+}
+
+// Converts a struct or array value to a call expression to the corresponding constructor.
+mi::mdl::IExpression *User_constant_remover::convert_compound_value(
+    mi::mdl::IValue_compound const *value)
+{
+    mi::mdl::IType_compound const *type = value->get_type();
+    mi::mdl::Definition_table const &def_tab = m_module->get_definition_table();
+    mi::mdl::Scope const *scope;
+    if( mi::mdl::IType_array const *a_tp = as<mi::mdl::IType_array>( type)) {
+        scope = def_tab.get_type_scope( a_tp->get_element_type());
+    } else {
+        scope = def_tab.get_type_scope( type);
+    }
+    MDL_ASSERT( scope);
+
+    mi::mdl::IQualified_name *qname = create_qualified_name( scope);
+    mi::mdl::IType_name *tname = m_nf->create_type_name( qname);
+
+    // Adapt type for arrays, with a value, the size of the array is known
+    if( mi::mdl::is<mi::mdl::IType_array>( type)) {
+        mi::mdl::IExpression_literal *array_size = m_ef->create_literal(
+            m_vf->create_int( type->get_compound_size()));
+        tname->set_array_size( array_size);
+        //tname->set_incomplete_array();
+    }
+
+    mi::mdl::IExpression_reference *constructor = m_ef->create_reference( tname);
+    constructor->set_type( type);
+
+    // Adapt constructor for arrays, if needed
+    if( mi::mdl::is<mi::mdl::IType_array>( type)) {
+        constructor->set_array_constructor();
+    }
+
+    mi::mdl::IExpression_call *call = m_ef->create_call( constructor);
+    call->set_type( type);
+
+    // Convert all compound elements and add to constructor arguments
+    for( int i = 0, n = value->get_component_count(); i < n; ++i) {
+        mi::mdl::IValue const *arg_value = value->get_value( i);
+        mi::mdl::IExpression *arg_expr = convert_user_value( arg_value);
+        // Was not a user value? Use original value
+        if( arg_expr == nullptr) {
+            arg_expr = m_ef->create_literal( arg_value);
+        }
+        mi::mdl::IArgument const *arg = m_ef->create_positional_argument( arg_expr);
+        call->add_argument( arg);
+    }
+
+    return call;
+}
+
+// Converts a value, if it contains a user constant, otherwise returns nullptr.
+mi::mdl::IExpression *User_constant_remover::convert_user_value( mi::mdl::IValue const *value)
+{
+    mi::mdl::IType const *type = value->get_type();
+    if( !mi::mdl::is_user_type( type))
+        return nullptr;
+
+    switch( type->get_kind()) {
+    case mi::mdl::IType::TK_ENUM:
+        return convert_enum_value( cast<mi::mdl::IValue_enum>( value));
+
+    case mi::mdl::IType::TK_STRUCT:
+        return convert_compound_value( cast<mi::mdl::IValue_compound>( value));
+
+    case mi::mdl::IType::TK_ARRAY:
+        {
+            mi::mdl::IType const *e_type = cast<mi::mdl::IType_array>( type)->get_element_type();
+            if( !mi::mdl::is_user_type( e_type))
+                return nullptr;
+            return convert_compound_value( cast<mi::mdl::IValue_compound>( value));
+        }
+
+    default:
+        return nullptr;
+    }
+}
+
+// Converts the literal, if it contains a user constant, otherwise keeps it unmodified.
+mi::mdl::IExpression *User_constant_remover::post_visit( mi::mdl::IExpression_literal* expr)
+{
+    mi::mdl::IExpression *converted_expr = convert_user_value( expr->get_value());
+
+    // Was not a user value? Return original expression
+    if( converted_expr == nullptr)
+        return expr;
+
+    return converted_expr;
+}
+
 /// Upgrades the MDL version of the module including all its call references.
 ///
 /// There must be no weak relative import declarations or weak relative resource file paths.
-class Version_upgrader : protected mi::mdl::Module_visitor, public mi::mdl::IClone_modifier
+class Version_upgrader : public User_constant_remover, public mi::mdl::IClone_modifier
 {
+    typedef User_constant_remover Base;
 public:
     Version_upgrader(
         mi::mdl::IMDL* mdl,
@@ -148,9 +348,6 @@ private:
     { return const_cast<mi::mdl::IQualified_name*>( qname); }
 
     mi::mdl::IMDL* m_mdl;
-    mi::mdl::Module* m_module;
-
-    mi::mdl::IExpression_factory* m_ef;
 
     mi::mdl::IMDL::MDL_version m_from_version;
     int m_from_major = 1;
@@ -168,10 +365,9 @@ Version_upgrader::Version_upgrader(
     mi::mdl::IMDL* mdl,
     mi::mdl::Module* module,
     mi::neuraylib::Mdl_version to_version)
-  : m_mdl( mdl),
-    m_module( module)
+  : Base( module),
+    m_mdl( mdl)
 {
-    m_ef = m_module->get_expression_factory();
     m_module->get_version( m_from_major, m_from_minor);
     m_from_version = combine_mdl_version( m_from_major, m_from_minor);
     m_to_version = convert_mdl_version( to_version);
@@ -430,7 +626,7 @@ void Alias_remover::post_visit( mi::mdl::IType_name* type_name)
     mi::mdl::IQualified_name* new_name = m_nf->create_qualified_name();
     if( module_name->is_absolute())
         new_name->set_absolute();
-    for( mi::Size i = 0, n = mi::Size( module_name->get_component_count()); i < n; ++i)
+    for( int i = 0, n = module_name->get_component_count(); i < n; ++i)
         new_name->add_component( module_name->get_component( i));
     new_name->add_component( m_nf->create_simple_name( def->get_symbol()));
 
@@ -500,20 +696,19 @@ mi::mdl::IQualified_name* Alias_remover::get_reference_name(
 }
 
 /// Provides common infrastructure for adjusting import declarations.
-class Import_declaration_replacer : protected mi::mdl::Module_visitor
+class Import_declaration_replacer : public User_constant_remover
 {
+    typedef User_constant_remover Base;
 public:
     Import_declaration_replacer(
         mi::mdl::IMDL* mdl,
         mi::mdl::Module* module,
         const std::vector<std::string>& module_name)
-      : m_mdl( mdl),
-        m_module( module),
+      : Base( module),
+        m_mdl( mdl),
         m_module_name( module_name),
         m_counter( 0)
     {
-        m_nf = m_module->get_name_factory();
-
         int major = 0;
         int minor = 0;
         m_module->get_version( major, minor);
@@ -581,9 +776,8 @@ private:
 
 protected:
     mi::mdl::IMDL* m_mdl;
-    mi::mdl::Module* m_module;
+
     const std::vector<std::string>& m_module_name;
-    mi::mdl::IName_factory* m_nf;
 
     /// Stores for each modified import declaration the mapping from its import index to the newly
     /// created name.
@@ -1174,16 +1368,16 @@ private:
 };
 
 /// Provides common infrastructure for adjusting resource file paths.
-class Resource_file_path_replacer : protected mi::mdl::Module_visitor
+class Resource_file_path_replacer : public User_constant_remover
 {
+    typedef User_constant_remover Base;
 public:
     Resource_file_path_replacer(
-        const mi::mdl::Module* module,
+        mi::mdl::Module* module,
         const std::vector<std::string>& module_name)
-      : m_module( module),
+      : Base( module),
         m_module_name( module_name)
     {
-        m_vf = m_module->get_value_factory();
     }
 
     void run() { visit( m_module); }
@@ -1208,9 +1402,7 @@ protected:
     const mi::mdl::IValue_resource* create_resource(
         const mi::mdl::IValue_resource* value, const char* s);
 
-    const mi::mdl::Module* m_module;
     const std::vector<std::string>& m_module_name;
-    mi::mdl::IValue_factory* m_vf;
 };
 
 /// Creates an absolute file path as combination of \c m_module_name and \p file_path.
@@ -1343,9 +1535,10 @@ const mi::mdl::IValue_resource* Resource_file_path_replacer::create_resource(
 /// Creates absolute resource file paths.
 class Absolute_resource_file_path_creator : public Resource_file_path_replacer
 {
+    typedef Resource_file_path_replacer Base;
 public:
     Absolute_resource_file_path_creator(
-        const mi::mdl::Module* module,
+        mi::mdl::Module* module,
         const std::vector<std::string>& module_name,
         std::wregex* include_regex,
         std::wregex* exclude_regex)
@@ -1356,6 +1549,12 @@ public:
 private:
     mi::mdl::IExpression* post_visit( mi::mdl::IExpression_literal* expr) final
     {
+        // Handled by base class?
+        mi::mdl::IExpression *new_expr = Base::post_visit( expr);
+        if( new_expr != expr) {
+            return new_expr;
+        }
+
         // Skip non-resources.
         const mi::mdl::IValue_resource* resource = as<mi::mdl::IValue_resource>( expr->get_value());
         if( !resource)
@@ -1404,9 +1603,10 @@ private:
 /// Creates strict relative resource file paths.
 class Relative_resource_file_path_creator : public Resource_file_path_replacer
 {
+    typedef Resource_file_path_replacer Base;
 public:
     Relative_resource_file_path_creator(
-        const mi::mdl::Module* module,
+        mi::mdl::Module* module,
         const std::vector<std::string>& module_name,
         std::wregex* include_regex,
         std::wregex* exclude_regex,
@@ -1419,6 +1619,12 @@ public:
 private:
     mi::mdl::IExpression* post_visit( mi::mdl::IExpression_literal* expr) final
     {
+        // Handled by base class?
+        mi::mdl::IExpression *new_expr = Base::post_visit( expr);
+        if( new_expr != expr) {
+            return new_expr;
+        }
+
         // Skip non-resources.
         const mi::mdl::IValue_resource* resource = as<mi::mdl::IValue_resource>( expr->get_value());
         if( !resource)
@@ -1483,9 +1689,10 @@ private:
 /// Creates non-weak relative resource file paths.
 class Non_weak_relative_resource_file_path_creator : public Resource_file_path_replacer
 {
+    typedef Resource_file_path_replacer Base;
 public:
     Non_weak_relative_resource_file_path_creator(
-        const mi::mdl::Module* module,
+        mi::mdl::Module* module,
         const std::vector<std::string>& module_name,
         Execution_context* context)
       : Resource_file_path_replacer( module, module_name)/*,
@@ -1494,6 +1701,12 @@ public:
 private:
     mi::mdl::IExpression* post_visit( mi::mdl::IExpression_literal* expr) final
     {
+        // Handled by base class?
+        mi::mdl::IExpression *new_expr = Base::post_visit( expr);
+        if( new_expr != expr) {
+            return new_expr;
+        }
+
         // Skip non-resources.
         const mi::mdl::IValue_resource* resource = as<mi::mdl::IValue_resource>( expr->get_value());
         if( !resource)

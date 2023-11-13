@@ -39,6 +39,7 @@ set(_GENERATED_SOURCES
 # scripts/files used to generate the sources above
 set(_GENERATOR_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/instantiate_templates_inline.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/post_swig.py
     ${CMAKE_CURRENT_SOURCE_DIR}/mdl_python_swig.i
     )
 
@@ -176,9 +177,13 @@ add_custom_command(
         -outdir $<TARGET_FILE_DIR:${PROJECT_NAME}>
         -module pymdlsdk
         ${CMAKE_CURRENT_SOURCE_DIR}/mdl_python_swig.i
+    COMMAND ${python_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/post_swig.py
+        -outdir $<TARGET_FILE_DIR:${PROJECT_NAME}>
+        -module pymdlsdk
     DEPENDS
         ${_GENERATED_DIR}${CONFIG_DIR}/processed_headers.d
         ${CMAKE_CURRENT_SOURCE_DIR}/mdl_python_swig.i
+        ${CMAKE_CURRENT_SOURCE_DIR}/post_swig.py
         ${PROJECT_SOURCES}
     VERBATIM
     )

@@ -53,6 +53,13 @@
 #include "generator_jit_hlsl_writer.h"
 #include "generator_jit_glsl_writer.h"
 
+#define NEW_OUT_OF_SSA 1
+#define DEBUG_NEW_OUT_OF_SSA 0
+
+#if !NEW_OUT_OF_SSA
+#define DEBUG_NEW_OUT_OF_SSA 0
+#endif
+
 namespace mi {
 namespace mdl {
 namespace sl {
@@ -71,11 +78,13 @@ SLWriterPass<BasePass>::SLWriterPass(
     mi::mdl::Messages_impl                               &messages,
     bool                                                 enable_debug,
     mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list,
+    mi::mdl::Function_remap const                        &func_remaps,
     mi::mdl::Df_handle_slot_mode                         df_handle_slot_mode,
     bool                                                 enable_opt_remarks)
 : Base(ID, alloc, type_mapper, options, messages, enable_debug, enable_opt_remarks)
 , m_code(code)
 , m_exp_func_list(exp_func_list)
+, m_func_remaps(func_remaps)
 , m_dg(alloc)
 , m_curr_node(nullptr)
 , m_curr_func(nullptr)
@@ -95,11 +104,7 @@ SLWriterPass<BasePass>::SLWriterPass(
 , m_num_texture_results(num_texture_results)
 , m_df_handle_slot_mode(df_handle_slot_mode)
 , m_cur_data_layout(nullptr)
-, m_func_remap_map(
-    0, typename Function_remap_map::hasher(), typename Function_remap_map::key_equal(), alloc)
 {
-    fill_function_remap(options.get_string_option(MDL_JIT_OPTION_SL_REMAP_FUNCTIONS));
-
     register_api_types(options, df_handle_slot_mode);
 }
 
@@ -355,7 +360,7 @@ bool SLWriterPass<BasePass>::runOnModule(llvm::Module &M)
                 !fname.startswith("glsl.") &&
                 !fname.startswith("hlsl."))
             {
-                Def_function *func_def = Base::create_prototype(func, get_mapper_symbol(fname));
+                Def_function *func_def = Base::create_prototype(func);
                 if (func_def != nullptr) {
                     m_llvm_function_map[&func] = func_def;
                 }
@@ -405,18 +410,17 @@ bool SLWriterPass<BasePass>::runOnModule(llvm::Module &M)
     // .. so delete it here
     m_llvm_function_map.clear();
 
-    typedef typename list<Symbol *>::Type Symbol_list;
-    Symbol_list mapped(Base::m_alloc);
+    typedef typename list<std::pair<char const *, Symbol *> >::Type Mapped_list;
+    Mapped_list mapped(Base::m_alloc);
 
-    for (typename Function_remap_map::const_iterator
-        it(m_func_remap_map.begin()), end(m_func_remap_map.end());
-        it != end;
-        ++it)
+    for (typename mdl::Function_remap::Remap_entry const *p = m_func_remaps.first();
+        p != nullptr;
+        p = p->next)
     {
-        Remap_entry const &re = it->second;
-
-        if (re.used) {
-            mapped.push_back(it->first);
+        if (p->used) {
+            if (Symbol *dst_sym = Base::m_symbol_table.lookup_symbol(p->to)) {
+                mapped.push_back(std::make_pair(p->from, dst_sym));
+            }
         }
     }
 
@@ -473,9 +477,7 @@ void SLWriterPass<BasePass>::translate_function(
     Type_name *ret_type_name = Base::get_type_name(ret_type);
 
     Symbol               *func_sym   = func_def->get_symbol();
-    Symbol               *mapper_sym = get_mapper_symbol(func_sym);
-    Name                 *func_name  = Base::get_name(
-        Base::zero_loc, mapper_sym != nullptr ? mapper_sym : func_sym);
+    Name                 *func_name  = Base::get_name(Base::zero_loc, func_sym);
     Declaration_function *decl_func  = Base::m_decl_factory.create_function(
         ret_type_name, func_name);
 
@@ -557,16 +559,13 @@ void SLWriterPass<BasePass>::translate_function(
             decl_func->add_param(decl_param);
         }
 
-        // only create the body if not mapped
-        if (mapper_sym == nullptr) {
-            // local variables possibly used in outer scopes will be declared in the
-            // first block of the function
-            m_cur_start_block = Base::m_stmt_factory.create_compound(Base::zero_loc);
+        // local variables possibly used in outer scopes will be declared in the
+        // first block of the function
+        m_cur_start_block = Base::m_stmt_factory.create_compound(Base::zero_loc);
 
-            Stmt *stmt = translate_region(ast_func->getBody());
-            Stmt *body = join_statements(m_cur_start_block, stmt);
-            decl_func->set_body(body);
-        }
+        Stmt *stmt = translate_region(ast_func->getBody());
+        Stmt *body = join_statements(m_cur_start_block, stmt);
+        decl_func->set_body(body);
     }
 
     // cleanup
@@ -636,11 +635,200 @@ static bool has_non_const_index(llvm::InsertElementInst *inst)
     return !llvm::isa<llvm::ConstantInt>(index);
 }
 
+#if NEW_OUT_OF_SSA
+
+#if DEBUG_NEW_OUT_OF_SSA
+void print_ssa_value(llvm::Value* v) {
+    if (v == reinterpret_cast<llvm::Value*>(static_cast<intptr_t>(1))) {
+        printf("swp");
+        return;
+    }
+    llvm::StringRef name = v->getName();
+    if (name.size() > 0) {
+        printf("%s", name.str().c_str());
+    }
+    else if (llvm::isa<llvm::Constant>(v)) {
+        printf("<constant:%p>", v);
+    }
+    else {
+        printf("<value:%p>", v);
+    }
+}
+#endif
+
+/// Register transfer graph. This is inspired by the graph described in
+/// Chapter 4 of Sebastian Hack, "Register Allocation for Programs in SSA Form",
+/// PhD Thesis, Universitaet Fridericiana zu Karlsruhe (TH), 2006.
+/// 
+/// The graph models the value transfer between SSA values on the edges of
+/// the CFG. Each edge is a copy operation between a PHI node input and the
+/// corresponding PHI node output.
+/// 
+/// The algorithm for copying inputs to outputs works as follows:
+/// 
+/// 1. When a node with an in-degree of 0 exists, a copy instruction to
+///    one of the successors can be emitted, and the edge removed.
+///    Copies to the same variable can be ignored.
+/// 2. If no such node exists, there exists a cycle in the graph. In
+///    that case, we select an arbitrary edge, create a temporary, copy
+///    one the source node on the edge to the temporary, remove the edge to
+///    break the cycle,
+///    process the rest of the graph and emit a copy from the temporary
+///    to the target node of the original edge.
+/// 3. Repeat until there are no more edges.
+/// 
+/// In contrast to the original algorithm, we do not have to care about
+/// spilling, as we can simply create temporaries. Also, when removing an edge,
+/// we do not move successors of `from` to `to` (which the original algoritm
+/// does), because we do not have to care about the number of temporaries.
+class Rtg {
+public:
+    using Id = unsigned;
+    using IdValueMap = std::map<Id, llvm::Value*>;
+    using ValueIdMap = std::map<llvm::Value*, Id>;
+
+    using RtgSet = std::set<Id>;
+    using PredMap = std::map<Id, Id>;
+    using SuccMap = std::map<Id, RtgSet>;
+
+private:
+    /// Map from internal node ids to LLVM values.
+    IdValueMap ids_to_values;
+    /// Map from LLVM values to internal node ids.
+    ValueIdMap values_to_ids;
+
+    /// Map from nodes to a set of their successors.
+    SuccMap m_succ_map;
+    /// Map from nodes to their respective predecessor. Nodes can only have
+    /// 0 or 1 predecessors.
+    PredMap m_pred_map;
+    /// Number of edges in the graph.
+    unsigned m_edge_count{ 0 };
+    /// Counter to generate internal node ids.
+    Id m_next_id{ 0 };
+
+public:
+    Id find_id(llvm::Value* v) {
+        auto it = values_to_ids.find(v);
+        if (it != values_to_ids.end()) {
+            return it->second;
+        } else {
+            Id id = m_next_id++;
+            values_to_ids[v] = id;
+            ids_to_values[id] = v;
+            return id;
+        }
+    }
+
+    /// Add an edge to the register transfer graph, if it doesn't already exist.
+    void add_edge(llvm::Value* from_val, llvm::Value* to_val) {
+        Id from = find_id(from_val);
+        Id to = find_id(to_val);
+        auto p = m_pred_map.find(to);
+        if (p == m_pred_map.end()) {
+            m_succ_map[from].insert(to);
+            m_pred_map[to] = from;
+            m_edge_count += 1;
+        } else {
+            MDL_ASSERT(p->second == from);
+        }
+    }
+
+    /// Remove an edge from the register transfer graph.
+    /// Precondition: the edge must exist in the graph.
+    void remove_edge(llvm::Value* from_val, llvm::Value* to_val) {
+        Id from = find_id(from_val);
+        Id to = find_id(to_val);
+        MDL_ASSERT(m_pred_map.find(to)->second == from);
+        m_succ_map[from].erase(m_succ_map[from].find(to));
+        m_pred_map.erase(m_pred_map.find(to));
+        m_edge_count -= 1;
+    }
+
+    /// Return the number of edges in the graph.
+    size_t edge_count() {
+        return m_edge_count;
+    }
+
+#if DEBUG_NEW_OUT_OF_SSA
+    void dump() {
+        printf("\n");
+        for (auto from_to : m_succ_map) {
+            for (auto to : from_to.second) {
+                printf("[-] ");
+                print_ssa_value(ids_to_values[from_to.first]);
+                printf(" -> ");
+                print_ssa_value(ids_to_values[to]);
+                printf("\n");
+            }
+        }
+    }
+#endif
+
+    llvm::Value* predecessor(llvm::Value* node) {
+        return ids_to_values[m_pred_map[values_to_ids[node]]];
+    }
+
+    /// Select a node that has no successors, but does have at least
+    /// one predecessor. Note that the returned node's predecessor can
+    /// be itself. The caller has to handle that case (e.g. by simply
+    /// ignoring it, since a copy would be useless).
+    /// 
+    /// Return nullptr if no such edge can be found.
+    llvm::Value* pick_without_outgoing_edges() {
+        // Pick edge r->s, with outdegree of s == 0 by iterating over
+        // m_pred_map (which means there is a predecessor) and then
+        // checking whether the successor set is empty.
+        for (auto &it : m_pred_map) {
+            Id s = it.first;
+            if (m_succ_map[s].size() == 0) {
+                auto it = ids_to_values.find(s);
+                MDL_ASSERT(it != ids_to_values.end());
+                return it->second;
+            }
+        }
+        return nullptr;
+    }
+
+    /// Return an arbitrary edge from the graph. If there are no edges,
+    /// return a pair (nullptr, nullptr).
+    std::pair <llvm::Value*, llvm::Value*> pick_arbitrary() {
+        // We just take the first entry in the predecessor map, exchanging
+        // the from and to nodes.
+        if (m_pred_map.size() > 0) {
+            auto p = m_pred_map.begin();
+            return std::make_pair(ids_to_values[p->second], ids_to_values[p->first]);
+        } else {
+            return std::make_pair(nullptr, nullptr);
+        }
+    }
+};
+#endif
+
+namespace {
+
+    // Return true if the value phi is used in any terminating instruction,
+    // which requires special handling in the out-of-SSA transformation.
+    bool used_in_terminator(llvm::Value* phi)
+    {
+        for (llvm::Value* user : phi->users()) {
+            if (llvm::isa<llvm::Instruction>(user)) {
+                llvm::Instruction *inst = llvm::cast<llvm::Instruction>(user);
+                if (inst->isTerminator()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+}
+
 // Translate a block-region into an AST.
 template<typename BasePass>
 typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
     llvm::sl::Region const *region)
 {
+
     llvm::BasicBlock *bb = region->get_bb();
 
     // Assumption: MDL has no pointers and uses copy-by-value, thus there are no aliases.
@@ -851,6 +1039,7 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
 
     llvm::SmallVector<Stmt *, 8> stmts;
 
+#if !NEW_OUT_OF_SSA
     // check for phis and assign to their in-variables from the predecessor blocks to
     // the out-variables at the beginning of this block
     for (llvm::PHINode &phi : bb->phis()) {
@@ -858,6 +1047,19 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
         Expr *phi_in_expr = Base::create_reference(phi_in_out_vars.first);
         stmts.push_back(create_assign_stmt(phi_in_out_vars.second, phi_in_expr));
     }
+#else
+    // When a variable is used in a terminating instruction, we have to introduce a
+    // variable for holding it's value across a control-flow edge, so that the old 
+    // variable's value is available to the terminating instruction (for example, a 
+    // branch).
+    for (llvm::PHINode& phi : bb->phis()) {
+        if (used_in_terminator(&phi)) {
+            auto phi_in_out_vars = get_phi_vars(&phi, true);
+            Expr* phi_in_expr = Base::create_reference(phi_in_out_vars.first);
+            stmts.push_back(create_assign_stmt(phi_in_out_vars.second, phi_in_expr));
+        }
+    }
+#endif // !NEW_OUT_OF_SSA
 
     for (llvm::Value *value : gen_insts) {
         // handle intrinsic functions
@@ -945,17 +1147,142 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
         }
     }
 
+#if NEW_OUT_OF_SSA
+    // Used as a marker to add a dependency on the "swap" temporary.
+    llvm::Value* swap_marker = reinterpret_cast<llvm::Value*>(static_cast<intptr_t>(1));
+    Def_variable* swap_tmp_v = nullptr;
+#endif // NEW_OUT_OF_SSA
+
     // check for phis in successor blocks and assign to their in-variables at the end of this block
     for (llvm::BasicBlock *succ_bb : successors(bb->getTerminator())) {
+#if NEW_OUT_OF_SSA
+        Rtg rtg;
+#endif // NEW_OUT_OF_SSA
         for (llvm::PHINode &phi : succ_bb->phis()) {
+            bool used_in_branch = used_in_terminator(&phi);
             for (unsigned i = 0, n = phi.getNumIncomingValues(); i < n; ++i) {
                 if (phi.getIncomingBlock(i) == bb) {
+                    llvm::Value* incoming = phi.getIncomingValue(i);
+#if NEW_OUT_OF_SSA
+                    if (used_in_branch) {
+                        // This is a variable used in a terminating instruction: copy it's value
+                        // into the temporary that holds it's value for the sucessor block.
+                        Def_variable* phi_in_var = get_phi_in_var(&phi, true);
+                        Expr* res = translate_expr(incoming);
+                        stmts.push_back(create_assign_stmt(phi_in_var, res));
+                    } else {
+                        // Variables not used in terminating instruction go into the register 
+                        // transfer graph.
+                        rtg.add_edge(incoming, &phi);
+                    }
+#else // !NEW_OUT_OF_SSA
                     Def_variable *phi_in_var = get_phi_in_var(&phi);
-                    Expr         *res        = translate_expr(phi.getIncomingValue(i));
+                    Expr         *res        = translate_expr(incoming);
                     stmts.push_back(create_assign_stmt(phi_in_var, res));
+#endif // !NEW_OUT_OF_SSA
                 }
             }
+            
         }
+#if NEW_OUT_OF_SSA
+      
+        while (rtg.edge_count() > 0) {
+#if DEBUG_NEW_OUT_OF_SSA
+            rtg.dump();
+#endif
+            llvm::Value* to = rtg.pick_without_outgoing_edges();
+            if (to != nullptr) {
+
+#if DEBUG_NEW_OUT_OF_SSA
+                printf("[select] ");
+                print_ssa_value(to);
+                printf("\n");
+#endif
+                llvm::Value* from = rtg.predecessor(to);
+                Def_variable* phi_out_var = get_phi_out_var(llvm::cast<llvm::PHINode>(to));
+
+                Expr* res;
+                if (from == swap_marker) {
+                    res = Base::create_reference(swap_tmp_v);
+                } else {
+                    res = translate_expr(from);
+                }
+#if DEBUG_NEW_OUT_OF_SSA
+                printf("  [generate] ");
+                if (Expr_ref* v = as<Expr_ref>(res)) {
+                    printf("%s", v->get_definition()->get_symbol()->get_name());
+                } else if (Expr_literal* l = as<Expr_literal>(res)) {
+                    printf("<literal>");
+                } else {
+                    printf("<node>");
+                }
+                printf(" -> %s\n", phi_out_var->get_symbol()->get_name());
+#endif
+                bool generate = true;
+                if (Expr_ref* ref = as<Expr_ref>(res)) {
+                    if (ref->get_definition()->get_symbol() == phi_out_var->get_symbol()) {
+                        generate = false;
+                    }
+                }
+                if (generate) {
+                    stmts.push_back(create_assign_stmt(phi_out_var, res));
+                }
+                rtg.remove_edge(from, to);
+            } else {
+                // Since we did not find a variable without an outgoing edge in, we choose an arbitrary
+                // edge and introduce a temporary variable. We move the source of the edge into the 
+                // temporary and add an edge from the temporary to the destination of the picked edge.
+
+                auto picked_edge = rtg.pick_arbitrary();
+
+                // Note: the pair elements are non-null, because the graph is not empty here.
+                llvm::Value* from = picked_edge.first;
+                llvm::Value* to = picked_edge.second;
+#if DEBUG_NEW_OUT_OF_SSA
+                printf("[cycle detected]\n  [select cycle-breaking edge] ");
+                print_ssa_value(from);
+                printf(" -> ");
+                print_ssa_value(to);
+                printf("\n");
+#endif
+                // Create temporary variable to break cycle. We only to this once per block, because we
+                // can reuse the variable: if there are multiple cycles, they will be done one after the
+                // other.
+                if (swap_tmp_v == nullptr) {
+                    swap_tmp_v = create_local_var(Base::get_unique_sym("swp", "swp"), from->getType());
+                }
+                Expr* swap_tmp = Base::create_reference(swap_tmp_v);
+
+                // Assign from value to temporary. The `from` node is now free to use.
+                Expr* from_expr = translate_expr(from);
+                stmts.push_back(create_assign_stmt(swap_tmp, from_expr));
+
+#if DEBUG_NEW_OUT_OF_SSA
+                printf("  [generate] ");
+                if (Expr_ref* v = as<Expr_ref>(from_expr)) {
+                    printf("%s", v->get_definition()->get_symbol()->get_name());
+                }
+                else if (Expr_literal* l = as<Expr_literal>(from_expr)) {
+                    printf("<literal>");
+                }
+                else {
+                    printf("<node>");
+                }
+                printf(" -> swp\n");
+#endif
+
+#if DEBUG_NEW_OUT_OF_SSA
+                printf("  [adding edge] swp -> ");
+                print_ssa_value(to);
+                printf("\n");
+#endif
+                // Remove original edge, as the from node is now free to use.
+                rtg.remove_edge(from, to);
+                // Add an edge from the temporary swap variable to the destination of the cycle-breaking edge.
+                rtg.add_edge(swap_marker, to);
+            }
+        }
+#endif // NEW_OUT_OF_SSA
     }
 
     size_t n_stmts = stmts.size();
@@ -1238,20 +1565,27 @@ bool SLWriterPass<BasePass>::move_into_compound_elem(
 
     // still too big? check whether we can go deeper
     // example: %10 = bitcast [16 x <4 x float>]* %0 to i32*
-    while (cur_type_size > target_size) {
+    //
+    // handle for instance T[1]
+    while (cur_type_size >= target_size) {
         // check for array, vector or struct
 
         if (!llvm::isa<llvm::ArrayType>(cur_llvm_type) &&
                 !llvm::isa<llvm::FixedVectorType>(cur_llvm_type) &&
                 !llvm::isa<llvm::StructType>(cur_llvm_type)) {
-            return false;
+            return cur_type_size == target_size;
         }
 
         llvm::Type *first_type = cur_llvm_type->getContainedType(0);
-        stack.push_back(Type_walk_element(
-            cur_llvm_type, ~0, nullptr, 0, first_type));
+        uint64_t first_type_size = m_cur_data_layout->getTypeStoreSize(first_type);
+        if (first_type_size < target_size) {
+            // do not enter into an element which is too small
+            break;
+        }
+
+        stack.push_back(Type_walk_element(cur_llvm_type, ~0, nullptr, 0, first_type));
         cur_llvm_type = first_type;
-        cur_type_size = m_cur_data_layout->getTypeStoreSize(cur_llvm_type);
+        cur_type_size = first_type_size;
     }
 
     return true;
@@ -2789,13 +3123,9 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::translate_expr_ca
 
         Type_function *func_type = func_def->get_type();
 
-        Symbol *func_sym   = func_def->get_symbol();
-        Symbol *mapped_sym = get_mapper_symbol(func_sym);
-
-        Type *ret_type = func_type->get_return_type();
-
-        Expr_ref *callee = Base::create_reference(
-            mapped_sym != nullptr ? mapped_sym : func_sym, func_type);
+        Symbol   *func_sym = func_def->get_symbol();
+        Type     *ret_type = func_type->get_return_type();
+        Expr_ref *callee   = Base::create_reference(func_sym, func_type);
 
         expr_call = Base::m_expr_factory.create_call(callee, args);
         expr_call->set_type(ret_type);
@@ -4275,22 +4605,43 @@ std::pair<
     typename SLWriterPass<BasePass>::Def_variable *,
     typename SLWriterPass<BasePass>::Def_variable *>
 SLWriterPass<BasePass>::get_phi_vars(
-    llvm::PHINode *phi)
+    llvm::PHINode *phi,
+    bool enter_in_var
+    )
 {
     auto it = m_phi_var_in_out_map.find(phi);
     if (it != m_phi_var_in_out_map.end()) {
         return it->second;
     }
 
+#if NEW_OUT_OF_SSA
     // TODO: use debug info to generate a better name
-    Symbol *in_sym  = Base::get_unique_sym("phi_in", "phi_in_");
-    Symbol *out_sym = Base::get_unique_sym("phi_out", "phi_out_");
+    Symbol *in_sym = Base::get_unique_sym("phi_in", "phi_in_");
+    Symbol *out_sym = nullptr;
+
+    llvm::StringRef name = phi->getName();
+    if (name.size() > 0) {
+        out_sym = Base::get_unique_sym(name, "phi_");
+    } else {
+        out_sym = Base::get_unique_sym("phi", "phi_");
+    }
 
     // TODO: arrays?
-    llvm::Type *type = phi->getType();
-    Def_variable *phi_in_def  = create_local_var(in_sym, type);
-    Def_variable *phi_out_def = create_local_var(out_sym, type);
+    llvm::Type   *type        = phi->getType();
+    Def_variable *phi_in_def  = create_local_var(in_sym, type, enter_in_var);
+    Def_variable *phi_out_def = create_local_var(out_sym, type, true);
+#else
+    // TODO: use debug info to generate a better name
+    Symbol* in_sym = Base::get_unique_sym("phi_in", "phi_in_");
+    Symbol* out_sym = Base::get_unique_sym("phi_out", "phi_out_");
 
+    bool do_enter = true;
+
+    // TODO: arrays?
+    llvm::Type* type = phi->getType();
+    Def_variable* phi_in_def = create_local_var(in_sym, type);
+    Def_variable* phi_out_def = create_local_var(out_sym, type, do_enter);
+#endif
     auto res = std::make_pair(phi_in_def, phi_out_def);
     m_phi_var_in_out_map[phi] = res;
 
@@ -4302,9 +4653,10 @@ SLWriterPass<BasePass>::get_phi_vars(
 // Get the definition of the in-variable of a PHI node.
 template<typename BasePass>
 typename SLWriterPass<BasePass>::Def_variable *SLWriterPass<BasePass>::get_phi_in_var(
-    llvm::PHINode *phi)
+    llvm::PHINode *phi,
+    bool enter_in_var)
 {
-    return get_phi_vars(phi).first;
+    return get_phi_vars(phi, enter_in_var).first;
 }
 
 // Get or create the symbol of the out-variable of a PHI node, where the in-variable
@@ -4363,87 +4715,6 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::join_statements(
     return block;
 }
 
-
-// Fills the function remap map from a comma separated list.
-template<typename BasePass>
-void SLWriterPass<BasePass>::fill_function_remap(
-    char const *list)
-{
-    for (char const *e = nullptr, *s = list; s != nullptr; s = e != nullptr ? e + 1 : nullptr) {
-        char const *start = s;
-        while (*start != '\0' && isspace(*start)) {
-            ++start;
-        }
-
-        e = strchr(start, ',');
-
-        char const *p = strchr(start, '=');
-        if (p == nullptr || (p >= e && e != nullptr)) {
-            // wrong entry
-            continue;
-        }
-
-        char const *end = p - 1;
-        while (end > start && isspace(*end)) {
-            --end;
-        }
-
-        if (start == end) {
-            // wrong entry
-            continue;
-        }
-
-        string from(start, end + 1, this->m_alloc);
-
-        start = p + 1;
-        while (*start != '\0' && isspace(*start)) {
-            ++start;
-        }
-
-        end = e == nullptr ? start + strlen(start) - 1 : e - 1;
-        while (end > start && isspace(*end)) {
-            --end;
-        }
-
-        if (start == end) {
-            // wrong entry
-            continue;
-        }
-        string to(start, end + 1, this->m_alloc);
-
-        Symbol *f_sym = Base::m_symbol_table.get_symbol(from.c_str());
-        Symbol *t_sym = Base::m_symbol_table.get_symbol(to.c_str());
-
-        m_func_remap_map[f_sym] = Remap_entry(t_sym);
-    }
-}
-
-// Return the function remap symbol for a given function symbol if one exists.
-template<typename BasePass>
-typename SLWriterPass<BasePass>::Symbol *SLWriterPass<BasePass>::get_mapper_symbol(
-    Symbol *sym)
-{
-    typename Function_remap_map::iterator it(m_func_remap_map.find(sym));
-    if (it != m_func_remap_map.end()) {
-        Remap_entry &re = it->second;
-        re.used = true;
-        return re.sym;
-    }
-    return nullptr;
-}
-
-// Return the function remap symbol for a given function name if one exists.
-template<typename BasePass>
-typename SLWriterPass<BasePass>::Symbol *SLWriterPass<BasePass>::get_mapper_symbol(
-    llvm::StringRef const &name)
-{
-    Symbol *sym = Base::m_symbol_table.lookup_symbol(name.str().c_str());
-    if (sym != nullptr) {
-        sym = this->get_mapper_symbol(sym);
-    }
-    return sym;
-}
-
 template<typename BasePass>
 char SLWriterPass<BasePass>::ID = 0;
 
@@ -4459,6 +4730,7 @@ llvm::Pass *createHLSLWriterPass(
     bool                                                 enable_debug,
     mi::mdl::Df_handle_slot_mode                         df_handle_slot_mode,
     mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list,
+    mi::mdl::Function_remap const                        &func_remaps,
     bool                                                 enable_opt_remarks,
     bool                                                 enable_noinline_support)
 {
@@ -4472,6 +4744,7 @@ llvm::Pass *createHLSLWriterPass(
         messages,
         enable_debug,
         exp_func_list,
+        func_remaps,
         df_handle_slot_mode,
         enable_opt_remarks);
 
@@ -4494,7 +4767,8 @@ llvm::Pass *createGLSLWriterPass(
     mi::mdl::Messages_impl                               &messages,
     bool                                                 enable_debug,
     mi::mdl::Df_handle_slot_mode                         df_handle_slot_mode,
-    mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list)
+    mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list,
+    mi::mdl::Function_remap const                        &func_remaps)
 {
     return new SLWriterPass<glsl::GLSLWriterBasePass>(
         alloc,
@@ -4506,6 +4780,7 @@ llvm::Pass *createGLSLWriterPass(
         messages,
         enable_debug,
         exp_func_list,
+        func_remaps,
         df_handle_slot_mode,
         /*enable_opt_remarks=*/false);
 }

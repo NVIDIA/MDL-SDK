@@ -509,6 +509,12 @@ mi::Size Value_invalid_df::get_memory_consumption() const
         + dynamic_memory_consumption( m_type);
 }
 
+Value_list::Value_list( mi::Size initial_capacity)
+{
+    m_index_name.reserve( initial_capacity);
+    m_values.reserve( initial_capacity);
+}
+
 mi::Size Value_list::get_size() const
 {
     return m_values.size();
@@ -579,6 +585,13 @@ mi::Sint32 Value_list::add_value( const char* name, const IValue* value)
     m_name_index[name] = m_values.size() - 1;
     m_index_name.push_back( name);
     return 0;
+}
+
+void Value_list::add_value_unchecked( const char* name, const IValue* value)
+{
+    m_values.push_back( make_handle_dup( value));
+    m_name_index[name] = m_values.size() - 1;
+    m_index_name.push_back( name);
 }
 
 mi::Size Value_list::get_memory_consumption() const
@@ -1026,9 +1039,9 @@ IValue* Value_factory::create( const IType* type, const IAnnotation_block* annot
     return range_annotation ? create( range_annotation.get()) : create( type);
 }
 
-IValue_list* Value_factory::create_value_list() const
+IValue_list* Value_factory::create_value_list( mi::Size initial_capacity) const
 {
-    return new Value_list;
+    return new Value_list( initial_capacity);
 }
 
 IValue* Value_factory::clone( const IValue* value) const
@@ -1149,8 +1162,8 @@ IValue_list* Value_factory::clone( const IValue_list* list) const
     if( !list)
         return nullptr;
 
-    IValue_list* result = create_value_list();
     mi::Size n = list->get_size();
+    IValue_list* result = create_value_list( n);
     for( mi::Size i = 0; i < n; ++i) {
         mi::base::Handle<const IValue> value( list->get_value( i));
         mi::base::Handle<IValue> clone_value( clone( value.get()));
@@ -1925,7 +1938,7 @@ void Value_factory::serialize_list(
 
 IValue_list* Value_factory::deserialize_list( SERIAL::Deserializer* deserializer) const
 {
-    Value_list* list_impl = new Value_list;
+    Value_list* list_impl = new Value_list( /*initial_capacity*/ 0);
 
     read( deserializer, &list_impl->m_name_index);
     read( deserializer, &list_impl->m_index_name);

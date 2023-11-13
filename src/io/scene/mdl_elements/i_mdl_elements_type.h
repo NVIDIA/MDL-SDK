@@ -433,6 +433,8 @@ class IType_list : public
     mi::base::Interface_declare<0x3fc44420,0xf157,0x4901,0xa2,0x76,0xec,0xff,0x4e,0xe4,0x96,0x57>
 {
 public:
+    // public API methods
+
     virtual mi::Size get_size() const = 0;
 
     virtual mi::Size get_index( const char* name) const = 0;
@@ -466,6 +468,14 @@ public:
     virtual mi::Sint32 set_type( const char* name, const IType* type) = 0;
 
     virtual mi::Sint32 add_type( const char* name, const IType* type) = 0;
+
+    // internal methods
+
+    /// A variant of #add_type() without sanity checks.
+    ///
+    /// This variant should only be used if correctness is guaranteed, e.g., when converting from
+    /// the MDL core API representation, or from another instance known to be correct.
+    virtual void add_type_unchecked( const char* name, const IType* type) = 0;
 
     virtual mi::Size get_memory_consumption() const = 0;
 };
@@ -522,7 +532,7 @@ public:
 
     virtual const IType_vdf* create_vdf() const = 0;
 
-    virtual IType_list* create_type_list() const = 0;
+    virtual IType_list* create_type_list( mi::Size initial_capacity) const = 0;
 
     virtual const IType_enum* get_predefined_enum( IType_enum::Predefined_id id) const = 0;
 

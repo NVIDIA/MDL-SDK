@@ -937,6 +937,12 @@ public:
     ///         if index is above the visible count
     Definition const *get_visible_definition(size_t &index) const;
 
+    /// Get the owner module of this definition table.
+    Module const *get_owner_module() const { return &m_owner; }
+
+    /// Checks if this definition table owns the given definition.
+    bool is_owner(IDefinition const *def) const;
+
     /// Debug helper: Prints the definition table to the given printer.
     ///
     /// \param printer  the printer

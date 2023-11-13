@@ -658,9 +658,10 @@ mi::Sint32 Mdle_api_impl::export_mdle(
 
     // compute (filtered) annotations
     //---------------------------------------------------------------------------------------------
-    mi::base::Handle<MDL::IAnnotation_block> new_annotations_int(ef->create_annotation_block());
     bool has_origin = false;
-    for(size_t a = 0; annotations_int && a < annotations_int->get_size(); ++a) {
+    mi::Size n = annotations_int ? annotations_int->get_size() : 0;
+    mi::base::Handle<MDL::IAnnotation_block> new_annotations_int(ef->create_annotation_block( n));
+    for(size_t a = 0; a < n; ++a) {
 
         mi::base::Handle<const MDL::IAnnotation> anno(annotations_int->get_annotation(a));
 
@@ -688,7 +689,8 @@ mi::Sint32 Mdle_api_impl::export_mdle(
         mi::base::Handle<MDL::IValue> anno_value(
             vf->create_string(definiton_name.c_str()));
         mi::base::Handle<MDL::IExpression> anno_expr(ef->create_constant(anno_value.get()));
-        mi::base::Handle<MDL::IExpression_list> anno_expr_list(ef->create_expression_list());
+        mi::base::Handle<MDL::IExpression_list> anno_expr_list(
+            ef->create_expression_list( /*initial_capacity*/ 1));
         anno_expr_list->add_expression("name", anno_expr.get());
 
         mi::base::Handle<MDL::IAnnotation> anno(ef->create_annotation(
@@ -715,7 +717,8 @@ mi::Sint32 Mdle_api_impl::export_mdle(
         mi::base::Handle<MDL::IValue> anno_value(
             vf->create_string(additional_file_target_paths.back()));
         mi::base::Handle<MDL::IExpression> anno_expr(ef->create_constant(anno_value.get()));
-        mi::base::Handle<MDL::IExpression_list> anno_expr_list(ef->create_expression_list());
+        mi::base::Handle<MDL::IExpression_list> anno_expr_list(
+            ef->create_expression_list( /*initial_capacity*/ 1));
         anno_expr_list->add_expression("name", anno_expr.get());
 
         mi::base::Handle<MDL::IAnnotation> anno(ef->create_annotation(
@@ -736,8 +739,8 @@ mi::Sint32 Mdle_api_impl::export_mdle(
 
     // add main material
     //---------------------------------------------------------------------------------------------
-    mi::base::Handle<MDL::IAnnotation_block> empty_block(ef->create_annotation_block());
-    mi::base::Handle<MDL::IAnnotation_list> empty_list(ef->create_annotation_list());
+    mi::base::Handle<MDL::IAnnotation_block> empty_block(ef->create_annotation_block( 0));
+    mi::base::Handle<MDL::IAnnotation_list> empty_list(ef->create_annotation_list( 0));
     builder.add_function(
         "main",                    // function/material name is "main"
         prototype_tag,             // stored in the database with this tag

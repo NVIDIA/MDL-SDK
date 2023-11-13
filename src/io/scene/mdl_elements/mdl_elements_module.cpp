@@ -809,26 +809,26 @@ void Mdl_module::init_module( DB::Transaction* transaction, Execution_context* c
     ASSERT(M_SCENE, m_code_dag);
 
     // convert types
-    m_exported_types = m_tf->create_type_list();
-    m_local_types    = m_tf->create_type_list();
-
     mi::Size type_count = m_code_dag->get_type_count();
-    for (mi::Size i = 0; i < type_count; ++i) {
-        const char* name = m_code_dag->get_type_name(i);
-        const mi::mdl::IType* type = m_code_dag->get_type(i);
+    m_exported_types = m_tf->create_type_list( type_count);
+    m_local_types    = m_tf->create_type_list( type_count);
+
+    for( mi::Size i = 0; i < type_count; ++i) {
+        const char* name = m_code_dag->get_type_name( i);
+        const mi::mdl::IType* type = m_code_dag->get_type( i);
 
         Mdl_annotation_block annotations;
         Mdl_annotation_block_vector sub_annotations;
-        convert_type_annotations(m_code_dag.get(), i, annotations, sub_annotations);
+        convert_type_annotations( m_code_dag.get(), i, annotations, sub_annotations);
 
         mi::base::Handle<const IType> type_int(
-            mdl_type_to_int_type(m_tf.get(), type, &annotations, &sub_annotations));
+            mdl_type_to_int_type( m_tf.get(), type, &annotations, &sub_annotations));
         std::string full_name = m_mdl_name + "::" + name;
 
-        if (m_code_dag->is_type_exported(i))
-            m_exported_types->add_type(full_name.c_str(), type_int.get());
+        if( m_code_dag->is_type_exported( i))
+            m_exported_types->add_type_unchecked( full_name.c_str(), type_int.get());
         else
-            m_local_types->add_type(full_name.c_str(), type_int.get());
+            m_local_types->add_type_unchecked( full_name.c_str(), type_int.get());
     }
 
     bool resolve_resources = context->get_option<bool>( MDL_CTX_OPTION_RESOLVE_RESOURCES);
@@ -846,23 +846,22 @@ void Mdl_module::init_module( DB::Transaction* transaction, Execution_context* c
         /*user_modules_seen*/ nullptr);
 
     // convert constants
-    m_constants = m_vf->create_value_list();
-
     mi::Size constant_count = m_code_dag->get_constant_count();
-    for (mi::Size i = 0; i < constant_count; ++i) {
-        const char* name = m_code_dag->get_constant_name(i);
-        const mi::mdl::DAG_constant* constant = m_code_dag->get_constant_value(i);
+    m_constants = m_vf->create_value_list( constant_count);
+    for( mi::Size i = 0; i < constant_count; ++i) {
+        const char* name = m_code_dag->get_constant_name( i);
+        const mi::mdl::DAG_constant* constant = m_code_dag->get_constant_value( i);
         const mi::mdl::IValue* value = constant->get_value();
         mi::base::Handle<IValue> value_int(
-            converter.mdl_value_to_int_value(/*type_int*/ nullptr, value));
+            converter.mdl_value_to_int_value( /*type_int*/ nullptr, value));
         std::string full_name = m_mdl_name + "::" + name;
-        m_constants->add_value(full_name.c_str(), value_int.get());
+        m_constants->add_value_unchecked( full_name.c_str(), value_int.get());
     }
 
     // convert annotation definitions
-    m_annotation_definitions = m_ef->create_annotation_definition_list();
-
     mi::Size annotation_definition_count = m_code_dag->get_annotation_count();
+    m_annotation_definitions
+        = m_ef->create_annotation_definition_list( annotation_definition_count);
     for (mi::Size i = 0; i < annotation_definition_count; ++i) {
 
         const char* core_name = m_code_dag->get_annotation_name( i);
@@ -871,11 +870,12 @@ void Mdl_module::init_module( DB::Transaction* transaction, Execution_context* c
             m_code_dag->get_simple_annotation_name( i));
 
         // convert parameters
-        mi::base::Handle<IType_list> parameter_types(m_tf->create_type_list());
-        mi::base::Handle<IExpression_list> parameter_defaults(m_ef->create_expression_list());
+        mi::Size n = m_code_dag->get_annotation_parameter_count( i);
+        mi::base::Handle<IExpression_list> parameter_defaults( m_ef->create_expression_list( n));
+        mi::base::Handle<IType_list> parameter_types( m_tf->create_type_list( n));
         std::vector<std::string> parameter_type_names;
 
-        for (mi::Size p = 0, n = m_code_dag->get_annotation_parameter_count(i); p < n; ++p) {
+        for (mi::Size p = 0; p < n; ++p) {
 
             const char* parameter_name = m_code_dag->get_annotation_parameter_name(i, p);
 
@@ -884,7 +884,7 @@ void Mdl_module::init_module( DB::Transaction* transaction, Execution_context* c
                 = m_code_dag->get_annotation_parameter_type(i, p);
             mi::base::Handle<const IType> type_int(
                 mdl_type_to_int_type(m_tf.get(), parameter_type));
-            parameter_types->add_type(parameter_name, type_int.get());
+            parameter_types->add_type_unchecked(parameter_name, type_int.get());
             parameter_type_names.emplace_back(encode_name_without_signature(
                 m_code_dag->get_annotation_parameter_type_name(i, p)).c_str());
 
@@ -895,7 +895,7 @@ void Mdl_module::init_module( DB::Transaction* transaction, Execution_context* c
                 mi::base::Handle<IExpression> default_int(converter.mdl_dag_node_to_int_expr(
                     default_, type_int.get()));
                 ASSERT(M_SCENE, default_int);
-                parameter_defaults->add_expression(parameter_name, default_int.get());
+                parameter_defaults->add_expression_unchecked(parameter_name, default_int.get());
             }
         }
 
@@ -952,7 +952,7 @@ void Mdl_module::init_module( DB::Transaction* transaction, Execution_context* c
                 parameter_defaults.get(),
                 annotations_int.get()));
 
-        m_annotation_definitions->add_definition(anno_def.get());
+        m_annotation_definitions->add_definition_unchecked( anno_def.get());
     }
 
     // convert module annotations

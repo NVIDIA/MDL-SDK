@@ -641,7 +641,7 @@ endfunction()
 function(CREATE_FROM_BASE_PRESET)
     # the options DYNAMIC_MSVC_RUNTIME and STATIC_MSVC_RUNTIME override the
     # general option MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES
-    set(options WIN32 WINDOWS_UNICODE EXAMPLE DYNAMIC_MSVC_RUNTIME STATIC_MSVC_RUNTIME)
+    set(options WIN32 WINDOWS_UNICODE EXAMPLE DYNAMIC_MSVC_RUNTIME STATIC_MSVC_RUNTIME SKIP_UNDEFINED_SYMBOL_CHECK)
     set(oneValueArgs TARGET VERSION TYPE NAMESPACE EXPORT_NAME OUTPUT_NAME VS_PROJECT_NAME EMBED_RC)
     set(multiValueArgs SOURCES ADDITIONAL_INCLUDE_DIRS)
     cmake_parse_arguments(CREATE_FROM_BASE_PRESET "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
@@ -686,7 +686,7 @@ function(CREATE_FROM_BASE_PRESET)
 
     # default namespace is mdl
     if(NOT CREATE_FROM_BASE_PRESET_NAMESPACE)
-        set( CREATE_FROM_BASE_PRESET_NAMESPACE mdl)
+        set(CREATE_FROM_BASE_PRESET_NAMESPACE mdl)
     endif()
 
     # add empty pch
@@ -779,6 +779,17 @@ function(CREATE_FROM_BASE_PRESET)
 
     # compiler flags and defines
     target_build_setup(TARGET ${CREATE_FROM_BASE_PRESET_TARGET} ${BUILD_SETUP_OPTIONS})
+
+    # undefined symbol check
+    if(NOT CREATE_FROM_BASE_PRESET_SKIP_UNDEFINED_SYMBOL_CHECK)
+        if(LINUX AND NOT (${CREATE_FROM_BASE_PRESET_TYPE} STREQUAL "STATIC"))
+            add_custom_command(
+                TARGET ${CREATE_FROM_BASE_PRESET_TARGET}
+                POST_BUILD
+                COMMAND ! ldd -r $<TARGET_FILE:${CREATE_FROM_BASE_PRESET_TARGET}> | grep "undefined symbol:"
+                )
+        endif()
+    endif()
 
     # configure visual studio and maybe other IDEs
     setup_ide(TARGET ${CREATE_FROM_BASE_PRESET_TARGET} 

@@ -2712,6 +2712,7 @@ IValue_int const *Value_factory::create_int(int value)
 // Create a new value of type enum.
 IValue_enum const *Value_factory::create_enum(IType_enum const *type, size_t index)
 {
+    MDL_ASSERT(m_tf.is_owner(type) && "Type is not associated which this value factory");
     MDL_ASSERT(index < size_t(type->get_value_count()) && "enum index out of range");
     IValue_enum *v = m_builder.create<Value_enum>(type, (int)index);
     std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
@@ -2796,6 +2797,7 @@ IValue_array const *Value_factory::create_array(
     IValue const * const values[],
     size_t               size)
 {
+    MDL_ASSERT(m_tf.is_owner(type) && "Type is not associated which this value factory");
     MDL_ASSERT(type->is_immediate_sized() && "Array values must have a immediate sized array type");
     IValue_array *v = m_builder.create<Value_array>(m_builder.get_arena(), type, values, size);
     std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
@@ -2845,6 +2847,7 @@ IValue_struct const *Value_factory::create_struct(
     IValue const * const values[],
     size_t               size)
 {
+    MDL_ASSERT(m_tf.is_owner(type) && "Type is not associated which this value factory");
     IValue_struct *v = m_builder.create<Value_struct>(m_builder.get_arena(), type, values, size);
     std::pair<Value_table::iterator, bool> res = m_vt.insert(v);
     if (! res.second) {

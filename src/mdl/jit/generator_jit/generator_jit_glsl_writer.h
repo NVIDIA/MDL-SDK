@@ -620,13 +620,11 @@ protected:
 
     /// Called for every function that is just a prototype in the original LLVM module.
     ///
-    /// \param func        the LLVM function (declaration)
-    /// \param mapped_sym  if non-NULL, the mapped symbol for this function
+    /// \param func  the LLVM function (declaration)
     glsl::Def_function *create_prototype(
-        llvm::Function &func,
-        glsl::Symbol   *mapped_sym);
+        llvm::Function &func);
 
-    /// Return true if the user of an instruction requires its materialization
+    /// Return true if the user of an instruction requires its materialization.
     ///
     /// \param user   the user instruction
     bool must_be_materialized(
@@ -650,9 +648,9 @@ protected:
     /// \param code    the generated source code
     /// \param remaps  list of remapped entities
     void finalize(
-        llvm::Module                     &M,
-        Generated_code_source            *code,
-        list<glsl::Symbol *>::Type const &remaps);
+        llvm::Module                                               &M,
+        Generated_code_source                                      *code,
+        list<std::pair<char const *, glsl::Symbol *> >::Type const &remaps);
 
     /// GLSL does not have C-style type casts.
     static bool has_c_style_type_casts() { return false; }

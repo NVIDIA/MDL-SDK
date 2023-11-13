@@ -189,6 +189,8 @@ private:
 class Expression_list : public mi::base::Interface_implement<IExpression_list>
 {
 public:
+    Expression_list( mi::Size initial_capacity);
+
     // public API methods
 
     mi::Size get_size() const;
@@ -206,6 +208,10 @@ public:
     mi::Sint32 set_expression( const char* name, const IExpression* expression);
 
     mi::Sint32 add_expression( const char* name, const IExpression* expression);
+
+    void add_expression_unchecked( const char* name, const IExpression* expression);
+
+    // internal methods
 
     mi::Size get_memory_consumption() const;
 
@@ -330,6 +336,8 @@ private:
 class Annotation_block : public mi::base::Interface_implement<IAnnotation_block>
 {
 public:
+    Annotation_block( mi::Size initial_capacity);
+
     // public API methods
 
     mi::Size get_size() const;
@@ -339,6 +347,8 @@ public:
     mi::Sint32 set_annotation( mi::Size index, const IAnnotation* annotation);
 
     mi::Sint32 add_annotation( const IAnnotation* annotation);
+
+    // internal methods
 
     mi::Size get_memory_consumption() const;
 
@@ -350,6 +360,8 @@ private:
 class Annotation_list : public mi::base::Interface_implement<IAnnotation_list>
 {
 public:
+    Annotation_list( mi::Size initial_capacity);
+
     // public API methods
 
     mi::Size get_size() const;
@@ -367,6 +379,10 @@ public:
     mi::Sint32 set_annotation_block( const char* name, const IAnnotation_block* block);
 
     mi::Sint32 add_annotation_block( const char* name, const IAnnotation_block* block);
+
+    // internal methods
+
+    void add_annotation_block_unchecked( const char* name, const IAnnotation_block* block);
 
     mi::Size get_memory_consumption() const;
 
@@ -413,7 +429,7 @@ public:
 
     IExpression_temporary* create_temporary( const IType* type, mi::Size index) const;
 
-    IExpression_list* create_expression_list() const;
+    IExpression_list* create_expression_list( mi::Size initial_capacity) const;
 
     IAnnotation* create_annotation(
         DB::Transaction* transaction, const char* name, const IExpression_list* arguments) const;
@@ -431,11 +447,12 @@ public:
         const IExpression_list* parameter_defaults,
         const IAnnotation_block* annotations) const;
 
-    IAnnotation_block* create_annotation_block() const;
+    IAnnotation_block* create_annotation_block( mi::Size initial_capacity) const;
 
-    IAnnotation_list* create_annotation_list() const;
+    IAnnotation_list* create_annotation_list( mi::Size initial_capacity) const;
 
-    IAnnotation_definition_list* create_annotation_definition_list() const;
+    IAnnotation_definition_list* create_annotation_definition_list(
+        mi::Size initial_capacity) const;
 
     IExpression* clone(
         const IExpression* expr,
@@ -604,13 +621,17 @@ private:
 class Annotation_definition_list : public mi::base::Interface_implement<IAnnotation_definition_list>
 {
 public:
-    mi::Sint32 add_definition( const IAnnotation_definition* anno_def);
+    Annotation_definition_list( mi::Size initial_capacity);
+
+    mi::Size get_size() const { return m_anno_definitions.size(); }
 
     const IAnnotation_definition* get_definition( mi::Size index) const;
 
     const IAnnotation_definition* get_definition( const char* name) const;
 
-    mi::Size get_size() const { return m_anno_definitions.size(); }
+    mi::Sint32 add_definition( const IAnnotation_definition* anno_def);
+
+    void add_definition_unchecked( const IAnnotation_definition* anno_def);
 
     mi::Size get_memory_consumption() const;
 

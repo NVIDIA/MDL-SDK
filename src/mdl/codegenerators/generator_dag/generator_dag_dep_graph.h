@@ -139,6 +139,9 @@ public:
     /// Get the definition of this node.
     IDefinition const *get_definition() const { return m_def; }
 
+    /// Get the owner of this definition if any (does not increase ref count).
+    IModule const *get_owner_module() const { return m_owner; }
+
     /// Add a dependency edge.
     ///
     /// \param arena        the arena to allocate an edge on
@@ -232,6 +235,7 @@ private:
     ///
     /// \param arena           the arena to allocate from
     /// \param id              the id of this node
+    /// \param owner           the owner module of the definition
     /// \param def             the definition
     /// \param dag_name        the DAG (mangled) name of this node
     /// \param dag_simple_name the DAG simple name of this node
@@ -242,6 +246,7 @@ private:
     Dependence_node(
         Memory_arena      *arena,
         size_t            id,
+        IModule const     *owner,
         IDefinition const *def,
         char const        *dag_name,
         char const        *dag_simple_name,
@@ -277,6 +282,9 @@ private:
         Dependence_node            *next);
 
 private:
+    /// The owner module of the definition (if valid).
+    IModule const *m_owner;
+
     /// The owner definition of this node if any.
     IDefinition const *m_def;
 
@@ -356,13 +364,11 @@ public:
     /// \param alloc           the allocator
     /// \param dag             the DAG to report errors
     /// \param dag_builder     the DAG builder this graph is constructed from.
-    /// \param invisible_sym   the invisible symbol of the current module
     /// \param include_locals  if true, include local entities in the dependence graph
     DAG_dependence_graph(
         IAllocator           *alloc,
         Generated_code_dag   &dag,
         DAG_builder          &dag_builder,
-        ISymbol const        *invisible_sym,
         bool                 include_locals);
 
     /// Get the exported nodes of the given module.
@@ -375,8 +381,9 @@ public:
 
     /// Get the dependency node for the given definition.
     ///
-    /// \param def  the definition of the node
-    Dependence_node *get_node(IDefinition const *def);
+    /// \param def    the definition of the node
+    Dependence_node *get_node(
+        IDefinition const *def);
 
     /// Get the DAG dependency node for the given entity.
     ///
@@ -478,9 +485,6 @@ private:
 
     /// The DAG builder described by this graph.
     DAG_builder &m_dag_builder;
-
-    /// The invisible symbol of the current module.
-    ISymbol const *m_invisible_sym;
 
     /// List of exported nodes.
     Node_list m_exported_nodes;

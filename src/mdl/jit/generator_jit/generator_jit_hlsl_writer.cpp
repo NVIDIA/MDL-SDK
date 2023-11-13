@@ -90,6 +90,7 @@ HLSLWriterBasePass::HLSLWriterBasePass(
 , m_debug_types(alloc)
 , m_ref_fnames(0, Ref_fname_id_map::hasher(), Ref_fname_id_map::key_equal(), alloc)
 , m_messages(messages)
+, m_api_decls(0, Decl_set::hasher(), Decl_set::key_equal(), alloc)
 , m_next_unique_name_id(0u)
 , m_noinline_mode(hlsl::IPrinter::ATTR_NOINLINE_WRAP)
 , m_use_dbg(enable_debug)
@@ -663,10 +664,11 @@ hlsl::Type *HLSLWriterBasePass::convert_struct_type(
     }
 
     m_type_cache[s_type] = res;
+    m_unit->add_decl(decl_struct);
 
-    // don't add API types to the unit to avoid printing
-    if (!is_api_type) {
-        m_unit->add_decl(decl_struct);
+    if (is_api_type) {
+        // this is an API type
+        m_api_decls.insert(decl_struct);
     }
 
     return res;
@@ -1183,6 +1185,110 @@ hlsl::Location HLSLWriterBasePass::convert_location(
     return zero_loc;
 }
 
+// Called for every function that is just a prototype in the original LLVM module.
+hlsl::Def_function *HLSLWriterBasePass::create_prototype(
+    llvm::Function &func)
+{
+    hlsl::Def_function  *func_def  = create_definition(&func);
+    hlsl::Type_function *func_type = func_def->get_type();
+    hlsl::Type *ret_type = func_type->get_return_type();
+    hlsl::Type *out_type = nullptr;
+
+    // reset the name IDs
+    m_next_unique_name_id = 0;
+
+    if (is<hlsl::Type_void>(ret_type) &&
+        !func.getFunctionType()->getReturnType()->isVoidTy())
+    {
+        // return type was converted into out parameter
+        typename hlsl::Type_function::Parameter *param = func_type->get_parameter(0);
+        if (param->get_modifier() == hlsl::Type_function::Parameter::PM_OUT) {
+            out_type = param->get_type();
+        }
+    }
+
+    // create the declaration for the function
+    Type_name *ret_type_name = get_type_name(ret_type);
+
+    hlsl::Symbol         *func_sym  = func_def->get_symbol();
+    hlsl::Name           *func_name = get_name(zero_loc, func_sym);
+    Declaration_function *decl_func = m_decl_factory.create_function(
+        ret_type_name, func_name);
+
+    // create the function body
+    {
+        hlsl::Definition_table::Scope_enter enter(m_def_tab, func_def);
+
+        // now create the declarations
+        unsigned first_param_ofs = 0;
+        if (out_type != nullptr) {
+            hlsl::Type_name *param_type_name = get_type_name(out_type);
+            hlsl::Declaration_param *decl_param = m_decl_factory.create_param(param_type_name);
+            add_array_specifiers(decl_param, out_type);
+            make_out_parameter(param_type_name);
+
+
+            hlsl::Symbol *param_sym = get_unique_sym("p_result", "p_result");
+            hlsl::Name *param_name = get_name(zero_loc, param_sym);
+            decl_param->set_name(param_name);
+
+            hlsl::Def_param *m_out_def = m_def_tab.enter_parameter_definition(
+                param_sym, out_type, &param_name->get_location());
+            m_out_def->set_declaration(decl_param);
+            param_name->set_definition(m_out_def);
+
+            decl_func->add_param(decl_param);
+
+            ++first_param_ofs;
+        }
+
+        for (llvm::Argument &arg_it : func.args()) {
+            llvm::Type *arg_llvm_type = arg_it.getType();
+            hlsl::Type *param_type = convert_type(arg_llvm_type);
+
+            if (is<hlsl::Type_void>(param_type)) {
+                // skip void typed parameters
+                continue;
+            }
+
+            unsigned        i = arg_it.getArgNo();
+            hlsl::Type_name *param_type_name = get_type_name(param_type);
+
+            hlsl::Declaration_param *decl_param = m_decl_factory.create_param(param_type_name);
+            add_array_specifiers(decl_param, param_type);
+
+            hlsl::Type_function::Parameter *param = func_type->get_parameter(i + first_param_ofs);
+
+            hlsl::Parameter_qualifier param_qualifier =
+                convert_type_modifier_to_param_qualifier(param);
+            param_type_name->get_qualifier().set_parameter_qualifier(param_qualifier);
+
+            char templ[16];
+            snprintf(templ, sizeof(templ), "p_%u", i);
+
+            hlsl::Symbol *param_sym = get_unique_sym(arg_it.getName(), templ);
+            hlsl::Name *param_name = get_name(zero_loc, param_sym);
+            decl_param->set_name(param_name);
+
+            hlsl::Def_param *param_def = m_def_tab.enter_parameter_definition(
+                param_sym, param_type, &param_name->get_location());
+            param_def->set_declaration(decl_param);
+            param_name->set_definition(param_def);
+
+            decl_func->add_param(decl_param);
+        }
+    }
+
+    func_def->set_declaration(decl_func);
+    decl_func->set_definition(func_def);
+    func_name->set_definition(func_def);
+
+    // do not add the prototype to the compilation unit: this will be done automatically
+    // by the declaration inserter IFF t is called
+
+    return func_def;
+}
+
 // Return true if the user of an instruction requires its materialization
 bool  HLSLWriterBasePass::must_be_materialized(
     llvm::Instruction *user)
@@ -1271,11 +1377,30 @@ static size_t get_expr_count(
     return visitor.get_count();
 }
 
+/// Check if this declaration needs an extra newline when dumped.
+static int last_decl_kind(
+    hlsl::Declaration const *decl)
+{
+    int kind = decl->get_kind();
+    if (kind == hlsl::Declaration::DK_FUNCTION) {
+        hlsl::Declaration_function const *f_decl = cast<hlsl::Declaration_function>(decl);
+        if (!f_decl->is_prototype()) {
+            kind = -2;
+        }
+    } else if (kind == hlsl::Declaration::DK_VARIABLE) {
+        hlsl::Declaration_variable const *vdecl = cast<hlsl::Declaration_variable>(decl);
+        if (vdecl->empty()) {
+            kind = -2;
+        }
+    }
+    return kind;
+}
+
 // Finalize the compilation unit and write it to the given output stream.
 void HLSLWriterBasePass::finalize(
-    llvm::Module                     &M,
-    Generated_code_source            *code,
-    list<hlsl::Symbol *>::Type const &remaps)
+    llvm::Module                                               &M,
+    Generated_code_source                                      *code,
+    list<std::pair<char const *, hlsl::Symbol *> >::Type const &remaps)
 {
     String_stream_writer            out(code->access_src_code());
     mi::base::Handle<hlsl::Printer> printer(m_compiler->create_printer(&out));
@@ -1287,6 +1412,19 @@ void HLSLWriterBasePass::finalize(
 
     // use defined to wrap [noinline]
     printer->set_attr_noinline_mode(m_noinline_mode);
+
+    // helper data
+    typedef ptr_hash_map<hlsl::Symbol, char const *>::Type Mapped_type;
+    Mapped_type mapped(m_alloc);
+    if (!remaps.empty()) {
+        typedef list<std::pair<char const *, Symbol *> >::Type Symbol_list;
+
+        for (Symbol_list::const_iterator it(remaps.begin()), end(remaps.end()); it != end; ++it) {
+            mapped[it->second] = it->first;
+        }
+    }
+
+    // generate the version fragment: EMPTY yet
 
     // generate the defines fragment
     if (m_noinline_mode == hlsl::IPrinter::ATTR_NOINLINE_WRAP || !remaps.empty()) {
@@ -1302,11 +1440,14 @@ void HLSLWriterBasePass::finalize(
         }
 
         if (!remaps.empty()) {
-            typedef list<hlsl::Symbol *>::Type Symbol_list;
+            typedef list<std::pair<char const *, Symbol *> >::Type Symbol_list;
 
-            for (Symbol_list::const_iterator it(remaps.begin()), end(remaps.end()); it != end; ++it) {
+            for (Symbol_list::const_iterator it(remaps.begin()), end(remaps.end());
+                it != end;
+                ++it)
+            {
                 printer->print("#define MAPPED_");
-                printer->print((*it)->get_name());
+                printer->print(it->first);
                 printer->print(" 1");
                 printer->nl();
             }
@@ -1314,7 +1455,186 @@ void HLSLWriterBasePass::finalize(
         }
     }
 
-    printer->print(m_unit.get());
+    // generate the API type fragment
+    if (false) {
+        bool first = true;
+        int last_kind = -1;
+        for (hlsl::Compilation_unit::const_iterator
+            it(m_unit->decl_begin()), end(m_unit->decl_end());
+            it != end;
+            ++it)
+        {
+            hlsl::Declaration const *decl = it;
+
+            if (m_api_decls.find(decl) != m_api_decls.end()) {
+                if (first) {
+                    printer->print_comment("API types");
+                    first = false;
+                }
+
+                hlsl::Declaration::Kind kind = decl->get_kind();
+                if (last_kind != -1 && last_kind != kind) {
+                    printer->nl();
+                }
+
+                printer->print(decl);
+                printer->nl();
+
+                last_kind = last_decl_kind(decl);
+            }
+        }
+    }
+
+    // generate the user type segment
+    {
+        bool first = true;
+        for (hlsl::Compilation_unit::const_iterator
+            it(m_unit->decl_begin()), end(m_unit->decl_end());
+            it != end;
+            ++it)
+        {
+            hlsl::Declaration const *decl = it;
+
+            if (!is<hlsl::Declaration_struct>(decl)) {
+                continue;
+            }
+
+            // ignore API type declarations
+            if (m_api_decls.find(decl) != m_api_decls.end()) {
+                // already dumped in state fragment
+                continue;
+            }
+
+            if (first) {
+                printer->print_comment("user defined structs");
+                first = false;
+            }
+
+            printer->print(decl);
+            printer->nl();
+        }
+    }
+
+    // generate the globals fragment
+    {
+        bool first = true;
+        int last_kind = -1;
+        for (hlsl::Compilation_unit::const_iterator
+            it(m_unit->decl_begin()), end(m_unit->decl_end());
+            it != end;
+            ++it)
+        {
+            hlsl::Declaration const *decl = it;
+
+            // ignore structs and functions
+            if (is<hlsl::Declaration_struct>(decl) || is<hlsl::Declaration_function>(decl)) {
+                continue;
+            }
+
+            // ignore API declarations
+            if (m_api_decls.find(decl) != m_api_decls.end()) {
+                // already dumped in API fragment
+                continue;
+            }
+
+            if (first) {
+                printer->print_comment("globals");
+                first = false;
+            }
+
+            hlsl::Declaration::Kind kind = decl->get_kind();
+            if (last_kind != -1 && last_kind != kind) {
+                printer->nl();
+            }
+
+            printer->print(decl);
+            printer->nl();
+
+            last_kind = last_decl_kind(decl);
+        }
+    }
+
+    // generate the functions prototype fragment
+    if (false) {
+        bool first = true;
+        for (hlsl::Compilation_unit::const_iterator
+            it(m_unit->decl_begin()), end(m_unit->decl_end());
+            it != end;
+            ++it)
+        {
+            hlsl::Declaration const *decl = it;
+
+            if (!is<hlsl::Declaration_function>(decl)) {
+                continue;
+            }
+
+            hlsl::Declaration_function const *f_decl = cast<hlsl::Declaration_function>(decl);
+
+            if (!f_decl->is_prototype()) {
+                continue;
+            }
+
+            if (first) {
+                printer->print_comment("prototypes");
+                first = false;
+            }
+
+            hlsl::Symbol *f_sym = f_decl->get_definition()->get_symbol();
+            Mapped_type::const_iterator mit(mapped.find(f_sym));
+            if (mit != mapped.end()) {
+                mi::mdl::string s(m_alloc);
+                mi::mdl::MDL_name_mangler mangler(m_alloc, s);
+
+                if (!mangler.demangle(mit->second, strlen(mit->second))) {
+                    // not a mangled name
+                    s = mit->second;
+                }
+
+                printer->print_comment(("replaces " + s).c_str());
+            }
+
+            printer->print(decl);
+            printer->nl();
+        }
+    }
+
+    // generate the functions fragment
+    {
+        bool first = true;
+        int last_kind = -1;
+        for (hlsl::Compilation_unit::const_iterator
+            it(m_unit->decl_begin()), end(m_unit->decl_end());
+            it != end;
+            ++it)
+        {
+            hlsl::Declaration const *decl = it;
+
+            if (hlsl::Declaration_function const *f_decl = as<hlsl::Declaration_function>(decl)) {
+                if (f_decl->is_prototype()) {
+                    // ignore prototypes
+                    continue;
+                }
+            } else {
+                // ignore non-functions
+                continue;
+            }
+
+            if (first) {
+                printer->print_comment("functions");
+                first = false;
+            }
+
+            hlsl::Declaration::Kind kind = decl->get_kind();
+            if (last_kind != -1 && last_kind != kind) {
+                printer->nl();
+            }
+
+            printer->print(decl);
+            printer->nl();
+
+            last_kind = last_decl_kind(decl);
+        }
+    }
 
     if (m_opt_remarks) {
         // just use the first function

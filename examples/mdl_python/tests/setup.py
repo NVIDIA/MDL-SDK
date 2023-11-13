@@ -1,11 +1,19 @@
-import pymdlsdk
+import unittest
 import os
+
+# local testing only
+import pymdlsdk
+BindingModuleName: str = 'pymdlsdk'
+BindingModule = pymdlsdk
+
+# the unittest base class, in case testing system already needs a specializing
+UnittestFrameworkBase = unittest.TestCase
+
 
 class SDK():
     neuray: pymdlsdk.INeuray = None
     transaction: pymdlsdk.ITransaction = None
     mdlFactory: pymdlsdk.IMdl_factory = None
-
 
     def _get_examples_search_path(self):
         """Try to get the example search path or returns 'mdl' sub folder of the current directory if it failed."""
@@ -27,7 +35,6 @@ class SDK():
             example_sp = './mdl'
 
         return os.path.abspath(example_sp)
-
 
     def load(self, addExampleSearchPath: bool = True, loadImagePlugins: bool = True, loadDistillerPlugin: bool = False):
         """Initialize the SDK and get some common interface for basic testing"""
@@ -61,6 +68,7 @@ class SDK():
                 raise Exception('Failed to load the \'mdl_distiller\' plugin.')
 
         # start neuray
+        print(f"Starting neuray of version: {self.neuray.get_version()}")
         resultCode = self.neuray.start()
         if resultCode != 0:
             raise Exception('Failed to initialize the SDK. Result code: ' + resultCode)
@@ -79,51 +87,10 @@ class SDK():
             self.transaction.commit()
         self.transaction = None
         self.mdlFactory = None
+        self.neuray.shutdown()
         self.neuray = None
         pymdlsdk._print_open_handle_statistic()
 
         # Unload the MDL SDK
         if not pymdlsdk.unload():
             raise Exception('Failed to unload the SDK.')
-
-    def log_context_messages(self, context: pymdlsdk.IMdl_execution_context) -> bool:
-        """print all messages from the context. Return false if there have been errors"""
-        if context.get_messages_count() == 0:
-            return True
-        hasErrors: bool = context.get_error_messages_count() > 0
-        for i in range(context.get_messages_count()):
-            message: pymdlsdk.IMessage = context.get_message(i)
-            level: str = "         "
-            if message.get_severity() == 0:  # pymdlsdk.MESSAGE_SEVERITY_FATAL
-                level = "fatal:   "
-                hasErrors = True
-            elif message.get_severity() == 1:  # pymdlsdk.MESSAGE_SEVERITY_ERROR
-                level = "error:   "
-                hasErrors = True
-            elif message.get_severity() == 2:  # pymdlsdk.MESSAGE_SEVERITY_WARNING
-                level = "warning: "
-            elif message.get_severity() == 3:  # pymdlsdk.MESSAGE_SEVERITY_INFO
-                level = "info:    "
-            elif message.get_severity() == 4:  # pymdlsdk.MESSAGE_SEVERITY_VERBOSE
-                level = "verbose: "
-            elif message.get_severity() == 5:  # pymdlsdk.MESSAGE_SEVERITY_DEBUG
-                level = "debug:   "
-            print(f"{level} {message.get_string()}")
-        return not hasErrors
-
-
-    def load_module(self, qualifiedModuleName: str):
-        """Load the module given its name.
-        Returns the database name if loaded successfully otherwise empty string"""
-
-        impExp: pymdlsdk.IMdl_impexp_api
-        context: pymdlsdk.IMdl_execution_context
-        with self.neuray.get_api_component(pymdlsdk.IMdl_impexp_api) as impExp, \
-             self.mdlFactory.create_execution_context() as context:
-            res = impExp.load_module(self.transaction, qualifiedModuleName, context)
-            if not self.log_context_messages(context) or res < 0:
-                return ""
-            dbName: pymdlsdk.IString = self.mdlFactory.get_db_module_name(qualifiedModuleName)
-            if dbName.is_valid_interface():
-                return dbName.get_c_str()
-        return ""

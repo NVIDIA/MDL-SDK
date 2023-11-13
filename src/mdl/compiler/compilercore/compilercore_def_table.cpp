@@ -2118,6 +2118,12 @@ Definition const *Definition_table::get_visible_definition(size_t &index) const
     return NULL;
 }
 
+// Checks if this definition table owns the given definition.
+bool Definition_table::is_owner(IDefinition const *def) const
+{
+    return impl_cast<Definition>(def)->get_owner_module_id() == m_owner.get_unique_id();
+}
+
 // Debug helper: Prints the definition table to the given printer.
 void Definition_table::dump(Printer *printer, char const *name) const
 {

@@ -591,7 +591,8 @@ mi::neuraylib::IValue* Value_factory::create(
 
 mi::neuraylib::IValue_list* Value_factory::create_value_list() const
 {
-    mi::base::Handle<MDL::IValue_list> result_int( m_vf->create_value_list());
+    mi::base::Handle<MDL::IValue_list> result_int(
+        m_vf->create_value_list( /*initial_capacity*/ 0));
     return create_value_list( result_int.get(), /*owner*/ nullptr);
 }
 

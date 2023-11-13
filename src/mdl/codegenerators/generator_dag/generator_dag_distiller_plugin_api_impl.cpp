@@ -571,23 +571,9 @@ DAG_node const *Distiller_plugin_api_impl::create_function_call(
     }
     parameter_types_str += ')';
 
-    // find the module name if the name has one
-    Size last_scope_pos = 0;
-    for ( Size i = 1; name[i] != '\0'; ++i) {
-        if ( name[i] == ':' && name[i+1] == ':')
-            last_scope_pos = i;
-    }
-
-    mi::base::Handle<IModule const> owner;
-    if ( last_scope_pos != 0) {
-        // direct lookup of module name
-        string module_name( name, last_scope_pos, get_allocator());
-        owner = m_call_resolver->get_owner_module(module_name.c_str());
-    } else { 
-        // find the module through the function definition
-        string signature = name + parameter_types_str;
-        owner = m_call_resolver->get_owner_module(signature.c_str());
-    }
+    // find the module through the function definition
+    string signature = name + parameter_types_str;
+    mi::base::Handle<IModule const> owner(m_call_resolver->get_owner_module(signature.c_str()));
 
     if (!owner.is_valid_interface()) {
         MDL_ASSERT(!"module or function call name does not exist");
@@ -1962,14 +1948,15 @@ IGenerated_code_dag::IMaterial_instance *Distiller_plugin_api_impl::apply_rules(
     Generated_code_dag::Material_instance *curr = inst->clone(
         m_alloc, Generated_code_dag::Material_instance::CF_DEFAULT, /*unsafe_math_opt=*/false);
 
-    size_t import_count = matcher.get_target_material_name_count();
-
-    for (size_t i = 0; i < import_count; i++) {
-        char const *module_name = matcher.get_target_material_name(i);
+    // Iterate over all custom target materials referenced by the material and make sure
+    // that they are loaded. The distiller user is responsible to load these moduels
+    // beforehand.
+    size_t tmm_count = matcher.get_target_material_name_count();
+    for (size_t i = 0; i < tmm_count; i++) {
+        char const *material_name = matcher.get_target_material_name(i);
         mi::base::Handle<IModule const> owner;
 
-        owner = m_call_resolver->get_owner_module(module_name);
-
+        owner = m_call_resolver->get_owner_module(material_name);
         if (!owner.is_valid_interface()) {
             error = -3;
             return curr;

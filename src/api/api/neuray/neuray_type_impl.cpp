@@ -526,7 +526,8 @@ const mi::neuraylib::IType_vdf* Type_factory::create_vdf() const
 
 mi::neuraylib::IType_list* Type_factory::create_type_list() const
 {
-    mi::base::Handle<MDL::IType_list> result_int( m_tf->create_type_list());
+    mi::base::Handle<MDL::IType_list> result_int(
+        m_tf->create_type_list( /*initial_capacity*/ 0));
     return create_type_list( result_int.get(), /*owner*/ nullptr);
 }
 

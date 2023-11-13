@@ -207,6 +207,7 @@ public:
     /// \param messages             backend messages
     /// \param exp_func_list        the list of exported functions for which prototypes must
     ///                             be generated
+    /// \param func_remaps          function remap map
     /// \param df_handle_slot_mode  the mode of handles in API types
     /// \param enable_opt_remarks   enable OptimizationRemarks
     SLWriterPass(
@@ -219,6 +220,7 @@ public:
         mi::mdl::Messages_impl                               &messages,
         bool                                                 enable_debug,
         mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list,
+        mi::mdl::Function_remap const                        &func_remaps,
         mi::mdl::Df_handle_slot_mode                         df_handle_slot_mode,
         bool                                                 enable_opt_remarks);
 
@@ -712,13 +714,15 @@ private:
     ///
     /// \param phi  the LLVM phi node
     std::pair<Def_variable *, Def_variable *> get_phi_vars(
-        llvm::PHINode *phi);
+        llvm::PHINode *phi,
+        bool enter_in_var = false);
 
     /// Get the definition of the in-variable of a PHI node.
     ///
     /// \param phi  the LLVM phi node
     Def_variable *get_phi_in_var(
-        llvm::PHINode *phi);
+        llvm::PHINode *phi,
+        bool enter_in_var = false);
 
     /// Get the definition of the out-variable of a PHI node, where the in-variable
     /// will be written to at the start of a block.
@@ -758,30 +762,15 @@ private:
         return false;
     }
 
-    /// Fills the function remap map from a comma separated list.
-    ///
-    /// \param list  a comma separated list of function mappings
-    void fill_function_remap(
-        char const *list);
-
-    /// Return the function remap symbol for a given function symbol if one exists.
-    ///
-    /// \param sym  the function symbol
-    Symbol *get_mapper_symbol(
-        Symbol *sym);
-
-    /// Return the function remap symbol for a given function name if one exists.
-    ///
-    /// \param name  the function name
-    Symbol *get_mapper_symbol(
-        llvm::StringRef const &name);
-
 private:
     /// Output stream where the generated AST code will be written to.
     Generated_code_source &m_code;
 
     /// List of exported functions for which prototypes should be generated.
     mi::mdl::LLVM_code_generator::Exported_function_list &m_exp_func_list;
+
+    /// The function remap map.
+    mi::mdl::Function_remap const &m_func_remaps;
 
     /// The dependence graph for the unit.
     Dep_graph<Definition> m_dg;
@@ -835,24 +824,6 @@ private:
 
     /// The data layout of the current module.
     llvm::DataLayout const *m_cur_data_layout;
-
-    /// An entry in the function remap map.
-    struct Remap_entry {
-        /// Constructor.
-        Remap_entry(Symbol *s = nullptr)
-        : sym(s)
-        , used(false)
-        {
-        }
-
-        Symbol *sym;  ///< The destination symbol.
-        bool   used;  ///< Remapping was used in the code.
-    };
-
-    typedef typename ptr_hash_map<Symbol, Remap_entry>::Type Function_remap_map;
-
-    /// The function remap map.
-    Function_remap_map m_func_remap_map;
 };
 
 /// Creates a HLSL writer pass.
@@ -867,6 +838,7 @@ private:
 /// \param[in]  enable_debug             true, if debug info should be generated
 /// \param[in]  df_handle_slot_mode      the layout of the BSDF_{evaluate, auxiliary}_data structs
 /// \param[out] exp_func_list            list of exported functions
+/// \param[in]  func_remaps              function remap map
 /// \param[in]  enable_opt_remarks       enable OptimizationRemarks
 /// \param[in]  enable_noinline_support  enable support for noinline (otherwise noinline is ignored)
 llvm::Pass *createHLSLWriterPass(
@@ -880,6 +852,7 @@ llvm::Pass *createHLSLWriterPass(
     bool                                                 enable_debug,
     mi::mdl::Df_handle_slot_mode                         df_handle_slot_mode,
     mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list,
+    mi::mdl::Function_remap const                        &func_remaps,
     bool                                                 enable_opt_remarks,
     bool                                                 enable_noinline_support);
 
@@ -895,6 +868,7 @@ llvm::Pass *createHLSLWriterPass(
 /// \param[in]  enable_debug         true, if debug info should be generated
 /// \param[in]  df_handle_slot_mode  the layout of the BSDF_{evaluate, auxiliary}_data structs
 /// \param[out] exp_func_list        list of exported functions
+/// \param[in]  func_remaps          function remap map
 llvm::Pass *createGLSLWriterPass(
     mi::mdl::IAllocator                                  *alloc,
     Type_mapper const                                    &type_mapper,
@@ -905,7 +879,8 @@ llvm::Pass *createGLSLWriterPass(
     mi::mdl::Messages_impl                               &messages,
     bool                                                 enable_debug,
     mi::mdl::Df_handle_slot_mode                         df_handle_slot_mode,
-    mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list);
+    mi::mdl::LLVM_code_generator::Exported_function_list &exp_func_list,
+    mi::mdl::Function_remap const                        &func_remaps);
 
 }  // sl
 }  // mdl

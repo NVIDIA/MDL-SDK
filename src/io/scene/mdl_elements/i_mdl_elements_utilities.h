@@ -56,6 +56,7 @@
 #include <mi/neuraylib/imdl_impexp_api.h>
 
 #include <base/lib/log/i_log_assert.h>
+#include <base/lib/robin_hood/robin_hood.h>
 #include <base/data/db/i_db_tag.h>
 
 #include "i_mdl_elements_type.h"
@@ -544,63 +545,33 @@ public:
 
     using Validator = bool (*)(const boost::any&);
 
-    Option(
-        const std::string& name,
-        const boost::any& default_value,
-        bool is_interface,
-        Validator validator=nullptr)
-      : m_name(name)
-      , m_value(default_value)
-      , m_default_value(default_value)
-      , m_validator(validator)
-      , m_is_interface(is_interface)
-      , m_is_set(false)
-    {}
+    // Default constructor. Required by the hash map.
+    Option() = default;
 
-    const char* get_name() const
-    {
-        return m_name.c_str();
-    }
+    // Regular constructor.
+    Option( const boost::any& default_value, bool is_interface, Validator validator = nullptr)
+      : m_value( default_value),
+        m_validator( validator),
+        m_is_interface( is_interface)
+    { }
 
-    bool set_value(const boost::any& value)
+    bool set_value( const boost::any& value)
     {
-        if(m_validator && !m_validator(value)) {
+        if( m_validator && !m_validator( value))
             return false;
-        }
         m_value = value;
-        m_is_set = true;
         return true;
     }
 
-    const boost::any& get_value() const
-    {
-        return m_value;
-    }
+    const boost::any& get_value() const { return m_value; }
 
-    void reset()
-    {
-        m_value = m_default_value;
-        m_is_set = false;
-    }
-
-    bool is_set() const
-    {
-        return m_is_set;
-    }
-
-    bool is_interface() const
-    {
-        return m_is_interface;
-    }
+    bool is_interface() const { return m_is_interface; }
 
 private:
 
-    std::string m_name;
     boost::any m_value;
-    boost::any m_default_value;
-    Validator m_validator;
-    bool m_is_interface;
-    bool m_is_set;
+    Validator m_validator = nullptr;
+    bool m_is_interface = false;
 };
 
 // When adding new options
@@ -636,79 +607,39 @@ private:
 // Not documented in the API (used by the module transformer, but not for general use).
 #define MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS   "keep_original_resource_file_paths"
 
-/// Represents an MDL execution context. Similar to mi::mdl::Thread_context.
+/// Represents an MDL execution context, similar to mi::mdl::Thread_context.
+///
+/// There is one instance holding all the defaults, and all other instances hold the explicitly
+/// set options (whose values might be identical to the default). Without the explicit instance
+/// with all the defaults, the time to create all the defaults for all temporaries becomes
+/// noticable in benchmarks.
 class Execution_context
 {
 public:
 
-    Execution_context();
+    Execution_context() : Execution_context( /*add_defaults*/ false) { }
+
+    // Error messages
 
     mi::Size get_messages_count() const;
 
     mi::Size get_error_messages_count() const;
 
-    const Message& get_message(mi::Size index) const;
+    const Message& get_message( mi::Size index) const;
 
-    const Message& get_error_message(mi::Size index) const;
+    const Message& get_error_message( mi::Size index) const;
 
-    void add_message(const mi::mdl::IMessage* message);
+    void add_message( const mi::mdl::IMessage* message);
 
-    void add_error_message(const mi::mdl::IMessage* message);
+    void add_error_message( const mi::mdl::IMessage* message);
 
-    void add_message(const Message& message);
+    void add_message( const Message& message);
 
-    void add_error_message(const Message& message);
+    void add_error_message( const Message& message);
 
-    void add_messages(const mi::mdl::Messages& messages);
+    void add_messages( const mi::mdl::Messages& messages);
 
     void clear_messages();
-
-    mi::Size get_option_count() const;
-
-    mi::Size get_option_index(const std::string& name) const;
-
-    const char* get_option_name(mi::Size index) const;
-
-    // The template parameter T has to match the option's value type, otherwise an exception might
-    // be thrown.
-    template<typename T>
-    T get_option(const std::string& name) const {
-
-        mi::Size index = get_option_index(name);
-        ASSERT(M_SCENE, index < m_options.size());
-
-        const Option& option = m_options[index];
-        ASSERT(M_SCENE, !option.is_interface());
-
-        return boost::any_cast<T> (option.get_value());
-    }
-
-    template<typename T>
-    T* get_interface_option(const std::string& name) const
-    {
-        mi::Size index = get_option_index(name);
-        ASSERT(M_SCENE, index < m_options.size());
-
-        const Option& option = m_options[index];
-        ASSERT(M_SCENE, option.is_interface());
-
-        mi::base::Handle<const mi::base::IInterface> handle
-            = boost::any_cast<mi::base::Handle<const mi::base::IInterface>>(option.get_value());
-
-        if (!handle)
-            return nullptr;
-
-        mi::base::Handle<T> value(handle.get_interface<T>());
-        if (!value)
-            return nullptr;
-
-        value->retain();
-        return value.get();
-    }
-
-    mi::Sint32 get_option(const std::string& name, boost::any& value) const;
-
-    mi::Sint32 set_option(const std::string& name, const boost::any& value);
 
     /// The result is purely internal and not exposed in the API.
     ///
@@ -720,21 +651,71 @@ public:
     /// In case of non-zero result, there is typically also an error message with the same code.
     /// But this is not necessarily the case if messages from the core compiler are passed and no
     /// overall message for the result code is generated.
-    void set_result(mi::Sint32 result);
+    void set_result( mi::Sint32 result);
 
     mi::Sint32 get_result() const;
 
-private:
+    // Options
 
-    void add_option(const Option& option);
+    mi::Size get_option_count() const;
+
+    const char* get_option_name( mi::Size index) const;
+
+    mi::Sint32 get_option( const std::string& name, boost::any& value) const;
+
+    mi::Sint32 set_option( const std::string& name, const boost::any& value);
+
+    const Option* get_option( const std::string& name) const;
+
+    /// The option's value type has to be T, otherwise an exception might be thrown.
+    template<typename T>
+    T get_option( const std::string& name) const
+    {
+        const Option* option = get_option( name);
+        ASSERT( M_SCENE, option);
+        ASSERT( M_SCENE, !option->is_interface());
+
+        return boost::any_cast<T>( option->get_value());
+    }
+
+    /// The option's value type has to be mi::base::Handle<T>, otherwise an exception might be
+    /// thrown.
+    template<typename T>
+    T* get_interface_option( const std::string& name) const
+    {
+        const Option* option = get_option( name);
+        ASSERT( M_SCENE, option);
+        ASSERT( M_SCENE, option->is_interface());
+
+        mi::base::Handle<const mi::base::IInterface> handle(
+            boost::any_cast<mi::base::Handle<const mi::base::IInterface>>( option->get_value()));
+        if( !handle)
+            return nullptr;
+        mi::base::Handle<T> handle_T( handle.get_interface<T>());
+        if( !handle_T)
+            return nullptr;
+        handle_T->retain();
+        return handle_T.get();
+    }
+
+private:
+    Execution_context( bool add_defaults);
+
+    void add_default_option( const char* name, const Option& option);
 
     std::vector<Message> m_messages;
     std::vector<Message> m_error_messages;
+    mi::Sint32 m_result = 0;
 
-    std::map<std::string, mi::Size> m_options_2_index;
-    std::vector<Option> m_options;
+    /// Points to an instance holding the default options (or \c NULL if this is the instance
+    /// holding the default options).
+    const Execution_context* m_default_options = nullptr;
 
-    mi::Sint32 m_result;
+    /// The currently set options (or all default options, see \c m_default_options).
+    robin_hood::unordered_map<std::string, Option> m_options;
+
+    /// Names of all default options (only valid for the instance holding the default options).
+    std::vector<std::string> m_names;
 
 };
 
@@ -1072,7 +1053,7 @@ private:
 
 // **********  Mdl_call_resolver *******************************************************************
 
-/// Finds the owning module of a function definition.
+/// Finds the owning module of entities.
 class Mdl_call_resolver : public mi::mdl::ICall_name_resolver
 {
 public:
@@ -1083,17 +1064,20 @@ public:
 
     virtual ~Mdl_call_resolver();
 
-    /// Finds the owning module of a function definition.
+    /// Find the owner module of a given entity name.
+    /// If the entity name does not contain a colon, you should return the builtins module,
+    /// which you can identify by IModule::is_builtins().
     ///
-    /// \param name   The core name of a function definition.
-    /// \return       The owning module, or \c NULL in case of failures.
+    /// \param entity_name    the entity name (note: this cannot be a module name)
+    ///
+    /// \returns the owning module of this entity if found, NULL otherwise
     const mi::mdl::IModule* get_owner_module(const char* name) const override;
 
     /// Find the owner code DAG of a given entity name.
     /// If the entity name does not contain a colon, you should return the builtins DAG,
     /// which you can identify by calling its owner module's IModule::is_builtins().
     ///
-    /// \param entity_name    the entity name
+    /// \param entity_name    the entity name (note: this cannot be a module name)
     ///
     /// \returns the owning module of this entity if found, NULL otherwise
     const mi::mdl::IGenerated_code_dag* get_owner_dag(const char* entity_name) const override;

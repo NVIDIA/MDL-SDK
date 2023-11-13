@@ -425,6 +425,8 @@ class IValue_list : public
     mi::base::Interface_declare<0x001251cb,0x41b3,0x4e34,0xb2,0xa5,0x78,0x80,0x12,0x97,0x78,0x42>
 {
 public:
+    // public API methods
+
     virtual mi::Size get_size() const = 0;
 
     virtual mi::Size get_index( const char* name) const = 0;
@@ -458,6 +460,14 @@ public:
     virtual mi::Sint32 set_value( const char* name, const IValue* value) = 0;
 
     virtual mi::Sint32 add_value( const char* name, const IValue* value) = 0;
+
+    // internal methods
+
+    /// A variant of #add_value() without sanity checks.
+    ///
+    /// This variant should only be used if correctness is guaranteed, e.g., when converting from
+    /// the MDL core API representation, or from another instance known to be correct.
+    virtual void add_value_unchecked( const char* name, const IValue* value) = 0;
 
     virtual mi::Size get_memory_consumption() const = 0;
 };
@@ -567,7 +577,7 @@ public:
         return static_cast<T*>( ptr_value->get_interface( typename T::IID()));
     }
 
-    virtual IValue_list* create_value_list() const = 0;
+    virtual IValue_list* create_value_list( mi::Size initial_capacity) const = 0;
 
     virtual IValue* clone( const IValue* value) const = 0;
 

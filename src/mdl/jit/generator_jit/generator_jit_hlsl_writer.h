@@ -528,14 +528,8 @@ protected:
     /// Called for every function that is just a prototype in the original LLVM module.
     ///
     /// \param func        the LLVM function (declaration)
-    /// \param mapped_sym  if non-NULL, the mapped symbol for this function
     hlsl::Def_function *create_prototype(
-        llvm::Function &func,
-        hlsl::Symbol   *mapped_sym)
-    {
-        // none for HLSL yet
-        return nullptr;
-    }
+        llvm::Function &func);
 
     /// Return true if the user of an instruction requires its materialization
     ///
@@ -549,9 +543,9 @@ protected:
     /// \param code    the generated source code
     /// \param remaps  list of remapped entities
     void finalize(
-        llvm::Module                     &M,
-        Generated_code_source            *code,
-        list<hlsl::Symbol *>::Type const &remaps);
+        llvm::Module                                               &M,
+        Generated_code_source                                      *code,
+        list<std::pair<char const *, hlsl::Symbol *> >::Type const &remaps);
 
     /// HLSL has C-style type casts.
     static bool has_c_style_type_casts() { return true; }
@@ -627,6 +621,11 @@ protected:
 
     /// Backend messages.
     mi::mdl::Messages_impl &m_messages;
+
+    typedef ptr_hash_set<hlsl::Declaration const>::Type Decl_set;
+
+    /// The set of all API related declarations.
+    Decl_set m_api_decls;
 
     /// ID used to create unique names.
     unsigned m_next_unique_name_id;

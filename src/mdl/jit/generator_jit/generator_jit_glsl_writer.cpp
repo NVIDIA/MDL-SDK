@@ -1801,8 +1801,7 @@ static int last_decl_kind(
 
 // Called for every function that is just a prototype in the original LLVM module.
 glsl::Def_function *GLSLWriterBasePass::create_prototype(
-    llvm::Function &func,
-    glsl::Symbol   *mapped_sym)
+    llvm::Function &func)
 {
     glsl::Def_function  *func_def  = create_definition(&func);
     glsl::Type_function *func_type = func_def->get_type();
@@ -1826,8 +1825,7 @@ glsl::Def_function *GLSLWriterBasePass::create_prototype(
     Type_name *ret_type_name = get_type_name(ret_type);
 
     glsl::Symbol *func_sym   = func_def->get_symbol();
-    glsl::Name   *func_name  = get_name(
-        zero_loc, mapped_sym != nullptr ? mapped_sym : func_sym);
+    glsl::Name   *func_name  = get_name(zero_loc, func_sym);
     Declaration_function *decl_func = m_decl_factory.create_function(
         ret_type_name, func_name);
 
@@ -1896,6 +1894,7 @@ glsl::Def_function *GLSLWriterBasePass::create_prototype(
     }
 
     func_def->set_declaration(decl_func);
+    decl_func->set_definition(func_def);
     func_name->set_definition(func_def);
 
     // do not add the prototype to the compilation unit: this will be done automatically
@@ -2052,9 +2051,9 @@ size_t GLSLWriterBasePass::fill_binary_data(
 
 // Finalize the compilation unit and write it to the given output stream.
 void GLSLWriterBasePass::finalize(
-    llvm::Module                     &M,
-    Generated_code_source            *code,
-    list<glsl::Symbol *>::Type const &remaps)
+    llvm::Module                                               &M,
+    Generated_code_source                                      *code,
+    list<std::pair<char const *, glsl::Symbol *> >::Type const &remaps)
 {
     String_stream_writer out(code->access_src_code());
     mi::base::Handle<glsl::Printer> printer(m_compiler->create_printer(&out));
@@ -2063,6 +2062,17 @@ void GLSLWriterBasePass::finalize(
     m_unit->analyze(*m_compiler.get());
 
     printer->enable_locations(m_use_dbg);
+
+    // helper data
+    typedef ptr_hash_map<glsl::Symbol, char const *>::Type Mapped_type;
+    Mapped_type mapped(m_alloc);
+    if (!remaps.empty()) {
+        typedef list<std::pair<char const *, Symbol *> >::Type Symbol_list;
+
+        for (Symbol_list::const_iterator it(remaps.begin()), end(remaps.end()); it != end; ++it) {
+            mapped[it->second] = it->first;
+        }
+    }
 
     // generate the version fragment
     {
@@ -2085,11 +2095,11 @@ void GLSLWriterBasePass::finalize(
     if (!remaps.empty()) {
         printer->print_comment("defines");
 
-        typedef list<glsl::Symbol *>::Type Symbol_list;
+        typedef list<std::pair<char const *, Symbol *> >::Type Symbol_list;
 
         for (Symbol_list::const_iterator it(remaps.begin()), end(remaps.end()); it != end; ++it) {
             printer->print("#define MAPPED_");
-            printer->print((*it)->get_name());
+            printer->print((*it).first);
             printer->print(" 1");
             printer->nl();
         }
@@ -2202,6 +2212,19 @@ void GLSLWriterBasePass::finalize(
                 continue;
             }
 
+            glsl::Symbol *f_sym = f_decl->get_definition()->get_symbol();
+            Mapped_type::const_iterator mit(mapped.find(f_sym));
+            if (mit != mapped.end()) {
+                mi::mdl::string s(m_alloc);
+                mi::mdl::MDL_name_mangler mangler(m_alloc, s);
+
+                if (!mangler.demangle(mit->second, strlen(mit->second))) {
+                    // not a mangled name
+                    s = mit->second;
+                }
+
+                printer->print_comment(("replaces " + s).c_str());
+            }
             printer->print(decl);
             printer->nl();
         }

@@ -880,7 +880,6 @@ Generated_code_dag::Generated_code_dag(
 , m_value_factory(m_arena, m_type_factory)
 , m_messages(alloc, module != NULL ? impl_cast<Module>(module)->get_msg_name() : "")
 , m_module_imports(alloc)
-, m_invisible_sym(m_sym_tab.create_user_type_symbol(""))
 , m_builder(alloc)
 , m_mdl(mi::base::make_handle_dup(compiler))
 , m_node_factory(compiler, m_arena, m_value_factory, internal_space)
@@ -905,10 +904,10 @@ Generated_code_dag::Generated_code_dag(
     m_node_factory.enable_expose_names_of_let_expressions((options & EXPOSE_NAMES_OF_LET_EXPRESSIONS) != 0);
 
     if (module != NULL) {
-        int n = module->get_import_count();
+        size_t n = module->get_import_count();
         m_module_imports.reserve(n);
 
-        for (int i = 0; i < n; ++i) {
+        for (size_t i = 0; i < n; ++i) {
             mi::base::Handle<IModule const> import(module->get_import(i));
 
             m_module_imports.push_back(string(import->get_name(), alloc));
@@ -2166,7 +2165,7 @@ void Generated_code_dag::compile(IModule const *module)
 
     // ... build the dependence graph first
     DAG_dependence_graph dep_graph(
-        alloc, *this, dag_builder, m_invisible_sym, include_locals);
+        alloc, *this, dag_builder, include_locals);
 
     // now create the topo-sort
     bool has_loops = false;
@@ -2498,20 +2497,24 @@ void Generated_code_dag::compile_entity(
     DAG_builder           &dag_builder,
     Dependence_node const *node)
 {
-    IModule const *module = dag_builder.tos_module();
-
     IDefinition const *def      = node->get_definition();
     IType const       *ret_type = node->get_return_type();
+
+    IModule const *owner = node->get_owner_module();
+
+    if (owner == NULL) {
+        owner = dag_builder.tos_module();
+    }
 
     IDefinition::Kind kind = def != NULL ? def->get_kind() : IDefinition::DK_ERROR;
 
     if (kind == IDefinition::DK_ANNOTATION) {
-        compile_annotation(module, node);
+        compile_annotation(owner, node);
     } else if (kind == IDefinition::DK_FUNCTION && is_material_type(ret_type)) {
         // functions returning materials ARE materials
         compile_material(dag_builder, node);
     } else {
-        compile_function(module, node);
+        compile_function(owner, node);
     }
 }
 
@@ -2523,19 +2526,21 @@ void Generated_code_dag::compile_local_entity(
     IDefinition const *def      = node->get_definition();
     IType const       *ret_type = node->get_return_type();
 
+    IModule const *owner = node->get_owner_module();
+
+    if (owner == NULL) {
+        owner = dag_builder.tos_module();
+    }
+
     IDefinition::Kind kind = def != NULL ? def->get_kind() : IDefinition::DK_ERROR;
 
     if (kind == IDefinition::DK_ANNOTATION) {
-        IModule const *module = dag_builder.tos_module();
-
-        compile_local_annotation(module, dag_builder, node);
+        compile_local_annotation(owner, dag_builder, node);
     } else if (kind == IDefinition::DK_FUNCTION && is_material_type(ret_type)) {
         // functions returning materials ARE materials
         compile_local_material(dag_builder, def);
     } else {
-        IModule const *module = dag_builder.tos_module();
-
-        compile_local_function(module, dag_builder, node);
+        compile_local_function(owner, dag_builder, node);
     }
 }
 
@@ -5313,17 +5318,35 @@ public:
     {
     }
 
+    /// Pre visit of an annotation block.
+    bool pre_visit(IAnnotation_block *block) MDL_FINAL
+    {
+        return false;  // never dive into annotations
+    }
+
+    /// Pre visit of a simple name.
+    bool pre_visit(ISimple_name *name) MDL_FINAL
+    {
+        return false;  // never dive into simple names
+    }
+
+    /// Pre visit of a qualified name.
+    bool pre_visit(IQualified_name *name) MDL_FINAL
+    {
+        return false;  // never dive into qualified names
+    }
+
+    /// Pre visit of a type name.
+    bool pre_visit(IType_name *name) MDL_FINAL
+    {
+        return false;  // never dive into type names
+    }
+
     /// Post visit of a literal.
     IExpression *post_visit(IExpression_literal *lit) MDL_FINAL
     {
         process_string_constants(lit->get_value());
         return lit;
-    }
-
-    /// Pre visit of an annotation block.
-    bool pre_visit(IAnnotation_block *block) MDL_FINAL
-    {
-        return false;  // never dive into annotations
     }
 
     /// Post visit of an call.

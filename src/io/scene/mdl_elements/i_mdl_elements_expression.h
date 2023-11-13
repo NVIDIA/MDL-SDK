@@ -174,6 +174,8 @@ class IExpression_list : public
     mi::base::Interface_declare<0x6f649c76,0xe019,0x47fb,0xac,0xc2,0x0f,0xc1,0x1c,0x6a,0xd1,0xfb>
 {
 public:
+    // public API methods
+
     virtual mi::Size get_size() const = 0;
 
     virtual mi::Size get_index( const char* name) const = 0;
@@ -207,6 +209,15 @@ public:
     virtual mi::Sint32 set_expression( mi::Size index, const IExpression* expression) = 0;
 
     virtual mi::Sint32 add_expression( const char* name, const IExpression* expression) = 0;
+
+    // internal methods
+
+    /// A variant of #add_expression() without sanity checks.
+    ///
+    /// This variant should only be used if correctness is guaranteed, e.g., when converting from
+    /// the MDL core API representation, or from another instance known to be correct.
+    virtual void add_expression_unchecked(
+        const char* name, const IExpression* expression) = 0;
 
     virtual mi::Size get_memory_consumption() const = 0;
 };
@@ -272,6 +283,8 @@ class IAnnotation_block : public
     mi::base::Interface_declare<0x4e85fed6,0x3583,0x4d9f,0xb7,0xef,0x2d,0x2f,0xab,0xed,0x20,0x51>
 {
 public:
+    // public API
+
     virtual mi::Size get_size() const = 0;
 
     virtual const IAnnotation* get_annotation( mi::Size index) const = 0;
@@ -280,6 +293,8 @@ public:
 
     virtual mi::Sint32 add_annotation( const IAnnotation* annotation) = 0;
 
+    // internal methods
+
     virtual mi::Size get_memory_consumption() const = 0;
 };
 
@@ -287,6 +302,8 @@ class IAnnotation_list : public
     mi::base::Interface_declare<0x87e92a87,0x1dc9,0x4c91,0x97,0x6b,0x89,0x8f,0xa3,0x69,0x5d,0xcb>
 {
 public:
+    // public API
+
     virtual mi::Size get_size() const = 0;
 
     virtual mi::Size get_index( const char* name) const = 0;
@@ -306,6 +323,11 @@ public:
     virtual mi::Sint32 add_annotation_block(
         const char* name, const IAnnotation_block* block) = 0;
 
+    // internal methods
+
+    virtual void add_annotation_block_unchecked(
+        const char* name, const IAnnotation_block* block) = 0;
+
     virtual mi::Size get_memory_consumption() const = 0;
 };
 
@@ -314,13 +336,15 @@ class IAnnotation_definition_list : public
     mi::base::Interface_declare<0xa43330cc,0xb1c4,0x41dd,0x9f,0x1b,0xed,0xcc,0x9,0x5b,0x51,0x1>
 {
 public:
-    virtual mi::Sint32 add_definition( const IAnnotation_definition* anno_def) = 0;
+    virtual mi::Size get_size() const = 0;
 
     virtual const IAnnotation_definition* get_definition( mi::Size index) const = 0;
 
     virtual const IAnnotation_definition* get_definition( const char* name) const = 0;
 
-    virtual mi::Size get_size() const = 0;
+    virtual mi::Sint32 add_definition( const IAnnotation_definition* anno_def) = 0;
+
+    virtual void add_definition_unchecked( const IAnnotation_definition* anno_def) = 0;
 
     virtual mi::Size get_memory_consumption() const = 0;
 };
@@ -349,7 +373,7 @@ public:
 
     virtual IExpression_temporary* create_temporary( const IType* type, mi::Size index) const = 0;
 
-    virtual IExpression_list* create_expression_list() const = 0;
+    virtual IExpression_list* create_expression_list( mi::Size initialize_capacity) const = 0;
 
     virtual IAnnotation* create_annotation(
         DB::Transaction* transaction,
@@ -369,11 +393,12 @@ public:
         const IExpression_list* parameter_defaults,
         const IAnnotation_block* annotations) const = 0;
 
-    virtual IAnnotation_block* create_annotation_block() const = 0;
+    virtual IAnnotation_block* create_annotation_block( mi::Size initial_capacity) const = 0;
 
-    virtual IAnnotation_list* create_annotation_list() const = 0;
+    virtual IAnnotation_list* create_annotation_list( mi::Size initial_capacity) const = 0;
 
-    virtual IAnnotation_definition_list* create_annotation_definition_list() const = 0;
+    virtual IAnnotation_definition_list* create_annotation_definition_list(
+        mi::Size initial_capacity) const = 0;
 
     virtual IExpression* clone(
         const IExpression* expr,

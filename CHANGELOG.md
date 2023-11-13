@@ -1,8 +1,56 @@
 Change Log
 ==========
-MDL SDK 2023.0.4 (367100.4957): 05 Oct 2023
+MDL SDK 2023.0.6 (367100.5773): 03 Nov 2023
 -----------------------------------------------
 
+
+ABI compatible with the MDL SDK 2023.0.6 (367100.5773) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+    - Various performance improvements, in particular with a focus on creation of
+      compiled materials.
+    - Python Bindings:
+        - Added `get` and `set` value functions to the bindings of types in `mi::data` and
+          added corresponding tests.
+        - Removed the `IAttribute_set` interface from the bindings of the `IScene_element` types.
+
+- MDL Compiler and Backends
+    - Optimized high-level (GLSL/HLSL) code generator to reduce code size.
+    - Added new backend option "`hlsl_remap_functions`": This allows to remap MDL functions
+      (including state functions) to user implemented  Native HLSL implementations.
+    
+- MDL Distiller and Baker
+    - Renamed `mdl_distiller` command line tool to `mdl_distiller_cli` to more
+      clearly separate it from the distiller plugin of the same name.
+      
+**Fixed Bugs**
+
+- General
+    - Fixed `IFactory::compare()` for `IString` and `IRef` on Linux on ARM.
+    - Python Bindings:
+        - Fixed the binding for the `ITile::get_pixel()` and 
+          `ITile::set_pixel()` functions.
+        - Mapped `mi::Size` to `signed integer` in python to allow for
+          comparing against `-1`.
+        - Deprecated the tuple return of functions that have an `float*` out parameter in C++.
+          Now an `ReturnCode` object is passed in and out as Python parameter.
+        - Removed unused classes and functions from the bindings.
+    
+- MDL Distiller and Baker
+    - mdltlc: Fixed matching on nested attribute expressions.
+    - Fixed missing `enum` to `int` conversion operator an auto-imports,
+      which caused compilation errors in rare cases.
+    - Fixed context information when compiling entities in the DAG-backend
+      (fixes only some asserts in debug mode).
+    - Fixed HLSL/GLSL code generation for access to single element compound types,
+      like arrays of length `1` or structs with only one field.
+    
+
+MDL SDK 2023.0.4 (367100.4957): 05 Oct 2023
+-----------------------------------------------
 
 ABI compatible with the MDL SDK 2023.0.4 (367100.4957) binary release
 (see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))

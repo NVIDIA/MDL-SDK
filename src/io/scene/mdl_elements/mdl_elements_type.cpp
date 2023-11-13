@@ -717,6 +717,12 @@ static const Type_matrix          the_double_4x4_type( &the_double_4_type, 4);
 }  // TYPES
 
 
+Type_list::Type_list( mi::Size initial_capacity)
+{
+    m_index_name.reserve( initial_capacity);
+    m_types.reserve( initial_capacity);
+}
+
 mi::Size Type_list::get_size() const
 {
     return m_types.size();
@@ -789,6 +795,13 @@ mi::Sint32 Type_list::add_type( const char* name, const IType* type)
     m_name_index[name] = m_types.size() - 1;
     m_index_name.push_back( name);
     return 0;
+}
+
+void Type_list::add_type_unchecked( const char* name, const IType* type)
+{
+    m_types.push_back( make_handle_dup( type));
+    m_name_index[name] = m_types.size() - 1;
+    m_index_name.push_back( name);
 }
 
 mi::Size Type_list::get_memory_consumption() const
@@ -1021,9 +1034,9 @@ const IType_vdf* Type_factory::create_vdf() const
     return &TYPES::the_vdf_type;
 }
 
-IType_list* Type_factory::create_type_list() const
+IType_list* Type_factory::create_type_list( mi::Size initial_capacity) const
 {
-    return new Type_list;
+    return new Type_list( initial_capacity);
 }
 
 const IType_enum* Type_factory::get_predefined_enum(
@@ -1057,12 +1070,12 @@ IType_list* Type_factory::clone( const IType_list* list) const
     if( !list)
         return nullptr;
 
-    IType_list* result = create_type_list();
     mi::Size n = list->get_size();
+    IType_list* result = create_type_list( n);
     for( mi::Size i = 0; i < n; ++i) {
         mi::base::Handle<const IType> type( list->get_type( i));
         const char* name = list->get_name( i);
-        result->add_type( name, type.get());
+        result->add_type_unchecked( name, type.get());
     }
     return result;
 }
@@ -1553,7 +1566,7 @@ void Type_factory::serialize_list( SERIAL::Serializer* serializer, const IType_l
 
 IType_list* Type_factory::deserialize_list( SERIAL::Deserializer* deserializer)
 {
-    Type_list* list_impl = new Type_list;
+    Type_list* list_impl = new Type_list( /*initial_capacity*/ 0);
 
     read( deserializer, &list_impl->m_name_index);
     read( deserializer, &list_impl->m_index_name);

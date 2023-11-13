@@ -1194,7 +1194,8 @@ mi::Sint32 Factory_impl::compare( const mi::INumber* lhs, const mi::INumber* rhs
 
 mi::Sint32 Factory_impl::compare( const mi::IString* lhs, const mi::IString* rhs)
 {
-    return strcmp( lhs->get_c_str(), rhs->get_c_str());
+    int result = strcmp( lhs->get_c_str(), rhs->get_c_str());
+    return result < 0 ? -1 : (result == 0 ? 0 : +1);
 }
 
 mi::Sint32 Factory_impl::compare( const mi::IRef* lhs, const mi::IRef* rhs)
@@ -1207,7 +1208,8 @@ mi::Sint32 Factory_impl::compare( const mi::IRef* lhs, const mi::IRef* rhs)
     if( !lhs_name && !rhs_name) return 0;
 
     ASSERT( M_NEURAY_API, lhs_name && rhs_name);
-    return strcmp( lhs_name, rhs_name); //-V575
+    int result = strcmp( lhs_name, rhs_name);
+    return result < 0 ? -1 : (result == 0 ? 0 : +1);
 }
 
 mi::Sint32 Factory_impl::compare( const mi::IEnum* lhs, const mi::IEnum* rhs)

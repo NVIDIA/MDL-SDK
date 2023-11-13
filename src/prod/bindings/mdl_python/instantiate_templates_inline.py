@@ -251,18 +251,18 @@ class Processor:
                         instantiation = ""
 
                         if "<" in base:
-                            instantiation += "%template(Interface_declare_" + name + "_base_template) " + base + ";\n"
                             instantiation += "%nodefaultctor Interface_declare_" + name + "_base_template;\n"
                             instantiation += "%nodefaultdtor Interface_declare_" + name + "_base_template;\n"
+                            instantiation += "%template(Interface_declare_" + name + "_base_template) " + base + ";\n"
 
+                        instantiation += "%rename(_" + name + ") " + name + ";\n"
+                        instantiation += "%ignore Interface_declare<" + uuid + base + ">;\n"
                         instantiation += "%template(Interface_declare_" + name + ") mi::base::Interface_declare<" + uuid + base + ">;\n"
-                        instantiation += "%nodefaultctor Interface_declare_" + name + ";\n"
-                        instantiation += "%nodefaultdtor Interface_declare_" + name + ";\n"
 
                         # #instantiation += "%ignore " + name + ";\n"
-                        instantiation += "%rename(_" + name + ") " + name + ";\n"
-                        instantiation += "%nodefaultctor " + name + ";\n"
-                        instantiation += "%nodefaultdtor " + name + ";\n"
+                        #instantiation += "%rename(_" + name + ") " + name + ";\n"
+                        #instantiation += "%nodefaultctor " + name + ";\n"
+                        #instantiation += "%nodefaultdtor " + name + ";\n"
                         # 
                         # if base:
                         # 

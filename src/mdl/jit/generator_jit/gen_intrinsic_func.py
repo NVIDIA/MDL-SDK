@@ -1174,10 +1174,17 @@ class SignatureParser:
 		llvm::Function    *func     = ctx_data->get_function();
 		unsigned          flags     = ctx_data->get_function_flags();
 
+		if ((flags & LLVM_context_data::FL_IS_MAPPED) != 0) {
+			return func;
+		}
+
+		// make all runtime function "internal": this is necessary, because some of them
+		// compile only cleanly in "always_inline" mode
+		func->setLinkage(llvm::GlobalValue::InternalLinkage);
+
 		Function_context ctx(m_alloc, m_code_gen, inst, func, flags);
 		llvm::Value *res;
 
-		func->setLinkage(llvm::GlobalValue::InternalLinkage);
 		m_code_gen.add_generated_attributes(func);
 		"""
 		self.format_code(f, code % params)

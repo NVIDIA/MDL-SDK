@@ -468,6 +468,8 @@ public:
 class Value_list : public mi::base::Interface_implement<IValue_list>
 {
 public:
+    Value_list( mi::Size initial_capacity);
+
     // public API methods
 
     mi::Size get_size() const;
@@ -485,6 +487,10 @@ public:
     mi::Sint32 set_value( const char* name, const IValue* value);
 
     mi::Sint32 add_value( const char* name, const IValue* value);
+
+    // internal methods
+
+    void add_value_unchecked( const char* name, const IValue* value);
 
     mi::Size get_memory_consumption() const;
 
@@ -573,7 +579,7 @@ public:
 
     using IValue_factory::create;
 
-    IValue_list* create_value_list() const;
+    IValue_list* create_value_list( mi::Size initial_capacity) const;
 
     IValue* clone( const IValue* value) const;
 

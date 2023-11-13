@@ -132,10 +132,10 @@ Mdl_module_builder::Mdl_module_builder(
 {
     m_transaction->pin();
 
-    m_empty_type_list        = m_int_tf->create_type_list();
-    m_empty_expression_list  = m_int_ef->create_expression_list();
-    m_empty_annotation_list  = m_int_ef->create_annotation_list();
-    m_empty_annotation_block = m_int_ef->create_annotation_block();
+    m_empty_type_list        = m_int_tf->create_type_list( /*initial_capacity*/ 0);
+    m_empty_expression_list  = m_int_ef->create_expression_list( /*initial_capacity*/ 0);
+    m_empty_annotation_list  = m_int_ef->create_annotation_list( /*initial_capacity*/ 0);
+    m_empty_annotation_block = m_int_ef->create_annotation_block( /*initial_capacity*/ 0);
 
     ASSERT( M_SCENE, context);
 

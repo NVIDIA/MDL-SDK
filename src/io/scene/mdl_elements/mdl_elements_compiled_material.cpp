@@ -117,24 +117,25 @@ Mdl_compiled_material::Mdl_compiled_material(
     ASSERT( M_SCENE, m_body);
 
     mi::Size n = instance->get_temporary_count();
-    m_temporaries = m_ef->create_expression_list();
+    m_temporaries = m_ef->create_expression_list( n);
     for( mi::Size i = 0; i < n; ++i) {
         std::string name( std::to_string( i));
         const mi::mdl::DAG_node* mdl_temporary = instance->get_temporary_value( i);
         mi::base::Handle<const IExpression> temporary(
             converter.mdl_dag_node_to_int_expr( mdl_temporary, /*type_int*/ nullptr));
         ASSERT( M_SCENE, temporary);
-        m_temporaries->add_expression( name.c_str(), temporary.get());
+        m_temporaries->add_expression_unchecked( name.c_str(), temporary.get());
     }
 
-    m_arguments = m_vf->create_value_list();
-    for (mi::Size i = 0, n = instance->get_parameter_count(); i < n; ++i) {
+    n = instance->get_parameter_count();
+    m_arguments = m_vf->create_value_list( n);
+    for( mi::Size i = 0; i < n; ++i) {
         const char* name = instance->get_parameter_name( i);
         const mi::mdl::IValue* mdl_argument = instance->get_parameter_default( i);
         mi::base::Handle<const IValue> argument(
             converter.mdl_value_to_int_value( /*type_int*/ nullptr, mdl_argument));
         ASSERT( M_SCENE, argument);
-        m_arguments->add_value( name, argument.get());
+        m_arguments->add_value_unchecked( name, argument.get());
     }
 
     const mi::mdl::DAG_hash* h = instance->get_hash();

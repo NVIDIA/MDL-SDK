@@ -36,6 +36,7 @@
 #include <mi/mdl/mdl_generated_dag.h>
 #include <mi/mdl/mdl_types.h>
 #include <mdl/compiler/compilercore/compilercore_bitset.h>
+#include <mdl/compiler/compilercore/compilercore_cstring_hash.h>
 #include <mdl/compiler/compilercore/compilercore_function_instance.h>
 #include <mdl/compiler/compilercore/compilercore_memory_arena.h>
 
@@ -367,19 +368,20 @@ class LLVM_context_data
 public:
     enum Flag {
         FL_NONE           = 0,        ///< No flags.
-        FL_SRET           = 1 << 0,   ///< Uses struct return.
-        FL_HAS_STATE      = 1 << 1,   ///< Has state parameter.
-        FL_HAS_RES        = 1 << 2,   ///< Has resource_data parameter.
-        FL_HAS_EXC        = 1 << 3,   ///< Has exc_state parameter.
-        FL_HAS_CAP_ARGS   = 1 << 4,   ///< Has captured arguments parameter.
-        FL_HAS_LMBD_RES   = 1 << 5,   ///< Has lambda_results parameter (libbsdf).
-        FL_HAS_OBJ_ID     = 1 << 6,   ///< Has object_id parameter.
-        FL_HAS_TRANSFORMS = 1 << 7,   ///< Has transform (matrix) parameters
-        FL_UNALIGNED_RET  = 1 << 8,   ///< The address for the struct return is might be unaligned.
-        FL_HAS_EXEC_CTX   = 1 << 9,   ///< The state, resource_data, exc_state, captured_arguments
+        FL_SRET           = 1 <<  0,  ///< Uses struct return.
+        FL_HAS_STATE      = 1 <<  1,  ///< Has state parameter.
+        FL_HAS_RES        = 1 <<  2,  ///< Has resource_data parameter.
+        FL_HAS_EXC        = 1 <<  3,  ///< Has exc_state parameter.
+        FL_HAS_CAP_ARGS   = 1 <<  4,  ///< Has captured arguments parameter.
+        FL_HAS_LMBD_RES   = 1 <<  5,  ///< Has lambda_results parameter (libbsdf).
+        FL_HAS_OBJ_ID     = 1 <<  6,  ///< Has object_id parameter.
+        FL_HAS_TRANSFORMS = 1 <<  7,  ///< Has transform (matrix) parameters
+        FL_UNALIGNED_RET  = 1 <<  8,  ///< The address for the struct return is might be unaligned.
+        FL_HAS_EXEC_CTX   = 1 <<  9,  ///< The state, resource_data, exc_state, captured_arguments
                                       ///< and lambda_results parameter is provided in an execution
                                       ///< context parameter. The other flags should also be set
                                       ///< to indicate, that the information is available.
+        FL_IS_MAPPED      = 1 << 10,  ///< This function is mapped to external implementation.
     };  // can be or'ed
 
     typedef unsigned Flags;
@@ -472,6 +474,9 @@ public:
 
     /// Returns true if the current function has two transform (matrix) parameters.
     bool has_transform_params() const { return (u.f.m_flags & FL_HAS_TRANSFORMS) != 0; }
+
+    /// Returns true if the current function is mapped to an external.
+    bool is_mapped_to_external() const { return (u.f.m_flags & FL_IS_MAPPED) != 0; }
 
     /// Get the function flags.
     Flags get_function_flags() const { return u.f.m_flags; }
@@ -934,13 +939,34 @@ public:
     State_usage_analysis(LLVM_code_generator &code_gen);
 
     /// Register a function to take part in the analysis.
-    void register_function(llvm::Function *func);
+    ///
+    /// \param func  the LLVM function
+    void register_function(
+        llvm::Function *func);
+
+    /// Register a mapped function to set the "expected" usage.
+    ///
+    /// \param func  the LLVM function
+    /// \param sema  the MDL semantics
+    void register_mapped_function(
+        llvm::Function              *func,
+        mdl::IDefinition::Semantics sema);
 
     /// Add a state usage flag to the given function.
-    void add_state_usage(llvm::Function *func, State_usage flag_to_add);
+    ///
+    /// \param func         the LLVM function
+    /// \param flag_to_add  the state usage to add
+    void add_state_usage(
+        llvm::Function *func,
+        State_usage    flag_to_add);
 
-    /// Add a call to the call graph.
-    void add_call(llvm::Function *caller, llvm::Function *callee);
+    /// Add a call edge from a caller to a callee to the call graph.
+    ///
+    /// \param caller  the caller (LLVM function)
+    /// \param callee  the callee (LLVM function)
+    void add_call(
+        llvm::Function *caller,
+        llvm::Function *callee);
 
     /// Updates the state usage of the exported functions of the code generator.
     void update_exported_functions_state_usage();
@@ -1100,6 +1126,76 @@ struct SL_api_functions
 
     /// The SL renderer runtime function for scene::data_lookup_float4x4 with derivatives.
     llvm::Function *m_scene_data_lookup_deriv_float4x4;
+};
+
+///
+/// Helper class to handle function remapping.
+///
+class Function_remap
+{
+public:
+    /// An entry in the function remap map.
+    struct Remap_entry {
+        /// Constructor.
+        Remap_entry(char const *from, char const *to, Remap_entry *next)
+        : from(from)
+        , to(to)
+        , used(false)
+        , next(next)
+        {
+        }
+
+        char const   *from;  ///< The original name.
+        char const   *to;    ///< The destination name.
+        mutable bool used;   ///< Remapping was used in the code.
+        Remap_entry  *next;
+    };
+
+    typedef ptr_hash_map<char const, Remap_entry *, cstring_hash, cstring_equal_to>::Type
+        Remap_map;
+
+    typedef Remap_map::const_iterator const_iterator;
+
+public:
+    /// Constructor.
+    ///
+    /// \param alloc  the allocator
+    /// \param list   the map list, a string in the form from=to, from=to, ...
+    Function_remap(
+        IAllocator *alloc,
+        char const *list)
+    : m_arena(alloc)
+    , m_func_remap_map(0, Remap_map::hasher(), Remap_map::key_equal(), alloc)
+    , m_first(nullptr)
+    {
+        fill_function_remap(list);
+    }
+
+    /// Fill the map from a option list.
+    ///
+    /// \param list  an option argument in the form name=remapped, name=remapped
+    void fill_function_remap(
+        char const *list);
+
+    /// Get the mapped name if there is any.
+    ///
+    /// \param src  the source name
+    ///
+    /// \note sets the used bit in the Remap_entry if found.
+    char const *get_mapper_symbol(
+        char const *src) const;
+
+    Remap_entry const *first() const { return m_first; }
+
+private:
+    /// The memory arena to allocate strings on.
+    Memory_arena m_arena;
+
+    /// The function remap map.
+    Remap_map m_func_remap_map;
+
+    /// Linear list of entries
+    Remap_entry *m_first;
 };
 
 ///
@@ -3803,6 +3899,9 @@ private:
 
     /// The target language.
     Target_language m_target_lang;
+
+    /// The function remapper.
+    Function_remap m_func_remap;
 
     /// The runtime creator.
     MDL_runtime_creator *m_runtime;

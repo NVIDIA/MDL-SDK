@@ -87,7 +87,8 @@ void Logger::message(
     // of the verbose level setting if trace is enabled.
     bool trace_message = false;
     if ( (0 == strncmp("Rule <", message, 6))
-         || (0 == strncmp("Check rule set '", message, 16)))
+         || (0 == strncmp("Check rule set '", message, 16))
+         || (m_debug_print && 0 == strncmp(">>> ", message, 4)))
         trace_message = true;
 
     if ( trace_message || (int(level) < m_level)) {

@@ -133,6 +133,12 @@ mi::Size Expression_temporary::get_memory_consumption() const
         + dynamic_memory_consumption( m_type);
 }
 
+Expression_list::Expression_list( mi::Size initial_capacity)
+{
+    m_index_name.reserve( initial_capacity);
+    m_expressions.reserve( initial_capacity);
+}
+
 mi::Size Expression_list::get_size() const
 {
     return m_expressions.size();
@@ -203,6 +209,14 @@ mi::Sint32 Expression_list::add_expression( const char* name, const IExpression*
     m_name_index[name] = m_expressions.size() - 1;
     m_index_name.push_back( name);
     return 0;
+}
+
+void Expression_list::add_expression_unchecked(
+    const char* name, const IExpression* expression)
+{
+    m_expressions.push_back( make_handle_dup( expression));
+    m_name_index[name] = m_expressions.size() - 1;
+    m_index_name.push_back( name);
 }
 
 mi::Size Expression_list::get_memory_consumption() const
@@ -287,8 +301,9 @@ const IAnnotation* Annotation_definition::create_annotation(const IExpression_li
     // build up complete arguments
     mi::base::Handle<IExpression_factory> ef(get_expression_factory());
     mi::base::Handle<IType_factory> tf(get_type_factory());
-    mi::base::Handle<IExpression_list> complete_arguments(ef->create_expression_list());
-    for (mi::Size i = 0, n = m_parameter_types->get_size(); i < n; ++i) {
+    mi::Size n = m_parameter_types->get_size();
+    mi::base::Handle<IExpression_list> complete_arguments(ef->create_expression_list(n));
+    for (mi::Size i = 0; i < n; ++i) {
 
         const char* name = m_parameter_types->get_name(i);
         mi::base::Handle<const IExpression> arg(
@@ -371,6 +386,11 @@ mi::Size Annotation::get_memory_consumption() const
         + dynamic_memory_consumption( m_arguments);
 }
 
+Annotation_block::Annotation_block( mi::Size initial_capacity)
+{
+    m_annotations.reserve( initial_capacity);
+}
+
 mi::Size Annotation_block::get_size() const
 {
     return m_annotations.size();
@@ -406,6 +426,12 @@ mi::Size Annotation_block::get_memory_consumption() const
 {
     return sizeof( *this)
         + dynamic_memory_consumption( m_annotations);
+}
+
+Annotation_list::Annotation_list( mi::Size initial_capacity)
+{
+    m_index_name.reserve( initial_capacity);
+    m_annotation_blocks.reserve( initial_capacity);
 }
 
 mi::Size Annotation_list::get_size() const
@@ -481,6 +507,14 @@ mi::Sint32 Annotation_list::add_annotation_block(
     m_name_index[name] = m_annotation_blocks.size() - 1;
     m_index_name.push_back( name);
     return 0;
+}
+
+void Annotation_list::add_annotation_block_unchecked(
+    const char* name, const IAnnotation_block* block)
+{
+    m_annotation_blocks.push_back( make_handle_dup( block));
+    m_name_index[name] = m_annotation_blocks.size() - 1;
+    m_index_name.push_back( name);
 }
 
 mi::Size Annotation_list::get_memory_consumption() const
@@ -594,24 +628,25 @@ IAnnotation_definition* Expression_factory::create_annotation_definition(
         since_version, removed_version, parameter_types, parameter_defaults, annotations);
 }
 
-IExpression_list* Expression_factory::create_expression_list() const
+IExpression_list* Expression_factory::create_expression_list( mi::Size initial_capacity) const
 {
-    return new Expression_list;
+    return new Expression_list( initial_capacity);
 }
 
-IAnnotation_block* Expression_factory::create_annotation_block() const
+IAnnotation_block* Expression_factory::create_annotation_block( mi::Size initial_capacity) const
 {
-    return new Annotation_block;
+    return new Annotation_block( initial_capacity);
 }
 
-IAnnotation_list* Expression_factory::create_annotation_list() const
+IAnnotation_list* Expression_factory::create_annotation_list( mi::Size initial_capacity) const
 {
-    return new Annotation_list;
+    return new Annotation_list( initial_capacity);
 }
 
-IAnnotation_definition_list* Expression_factory::create_annotation_definition_list() const
+IAnnotation_definition_list* Expression_factory::create_annotation_definition_list(
+    mi::Size initial_capacity) const
 {
-    return new Annotation_definition_list;
+    return new Annotation_definition_list( initial_capacity);
 }
 
 IExpression* Expression_factory::clone(
@@ -694,15 +729,15 @@ IExpression_list* Expression_factory::clone(
     if( !list)
         return nullptr;
 
-    IExpression_list* result = create_expression_list();
     mi::Size n = list->get_size();
+    IExpression_list* result = create_expression_list( n);
     for( mi::Size i = 0; i < n; ++i) {
 
         mi::base::Handle<const IExpression> expr( list->get_expression( i));
         mi::base::Handle<IExpression> clone_expr(
             clone( expr.get(), transaction, copy_immutable_calls));
         const char* name = list->get_name( i);
-        result->add_expression( name, clone_expr.get());
+        result->add_expression_unchecked( name, clone_expr.get());
     }
     return result;
 }
@@ -824,8 +859,8 @@ IExpression* Expression_factory::create_cast(
     DB::Access<Mdl_function_definition> cast_def(cast_def_tag, transaction);
     ASSERT(M_SCENE, cast_def);
 
-    mi::base::Handle<IExpression_list> args(create_expression_list());
-    args->add_expression("cast", src_expr);
+    mi::base::Handle<IExpression_list> args(create_expression_list( /*initial_capacity*/ 2));
+    args->add_expression_unchecked("cast", src_expr);
 
     if (direct_call) {
         return create_direct_call(
@@ -847,7 +882,7 @@ IExpression* Expression_factory::create_cast(
 
     mi::base::Handle<IValue> target_type_value(m_value_factory->create(stripped_target_type.get()));
     mi::base::Handle<IExpression> target_type_expr(create_constant(target_type_value.get()));
-    args->add_expression("cast_return", target_type_expr.get());
+    args->add_expression_unchecked("cast_return", target_type_expr.get());
 
     std::string call_name;
     if (cast_db_name) {
@@ -1008,20 +1043,20 @@ void Expression_factory::serialize_list(
     write( serializer, list_impl->m_index_name);
 
     mi::Size size = list_impl->m_expressions.size();
-    SERIAL::write(serializer,  size);
+    SERIAL::write(serializer, size);
     for( mi::Size i = 0; i < size; ++i)
         serialize( serializer, list_impl->m_expressions[i].get());
 }
 
 IExpression_list* Expression_factory::deserialize_list( SERIAL::Deserializer* deserializer) const
 {
-    Expression_list* list_impl = new Expression_list;
+    Expression_list* list_impl = new Expression_list( /*initial capacity*/ 0);
 
     read( deserializer, &list_impl->m_name_index);
     read( deserializer, &list_impl->m_index_name);
 
     mi::Size size;
-    SERIAL::read(deserializer,  &size);
+    SERIAL::read( deserializer,  &size);
     list_impl->m_expressions.resize( size);
     for( mi::Size i = 0; i < size; ++i)
         list_impl->m_expressions[i] = deserialize( deserializer);
@@ -1033,7 +1068,7 @@ void Expression_factory::serialize_annotation(
     SERIAL::Serializer* serializer, const IAnnotation* annotation) const
 {
     std::string name = annotation->get_name();
-    SERIAL::write(serializer,  name);
+    SERIAL::write( serializer,  name);
     mi::base::Handle<const IExpression_list> arguments( annotation->get_arguments());
     serialize_list( serializer, arguments.get());
 }
@@ -1042,7 +1077,7 @@ IAnnotation* Expression_factory::deserialize_annotation(
     SERIAL::Deserializer* deserializer) const
 {
     std::string name;
-    SERIAL::read(deserializer,  &name);
+    SERIAL::read( deserializer,  &name);
     mi::base::Handle<IExpression_list> arguments( deserialize_list( deserializer));
     return create_annotation( /*transaction*/ nullptr, name.c_str(), arguments.get());
 }
@@ -1050,32 +1085,32 @@ IAnnotation* Expression_factory::deserialize_annotation(
 void Expression_factory::serialize_annotation_definition(
     SERIAL::Serializer* serializer, const IAnnotation_definition* anno_def) const
 {
-    SERIAL::write(serializer, anno_def->get_name());
-    SERIAL::write(serializer, anno_def->get_mdl_module_name());
-    SERIAL::write(serializer, anno_def->get_mdl_simple_name());
+    SERIAL::write( serializer, anno_def->get_name());
+    SERIAL::write( serializer, anno_def->get_mdl_module_name());
+    SERIAL::write( serializer, anno_def->get_mdl_simple_name());
 
-    mi::base::Handle<const IType_list> type_list(anno_def->get_parameter_types());
+    mi::base::Handle<const IType_list> type_list( anno_def->get_parameter_types());
     size_t n = type_list->get_size();
-    serializer->write_size_t(n);
+    serializer->write_size_t( n);
     for(size_t i = 0; i < n; ++i)
-        SERIAL::write(serializer, anno_def->get_mdl_parameter_type_name(i));
+        SERIAL::write( serializer, anno_def->get_mdl_parameter_type_name( i));
 
-    SERIAL::write_enum(serializer, anno_def->get_semantic());
-    SERIAL::write(serializer, anno_def->is_exported());
+    SERIAL::write_enum( serializer, anno_def->get_semantic());
+    SERIAL::write( serializer, anno_def->is_exported());
 
     mi::neuraylib::Mdl_version since_version, removed_version;
     anno_def->get_mdl_version( since_version, removed_version);
     write_enum( serializer, since_version);
     write_enum( serializer, removed_version);
 
-    mi::base::Handle<IType_factory> tf(m_value_factory->get_type_factory());
-    tf->serialize_list(serializer, type_list.get());
+    mi::base::Handle<IType_factory> tf( m_value_factory->get_type_factory());
+    tf->serialize_list( serializer, type_list.get());
 
-    mi::base::Handle<const IExpression_list> defaults(anno_def->get_defaults());
-    serialize_list(serializer, defaults.get());
+    mi::base::Handle<const IExpression_list> defaults( anno_def->get_defaults());
+    serialize_list( serializer, defaults.get());
 
-    mi::base::Handle<const IAnnotation_block> annotations(anno_def->get_annotations());
-    serialize_annotation_block(serializer, annotations.get());
+    mi::base::Handle<const IAnnotation_block> annotations( anno_def->get_annotations());
+    serialize_annotation_block( serializer, annotations.get());
 }
 
 IAnnotation_definition* Expression_factory::deserialize_annotation_definition(
@@ -1147,7 +1182,7 @@ IAnnotation_block* Expression_factory::deserialize_annotation_block(
     if( size == 0)
         return nullptr;
 
-    IAnnotation_block* block = new Annotation_block;
+    IAnnotation_block* block = new Annotation_block( size);
     for( mi::Size i = 0; i < size; ++i) {
         mi::base::Handle<IAnnotation> anno( deserialize_annotation( deserializer));
         block->add_annotation( anno.get());
@@ -1172,7 +1207,7 @@ void Expression_factory::serialize_annotation_list(
 IAnnotation_list* Expression_factory::deserialize_annotation_list(
     SERIAL::Deserializer* deserializer) const
 {
-    Annotation_list* list_impl = new Annotation_list;
+    Annotation_list* list_impl = new Annotation_list( /*initial_capacity*/ 0);
 
     read( deserializer, &list_impl->m_name_index);
     read( deserializer, &list_impl->m_index_name);
@@ -1194,6 +1229,7 @@ void Expression_factory::serialize_annotation_definition_list(
         = static_cast<const Annotation_definition_list*>( anno_def_list);
 
     write( serializer, anno_def_list_impl->m_name_to_index);
+
     mi::Size size = anno_def_list_impl->m_anno_definitions.size();
     SERIAL::write( serializer, size);
     for( mi::Size i = 0; i < size; ++i)
@@ -1204,7 +1240,7 @@ void Expression_factory::serialize_annotation_definition_list(
 IAnnotation_definition_list* Expression_factory::deserialize_annotation_definition_list(
     SERIAL::Deserializer* deserializer) const
 {
-    Annotation_definition_list* list_impl = new Annotation_definition_list;
+    Annotation_definition_list* list_impl = new Annotation_definition_list( /*initial_capacity*/ 0);
 
     read( deserializer, &list_impl->m_name_to_index);
 
@@ -1626,15 +1662,9 @@ mi::Sint32 Expression_factory::compare_static(
     return 0;
 }
 
-mi::Sint32 Annotation_definition_list::add_definition(const IAnnotation_definition* anno_def)
+Annotation_definition_list::Annotation_definition_list( mi::Size initial_capacity)
 {
-    if (m_name_to_index.find(anno_def->get_name()) != m_name_to_index.end())
-        return -1; // already in
-
-    m_anno_definitions.push_back(mi::base::make_handle_dup(anno_def));
-    m_name_to_index.insert(
-        std::make_pair(anno_def->get_name(), m_anno_definitions.size() - 1));
-    return 0;
+    m_anno_definitions.reserve( initial_capacity);
 }
 
 const IAnnotation_definition* Annotation_definition_list::get_definition(mi::Size index) const
@@ -1657,6 +1687,25 @@ const IAnnotation_definition* Annotation_definition_list::get_definition(const c
 
     m_anno_definitions[decl->second]->retain();
     return m_anno_definitions[decl->second].get();
+}
+
+mi::Sint32 Annotation_definition_list::add_definition( const IAnnotation_definition* anno_def)
+{
+    if( !anno_def)
+        return -1;
+    const char* name = anno_def->get_name();
+    if( m_name_to_index.find( name) != m_name_to_index.end())
+        return -2;
+    m_anno_definitions.push_back( mi::base::make_handle_dup(anno_def));
+    m_name_to_index[name] = m_anno_definitions.size() - 1;
+    return 0;
+}
+
+void Annotation_definition_list::add_definition_unchecked(
+    const IAnnotation_definition* anno_def)
+{
+    m_anno_definitions.push_back( mi::base::make_handle_dup( anno_def));
+    m_name_to_index[anno_def->get_name()] = m_anno_definitions.size() - 1;
 }
 
 mi::Size Annotation_definition_list::get_memory_consumption() const

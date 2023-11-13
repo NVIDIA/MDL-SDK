@@ -1438,12 +1438,13 @@ void Compilation_unit::output_cpp_pattern_condition(
             if (is<Expr_call>(arg)) {
                 p.nl();
                 p.oper("&&");
+                p.space();
                 p.with_parens([&] (pp::Pretty_print &p) {
-                        p.string("e.get_selector(");
-                        p.string(prefix2.c_str());
-                        p.string(") == ");
-                        p.string(find_selector(arg));
-                    });
+                    p.string("e.get_selector(");
+                    p.string(prefix2.c_str());
+                    p.string(") == ");
+                    p.string(find_selector(arg));
+                });
                 output_cpp_pattern_condition(p, arg, prefix2);
             } else {
                 output_cpp_pattern_condition(p, arg, prefix2);
@@ -1463,11 +1464,11 @@ void Compilation_unit::output_cpp_pattern_condition(
             p.oper("&&");
             p.space();
             p.with_parens([&] (pp::Pretty_print &p) {
-                    p.string("e.get_selector(");
-                    p.string(prefix.c_str());
-                    p.string(") == ");
-                    p.string(find_selector(arg));
-                });
+                p.string("e.get_selector(");
+                p.string(prefix.c_str());
+                p.string(") == ");
+                p.string(find_selector(arg));
+            });
             output_cpp_pattern_condition(p, arg, prefix);
         } else {
             output_cpp_pattern_condition(p, arg, prefix);
@@ -1482,15 +1483,29 @@ void Compilation_unit::output_cpp_pattern_condition(
             p.oper("&&");
             p.space();
             p.with_parens([&] (pp::Pretty_print &p) {
-                    p.string("e.attribute_exists(");
-                    p.string(prefix.c_str());
-                    p.string(", \"");
-                    p.string(attr_name.c_str());
-                    p.string("\")");
-                    if (attr_pat) {
-                        output_cpp_pattern_condition(p, attr_pat, prefix);
+                p.string("e.attribute_exists(");
+                p.string(prefix.c_str());
+                p.string(", \"");
+                p.string(attr_name.c_str());
+                p.string("\")");
+                if (attr_pat) {
+                    if (is<Expr_call>(attr_pat)) {
+                        p.nl();
+                        p.oper("&&");
+                        p.space();
+                        p.with_parens([&] (pp::Pretty_print &p) {
+                            p.string("e.get_selector(e.get_attribute(");
+                            p.string(prefix.c_str());
+                            p.string(", \"");
+                            p.string(attr_name.c_str());
+                            p.string("\")");
+                            p.string(") == ");
+                            p.string(find_selector(attr_pat));
+                        });
                     }
-                });
+                    output_cpp_pattern_condition(p, attr_pat, prefix);
+                }
+            });
         }
     } else if (Expr_type_annotation const *ea = as<Expr_type_annotation>(expr)) {
         output_cpp_pattern_condition(p, ea->get_argument(), prefix);

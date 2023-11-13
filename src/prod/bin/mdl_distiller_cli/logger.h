@@ -37,6 +37,7 @@
 class Logger : public mi::base::Interface_implement<mi::base::ILogger> {
     int  m_level;           ///< Logging level up to which messages are reported
     bool m_test_suite;      ///< True if run within the testsuite. Report only matched rules.
+    bool m_debug_print;     ///< Ensure debug_print() generated messages are printed.
     std::string m_path;     ///< Where to dump a logfile in test suite mode.
 
     /// Returns a string label corresponding to the log level severity.
@@ -47,8 +48,11 @@ public:
     /// are written to stderr, i.e., \p level = 0 will disable all logging, and
     /// \p level = 1 logs only fatal messages, \p level = 2 logs errors,
     /// \p level = 3 logs warnings, \p level = 4 logs info, \p level = 5 logs debug.
-    Logger( int level, bool test_suite, const std::string& path) :
-        m_level( level), m_test_suite( test_suite), m_path(path) {}
+    Logger( int level, bool test_suite, bool debug_print, const std::string& path)
+        : m_level( level)
+        , m_test_suite( test_suite)
+        , m_debug_print(debug_print)
+        , m_path(path) {}
 
     /// Callback function logging a message.
     void message(

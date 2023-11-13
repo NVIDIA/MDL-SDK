@@ -71,11 +71,12 @@ using mi::neuraylib::Neuray_factory;
 /// process.  Return status code 0 to operating system if `ok` is
 /// true, and EXIT_FAILURE otherwise.
 void usage(bool ok = false) {
-    std::cerr << "Usage: mdl_distiller [<options>] <mdl_material>\n"
+    std::cerr << "Usage: mdl_distiller_cli [<options>] <mdl_material>\n"
         "Options:\n"
         "    -v <level>             sets the log verbosity level for the MDL compiler\n"
         "    -trace [<lvl>]         lvl: 0 = none, 1 = report the matching rules (default)\n"
         "                                2 = report all checked path and the matching rules\n"
+        "    -debug-print           enable MDLTL debug_print statements\n"
         "    -o <out-filename>      filename for distilled material, '-' = stdout (default)\n"
         "    -outline               DF node outline on stderr\n"
         "    -quiet                 no output on stderr\n"
@@ -642,6 +643,8 @@ int main( int argc, char* argv[]) {
             }
         } else if (0 == strcmp( "-outline", argv[i])) {
             options.outline = true;
+        } else if (0 == strcmp( "-debug-print", argv[i])) {
+            options.debug_print = true;
         } else if (0 == strcmp( "-quiet", argv[i])) {
             options.quiet = true;
             options.verbosity = 0;
@@ -854,7 +857,8 @@ int main( int argc, char* argv[]) {
 
     // Create an instance of our logger
     Handle<ILogger> logger(
-        new Logger(options.verbosity, options.test_suite, options.test_dir)); // 
+        new Logger(options.verbosity, options.test_suite, options.debug_print,
+                   options.test_dir));
 
     // Access the MDL SDK
     Neuray_factory neuray( logger.get());

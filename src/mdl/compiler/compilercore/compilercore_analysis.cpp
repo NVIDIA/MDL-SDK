@@ -10308,8 +10308,14 @@ Definition const *NT_analysis::reformat_default_struct_constructor(
                 expr = fact->create_invalid();
                 const_cast<IExpression *>(expr)->set_type(ptype);  // set type to error type
             } else {
+                // create the value in the factory of the owner (or the constructor lookup
+                // might fail) ...
                 IValue const *pval = ptype_mod->create_default_value(
-                    m_module.get_value_factory(), ptype);
+                    ptype_mod->get_value_factory(), ptype);
+                /// ... and import it into out module if necessary
+                if (ptype_mod.get() != &m_module) {
+                    pval = m_module.import_value(pval);
+                }
                 expr = fact->create_literal(pval);
             }
         }

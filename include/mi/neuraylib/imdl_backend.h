@@ -169,6 +169,10 @@ public:
     ///   passed to all resource callbacks.
     ///   Possible values:
     ///   \c "on", \c "off". Default: \c "off".
+    /// - \c "hlsl_remap_functions": Specifies a comma separated remap list of MDL functions. The
+    ///                              entries must be specified as &lt;old_name&gt;=&lt;new_name&gt;.
+    ///                              Both names have to be in mangled form.
+    ///   Default: \c "".
     /// - \c "df_handle_slot_mode": The option \c "pointer" is not available (see above).
     /// - \c "use_renderer_adapt_microfacet_roughness": If enabled, the generated code expects
     ///   the renderer to provide a function with the prototype

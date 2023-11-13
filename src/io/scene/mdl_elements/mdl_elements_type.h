@@ -56,6 +56,8 @@ namespace MDL {
 class Type_list : public mi::base::Interface_implement<IType_list>
 {
 public:
+    Type_list( mi::Size initial_capacity);
+
     // public API methods
 
     mi::Size get_size() const override;
@@ -73,6 +75,10 @@ public:
     mi::Sint32 set_type( const char* name, const IType* type) override;
 
     mi::Sint32 add_type( const char* name, const IType* type) override;
+
+    // internal methods
+
+    void add_type_unchecked( const char* name, const IType* type) override;
 
     mi::Size get_memory_consumption() const override;
 
@@ -141,7 +147,7 @@ public:
 
     const IType_vdf* create_vdf() const override;
 
-    IType_list* create_type_list() const override;
+    IType_list* create_type_list( mi::Size initial_capacity) const override;
 
     const IType_enum* get_predefined_enum( IType_enum::Predefined_id id) const override;
 

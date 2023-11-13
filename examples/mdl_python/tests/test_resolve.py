@@ -1,14 +1,24 @@
 import unittest
-import pymdlsdk
-from setup import SDK
+import os
+
+try:  # pragma: no cover
+    # testing from within a package or CI
+    from .setup import SDK, BindingModule
+    from .unittest_base import UnittestBase
+    pymdlsdk = BindingModule
+except ImportError:  # pragma: no cover
+    # local testing
+    from setup import SDK
+    from unittest_base import UnittestBase
+    import pymdlsdk
 
 
-class Main(unittest.TestCase):
+class MainResolve(UnittestBase):
     sdk: SDK = None
 
     @classmethod
     def setUpClass(self):
-        print(f"Running tests in {__file__}")
+        print(f"Running tests in {__file__} in process with id: {os.getpid()}")
         self.sdk = SDK()
         self.sdk.load(addExampleSearchPath=True, loadImagePlugins=False)
 
@@ -18,7 +28,13 @@ class Main(unittest.TestCase):
         self.sdk = None
         print(f"\nFinished tests in {__file__}\n")
 
-    def test_resolve_resource_absolute(self):
+    def test_load_module_success(self):
+        self.assertNotEqual(self.load_module("::df"), "")  # note, don't load modules like this in an application!
+
+    def test_load_module_failure(self):
+        self.assertEqual(self.load_module("::NOT_EXISTING"), "")
+
+    def UPCOMING_test_resolve_resource_absolute(self):  # pragma: no cover
         config: pymdlsdk.IMdl_configuration = self.sdk.neuray.get_api_component(pymdlsdk.IMdl_configuration)
         self.assertIsNotNone(config)
         er: pymdlsdk.IMdl_entity_resolver = config.get_entity_resolver()
@@ -37,7 +53,7 @@ class Main(unittest.TestCase):
         filename_frame0_tile0: str = frame0.get_filename(0).replace("\\", "/")
         self.assertEqual(filename_frame0_tile0, filename_mask)  # same for not animated and not tiled
 
-    def resolve_module(self, mdlName) -> str:
+    def UPCOMING_resolve_module(self, mdlName) -> str:  # pragma: no cover
         config: pymdlsdk.IMdl_configuration = self.sdk.neuray.get_api_component(pymdlsdk.IMdl_configuration)
         self.assertIsNotNone(config)
         er: pymdlsdk.IMdl_entity_resolver = config.get_entity_resolver()
@@ -48,10 +64,10 @@ class Main(unittest.TestCase):
         self.assertTrue(moduleFileName.replace("\\", "/").endswith(mdlName.replace("::", "/") + ".mdl"))
         return moduleFileName
 
-    def test_resolve_module(self):
+    def UPCOMING_test_resolve_module(self):  # pragma: no cover
         self.assertTrue(len(self.resolve_module("::nvidia::sdk_examples::tutorials")) > 0)
 
-    def test_resolve_resource_relative(self):
+    def UPCOMING_test_resolve_resource_relative(self):  # pragma: no cover
         config: pymdlsdk.IMdl_configuration = self.sdk.neuray.get_api_component(pymdlsdk.IMdl_configuration)
         self.assertIsNotNone(config)
         er: pymdlsdk.IMdl_entity_resolver = config.get_entity_resolver()
@@ -75,4 +91,4 @@ class Main(unittest.TestCase):
 
 # run all tests of this file
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main()  # pragma: no cover

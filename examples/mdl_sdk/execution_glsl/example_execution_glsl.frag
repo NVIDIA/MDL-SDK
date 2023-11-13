@@ -147,7 +147,7 @@ void main() {
     State state = State(
         /*normal=*/                 vec3(0.0, 0.0, 1.0),
         /*geometry_normal=*/        vec3(0.0, 0.0, 1.0),
-        /*position=*/               -vPosition,
+        /*position=*/               vPosition,
         /*animation_time=*/         animation_time,
         /*text_coords=*/            texture_coordinate,
         /*texture_tangent_u=*/      vec3[1](vec3(1.0, 0.0, 0.0)),

@@ -40,7 +40,7 @@ const char SLASH =
 #endif
 
 /// Default logfile filename in test mode
-char const * const LOG_FILE = "mdl_distiller.log";
+char const * const LOG_FILE = "mdl_distiller_cli.log";
 
 /// Default matching RUID filename in test mode
 char const * const RUID_FILE = "rule_matches.txt";
@@ -77,6 +77,7 @@ public:
     std::vector<const char*> paths;       ///< MDL search paths
     int                 verbosity;        ///< log level: 0 = off, 3 = show errs and warns
     int                 trace;            ///< 0=none
+    bool                debug_print;      ///< control MDLTL debug_print statements
     bool                outline;          ///< DF node outline on stderr
     bool                quiet;            ///< quiet, no output on stderr
     std::string         out_filename;     ///< distilled material output filename, "-" = stdout
@@ -108,6 +109,7 @@ public:
     Options()
         : verbosity(3)
         , trace(0)
+        , debug_print(false)
         , outline(false)
         , quiet(false)
         , out_filename("-")

@@ -167,12 +167,11 @@ Mdl_function_definition::Mdl_function_definition(
        return_annotations, m_mdl_name.c_str());
 
     // parameters/arguments
-    m_defaults = m_ef->create_expression_list();
-    m_parameter_annotations = m_ef->create_annotation_list();
-    m_parameter_types = m_tf->create_type_list();
-    m_enable_if_conditions = m_ef->create_expression_list();
-
     mi::Size parameter_count = code_dag.get_parameter_count( index);
+    m_defaults = m_ef->create_expression_list( parameter_count);
+    m_parameter_annotations = m_ef->create_annotation_list( parameter_count);
+    m_parameter_types = m_tf->create_type_list( parameter_count);
+    m_enable_if_conditions = m_ef->create_expression_list( parameter_count);
     m_enable_if_users.resize( parameter_count);
 
     for( mi::Size i = 0; i < parameter_count; ++i) {
@@ -183,7 +182,7 @@ Mdl_function_definition::Mdl_function_definition(
         const mi::mdl::IType* parameter_type
             = code_dag.get_parameter_type( index, i);
         mi::base::Handle<const IType> type( mdl_type_to_int_type( m_tf.get(), parameter_type));
-        m_parameter_types->add_type( parameter_name, type.get());
+        m_parameter_types->add_type_unchecked( parameter_name, type.get());
         m_parameter_type_names.emplace_back(
             encode_name_without_signature( code_dag.get_parameter_type_name( index, i)));
 
@@ -194,7 +193,7 @@ Mdl_function_definition::Mdl_function_definition(
             mi::base::Handle<IExpression> default_int( converter.mdl_dag_node_to_int_expr(
                default_, type.get()));
             ASSERT( M_SCENE, default_int);
-            m_defaults->add_expression( parameter_name, default_int.get());
+            m_defaults->add_expression_unchecked( parameter_name, default_int.get());
         }
 
         // update enable_if conditions
@@ -204,7 +203,8 @@ Mdl_function_definition::Mdl_function_definition(
             mi::base::Handle<IExpression> enable_if_cond_int( converter.mdl_dag_node_to_int_expr(
                 enable_if_cond, type.get()));
             ASSERT( M_SCENE, enable_if_cond_int);
-            m_enable_if_conditions->add_expression( parameter_name, enable_if_cond_int.get());
+            m_enable_if_conditions->add_expression_unchecked(
+                 parameter_name, enable_if_cond_int.get());
         }
         std::vector<mi::Size> &users = m_enable_if_users[i];
         mi::Size n_users = code_dag.get_parameter_enable_if_condition_users(
@@ -226,7 +226,7 @@ Mdl_function_definition::Mdl_function_definition(
             converter.mdl_dag_node_vector_to_int_annotation_block(
                 parameter_annotations, m_mdl_name.c_str()));
         if( block)
-            m_parameter_annotations->add_annotation_block( parameter_name, block.get());
+            m_parameter_annotations->add_annotation_block_unchecked( parameter_name, block.get());
     }
 
     // hash
@@ -1559,9 +1559,10 @@ IExpression_list* Mdl_function_definition::check_and_prepare_arguments(
     }
 
     // build up complete argument set using the defaults where necessary
-    mi::base::Handle<IExpression_list> complete_arguments( m_ef->create_expression_list());
+    mi::Size n = m_parameter_types->get_size();
+    mi::base::Handle<IExpression_list> complete_arguments( m_ef->create_expression_list( n));
     std::vector<mi::base::Handle<const IExpression> > call_context;
-    for( mi::Size i = 0, n = m_parameter_types->get_size(); i < n;  ++i) {
+    for( mi::Size i = 0; i < n;  ++i) {
         const char* name = get_parameter_name( i);
         mi::base::Handle<const IExpression> argument(
             arguments ? arguments->get_expression( name) : nullptr);
@@ -1613,7 +1614,7 @@ IExpression_list* Mdl_function_definition::check_and_prepare_arguments(
             ASSERT( M_SCENE, default_copy);
             argument = default_copy;
         }
-        complete_arguments->add_expression( name, argument.get());
+        complete_arguments->add_expression_unchecked( name, argument.get());
         call_context.push_back( argument);
     }
 
@@ -1671,14 +1672,16 @@ Mdl_function_definition::check_and_prepare_arguments_cast_operator(
     }
 
     // the actual call only has one argument, clone it and create a new list
-    mi::base::Handle<IExpression_list> new_arguments( m_ef->create_expression_list());
     mi::base::Handle<IExpression> cast_from_copy(
         m_ef->clone( cast_from.get(), /*transaction*/ transaction, copy_immutable_calls));
-    new_arguments->add_expression( "cast", cast_from_copy.get());
+    mi::base::Handle<IExpression_list> new_arguments(
+        m_ef->create_expression_list( /*initial_capacity*/ 1));
+    new_arguments->add_expression_unchecked( "cast", cast_from_copy.get());
 
     // create parameter type list
-    mi::base::Handle<IType_list> parameter_types( m_tf->create_type_list());
-    parameter_types->add_type( "cast", cast_from_type.get());
+    mi::base::Handle<IType_list> parameter_types(
+        m_tf->create_type_list( /*initial_capacity*/ 1));
+    parameter_types->add_type_unchecked( "cast", cast_from_type.get());
 
     new_arguments->retain();
     parameter_types->retain();
@@ -1747,10 +1750,11 @@ Mdl_function_definition::check_and_prepare_arguments_ternary_operator(
         m_ef->clone( arguments, transaction, copy_immutable_calls));
 
     // create parameter type list
-    mi::base::Handle<IType_list> parameter_types( m_tf->create_type_list());
-    parameter_types->add_type( "cond", cond_type.get());
-    parameter_types->add_type( "true_exp", s_true_type.get());
-    parameter_types->add_type( "false_exp", s_false_type.get());
+    mi::base::Handle<IType_list> parameter_types(
+        m_tf->create_type_list( /*initial_capacity*/ 3));
+    parameter_types->add_type_unchecked( "cond", cond_type.get());
+    parameter_types->add_type_unchecked( "true_exp", s_true_type.get());
+    parameter_types->add_type_unchecked( "false_exp", s_false_type.get());
 
     new_arguments->retain();
     parameter_types->retain();
@@ -1833,9 +1837,10 @@ Mdl_function_definition::check_and_prepare_arguments_array_index_operator(
         m_ef->clone( arguments, transaction, copy_immutable_calls));
 
     // create parameter type list
-    mi::base::Handle<IType_list> parameter_types( m_tf->create_type_list());
-    parameter_types->add_type( "a", base_type.get());
-    parameter_types->add_type( "i", index_type.get());
+    mi::base::Handle<IType_list> parameter_types(
+        m_tf->create_type_list( /*initial capacity*/ 2));
+    parameter_types->add_type_unchecked( "a", base_type.get());
+    parameter_types->add_type_unchecked( "i", index_type.get());
 
     new_arguments->retain();
     parameter_types->retain();
@@ -1898,8 +1903,9 @@ Mdl_function_definition::check_and_prepare_arguments_array_length_operator(
         m_ef->clone( arguments, transaction, copy_immutable_calls));
 
     // create parameter type list
-    mi::base::Handle<IType_list> parameter_types( m_tf->create_type_list());
-    parameter_types->add_type( "a", array_type.get());
+    mi::base::Handle<IType_list> parameter_types(
+        m_tf->create_type_list( /*initial capacity*/ 1));
+    parameter_types->add_type_unchecked( "a", array_type.get());
 
     new_arguments->retain();
     parameter_types->retain();
@@ -2006,8 +2012,8 @@ Mdl_function_definition::check_and_prepare_arguments_array_constructor_operator(
     }
 
     // clone arguments, create parameter types
-    mi::base::Handle<IExpression_list> new_arguments( m_ef->create_expression_list());
-    mi::base::Handle<IType_list> parameter_types( m_tf->create_type_list());
+    mi::base::Handle<IExpression_list> new_arguments( m_ef->create_expression_list( n));
+    mi::base::Handle<IType_list> parameter_types( m_tf->create_type_list( n));
     for( mi::Size i = 0; i < n; ++i) {
         std::string name = "value" + std::to_string( i);
         mi::base::Handle<const IExpression> arg( arguments->get_expression( name.c_str()));
@@ -2022,8 +2028,8 @@ Mdl_function_definition::check_and_prepare_arguments_array_constructor_operator(
                 /*force_cast*/ false,
                 create_direct_calls,
                 errors);
-        new_arguments->add_expression( name.c_str(), new_arg.get());
-        parameter_types->add_type( name.c_str(), expected_type.get());
+        new_arguments->add_expression_unchecked( name.c_str(), new_arg.get());
+        parameter_types->add_type_unchecked( name.c_str(), expected_type.get());
     }
 
     // compute return type

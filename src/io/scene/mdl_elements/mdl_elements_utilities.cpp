@@ -1904,9 +1904,10 @@ const IDeserialized_function_name* deserialize_function_name(
             }
 
             mi::Size size = *size_likely.get_ptr();
-            mi::base::Handle<IType_list> argument_types( tf->create_type_list());
+            mi::base::Handle<IType_list> argument_types( tf->create_type_list( size));
             for( mi::Size i = 0; i < size; ++i)
-                argument_types->add_type( ("value" + std::to_string( i)).c_str(), arg0.get());
+                argument_types->add_type_unchecked(
+                    ("value" + std::to_string( i)).c_str(), arg0.get());
 
             return new Deserialized_function_name( db_name.c_str(), argument_types.get());
 
@@ -1937,10 +1938,11 @@ const IDeserialized_function_name* deserialize_function_name(
                 return nullptr;
             }
 
-            mi::base::Handle<IType_list> argument_types( tf->create_type_list());
-            argument_types->add_type( "a", arg0.get());
+            mi::base::Handle<IType_list> argument_types( tf->create_type_list(
+                /*initial_capacity*/ 2));
+            argument_types->add_type_unchecked( "a", arg0.get());
             mi::base::Handle<const IType> arg1( tf->create_int());
-            argument_types->add_type( "i", arg1.get());
+            argument_types->add_type_unchecked( "i", arg1.get());
 
             return new Deserialized_function_name( db_name.c_str(), argument_types.get());
 
@@ -1968,8 +1970,9 @@ const IDeserialized_function_name* deserialize_function_name(
                 return nullptr;
             }
 
-            mi::base::Handle<IType_list> argument_types( tf->create_type_list());
-            argument_types->add_type( "a", arg0.get());
+            mi::base::Handle<IType_list> argument_types(
+                tf->create_type_list( /*initial_capacity*/ 1));
+            argument_types->add_type_unchecked( "a", arg0.get());
 
             return new Deserialized_function_name( db_name.c_str(), argument_types.get());
 
@@ -1990,11 +1993,12 @@ const IDeserialized_function_name* deserialize_function_name(
                 return nullptr;
             }
 
-            mi::base::Handle<IType_list> argument_types( tf->create_type_list());
+            mi::base::Handle<IType_list> argument_types(
+                tf->create_type_list( /*initial_capacity*/ 3));
             mi::base::Handle<const IType> arg0( tf->create_bool());
-            argument_types->add_type( "cond",      arg0.get());
-            argument_types->add_type( "true_exp",  arg1.get());
-            argument_types->add_type( "false_exp", arg1.get()); // same type as true_exp
+            argument_types->add_type_unchecked( "cond",      arg0.get());
+            argument_types->add_type_unchecked( "true_exp",  arg1.get());
+            argument_types->add_type_unchecked( "false_exp", arg1.get()); // same type as true_exp
 
             return new Deserialized_function_name( db_name.c_str(), argument_types.get());
 
@@ -2024,9 +2028,10 @@ const IDeserialized_function_name* deserialize_function_name(
                 return nullptr;
             }
 
-            mi::base::Handle<IType_list> argument_types( tf->create_type_list());
-            argument_types->add_type( "cast",        arg0.get());
-            argument_types->add_type( "cast_return", arg1.get());
+            mi::base::Handle<IType_list> argument_types(
+                tf->create_type_list( /*initial_capacity*/ 2));
+            argument_types->add_type_unchecked( "cast",        arg0.get());
+            argument_types->add_type_unchecked( "cast_return", arg1.get());
 
             return new Deserialized_function_name( db_name.c_str(), argument_types.get());
 
@@ -2900,17 +2905,15 @@ const mi::mdl::DAG_node* Mdl_dag_builder<T>::int_expr_call_to_mdl_dag_node_share
 {
     mi::base::Handle<const mi::mdl::IGenerated_code_dag> mdl_code_dag( module->get_code_dag());
     Code_dag code_dag( mdl_code_dag.get(), is_material);
-    const char* definition_core_name = code_dag.get_name( definition_index);
+
+    // Use the original name if present. The core for example expects that the name of field_access
+    // functions always use the original name
+    const char* definition_core_name = code_dag.get_original_name( definition_index);
+    if( definition_core_name == nullptr) {
+        definition_core_name = code_dag.get_name( definition_index);
+    }
 
     mi::mdl::IDefinition::Semantics sema = code_dag.get_semantics( definition_index);
-
-    if( sema == mi::mdl::IDefinition::DS_INTRINSIC_DAG_FIELD_ACCESS) {
-        // use the original name if exists, the core expects that the name of field_access
-        // functions use always the original name
-        if( const char* orig_name = code_dag.get_original_name( definition_index)) {
-            definition_core_name = orig_name;
-        }
-    }
 
     bool is_array_constructor = sema == mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_CONSTRUCTOR;
     bool is_array_length      = sema == mi::mdl::IDefinition::DS_INTRINSIC_DAG_ARRAY_LENGTH;
@@ -3177,17 +3180,11 @@ DB::Tag Mdl_call_resolver::get_module_tag( const char* name) const
     if( i != std::string::npos)
         s = s.substr( 0, i);
 
-    // lookup name for DB element
+    // strip last component and lookup name of that DB element
     std::string mdl_name = encode_name_without_signature( s);
+    mdl_name = get_mdl_module_name( mdl_name);
     std::string db_name  = get_db_name( mdl_name);
     DB::Tag tag = m_transaction->name_to_tag( db_name.c_str());
-    if( tag && (m_transaction->get_class_id( tag) == Mdl_module::id))
-        return tag;
-
-    // strip last component and lookup name of that DB element
-    mdl_name = get_mdl_module_name( mdl_name);
-    db_name  = get_db_name( mdl_name);
-    tag = m_transaction->name_to_tag( db_name.c_str());
     if( tag && (m_transaction->get_class_id( tag) == Mdl_module::id))
         return tag;
 
@@ -3922,9 +3919,9 @@ IExpression* Mdl_dag_converter::mdl_call_to_int_expr_direct(
     Mdl_ident def_ident = function_definition->get_ident();
     std::string def_name = get_db_name(function_definition->get_mdl_name());
 
-    mi::base::Handle<IExpression_list> arguments(m_ef->create_expression_list());
     mi::Uint32 n = call->get_argument_count();
-    for (mi::Uint32 i = 0; i < n; i++) {
+    mi::base::Handle<IExpression_list> arguments(m_ef->create_expression_list( n));
+    for( mi::Uint32 i = 0; i < n; i++) {
 
         const char* parameter_name = call->get_parameter_name(i);
         const mi::mdl::DAG_node* mdl_argument = call->get_argument(i);
@@ -3932,7 +3929,7 @@ IExpression* Mdl_dag_converter::mdl_call_to_int_expr_direct(
             use_parameter_type ? parameter_types->get_type(i) : (const IType *)nullptr);
         mi::base::Handle<const IExpression> argument(mdl_dag_node_to_int_expr(
             mdl_argument, parameter_type.get()));
-        arguments->add_expression(parameter_name, argument.get());
+        arguments->add_expression_unchecked(parameter_name, argument.get());
     }
 
     if (m_user_modules_seen) {
@@ -3997,8 +3994,8 @@ IExpression* Mdl_dag_converter::mdl_call_to_int_expr_indirect(
     mi::base::Handle<const IType_list> parameter_types( function_definition->get_parameter_types());
 
     // create argument list
-    mi::base::Handle<IExpression_list> arguments( m_ef->create_expression_list());
     mi::Uint32 n = call->get_argument_count();
+    mi::base::Handle<IExpression_list> arguments( m_ef->create_expression_list( n));
     ASSERT( M_SCENE, !is_cast_operator     || n == 1);
     ASSERT( M_SCENE, !is_array_constructor || n > 0);
 
@@ -4017,7 +4014,7 @@ IExpression* Mdl_dag_converter::mdl_call_to_int_expr_indirect(
             parameter_name = "value" + std::to_string( i);
         else
             parameter_name = function_definition->get_parameter_name( i);
-        arguments->add_expression( parameter_name.c_str(), argument_int.get());
+        arguments->add_expression_unchecked( parameter_name.c_str(), argument_int.get());
     }
 
     // create function call from definition
@@ -4036,7 +4033,7 @@ IExpression* Mdl_dag_converter::mdl_call_to_int_expr_indirect(
             mdl_type_to_int_type( m_tf.get(), call->get_type()));
         mi::base::Handle<IValue> value( m_vf->create( ret_type.get()));
         mi::base::Handle<IExpression> expr( m_ef->create_constant( value.get()));
-        arguments->add_expression( "cast_return", expr.get());
+        arguments->add_expression_unchecked( "cast_return", expr.get());
         function_call = function_definition->create_cast_operator_call_internal(
             m_transaction, arguments.get(), m_immutable_callees, &errors);
     } else if( is_ternary_operator) {
@@ -4083,17 +4080,16 @@ IAnnotation_block* Mdl_dag_converter::mdl_dag_node_vector_to_int_annotation_bloc
     const Mdl_annotation_block& mdl_annotations,
     const char* qualified_name) const
 {
-    if (mdl_annotations.empty())
+    if( mdl_annotations.empty())
         return nullptr;
 
-    IAnnotation_block* block = m_ef->create_annotation_block();
-
-    for (mi::Size i = 0; i < mdl_annotations.size(); ++i) {
-
-        const mi::mdl::DAG_call* call = cast<mi::mdl::DAG_call>(mdl_annotations[i]);
+    mi::Size n = mdl_annotations.size();
+    IAnnotation_block* block = m_ef->create_annotation_block( n);
+    for( mi::Size i = 0; i < mdl_annotations.size(); ++i) {
+        const mi::mdl::DAG_call* call = cast<mi::mdl::DAG_call>( mdl_annotations[i]);
         mi::base::Handle<IAnnotation> annotation(
-            mdl_dag_call_to_int_annotation(call, qualified_name));
-        block->add_annotation(annotation.get());
+            mdl_dag_call_to_int_annotation( call, qualified_name));
+        block->add_annotation( annotation.get());
     }
 
     return block;
@@ -4103,7 +4099,7 @@ IAnnotation* Mdl_dag_converter::mdl_dag_call_to_int_annotation(
     const mi::mdl::DAG_call* call, const char* qualified_name) const
 {
     mi::Uint32 n = call->get_argument_count();
-    mi::base::Handle<IExpression_list> arguments(m_ef->create_expression_list());
+    mi::base::Handle<IExpression_list> arguments(m_ef->create_expression_list( n));
     for (mi::Uint32 i = 0; i < n; ++i) {
         const mi::mdl::DAG_node* argument = call->get_argument(i);
         mi::base::Handle<IExpression> argument_int(mdl_dag_node_to_int_expr_localized(
@@ -4111,7 +4107,7 @@ IAnnotation* Mdl_dag_converter::mdl_dag_call_to_int_annotation(
         ASSERT(M_SCENE, argument_int);
         ASSERT(M_SCENE, argument_int->get_kind() == IExpression::EK_CONSTANT);
         const char* parameter_name = call->get_parameter_name(i);
-        arguments->add_expression(parameter_name, argument_int.get());
+        arguments->add_expression_unchecked(parameter_name, argument_int.get());
     }
 
     const char* name = call->get_name();
@@ -4713,6 +4709,7 @@ const mi::mdl::IValue* int_value_to_mdl_value(
             mi::base::Handle<const IValue_enum> value_enum(
                 value->get_interface<IValue_enum>());
             mi::Size index = value_enum->get_index();
+            mdl_type_enum = cast<mi::mdl::IType_enum>(vf->get_type_factory()->import(mdl_type_enum));
             return vf->create_enum( mdl_type_enum, index);
         }
         case IValue::VK_FLOAT: {
@@ -4770,6 +4767,7 @@ const mi::mdl::IValue* int_value_to_mdl_value(
                     transaction, vf, mdl_element_type, element_value.get());
                 mdl_element_values[i] = mdl_element_value;
             }
+            mdl_type_compound = cast<mi::mdl::IType_compound>(vf->get_type_factory()->import(mdl_type_compound));
             return vf->create_compound(
                 mdl_type_compound, mdl_element_values.data(), n);
         }
@@ -5071,10 +5069,11 @@ IExpression* int_expr_call_to_int_expr_direct_call(
     Execution_context* context)
 {
     mi::base::Handle<const IExpression_list> arguments( call->get_arguments());
+    mi::Size n = arguments->get_size();
     mi::base::Handle<IExpression_list> converted_arguments(
-        ef->create_expression_list());
+        ef->create_expression_list( n));
 
-    for( mi::Size i = 0, n = arguments->get_size(); i < n; ++i) {
+    for( mi::Size i = 0; i < n; ++i) {
         const char* parameter_name = arguments->get_name( i);
         mi::base::Handle<const IExpression> arg( arguments->get_expression( i));
         mi::base::Handle<IExpression> converted_arg(
@@ -5082,7 +5081,7 @@ IExpression* int_expr_call_to_int_expr_direct_call(
                 transaction, ef, arg.get(), parameters, context));
         if( !converted_arg)
             return nullptr;
-        converted_arguments->add_expression( parameter_name, converted_arg.get());
+        converted_arguments->add_expression_unchecked( parameter_name, converted_arg.get());
     }
 
     DB::Tag module_tag = call->get_module( transaction);
@@ -5285,8 +5284,8 @@ IExpression* deep_copy(
             copy->make_mutable( transaction);
 
             mi::base::Handle<const IExpression_list> arguments( original->get_arguments());
-            mi::base::Handle<IExpression_list> copy_arguments( ef->create_expression_list());
             mi::Size n = arguments->get_size();
+            mi::base::Handle<IExpression_list> copy_arguments( ef->create_expression_list( n));
             for( mi::Size i = 0; i < n; ++i) {
                 mi::base::Handle<const IExpression> argument( arguments->get_expression( i));
                 mi::base::Handle<IExpression> copy_argument(
@@ -5294,7 +5293,7 @@ IExpression* deep_copy(
                 if( !copy_argument)
                     return nullptr;
                 const char* name = arguments->get_name( i);
-                copy_arguments->add_expression( name, copy_argument.get());
+                copy_arguments->add_expression_unchecked( name, copy_argument.get());
             }
             mi::Sint32 result = copy->set_arguments( transaction, copy_arguments.get());
             ASSERT( M_SCENE, result == 0);
@@ -5330,8 +5329,8 @@ IExpression* deep_copy(
             const char* definition_db_name = expr_direct_call->get_definition_db_name();
             mi::base::Handle<const IExpression_list> arguments( expr_direct_call->get_arguments());
 
-            mi::base::Handle<IExpression_list> copy_arguments( ef->create_expression_list());
             mi::Size n = arguments->get_size();
+            mi::base::Handle<IExpression_list> copy_arguments( ef->create_expression_list( n));
             for( mi::Size i = 0; i < n; ++i) {
                 mi::base::Handle<const IExpression> argument( arguments->get_expression( i));
                 mi::base::Handle<IExpression> copy_argument(
@@ -5339,7 +5338,7 @@ IExpression* deep_copy(
                 const char* name = arguments->get_name( i);
                 if( !copy_argument)
                     return nullptr;
-                copy_arguments->add_expression( name, copy_argument.get());
+                copy_arguments->add_expression_unchecked( name, copy_argument.get());
             }
 
             return ef->create_direct_call(
@@ -7553,7 +7552,7 @@ const mi::mdl::IValue* Call_evaluator<T>::fold_tex_width_offset(
     const mi::mdl::IValue* tex,
     const mi::mdl::IValue* offset) const
 {
-    // FIXME: default value currently
+    // TODO: default value currently
     return value_factory->create_int(0);
 }
 
@@ -7563,7 +7562,7 @@ const mi::mdl::IValue* Call_evaluator<T>::fold_tex_height_offset(
     const mi::mdl::IValue* tex,
     const mi::mdl::IValue* offset) const
 {
-    // FIXME: default value currently
+    // TODO: default value currently
     return value_factory->create_int(0);
 }
 
@@ -7573,7 +7572,7 @@ const mi::mdl::IValue* Call_evaluator<T>::fold_tex_depth_offset(
     const mi::mdl::IValue* tex,
     const mi::mdl::IValue* offset) const
 {
-    // FIXME: default value currently
+    // TODO: default value currently
     return value_factory->create_int(0);
 }
 
@@ -7623,7 +7622,7 @@ const mi::mdl::IValue* Call_evaluator<T>::fold_tex_grid_to_object_space(
     const mi::mdl::IValue* tex,
     const mi::mdl::IValue* offset) const
 {
-    // FIXME: default value currently
+    // TODO: default value currently
     mi::mdl::IType_factory* tp_factory = value_factory->get_type_factory();
     const mi::mdl::IType_float* f_tp = tp_factory->create_float();
     const mi::mdl::IType_vector* f4_tp = tp_factory->create_vector( f_tp, 4);
@@ -7743,44 +7742,7 @@ bool validate_internal_space(const boost::any& value)
     return false;
 }
 
-}
-
-Execution_context::Execution_context() : m_result(0)
-{
-    add_option(Option(MDL_CTX_OPTION_WARNING, ""s, false,
-        validate_warning));
-    add_option(Option(MDL_CTX_OPTION_OPTIMIZATION_LEVEL, static_cast<mi::Sint32>( 2), false,
-        validate_optimization_level));
-    add_option(Option(MDL_CTX_OPTION_INTERNAL_SPACE, "coordinate_world"s, false,
-        validate_internal_space));
-    add_option(Option(MDL_CTX_OPTION_FOLD_METERS_PER_SCENE_UNIT, true, false));
-    add_option(Option(MDL_CTX_OPTION_METERS_PER_SCENE_UNIT, 1.0f, false));
-    add_option(Option(MDL_CTX_OPTION_WAVELENGTH_MIN, 380.f, false));
-    add_option(Option(MDL_CTX_OPTION_WAVELENGTH_MAX, 780.f, false));
-    add_option(Option(MDL_CTX_OPTION_INCLUDE_GEO_NORMAL, true, false));
-    add_option(Option(MDL_CTX_OPTION_BUNDLE_RESOURCES, false, false));
-    add_option(Option(MDL_CTX_OPTION_EXPORT_RESOURCES_WITH_MODULE_PREFIX, true, false));
-    add_option(Option(MDL_CTX_OPTION_MDL_NEXT, false, false));
-    add_option(Option(MDL_CTX_OPTION_EXPERIMENTAL, false, false));
-    add_option(Option(MDL_CTX_OPTION_RESOLVE_RESOURCES, true, false));
-    add_option(Option(MDL_CTX_OPTION_FOLD_TERNARY_ON_DF, false, false));
-    add_option(Option(MDL_CTX_OPTION_IGNORE_NOINLINE, false, false));
-    add_option(Option(MDL_CTX_OPTION_REMOVE_DEAD_PARAMETERS, true, false));
-    add_option(Option(MDL_CTX_OPTION_FOLD_ALL_BOOL_PARAMETERS, false, false));
-    add_option(Option(MDL_CTX_OPTION_FOLD_ALL_ENUM_PARAMETERS, false, false));
-    add_option(Option(MDL_CTX_OPTION_FOLD_PARAMETERS,
-        mi::base::Handle<const mi::base::IInterface>(), true));
-    add_option(Option(MDL_CTX_OPTION_FOLD_TRIVIAL_CUTOUT_OPACITY, false, false));
-    add_option(Option(MDL_CTX_OPTION_FOLD_TRANSPARENT_LAYERS, false, false));
-    add_option(Option(MDL_CTX_OPTION_SERIALIZE_CLASS_INSTANCE_DATA, true, false));
-    add_option(Option(MDL_CTX_OPTION_LOADING_WAIT_HANDLE_FACTORY,
-        mi::base::Handle<const mi::base::IInterface>(), true));
-    add_option(Option(MDL_CTX_OPTION_DEPRECATED_REPLACE_EXISTING, false, false));
-    add_option(Option(MDL_CTX_OPTION_TARGET_MATERIAL_MODEL_MODE, false, false));
-    add_option(Option(MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS, false, false));
-    add_option(Option(MDL_CTX_OPTION_USER_DATA,
-        mi::base::Handle<const mi::base::IInterface>(), true));
-}
+} // namespace
 
 mi::Size Execution_context::get_messages_count() const
 {
@@ -7792,46 +7754,44 @@ mi::Size Execution_context::get_error_messages_count() const
     return m_error_messages.size();
 }
 
-const Message& Execution_context::get_message(mi::Size index) const
+const Message& Execution_context::get_message( mi::Size index) const
 {
-    ASSERT(M_SCENE, index < m_messages.size());
-
+    ASSERT( M_SCENE, index < m_messages.size());
     return m_messages[index];
 }
 
-const Message& Execution_context::get_error_message(mi::Size index) const
+const Message& Execution_context::get_error_message( mi::Size index) const
 {
-    ASSERT(M_SCENE, index < m_error_messages.size());
-
+    ASSERT( M_SCENE, index < m_error_messages.size());
     return m_error_messages[index];
 }
 
-void Execution_context::add_message(const mi::mdl::IMessage* message)
+void Execution_context::add_message( const mi::mdl::IMessage* message)
 {
-    m_messages.emplace_back(message);
+    m_messages.emplace_back( message);
 }
 
-void Execution_context::add_error_message(const mi::mdl::IMessage* message)
+void Execution_context::add_error_message( const mi::mdl::IMessage* message)
 {
-    m_error_messages.emplace_back(message);
+    m_error_messages.emplace_back( message);
 }
 
-void Execution_context::add_message(const Message& message)
+void Execution_context::add_message( const Message& message)
 {
-    m_messages.push_back(message);
+    m_messages.push_back( message);
 }
 
-void Execution_context::add_error_message(const Message& message)
+void Execution_context::add_error_message( const Message& message)
 {
-    m_error_messages.push_back(message);
+    m_error_messages.push_back( message);
 }
 
-void Execution_context::add_messages(const mi::mdl::Messages& messages)
+void Execution_context::add_messages( const mi::mdl::Messages& messages)
 {
-    for(mi::Size i = 0; i < messages.get_message_count(); ++i)
-        m_messages.emplace_back(messages.get_message(i));
-    for(mi::Size i = 0; i < messages.get_error_message_count(); ++i)
-        m_error_messages.emplace_back(messages.get_error_message(i));
+    for( mi::Size i = 0; i < messages.get_message_count(); ++i)
+        m_messages.emplace_back( messages.get_message( i));
+    for( mi::Size i = 0; i < messages.get_error_message_count(); ++i)
+        m_error_messages.emplace_back( messages.get_error_message( i));
 }
 
 void Execution_context::clear_messages()
@@ -7840,70 +7800,7 @@ void Execution_context::clear_messages()
     m_error_messages.clear();
 }
 
-mi::Size Execution_context::get_option_count() const
-{
-    return static_cast<mi::Size>(m_options.size());
-}
-
-mi::Size Execution_context::get_option_index(const std::string& name) const
-{
-    const auto& option = m_options_2_index.find(name);
-    if (option != m_options_2_index.end())
-        return option->second;
-    return static_cast<mi::Size>(-1);
-}
-
-const char* Execution_context::get_option_name(mi::Size index) const
-{
-    ASSERT(M_SCENE, m_options.size() > index);
-
-    return m_options[index].get_name();
-}
-
-mi::Sint32 Execution_context::get_option(const std::string& name, boost::any& value) const
-{
-    mi::Size index = get_option_index(name);
-    if (index == static_cast<mi::Size>(-1))
-        return -1;
-
-    const Option& option = m_options[index];
-    value = option.get_value();
-    return 0;
-}
-
-mi::Sint32 Execution_context::set_option(const std::string& name, const boost::any& value)
-{
-    mi::Size index = get_option_index(name);
-    if (index == static_cast<mi::Size>(-1))
-        return -1;
-
-    Option& option = m_options[index];
-    if (option.is_interface()) {
-
-        // check that the value is a handle
-        try {
-            mi::base::Handle<const mi::base::IInterface> is_value_handle(
-                boost::any_cast<mi::base::Handle<const mi::base::IInterface>>(value));
-        } catch( ...) {
-            return -2;
-        }
-
-    } else {
-
-        // check that the type of value matches exactly
-        const boost::any& old_value = option.get_value();
-        if (old_value.type() != value.type())
-            return -2;
-
-    }
-
-    if (!option.set_value(value))
-        return -3;
-
-    return 0;
-}
-
-void Execution_context::set_result(mi::Sint32 result)
+void Execution_context::set_result( mi::Sint32 result)
 {
     m_result = result;
 }
@@ -7913,10 +7810,124 @@ mi::Sint32 Execution_context::get_result() const
     return m_result;
 }
 
-void Execution_context::add_option(const Option& option)
+mi::Size Execution_context::get_option_count() const
 {
-    m_options.push_back(option);
-    m_options_2_index[option.get_name()] = m_options.size() - 1;
+    return m_options.size();
+}
+
+const char* Execution_context::get_option_name( mi::Size index) const
+{
+    if( m_default_options)
+        return m_default_options->get_option_name( index);
+
+    if( index >= m_names.size())
+        return nullptr;
+    return m_names[index].c_str();
+}
+
+mi::Sint32 Execution_context::get_option( const std::string& name, boost::any& value) const
+{
+    auto it = m_options.find( name);
+    if( it == m_options.end())
+         return m_default_options ? m_default_options->get_option( name, value) : -1;
+
+    value = it->second.get_value();
+    return 0;
+}
+
+mi::Sint32 Execution_context::set_option( const std::string& name, const boost::any& value)
+{
+    const Option* default_option = get_option( name);
+    if( !default_option)
+         return -1;
+
+    if( default_option->is_interface()) {
+
+        // check that the value is a handle
+        try {
+            mi::base::Handle<const mi::base::IInterface> is_value_handle(
+                boost::any_cast<mi::base::Handle<const mi::base::IInterface>>( value));
+        } catch( ...) {
+            return -2;
+        }
+
+    } else {
+
+        // check that the type of value matches exactly
+        const boost::any& default_value = default_option->get_value();
+        if( value.type() != default_value.type())
+            return -2;
+
+    }
+
+    Option& option = m_options[name] = Option( *default_option);
+    if( !option.set_value( value))
+        return -3;
+
+    return 0;
+}
+
+const Option* Execution_context::get_option( const std::string& name) const
+{
+    auto it = m_options.find( name);
+    if( it == m_options.end())
+        return m_default_options ? m_default_options->get_option( name) : nullptr;
+
+    return & it->second;
+}
+
+Execution_context::Execution_context( bool add_defaults)
+{
+    if( !add_defaults) {
+        static Execution_context s_defaults( /*add_defaults*/ true);
+        m_default_options = &s_defaults;
+        return;
+    }
+
+    m_default_options = nullptr;
+
+#define ADD3(a, b, c) add_default_option( a, Option( b, c))
+#define ADD4(a, b, c, d) add_default_option( a, Option( b, c, d))
+
+    mi::base::Handle<const mi::base::IInterface> empty_handle;
+    mi::Sint32 opt_level = 2;
+
+    ADD4( MDL_CTX_OPTION_WARNING, ""s, false, validate_warning);
+    ADD4( MDL_CTX_OPTION_OPTIMIZATION_LEVEL, opt_level, false, validate_optimization_level);
+    ADD4( MDL_CTX_OPTION_INTERNAL_SPACE, "coordinate_world"s, false, validate_internal_space);
+    ADD3( MDL_CTX_OPTION_FOLD_METERS_PER_SCENE_UNIT, true, false);
+    ADD3( MDL_CTX_OPTION_METERS_PER_SCENE_UNIT, 1.0f, false);
+    ADD3( MDL_CTX_OPTION_WAVELENGTH_MIN, 380.f, false);
+    ADD3( MDL_CTX_OPTION_WAVELENGTH_MAX, 780.f, false);
+    ADD3( MDL_CTX_OPTION_INCLUDE_GEO_NORMAL, true, false);
+    ADD3( MDL_CTX_OPTION_BUNDLE_RESOURCES, false, false);
+    ADD3( MDL_CTX_OPTION_EXPORT_RESOURCES_WITH_MODULE_PREFIX, true, false);
+    ADD3( MDL_CTX_OPTION_MDL_NEXT, false, false);
+    ADD3( MDL_CTX_OPTION_EXPERIMENTAL, false, false);
+    ADD3( MDL_CTX_OPTION_RESOLVE_RESOURCES, true, false);
+    ADD3( MDL_CTX_OPTION_FOLD_TERNARY_ON_DF, false, false);
+    ADD3( MDL_CTX_OPTION_IGNORE_NOINLINE, false, false);
+    ADD3( MDL_CTX_OPTION_REMOVE_DEAD_PARAMETERS, true, false);
+    ADD3( MDL_CTX_OPTION_FOLD_ALL_BOOL_PARAMETERS, false, false);
+    ADD3( MDL_CTX_OPTION_FOLD_ALL_ENUM_PARAMETERS, false, false);
+    ADD3( MDL_CTX_OPTION_FOLD_PARAMETERS, empty_handle, true);
+    ADD3( MDL_CTX_OPTION_FOLD_TRIVIAL_CUTOUT_OPACITY, false, false);
+    ADD3( MDL_CTX_OPTION_FOLD_TRANSPARENT_LAYERS, false, false);
+    ADD3( MDL_CTX_OPTION_SERIALIZE_CLASS_INSTANCE_DATA, true, false);
+    ADD3( MDL_CTX_OPTION_LOADING_WAIT_HANDLE_FACTORY, empty_handle, true);
+    ADD3( MDL_CTX_OPTION_DEPRECATED_REPLACE_EXISTING, false, false);
+    ADD3( MDL_CTX_OPTION_TARGET_MATERIAL_MODEL_MODE, false, false);
+    ADD3( MDL_CTX_OPTION_KEEP_ORIGINAL_RESOURCE_FILE_PATHS, false, false);
+    ADD3( MDL_CTX_OPTION_USER_DATA, empty_handle, true);
+
+#undef ADD3
+#undef ADD4
+}
+
+void Execution_context::add_default_option( const char* name, const Option& option)
+{
+    m_options[name] = option;
+    m_names.push_back( name);
 }
 
 mi::mdl::IThread_context* create_thread_context( mi::mdl::IMDL* mdl, Execution_context* context)

@@ -883,13 +883,8 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
             }
 
             if (m_owner_version > mi::mdl::IMDL::MDL_VERSION_1_6) {
-                if ((
-                    mi::mdl::is_tex_2d(tex_expr->get_type()) && n_params == 6
-                    )
-                    ||
-                    (
-                        mi::mdl::is_tex_3d(tex_expr->get_type()) && n_params == 8
-                        ))
+                if ((n_params == 6 && mi::mdl::is_tex_2d(tex_expr->get_type())) ||
+                    (n_params == 8 && mi::mdl::is_tex_3d(tex_expr->get_type())))
                 {
                     // MDL 1.6 -> 1.7: insert the frame parameter
                     mi::mdl::IExpression const *expr =
@@ -1037,7 +1032,8 @@ mi::mdl::IExpression const *Mdl_ast_builder::transform_call(
 
             mi::mdl::IExpression_call *call = m_ef.create_call(ref);
 
-            for (mi::Size i = 0, n = n_params; i < n; ++i) {
+            // for array constructors, we need to take the size from the provided argument list
+            for (mi::Size i = 0, n = args->get_size(); i < n; ++i) {
                 Handle<IExpression const> arg(
                     args->get_expression(("value" + std::to_string(i)).c_str()));
                 mi::mdl::IExpression const *expr = transform_expr(arg.get());

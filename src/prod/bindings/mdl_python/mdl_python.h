@@ -41,10 +41,18 @@ public:
     static void _print_open_handle_statistic()
     {
         std::unique_lock<std::mutex> lock(s_lock_open_handles);
-        printf("Open Handle Statistic:\n");
+        bool headerShown = false;
         for (auto&& entry : s_open_handles)
         {
-            printf("- [%p] %d of type '%s'\n", entry.first, entry.second.ref_count_difference, entry.second.type_name.c_str());
+            if (entry.second.ref_count_difference != 0)
+            {
+                if (!headerShown)
+                {
+                    printf("Open Handle Statistic:\n");
+                    headerShown = true;
+                }
+                printf("- [%p] %d of type '%s'\n", entry.first, entry.second.ref_count_difference, entry.second.type_name.c_str());
+            }
         }
     }
 
