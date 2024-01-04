@@ -26,248 +26,212 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 
-/** \file
- ** \brief Implementation of the lightweight database.
- **
- ** This is an implementation of the database. It does only very little things.
- **/
-
 #include "pch.h"
 
 #include "dblight_database.h"
+
+
+#include "dblight_info.h"
+#include "dblight_fragmented_job.h"
 #include "dblight_scope.h"
 #include "dblight_transaction.h"
+#include "dblight_util.h"
 
-#include <base/system/main/i_assert.h>
+// After inclusion of dblight_util.h which might define the macro.
+#ifdef DBLIGHT_ENABLE_STATISTICS
+#include <iostream>
+#endif // DBLIGHT_ENABLE_STATISTICS
+
 #include <base/data/db/i_db_element.h>
-#include <base/data/db/i_db_info.h>
-#include <base/data/db/i_db_transaction.h>
-#include <base/data/db/i_db_database.h>
+#include <base/data/serial/serial.h>
+#include <base/data/thread_pool/i_thread_pool_thread_pool.h>
+#include <base/hal/host/i_host.h>
+#include <base/hal/thread/i_thread_block.h>
+#include <base/lib/config/config.h>
+#include <base/lib/log/i_log_logger.h>
+#include <base/util/registry/i_config_registry.h>
+#include <base/system/main/access_module.h>
+#include <base/system/main/i_assert.h>
 
 namespace MI {
 
 namespace DBLIGHT {
 
 Database_impl::Database_impl()
-  : m_next_tag(0)
-  , m_next_transaction_id(0)
-  , m_global_scope(new Scope_impl(this))
+  : m_info_manager( new Info_manager( this)),
+    m_transaction_manager( new Transaction_manager( this)),
+    m_global_scope( new Scope_impl( this)),
+    m_next_tag( 1)
 {
+    SYSTEM::Access_module<HOST::Host_module> host_module( false);
+    int number_of_cpus = host_module->get_number_of_cpus();
+    float cpu_load_limit = static_cast<float>( number_of_cpus);
+    m_thread_pool = std::make_unique<THREAD_POOL::Thread_pool>(
+        cpu_load_limit, /*gpu_load_limit*/ 0.0f, /*nr_of_worker_threads*/ 0);
+
+    m_deserialization_manager = SERIAL::Deserialization_manager::create();
+
+    SYSTEM::Access_module<CONFIG::Config_module> config_module( false);
+    const CONFIG::Config_registry& registry = config_module->get_configuration();
+    CONFIG::update_value( registry, "check_serializer_store", m_check_serialization_store);
+    if( m_check_serialization_store)
+        LOG::mod_log->info( M_DB, LOG::Mod_log::C_DATABASE,
+            "Testing of serialization for database elements during store enabled.");
+    CONFIG::update_value( registry, "check_serializer_edit", m_check_serialization_edit);
+    if( m_check_serialization_edit)
+        LOG::mod_log->info( M_DB, LOG::Mod_log::C_DATABASE,
+            "Testing of serialization for database elements after edits enabled.");
 }
 
 Database_impl::~Database_impl()
 {
-    for (Tag_map::iterator it = m_tags.begin(); it != m_tags.end(); ++it) {
-        DB::Info* info = it->second;
-        MI_ASSERT(info->get_pin_count() == 1);
-        info->unpin();
-    }
-
     m_global_scope->unpin();
+
+    // Clearing the transaction manager first will trigger assertions if there are infos left which
+    // (incorrectly) still reference transactions.
+    m_transaction_manager.reset();
+    m_info_manager.reset();
+
+   SERIAL::Deserialization_manager::release( m_deserialization_manager);
+
+#ifdef DBLIGHT_ENABLE_STATISTICS
+    dump_statistics( std::cerr, m_next_tag.load());
+#endif // DBLIGHT_ENABLE_STATISTICS
 }
 
-void Database_impl::prepare_close() { }
-
-void Database_impl::close()
+DB::Scope* Database_impl::get_global_scope()
 {
-    delete this;
+    return m_global_scope;
 }
 
-void Database_impl::garbage_collection(int /*priority*/)
+DB::Scope* Database_impl::lookup_scope( DB::Scope_id id)
 {
-    // Priority argument is ignored, always runs at highest priority.
-    Uint32 counter = m_global_scope->increment_transaction_count();
-    if (counter > 1) {
-        m_global_scope->decrement_transaction_count();
-        return;
-    }
-
-    garbage_collection_internal();
-    m_global_scope->decrement_transaction_count();
+    return id == 0 ? m_global_scope : nullptr;
 }
 
-DB::Scope* Database_impl::get_global_scope() { return m_global_scope; }
-
-DB::Scope* Database_impl::lookup_scope(DB::Scope_id id)
+DB::Scope* Database_impl::lookup_scope( const std::string& name)
 {
-    return id == 0 ? m_global_scope : 0;
+    return name.empty() ? m_global_scope : nullptr;
 }
 
-DB::Scope* Database_impl::lookup_scope(const std::string& name)
+void Database_impl::garbage_collection( int priority)
 {
-    return 0;
+    THREAD::Block block( &m_lock);
+    m_info_manager->garbage_collection( m_transaction_manager->get_lowest_open_transaction_id());
 }
 
-bool Database_impl::remove(DB::Scope_id id) { return false; }
+#define NOT_IMPLEMENTED { MI_ASSERT( !"Not implemented"); }
 
-Sint32 Database_impl::set_memory_limits(size_t low_water, size_t high_water)
+void Database_impl::lock( mi::Uint32 lock_id) NOT_IMPLEMENTED
+
+bool Database_impl::unlock( mi::Uint32 lock_id) { MI_ASSERT( !"Not implemented"); return false; }
+
+void Database_impl::check_is_locked( mi::Uint32 lock_id) NOT_IMPLEMENTED
+
+mi::Sint32 Database_impl::set_memory_limits( size_t low_water, size_t high_water)
 {
-    MI_ASSERT(false);
+    MI_ASSERT( !"Not implemented");
     return -1;
 }
 
-void Database_impl::get_memory_limits(size_t& low_water, size_t& high_water) const
+void Database_impl::get_memory_limits( size_t& low_water, size_t& high_water) const
 {
-    MI_ASSERT(false);
-    low_water = 0; //-V779 PVS
+    MI_ASSERT( !"Not implemented");
+    low_water = 0;
     high_water = 0;
 }
 
-Sint32 Database_impl::set_disk_swapping(const char* path)
+void Database_impl::register_status_listener( DB::Status_listener* listener) NOT_IMPLEMENTED
+
+void Database_impl::unregister_status_listener( DB::Status_listener* listener) NOT_IMPLEMENTED
+
+void Database_impl::register_transaction_listener( DB::ITransaction_listener* listener)
+NOT_IMPLEMENTED
+
+void Database_impl::unregister_transaction_listener( DB::ITransaction_listener* listener)
+NOT_IMPLEMENTED
+
+void Database_impl::register_scope_listener( DB::IScope_listener* listener) NOT_IMPLEMENTED
+
+void Database_impl::unregister_scope_listener( DB::IScope_listener* listener) NOT_IMPLEMENTED
+
+mi::Sint32 Database_impl::execute_fragmented( DB::Fragmented_job* job, size_t count)
 {
-    MI_ASSERT(false);
-    return -1;
+    return execute_fragmented( /*transaction*/ nullptr, job, count);
 }
 
-const char* Database_impl::get_disk_swapping() const
+mi::Sint32 Database_impl::execute_fragmented_async(
+    DB::Fragmented_job* job, size_t count, DB::IExecution_listener* listener)
 {
-    MI_ASSERT(false);
+    return execute_fragmented_async( /*transaction*/ nullptr, job, count, listener);
+}
+
+void Database_impl::suspend_current_job()
+{
+    m_thread_pool->suspend_current_job();
+}
+
+void Database_impl::resume_current_job()
+{
+    m_thread_pool->resume_current_job();
+}
+
+void Database_impl::yield()
+{
+    m_thread_pool->yield();
+}
+
+mi::Sint32 Database_impl::execute_fragmented(
+    DB::Transaction* transaction, DB::Fragmented_job* job, size_t count)
+{
+    if( !job || count == 0)
+        return -1;
+    if( !transaction && (job->get_scheduling_mode() != DB::Fragmented_job::LOCAL))
+        return -2;
+
+    mi::base::Handle<DBLIGHT::Fragmented_job> wrapped_job(
+        new DBLIGHT::Fragmented_job( transaction, count, job, /*listener*/ nullptr));
+    m_thread_pool->submit_job_and_wait( wrapped_job.get());
     return 0;
 }
 
-void Database_impl::lock(DB::Tag tag) { MI_ASSERT(false); }
-bool Database_impl::unlock(DB::Tag tag) { MI_ASSERT(false); return false; }
-void Database_impl::check_is_locked(DB::Tag tag) { MI_ASSERT(false); }
-
-bool Database_impl::wait_for_notify(DB::Tag tag, TIME::Time timeout)
+mi::Sint32 Database_impl::execute_fragmented_async(
+    DB::Transaction* transaction,
+    DB::Fragmented_job* job,
+    size_t count,
+    DB::IExecution_listener* listener)
 {
-    MI_ASSERT(false);
-    return false;
-}
+    if( !job || count == 0)
+        return -1;
+    if( job->get_scheduling_mode() != DB::Fragmented_job::LOCAL)
+        return -2;
 
-void Database_impl::notify(DB::Tag tag) { MI_ASSERT(false); }
-
-std::string Database_impl::get_next_name(const std::string& pattern)
-{
-    MI_ASSERT(false);
-    return "";
-}
-
-DB::Database_statistics Database_impl::get_statistics()
-{
-    MI_ASSERT(false);
-    return DB::Database_statistics();
-}
-
-DB::Db_status Database_impl::get_database_status() { return DB::DB_OK; }
-
-void Database_impl::register_status_listener(DB::IStatus_listener* listener) { MI_ASSERT(false); }
-void Database_impl::unregister_status_listener(DB::IStatus_listener* listener) { MI_ASSERT(false); }
-void Database_impl::register_transaction_listener(DB::ITransaction_listener* listener)
-    { MI_ASSERT(false); }
-void Database_impl::unregister_transaction_listener(DB::ITransaction_listener* listener)
-    { MI_ASSERT(false); }
-void Database_impl::register_scope_listener(DB::IScope_listener* listener) { MI_ASSERT(false); }
-void Database_impl::unregister_scope_listener(DB::IScope_listener* listener) { MI_ASSERT(false); }
-void Database_impl::set_ready_event(EVENT::Event0_base* event) { MI_ASSERT(false); }
-
-DB::Transaction* Database_impl::get_transaction(DB::Transaction_id id)
-{
-    MI_ASSERT(false);
+    mi::base::Handle<DBLIGHT::Fragmented_job> wrapped_job(
+        new DBLIGHT::Fragmented_job( transaction, count, job, listener));
+    m_thread_pool->submit_job( wrapped_job.get());
     return 0;
 }
 
-void Database_impl::cancel_all_fragmented_jobs() { MI_ASSERT(false); }
-
-Sint32 Database_impl::execute_fragmented(DB::Fragmented_job* job, size_t count)
+SERIAL::Deserialization_manager* Database_impl::get_deserialization_manager()
 {
-    MI_ASSERT(false);
-    return -1;
+    return m_deserialization_manager;
 }
 
-Sint32 Database_impl::execute_fragmented_async(
-    DB::Fragmented_job* job, size_t count,  DB::IExecution_listener* listener)
+void Database_impl::dump( std::ostream& s, bool mask_pointer_values)
 {
-    MI_ASSERT(false);
-    return -1;
+    THREAD::Block_shared block( &m_lock);
+
+    m_transaction_manager->dump( s, mask_pointer_values);
+    m_info_manager->dump( s, mask_pointer_values);
 }
-
-void Database_impl::suspend_current_job() { MI_ASSERT(false); }
-void Database_impl::resume_current_job() { MI_ASSERT(false); }
-void Database_impl::yield() { MI_ASSERT(false); }
-
-void Database_impl::increment_reference_count(DB::Tag tag)
-{
-    Uint32 value = ++m_reference_counts[tag];
-    if (value == 1)
-        m_reference_count_zero.erase(tag);
-}
-
-void Database_impl::decrement_reference_count(DB::Tag tag)
-{
-    Uint32 value = --m_reference_counts[tag];
-    if (value == 0)
-        m_reference_count_zero.insert(tag);
-}
-
-void Database_impl::increment_reference_counts(const DB::Tag_set& tag_set)
-{
-    DB::Tag_set::const_iterator it     = tag_set.begin();
-    DB::Tag_set::const_iterator it_end = tag_set.end();
-
-    for ( ; it != it_end; ++it)
-        increment_reference_count(*it);
-}
-
-void Database_impl::decrement_reference_counts(const DB::Tag_set& tag_set)
-{
-    DB::Tag_set::const_iterator it     = tag_set.begin();
-    DB::Tag_set::const_iterator it_end = tag_set.end();
-
-    for ( ; it != it_end; ++it)
-        decrement_reference_count(*it);
-}
-
-Uint32 Database_impl::get_tag_reference_count(DB::Tag tag)
-{
-    mi::base::Lock::Block block(&m_lock);
-    return m_reference_counts[tag];
-}
-
-void Database_impl::garbage_collection_internal()
-{
-    mi::base::Lock::Block block(&m_lock);
-
-    while (true) {
-
-        DB::Tag_set candidates = m_reference_count_zero;
-        if (candidates.empty())
-            return;
-
-        DB::Tag_set::const_iterator it     = candidates.begin();
-        DB::Tag_set::const_iterator it_end = candidates.end();
-        for ( ;  it != it_end; ++it) {
-
-            DB::Tag tag = *it;
-
-            Tag_map::iterator it_info = m_tags.find(tag);
-            it_info->second->unpin(); //-V783 PVS
-            m_tags.erase(it_info);
-
-            Reverse_named_tag_map::iterator it_name = m_reverse_named_tags.find(tag);
-            if( it_name != m_reverse_named_tags.end()) {
-                m_named_tags.erase(it_name->second);
-                m_reverse_named_tags.erase(it_name);
-            }
-
-            m_tags_flagged_for_removal.erase(tag);
-            m_reference_counts.erase(tag);
-            m_reference_count_zero.erase(tag);
-        }
-    }
-}
-
 
 DB::Database* factory()
 {
     return new Database_impl;
 }
 
+#undef NOT_IMPLEMENTED
+
 } // namespace DBLIGHT
 
-namespace DBNR { class Transaction_impl : public DB::Transaction { }; }
-
-namespace DB { Database_statistics::Database_statistics() { MI_ASSERT(false); } } //-V730 PVS
-
 } // namespace MI
-

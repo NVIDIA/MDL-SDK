@@ -1,0 +1,106 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Attr_syntax topdown {
+
+      // Simple attribute in pattern position with wildcard.
+      material(thin_walled,
+               surface,
+               backface,
+               ior,
+               volume,
+               geometry,
+               hair)
+          [[ _a ~ _ ]] // Prefix with "_" to suppress warning.
+      -->
+        material(thin_walled,
+                 surface,
+                 backface,
+                 ior,
+                 volume,
+                 geometry,
+                 hair)
+        ;
+
+      // Attribute in pattern position with more complicated pattern.
+      material(thin_walled,
+               surface,
+               backface,
+               ior,
+               volume,
+               geometry,
+               hair)
+          [[ _a ~ diffuse_reflection_bsdf(_,_) ]] // Prefix with "_" to suppress warning.
+      -->
+        material(thin_walled,
+                 surface,
+                 backface,
+                 ior,
+                 volume,
+                 geometry,
+                 hair)
+        ;
+
+      // Simple attribute in pattern position without binding.
+      material(_thin_walled,
+               surface,
+               backface,
+               ior,
+               volume,
+               geometry,
+               hair)
+          [[ tw ]]
+      -->
+        material(tw,
+                 surface,
+                 backface,
+                 ior,
+                 volume,
+                 geometry,
+                 hair)
+        ;
+
+}
+
+rules Attr_syntax_bu bottomup {
+      // Simple attribute in expression position.
+      material(thin_walled,
+               surface,
+               backface,
+               ior,
+               volume,
+               geometry,
+               hair)
+      -->
+        material(thin_walled,
+                 surface,
+                 backface,
+                 ior,
+                 volume,
+                 geometry,
+                 hair)
+          [[ is_thin_walled = thin_walled ]]
+          if thin_walled == true
+        ;
+
+      // More complicated attribute in expression position.
+      material(thin_walled,
+               surface,
+               backface,
+               ior,
+               volume,
+               geometry,
+               hair)
+      -->
+        material(thin_walled,
+                 surface,
+                 backface,
+                 ior,
+                 volume,
+                 geometry,
+                 hair)
+          [[ base = diffuse_reflection_bsdf(color(1.0), 0.0) ]]
+        ;
+
+}

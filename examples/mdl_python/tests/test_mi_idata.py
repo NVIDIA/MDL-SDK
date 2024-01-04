@@ -33,6 +33,197 @@ class MainIData(UnittestBase):
         self.assertIsValidInterface(self.sdk.neuray)
         self.assertIsValidInterface(self.sdk.transaction)
 
+    def test_IString(self):
+        i: pymdlsdk.IInterface = self.sdk.transaction.create("String", 0, None)  # using 'create' at least once
+        self.assertTrue(i.is_valid_interface(), "Invalid IInterface")            # returns an IInterface
+        a: pymdlsdk.IString = i.get_interface(pymdlsdk.IString)                  # needs casting
+        self.assertTrue(a.is_valid_interface(), "Invalid IInterface")
+        value: str = a.get_c_str()
+        self.assertEqual(value, "")
+        value = "MDL"
+        a.set_c_str(value)
+        value2: str = a.get_c_str()
+        self.assertEqual(value, value2)
+
+    def test_ISize(self):
+        a: pymdlsdk.ISize = self.sdk.transaction.create_as(pymdlsdk.ISize, "Size", 0, None)
+        self.assertTrue(a.is_valid_interface(), "Invalid IInterface")
+        value: int = a.get_value()
+        self.assertEqual(value, 0)
+        value = 12345
+        a.set_value(value)
+        self.assertEqual(value, a.get_value())
+
+    def test_IFloat32(self):
+        a: pymdlsdk.IFloat32 = self.sdk.transaction.create_as(pymdlsdk.IFloat32, "Float32")
+        self.assertTrue(a.is_valid_interface(), "Invalid IInterface")
+        value: float = a.get_value()
+        self.assertEqual(value, 0)
+        value = -1.2
+        a.set_value(value)
+        self.assertAlmostEqual(value, a.get_value())  # floating point off by 0.0000000476837158
+
+    def test_IUint8(self):
+        a: pymdlsdk.IUint8 = self.sdk.transaction.create_as(pymdlsdk.IUint8, "Uint8")
+        self.assertTrue(a.is_valid_interface(), "Invalid IInterface")
+        value: int = a.get_value()
+        self.assertEqual(value, 0)
+        value = 234
+        a.set_value(value)
+        self.assertEqual(value, a.get_value())
+
+    def test_IBoolean(self):
+        a: pymdlsdk.IBoolean = self.sdk.transaction.create_as(pymdlsdk.IBoolean, "Boolean")
+        self.assertTrue(a.is_valid_interface(), "Invalid IInterface")
+        value: bool = a.get_value()
+        self.assertEqual(value, False)
+        value = True
+        a.set_value(value)
+        self.assertEqual(value, a.get_value())
+
+    def test_IColor(self):
+        a: pymdlsdk.IColor = self.sdk.transaction.create_as(pymdlsdk.IColor, "Color")
+        self.assertTrue(a.is_valid_interface(), "Invalid IInterface")
+        value: pymdlsdk.Color_struct = a.get_value()
+        self.assertEqual(value.r, 0)
+        self.assertEqual(value.g, 0)
+        self.assertEqual(value.b, 0)
+        self.assertEqual(value.a, 0)
+        value.r = 0.25
+        value.g = 0.5
+        value.b = 0.75
+        value.a = 1.0
+        a.set_value(value)
+        value2 = a.get_value()
+        self.assertEqual(value.r, value2.r)
+        self.assertEqual(value.g, value2.g)
+        self.assertEqual(value.b, value2.b)
+        self.assertEqual(value.a, value2.a)
+
+    def test_IColor3(self):
+        a: pymdlsdk.IColor3 = self.sdk.transaction.create_as(pymdlsdk.IColor3, "Color3")
+        self.assertTrue(a.is_valid_interface(), "Invalid IInterface")
+        value: pymdlsdk.Color_struct = a.get_value()
+        self.assertEqual(value.r, 0)
+        self.assertEqual(value.g, 0)
+        self.assertEqual(value.b, 0)
+        self.assertEqual(value.a, 1)
+        value.r = 0.25
+        value.g = 0.5
+        value.b = 0.75
+        a.set_value(value)
+        value2 = a.get_value()
+        self.assertEqual(value.r, value2.r)
+        self.assertEqual(value.g, value2.g)
+        self.assertEqual(value.b, value2.b)
+
+    def test_IFloat32_3(self):
+        a: pymdlsdk.IFloat32_3 = self.sdk.transaction.create_as(pymdlsdk.IFloat32_3, "Float32<3>")
+        self.assertTrue(a.is_valid_interface(), "Invalid IInterface")
+        value: pymdlsdk.Float32_3_struct = a.get_value()
+        self.assertEqual(value.x, 0)
+        self.assertEqual(value.y, 0)
+        self.assertEqual(value.z, 0)
+        value.x = 1.2
+        value.y = 3.4
+        value.z = -5.6
+        a.set_value(value)
+        value2 = a.get_value()
+        self.assertEqual(value.x, value2.x)
+        self.assertEqual(value.y, value2.y)
+        self.assertEqual(value.z, value2.z)
+
+    def test_IFloat64_2(self):
+        a: pymdlsdk.IFloat64_2 = self.sdk.transaction.create_as(pymdlsdk.IFloat64_2, "Float64<2>")
+        self.assertTrue(a.is_valid_interface(), "Invalid IInterface")
+        value: pymdlsdk.Float64_2_struct = a.get_value()
+        self.assertEqual(value.x, 0)
+        self.assertEqual(value.y, 0)
+        value.x = 1.2
+        value.y = 3.4
+        a.set_value(value)
+        value2 = a.get_value()
+        self.assertEqual(value.x, value2.x)
+        self.assertEqual(value.y, value2.y)
+
+    def test_IBoolean_4(self):
+        a: pymdlsdk.IBoolean_4 = self.sdk.transaction.create_as(pymdlsdk.IBoolean_4, "Boolean<4>")
+        self.assertTrue(a.is_valid_interface(), "Invalid IInterface")
+        value: pymdlsdk.Boolean_4_struct = a.get_value()
+        self.assertFalse(value.x)
+        self.assertFalse(value.y)
+        self.assertFalse(value.z)
+        self.assertFalse(value.w)
+        value.x = True
+        value.y = False
+        value.z = True
+        value.w = False
+        a.set_value(value)
+        value2 = a.get_value()
+        self.assertEqual(value.x, value2.x)
+        self.assertEqual(value.y, value2.y)
+        self.assertEqual(value.z, value2.z)
+        self.assertEqual(value.w, value2.w)
+
+    def test_ISint32_2_3(self):
+        a: pymdlsdk.ISint32_2_3 = self.sdk.transaction.create_as(pymdlsdk.ISint32_2_3, "Sint32<2,3>")
+        self.assertTrue(a.is_valid_interface(), "Invalid IInterface")
+        value = a.get_value()
+        self.assertEqual(value.xx, 0)
+        self.assertEqual(value.xy, 0)
+        self.assertEqual(value.xz, 0)
+        self.assertEqual(value.yx, 0)
+        self.assertEqual(value.yy, 0)
+        self.assertEqual(value.yz, 0)
+        value.xx = -11
+        value.xy = 12
+        value.xz = -13
+        value.yx = 14
+        value.yy = -15
+        value.yz = 16
+        a.set_value(value)
+        value2 = a.get_value()
+        self.assertEqual(value.xx, value2.xx)
+        self.assertEqual(value.xy, value2.xy)
+        self.assertEqual(value.xz, value2.xz)
+        self.assertEqual(value.yx, value2.yx)
+        self.assertEqual(value.yy, value2.yy)
+        self.assertEqual(value.yz, value2.yz)
+
+    def test_IFloat32_3_3(self):
+        a: pymdlsdk.IFloat32_3_3 = self.sdk.transaction.create_as(pymdlsdk.IFloat32_3_3, "Float32<3,3>")
+        self.assertTrue(a.is_valid_interface(), "Invalid IInterface")
+        value = a.get_value()
+        self.assertEqual(value.xx, 0)
+        self.assertEqual(value.xy, 0)
+        self.assertEqual(value.xz, 0)
+        self.assertEqual(value.yx, 0)
+        self.assertEqual(value.yy, 0)
+        self.assertEqual(value.yz, 0)
+        self.assertEqual(value.zx, 0)
+        self.assertEqual(value.zy, 0)
+        self.assertEqual(value.zz, 0)
+        value.xx = -11.0
+        value.xy = 12.0
+        value.xz = -13.0
+        value.yx = 14.0
+        value.yy = -15.0
+        value.yz = 16.0
+        value.zx = -17.0
+        value.zy = 18.0
+        value.zz = -19.0
+        a.set_value(value)
+        value2 = a.get_value()
+        self.assertEqual(value.xx, value2.xx)
+        self.assertEqual(value.xy, value2.xy)
+        self.assertEqual(value.xz, value2.xz)
+        self.assertEqual(value.yx, value2.yx)
+        self.assertEqual(value.yy, value2.yy)
+        self.assertEqual(value.yz, value2.yz)
+        self.assertEqual(value.zx, value2.zx)
+        self.assertEqual(value.zy, value2.zy)
+        self.assertEqual(value.zz, value2.zz)
+
     def run_IData_collection_tests(self, collectionClassType, collection: pymdlsdk.IData_collection):
         self.assertIsValidInterface(collection)
         base: pymdlsdk.IData_collection
@@ -99,28 +290,21 @@ class MainIData(UnittestBase):
         else:
             self.assertEqual(testValue.get_value(), valueC.get_value())
             self.assertEqual(testValue.get_value(), valueD.get_value())
-        # UPCOMING valueAPtr: int = valueA.__iinterface_ptr_as_uint64__()
-        # UPCOMING valueBPtr: int = valueB.__iinterface_ptr_as_uint64__()
-        # UPCOMING valueCPtr: int = valueC.__iinterface_ptr_as_uint64__()
-        # UPCOMING valueDPtr: int = valueD.__iinterface_ptr_as_uint64__()
-        # UPCOMING testValuePtr: int = testValue.__iinterface_ptr_as_uint64__()
-        # UPCOMING self.assertEqual(valueAPtr, valueBPtr)
-        # UPCOMING self.assertEqual(valueCPtr, valueDPtr)
-        # UPCOMING self.assertNotEqual(valueAPtr, valueCPtr)
-        # UPCOMING self.assertEqual(valueCPtr, testValuePtr)
-
+        valueAPtr: int = valueA.__iinterface_ptr_as_uint64__()
+        valueBPtr: int = valueB.__iinterface_ptr_as_uint64__()
+        valueCPtr: int = valueC.__iinterface_ptr_as_uint64__()
+        valueDPtr: int = valueD.__iinterface_ptr_as_uint64__()
+        testValuePtr: int = testValue.__iinterface_ptr_as_uint64__()
+        self.assertEqual(valueAPtr, valueBPtr)
+        self.assertEqual(valueCPtr, valueDPtr)
+        self.assertNotEqual(valueAPtr, valueCPtr)
+        self.assertEqual(valueCPtr, testValuePtr)
         wrongType: pymdlsdk.IMaterial_instance = collection.get_value_as(pymdlsdk.IMaterial_instance, keyToTest)  # wrong type
         self.assertIsNotNone(wrongType)
         self.assertFalse(wrongType.is_valid_interface())
-
         wrongKeyOrIndex = collection.get_value_as(elementType, "SOMETHING_NOT_EXISTING")
         self.assertIsNotNone(wrongKeyOrIndex)
         self.assertFalse(wrongKeyOrIndex.is_valid_interface())
-
-        wrongKeyOrIndex = collection.get_value("SOMETHING_NOT_EXISTING")
-        self.assertIsNotNone(wrongKeyOrIndex)
-        self.assertFalse(wrongKeyOrIndex.is_valid_interface())
-
         with self.assertRaises(IndexError):
             wrongKey = collection.get_value(3.14)
         with self.assertRaises(IndexError):
@@ -162,12 +346,8 @@ class MainIData(UnittestBase):
         self.assertEqual(element2.get_value(), array.get_element_as(pymdlsdk.IFloat32, 2).get_value())
         self.assertEqual(element3.get_value(), array.get_element_as(pymdlsdk.IFloat32, 3).get_value())
         wrong_element_type: pymdlsdk.ISint32 = array.get_element_as(pymdlsdk.ISint32, 3)  # wrong type
-
         self.assertIsNotNone(wrong_element_type)
         self.assertFalse(wrong_element_type.is_valid_interface())
-        wrong_index: pymdlsdk.IFloat32 = array.get_element(4)
-        self.assertIsNotNone(wrong_index)
-        self.assertFalse(wrong_index.is_valid_interface())
         wrong_index: pymdlsdk.IFloat32 = array.get_element_as(pymdlsdk.IFloat32, 4)
         self.assertIsNotNone(wrong_index)
         self.assertFalse(wrong_index.is_valid_interface())
@@ -308,7 +488,6 @@ class MainIData(UnittestBase):
         self.assertEqual(pymdlsdk.Float64_4_3_struct().wz, 0)
         self.assertEqual(pymdlsdk.Float64_4_4_struct().ww, 0)
 
-    def test_constructors_2(self):
         uuid: pymdlsdk.Uuid = pymdlsdk.Uuid()
         self.assertEqual(uuid.m_id1, 0)
         self.assertEqual(uuid.m_id2, 0)
@@ -373,7 +552,7 @@ class MainIData(UnittestBase):
             "Uint32<4,2>": pymdlsdk.IUint32_4_2,
             "Float32<4,2>": pymdlsdk.IFloat32_4_2,
             "Float64<4,2>": pymdlsdk.IFloat64_4_2,
-            
+
             "Boolean<2,3>": pymdlsdk.IBoolean_2_3,
             "Sint32<2,3>": pymdlsdk.ISint32_2_3,
             "Uint32<2,3>": pymdlsdk.IUint32_2_3,
@@ -459,7 +638,6 @@ class MainIData(UnittestBase):
                 value = iinterface.get_value()
                 self.assertIsNotNone(value)
                 iinterface.set_value(value)
-
             if name in namesVectors.keys():
                 r: int = iinterface.get_number_of_rows()
                 self.assertEqual(1, iinterface.get_number_of_columns())
@@ -475,7 +653,6 @@ class MainIData(UnittestBase):
                         iinterface.set_value(data)
                         data2 = iinterface.get_value()
                         self.assertEqual(data.r, data2.r)
-                        pass
                 else:
                     self.assertEqual(typename, name[:-3])
                     if classType != pymdlsdk.ICompound:
@@ -484,7 +661,6 @@ class MainIData(UnittestBase):
                         iinterface.set_value(data)
                         data2 = iinterface.get_value()
                         self.assertEqual(data.x, data2.x)
-
             elif name in namesMatrices.keys():
                 r: int = iinterface.get_number_of_rows()
                 c: int = iinterface.get_number_of_columns()

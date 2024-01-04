@@ -148,10 +148,14 @@ mi::Size Expression_list::get_index( const char* name) const
 {
     if( !name)
         return static_cast<mi::Size>( -1);
-    Name_index_map::const_iterator it = m_name_index.find( name);
-    if( it == m_name_index.end())
-        return static_cast<mi::Size>( -1);
-    return it->second;
+
+    // For typical list sizes a linear search is much faster than maintaining a map from names to
+    // indices.
+    for( mi::Size i = 0; i < m_index_name.size(); ++i)
+        if( m_index_name[i] == name)
+            return i;
+
+    return static_cast<mi::Size>( -1);
 }
 
 const char* Expression_list::get_name( mi::Size index) const
@@ -206,7 +210,6 @@ mi::Sint32 Expression_list::add_expression( const char* name, const IExpression*
     if( index != static_cast<mi::Size>( -1))
         return -2;
     m_expressions.push_back( make_handle_dup( expression));
-    m_name_index[name] = m_expressions.size() - 1;
     m_index_name.push_back( name);
     return 0;
 }
@@ -215,14 +218,12 @@ void Expression_list::add_expression_unchecked(
     const char* name, const IExpression* expression)
 {
     m_expressions.push_back( make_handle_dup( expression));
-    m_name_index[name] = m_expressions.size() - 1;
     m_index_name.push_back( name);
 }
 
 mi::Size Expression_list::get_memory_consumption() const
 {
     return sizeof( *this)
-        + dynamic_memory_consumption( m_name_index)
         + dynamic_memory_consumption( m_index_name)
         + dynamic_memory_consumption( m_expressions);
 }
@@ -443,10 +444,14 @@ mi::Size Annotation_list::get_index( const char* name) const
 {
     if( !name)
         return static_cast<mi::Size>( -1);
-    Name_index_map::const_iterator it = m_name_index.find( name);
-    if( it == m_name_index.end())
-        return static_cast<mi::Size>( -1);
-    return it->second;
+
+    // For typical list sizes a linear search is much faster than maintaining a map from names to
+    // indices.
+    for( mi::Size i = 0; i < m_index_name.size(); ++i)
+        if( m_index_name[i] == name)
+            return i;
+
+    return static_cast<mi::Size>( -1);
 }
 
 const char* Annotation_list::get_name( mi::Size index) const
@@ -504,7 +509,6 @@ mi::Sint32 Annotation_list::add_annotation_block(
     if( index != static_cast<mi::Size>( -1))
         return -2;
     m_annotation_blocks.push_back( make_handle_dup( block));
-    m_name_index[name] = m_annotation_blocks.size() - 1;
     m_index_name.push_back( name);
     return 0;
 }
@@ -513,14 +517,12 @@ void Annotation_list::add_annotation_block_unchecked(
     const char* name, const IAnnotation_block* block)
 {
     m_annotation_blocks.push_back( make_handle_dup( block));
-    m_name_index[name] = m_annotation_blocks.size() - 1;
     m_index_name.push_back( name);
 }
 
 mi::Size Annotation_list::get_memory_consumption() const
 {
     return sizeof( *this)
-        + dynamic_memory_consumption( m_name_index)
         + dynamic_memory_consumption( m_index_name)
         + dynamic_memory_consumption( m_annotation_blocks);
 }
@@ -676,11 +678,11 @@ IExpression* Expression_factory::clone(
                 ASSERT( M_SCENE, transaction);
                 DB::Tag call_tag = expr_call->get_call();
                 SERIAL::Class_id class_id = transaction->get_class_id( call_tag);
-                std::vector<mi::base::Handle<const IExpression> > dummy_context;
+                std::vector<mi::base::Handle<const IExpression>> dummy_call_context;
                 if( class_id == Mdl_function_call::id) {
                     DB::Access<Mdl_function_call> fc( call_tag, transaction);
                     if( fc->is_immutable())
-                        return deep_copy( this, transaction, expr_call.get(), dummy_context);
+                        return deep_copy( this, transaction, expr_call.get(), dummy_call_context);
                 } else
                     return nullptr;
             }
@@ -744,17 +746,6 @@ IExpression_list* Expression_factory::clone(
 
 namespace {
 
-class String : public mi::base::Interface_implement<mi::IString>
-{
-public:
-    String( const char* str = nullptr) : m_string( str ? str : "") { }
-    const char* get_type_name() const { return "String"; }
-    const char* get_c_str() const { return m_string.c_str(); }
-    void set_c_str( const char* str) { m_string = str ? str : ""; }
-private:
-    std::string m_string;
-};
-
 std::string get_prefix( mi::Size depth)
 {
     std::string prefix;
@@ -774,7 +765,7 @@ const mi::IString* Expression_factory::dump(
     std::ostringstream s;
     mi::base::Handle<IType_factory> tf( m_value_factory->get_type_factory());
     dump_static( transaction, tf.get(), expr, name, depth, s);
-    return new String( s.str().c_str());
+    return create_istring( s.str().c_str());
 }
 
 const mi::IString* Expression_factory::dump(
@@ -786,7 +777,7 @@ const mi::IString* Expression_factory::dump(
     std::ostringstream s;
     mi::base::Handle<IType_factory> tf( m_value_factory->get_type_factory());
     dump_static( transaction, tf.get(), list, name, depth, s);
-    return new String( s.str().c_str());
+    return create_istring( s.str().c_str());
 }
 
 const mi::IString* Expression_factory::dump(
@@ -798,7 +789,7 @@ const mi::IString* Expression_factory::dump(
     std::ostringstream s;
     mi::base::Handle<IType_factory> tf( m_value_factory->get_type_factory());
     dump_static( transaction, tf.get(), anno, name, depth, s);
-    return new String( s.str().c_str());
+    return create_istring( s.str().c_str());
 }
 
 const mi::IString* Expression_factory::dump(
@@ -810,7 +801,7 @@ const mi::IString* Expression_factory::dump(
     std::ostringstream s;
     mi::base::Handle<IType_factory> tf( m_value_factory->get_type_factory());
     dump_static( transaction, tf.get(), block, name, depth, s);
-    return new String( s.str().c_str());
+    return create_istring( s.str().c_str());
 }
 
 const mi::IString* Expression_factory::dump(
@@ -822,7 +813,7 @@ const mi::IString* Expression_factory::dump(
     std::ostringstream s;
     mi::base::Handle<IType_factory> tf( m_value_factory->get_type_factory());
     dump_static( transaction, tf.get(), list, name, depth, s);
-    return new String( s.str().c_str());
+    return create_istring( s.str().c_str());
 }
 
 IExpression* Expression_factory::create_cast(
@@ -1039,7 +1030,6 @@ void Expression_factory::serialize_list(
 {
     const Expression_list* list_impl = static_cast<const Expression_list*>( list);
 
-    write( serializer, list_impl->m_name_index);
     write( serializer, list_impl->m_index_name);
 
     mi::Size size = list_impl->m_expressions.size();
@@ -1052,7 +1042,6 @@ IExpression_list* Expression_factory::deserialize_list( SERIAL::Deserializer* de
 {
     Expression_list* list_impl = new Expression_list( /*initial capacity*/ 0);
 
-    read( deserializer, &list_impl->m_name_index);
     read( deserializer, &list_impl->m_index_name);
 
     mi::Size size;
@@ -1195,7 +1184,6 @@ void Expression_factory::serialize_annotation_list(
 {
     const Annotation_list* list_impl = static_cast<const Annotation_list*>( list);
 
-    write( serializer, list_impl->m_name_index);
     write( serializer, list_impl->m_index_name);
 
     mi::Size size = list_impl->m_annotation_blocks.size();
@@ -1209,7 +1197,6 @@ IAnnotation_list* Expression_factory::deserialize_annotation_list(
 {
     Annotation_list* list_impl = new Annotation_list( /*initial_capacity*/ 0);
 
-    read( deserializer, &list_impl->m_name_index);
     read( deserializer, &list_impl->m_index_name);
 
     mi::Size size;
@@ -1228,8 +1215,6 @@ void Expression_factory::serialize_annotation_definition_list(
     const Annotation_definition_list* anno_def_list_impl
         = static_cast<const Annotation_definition_list*>( anno_def_list);
 
-    write( serializer, anno_def_list_impl->m_name_to_index);
-
     mi::Size size = anno_def_list_impl->m_anno_definitions.size();
     SERIAL::write( serializer, size);
     for( mi::Size i = 0; i < size; ++i)
@@ -1241,8 +1226,6 @@ IAnnotation_definition_list* Expression_factory::deserialize_annotation_definiti
     SERIAL::Deserializer* deserializer) const
 {
     Annotation_definition_list* list_impl = new Annotation_definition_list( /*initial_capacity*/ 0);
-
-    read( deserializer, &list_impl->m_name_to_index);
 
     mi::Size size;
     SERIAL::read( deserializer, &size);
@@ -1667,37 +1650,43 @@ Annotation_definition_list::Annotation_definition_list( mi::Size initial_capacit
     m_anno_definitions.reserve( initial_capacity);
 }
 
-const IAnnotation_definition* Annotation_definition_list::get_definition(mi::Size index) const
+const IAnnotation_definition* Annotation_definition_list::get_definition( mi::Size index) const
 {
-    if (index >= m_anno_definitions.size())
+    if( index >= m_anno_definitions.size())
         return nullptr;
 
     m_anno_definitions[index]->retain();
     return m_anno_definitions[index].get();
 }
 
-const IAnnotation_definition* Annotation_definition_list::get_definition(const char* name) const
+const IAnnotation_definition* Annotation_definition_list::get_definition( const char* name) const
 {
-    if (!name)
+    if( !name)
         return nullptr;
 
-    const auto& decl = m_name_to_index.find(name);
-    if (decl == m_name_to_index.end())
-        return nullptr;
+    // For typical list sizes a linear search is much faster than maintaining a map from names to
+    // indices.
+    for( const auto& anno_def: m_anno_definitions)
+        if( strcmp( anno_def->get_name(), name) == 0) {
+            anno_def->retain();
+            return anno_def.get();
+        }
 
-    m_anno_definitions[decl->second]->retain();
-    return m_anno_definitions[decl->second].get();
+    return nullptr;
 }
 
 mi::Sint32 Annotation_definition_list::add_definition( const IAnnotation_definition* anno_def)
 {
     if( !anno_def)
         return -1;
+
+    // A linear search is much faster than maintaining a map from names to indices.
     const char* name = anno_def->get_name();
-    if( m_name_to_index.find( name) != m_name_to_index.end())
-        return -2;
-    m_anno_definitions.push_back( mi::base::make_handle_dup(anno_def));
-    m_name_to_index[name] = m_anno_definitions.size() - 1;
+    for( const auto& anno_def: m_anno_definitions)
+        if( strcmp( anno_def->get_name(), name) == 0)
+            return -2;
+
+    m_anno_definitions.push_back( mi::base::make_handle_dup( anno_def));
     return 0;
 }
 
@@ -1705,14 +1694,12 @@ void Annotation_definition_list::add_definition_unchecked(
     const IAnnotation_definition* anno_def)
 {
     m_anno_definitions.push_back( mi::base::make_handle_dup( anno_def));
-    m_name_to_index[anno_def->get_name()] = m_anno_definitions.size() - 1;
 }
 
 mi::Size Annotation_definition_list::get_memory_consumption() const
 {
-    return sizeof(*this)
-        + dynamic_memory_consumption(m_name_to_index)
-        + dynamic_memory_consumption(m_anno_definitions);
+    return sizeof( *this)
+        + dynamic_memory_consumption( m_anno_definitions);
 }
 
 

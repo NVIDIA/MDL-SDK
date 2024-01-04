@@ -876,6 +876,41 @@ static bool handle_resource(
     return changed;
 }
 
+static void launch_subframe(
+    mi::examples::mdl::GL_display* gl_display,
+    int width,
+    int height,
+    CUfunction cuda_function,
+    Kernel_params *kernel_params)
+{
+    // Map diplay buffer, if present
+    if (gl_display) {
+        kernel_params->display_buffer =
+            reinterpret_cast<unsigned int*>(gl_display->map(0));
+    }
+
+    // Launch kernel
+    dim3 threads_per_block(16, 16);
+    dim3 num_blocks((width + 15) / 16, (height + 15) / 16);
+    void* params[] = { kernel_params };
+    check_cuda_success(cuLaunchKernel(
+        cuda_function,
+        num_blocks.x, num_blocks.y, num_blocks.z,
+        threads_per_block.x, threads_per_block.y, threads_per_block.z,
+        0, nullptr, params, nullptr));
+
+    kernel_params->iteration_start += kernel_params->iteration_num;
+
+    // Unmap again, if necessary
+    if (gl_display) {
+        gl_display->unmap(0);
+    }
+
+    // Make sure, any debug::print()s are written to the console
+    check_cuda_success(cuStreamSynchronize(0));
+
+}
+
 // Progressively render scene
 static void render_scene(
     const Options &options,
@@ -1261,72 +1296,68 @@ static void render_scene(
             mat_infos.push_back(mat_info);
         }
 
-        std::chrono::duration<double> state_update_time( 0.0 );
-        std::chrono::duration<double> render_time( 0.0 );
-        std::chrono::duration<double> display_time( 0.0 );
-        char stats_text[128];
-        int last_update_frames = -1;
-        auto last_update_time = std::chrono::steady_clock::now();
-        const std::chrono::duration<double> update_min_interval( 0.5 );
-
-        // Main render loop
-        while (true)
+        if (!options.opengl)
         {
-            std::chrono::time_point<std::chrono::steady_clock> t0;
+            kernel_params.resolution.x = width;
+            kernel_params.resolution.y = height;
+            kernel_params.accum_buffer = reinterpret_cast<float3*>(accum_buffer);
+            kernel_params.albedo_buffer = reinterpret_cast<float3*>(aux_albedo_buffer);
+            kernel_params.normal_buffer = reinterpret_cast<float3*>(aux_normal_buffer);
 
-            if (!options.opengl)
-            {
-                kernel_params.resolution.x = width;
-                kernel_params.resolution.y = height;
-                kernel_params.accum_buffer = reinterpret_cast<float3 *>(accum_buffer);
-                kernel_params.albedo_buffer = reinterpret_cast<float3 *>(aux_albedo_buffer);
-                kernel_params.normal_buffer = reinterpret_cast<float3 *>(aux_normal_buffer);
-
-
-                // Check if desired number of samples is reached
-                if (kernel_params.iteration_start >= options.iterations) {
-                    std::cout << "rendering done" << std::endl;
-
-                    save_result(
-                        accum_buffer, width, height,
-                        next_filename_base + filename_ext,
-                        image_api, mdl_impexp_api);
-
-                    save_result(
-                        aux_albedo_buffer, width, height,
-                        next_filename_base +  "_albedo" + filename_ext,
-                        image_api, mdl_impexp_api);
-
-                    save_result(
-                        aux_normal_buffer, width, height,
-                        next_filename_base + "_normal" + filename_ext,
-                        image_api, mdl_impexp_api);
-
-                    std::cout << std::endl;
-
-                    // All materials have been rendered? -> done
-                    if (kernel_params.current_material + 1 >= material_bundle.size())
-                        break;
-
-                    if (material_bundle[kernel_params.current_material].contains_hair_bsdf == 0)
-                        kernel_params.geometry = GT_SPHERE;
-                    else
-                        kernel_params.geometry = GT_HAIR;
-
-                    // Start new image with next material
-                    kernel_params.iteration_start = 0;
-                    ++kernel_params.current_material;
-                    next_filename_base =
-                        filename_base + "-" + to_string(kernel_params.current_material);
+            // render images for all materials
+            while (kernel_params.current_material < material_bundle.size()) {
+                // render scene
+                {
+                    Timing timing("rendering");
+                    while (kernel_params.iteration_start < options.iterations) {
+                        launch_subframe(gl_display, width, height, cuda_function, &kernel_params);
+                    }
                 }
 
-                std::cout
-                    << "rendering iterations " << kernel_params.iteration_start << " to "
-                    << kernel_params.iteration_start + kernel_params.iteration_num << std::endl;
+                save_result(
+                    accum_buffer, width, height,
+                    next_filename_base + filename_ext,
+                    image_api, mdl_impexp_api);
+
+                save_result(
+                    aux_albedo_buffer, width, height,
+                    next_filename_base + "_albedo" + filename_ext,
+                    image_api, mdl_impexp_api);
+
+                save_result(
+                    aux_normal_buffer, width, height,
+                    next_filename_base + "_normal" + filename_ext,
+                    image_api, mdl_impexp_api);
+
+                // All materials have been rendered? -> done
+                if (kernel_params.current_material + 1 >= material_bundle.size())
+                    break;
+
+                if (material_bundle[kernel_params.current_material].contains_hair_bsdf == 0)
+                    kernel_params.geometry = GT_SPHERE;
+                else
+                    kernel_params.geometry = GT_HAIR;
+
+                // Start new image with next material
+                kernel_params.iteration_start = 0;
+                ++kernel_params.current_material;
+                next_filename_base =
+                    filename_base + "-" + to_string(kernel_params.current_material);
             }
-            else
+        } else {
+            std::chrono::duration<double> state_update_time( 0.0 );
+            std::chrono::duration<double> render_time( 0.0 );
+            std::chrono::duration<double> display_time( 0.0 );
+            char stats_text[128];
+            int last_update_frames = -1;
+            auto last_update_time = std::chrono::steady_clock::now();
+            const std::chrono::duration<double> update_min_interval( 0.5 );
+
+            // Main render loop
+            while (true)
             {
-                t0 = std::chrono::steady_clock::now();
+                std::chrono::time_point<std::chrono::steady_clock> t0 =
+                    std::chrono::steady_clock::now();
 
                 // Check for termination
                 if (glfwWindowShouldClose(window))
@@ -1750,34 +1781,9 @@ static void render_scene(
                 state_update_time += t1 - t0;
                 t0 = t1;
 
-                // Map GL buffer for access with CUDA
-                kernel_params.display_buffer =
-                    reinterpret_cast<unsigned int *>(gl_display->map(0));
-            }
+                launch_subframe(gl_display, width, height, cuda_function, &kernel_params);
 
-
-            // Launch kernel
-            dim3 threads_per_block(16, 16);
-            dim3 num_blocks((width + 15) / 16, (height + 15) / 16);
-            void *params[] = { &kernel_params };
-            check_cuda_success(cuLaunchKernel(
-                cuda_function,
-                num_blocks.x, num_blocks.y, num_blocks.z,
-                threads_per_block.x, threads_per_block.y, threads_per_block.z,
-                0, nullptr, params, nullptr));
-
-
-            kernel_params.iteration_start += kernel_params.iteration_num;
-
-            // Make sure, any debug::print()s are written to the console
-            check_cuda_success(cuStreamSynchronize(0));
-
-            if (options.opengl)
-            {
-                // Unmap GL buffer
-                gl_display->unmap(0);
-
-                auto t1 = std::chrono::steady_clock::now();
+                t1 = std::chrono::steady_clock::now();
                 render_time += t1 - t0;
                 t0 = t1;
 
@@ -2310,7 +2316,8 @@ int MAIN_UTF8(int argc, char* argv[])
                 options.enable_auxiliary_output,
                 options.enable_pdf,
                 options.use_adapt_normal,
-                /*df_handle_mode=*/ "pointer");
+                /*df_handle_mode=*/ "pointer",
+                /*lambda_return_mode=*/ "value");
 
             // List of materials in the scene
             std::vector<Df_cuda_material> material_bundle;

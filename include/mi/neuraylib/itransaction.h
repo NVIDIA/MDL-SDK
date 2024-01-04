@@ -78,31 +78,28 @@ class IScope;
 /// <li> multiple #access() calls: Since all obtained interface pointers are const there is no
 ///      way to modify the database elements.</li>
 /// <li> #access() call after #edit() calls: The interface pointer returned from #access() reflects
-///      the changes as they are done to the interface pointer returned from the last #edit() call.
+///      the changes as they are done via the interface pointer returned from the last #edit() call.
 ///      \if IRAY_API Note that this use case is not supported for user-defined classes (classes
 ///      derived from #mi::neuraylib::IUser_class).\endif </li>
-/// <li> #edit() call after #access() calls: The changes done to the interface pointer returned from
-///      #edit() are not observable through any interface pointer returned from the #access() calls.
-///      </li>
-/// <li> multiple #edit() calls: The changes done to the individual interface pointers are not
-///      observable through the other interface pointers. The changes from the interface pointer
-///      from the last #edit() call survive, independent of the order in which the pointers are
-///      released.</li>
+/// <li> #edit() call after #access() calls: The changes done via the interface pointer returned
+///      from #edit() are not observable through any interface pointer returned from the #access()
+///      calls.</li>
+/// <li> multiple #edit() calls: The changes done via the individual interface pointers are not
+///      observable through the other interface pointers, except for the changes done via the
+///      interface pointer obtained first at the time the second interface pointer is obtained. The
+///      changes from the interface pointer from the last #edit() call survive, independent of the
+///      order in which the pointers are released.</li>
 /// </ul>
 /// \par
 /// Note that these semantics do not only apply to #access() and #edit() calls. They also apply
 /// to other API methods that access other database elements, e.g., #mi::IRef::get_reference(),
 /// which internally calls #access().
 ///
-/// \ifnot MDL_SDK_API
 /// \par Concurrent transactions
 /// If the same database element is edited in multiple overlapping transactions, the changes from
 /// the transaction created last survive, independent of the order in which the transactions are
-/// committed. If needed, the lifetime of transactions can be serialized across hosts (see
-/// #mi::neuraylib::IDatabase::lock() for details).
-/// \else
-/// \note The MDL SDK currently supports only one transaction at a time.
-/// \endif
+/// committed. \ifnot MDL_SDK_API If needed, the lifetime of transactions can be serialized across
+/// hosts (see #mi::neuraylib::IDatabase::lock() for details). \endif
 class ITransaction : public
     mi::base::Interface_declare<0x6ca1f0c2,0xb262,0x4f09,0xa6,0xa5,0x05,0xae,0x14,0x45,0xed,0xfa>
 {
@@ -118,14 +115,10 @@ public:
     ///                     - -3: The transaction is not open.
     virtual Sint32 commit() = 0;
 
-    /// \ifnot MDL_SDK_API
     /// Aborts the transaction.
     ///
     /// Note that an abort() implicitly closes the transaction.
     /// A closed transaction does not allow any future operations and needs to be released.
-    /// \else
-    /// This operation is not supported.
-    /// \endif
     virtual void abort() = 0;
 
     /// Indicates whether the transaction is open.
@@ -439,7 +432,7 @@ public:
     virtual Sint32 copy( const char* source, const char* target, Uint8 privacy = LOCAL_SCOPE) = 0;
 #endif
 
-    /// Removes the element with the name \p name from the database.
+    /// Marks the element with the name \p name for removal from the database.
     ///
     /// Note that the element continues to be stored in the database as long as it is referenced by
     /// other elements. If it is no longer referenced, and the last transaction were it was
@@ -456,7 +449,7 @@ public:
     /// See also \ref mi_neuray_database_reuse_of_names for more details and correct usage patterns.
     /// \endif
     ///
-    /// \param name           The name of the element in the database to remove.
+    /// \param name           The name of the element in the database to mark for removal.
     /// \param only_localized \if MDL_SDK_API Unused. \else If \c true, the element is only removed
     ///                       if it exists in the scope of the transaction; parent scopes are not
     ///                       considered. \endif

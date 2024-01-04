@@ -30,8 +30,8 @@
  ** \brief Header for the IMdl_discovery_definition implementation.
  **/
 
-#ifndef API_API_NEURAY_MDL_DISCOVERY_IMPL_H
-#define API_API_NEURAY_MDL_DISCOVERY_IMPL_H
+#ifndef API_API_NEURAY_NEURAY_MDL_DISCOVERY_API_IMPL_H
+#define API_API_NEURAY_NEURAY_MDL_DISCOVERY_API_IMPL_H
 
 #include <mi/neuraylib/imdl_discovery_api.h>
 #include <mi/neuraylib/imdl_archive_api.h>
@@ -604,4 +604,4 @@ class Mdl_discovery_result_impl
 
 } // namespace MI
 
-#endif // API_API_NEURAY_MDL_DISCOVERY_IMPL_H
+#endif // API_API_NEURAY_NEURAY_MDL_DISCOVERY_API_IMPL_H

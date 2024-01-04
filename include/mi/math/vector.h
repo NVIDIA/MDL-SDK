@@ -591,12 +591,16 @@ public:
     }
 
     /// Assignment.
+#if (__cplusplus >= 201103L)
+    Vector& operator= ( const Vector& other) = default;
+#else
     inline Vector& operator= ( const Vector& other)
     {
         for( Size i(0u); i < DIM; ++i)
             (*this)[i] = other[i];
         return *this;
     }
+#endif
 
     /// Assignment from a scalar, setting all elements to \p s.
     inline Vector& operator= ( T s)

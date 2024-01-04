@@ -1,0 +1,68 @@
+mdl 1.7;
+
+import ::df::*;
+import ::state::*;
+
+export struct lookup_value
+{
+    bool valid = true;
+    color value = color(0.25, 0.5, 0.75);
+    float alpha = 1.0f;
+};
+
+export color extract_value(lookup_value lookup = lookup_value())
+{
+    return lookup.valid ? lookup.value : color(1.0, 0.0, 1.0);
+}
+
+// we are interested in the default value and how it's preserved through USD
+export material main_defaults(
+    lookup_value lookup = lookup_value()
+) = material(
+    surface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(
+            tint: lookup.valid ? lookup.value : color(1.0, 0.0, 0.0))
+    ),
+    geometry: material_geometry(
+        cutout_opacity: lookup.valid ? lookup.alpha : 1.0
+    )
+);
+
+export material main_indirect(
+    color tint = extract_value(
+        lookup: lookup_value())
+) = material(
+    surface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(
+            tint: tint)
+    )
+);
+
+export color create_value(float scale = 0.5)
+{
+    return color(state::normal() * scale);
+}
+
+export color create_value_2(float scale_2 = 0.5)
+{
+    return color(state::normal() * scale_2);
+}
+
+// using state or other functions in constructors forces the creation of a default call
+export material main_array(
+    float a = 1.01,
+    float b = 1.0,
+    color[4] data = color[](
+        color(0.25, 0.5, 0.75),
+        color(::state::position() * a),
+        create_value(b),
+        create_value_2(b) // usa b second time
+    ),
+    int index = 0
+) = material(
+    surface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(
+            tint: (index < 0 || index >= 4) ? color(1.0, 0.0, 0.0) : data[index]
+            )
+    )
+);

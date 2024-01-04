@@ -117,8 +117,10 @@ Example_dxr::Example_dxr()
     : Base_application()
     , m_frame_buffer(nullptr)
     , m_output_buffer(nullptr)
-    , m_albedo_buffer(nullptr)
+    , m_albedo_diffuse_buffer(nullptr)
+    , m_albedo_glossy_buffer(nullptr)
     , m_normal_buffer(nullptr)
+    , m_roughness_buffer(nullptr)
     , m_pipeline{ nullptr, nullptr }
     , m_shader_binding_table{ nullptr, nullptr }
     , m_active_pipeline_index(0)
@@ -177,6 +179,34 @@ bool Example_dxr::initialize(Base_options* options)
 
 // ------------------------------------------------------------------------------------------------
 
+void Example_dxr::apply_dynamic_options()
+{
+    Base_dynamic_options* options = get_dynamic_options();
+    if (!options->get_restart_progressive_rendering())
+        return;
+
+    Scene_constants& scene_data = m_scene_constants->data();
+
+    // set active epression currently evaluated by the renderer
+    const std::string& active_lpe = options->get_active_lpe();
+    if (active_lpe == "albedo")
+        scene_data.display_buffer_index = static_cast<uint32_t>(Display_buffer_options::Albedo);
+    else if (active_lpe == "albedo_diffuse")
+        scene_data.display_buffer_index = static_cast<uint32_t>(Display_buffer_options::Albedo_Diffuse);
+    else if (active_lpe == "albedo_glossy")
+        scene_data.display_buffer_index = static_cast<uint32_t>(Display_buffer_options::Albedo_Glossy);
+    else if (active_lpe == "normal")
+        scene_data.display_buffer_index = static_cast<uint32_t>(Display_buffer_options::Normal);
+    else if (active_lpe == "roughness")
+        scene_data.display_buffer_index = static_cast<uint32_t>(Display_buffer_options::Roughness);
+    else
+        scene_data.display_buffer_index = static_cast<uint32_t>(Display_buffer_options::Beauty);
+
+    scene_data.restart_progressive_rendering();
+}
+
+// ------------------------------------------------------------------------------------------------
+
 bool Example_dxr::load()
 {
     Timing t("loading application");
@@ -204,7 +234,7 @@ bool Example_dxr::load()
         get_window()->get_width(), get_window()->get_height(),
         DXGI_FORMAT_R32G32B32A32_FLOAT, "RaytracingOutputBuffer");
 
-    m_output_buffer_uav = resource_heap->reserve_views(options->enable_auxiliary ? 4 : 2);
+    m_output_buffer_uav = resource_heap->reserve_views(options->enable_auxiliary ? 6 : 2);
     if (!resource_heap->create_unordered_access_view(m_output_buffer, m_output_buffer_uav))
         return false;
 
@@ -222,13 +252,22 @@ bool Example_dxr::load()
     // from the MDL material perspective albedo (approximation) and normals can be generated.
     if (options->enable_auxiliary)
     {
-        m_albedo_buffer = Texture::create_texture_2d(
+        m_albedo_diffuse_buffer = Texture::create_texture_2d(
             this, GPU_access::unorder_access,
             get_window()->get_width(), get_window()->get_height(),
-            DXGI_FORMAT_R32G32B32A32_FLOAT, "RaytracingAlbedoBuffer");
+            DXGI_FORMAT_R32G32B32A32_FLOAT, "RaytracingAlbedoDiffuseBuffer");
 
-        m_albedo_buffer_uav = m_output_buffer_uav.create_offset(2);
-        if (!resource_heap->create_unordered_access_view(m_albedo_buffer, m_albedo_buffer_uav))
+        m_albedo_diffuse_buffer_uav = m_output_buffer_uav.create_offset(2);
+        if (!resource_heap->create_unordered_access_view(m_albedo_diffuse_buffer, m_albedo_diffuse_buffer_uav))
+            return false;
+
+        m_albedo_glossy_buffer = Texture::create_texture_2d(
+            this, GPU_access::unorder_access,
+            get_window()->get_width(), get_window()->get_height(),
+            DXGI_FORMAT_R32G32B32A32_FLOAT, "RaytracingAlbedoGlossyBuffer");
+
+        m_albedo_glossy_buffer_uav = m_output_buffer_uav.create_offset(3);
+        if (!resource_heap->create_unordered_access_view(m_albedo_glossy_buffer, m_albedo_glossy_buffer_uav))
             return false;
 
         m_normal_buffer = Texture::create_texture_2d(
@@ -236,14 +275,25 @@ bool Example_dxr::load()
             get_window()->get_width(), get_window()->get_height(),
             DXGI_FORMAT_R32G32B32A32_FLOAT, "RaytracingNormalBuffer");
 
-        m_normal_buffer_uav = m_output_buffer_uav.create_offset(3);
+        m_normal_buffer_uav = m_output_buffer_uav.create_offset(4);
         if (!resource_heap->create_unordered_access_view(m_normal_buffer, m_normal_buffer_uav))
+            return false;
+
+        m_roughness_buffer = Texture::create_texture_2d(
+            this, GPU_access::unorder_access,
+            get_window()->get_width(), get_window()->get_height(),
+            DXGI_FORMAT_R32G32B32A32_FLOAT, "RaytracingRoughnessBuffer");
+
+        m_roughness_buffer_uav = m_output_buffer_uav.create_offset(5);
+        if (!resource_heap->create_unordered_access_view(m_roughness_buffer, m_roughness_buffer_uav))
             return false;
     }
     else
     {
-        m_albedo_buffer = nullptr;
+        m_albedo_diffuse_buffer = nullptr;
+        m_albedo_glossy_buffer = nullptr;
         m_normal_buffer = nullptr;
+        m_roughness_buffer = nullptr;
     }
 
     // create scene constants
@@ -273,14 +323,11 @@ bool Example_dxr::load()
     scene_data.uv_repeat = options->uv_repeat;
     scene_data.uv_saturate = options->uv_saturate;
 
-    scene_data.restart_progressive_rendering();
+    // apply the dynamic options
+    apply_dynamic_options();
 
-    if (options->lpe == "albedo")
-        scene_data.display_buffer_index = static_cast<unsigned>(Display_buffer_options::Albedo);
-    else if (options->lpe == "normal")
-        scene_data.display_buffer_index = static_cast<unsigned>(Display_buffer_options::Normal);
-    else
-        scene_data.display_buffer_index = static_cast<unsigned>(Display_buffer_options::Beauty);
+    // make sure we start with a fresh rendering
+    scene_data.restart_progressive_rendering();
 
     switch (get_window()->get_back_buffer()->get_format())
     {
@@ -979,11 +1026,15 @@ bool Example_dxr::update_rendering_pipeline()
 
         if (options->enable_auxiliary)
         {
-            // use register(u2,space0) for the albedo buffer
-            global_root_signature_dt.register_uav(2, 0, m_albedo_buffer_uav);
+            // use register(u2/u3,space0) for the albedo buffers
+            global_root_signature_dt.register_uav(2, 0, m_albedo_diffuse_buffer_uav);
+            global_root_signature_dt.register_uav(3, 0, m_albedo_glossy_buffer_uav);
 
-            // use register(u3,space0) for the normal buffer
-            global_root_signature_dt.register_uav(3, 0, m_normal_buffer_uav);
+            // use register(u4,space0) for the normal buffer
+            global_root_signature_dt.register_uav(4, 0, m_normal_buffer_uav);
+
+            // use register(u5,space0) for the roughness buffer
+            global_root_signature_dt.register_uav(5, 0, m_roughness_buffer_uav);
         }
 
         // use register(b0) and (b1) for camera and camera constants
@@ -1251,8 +1302,10 @@ bool Example_dxr::unload()
     delete m_scene;
     delete m_environment;
     delete m_output_buffer;
-    if (m_albedo_buffer) delete m_albedo_buffer;
+    if (m_albedo_diffuse_buffer) delete m_albedo_diffuse_buffer;
+    if (m_albedo_glossy_buffer) delete m_albedo_glossy_buffer;
     if (m_normal_buffer) delete m_normal_buffer;
+    if (m_roughness_buffer) delete m_roughness_buffer;
     delete m_frame_buffer;
     delete m_scene_constants;
     if (m_pipeline[0]) delete m_pipeline[0];
@@ -1429,6 +1482,10 @@ void Example_dxr::update(const Update_args& args)
         }
     }
 
+    // apply updates from settings
+    // ----------------------------------------------------------------------------------------
+    apply_dynamic_options();
+
     // update scene graph
     // ----------------------------------------------------------------------------------------
 
@@ -1603,15 +1660,23 @@ void Example_dxr::on_resize(size_t width, size_t height)
     get_resource_descriptor_heap()->create_unordered_access_view(
         m_frame_buffer, m_frame_buffer_uav);
 
-    if (m_albedo_buffer)
+    if (m_albedo_diffuse_buffer)
     {
-        m_albedo_buffer->resize(width, height);
+        m_albedo_diffuse_buffer->resize(width, height);
         get_resource_descriptor_heap()->create_unordered_access_view(
-            m_albedo_buffer, m_albedo_buffer_uav);
+            m_albedo_diffuse_buffer, m_albedo_diffuse_buffer_uav);
+
+        m_albedo_glossy_buffer->resize(width, height);
+        get_resource_descriptor_heap()->create_unordered_access_view(
+            m_albedo_glossy_buffer, m_albedo_glossy_buffer_uav);
 
         m_normal_buffer->resize(width, height);
         get_resource_descriptor_heap()->create_unordered_access_view(
             m_normal_buffer, m_normal_buffer_uav);
+
+        m_roughness_buffer->resize(width, height);
+        get_resource_descriptor_heap()->create_unordered_access_view(
+            m_roughness_buffer, m_roughness_buffer_uav);
     }
 
     m_camera_controls->get_target()->get_camera()->set_aspect_ratio(float(width) / float(height));
@@ -1708,7 +1773,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int nCmdSh
     {
         // run the application
         mi::examples::dxr::Example_dxr app;
-        return_code = app.run(&options, hInstance, nCmdShow);
+        mi::examples::dxr::Base_dynamic_options dynamic_options(&options);
+        return_code = app.run(&options, &dynamic_options, hInstance, nCmdShow);
     }
     LocalFree(argv);
 

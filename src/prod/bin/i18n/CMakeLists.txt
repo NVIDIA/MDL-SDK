@@ -68,17 +68,12 @@ create_from_base_preset(
 )
 
 # add mdl and other dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME} 
-    DEPENDS 
-        boost
+target_add_dependencies(TARGET ${PROJECT_NAME}
+    DEPENDS
         ${LINKER_START_GROUP}
-        mdl::api-api-mdl
-        mdl::base-hal-disk
-        mdl::base-hal-hal
-        mdl::base-lib-tinyxml2
-        mdl::base-system-main
-        base-util-string_utils
+        ${LINKER_DEPENDENCIES_BASE}
         ${LINKER_END_GROUP}
+        boost
     )
 
 # -------------------------------------------------------------------------------------------------
@@ -87,8 +82,3 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
 add_target_install(
     TARGET ${PROJECT_NAME}
     )
-
-# -------------------------------------------------------------------------------------------------
-# Add tests if available
-# -------------------------------------------------------------------------------------------------
-add_tests(POST)

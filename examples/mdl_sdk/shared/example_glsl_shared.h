@@ -128,7 +128,11 @@ static void add_shader(GLenum shader_type, const std::string& source_code, GLuin
     GLint success;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
     if (!success) {
-        dump_shader_info(shader, "Error compiling the fragment shader: ");
+        dump_shader_info(
+            shader,
+            shader_type == GL_VERTEX_SHADER ?
+                "Error compiling the vertex shader: " :
+                "Error compiling the fragment shader: ");
         terminate();
     }
     glAttachShader(program, shader);

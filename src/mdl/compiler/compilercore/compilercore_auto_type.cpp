@@ -157,10 +157,11 @@ private:
 // Fix the type by applying type modifiers.
 IType const *AT_check::fix_type(IType const *type, IType::Modifiers mod)
 {
-    if (mod == IType::MK_VARYING)
+    if (mod == IType::MK_VARYING) {
         type = m_tc.decorate_type(type->skip_type_alias(), IType::MK_VARYING);
-    else if (mod == IType::MK_UNIFORM || mod == IType::MK_CONST)
+    } else if (mod == IType::MK_UNIFORM || mod == IType::MK_CONST) {
         type = m_tc.decorate_type(type->skip_type_alias(), IType::MK_UNIFORM);
+    }
     return type;
 }
 
@@ -375,8 +376,9 @@ static IType const *needs_uniform_condition(IType const *type)
                     s_type->get_field(i, f_type, f_sym);
 
                     IType const *bad_type = needs_uniform_condition(f_type);
-                    if (bad_type != NULL)
+                    if (bad_type != NULL) {
                         return bad_type;
+                    }
                 }
                 return NULL;
             }
@@ -711,8 +713,9 @@ bool AT_check::pre_visit(IDeclaration_variable *var_decl)
         }
 
         IType const *v_type = v_def->get_type();
-        if (is<IType_error>(v_type))
+        if (is<IType_error>(v_type)) {
             continue;
+        }
 
         Dependence_graph::Node *v_node = m_dg.get_node(v_def);
         MDL_ASSERT(v_node != NULL && "local has no node in dependence graph");
@@ -786,8 +789,9 @@ void AT_analysis::AT_visitor::visit_cg_node(Call_node *node, ICallgraph_visitor:
         Definition const *def     = node->get_definition();
         Definition const *def_def = def->get_definite_definition();
 
-        if (def_def != NULL)
+        if (def_def != NULL) {
             def = def_def;
+        }
 
         if (def->get_original_import_idx() == 0 && !def->has_flag(Definition::DEF_IS_DECL_ONLY)) {
             if (def->get_owner_module_id() != m_curr_mod_id) {
@@ -868,16 +872,18 @@ static void add_extra_control_dependence(
 
         // check for uplinks
         ctrl_id = ctrl_node->get_control_uplink();
-        if (ctrl_id == 0)
+        if (ctrl_id == 0) {
             break;
+        }
     }
 }
 
 // Add control dependence to the given node is one exists.
 void AT_analysis::add_control_dependence(size_t node_id)
 {
-    if (m_control_stack.empty())
+    if (m_control_stack.empty()) {
         return;
+    }
 
     Dependence_graph::Id_type ctrl_id = m_control_stack.top();
 
@@ -891,8 +897,9 @@ void AT_analysis::add_control_dependence(size_t node_id)
 // Set the control dependence uplink to the given node if one exists.
 void AT_analysis::set_control_dependence_uplink(size_t node_id)
 {
-    if (m_control_stack.empty())
+    if (m_control_stack.empty()) {
         return;
+    }
 
     Dependence_graph::Id_type ctrl_id = m_control_stack.top();
 
@@ -923,8 +930,9 @@ static void set_function_qualifier(
 void AT_analysis::check_auto_types(IDeclaration_function *decl)
 {
     Definition const *def = impl_cast<Definition>(decl->get_definition());
-    if (is_error(def))
+    if (is_error(def)) {
         return;
+    }
 
     IType_function const *f_type   = cast<IType_function>(def->get_type());
     IType const          *ret_type = f_type->get_return_type();
@@ -1018,29 +1026,9 @@ void AT_analysis::check_auto_types(IDeclaration_function *decl)
     at_checker.process(decl);
 }
 
-// Process a function given by its definition.
-void AT_analysis::process_function(Definition const *def)
+// Creates the dependency graph for the given definition.
+void AT_analysis::init_dependency_graph(Definition const *fkt_def)
 {
-    if (IDeclaration const *decl = def->get_declaration()) {
-        // found a function in the current module that is defined there, visit it
-
-        Flag_store has_varying_call(m_has_varying_call, false);
-        Flag_store is_uniform(m_curr_func_is_uniform, def->has_flag(Definition::DEF_IS_UNIFORM));
-
-        visit(decl);
-    }
-}
-
-// start of a function
-bool AT_analysis::pre_visit(IDeclaration_function *decl)
-{
-    Definition const *fkt_def = impl_cast<Definition>(decl->get_definition());
-
-    if (is_error(fkt_def)) {
-        // something really bad here, even the type is broken. stop traversal.
-        return false;
-    }
-
     // create the dependence graph and enter it
     m_dg = m_builder.create<Dependence_graph>(&m_arena, fkt_def->get_sym()->get_name());
 
@@ -1055,15 +1043,59 @@ bool AT_analysis::pre_visit(IDeclaration_function *decl)
 #ifdef ENABLE_ASSERT
     node =
 #endif
-    m_dg->create_aux_node(Dependence_graph::Node::NK_RETURN_VALUE, ret_type);
+        m_dg->create_aux_node(Dependence_graph::Node::NK_RETURN_VALUE, ret_type);
     MDL_ASSERT(node->get_id() == return_value_id);
 
     // create the one and only variadic call node
 #ifdef ENABLE_ASSERT
     node =
 #endif
-    m_dg->create_aux_node(Dependence_graph::Node::NK_VARYING_CALL, NULL);
+        m_dg->create_aux_node(Dependence_graph::Node::NK_VARYING_CALL, NULL);
     MDL_ASSERT(node->get_id() == varying_call_id);
+}
+
+// Close and destroy the dependency graph for the given declaration.
+void AT_analysis::close_dependency_graph(IDeclaration const *decl)
+{
+    // if the function is badly broken, we don't have a dependence graph
+    if (m_dg != NULL) {
+        // This is ugly: the dependence graph is on the Arena but contains STL objects on the
+        // heap so call the destructor ...
+        m_dg->~Dependence_graph();
+        m_dg = NULL;
+    }
+}
+
+// Process a function given by its definition.
+void AT_analysis::process_function(Definition const *def)
+{
+    if (IDeclaration const *decl = def->get_declaration()) {
+        // found a function in the current module that is defined there, visit it
+
+        Flag_store has_varying_call(m_has_varying_call, false);
+        Flag_store is_uniform(m_curr_func_is_uniform, def->has_flag(Definition::DEF_IS_UNIFORM));
+
+        init_dependency_graph(def);
+
+        visit(decl);
+
+        close_dependency_graph(decl);
+    }
+}
+
+// start of a function
+bool AT_analysis::pre_visit(IDeclaration_function *decl)
+{
+    Definition const *fkt_def = impl_cast<Definition>(decl->get_definition());
+
+    if (is_error(fkt_def)) {
+        // something really bad here, even the type is broken. stop traversal.
+        return false;
+    }
+
+    // create the return node, it has always the ID <return_value_id>
+    IType_function const *fkt_type = cast<IType_function>(fkt_def->get_type());
+    IType const          *ret_type = fkt_type->get_return_type();
 
     if (fkt_def->has_flag(Definition::DEF_IS_UNIFORM)) {
         IType::Modifiers mod = get_type_modifiers(ret_type);
@@ -1097,28 +1129,20 @@ void AT_analysis::post_visit(IDeclaration_function *decl)
     MDL_ASSERT(m_context_stack.empty());
     MDL_ASSERT(m_loop_stack.empty());
 
-    // if the function is badly broken, we don't have a dependence graph
-    if (m_dg != NULL) {
-        // do not analyze presets, these are not call function bodies
-        if (!decl->is_preset()) {
-            if (m_opt_dump_dg) {
-                dump_dg("_dg_before");
-            }
-
-            // build the auto types
-            m_dg->calc_auto_types();
-
-            if (m_opt_dump_dg) {
-                dump_dg("_dg_after");
-            }
-
-            check_auto_types(decl);
+    // do not analyze presets, these are not call function bodies
+    if (!decl->is_preset()) {
+        if (m_opt_dump_dg) {
+            dump_dg("_dg_before");
         }
 
-        // This is ugly: the dependence graph is on the Arena but contains STL objects on the
-        // heap so call the destructor ...
-        m_dg->~Dependence_graph();
-        m_dg = NULL;
+        // build the auto types
+        m_dg->calc_auto_types();
+
+        if (m_opt_dump_dg) {
+            dump_dg("_dg_after");
+        }
+
+        check_auto_types(decl);
     }
 }
 
@@ -1128,9 +1152,10 @@ bool AT_analysis::pre_visit(IDeclaration_variable *decl)
     IType_name const *tname = decl->get_type_name();
     visit(tname);
 
-    Dependence_graph::Id_type control_boundary = 0;     
-    if (!m_control_stack.empty())
+    Dependence_graph::Id_type control_boundary = 0;
+    if (!m_control_stack.empty()) {
         control_boundary = m_control_stack.top();
+    }
 
     for (size_t i = 0, n = decl->get_variable_count(); i < n; ++i) {
         ISimple_name const *vname   = decl->get_variable_name(i);
@@ -1189,8 +1214,9 @@ bool AT_analysis::pre_visit(IStatement_if *stmt)
         IStatement const *t = stmt->get_then_statement();
         visit(t);
 
-        if (IStatement const *e = stmt->get_else_statement())
+        if (IStatement const *e = stmt->get_else_statement()) {
             visit(e);
+        }
     }
 
     // do not visit children anymore
@@ -1286,8 +1312,9 @@ bool AT_analysis::pre_visit(IStatement_for *stmt)
     {
         Stack_scope<Dependency_stack> scope(m_control_stack, node->get_id());
 
-        if (IExpression const *upd = stmt->get_update())
+        if (IExpression const *upd = stmt->get_update()) {
             visit(upd);
+        }
 
         IStatement const *body = stmt->get_body();
         visit(body);
@@ -1518,6 +1545,9 @@ bool AT_analysis::pre_visit(IExpression_call *expr)
     if (ref == NULL) {
         // error, ignore dependencies
         ignore_param_deps = true;
+
+        // propagate dependencies
+        visit(expr->get_reference());
     } else {
         if (ref->is_array_constructor()) {
             // array constructors are uniform calls 
@@ -1559,8 +1589,9 @@ bool AT_analysis::pre_visit(IExpression_call *expr)
         }
     }
 
-    if (ignore_param_deps)
+    if (ignore_param_deps) {
         def = NULL;
+    }
 
     IType_function const *fkt_type = def != NULL ? cast<IType_function>(def->get_type()) : NULL;
 
@@ -1630,12 +1661,14 @@ bool AT_analysis::pre_visit(IParameter *param)
     visit(sname);
 
     /// Get the initializing expression.
-    if (IExpression const *init = param->get_init_expr())
+    if (IExpression const *init = param->get_init_expr()) {
         visit(init);
+    }
 
     /// Get the annotation block.
-    if (IAnnotation_block const *anno = param->get_annotations())
+    if (IAnnotation_block const *anno = param->get_annotations()) {
         visit(anno);
+    }
 
     // do not visit children
     return false;

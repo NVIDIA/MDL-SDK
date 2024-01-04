@@ -43,6 +43,7 @@ namespace mi { namespace neuraylib
 namespace mi { namespace examples { namespace mdl_d3d12
 {
     class Base_application;
+    class Base_dynamic_options;
     class Camera_controls;
     class Mdl_material;
     class Scene;
@@ -88,7 +89,9 @@ namespace mi { namespace examples { namespace dxr
     private:
         Example_dxr* m_app;
         Scene_constants* m_scene_data;
+        mdl_d3d12::Base_dynamic_options* m_dynamic_options;
         const Example_dxr_options* m_options;
+        uint32_t m_current_output_buffer_index;
         uint32_t m_default_output_buffer_index;
         bool m_enable_firefly_clamping;
         bool m_enable_animation;

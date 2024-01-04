@@ -26,471 +26,411 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 
-/** \file i_db_access.h
- ** \brief This declares the access classes used to access database elements
- **
- ** This file declares the access classes used to access database elements.
- **/
-
 #ifndef BASE_DATA_DB_I_DB_ACCESS_H
 #define BASE_DATA_DB_I_DB_ACCESS_H
 
 #include "i_db_element.h"
-#include <base/lib/log/i_log_assert.h>
+#include "i_db_info.h"
+#include "i_db_journal_type.h"
 
-namespace MI
-{
+#include <base/system/main/i_assert.h>
+
+namespace MI {
 
 namespace SCHED { class Job; }
 
-namespace DB
-{
+namespace DB {
 
 class Transaction;
-class Info;
-template <class T> class Edit;
 
-/// Base class for Access smart pointers. This is needed to allow
-/// obtaining a specialized Access pointer from an Access pointer to
-/// Element_base.
+/// Base class for Access and Edit smart pointers.
 ///
-/// This base class implements the full Access and Edit logic in a
-/// shared and untyped way.  Use with great care and prefer the
-/// Access<T> and Edit<T> templates below for a type safe way of
-/// accessing DB elements whenever possible. This class is useful to
-/// efficiently implement things like Access and Edit handling in the
-/// neuray C++ API or access caches, which guarantee the type safety
-/// themselves.
+/// The Access and Edit smart pointers simplify accessing and editing database elements and hide the
+/// details of DB::Transaction and DB::Info. This base class implements the full Access and Edit
+/// logic in a shared and untyped way. It is used by the API. Other users are most likely better off
+/// using the derived classes Access<T> and Edit<T>.
 ///
-/// An Access_base represents an Edit whenever m_edit is true. Edits
-/// cannot be copied or assigned, but they can be copied or assigned
-/// to accesses. So, copy and assignment in Access_base have special
-/// case handling to keep the m_edit only on the source argument and
-/// change the target to be an access.
+/// An instance of Access_base represents an Edit whenever m_edit is true. Edits cannot be copied
+/// or assigned, they are treated as Access if they appear as source of such an operation (and the
+/// target is Access, or Access_base). Accesses can not be assigned to Edits.
 ///
+/// See #mi::neuraylib::ITransaction for semantics of concurrent accesses to the very same database
+/// element within one particular transaction.
+///
+/// Implementation of non-inline methods is in base/data/dblight/dblight_ačcess.cpp.
 class Access_base
 {
-  public:
-    /// Default constructor
-    Access_base();
-
-    /// Copy constructor
-    /// Edits become accesses upon copying
-    Access_base( const Access_base& access);
-
-    /// Assignment operator
-    /// Edits become accesses upon copying
-    Access_base& operator=( const Access_base& access);
-
-    /// Destructor
-    ~Access_base();
-
-    /// Return the pointer to the job, if this is a job or NULL, otherwise.
-    /// \return                         The job
-    const SCHED::Job* get_job() const;
-
-    /// Get the transaction this object belongs to
-    /// \return                         The transaction
-    Transaction* get_transaction() const { return m_transaction; }
-
-    /// Return the tag this object references.
-    /// \return                         The tag
-    Tag get_tag() const { return m_tag; }
-
-    /// Return the base pointer to the DB element
-    const Element_base* get_base_ptr() const { return m_pointer; }
-
-    /// Return the base pointer to the DB element
-    Element_base* get_base_ptr() { return m_pointer; }
-
-    /// Check if the pointer is set to a valid tag or to 0.
-    /// \return                         True if it is set to a valid tag, 0 otherwise.
-    bool is_valid() const { return m_info != nullptr; }
-
-    /// Return whether pointer is set to a valid tag.
-    /// \return                         True if it is set to a valid tag, 0 otherwise.
-    bool operator!() const { return !this->is_valid(); }
-
-    /// Get the unique id of a certain tag version. The result of a database lookup on a certain
-    /// tag depends on the asking transaction and may return different versions for different
-    /// transactions. For caching data derived from the tag, such a unique id uniquely
-    /// identifies the actual version of the tag obtained from a certain transaction. This
-    /// means, that it may be used to identify this version. The database guarantees, that any
-    /// legal change to the data (done through an edit) will also change this id.
-    /// NOTE: The value obtained is valid host locally, only.
-    /// \return                 The tag version
-    Tag_version get_tag_version() const;
-
-    /// Set this access to point to a new tag, possibly within a new transaction.
-    ///
-    /// Will set the class to point to a new element. Note that the execution
-    /// context stays the same as before. This will unpin an old element
-    /// if necessary.
-    /// If the argument is 0, then only the old element will be unpinned (if it
-    /// was pointing somewhere) because 0 is no valid tag.
-    ///
-    /// \param tag                      The new tag
-    /// \param transaction              The new transaction
-    /// \param id                       The expected class id of the new tag.
-    /// \param wait                     Should the access wait if the tag is not yet available
-    ///                                 or return immediately?
-    Element_base* set_access( Tag tag,
-                              Transaction* transaction,
-                              SERIAL::Class_id id,
-                              bool wait = true);
-
 private:
-    /// Set this access to point to the same as source
-    ///
-    /// Used to implement copy constructor and assignment operator.
-    ///
-    /// \param source                   The source for copying.
-    Element_base* set_access( const Access_base& source);
+    /// Helper type for the conversion to bool via this intermediate type (such that the bool is
+    /// not implicitly converted to another type).
+    using unknown_bool_type = bool (Access_base::*)() const;
 
 public:
-    /// Set this to edit a new tag, possibly within a new transaction.
-    ///
-    /// Will set the class to point to a new element. Note that the execution
-    /// context stays the same as before. This will unpin an old element
-    /// if necessary.
-    /// If the argument is 0, then only the old element will be unpinned (if it
-    /// was pointing somewhere) because 0 is no valid tag.
-    ///
-    /// \param tag                      The new tag
-    /// \param transaction              The new transaction
-    /// \param id                       The expected class id of the new tag.
-    /// \param journal type             The initial journal flags of this edit.
-    Element_base* set_edit( Tag tag,
-                            Transaction* transaction,
-                            SERIAL::Class_id id,
-                            Journal_type journal_type);
+    /// \name Constructors etc.
 
-    /// Returns true if this is an edit and false if this is an access.
+    /// Constructor.
+    Access_base() = default;
+
+    /// Copy constructor.
+    ///
+    /// Ignores the \c m_is_edit flag on \p other, i.e., copies an Edit as if it as an Access.
+    Access_base( const Access_base& other);
+
+    /// Assignment operator.
+    ///
+    /// Ignores the \c m_is_edit flag on \p other, i.e., assigns an Edit as if it as an Access.
+    /// Asserts if \c m_is_edit on \c *this is set.
+    Access_base& operator=( const Access_base& other);
+
+    /// Destructor.
+    ///
+    /// Finishes edits, see #Transaction::finish_edit().
+    ~Access_base();
+
+    //@}
+    /// \name Properties
+    //@{
+
+    /// Indicates whether the access/edit is valid.
+    bool is_valid() const { return m_info != nullptr; }
+
+    /// Conversion to bool, returns \c true for valid accesses/edits.
+    operator unknown_bool_type() const { return is_valid() ? &Access_base::is_valid : nullptr; }
+
+    /// Indicates whether this instance represents an edit (or access).
     bool is_edit() const { return m_is_edit; }
 
-    /// Return the journal flags
+    /// Returns the referenced tag.
+    Tag get_tag() const { return m_tag; }
+
+    /// Returns the corresponding transaction. Can be \c NULL after construction. RCS:NEU
+    Transaction* get_transaction() const { return m_transaction; }
+
+    /// Returns the referenced tag version.
+    Tag_version get_tag_version() const;
+
+    /// Returns the referenced DB element (or DB job result). Can be \c NULL. RCS:NEU
+    const Element_base* get_base_ptr() const { return m_element; }
+
+    /// Returns the referenced DB element (or DB job result). Can be \c NULL. RCS:NEU
+    Element_base* get_base_ptr() { return m_is_edit ? m_element : nullptr; }
+
+    /// Returns the referenced DB job, or \c NULL if this does not reference a DB job. RCS:NEU
+    const SCHED::Job* get_job() const;
+
+    /// Returns the journal flags accumulated so far.
     ///
-    /// \return                         The journal flags accumulated during this edit.
+    /// Always JOURNAL_NONE for accesses.
     Journal_type get_journal_flags() const { return m_journal_type; }
 
-    /// Set the journal flags of the edit. This can be done until the edit goes out of scope or set
-    /// is used to let it point to a different tag. This is meant to be used, when journal flags
-    /// are not known from the beginning but become clear, later. This is efficient and can be used
-    /// many times and always overwrites the old flags. Together with get_journal_flags it can be
-    /// used to add the flags successively. Precondition: this has to be an edit.
+    //@}
+    /// \name
+    //@{
+
+    /// Sets an access to a given tag, possibly within a new transaction.
     ///
-    /// \param type                     The new set of journal flags
-    void set_journal_flags( Journal_type type) { 
-        ASSERT(M_DB, m_is_edit);
-        m_journal_type = type;
+    /// Note that this method does not allow to restore the state after construction. A
+    /// default-constructed value for \p tag is valid, but a \c NULL value for \p transaction keeps
+    /// the current transaction. Use the copy constructor or assignment operator to reset the
+    /// state. (Access has a reset() method, but not Edit.)
+    ///
+    /// \param tag           The new tag.
+    /// \param transaction   The new transaction. Pass \c NULL to keep the current transaction.
+    ///                      RCS:NEU
+    /// \param id            The expected class ID of the new tag. Used for assertions.
+    /// \return              The referenced database element. RCS:NEU
+    Element_base* set_access(
+        Tag tag, Transaction* transaction, SERIAL::Class_id id);
+
+    /// Sets an edit to a given tag, possibly within a new transaction.
+    ///
+    /// \param tag           The new tag.
+    /// \param transaction   The new transaction. Pass \c NULL to keep the current transaction.
+    ///                      RCS:NEU
+    /// \param id            The expected class ID of the new tag. Used for assertions.
+    /// \param journal_type  The initial journal flags of this edit.
+    /// \return              The referenced database element. RCS:NEU
+    Element_base* set_edit(
+        Tag tag, Transaction* transaction, SERIAL::Class_id id, Journal_type journal_type);
+
+    /// Sets the journal flags of an edit.
+    ///
+    /// Local copy of the journal flags. Transmitted to the database by the destructor.
+    void set_journal_flags( Journal_type journal_type)
+    {
+        MI_ASSERT( m_is_edit);
+        m_journal_type = journal_type;
     }
 
-    /// Add journal flags to the edit. This can be done until the edit goes out of scope or set
-    /// is used to let it point to a different tag. This is meant to be used, when journal flags
-    /// are not known from the beginning but become clear, later. This is efficient and can be used
-    /// many times to aggregate flags. Precondition: this has to be an edit.
+    /// Adds journal flags to the journal flags of an edit.
     ///
-    /// \param type                     The new set of journal flags
-    void add_journal_flags( Journal_type type) { 
-        ASSERT(M_DB, m_is_edit);
-        m_journal_type.add_journal( type);
+    /// Local copy of the journal flags. Transmitted to the database by the destructor.
+    void add_journal_flags( Journal_type journal_type)
+    {
+        MI_ASSERT( m_is_edit);
+        m_journal_type.add_journal( journal_type);
     }
 
-    /// Clear the transaction pointer.
+    /// Clears the transaction pointer of an access.
     ///
-    /// This method is used by the API to avoid uninteded use of the transaction pointer.
-    /// Under some circumstances, Access_base's are shared across transactions. This method
-    /// is a safety measure to avoid unintended use of the transaction pointer in such cases.
+    /// This method is used by the API to avoid unintended use of the transaction pointer. Under
+    /// some circumstances, instances of this class are shared across transactions. This method is
+    /// a safety measure to avoid unintended use of the transaction pointer in such cases.
     ///
-    /// Note that this method must not be called if m_is_edit is true, because cleanup()
-    /// will use the transaction pointer in this case.
+    /// This method must only be called for accesses, not for edits.
     void clear_transaction();
-    
-private:
-    /// Unpin old m_info with proper edit cleanup handling before the
-    /// access/edit is used for a new tag. No longer an edit afterwards.
+
+    //@}
+
+protected:
+    /// Resets the access or edit to the default-constructed state with exception of the
+    /// transaction.
+    ///
+    /// Finishes edits (and switches back to access).
     void cleanup();
 
 private:
-    /// The pointer to the DB element
-    Element_base* m_pointer;
+    /// Sets this access to point to the same DB element as another one.
+    ///
+    /// Used to implement copy constructor and assignment operator.
+    ///
+    /// \return              The referenced database element. RCS:NEU
+    Element_base* set_access( const Access_base& other);
 
-    /// The tag for the access
-    Tag           m_tag;
-
-    /// The transaction for the access
-    Transaction*  m_transaction;
-
-    /// The info for the accessed version.
-    Info*         m_info;
-
-    /// The journal type for changes
-    Journal_type  m_journal_type;
-
-    /// The state if this is an edit or an access.
-    bool          m_is_edit;
+    Element_base* m_element = nullptr;      ///< The referenced DB element.
+    Transaction* m_transaction = nullptr;   ///< The corresponding transaction.
+    Info* m_info = nullptr;                 ///< The referenced Info.
+    Tag m_tag;                              ///< The referenced tag.
+    Journal_type m_journal_type;            ///< The journal flags accumulated so far.
+    bool m_is_edit = false;                 ///< Edit or access
 };
 
-/// This is used by jobs and applications to read database elements. It will ensure that the type of
-/// the accessed tag and the type of the pointer match. The pointers hides all pinning and unpinning
-/// on elements in the cache. It also hides the selection of the correct version of the tag
-/// depending on the database context.
-/// Example for the usage:
-///  {
-///      ...
+/// Smart pointer for accesses to database elements.
 ///
-///       // Get a read-only pointer to a texture identified by the tag 5. The
-///      // database will ensure that tag 5 is of type Texture!
-///      Access<Texture> texture(5, transaction);
+/// \note This class only uses assertions to detect mismatches between the template parameters and
+///       the type of the database element. Input validation must be done upfront by other means,
+///       e.g., DB::Transaction::get_class_id().
 ///
-///      // Use the smart pointer in the same way a pointer to a texture would
-///      // be used. Note that trying to change the data would result in a
-///     // compile time error message!
-///      int width = texture->get_width();
+/// Example:
 ///
-///      ...
-///
-///       // Leaving the current scope will unpin the texture
+/// \code
+/// {
+///     Transaction* transaction = ...;
+///     // Obtain a (const) smart pointer to a texture identified by the tag 5.
+///     Access<Texture> texture( 5, transaction);
+///     // Retrieve some property of the texture.
+///     int width = texture->get_width();
+///     // Leaving the current scope will release the texture held by the smart pointer.
 ///  }
-///
-/// The WAIT template parameter decides, if the access will wait for the element to be created
-/// or transmitted over the network etc. if it is not locally available
-template <class T, bool WAIT = true> class Access : public Access_base
+/// \endcode
+template <class T>
+class Access : public Access_base
 {
-  public:
+public:
     /// Default constructor.
-    Access() {}
+    Access() = default;
 
-    /// Constructor.
+    /// Constructs an access to a given tag.
     ///
-    /// \param tag                      The tag to access
-    /// \param transaction              The transaction for the access
-    Access( const Typed_tag<T>& tag, Transaction* transaction)
+    /// \param tag           The tag.
+    /// \param transaction   The transaction. RCS:NEU
+    Access( Tag tag, Transaction* transaction)
     {
-        set_access(tag.get_untyped(), transaction, T::id, WAIT);
-        ASSERT(M_DB, !T::id || !get_base_ptr() || get_base_ptr()->is_type_of(T::id));
+        set_access( tag, transaction, T::id);
+        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
     }
 
     /// Copy constructor.
-    ///
-    /// \param source                   The source access object.
-    Access( const Access_base& source)
-        : Access_base( source)
+    Access( const Access_base& other)
+      : Access_base( other)
     {
-        ASSERT(M_DB, !T::id || !get_base_ptr() || get_base_ptr()->is_type_of(T::id));
+        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
     }
 
-    /// Copy constructor.
-    ///
-    /// \param source                   The source access object.
-    Access( const Access<T, WAIT>& source)
-        : Access_base( source)
+    /// Assignment operator.
+    Access<T>& operator=( const Access_base& other)
     {
-        ASSERT(M_DB, !T::id || !get_base_ptr() || get_base_ptr()->is_type_of(T::id));
+        Access_base::operator=( other);
+        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
+        return *this;
     }
 
-     /// Destructor
-    ~Access() {}
+    /// Destructor.
+    ~Access() = default;
 
-    /// Will set the class to point to a new element. Note that the execution context stays the
-    /// same as before. This will unpin an old element if necessary.
-    /// If the argument is 0, then only the old element will be unpinned (if it was pointing
-    /// somewhere) because 0 is no valid tag.
+    /// Sets an access to a given tag, possibly within a new transaction.
     ///
-    /// \param tag                      The new tag
-    /// \param transaction              The new transaction
-    void set( Typed_tag<T> const & tag = Typed_tag<T>(),
-              Transaction* transaction = 0)
+    /// Note that this method does not allow to restore the state after construction. A
+    /// default-constructed value for \p tag is valid, but a \c NULL value for \p transaction keeps
+    /// the current transaction. Use #reset() for that.
+    ///
+    /// \param tag           The new tag to access.
+    /// \param transaction   The new transaction. Pass \c NULL to keep the current transaction.
+    ///                      RCS:NEU
+    /// \param id            The expected class ID of the new tag. Used for assertions.
+    void set( Tag tag = Tag(), Transaction* transaction = nullptr)
     {
-        set_access(tag.get_untyped(), transaction, T::id, WAIT);
-        ASSERT(M_DB, !T::id || !get_base_ptr() || get_base_ptr()->is_type_of(T::id));
+        set_access( tag, transaction, T::id);
+        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
     }
 
-    /// Resets the access
-    void reset()
-    {
-        set_access(DB::Tag(), nullptr, T::id, WAIT);
-        clear_transaction();
-    }
+    /// Resets the access to the default-constructed state with exception of the transaction.
+    void reset() { cleanup(); }
 
-    /// Set the access object to the same values as the source
+    /// Member access operator (const).
     ///
-    /// \param source                   The source access object.
-    void operator=( const Access<T,WAIT>& source)
-    {
-        Access_base::operator=( source);
-        ASSERT(M_DB, !T::id || !get_base_ptr() || get_base_ptr()->is_type_of(T::id));
-    }
-
-    /// Set the access object to the same values as the source
-    ///
-    /// \param source                   The source access object.
-    void operator=( const Access_base& source)
-    {
-        Access_base::operator=( source);
-        ASSERT(M_DB, !T::id || !get_base_ptr() || get_base_ptr()->is_type_of(T::id));
-    }
-
-    /// Access operator. This is const because it does not allow jobs and applications to change
-    /// database elements.
-    ///
-    /// \return                         The pointer this points to.
+    /// \return   The referenced DB element. Might not be valid beyond the lifetime of this
+    ///           smart pointer. RCS:NEU
     const T* operator->() const
     {
-        ASSERT(M_DB, get_base_ptr()); // catch attempt to dereference an unset Access<T>
-        return static_cast<const T*>( get_base_ptr());
+        const T* ptr = static_cast<const T*>( get_base_ptr());
+        MI_ASSERT( ptr);
+        return ptr;
     }
 
-    /// Retrieve the internal object pointer. Useful for convenience only. Note that this method
-    /// should be used carefully, since it circumvents this smart pointer wrapper - as soon as the
-    /// destructor was executed the retrieved pointer is undefined.
+    /// Returns the referenced DB element (const).
     ///
-    /// \return                         The pointer this points to.
+    /// \return   The referenced DB element. Might not be valid beyond the lifetime of this
+    ///           smart pointer. RCS:NEU
     const T* get_ptr() const { return static_cast<const T*>( get_base_ptr()); }
 };
 
-/// This is used by jobs and applications to edit database elements. It will ensure that the type of
-/// the accessed tag and the type of the pointer match. The pointers hides all pinning and unpinning
-/// on elements in the cache. It also hides the selection of the correct version of the tag
-/// depending on the database context.
+/// Smart pointer for edits of database elements.
 ///
-/// Example for the usage:
-///  {
-///      ...
+/// \note This class only uses assertions to detect mismatches between the template parameters and
+///       the type of the database element. Input validation must be done upfront by other means,
+///       e.g., DB::Transaction::get_class_id().
 ///
-///      // Get a read-only pointer to a texture identified by the tag 5. The database will ensure
-///      // that tag 5 is of type Texture!
-///      Edit<Texture> texture(context, 5);
+/// \note It is not possible to edit database elements representing job results.
 ///
-///       // Use the smart pointer in the same way a pointer to a texture would be used
-///      texture->set_width(100);
+/// \note The assertions on #is_edit() are supposed to catch misuse due to slicing: Due to the
+///       inheritance of Edit from Access it is possible to create an Access<T> reference or an
+///       Access_base reference of an instances of Edit. Calling #Access<T>::set() or
+///       Access_base::set_access() will turn the Edit into an Access under the hood. This creates
+///       problems later e.g. when calling the non-const overload of Edit::get_ptr().
 ///
-///      ...
+/// Example:
 ///
-///       // Leaving the current scope will unpin the texture
+/// \code
+/// {
+///     Transaction* transaction = ...;
+///     // Obtain a mutable smart pointer to a texture identified by the tag 5.
+///     Edit<Texture> texture( 5, transaction);
+///     // Set some property of the texture.
+///     texture->set_width( 1024);
+///     // Leaving the current scope will finish the edit and release the texture held by the smart
+///     // pointer.
 ///  }
-///
-/// Note that it is not possible to edit elements created by jobs.
-template <class T> class Edit : public Access<T>
+/// \endcode
+template <class T>
+class Edit : public Access<T>
 {
-  public:
-    using Access<T>::get_base_ptr;
+public:
+    using Access_base::get_base_ptr;
 
     /// Default constructor.
     Edit()
     {
-        this->set_edit(Tag(), 0, T::id, JOURNAL_ALL);
-        ASSERT(M_DB, !T::id || !get_base_ptr() || get_base_ptr()->is_type_of(T::id));
+        this->set_edit( Tag(), nullptr, T::id, JOURNAL_ALL);
+        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
     }
 
-    /// Constructor.
+    /// Constructs an edit to a given tag.
     ///
-    /// \param tag                      The tag to edit
-    /// \param transaction              The transaction for the access
-    /// \param journal_type             The type for journal entries
-    Edit( const Typed_tag<T>& tag,
-          Transaction* transaction,
-          Journal_type journal_type = JOURNAL_ALL)
+    /// \param tag           The new tag.
+    /// \param transaction   The new transaction. RCS:NEU
+    /// \param journal_type  The initial journal flags of this edit.
+    Edit( Tag tag, Transaction* transaction, Journal_type journal_type = JOURNAL_ALL)
     {
-        this->set_edit(tag.get_untyped(), transaction, T::id, journal_type);
-        ASSERT(M_DB, !T::id || !get_base_ptr() || get_base_ptr()->is_type_of(T::id));
+        this->set_edit( tag, transaction, T::id, journal_type);
+        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
     }
 
-
-    /// Constructor. This can be used to get an Edit pointer from an Access pointer, when it gets
-    /// clear that the element has to be edited.
+    /// Constructs an edit from an access.
     ///
-    /// \param source                   The source access object
-    /// \param journal_type             The type for journal entries
-    Edit( const Access<T>& source,
-          Journal_type journal_type = JOURNAL_ALL)
-    {
-        this->set_edit(source.get_tag(), source.get_transaction(), T::id, journal_type);
-        ASSERT(M_DB, !T::id || !get_base_ptr() || get_base_ptr()->is_type_of(T::id));
-    }
-
-    /// Destructor. Will unpin an element, if necessary.
-    ~Edit()
-    {
-        // Note: this assert catches mis-uses of Edit<...> and Access<...>
-        // where, for example, an Access reference is created for an Edit
-        // (possible because of the inheritance of Edit from Access) and
-        // on that access the set method is called. This essentially
-        // changes the Edit under the hood to an access, which should not
-        // happen.
-        ASSERT(M_DB, this->is_edit());
-    }
-
-
-    /// Set the class to point to a new element. Note that the execution context stays the same
-    /// as before. This will unpin an old element if necessary.
-    /// If the argument is 0, then only the old element will be unpinned (if it was pointing
-    /// somewhere) because 0 is no valid tag.
+    /// This can be used to avoid creating an expensive edit upfront: start with an access and
+    /// create the edit later only if necessary.
     ///
-    /// \param tag                      The tag to edit
-    /// \param transaction              The transaction for the access
-    /// \param journal_type             The type for journal entries
-    void set( const Typed_tag<T>& tag = Tag(),
-              Transaction* transaction = 0,
-              Journal_type journal_type = JOURNAL_ALL)
+    /// \param other         The access object.
+    /// \param journal_type  The initial journal flags of this edit.
+    Edit( const Access<T>& other, Journal_type journal_type = JOURNAL_ALL)
     {
-        this->set_edit(tag.get_untyped(), transaction, T::id, journal_type);
-        ASSERT(M_DB, !T::id || !get_base_ptr() || get_base_ptr()->is_type_of(T::id));
+        this->set_edit( other.get_tag(), other.get_transaction(), T::id, journal_type);
+        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
     }
 
-
-    /// Access operator. This is not const because it allows jobs and applications to change
-    /// database elements. This means when setting an Edit class element to an element, a new
-    /// version of the element will be created.
+    /// Sets an edit to a given tag, possibly within a new transaction.
     ///
-    /// \return                         The pointer this points to.
+    /// Note that this method does not allow to restore the state after construction. A
+    /// default-constructed value for \p tag is valid, but a \c NULL value for \p transaction keeps
+    /// the current transaction. Use the copy constructor or assignment operator to reset the
+    /// state.
+    ///
+    /// \param tag           The new tag to edit.
+    /// \param transaction   The new transaction. Pass \c NULL to keep the current transaction.
+    ///                      RCS:NEU
+    /// \param journal_type  The initial journal flags of this edit.
+    void set(
+        Tag tag = DB::Tag(),
+        Transaction* transaction = nullptr,
+        Journal_type journal_type = JOURNAL_ALL)
+    {
+        MI_ASSERT( this->is_edit());
+        this->set_edit( tag, transaction, T::id, journal_type);
+        MI_ASSERT( !T::id || !get_base_ptr() || get_base_ptr()->is_type_of( T::id));
+    }
+
+    /// Member access operator (mutable).
+    ///
+    /// \return   The referenced DB element. Might not be valid beyond the lifetime of this
+    ///           smart pointer. RCS:NEU
     T* operator->()
     {
-        ASSERT(M_DB, get_base_ptr()); // catch attempt to dereference an unset Edit<T>
-        return static_cast<T*>(get_base_ptr());
+        MI_ASSERT( this->is_edit());
+        T* ptr = static_cast<T*>( get_base_ptr());
+        MI_ASSERT( ptr);
+        return ptr;
     }
 
-    /// Access operator. This is const and callers are not allowed to change the database
-    /// element. Useful if the Edit is a member of a class and you want to call a const method
-    /// of T from a const method of that class.
+    /// Member access operator (const).
     ///
-    /// \return                         The pointer this points to.
+    /// \return   The referenced DB element. Might not be valid beyond the lifetime of this
+    ///           smart pointer. RCS:NEU
     const T* operator->() const
     {
-        ASSERT(M_DB, get_base_ptr()); // catch attempt to dereference an unset Edit<T>
-        return static_cast<const T*>(get_base_ptr());
+        MI_ASSERT( this->is_edit());
+        const T* ptr = static_cast<const T*>( get_base_ptr());
+        MI_ASSERT( ptr);
+        return ptr;
     }
 
-    /// Retrieve the internal object pointer. Useful for convenience only.
-    /// Note that this method should be used carefully, since it circumvents this smart pointer
-    /// wrapper - as soon as the destructor was executed the retrieved pointer is undefined.
+    /// Returns the referenced DB element (mutable).
     ///
-    /// \return                         The pointer this points to.
-    T* get_ptr() { return static_cast<T*>(get_base_ptr()); }
+    /// \return   The referenced DB element. Might not be valid beyond the lifetime of this
+    ///           smart pointer. RCS:NEU
+    T* get_ptr()
+    {
+        MI_ASSERT( this->is_edit());
+        return static_cast<T*>( get_base_ptr());
+    }
 
-    /// Retrieve the internal object pointer. Useful for convenience only.
-    /// Note that this method should be used carefully, since it circumvents this smart pointer
-    /// wrapper - as soon as the destructor was executed the retrieved pointer is undefined.
+    /// Returns the referenced DB element (const).
     ///
-    /// \return                         The pointer this points to.
-    const T* get_ptr() const { return static_cast<const T*>(get_base_ptr()); }
+    /// \return   The referenced DB element. Might not be valid beyond the lifetime of this
+    ///           smart pointer. RCS:NEU
+    const T* get_ptr() const
+    {
+        MI_ASSERT( this->is_edit());
+        return static_cast<const T*>( get_base_ptr());
+    }
 
 private:
-    // Copying and assignment is forbidden to avoid the dangerous creation of
-    // temporary Edit-pointers. Use 'set' function instead.
-    // Copy constructor.
-    Edit( const Edit<T>& source);
+    /// Delete copy constructor to avoid accidental use.
+    Edit( const Edit<T>& other) = delete;
 
-    // Assignment operators
-    void operator=( const Edit<T>& source);
-
-    // Assignment operators
-    void operator=( const Access<T>& source);
-
-    // Assignment operators
-    Access_base& operator=( const Access_base& source);
+    /// Delete assignment operator to avoid accidental use.
+    Edit<T>& operator=( const Access_base& other) = delete;
 };
-
 
 } // namespace DB
 

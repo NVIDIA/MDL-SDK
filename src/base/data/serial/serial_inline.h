@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 /// \file
-/// \brief 
+/// \brief
 
 #include <type_traits>
 #include <cassert>
@@ -38,7 +38,7 @@ namespace SERIAL {
 template <typename T>
 inline void Serializer::write(const DB::Typed_tag<T>& value)
 {
-    write(value.get_untyped());
+    write(DB::Tag(value));
 }
 
 template <typename T>
@@ -72,7 +72,7 @@ inline void Serializer::write(const std::set<T, SWO>& set)
     write_range(*this, set.begin(), set.end());
 }
 
-template <typename T1, typename T2> 
+template <typename T1, typename T2>
 inline void Serializer::write(const std::pair<T1, T2>& pair)
 {
     write(pair.first);
@@ -202,7 +202,7 @@ inline void write(
 template <class T>
 inline void write(Serializer* serial, const DB::Typed_tag<T>& value)
 {
-    write(serial, value.get_untyped());
+    write(serial, DB::Tag(value));
 }
 
 inline void write(Serializer* serial, const DB::Tag_version& value )
@@ -319,7 +319,7 @@ inline void read(Deserializer* deser, DB::Typed_tag<T>* value_pointer)
 {
     DB::Tag tag;
     read(deser, &tag );
-    *value_pointer = tag;
+    *value_pointer = DB::Typed_tag<T>(tag);
 }
 
 inline void read(Deserializer* deser, DB::Tag_version* value_pointer)

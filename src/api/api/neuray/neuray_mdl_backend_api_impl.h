@@ -30,8 +30,8 @@
  ** \brief Header for the IMdl_backend_api implementation.
  **/
 
-#ifndef API_API_NEURAY_MDL_BACKEND_API_IMPL_H
-#define API_API_NEURAY_MDL_BACKEND_API_IMPL_H
+#ifndef API_API_NEURAY_NEURAY_MDL_BACKEND_API_IMPL_H
+#define API_API_NEURAY_NEURAY_MDL_BACKEND_API_IMPL_H
 
 #include <mi/base/interface_implement.h>
 #include <mi/neuraylib/imdl_backend_api.h>
@@ -104,4 +104,4 @@ private:
 } // namespace NEURAY
 } // namespace MI
 
-#endif // API_API_NEURAY_MDL_BACKEND_API_IMPL_H
+#endif // API_API_NEURAY_NEURAY_MDL_BACKEND_API_IMPL_H

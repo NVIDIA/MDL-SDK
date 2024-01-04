@@ -441,9 +441,11 @@ mi::neuraylib::IValue_string* Value_factory::create_string( const char* value) c
     return new Value_string( this, result_int.get(), /*owner*/ nullptr);
 }
 
-mi::neuraylib::IValue_string_localized* Value_factory::create_string_localized( const char* value, const char* original) const
+mi::neuraylib::IValue_string_localized* Value_factory::create_string_localized(
+    const char* value, const char* original) const
 {
-    mi::base::Handle<MDL::IValue_string_localized> result_int( m_vf->create_string_localized( value, original));
+    mi::base::Handle<MDL::IValue_string_localized> result_int(
+        m_vf->create_string_localized( value, original));
     return new Value_string_localized( this, result_int.get(), /*owner*/ nullptr);
 }
 
@@ -542,7 +544,8 @@ mi::neuraylib::IValue_bsdf_measurement* Value_factory::create_bsdf_measurement(
 
     mi::base::Handle<MDL::IValue_bsdf_measurement> result_int(
         m_vf->create_bsdf_measurement( tag));
-    return new Value_bsdf_measurement( this, m_transaction.get(), result_int.get(), /*owner*/ nullptr);
+    return new Value_bsdf_measurement(
+        this, m_transaction.get(), result_int.get(), /*owner*/ nullptr);
 }
 
 mi::neuraylib::IValue_invalid_df* Value_factory::create_invalid_df(
@@ -683,10 +686,10 @@ mi::neuraylib::IValue* Value_factory::create(
             return new Value_double( this, v.get(), owner);
         }
         case MDL::IValue::VK_STRING: {
-            mi::base::Handle<MDL::IValue_string_localized> v_localized( value->get_interface<MDL::IValue_string_localized>());
-            if( v_localized) {
+            mi::base::Handle<MDL::IValue_string_localized> v_localized(
+                value->get_interface<MDL::IValue_string_localized>());
+            if( v_localized)
                 return new Value_string_localized( this, v_localized.get(), owner);
-            }
             mi::base::Handle<MDL::IValue_string> v( value->get_interface<MDL::IValue_string>());
             return new Value_string( this, v.get(), owner);
         }

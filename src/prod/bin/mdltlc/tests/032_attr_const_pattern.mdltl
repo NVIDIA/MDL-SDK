@@ -1,0 +1,8 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Attr_const_pattern bottomup {
+    custom_curve_layer(w1 [[ a ~ 0]],_,_,_w, bsdf(), bsdf(), _normal )
+        --> bsdf();
+}

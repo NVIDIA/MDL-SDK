@@ -2647,6 +2647,12 @@ private:
     /// \param suffix  name suffix for dumped file name
     void dump_dg(char const *suffix);
 
+    /// Creates the dependency graph for the given definition.
+    void init_dependency_graph(Definition const *fkt_def);
+
+    /// Close and destroy the dependency graph for the given declaration.
+    void close_dependency_graph(IDeclaration const *decl);
+
     /// Process a function given by its definition.
     ///
     /// \param def  a function definition

@@ -1,0 +1,17 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Wrong_comparisons bottomup {
+    import state;
+    import math;
+
+    matched_bsdf ~ microfacet_ggx_vcavities_bsdf( ru,rv,tint,ior,t,mode)
+        --> matched_bsdf [[ type = "glass",
+                                  c_c = color(0.0), c_ru = 0.0, c_rv = 0.0, c_t = state::texture_tangent_u(0), c_w0 = 0.0, c_w90 = 0.0,c_n = state::normal(),
+                                  g_c0 = tint, g_c90 = tint, g_ru = ru, g_rv = rv, g_t = t, g_w0 = 0.04 /*ior from material?*/, g_w90 = 1.0, g_n = state::normal(),
+                                  gt_c = tint, gt_w = 1.0, gt_ior = ior,
+                                  d_c = color(0.0), d_w = 0.0, dt_c = color(0.0), dt_w = 0.0, b_n = state::normal(),
+                                  r_c = color(0.0), r_r = 0.0, r_w = 0.0]]
+    if (mode == scatter_reflect_transmit) && (ior >= color(1.0));
+}

@@ -31,7 +31,6 @@ set(PROJECT_NAME api-api-mdl)
 
 # collect sources
 set(PROJECT_HEADERS
-    "../mdl/mdl_logger.h"
     "../mdl/mdl_mdl_compiler_impl.h"
     "../mdl/mdl_neuray_impl.h"
     "../neuray/i_neuray_attribute_context.h"
@@ -61,6 +60,8 @@ set(PROJECT_HEADERS
     "../neuray/neuray_image_impl.h"
     "../neuray/neuray_impexp_utilities.h"
     "../neuray/neuray_lightprofile_impl.h"
+    "../neuray/neuray_log_utilities.h"
+    "../neuray/neuray_logging_configuration_impl.h"
     "../neuray/neuray_map_impl.h"
     "../neuray/neuray_material_instance_impl.h"
     "../neuray/neuray_mdl_archive_api_impl.h"
@@ -78,7 +79,6 @@ set(PROJECT_HEADERS
     "../neuray/neuray_mdl_impexp_api_impl.h"
     "../neuray/neuray_mdl_module_builder_impl.h"
     "../neuray/neuray_mdl_module_transformer_impl.h"
-    "../neuray/neuray_mdl_resource_callback.h"
     "../neuray/neuray_mdle_api_impl.h"
     "../neuray/neuray_module_impl.h"
     "../neuray/neuray_number_impl.h"
@@ -104,8 +104,7 @@ set(PROJECT_HEADERS
     "../neuray/neuray_db_element_impl.h"
 )
 
-set(PROJECT_SOURCES 
-    "../mdl/mdl_logger.cpp"
+set(PROJECT_SOURCES
     "../mdl/mdl_mdl_compiler_impl.cpp"
     "../mdl/mdl_neuray_impl.cpp"
     "../neuray/neuray_array_impl.cpp"
@@ -132,6 +131,8 @@ set(PROJECT_SOURCES
     "../neuray/neuray_image_api_impl.cpp"
     "../neuray/neuray_impexp_utilities.cpp"
     "../neuray/neuray_lightprofile_impl.cpp"
+    "../neuray/neuray_log_utilities.cpp"
+    "../neuray/neuray_logging_configuration_impl.cpp"
     "../neuray/neuray_map_impl.cpp"
     "../neuray/neuray_material_instance_impl.cpp"
     "../neuray/neuray_mdl_archive_api_impl.cpp"
@@ -149,7 +150,6 @@ set(PROJECT_SOURCES
     "../neuray/neuray_mdl_impexp_api_impl.cpp"
     "../neuray/neuray_mdl_module_builder_impl.cpp"
     "../neuray/neuray_mdl_module_transformer_impl.cpp"
-    "../neuray/neuray_mdl_resource_callback.cpp"
     "../neuray/neuray_mdle_api_impl.cpp"
     "../neuray/neuray_module_impl.cpp"
     "../neuray/neuray_number_impl.cpp"

@@ -31,7 +31,7 @@
 
 #include <base/lib/log/i_log_assert.h>
 #include <base/lib/mem/i_mem_consumption.h>
-#include <base/lib/log/log.h>
+#include <base/lib/log/i_log_logger.h>
 
 namespace MI {
 namespace ATTR {
@@ -324,7 +324,7 @@ MI_INLINE size_t Type::align_all() const
 
     size_t align = 1;
     // in the TYPE_CALL case, set initial alignment to the two string pointers
-    if (m_typecode == TYPE_CALL || 
+    if (m_typecode == TYPE_CALL ||
         (m_typecode == TYPE_ARRAY && m_child && m_child->get_typecode() == TYPE_CALL))
     {
         bool is_dynamic_array = m_typecode != TYPE_ARRAY && m_arraysize == 0;

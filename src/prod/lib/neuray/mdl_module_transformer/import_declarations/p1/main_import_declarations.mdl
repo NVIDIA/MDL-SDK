@@ -1,0 +1,106 @@
+mdl 1.3;
+
+
+// import
+
+// absolute
+import ::up1::up1_f;
+import ::p1::same1::same1_f;
+import ::p1::p2::down1::down1_f;
+import ::limits::FLOAT_MIN;
+import ::std::FLOAT_MIN;
+import ::base::mono_mode;
+
+// strict relative
+import ..::up2::up2_f;
+import .::same2::same2_f;
+import .::p2::down2::down2_f;
+
+// weak relative as absolute
+import up3::up3_f;
+import p1::same3::same3_f;
+import p1::p2::down3::down3_f;
+import limits::FLOAT_MAX;
+import std::FLOAT_MAX;
+import base::gradient_mode;
+
+// weak relative as relative
+import same4::same4_f;
+import p2::down4::down4_f;
+
+
+// using
+
+// absolute
+using ::up5 import up5_f;
+using ::p1::same5 import same5_f;
+using ::p1::p2::down5 import down5_f;
+using ::limits import DOUBLE_MIN;
+using ::std import INT_MIN;
+using ::base import projection_mode;
+
+// strict relative
+using ..::up6 import up6_f;
+using .::same6 import same6_f;
+using .::p2::down6 import down6_f;
+
+// weak relative as absolute
+using up7 import up7_f;
+using p1::same7 import same7_f;
+using p1::p2::down7 import down7_f;
+using ::limits import DOUBLE_MAX;
+using limits import INT_MAX;
+using base import color_layer_mode;
+
+// weak relative as relative
+using same8 import same8_f;
+using p2::down8 import down8_f;
+
+
+export int use_up1_f()   { return up1::up1_f(); }
+export int use_same1_f() { return p1::same1::same1_f(); }
+export int use_down1_f() { return p1::p2::down1::down1_f(); }
+
+export int use_up2_f()   { return up2::up2_f(); }
+export int use_same2_f() { return same2::same2_f(); }
+export int use_down2_f() { return p2::down2::down2_f(); }
+
+export int use_up3_f()   { return up3::up3_f(); }
+export int use_same3_f() { return p1::same3::same3_f(); }
+export int use_down3_f() { return p1::p2::down3::down3_f(); }
+
+export int use_same4_f() { return same4::same4_f(); }
+export int use_down4_f() { return p2::down4::down4_f(); }
+
+
+export int use_up5_f()   { return up5_f(); }
+export int use_same5_2() { return same5_f(); }
+export int use_down5_f() { return down5_f(); }
+
+export int use_up6_f()   { return up6_f(); }
+export int use_same6_2() { return same6_f(); }
+export int use_down6_f() { return down6_f(); }
+
+export int use_up7_f()   { return up7_f(); }
+export int use_same7_2() { return same7_f(); }
+export int use_down7_f() { return down7_f(); }
+
+export int use_same8_f() { return same8_f(); }
+export int use_down8_f() { return down8_f(); }
+
+
+export float use_float_min()                    { return limits::FLOAT_MIN; }
+export float use_std_float_min()                { return std::FLOAT_MIN; }
+export base::mono_mode use_mono_mode()          { return base::mono_alpha; }
+
+export float use_float_max()                    { return limits::FLOAT_MAX; }
+export float use_std_float_max()                { return std::FLOAT_MAX; }
+export base::gradient_mode use_gradient_mode()  { return base::gradient_linear; }
+
+export double use_double_min()                  { return DOUBLE_MIN; }
+export int use_std_int_min()                    { return INT_MIN; }
+export projection_mode use_projection_mode()    { return projection_cubic; }
+
+export double use_double_max()                  { return DOUBLE_MAX; }
+export int use_std_int_max()                    { return INT_MAX; }
+export color_layer_mode  use_color_layer_mode() { return color_layer_blend; }

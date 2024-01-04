@@ -32,7 +32,7 @@
 
 #include "pch.h"
 #include "hal.h"
-#include <base/lib/log/i_log_assert.h>
+#include <base/system/main/i_assert.h>
 #include <base/system/main/i_module_id.h>
 #include <cstdio>
 
@@ -91,8 +91,8 @@ static WORD colorcodes[] = {
 const char *get_ansi_color(
     Color               c)              // one of C_*
 {
-    ASSERT(M_HAL, sizeof(colorstrings) == C_NUM * sizeof(char *));
-    ASSERT(M_HAL, c >= 0 && c < C_NUM);
+    MI_ASSERT(sizeof(colorstrings) == C_NUM * sizeof(char *));
+    MI_ASSERT(c >= 0 && c < C_NUM);
     return colorstrings[c];
 }
 
@@ -107,7 +107,7 @@ void set_console_color(
     HANDLE std_out = GetStdHandle(STD_OUTPUT_HANDLE);
     if (std_out == INVALID_HANDLE_VALUE)
     {
-        ASSERT(M_HAL, !"Can't obtain std out handle");
+        MI_ASSERT(!"Can't obtain std out handle");
         return;
     }
     SetConsoleTextAttribute(std_out, colorcodes[c]);

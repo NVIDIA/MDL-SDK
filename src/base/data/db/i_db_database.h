@@ -26,364 +26,224 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 
-/** \file i_db_database.h
- ** \brief This declares the database class which owns all transactions etc.
- **
- ** This file contains the pure virtual base class for the database class which owns all
- ** transactions, database elements, etc.
- **/
-
 #ifndef BASE_DATA_DB_I_DB_DATABASE_H
 #define BASE_DATA_DB_I_DB_DATABASE_H
 
-#include "i_db_scope.h"
-#include "i_db_transaction.h"
+#include <string>
 
-#include <base/hal/time/i_time.h>
-#include <boost/function.hpp>
+#include <boost/core/noncopyable.hpp>
+
 #include <mi/base/interface_declare.h>
 
-namespace MI
-{
+#include "i_db_scope.h"
+#include "i_db_tag.h"
 
-namespace CLUSTER     { class Cluster_manager; }
-namespace SERIAL      { class Deserialization_manager; }
-namespace HTTP        { class Server; class Ssi_handler; }
-namespace MSG         { class Selector; }
-namespace SCHED       { class IScheduler; }
-namespace EVENT       { class Event0_base; }
-namespace NET         { class Message_logger; }
-namespace RDMA        { class IRDMA_group; }
-namespace THREAD_POOL { class Thread_pool; }
+/// Reference counting strategy in base/data/db
+///
+/// The interfaces in base/data/db and its implementation in based/data/dbnr predate
+/// mi::base::IInterface and the reference counting strategy used in the public APIs. The following
+/// abbreviations are used to denote the convention for each pointer in parameters and return
+/// values.
+///
+/// - RCS:NEU neutral, for parameters and return values
+/// - RCS:ICE incremented by callee, for return values
+/// - RCS:ICR incremented by caller, for parameters, rare
+/// - RCS:TRO transfers ownership, for parameters and return values, rare, e.g.,
+///           Transaction::store()
+///
+/// Pointers of classes derived from mi::base::IInterface are not annotated since the standard
+/// reference counting strategy as in the public APIs is assumed (RCS:NEU for parameters and
+/// RCS:ICE for return values).
 
-namespace DB
-{
+namespace MI {
+
+namespace DB {
 
 class Elememt_base;
 class Fragmented_job;
 class IExecution_listener;
+class IScope_listener;
+class ITransaction_listener;
+class Status_listener;
+class Transaction;
 
-/// Status that the database can be in.
-enum Db_status
+/// The public database interface.
+///
+/// Provides access to scopes (which provide access to transactions and DB elements/jobs).
+class Database : private boost::noncopyable
 {
-    DB_NOT_READY,
-    DB_RECOVERING,
-    DB_OK
-};
+public:
+    /// \name Scopes
+    //@{
 
-/// This is an abstract class which can be used to register a status listener with the database.
-/// The listener will be called whenever the status of the database changes.
-struct IStatus_listener
-{
-    /// This is called when the status of the database changed
+    /// Returns the global scope.
     ///
-    /// \param status           The new status
-    virtual void status_changed(Db_status status) { }
-};
-
-/// This is an abstract class which can be used to register a transaction listener with the 
-/// database. The listener will be called whenever a transaction is created, just before
-/// it is committed or aborted, and when it has been committed/aborted.
-struct ITransaction_listener : public
-    mi::base::Interface_declare<0xf33f94ac,0xc43f,0x4ea1,0x97,0xd5,0xbc,0x8b,0xd1,0xae,0x6d,0x83>
-{
-    /// This method is called when the provided transaction has been created.
+    /// The global scope is the root of a tree of scopes.
     ///
-    /// \param trans            The new transaction
-    virtual void transaction_created(Transaction* trans) = 0;
+    /// \return       The global scope. Never \c NULL. RCS:NEU
+    virtual Scope* get_global_scope() = 0;
 
-    /// This method is called when the provided transaction is about to be committed. The 
-    /// transaction is still valid at this point. Note that the transaction can be aborted
-    /// in case of an error even if the pre-commit callback has been made, in which case
-    /// this call will be followed by a transaction_aborted call.
+    /// Looks up and returns a scope with a given ID.
     ///
-    /// \param trans            The transaction
-    virtual void transaction_pre_commit(Transaction* trans) = 0;
+    /// \param id     The ID of the scope as returned by #DB::Scope::get_id(). The global scope has
+    ///               ID 0.
+    /// \return       The found scope or \c NULL if no such scope exists. RCS:NEU
+    virtual Scope* lookup_scope( Scope_id id) = 0;
 
-    /// This method is called when the provided transaction is about to be aborted. The 
-    /// transaction is still valid at this point.
+    /// Looks up a named scope.
     ///
-    /// \param trans            The transaction
-    virtual void transaction_pre_abort(Transaction* trans) = 0;
+    /// \param name   The name of the scope as returned by #DB::Scope::get_name(). The global scope
+    ///               has the empty string as name.
+    /// \return       The found scope or \c NULL if no such scope exists. RCS:NEU
+    virtual Scope* lookup_scope( const std::string& name) = 0;
 
-    /// This method is called when the provided transaction has been committed.
+    /// Removes a scope from the database.
     ///
-    /// \param trans            The transaction
-    virtual void transaction_committed(Transaction* trans) = 0;
-    
-    /// This method is called when the provided transaction has been aborted.
+    /// \note Without explicit pinning the corresponding scope must no longer be used in any way
+    ///       after a call to this method without.
     ///
-    /// \param trans            The transaction
-    virtual void transaction_aborted(Transaction* trans) = 0;
-};
+    /// \param id     The ID of the scope to remove
+    /// \return       \c true in case of success, \c false otherwise (invalid scope ID, or already
+    ///               marked for removal).
+    virtual bool remove( Scope_id id) = 0;
 
-/// This is an abstract class which can be used to register a scope listener with the 
-/// database. The listener will be called whenever a scope is created or destroyed.
-struct IScope_listener : public
-    mi::base::Interface_declare<0x7d8320ce,0xd104,0x4465,0xa0,0xb8,0x9f,0x3e,0xc8,0x6c,0x30,0xac>
-{
-    /// Called when the provided scope is created. Note that no callback is made for the 
-    /// global scope. The scope may be used at this point.
-    virtual void scope_created(Scope* scope) = 0;
+    //@}
+    /// \name Closing
+    //@{
 
-    /// Called when the provided scope is removed. 
-    virtual void scope_removed(Scope* scope) = 0;
-};
-
-/// Statistics for the database. Used to allow the application to query some interesting statistical
-/// values for performance checking and tuning.
-struct Database_statistics
-{
-    // constructor
-    Database_statistics();
-
-    /// the number of tags currently stored
-    Uint m_nr_of_stored_tags;
-    /// number of update messages
-    Uint m_nr_of_received_updates;
-    /// number of objects received so far
-    Uint m_nr_of_received_objects;
-    /// number of transactions received
-    Uint m_nr_of_received_transactions;
-    /// number of self-created transactions
-    Uint m_nr_of_created_transactions;
-    /// number of hosts we know about
-    Uint m_nr_of_known_hosts;
-};
-
-/// The database class manages the whole database. It holds the caches for the database elements and
-/// manages all the communication with other hosts. The Database class is the interface class which
-/// is visible from the outside.
-class Database
-{
-  public:
-    /// Create a database instance.
-    /// \param selector                         For event delivery
-    /// \param cluster_manager                  For communication
-    /// \param deserialization_manager          For deserialization
-    /// \param redundancy_level                 Nr of tag copies
-    /// \param web_interface_url_prefix         For web interface
-    /// \param http_server                      For web interface
-    /// \param logger                           For logging messages
-    /// \param send_elements_only_to_owners     Send elements to all host or only to owners?
-    /// \param disk_cache_path                  When a disk cache should be created the path or NULL
-    /// \param max_journal_size
-    /// \param track_memory_usage               Track memory usage of DB elements?
-    /// \return                                 The new database
-    static Database* create(
-        MSG::Selector* selector,
-        CLUSTER::Cluster_manager* cluster_manager,
-        SERIAL::Deserialization_manager* deserialization_manager,
-        Uint redundancy_level = 1,
-        const char* web_interface_url_prefix = NULL,
-        HTTP::Server* http_server = NULL,
-        NET::Message_logger* logger = NULL,
-        bool is_allowed_to_own_data = true,
-        bool send_elements_only_to_owners = false,
-        const char* disk_cache_path = NULL,
-        int max_journal_size = 10000,
-        bool track_memory_usage = false);
-
-    /// Prepare closing the database
+    /// Prepares closing the database.
     ///
-    /// This call stops the garbage collection and offloading callbacks. This is necessary because
-    /// the exit() method of higher level modules often assume that no other thread is using the
-    /// module anymore.
+    /// This call stops all background activity of the database, e.g. the garbage collection. This
+    /// is necessary because the exit() method of higher level modules often assume that no other
+    /// thread is using the module anymore.
     virtual void prepare_close() = 0;
 
-    /// Close the database
+    /// Closes the database.
+    ///
+    /// Calls the destructor of this instance.
     virtual void close() = 0;
 
-    /// Do a synchronous garbage collection sweep.
+    //@}
+    /// \name Garbage collection
+    //@{
+
+    /// Triggers a synchronous garbage collection run.
+    ///
+    /// The method sweeps through the entire database and removes all database elements which have
+    /// been marked for removal and are no longer referenced. Note that it is not possible to remove
+    /// database elements if there are open transactions in which such an element is still
+    /// referenced.
     ///
     /// \param priority   The priority (0/1/2 for low/medium/high priority).
     virtual void garbage_collection( int priority) = 0;
 
-    /// The database always contains a global scope. The global scope is the root of a tree of
-    /// scopes. This function is used to get the global scope so that child scopes can be created
-    /// etc.
-    ///
-    /// \return                                 The global scope
-    virtual Scope *get_global_scope() = 0;
+    //@}
+    /// \name Locks
+    //@{
 
-    /// In some applications the application needs to lookup a certain scope. This has to be
-    /// possible from every host in the whole system. Consider an application where a scope
-    /// addresses an arena (e.g. a chess game). The system presents a page to the user listing all
-    /// available arenas. The user selects one of the arenas. Now the application will create a new
-    /// scope which is a child of the arena. Thus it must be possible for each host to address the
-    /// arena scope. The application would store the scope id in the database and later it would use
-    /// the id to lookup the scope.
+    /// Acquires a DB lock.
     ///
-    /// \param id                               The id of the scope to lookup.
-    /// \return                                 The found scope
-    virtual Scope *lookup_scope(
-        Scope_id id) = 0;
+    /// The method blocks until the requested lock has been obtained. Recursively locking the
+    /// same lock from within the same thread on the same host is supported.
+    ///
+    /// If the host holding a lock leaves the cluster, the lock is automatically released.
+    ///
+    /// \param lock_id   The lock to acquire.
+    ///
+    /// \note The locking mechanism is kind of a co-operative locking mechanism: The lock does not
+    ///       prevent other threads from accessing or editing the DB. It only prevents other threads
+    ///       from obtaining the same lock.
+    ///
+    /// \note DB locks are not restricted to threads on a single host, they apply to all threads on
+    ///       all hosts in the cluster.
+    ///
+    /// \note DB locks are an expensive operation and should only be used when absolutely necessary.
+    virtual void lock( mi::Uint32 lock_id) = 0;
 
-    /// Lookup a named scope.
+    /// Releases a previously obtained DB lock.
     ///
-    /// \param name                             The name of the scope to lookup.
-    /// \return                                 The found scope or NULL if it was not found.
-    virtual Scope *lookup_scope(
-        const std::string& name) = 0;
+    /// If the lock has been locked several times from within the same thread on the same host,
+    /// it simply decrements the lock count. If the lock count reaches zero, the lock is released.
+    ///
+    /// \param lock_id   The lock to release.
+    /// \return          0, in case of success, -1 in case of failure, i.e, the lock is not held
+    ///                  by this thread on this host
+    virtual bool unlock( mi::Uint32 lock_id) = 0;
 
-    /// Remove a scope from the database. Return true, if succeeded, otherwise false.
+    /// Checks whether a DB lock is locked.
     ///
-    /// \param id                       The id of the scope to remove
-    /// \return                         A bool indicating success, true, or failure, false
-    virtual bool remove(Scope_id id) = 0;
+    /// In the debug mode, abort if not. In release mode, just log an error.
+    ///
+    /// \param lock_id   The lock to check.
+    virtual void check_is_locked( mi::Uint32 lock_id) = 0;
 
-    /// Lock a tag making it inaccessible to others. Note that this is a kind of cooperative lock:
-    /// It will not stop others from editing the tag. It will only prevent them from obtaining a
-    /// lock on the same tag.
-    ///
-    /// \param tag                              Lock this tag
-    virtual void lock(
-        Tag tag) = 0;
-
-    /// Unlock a tag previously locked from the same context.
-    ///
-    /// \param tag                              Unlock this tag
-    /// \return                                 A bool indicating success, true, or failure, false
-    virtual bool unlock(
-        Tag tag) = 0;
-
-    /// Check, if a tag is locked. In the debug version, abort if not. In the release version, just
-    /// print an error.
-    ///
-    /// \param tag                              Check this tag
-    virtual void check_is_locked(
-        Tag tag) = 0;
-
-    /// Wait for a notification for a certain tag.
-    /// Note that this can return although the tag was not actually notified. This will be the case,
-    /// when a host leaves to avoid lost notifications blocking threads forever.
-    /// The return value true means, that the notification arrived, false means, that a timeout
-    /// occurred.
-    ///
-    /// \param tag                              Tag to wait for
-    /// \param timeout                          Return after the timeout, -1 means never
-    /// \return                                 See description.
-    virtual bool wait_for_notify(
-        Tag tag,
-        TIME::Time timeout = TIME::Time(-1)) = 0;
-
-    /// Send a notification for a certain tag. This will wakeup all threads in the network waiting
-    /// for a notification on that tag.
-    ///
-    /// \param tag                              The tag to send a notification for
-    virtual void notify(
-        Tag tag) = 0;
-
-    /// Get the next name following the given name. This can be used to iterate throw the names
-    /// stored in the database. This is relatively slow, since it requires a map lookup for each
-    /// call.
-    ///
-    /// \param pattern                          The pattern for searching the names
-    virtual std::string get_next_name(
-        const std::string& pattern) = 0;
-
-    /// Get the database statistics
-    ///
-    /// \return                                 The gathered statistics
-    virtual Database_statistics get_statistics() = 0;
-
-    /// Get the database status
-    ///
-    /// \return status
-    virtual Db_status get_database_status() = 0;
-
-    /// Register a listener to be notified when the status changes.
-    ///
-    /// Note that calls to register and unregister a listener of this type must not 
-    /// be made from the callback since this will result in a deadlock.
-    ///
-    /// \param listener                         The new listener.
-    virtual void register_status_listener(IStatus_listener* listener) = 0;
-
-    /// Unregister a previously registered status listener
-    ///
-    /// Note that calls to register and unregister a listener of this type must not 
-    /// be made from the callback since this will result in a deadlock.
-    ///
-    /// \param listener                         The old listener.
-    virtual void unregister_status_listener(IStatus_listener* listener) = 0;
-
-    /// Register a listener to be notified for transaction events.
-    ///
-    /// Note that calls to register and unregister a listener of this type must not 
-    /// be made from the callback since this will result in a deadlock.
-    ///
-    /// \param listener                         The new listener.
-    virtual void register_transaction_listener(ITransaction_listener* listener) = 0;
-
-    /// Unregister a previously registered transaction listener
-    ///
-    /// Note that calls to register and unregister a listener of this type must not 
-    /// be made from the callback since this will result in a deadlock.
-    ///
-    /// \param listener                         The old listener.
-    virtual void unregister_transaction_listener(ITransaction_listener* listener) = 0;
-
-    /// Register a listener to be notified for transaction events.
-    ///
-    /// Note that calls to register and unregister a listener of this type must not 
-    /// be made from the callback since this will result in a deadlock.
-    ///
-    /// \param listener                         The new listener.
-    virtual void register_scope_listener(IScope_listener* listener) = 0;
-
-    /// Unregister a previously registered transaction listener
-    ///
-    /// Note that calls to register and unregister a listener of this type must not 
-    /// be made from the callback since this will result in a deadlock.
-    ///
-    /// \param listener                         The old listener.
-    virtual void unregister_scope_listener(IScope_listener* listener) = 0;
-    
+    //@}
+    /// \name Memory limits
+    //@{
 
     /// Sets the limits for memory usage of the database.
-    virtual Sint32 set_memory_limits(size_t low_water, size_t high_water) = 0;
-        
+    ///
+    /// \see #mi::neuraylib::IDatabase_configuration::set_memory_limits().
+    virtual mi::Sint32 set_memory_limits( size_t low_water, size_t high_water) = 0;
+
     /// Returns the limits for memory usage of the database.
-    virtual void get_memory_limits(size_t& low_water, size_t& high_water) const = 0;
-
-  //
-  // The functions below may only be used by DATA!!!!
-  //
-
-    /// Set an event to be signalled when the database is completely ready.
     ///
-    /// \param event                            The even to signal when the database is ready
-    virtual void set_ready_event(
-        EVENT::Event0_base* event) = 0;
+    /// \see #mi::neuraylib::IDatabase_configuration::get_memory_limits().
+    virtual void get_memory_limits( size_t& low_water, size_t& high_water) const = 0;
 
-  //
-  // The functions below may only be used by SCHED!!!!
-  //
+    //@}
+    /// \name Listeners
+    //@{
 
-    /// This is to be used by the sched module only. It will return the requested transaction. It
-    /// may return NULL, if the transaction is already committed.
+    /// Registers a listener to be notified when the status changes.
     ///
-    /// \param id                               The id of the transaction to be retrieved.
-    /// \return                                 The transaction or NULL
-    virtual Transaction* get_transaction(
-        Transaction_id id) = 0;
-
-// currently unused, prevent accidental use
-private:
-  //
-  // The function below are experimental and should not be used in production code
-  //
-
-    // Cancel all fragmented jobs in the database
-    virtual void cancel_all_fragmented_jobs() = 0;
-
-public:
-    /// Execute a job splitting it in a given number of fragments. This will not return before all
-    /// fragments have been executed. The fragments may be executed in any number of threads and if
-    /// the job allows on any number of hosts.
+    /// \note Must not be called from within the callback (deadlock).
     ///
-    /// \param job                      The fragmented job to be executed.
+    /// \param listener   RCS:NEU
+    virtual void register_status_listener( Status_listener* listener) = 0;
+
+    /// Unregisters a previously registered status listener.
+    ///
+    /// \note Must not be called from within the callback (deadlock).
+    ///
+    /// \param listener   RCS:NEU
+    virtual void unregister_status_listener( Status_listener* listener) = 0;
+
+    /// Registers a listener to be notified for transaction events.
+    ///
+    /// \note Must not be called from within the callback (deadlock).
+    virtual void register_transaction_listener( ITransaction_listener* listener) = 0;
+
+    /// Unregisters a previously registered transaction listener.
+    ///
+    /// \note Must not be called from within the callback (deadlock).
+    virtual void unregister_transaction_listener( ITransaction_listener* listener) = 0;
+
+    /// Registers a listener to be notified for scope events.
+    ///
+    /// \note Must not be called from within the callback (deadlock).
+    virtual void register_scope_listener( IScope_listener* listener) = 0;
+
+    /// Unregisters a previously registered Scope listener.
+    ///
+    /// \note Must not be called from within the callback (deadlock).
+    virtual void unregister_scope_listener( IScope_listener* listener) = 0;
+
+    //@}
+    /// \name Thread pool and fragmented jobs
+    //@{
+
+    /// Executes a job, splitting it into the given number of fragments (synchronous).
+    ///
+    /// This method is for fragmented jobs without transaction context. See
+    /// #Transaction::execute_fragmented() for executing fragmented jobs with transaction context.
+    ///
+    /// This method will not return before all fragments have been executed. The fragments may be
+    /// executed in any number of threads.
+    ///
+    /// \note This method is restricted to localhost-only jobs.
+    ///
+    /// \param job                      The fragmented job to be executed. RCS:NEU
     /// \param count                    The number of fragments this job should be split into. This
     ///                                 number must be greater than zero.
     /// \return
@@ -392,17 +252,20 @@ public:
     ///                                       zero).
     ///                                 - -2: Invalid scheduling mode (transaction-less or
     ///                                       asynchronous execution is restricted to local jobs).
-    virtual Sint32 execute_fragmented(
-        Fragmented_job* job,
-        size_t count) = 0;  
+    virtual mi::Sint32 execute_fragmented( Fragmented_job* job, size_t count) = 0;
 
-    /// Execute a job splitting it in a given number of fragments. This will return immediately,
-    /// typically before all fragments have been executed. The fragments may be executed in any
-    /// number of threads.
-    /// NOTE: Currently this is restricted to local host only jobs! This restriction might be
-    ///       lifted in the future.
+    /// Executes a job, splitting it into the given number of fragments (asynchronous).
     ///
-    /// \param job                      The fragmented job to be executed.
+    /// This method is for fragmented jobs without transaction context. See
+    /// #Transaction::execute_fragmented_async() for executing fragmented jobs with transaction
+    /// context.
+    ///
+    /// This will return immediately, typically before all fragments have been executed. The
+    /// fragments may be executed in any number of threads.
+    ///
+    /// \note This method is restricted to localhost-only jobs.
+    ///
+    /// \param job                      The fragmented job to be executed. RCS:NEU
     /// \param count                    The number of fragments this job should be split into. This
     ///                                 number must be greater than zero.
     /// \param listener                 Provides a callback to be called when the job is done.
@@ -412,10 +275,8 @@ public:
     ///                                       zero).
     ///                                 - -2: Invalid scheduling mode (transaction-less or
     ///                                       asynchronous execution is restricted to local jobs).
-    virtual Sint32 execute_fragmented_async(
-        Fragmented_job* job,
-        size_t count,
-        IExecution_listener* listener) = 0;
+    virtual mi::Sint32 execute_fragmented_async(
+        Fragmented_job* job, size_t count, IExecution_listener* listener) = 0;
 
     /// See THREAD_POOL::Thread_pool::suspend_current_job().
     virtual void suspend_current_job() = 0;
@@ -426,10 +287,83 @@ public:
     /// See THREAD_POOL::Thread_pool::yield().
     virtual void yield() = 0;
 
-  protected:
-    /// The destructor is protected because destroying the database is not part
-    /// of the public interface.
-    virtual ~Database() { }
+    //@}
+};
+
+/// Status that the database can be in.
+enum Db_status
+{
+    DB_OK,        ///< The database if fully operational.
+    DB_NOT_READY, ///< The database is not yet ready. This state may occur initially upon creation.
+    DB_RECOVERING ///< The database is recovering from a network split.
+};
+
+/// Abstract interface for status listeners.
+class Status_listener
+{
+public:
+    /// Invoked when the status of the database changed.
+    virtual void status_changed( Db_status new_status) = 0;
+};
+
+/// Abstract interface for listeners for major transaction events.
+class ITransaction_listener : public
+    mi::base::Interface_declare<0xf33f94ac,0xc43f,0x4ea1,0x97,0xd5,0xbc,0x8b,0xd1,0xae,0x6d,0x83>
+{
+public:
+    /// Invoked when the provided transaction has been created.
+    ///
+    /// \param transaction   RCS:NEU
+    virtual void transaction_created( Transaction* transaction) = 0;
+
+    /// Invoked when the provided transaction is about to be committed.
+    ///
+    /// The transaction is still open at this point. Note that the transaction can be aborted
+    /// instead of committed in case of an error, even if the pre-commit callback has been made.
+    /// In such a case, this call will be followed by a #transaction_aborted() call instead of a
+    /// #transaction_committed() call.
+    ///
+    /// \param transaction   RCS:NEU
+    virtual void transaction_pre_commit( Transaction* transaction) = 0;
+
+    /// Invoked when the provided transaction is about to be aborted.
+    ///
+    /// The transaction is still open at this point.
+    ///
+    /// \param transaction   RCS:NEU
+    virtual void transaction_pre_abort( Transaction* transaction) = 0;
+
+    /// Invoked when the provided transaction has been committed.
+    ///
+    /// \param transaction   RCS:NEU
+    virtual void transaction_committed( Transaction* transaction) = 0;
+
+    /// Invoked when the provided transaction has been aborted.
+    ///
+    /// \param transaction   RCS:NEU
+    virtual void transaction_aborted( Transaction* transaction) = 0;
+};
+
+/// Abstract interface for listeners for major scope events.
+class IScope_listener : public
+    mi::base::Interface_declare<0x7d8320ce,0xd104,0x4465,0xa0,0xb8,0x9f,0x3e,0xc8,0x6c,0x30,0xac>
+{
+public:
+    /// Invoked when a scope has been created.
+    ///
+    /// The scope can be used as soon as the callback is received. Note that there is no callback
+    /// for the global scope.
+    ///
+    /// \param scope   RCS:NEU
+    virtual void scope_created( Scope* scope) = 0;
+
+    /// Invoked when a scope has been removed.
+    ///
+    /// The scope must not be used anymore when the callback is received. Note that there is no
+    /// callback for the global scope.
+    ///
+    /// \param scope   RCS:NEU
+    virtual void scope_removed( Scope* scope) = 0;
 };
 
 } // namespace DB
@@ -437,4 +371,3 @@ public:
 } // namespace MI
 
 #endif // BASE_DATA_DB_I_DB_DATABASE_H
-

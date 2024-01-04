@@ -28,7 +28,7 @@
 
 /// \file
 /// \brief Declare the logger interface.
-/// 
+///
 /// This file declares the interface for logging. It allows to implement different implementations
 /// for the logging functionality. It has nothing to do with log configuration. The access to the
 /// logging functionality is done by the mod_log variable.
@@ -37,8 +37,10 @@
 #define BASE_LIB_LOG_I_LOG_LOGGER_H
 
 #include <cstdarg>
+
 #include <base/system/main/module.h>
 #include <base/system/main/types.h>
+
 #include "i_log_assert.h"
 
 #include <mi/base/ilogger.h>

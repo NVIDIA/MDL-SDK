@@ -29,12 +29,6 @@
 # name of the target and the resulting library
 set(PROJECT_NAME base-lib-log)
 
-# add dummy-source to create a dummy-lib
-set(DUMMY_CPP ${CMAKE_CURRENT_BINARY_DIR}/generated/empty.cpp)
-if(NOT EXISTS ${DUMMY_CPP})
-    file(WRITE ${DUMMY_CPP} "")
-endif()
-
 # collect sources
 set(PROJECT_HEADERS
     "i_log_assert.h"
@@ -44,16 +38,25 @@ set(PROJECT_HEADERS
     "i_log_module.h"
     "i_log_stream.h"
     "i_log_target.h"
-    "log.h"
+    "i_log_utilities.h"
     )
 
 set(PROJECT_SOURCES
-     ${PROJECT_HEADERS}
-     ${DUMMY_CPP}
+    "log_assertion_failure.cpp"
+    "log_module_impl.cpp"
+    "log_targets.cpp"
+    "log_utilities.cpp"
+    ${PROJECT_HEADERS}
     )
 
 # create target from template
 create_from_base_preset(
     TARGET ${PROJECT_NAME}
     SOURCES ${PROJECT_SOURCES}
+    )
+
+# add dependencies
+target_add_dependencies(TARGET ${PROJECT_NAME}
+    DEPENDS
+        boost
     )

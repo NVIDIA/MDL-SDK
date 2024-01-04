@@ -331,6 +331,8 @@ Mdl_helper::Mdl_helper(
         exit_failure("ERROR: Setting PTX option sm_version failed");
     if (m_be_cuda_ptx->set_option("tex_lookup_call_mode", "direct_call") != 0)
         exit_failure("ERROR: Setting PTX option tex_lookup_call_mode failed");
+    if (m_be_cuda_ptx->set_option("lambda_return_mode", "value") != 0)
+        exit_failure("ERROR: Setting PTX option lambda_return_mode failed");
     if (enable_derivatives) {
         // Option "texture_runtime_with_derivs": Default is disabled.
         // We enable it to get coordinates with derivatives for texture lookup functions.
@@ -369,8 +371,11 @@ Mdl_helper::~Mdl_helper()
     m_global_scope.reset();
     m_database.reset();
     m_mdl_compiler.reset();
+    m_mdl_config.reset();
 
     m_neuray->shutdown();
+    m_neuray = nullptr;
+    mi::examples::mdl::unload();
 }
 
 // Sets the renderer module to be linked with the generated code.

@@ -36,15 +36,6 @@
 #include <stdint.h>
 
 
-// If enabled, the no-direct-call mode will be used. In this mode, the generated MDL code will
-// be linked, inlined and optimized with the radiance closest hit shader. This makes it possible
-// to get rid of most MDL state related memory reads and writes, leading to much better performance
-// at the cost of higher compile times.
-// If disabled, there will only be one radiance closest hit shader, which dynamically calls
-// direct callables generated for the different functions generated from the MDL code
-#define NO_DIRECT_CALL
-
-
 // If enabled, the ray contribution is stored in the payload registers instead of the RadiancePRD
 // structure, which leads to better performance due to less memory reads and writes
 #define CONTRIB_IN_PAYLOAD

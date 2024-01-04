@@ -131,7 +131,7 @@ public:
         TK_MATERIAL_GEOMETRY, ///< The material_geometry type.
         TK_MATERIAL,          ///< The material type.
 
-        TK_VAR,               ///< A type variable..
+        TK_VAR,               ///< A type variable.
         TK_ERROR,             ///< The error type.
     };
 

@@ -28,28 +28,34 @@ Coco/R itself) does not fall under the GNU General Public License.
 
 #include "Symbol.h"
 #include "Scanner.h"
+#include "BitArray.h"
 
 namespace Coco {
 
-Symbol::Symbol(Node::Kind typ, char const *name, int line) {
-	n = 0;
-	graph = NULL;
-	tokenKind = fixedToken;
-	deletable = false;
-	firstReady = false;
-	first = NULL;
-	follow = NULL;
-	nts = NULL;
-	attrPos = NULL;
-	semPos = NULL;
-
-	this->typ = typ;
-	this->name = coco_string_create(name);
-	this->line = line;
+Symbol::Symbol(Node::Kind typ, char const *name, int line)
+: n(0)
+, typ(typ)
+, name(coco_string_create(name))
+, graph(NULL)
+, tokenKind(fixedToken)
+, deletable(false)
+, firstReady(false)
+, first(NULL)
+, follow(NULL)
+, nts(NULL)
+, line(line)
+, attrPos(NULL)
+, semPos(NULL)
+{
 }
 
 Symbol::~Symbol() {
 	coco_string_delete(name);
+	// delete first and follow set if assigned
+	delete first;
+	delete follow;
+	// delete nt set
+	delete nts;
 }
 
 }; // namespace

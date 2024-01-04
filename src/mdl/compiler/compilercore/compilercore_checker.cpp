@@ -50,7 +50,8 @@ Code_checker::Code_checker(
 }
 
 // Check a value factory for soundness.
-void Code_checker::check_factory(Value_factory const *factory)
+void Code_checker::check_value_factory(
+    Value_factory const *factory)
 {
     if (m_verbose) {
         if (m_printer.is_valid_interface()) {
@@ -64,12 +65,14 @@ void Code_checker::check_factory(Value_factory const *factory)
     for (; it != end; ++it) {
         IValue const *v = *it;
 
-        check_value(v);
+        check_value(factory, v);
     }
 }
 
 // Check a given value for soundness.
-void Code_checker::check_value(IValue const *v)
+void Code_checker::check_value(
+    Value_factory const *owner,
+    IValue const        *v)
 {
     if (v == NULL) {
         report("value is NULL");
@@ -89,9 +92,13 @@ void Code_checker::check_value(IValue const *v)
         }
     }
 
+    if (!owner->is_owner(v)) {
+        report("value is not owned by given factory");
+    }
+
     IType const *v_type = v->get_type();
 
-    check_type(v_type);
+    check_type(const_cast<Value_factory *>(owner)->get_type_factory(), v_type);
 
     switch (v->get_kind()) {
         case IValue::VK_BAD:
@@ -165,7 +172,9 @@ void Code_checker::check_value(IValue const *v)
 }
 
 // Check a given type for soundness.
-void Code_checker::check_type(IType const *type)
+void Code_checker::check_type(
+    Type_factory const *owner,
+    IType const        *type)
 {
     if (type == NULL) {
         report("type is NULL");
@@ -183,6 +192,10 @@ void Code_checker::check_type(IType const *type)
             m_printer->print(type);
             m_printer->print("\n");
         }
+    }
+
+    if (!owner->is_owner(type)) {
+        report("type is not owned by given factory");
     }
 
     switch (type->get_kind()) {
@@ -206,7 +219,7 @@ void Code_checker::check_type(IType const *type)
             IType_array const *a_type = cast<IType_array>(type);
             IType const *e_type = a_type->get_element_type();
 
-            check_type(e_type);
+            check_type(owner, e_type);
 
             if (!a_type->is_immediate_sized()) {
                 IType_array_size const *s = a_type->get_deferred_size();
@@ -232,6 +245,60 @@ void Code_checker::check_type(IType const *type)
     }
 }
 
+// Check a given definition for soundness.
+void Code_checker::check_definition(
+    Definition_table const *owner,
+    IDefinition const      *def)
+{
+    if (def == NULL) {
+        report("def is NULL");
+        return;
+    }
+
+    if (m_verbose) {
+        if (m_printer.is_valid_interface()) {
+            char buffer[32];
+            snprintf(buffer, sizeof(buffer), "0x%p", def);
+
+            m_printer->print("Checking definition ");
+            m_printer->print(buffer);
+            m_printer->print(" ");
+            m_printer->print(def);
+            m_printer->print("\n");
+        }
+    }
+
+    if (!owner->is_owner(def)) {
+        report("Def is not owned by given module");
+    }
+
+    check_type(owner->get_owner_module()->get_type_factory(), def->get_type());
+
+    switch (def->get_kind()) {
+    case IDefinition::DK_ERROR:
+        break;
+    case IDefinition::DK_CONSTANT:
+    case IDefinition::DK_ENUM_VALUE:
+        check_value(owner->get_owner_module()->get_value_factory(), def->get_constant_value());
+        break;
+    case IDefinition::DK_ANNOTATION:
+    case IDefinition::DK_FUNCTION:
+    case IDefinition::DK_CONSTRUCTOR:
+        // TODO: check parameter initializer
+        break;
+    case IDefinition::DK_TYPE:
+        break;
+    case IDefinition::DK_VARIABLE:
+        break;
+    case IDefinition::DK_MEMBER:
+    case IDefinition::DK_PARAMETER:
+    case IDefinition::DK_ARRAY_SIZE:
+    case IDefinition::DK_OPERATOR:
+    case IDefinition::DK_NAMESPACE:
+        break;
+    }
+}
+
 // Report an error.
 void Code_checker::report(char const *msg)
 {
@@ -247,10 +314,54 @@ void Code_checker::report(char const *msg)
 
 // Constructor.
 Module_checker::Module_checker(
-    bool     verbose,
-    IPrinter *printer)
+    Module const *module,
+    bool         verbose,
+    IPrinter     *printer)
 : Base(verbose, printer)
+, m_vf(module->get_value_factory())
+, m_tf(module->get_type_factory())
+, m_deftab(&module->get_definition_table())
 {
+}
+
+// Default post visitor for expressions.
+IExpression *Module_checker::post_visit(
+    IExpression *expr)
+{
+    IType const *type = expr->get_type();
+
+    // check only the type in generic cases
+    check_type(m_tf, type);
+
+    return expr;
+}
+
+// Post visitor for literal expressions.
+IExpression *Module_checker::post_visit(IExpression_literal *expr)
+{
+    IValue const *value = expr->get_value();
+
+    check_value(m_vf, value);
+
+    return expr;
+}
+
+// Post visitor for reference expressions.
+IExpression *Module_checker::post_visit(IExpression_reference *expr)
+{
+    IType const *type = expr->get_type();
+
+    check_type(m_tf, type);
+
+    if (expr->is_array_constructor()) {
+        // no definition
+        return expr;
+    }
+
+    IDefinition const *def = expr->get_definition();
+    check_definition(m_deftab, def);
+
+    return expr;
 }
 
 // Check a module.
@@ -267,13 +378,15 @@ bool Module_checker::check(
         IPrinter *printer = compiler->create_printer(os_stderr.get());
         printer->enable_color(true);
 
-        Module_checker checker(verbose, printer);
+        Module_checker checker(module, verbose, printer);
 
         printer->print("Checking ");
         printer->print(module->get_name());
         printer->print("\n");
 
-        checker.check_factory(module->get_value_factory());
+        checker.check_value_factory(module->get_value_factory());
+
+        checker.visit(module);
 
         if (checker.get_error_count() != 0) {
             printer->print("Checking ");
@@ -287,8 +400,9 @@ bool Module_checker::check(
         printer->print(" OK!\n\n");
         return true;
     } else {
-        Module_checker checker(false, NULL);
-        checker.check_factory(module->get_value_factory());
+        Module_checker checker(module, /*verbose=*/false, /*printer=*/NULL);
+        checker.check_value_factory(module->get_value_factory());
+        checker.visit(module);
         return checker.get_error_count() == 0;
     }
 }

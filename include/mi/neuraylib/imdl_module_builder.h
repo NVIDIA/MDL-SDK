@@ -231,14 +231,39 @@ public:
 
     /// Analyzes which parameters need to be uniform.
     ///
+    /// Note that the method can fail if the graph to be analyzed is invalid and/or never uniform
+    /// independent of uniform modifiers of parameter types.
+    ///
+    /// <table>
+    /// <tr>
+    ///     <th>root_expr_uniform is \c false</th>
+    ///     <th>root_expr_uniform is \c true</th>
+    ///     <th>Interpretation</th>
+    /// </tr>
+    /// <tr><td>failure</td><td>failure</td><td>The graph is invalid.</td></tr>
+    /// <tr><td>failure</td><td>success</td><td>This case is not possible.</td></tr>
+    /// <tr><td>success</td><td>failure</td><td>The graph is never uniform.</td></tr>
+    /// <tr><td>success</td><td>success</td><td>The graph is uniform if the parameters returned in
+    ///                                         the \c true case are made uniform.</td></tr>
+    /// </table>
+    ///
+    /// If the graph should be uniform, and you cannot rule out invalid graphs, then you might want
+    /// to invoke this method first with \p root_expr_uniform set to \c false to check for
+    /// validity. If that method succeeds, you can then call it again with \p root_expr_uniform set
+    /// to \c true to obtain the constraints on the parameters.
+    ///
     /// \param root_expr               Root expression of the graph, i.e., the body of the new
-    ///                                material or function.
+    ///                                material or function. Feasible sub-expression kinds:
+    ///                                constants, direct calls, and parameter references.
     /// \param root_expr_uniform       Indicates whether the root expression should be uniform.
     /// \param context                 The execution context can be used to pass options and to
     ///                                retrieve error and/or warning messages. Can be \c NULL.
-    /// \return                        Indicates which parameters need to be uniform. The array
-    ///                                might be shorter than expected if trailing parameters are
-    ///                                not referenced by \p root_expr (or in case of errors).
+    /// \return                        Returns an array of boolean values indicating which
+    ///                                parameters need to be uniform (or \c NULL in case of
+    ///                                errors). The array indices match the indices of the
+    ///                                parameter references. The array might be shorter than
+    ///                                expected if trailing parameters are not referenced by \p
+    ///                                root_expr.
     virtual const IArray* analyze_uniform(
         const IExpression* root_expr,
         bool root_expr_uniform,

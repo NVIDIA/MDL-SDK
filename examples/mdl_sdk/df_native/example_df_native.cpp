@@ -1566,7 +1566,7 @@ bool trace_ray(mi::Float32_3 vp_sample[3], Render_context &rc, Render_context::R
                     nullptr);
                 assert(ret_code == 0 && "execute_bsdf_auxiliary failed");
 
-                vp_sample[VPCH_ALBEDO] = aux_data.albedo;
+                vp_sample[VPCH_ALBEDO] = aux_data.albedo_diffuse + aux_data.albedo_glossy;
                 vp_sample[VPCH_NORMAL] = aux_data.normal;
             }
 

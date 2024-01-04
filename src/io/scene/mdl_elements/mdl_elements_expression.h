@@ -28,15 +28,14 @@
 /// \file
 /// \brief      Header for the IExpression hierarchy and IExpression_factory implementation.
 
-#ifndef IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_EXPRESSION_IMPL_H
-#define IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_EXPRESSION_IMPL_H
+#ifndef IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_EXPRESSION_H
+#define IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_EXPRESSION_H
 
 #include <mi/base/handle.h>
 #include <mi/base/interface_implement.h>
 
 #include "i_mdl_elements_expression.h"
 
-#include <map>
 #include <vector>
 #include <base/lib/log/i_log_assert.h>
 
@@ -219,9 +218,6 @@ public:
 
 private:
 
-    typedef std::map<std::string, mi::Size> Name_index_map;
-    Name_index_map m_name_index;
-
     using Index_name_vector = std::vector<std::string>;
     Index_name_vector m_index_name;
 
@@ -389,9 +385,6 @@ public:
     friend class Expression_factory; // for serialization/deserialization
 
 private:
-
-    typedef std::map<std::string, mi::Size> Name_index_map;
-    Name_index_map m_name_index;
 
     using Index_name_vector = std::vector<std::string>;
     Index_name_vector m_index_name;
@@ -638,12 +631,14 @@ public:
     friend class Expression_factory; // for serialization/deserialization
 
 private:
-    std::vector<mi::base::Handle<const IAnnotation_definition>> m_anno_definitions;
-    std::map<std::string, mi::Size> m_name_to_index;
+
+    using Annotation_definition_vector
+        = std::vector<mi::base::Handle<const IAnnotation_definition>>;
+    Annotation_definition_vector  m_anno_definitions;
 };
 
 } // namespace MDL
 
 } // namespace MI
 
-#endif // IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_EXPRESSION_IMPL_H
+#endif // IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_EXPRESSION_H

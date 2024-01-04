@@ -88,6 +88,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
 
     // --------------------------------------------------------------------------------------------
 
+    // Options that are defined at application start. They cannot be changed while the application
+    // is running.
     class Base_options
     {
     public:
@@ -105,7 +107,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
             , hide_gui(false)
             , ray_depth(6)
             , output_file("output.png")
-            , lpe("beauty")
+            , lpe({ "beauty" })
             , iterations(1)
             , enable_auxiliary(true)
             , texture_results_cache_size(16)
@@ -125,8 +127,12 @@ namespace mi { namespace examples { namespace mdl_d3d12
             , gpu_debug(false)
             , enable_shader_cache(false)
             , shader_opt("O3")
+            , distilling_target("none")
 #if MDL_ENABLE_SLANG
             , use_slang(false)
+#endif
+#if MDL_ENABLE_MATERIALX
+            , mtlx_to_mdl("latest")
 #endif
         {
         }
@@ -145,7 +151,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         size_t ray_depth;
         std::string output_file;
         std::string generated_mdl_path;
-        std::string lpe;
+        std::vector<std::string> lpe;
         size_t iterations;
         bool enable_auxiliary;
         size_t texture_results_cache_size;
@@ -165,6 +171,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         bool gpu_debug;
         bool enable_shader_cache;
         std::string shader_opt;
+        std::string distilling_target;
 
 #if MDL_ENABLE_SLANG
         bool use_slang;
@@ -173,6 +180,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
 #if MDL_ENABLE_MATERIALX
         std::vector<std::string> mtlx_paths;
         std::vector<std::string> mtlx_libraries;
+        std::string mtlx_to_mdl;
 #endif
 
         std::unordered_map<std::string, std::string> user_options;
@@ -190,6 +198,35 @@ namespace mi { namespace examples { namespace mdl_d3d12
             out_value = "";
             return false;
         }
+    };
+
+    // --------------------------------------------------------------------------------------------
+
+    class Base_dynamic_options
+    {
+    public:
+        Base_dynamic_options(const Base_options* options);
+
+        // Called by the application to check if the progressive rendering has to be restarted.
+        // Returns true and resets in case the rendering has to be restarting. A further call to 
+        // this function will return false until a corresponding option changed.
+        bool get_restart_progressive_rendering();
+
+        /// Get/Set the currently active expression used by the renderer.
+        /// Changes will trigger a restart of the progressive rendering.
+        const std::string& get_active_lpe() const { return m_active_lpe; }
+        void set_active_lpe(const std::string& expression)
+        { 
+            if (m_active_lpe != expression)
+            {
+                m_active_lpe = expression;
+                m_restart_progressive_rendering = true;
+            }
+        }
+
+    private:
+        bool m_restart_progressive_rendering = true;
+        std::string m_active_lpe;
     };
 
     // --------------------------------------------------------------------------------------------
@@ -228,10 +265,17 @@ namespace mi { namespace examples { namespace mdl_d3d12
         virtual ~Base_application();
 
         /// called only from the main entry point of the application.
-        int run(Base_options* options, HINSTANCE hInstance, int nCmdShow);
+        int run(
+            Base_options* options, 
+            Base_dynamic_options* dynamic_options,
+            HINSTANCE hInstance,
+            int nCmdShow);
 
-        /// get access the applications options that have been parsed from the command line
+        /// get access to the applications options that have been parsed from the command line
         const Base_options* get_options() const { return m_options; }
+
+        /// get access to the application options that can change at runtime.
+        Base_dynamic_options* get_dynamic_options() { return m_dynamic_options; }
 
         /// get access to the DXGI factory (required by the window)
         IDXGIFactory4* get_dxgi_factory() { return m_factory.Get(); }
@@ -285,12 +329,13 @@ namespace mi { namespace examples { namespace mdl_d3d12
         void set_scene_path(const std::string& file_path) { m_scene_path = file_path; }
     private:
         // allow the application to see / change options before loading
-        bool initialize_internal(Base_options* options);
+        bool initialize_internal(Base_options* options, Base_dynamic_options* dynamic_options);
 
         void update();
         void render();
 
         const Base_options* m_options;
+        Base_dynamic_options* m_dynamic_options;
         std::string m_scene_path;
 
         ComPtr<IDXGIFactory4> m_factory;

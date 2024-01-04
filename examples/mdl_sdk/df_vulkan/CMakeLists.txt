@@ -31,16 +31,15 @@ set(PROJECT_NAME examples-mdl_sdk-df_vulkan)
 
 # collect resources
 set(PROJECT_RESOURCES
-    mdl_runtime.glsl
-    path_trace.comp
-    display.vert
-    display.frag
+    "mdl_runtime.glsl"
+    "path_trace.comp"
+    "display.vert"
+    "display.frag"
     )
 
 # collect sources
 set(PROJECT_SOURCES
     "example_df_vulkan.cpp"
-    ${PROJECT_RESOURCES}
     )
 
 # create target from template
@@ -63,11 +62,8 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
     )
 
 # copy additional resources
-target_copy_to_output_dir(TARGET ${PROJECT_NAME}
-    RELATIVE    
-        "${CMAKE_CURRENT_SOURCE_DIR}"
-    FILES       
-        ${PROJECT_RESOURCES}
+target_add_content(TARGET ${PROJECT_NAME}
+    FILES ${PROJECT_RESOURCES}
     )
 
 # organize IDE folder
@@ -83,8 +79,3 @@ add_target_install(
     TARGET ${PROJECT_NAME}
     DESTINATION "examples/mdl_sdk/df_vulkan"
     )
-
-# -------------------------------------------------------------------------------------------------
-# Add tests if available
-# -------------------------------------------------------------------------------------------------
-add_tests()

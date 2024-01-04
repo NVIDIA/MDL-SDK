@@ -512,6 +512,8 @@ public:
 
     mi::neuraylib::IType_list* create_type_list() const override;
 
+    const mi::neuraylib::IType* create_from_mdl_type_name( const char* name) const override;
+
     const mi::neuraylib::IType_enum* get_predefined_enum(
         mi::neuraylib::IType_enum::Predefined_id id) const override;
 
@@ -521,24 +523,21 @@ public:
     mi::neuraylib::IType_list* clone( const mi::neuraylib::IType_list* type_list) const override;
 
     mi::Sint32 compare(
-        const mi::neuraylib::IType* lhs,
-        const mi::neuraylib::IType* rhs) const override;
+        const mi::neuraylib::IType* lhs, const mi::neuraylib::IType* rhs) const override;
 
     mi::Sint32 compare(
-        const mi::neuraylib::IType_list* lhs,
-        const mi::neuraylib::IType_list* rhs) const override;
+        const mi::neuraylib::IType_list* lhs, const mi::neuraylib::IType_list* rhs) const override;
 
     mi::Sint32 is_compatible(
-        const mi::neuraylib::IType* src,
-        const mi::neuraylib::IType* dst) const override;
+        const mi::neuraylib::IType* src, const mi::neuraylib::IType* dst) const override;
 
-    const mi::IString* dump(
-        const mi::neuraylib::IType* type,
-        mi::Size depth) const override;
+    const mi::IString* dump( const mi::neuraylib::IType* type, mi::Size depth) const override;
 
-    const mi::IString* dump(
-        const mi::neuraylib::IType_list* list,
-        mi::Size depth) const override;
+    const mi::IString* dump( const mi::neuraylib::IType_list* list, mi::Size depth) const override;
+
+    const mi::IString* get_mdl_type_name( const mi::neuraylib::IType* type) const override;
+
+    const mi::IString* get_mdl_module_name( const mi::neuraylib::IType* type) const override;
 
     // internal methods
 

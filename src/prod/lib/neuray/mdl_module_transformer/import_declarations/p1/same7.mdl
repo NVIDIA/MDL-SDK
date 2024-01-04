@@ -1,0 +1,3 @@
+mdl 1.6;
+
+export int same7_f() { return 42; }

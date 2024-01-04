@@ -127,8 +127,8 @@ const mi::base::IInterface* Compound_impl<I, T, ROWS, COLUMNS>::get_value( mi::S
     element_proxy_class_name += get_element_type_name();
     element_proxy_class_name += "_proxy";
 
-    mi::INumber* value
-        = s_class_factory->create_type_instance<mi::INumber>( nullptr, element_proxy_class_name.c_str());
+    mi::INumber* value= s_class_factory->create_type_instance<mi::INumber>(
+        nullptr, element_proxy_class_name.c_str());
     mi::base::Handle<IProxy> proxy( value->get_interface<IProxy>());
     proxy->set_pointer_and_owner( &m_storage[index], this->cast_to_major());
     return value;
@@ -144,8 +144,8 @@ mi::base::IInterface* Compound_impl<I, T, ROWS, COLUMNS>::get_value( mi::Size in
     element_proxy_class_name += get_element_type_name();
     element_proxy_class_name += "_proxy";
 
-    mi::INumber* value
-        = s_class_factory->create_type_instance<mi::INumber>( nullptr, element_proxy_class_name.c_str());
+    mi::INumber* value = s_class_factory->create_type_instance<mi::INumber>(
+        nullptr, element_proxy_class_name.c_str());
     mi::base::Handle<IProxy> proxy( value->get_interface<IProxy>());
     proxy->set_pointer_and_owner( &m_storage[index], this->cast_to_major());
     return value;

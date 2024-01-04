@@ -292,6 +292,16 @@ struct PathTracerState
     Mesh                          *mesh = nullptr;
     std::vector<Instance>          instances;
 
+    // If true, there will only be one radiance closest hit shader, which
+    // dynamically calls direct callables generated for the different functions
+    // generated from the MDL code.
+    // Otherwise, the no-direct-call mode will be used. In this mode, the
+    // generated MDL code will be linked, inlined and optimized with the
+    // radiance closest hit shader. This makes it possible to get rid of most
+    // MDL state related memory reads and writes, leading to much better
+    // performance at the cost of higher compile times.
+    bool                           use_direct_call = false;
+
     // Traversable handle for instance AS
     OptixTraversableHandle         ias_handle = 0;
     // Instance AS memory
@@ -310,7 +320,7 @@ struct PathTracerState
     std::vector<OptixProgramGroup> mdl_callable_groups;
 
     CUstream                       stream = 0;
-    Params                         params;
+    Params                         params = {};
     Params*                        d_params = nullptr;
 
     bool                           resize_dirty = false;
@@ -380,7 +390,7 @@ float build_alias_map(
 }
 
 
-bool initEnvironmentLight(PathTracerState& state, const std::string& env_path)
+bool initEnvironmentLight(PathTracerState &state, const std::string& env_path)
 {
     Timing timing("initialize environment light");
 
@@ -816,7 +826,7 @@ void optix_context_log_cb(unsigned int level, const char* tag, const char* messa
 }
 
 
-void createContext(PathTracerState& state, int cuda_device_id)
+void createContext(PathTracerState &state, int cuda_device_id)
 {
     Timing timing("create OptiX context");
 
@@ -854,8 +864,9 @@ void createContext(PathTracerState& state, int cuda_device_id)
     state.pipeline_compile_options.pipelineLaunchParamsVariableName = "params";
 }
 
+
 OptixProgramGroup createRadianceClosestHitProgramGroup(
-    PathTracerState& state,
+    PathTracerState &state,
     char const *module_code,
     size_t module_size)
 {
@@ -897,25 +908,91 @@ OptixProgramGroup createRadianceClosestHitProgramGroup(
 }
 
 
+// Create an OptiX module from given module code and create 5 callables,
+// 4 for the BSDF and 1 for thin_walled.
+// Returns the base index into mdl_callable_groups of the created callables.
+size_t createDirectCallables(
+    PathTracerState &state,
+    char const *module_code,
+    size_t module_size,
+    std::string &bsdf_base_name,
+    std::string &thin_walled_name)
+{
+    char   log[2048];
+    size_t sizeof_log = sizeof(log);
+    OptixModule module;
+    OPTIX_CHECK_LOG(optixModuleCreateFromPTX(
+        state.context,
+        &state.module_compile_options,
+        &state.pipeline_compile_options,
+        module_code,
+        module_size,
+        log,
+        &sizeof_log,
+        &module));
+
+    // Create direct callable program group
+    size_t callable_base_index = state.mdl_callable_groups.size();
+    state.mdl_callable_groups.resize(callable_base_index + 5);
+
+    std::string init_name   = bsdf_base_name + "_init";
+    std::string sample_name = bsdf_base_name + "_sample";
+    std::string eval_name   = bsdf_base_name + "_evaluate";
+    std::string pdf_name    = bsdf_base_name + "_pdf";
+
+    OptixProgramGroupOptions callable_options = {};
+    OptixProgramGroupDesc    callable_descs[5] = {};
+    callable_descs[0].kind                          = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
+    callable_descs[0].callables.moduleDC            = module;
+    callable_descs[0].callables.entryFunctionNameDC = init_name.c_str();
+    callable_descs[1].kind                          = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
+    callable_descs[1].callables.moduleDC            = module;
+    callable_descs[1].callables.entryFunctionNameDC = sample_name.c_str();
+    callable_descs[2].kind                          = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
+    callable_descs[2].callables.moduleDC            = module;
+    callable_descs[2].callables.entryFunctionNameDC = eval_name.c_str();
+    callable_descs[3].kind                          = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
+    callable_descs[3].callables.moduleDC            = module;
+    callable_descs[3].callables.entryFunctionNameDC = pdf_name.c_str();
+    callable_descs[4].kind                          = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
+    callable_descs[4].callables.moduleDC            = module;
+    callable_descs[4].callables.entryFunctionNameDC = thin_walled_name.c_str();
+    sizeof_log = sizeof(log);
+    OPTIX_CHECK_LOG(optixProgramGroupCreate(
+        state.context,
+        callable_descs,
+        5,
+        &callable_options,
+        log,
+        &sizeof_log,
+        &state.mdl_callable_groups[callable_base_index]));
+
+    return callable_base_index;
+}
+
+
 void addMDLMaterial(
-    PathTracerState& state,
+    PathTracerState &state,
     std::string const &material_name,
     bool class_compilation)
 {
     mi::base::Handle<mi::neuraylib::ITransaction> transaction =
         state.mdl_helper->create_transaction();
 
-#ifdef NO_DIRECT_CALL
-    std::string bsdf_base_name   = "mdlcode";
-    std::string thin_walled_name = "mdlcode_thin_walled";
-#else
-    // direct callable function names must start with OptiX semantic type
-    // prefix "__direct_callable__" and need unique names
-    std::string bsdf_base_name =
-        "__direct_callable__mdlcode" + std::to_string(state.mdl_materials.size());
-    std::string thin_walled_name =
-        "__direct_callable__mdlcode_thin_walled" + std::to_string(state.mdl_materials.size());
-#endif
+    std::string bsdf_base_name;
+    std::string thin_walled_name;
+
+    if (state.use_direct_call) {
+        // direct callable function names must start with OptiX semantic type
+        // prefix "__direct_callable__" and need unique names
+        bsdf_base_name =
+            "__direct_callable__mdlcode" + std::to_string(state.mdl_materials.size());
+        thin_walled_name =
+            "__direct_callable__mdlcode_thin_walled" + std::to_string(state.mdl_materials.size());
+    } else {
+        bsdf_base_name   = "mdlcode";
+        thin_walled_name = "mdlcode_thin_walled";
+    }
 
     std::vector<mi::neuraylib::Target_function_description> descs;
     descs.push_back(mi::neuraylib::Target_function_description(
@@ -958,84 +1035,42 @@ void addMDLMaterial(
             callable_base_index = it->second.second;
         } else {
             Timing timing("prepare OptiX material hit group");
-#ifdef NO_DIRECT_CALL
-            // In no-direct-call mode, we create one closest hit program per hash-unique material.
-            mat_hit_group = createRadianceClosestHitProgramGroup(
-                state,
-                compile_res.target_code->get_code(),
-                compile_res.target_code->get_code_size());
 
-            state.radiance_hit_groups.push_back(mat_hit_group);
+            if (state.use_direct_call) {
+                // In direct-call mode, there will be only one closest hit program,
+                // calling different direct callables depending on the material.
+                callable_base_index = createDirectCallables(
+                    state,
+                    compile_res.target_code->get_code(),
+                    compile_res.target_code->get_code_size(),
+                    bsdf_base_name,
+                    thin_walled_name);
 
-            callable_base_index = 0;  // not used in this mode
-#else
-            // In direct-call mode, create OptiX module from target code and create 5 callables,
-            // 4 for the BSDF and 1 for thin_walled
-            char   log[2048];
-            size_t sizeof_log = sizeof(log);
-            OptixModule module;
-            OPTIX_CHECK_LOG(optixModuleCreateFromPTX(
-                state.context,
-                &state.module_compile_options,
-                &state.pipeline_compile_options,
-                compile_res.target_code->get_code(),
-                compile_res.target_code->get_code_size(),
-                log,
-                &sizeof_log,
-                &module));
+                // Create the closest hit program, if it hasn't already been created
+                if (state.radiance_hit_groups.empty()) {
+                    std::string ptx = mi::examples::io::read_text_file(
+                        mi::examples::io::get_executable_folder() +
+                        "/optix7_mdl_closest_hit_radiance_direct_call.ptx");
+                    mat_hit_group = createRadianceClosestHitProgramGroup(
+                        state,
+                        ptx.c_str(),
+                        ptx.size());
 
-            // Create direct callable program group
-            callable_base_index = state.mdl_callable_groups.size();
-            state.mdl_callable_groups.resize(callable_base_index + 5);
-
-            std::string init_name   = bsdf_base_name + "_init";
-            std::string sample_name = bsdf_base_name + "_sample";
-            std::string eval_name   = bsdf_base_name + "_evaluate";
-            std::string pdf_name    = bsdf_base_name + "_pdf";
-
-            OptixProgramGroupOptions callable_options = {};
-            OptixProgramGroupDesc    callable_descs[5] = {};
-            callable_descs[0].kind                          = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-            callable_descs[0].callables.moduleDC            = module;
-            callable_descs[0].callables.entryFunctionNameDC = init_name.c_str();
-            callable_descs[1].kind                          = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-            callable_descs[1].callables.moduleDC            = module;
-            callable_descs[1].callables.entryFunctionNameDC = sample_name.c_str();
-            callable_descs[2].kind                          = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-            callable_descs[2].callables.moduleDC            = module;
-            callable_descs[2].callables.entryFunctionNameDC = eval_name.c_str();
-            callable_descs[3].kind                          = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-            callable_descs[3].callables.moduleDC            = module;
-            callable_descs[3].callables.entryFunctionNameDC = pdf_name.c_str();
-            callable_descs[4].kind                          = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-            callable_descs[4].callables.moduleDC            = module;
-            callable_descs[4].callables.entryFunctionNameDC = thin_walled_name.c_str();
-            sizeof_log = sizeof(log);
-            OPTIX_CHECK_LOG(optixProgramGroupCreate(
-                state.context,
-                callable_descs,
-                5,
-                &callable_options,
-                log,
-                &sizeof_log,
-                &state.mdl_callable_groups[callable_base_index]));
-
-            // In direct-call mode, there will be only one closest hit program.
-            // Create it, if it hasn't already been created
-            if (state.radiance_hit_groups.empty()) {
-                std::string ptx = mi::examples::io::read_text_file(
-                    mi::examples::io::get_executable_folder() +
-                    "/optix7_mdl_closest_hit_radiance.ptx");
+                    state.radiance_hit_groups.push_back(mat_hit_group);
+                } else {
+                    mat_hit_group = state.radiance_hit_groups.back();
+                }
+            } else {
+                // In no-direct-call mode, we create one closest hit program per hash-unique material.
                 mat_hit_group = createRadianceClosestHitProgramGroup(
                     state,
-                    ptx.c_str(),
-                    ptx.size());
+                    compile_res.target_code->get_code(),
+                    compile_res.target_code->get_code_size());
 
                 state.radiance_hit_groups.push_back(mat_hit_group);
-            } else {
-                mat_hit_group = state.radiance_hit_groups.back();
+
+                callable_base_index = 0;  // not used in this mode
             }
-#endif
 
             state.optix_program_cache[code_str] =
                 std::make_pair(mat_hit_group, callable_base_index);
@@ -1101,7 +1136,7 @@ void addMDLMaterial(
 
 
 void initMDL(
-    PathTracerState& state,
+    PathTracerState &state,
     mi::examples::mdl::Configure_options const& configure_options)
 {
     Timing timing("init MDL SDK");
@@ -1112,18 +1147,19 @@ void initMDL(
         /*num_texture_results=*/ 16,
         /*enable_derivative=*/   false);
 
-#ifdef NO_DIRECT_CALL
-    // In no-direct-call mode, register closest hit shader code and texture runtime to be
-    // linked and optimized with the generated code
-    state.mdl_helper->set_renderer_module(
-        mi::examples::io::get_executable_folder() + "/optix7_mdl_closest_hit_radiance.bc",
-        /*visible_functions=*/ "__closesthit__radiance");
-#endif
+    if (!state.use_direct_call) {
+        // In no-direct-call mode, register closest hit shader code and texture
+        // runtime to be linked and optimized with the generated code
+        state.mdl_helper->set_renderer_module(
+            mi::examples::io::get_executable_folder() +
+            "/optix7_mdl_closest_hit_radiance.bc",
+            /*visible_functions=*/ "__closesthit__radiance");
+    }
 }
 
 
 void loadMaterials(
-    PathTracerState& state,
+    PathTracerState &state,
     std::vector<std::string> const& material_names,
     bool class_compilation)
 {
@@ -1132,7 +1168,7 @@ void loadMaterials(
 }
 
 
-void buildMeshAccel(PathTracerState& state, std::string const &model)
+void buildMeshAccel(PathTracerState &state, std::string const &model)
 {
     Timing timing("building mesh acceleration structure");
 
@@ -1143,7 +1179,7 @@ void buildMeshAccel(PathTracerState& state, std::string const &model)
 }
 
 
-void buildScene(PathTracerState& state)
+void buildScene(PathTracerState &state)
 {
     // create a circle of spheres, one per provided material
 
@@ -1176,7 +1212,7 @@ void buildScene(PathTracerState& state)
         float y = r * sinf(a);
 
         state.instances.push_back(
-            Instance{ state.mesh, i % state.mdl_materials.size(), {
+            Instance{ state.mesh, unsigned(i % state.mdl_materials.size()), {
                 1, 0, 0, x,
                 0, 1, 0, y,
                 0, 0, 1, 0
@@ -1196,7 +1232,7 @@ void buildScene(PathTracerState& state)
 }
 
 
-void buildInstanceAccel(PathTracerState& state)
+void buildInstanceAccel(PathTracerState &state)
 {
     Timing timing("building instance acceleration structure");
 
@@ -1266,7 +1302,7 @@ void buildInstanceAccel(PathTracerState& state)
 }
 
 
-void createProgramGroups(PathTracerState& state)
+void createProgramGroups(PathTracerState &state)
 {
     Timing timing("creating OptiX module and program groups");
 
@@ -1351,7 +1387,7 @@ void createProgramGroups(PathTracerState& state)
 }
 
 
-void createPipeline(PathTracerState& state)
+void createPipeline(PathTracerState &state)
 {
     Timing timing("setting up ray tracing pipeline");
 
@@ -1390,11 +1426,7 @@ void createPipeline(PathTracerState& state)
 
     uint32_t max_trace_depth = 2;
     uint32_t max_cc_depth = 0;
-#ifdef NO_DIRECT_CALL
-    uint32_t max_dc_depth = 0;
-#else
-    uint32_t max_dc_depth = 1;
-#endif
+    uint32_t max_dc_depth = state.use_direct_call ? 1 : 0;
     uint32_t direct_callable_stack_size_from_traversal;
     uint32_t direct_callable_stack_size_from_state;
     uint32_t continuation_stack_size;
@@ -1419,7 +1451,7 @@ void createPipeline(PathTracerState& state)
 }
 
 
-void createSBT(PathTracerState& state)
+void createSBT(PathTracerState &state)
 {
     // Create a SBT record for the ray generation program
     RayGenSbtRecord raygen_record;
@@ -1492,7 +1524,7 @@ void createSBT(PathTracerState& state)
 }
 
 
-void initLaunchParams(PathTracerState& state)
+void initLaunchParams(PathTracerState &state)
 {
     CUDA_CHECK(cudaMalloc(
         reinterpret_cast<void**>(&state.params.accum_buffer),
@@ -1509,7 +1541,7 @@ void initLaunchParams(PathTracerState& state)
 }
 
 
-void handleCameraUpdate(PathTracerState& state)
+void handleCameraUpdate(PathTracerState &state)
 {
     if (!state.camera_changed)
         return;
@@ -1540,7 +1572,7 @@ void handleCameraUpdate(PathTracerState& state)
 }
 
 
-void handleResize(mi::examples::mdl::GL_display *gl_display, PathTracerState& state)
+void handleResize(mi::examples::mdl::GL_display *gl_display, PathTracerState &state)
 {
     if (!state.resize_dirty)
         return;
@@ -1562,7 +1594,7 @@ void handleResize(mi::examples::mdl::GL_display *gl_display, PathTracerState& st
 }
 
 
-void updateState(mi::examples::mdl::GL_display *gl_display, PathTracerState& state)
+void updateState(mi::examples::mdl::GL_display *gl_display, PathTracerState &state)
 {
     if (state.camera_changed || state.resize_dirty)
         state.params.subframe_index = 0;
@@ -1572,7 +1604,7 @@ void updateState(mi::examples::mdl::GL_display *gl_display, PathTracerState& sta
 }
 
 
-void launchSubframe(mi::examples::mdl::GL_display *gl_display, PathTracerState& state)
+void launchSubframe(mi::examples::mdl::GL_display *gl_display, PathTracerState &state)
 {
     // Map display buffer, if present
     if (gl_display)
@@ -1606,7 +1638,7 @@ void launchSubframe(mi::examples::mdl::GL_display *gl_display, PathTracerState& 
 }
 
 
-void cleanupState(PathTracerState& state)
+void cleanupState(PathTracerState &state)
 {
     OPTIX_CHECK(optixPipelineDestroy(state.pipeline));
     OPTIX_CHECK(optixProgramGroupDestroy(state.raygen_prog_group));
@@ -1737,7 +1769,7 @@ void scrollCallback(GLFWwindow* window, double xscroll, double yscroll)
 
 
 // Initialize OpenGL and create a window with an associated OpenGL context.
-GLFWwindow *initGUI(PathTracerState& state)
+GLFWwindow *initGUI(PathTracerState &state)
 {
     // Initialize GLFW
     check_success(glfwInit());
@@ -2124,6 +2156,7 @@ void printUsageAndExit(const char* argv0)
         << " --fov <fov>            Horizontal field of view angle in degrees (default: 45.0)\n"
         << " --model <name>         Can be \"sphere\" or \"cube\" (default: sphere)\n"
         << " --nocc                 Disable class-compilation for MDL material\n"
+        << " --use-direct-call      Use OptiX direct callables to call MDL generated code\n"
         << " --iterations | -i      Number of iterations in file mode, does not improve\n"
         << "                        image, just used for performance measurement\n"
         << " --help | -h            Print this usage message\n";
@@ -2198,6 +2231,8 @@ int main(int argc, char* argv[])
                     printUsageAndExit(argv[0]);
             } else if (arg == "--nocc") {
                 class_compilation = false;
+            } else if (arg == "--use-direct-call") {
+                state.use_direct_call = true;
             } else if (arg == "--iterations" || arg == "-i") {
                 if (i >= argc - 1)
                     printUsageAndExit(argv[0]);

@@ -1,0 +1,11 @@
+#!/bin/bash
+
+@_SH_PATHS@
+
+export MI_SRC=@MDL_SRC_FOLDER@
+export MI_DATA=
+export MI_LARGE_DATA=
+
+cd @CMAKE_CURRENT_BINARY_DIR@
+
+@CMAKE_BUILD_TYPE@/@CREATE_UNIT_TEST_NAME@

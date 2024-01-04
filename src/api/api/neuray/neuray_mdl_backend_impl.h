@@ -28,8 +28,8 @@
 /// \file
 /// \brief
 
-#ifndef API_API_NEURAY_MDL_BACKEND_H
-#define API_API_NEURAY_MDL_BACKEND_H
+#ifndef API_API_NEURAY_NEURAY_MDL_BACKEND_IMPL_H
+#define API_API_NEURAY_NEURAY_MDL_BACKEND_IMPL_H
 
 #include <string>
 #include <vector>
@@ -210,4 +210,4 @@ private:
 
 } // namespace MI
 
-#endif // API_API_NEURAY_MDL_BACKEND_H
+#endif // API_API_NEURAY_NEURAY_MDL_BACKEND_IMPL_H

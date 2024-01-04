@@ -268,6 +268,8 @@ const char* Mdle_resource_mapper::get_resource_name(
     {
         std::string name = suggested_file_name;
         size_t p = name.find_last_of("/\\:");
+        ASSERT(M_NEURAY_API, p != std::string::npos);
+        ASSERT(M_NEURAY_API, name.substr(p+1, 5) == "main_");
         name = name.substr(p + 6); // strip away the leading "<path>/main_"
 
         // store the buffer
@@ -683,8 +685,10 @@ mi::Sint32 Mdle_api_impl::export_mdle(
     if (!has_origin) {
         // add origin annotation
         std::string definiton_name = db_transaction->tag_to_name(prototype_tag);
-        definiton_name = definiton_name.substr(definiton_name.find("::"));// strip mdl::/mdle:: prefix
-        definiton_name = definiton_name.substr(0, definiton_name.rfind('(')); // strip signature
+        // strip mdl::/mdle:: prefix
+        definiton_name = definiton_name.substr(definiton_name.find("::"));
+        // strip signature
+        definiton_name = definiton_name.substr(0, definiton_name.rfind('('));
 
         mi::base::Handle<MDL::IValue> anno_value(
             vf->create_string(definiton_name.c_str()));

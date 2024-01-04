@@ -1,0 +1,100 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Local_normal bottomup {
+
+    material(tw,sf,bf,ior,vol, material_geometry(d,cutout,n), hair) [[ w ~ _w, normal ~ nl ]]
+        --> material(tw,sf,bf,ior,vol,material_geometry(d,cutout,nprime),hair)
+        maybe n != nl
+        where nprime = nvidia::distilling_support::add_detail_normal( nl, n);
+
+    bsdf() --> bsdf() [[ w = 0.0, normal = state::normal() ]];
+    diffuse_reflection_bsdf(t,r) --> diffuse_reflection_bsdf(t,r) [[ w = 0.0, normal = state::normal() ]];
+    diffuse_transmission_bsdf(t) --> diffuse_transmission_bsdf(t) [[ w = 0.0, normal = state::normal() ]];
+    specular_bsdf(c) --> specular_bsdf(c) [[ w = 0.0, normal = state::normal() ]];
+
+    simple_glossy_bsdf(a,b,c,d,e) --> simple_glossy_bsdf(a,b,c,d,e) [[ w = 0.0, normal = state::normal() ]];
+    bsdf_mix_1(w1, b [[ w ~ nw, normal ~ nl ]]) --> bsdf_mix_1(w1, b) [[ w = w1 * nw, normal = nl ]] ;
+
+    bsdf_color_mix_1(w1, b [[ w ~ nw, normal ~ nl ]])
+        --> bsdf_color_mix_1(w1, b) [[ w = math::luminance(w1) * nw, normal = nl ]];
+
+    bsdf_mix_2(w1,b1 [[ w ~ nw1, normal ~ nl1 ]],w2,b2 [[w ~ nw2, normal ~ nl2 ]])
+        --> bsdf_mix_2(w1,b1,w2,b2) [[ w = w1 * nw1 + w2 * nw2, normal = nl1 ]]
+        if nl1 == nl2;
+      bsdf_mix_2(w1,b1 [[ w ~ nw1, normal ~ nl1 ]],w2,b2 [[ w ~ nw2, normal ~ nl2 ]])
+        --> bsdf_mix_2(w1,b1,w2,b2)
+          [[ w = w1 * nw1 + w2 * nw2,
+            normal = nvidia::distilling_support::affine_normal_sum( w1 * nw1, nl1, w2 * nw2, nl2) ]];
+
+    bsdf_color_mix_2(w1,local_normal(nw1,nl1),w2,local_normal(nw2,nl2))
+        --> local_normal( math::luminance(w1) * nw1 + math::luminance(w2) * nw2, nl1)
+        if nl1 == nl2;
+    bsdf_color_mix_2(w1,local_normal(nw1,nl1),w2,local_normal(nw2,nl2))
+        --> local_normal( w1p * nw1 + w2p * nw2,
+                nvidia::distilling_support::affine_normal_sum( w1p * nw1, nl1, w2p * nw2, nl2))
+        where w1p = math::luminance(w1)
+              w2p = math::luminance(w2);
+    bsdf_mix_3(w1,local_normal(nw1,nl1),
+               w2,local_normal(nw2,nl2),
+               w3,local_normal(nw3,nl3))
+        --> local_normal( w1 * nw1 + w2 * nw2 + w3 * nw3, nl1)
+        if (nl1 == nl2) && (nl1 == nl3);
+    bsdf_mix_3(w1,local_normal(nw1,nl1),
+               w2,local_normal(nw2,nl2),
+               w3,local_normal(nw3,nl3))
+         --> local_normal( w1 * nw1 + w2 * nw2 + w3 * nw3,
+                 nvidia::distilling_support::affine_normal_sum(
+                     w1 * nw1, nl1, w2 * nw2, nl2, w3 * nw3, nl3));
+    bsdf_color_mix_3(w1,local_normal(nw1,nl1),
+                     w2,local_normal(nw2,nl2),
+                     w3,local_normal(nw3,nl3))
+        --> local_normal( math::luminance(w1) * nw1 + math::luminance(w2) * nw2
+                                       + math::luminance(w3) * nw3, nl1)
+        if (nl1 == nl2) && (nl1 == nl3);
+    bsdf_color_mix_3(w1,local_normal(nw1,nl1),
+               w2,local_normal(nw2,nl2),
+               w3,local_normal(nw3,nl3))
+         --> local_normal( w1p * nw1 + w2p * nw2 + w3p * nw3,
+                 nvidia::distilling_support::affine_normal_sum(
+                     w1p * nw1, nl1, w2p * nw2, nl2, w3p * nw3, nl3))
+        where w1p = math::luminance(w1)
+              w2p = math::luminance(w2)
+              w3p = math::luminance(w3);
+    weighted_layer(this_w,local_normal(_,nl1),local_normal(nw2,nl2),n)
+        --> local_normal( nw2 * (1.0-this_w) + this_w, n)
+        if (n == nl1) && (n == nl2);
+    weighted_layer(this_w,local_normal(nw1,nl1),local_normal(nw2,nl2),n)
+        --> local_normal( nw2 * (1.0-this_w) + this_w,
+                nvidia::distilling_support::affine_normal_sum(
+                    (1.0-this_w)*nw2, nl2, this_w*(1.0-nw1), n, this_w*nw1, nl1));
+    color_weighted_layer(this_w,local_normal(_,nl1),local_normal(nw2,nl2),n)
+        --> local_normal( nw2 * (1.0-math::luminance(this_w)) + math::luminance(this_w), n)
+        if (n == nl1) && (n == nl2);
+    color_weighted_layer(this_w,local_normal(nw1,nl1),local_normal(nw2,nl2),n)
+        --> local_normal( nw2 * (1.0-wp) + wp,
+                nvidia::distilling_support::affine_normal_sum(
+                    (1.0-wp)*nw2, nl2, wp*(1.0-nw1), n, wp*nw1, nl1))
+        where wp = math::luminance(this_w);
+
+    fresnel_layer(ior,w0,layer [[ w ~ _, normal ~ nl1 ]],base [[ w ~ nw2, normal ~ nl2 ]],n)  [[ w ~ _, normal ~ _ ]]
+    --> fresnel_layer(ior,w0,layer,base,n) [[ w = nw2 * (1.0-wght) + w, normal = n ]]
+        if (n == nl1) && (n == nl2)
+        where wght = w0 * option( top_layer_weight);
+    fresnel_layer(ior,w0,layer [[ w ~ nw1, normal ~ nl1 ]],base [[ w ~ nw2, normal ~ nl2 ]],n)
+        --> fresnel_layer(ior,w0,layer,base,n) [[ w = nw2 * (1.0-w) + w, normal = nvidia::distilling_support::affine_normal_sum(
+            (1.0-wght)*nw2, nl2, wght*(1.0-nw1), n, wght*nw1, nl1) ]]
+        where wght = w0 * option( top_layer_weight);
+
+    color_fresnel_layer(_,w0,local_normal(_,nl1),local_normal(nw2,nl2),n)
+        --> local_normal( nw2 * (1.0-w) + w, n)
+        if (n == nl1) && (n == nl2)
+                          where w = math::luminance(w0) * option( top_layer_weight);
+    color_fresnel_layer(_,w0,local_normal(nw1,nl1),
+                             local_normal(nw2,nl2),n)
+        --> local_normal( nw2 * (1.0-w) + w,
+                nvidia::distilling_support::affine_normal_sum(
+                    (1.0-w)*nw2, nl2, w*(1.0-nw1), n, w*nw1, nl1))
+        where w = math::luminance(w0) * option( top_layer_weight);
+}

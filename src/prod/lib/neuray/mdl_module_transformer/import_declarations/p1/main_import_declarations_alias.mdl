@@ -1,0 +1,111 @@
+mdl 1.6;
+
+
+// alias
+
+// absolute namespace (alias not required)
+using up9 = ::up1;
+using same9 = ::p1::same1;
+using down9 = ::p1::p2::down1;
+using limits9 = ::limits;
+using std9 = ::std;
+using base9 = ::base;
+
+// strict relative namespace (alias not required)
+using up10 = ..::up2;
+using same10 = .::same2;
+using down10 = .::p2::down2;
+
+// used in absolute import decl (alias required, will be reused if involved in transformation)
+using up11 = "up3_+";
+using same11 = "same3_+";
+using down11 = "down3_+";
+
+// used in strict relative import decl (alias required, will be reused if involved in transformation)
+using up12 = "up4_+";
+using same12 = "same4_+";
+using down12 = "down4_+";
+
+// absolute namespace (alias required, will not be reused if involved in transformation)
+using up13 = ::"up5_+";
+using same13 = ::p1::"same5_+";
+using down13 = ::p1::p2::"down5_+";
+
+// strict relative namespace (alias required, will not be reused if involved in transformation)
+using up14 = ..::"up6_+";
+using same14 = .::"same6_+";
+using down14 = .::p2::"down6_+";
+
+// special case with absolute namespace not referring to a module
+using same15a = ::p1;
+using same15b = "same7_+";
+
+
+// import
+
+// absolute namespace (alias not required)
+import up9::up1_f;
+import same9::same1_f;
+import down9::down1_f;
+import limits9::FLOAT_MIN;
+import std9::FLOAT_MIN;
+import base9::mono_mode;
+
+// strict relative namespace (alias not required)
+import up10::up2_f;
+import same10::same2_f;
+import down10::down2_f;
+
+// used in absolute import decl (alias required, will be reused if involved in transformation)
+import ::up11::up3_f;
+import ::p1::same11::same3_f;
+import ::p1::p2::down11::down3_f;
+
+// used in strict relative import decl (alias required, will be reused if involved in transformation)
+import ..::up12::up4_f;
+import .::same12::same4_f;
+import .::p2::down12::down4_f;
+
+// absolute namespace (alias required, will not be reused if involved in transformation)
+import up13::up5_f;
+import same13::same5_f;
+import down13::down5_f;
+
+// strict relative namespace (alias required, will not be reused if involved in transformation)
+import up14::up6_f;
+import same14::same6_f;
+import down14::down6_f;
+
+// special case with absolute namespace not referring to a module
+import same15a::same15b::same7_f;
+
+
+export int use_up9_f()   { return up9::up1_f(); }
+export int use_same9_f() { return same9::same1_f(); }
+export int use_down9_f() { return down9::down1_f(); }
+
+export int use_up10_f()   { return up10::up2_f(); }
+export int use_same10_f() { return same10::same2_f(); }
+export int use_down10_f() { return down10::down2_f(); }
+
+export float use_float_min()                    { return limits9::FLOAT_MIN; }
+export float use_std_float_min()                { return std9::FLOAT_MIN; }
+export base9::mono_mode use_mono_mode()         { return base9::mono_alpha; }
+
+export int use_up11_f()   { return up11::up3_f(); }
+export int use_same11_f() { return p1::same11::same3_f(); }
+export int use_down11_f() { return p1::p2::down11::down3_f(); }
+
+export int use_up12_f()   { return up12::up4_f(); }
+export int use_same12_f() { return same12::same4_f(); }
+export int use_down12_f() { return p2::down12::down4_f(); }
+
+export int use_up13_f()   { return up13::up5_f(); }
+export int use_same13_f() { return same13::same5_f(); }
+export int use_down13_f() { return down13::down5_f(); }
+
+export int use_up14_f()   { return up14::up6_f(); }
+export int use_same14_f() { return same14::same6_f(); }
+export int use_down14_f() { return down14::down6_f(); }
+
+export int use_same15_f() { return same15a::same15b::same7_f(); }

@@ -45,28 +45,6 @@ SERIAL::Serializable *Scene_element<T, C, P>::factory()
 
 
 //
-// default constructor needed because of the copy constructor
-//
-
-template <class T, SERIAL::Class_id C, class P>
-inline Scene_element<T, C, P>::Scene_element()
-{
-}
-
-
-//
-// copy constructor which will call the copy constructor of the base class
-//
-
-template <class T, SERIAL::Class_id C, class P>
-inline Scene_element<T, C, P>::Scene_element(
-    const Scene_element	&source)		// the source to copy from
-    : P(source)
-{
-}
-
-
-//
 // get the class id of an instance of our class
 //
 

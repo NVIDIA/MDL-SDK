@@ -77,7 +77,7 @@ struct Spectrum_struct
 
 /// Supported clipping modes
 ///
-/// \sa #mi::Color::clip() function.
+/// \see #mi::Color::clip() function.
 enum Clip_mode {
     CLIP_RGB,   ///< First clip RGB to [0,1], then clip A to [max(R,G,B),1].
     CLIP_ALPHA, ///< First clip A to [0,1], then clip RGB to [0,A].

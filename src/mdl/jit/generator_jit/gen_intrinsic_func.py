@@ -3316,7 +3316,15 @@ class SignatureParser:
 					// encoded as bitangent
 					// float3 bitangent = cross(normal, tangent) * tangent_bitangentsign.w
 					llvm::Value *state = ctx.get_state_parameter();
-					llvm::Value *exc   = ctx.get_exc_state_parameter();
+
+					llvm::Value *tv_args[3] = { state, a, NULL };
+					size_t len              = 2;
+
+					if (m_code_gen.target_uses_exception_state_parameter()) {
+						tv_args[1] = ctx.get_exc_state_parameter();
+						tv_args[2] = a;
+						++len;
+					}
 
 					mi::mdl::IDefinition const *n_def = m_code_gen.find_stdlib_signature("::state", "normal()");
 					llvm::Function *n_fkt = get_intrinsic_function(n_def, /*return_derivs=*/ false);
@@ -3325,8 +3333,7 @@ class SignatureParser:
 
 					mi::mdl::IDefinition const *t_def = m_code_gen.find_stdlib_signature("::state", "texture_tangent_v(int)");
 					llvm::Function *t_fkt = get_intrinsic_function(t_def, /*return_derivs=*/ false);
-					llvm::Value *t_args[] = { state, exc, a };
-					llvm::Value *tangent = call_rt_func(ctx, t_fkt, t_args);
+					llvm::Value *tangent = call_rt_func(ctx, t_fkt, llvm::ArrayRef<llvm::Value *>(tv_args, len));
 
 					mi::mdl::IDefinition const *c_def = m_code_gen.find_stdlib_signature("::math", "cross(float3,float3)");
 					llvm::Function *c_fkt = get_intrinsic_function(c_def, /*return_derivs=*/ false);

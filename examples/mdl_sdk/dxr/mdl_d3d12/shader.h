@@ -128,7 +128,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         LPVOID STDMETHODCALLTYPE GetBufferPointer(void) final { return m_buffer.data(); }
         SIZE_T STDMETHODCALLTYPE GetBufferSize(void) final { return m_buffer.size(); }
 
-        // ---------------------------------------------------------------------------------------------
+        // ----------------------------------------------------------------------------------------
 
         HRESULT QueryInterface(REFIID riid, LPVOID* ppvObj)
         {
@@ -415,7 +415,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
         std::unordered_set<std::string> m_added_symbol_names;
         std::vector<Shader_record> m_shader_records[3];
 
+        D3D12_RESOURCE_STATES m_binding_table_buffer_upload_latest_requested_state;
         ComPtr<ID3D12Resource> m_binding_table_buffer_upload;
+        D3D12_RESOURCE_STATES m_binding_table_buffer_latest_requested_state;
         ComPtr<ID3D12Resource> m_binding_table_buffer;
         uint8_t* m_mapped_binding_table;
         D3D12_DISPATCH_RAYS_DESC m_prefilled_dispatch_description;

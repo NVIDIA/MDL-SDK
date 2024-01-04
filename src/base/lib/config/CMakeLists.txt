@@ -35,7 +35,7 @@ set(PROJECT_HEADERS
     "config_impl.h"
     )
 
-set(PROJECT_SOURCES 
+set(PROJECT_SOURCES
     "config.cpp"
     ${PROJECT_HEADERS}
     )
@@ -47,7 +47,10 @@ create_from_base_preset(
     )
 
 # add dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME} 
-    DEPENDS 
+target_add_dependencies(TARGET ${PROJECT_NAME}
+    DEPENDS
         boost
     )
+
+# add unit tests
+add_unit_tests(POST)

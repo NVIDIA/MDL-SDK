@@ -138,6 +138,15 @@ public:
     ///   Possible values:
     ///   \c "on", \c "off". Default: \c "off".
     ///
+    /// The following options are supported by the PTX and LLVM-IR only:
+    /// - \c "lambda_return_mode": Selects how generated lambda functions return their results.
+    ///   Possible value:
+    ///   * \c "default": Use the default mode for the backend, currently always sret mode
+    ///   * \c "sret": Write the result into a buffer provided as first argument
+    ///   * \c "value": Return the value directly. If the type is not supported as return type
+    ///                 by the backend, fallback to sret mode. Currently only supports
+    ///                 base types and vector types as return types.
+    ///
     /// The following options are supported by the LLVM-IR backend only:
     /// - \c "enable_simd": Enables/disables the use of SIMD instructions. Possible values:
     ///   \c "on", \c "off". Default: \c "on".
@@ -815,7 +824,6 @@ public:
         SL_PTX,
         SL_HLSL,
         SL_GLSL,
-        SL_OLD_GLSL, // \if MDL_SOURCE_RELEASE Reserved\else old GLSL\endif.
         SL_NUM_LANGUAGES,
         SL_FORCE_32_BIT = 0xFFFFFFFFu //   Undocumented, for alignment only
     };

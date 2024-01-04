@@ -70,6 +70,13 @@ public:
     /// The reference is set to a NULL tag.
     Texture();
 
+    /// Copy constructor.
+    Texture( const Texture&) = default;
+
+    Texture& operator=( const Texture&) = delete;
+
+    // methods of mi::neuraylib::ITexture
+
     /// Sets the reference image.
     void set_image( DB::Tag image);
 

@@ -32,8 +32,8 @@
  ** Implements the IDatabase interface
  **/
 
-#ifndef API_API_NEURAY_DATABASE_IMPL_H
-#define API_API_NEURAY_DATABASE_IMPL_H
+#ifndef API_API_NEURAY_NEURAY_DATABASE_IMPL_H
+#define API_API_NEURAY_NEURAY_DATABASE_IMPL_H
 
 #include <mi/base/interface_implement.h>
 #include <mi/neuraylib/idatabase.h>
@@ -79,11 +79,11 @@ public:
 
     mi::Sint32 remove_scope( const char* id) const;
 
+    void garbage_collection( mi::neuraylib::IDatabase::Garbage_collection_priority priority);
+
     void lock( mi::Uint32 lock_id);
 
     mi::Sint32 unlock( mi::Uint32 lock_id);
-
-    void garbage_collection( mi::neuraylib::IDatabase::Garbage_collection_priority priority);
 
     // internal methods
 
@@ -116,4 +116,4 @@ private:
 
 } // namespace MI
 
-#endif // API_API_NEURAY_DATABASE_IMPL_H
+#endif // API_API_NEURAY_NEURAY_DATABASE_IMPL_H

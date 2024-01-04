@@ -50,7 +50,7 @@ function(FIND_DXC_EXT)
         endif()
     endforeach()
 
-    # store path that are later used
+    # store paths that are later used
     set(MDL_DEPENDENCY_DXC_INCLUDE ${_DXC_INCLUDE} CACHE INTERNAL "DXC includes")
     set(MDL_DEPENDENCY_DXC_SHARED ${_DXC_SHARED} CACHE INTERNAL "DXC shared libs")
     set(MDL_DEPENDENCY_DXC_LIBS ${_DXC_LIBS} CACHE INTERNAL "DXC libs")

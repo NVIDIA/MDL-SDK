@@ -377,6 +377,7 @@ namespace mi { namespace examples { namespace mdl_d3d12
         bool build_top_level_structure(D3DCommandList* command_list, bool update);
 
         bool allocate_resource(
+            D3DCommandList* command_list,
             ID3D12Resource** resource,
             UINT64 size_in_byte,
             D3D12_RESOURCE_STATES initial_state,

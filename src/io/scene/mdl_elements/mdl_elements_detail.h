@@ -359,19 +359,17 @@ struct Equal_ptr
 /// Helper class for parameter type binding and checking.
 class Type_binder
 {
-    typedef std::unordered_map<
+    using Bind_type_map = std::unordered_map<
         const mi::mdl::IType_array*,
         const mi::mdl::IType_array*,
         const Hash_ptr<mi::mdl::IType_array>,
-        const Equal_ptr<mi::mdl::IType_array>
-    > Bind_type_map;
+        const Equal_ptr<mi::mdl::IType_array>>;
 
-    typedef std::unordered_map<
+    using Bind_size_map = std::unordered_map<
         const mi::mdl::IType_array_size*,
         int,
         const Hash_ptr<mi::mdl::IType_array_size>,
-        const Equal_ptr<mi::mdl::IType_array_size>
-    > Bind_size_map;
+        const Equal_ptr<mi::mdl::IType_array_size>>;
 
 public:
     /// Constructor.

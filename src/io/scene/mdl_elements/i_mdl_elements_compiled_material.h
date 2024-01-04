@@ -91,6 +91,9 @@ public:
         mi::Float32 mdl_wavelength_max,
         bool        resolve_resources);
 
+    /// Copy constructor.
+    Mdl_compiled_material( const Mdl_compiled_material&) = default;
+
     Mdl_compiled_material& operator=( const Mdl_compiled_material&) = delete;
 
     // methods corresponding to mi::neuraylib::ICompiled_material
@@ -106,8 +109,6 @@ public:
     mi::Float32 get_mdl_wavelength_min() const;
 
     mi::Float32 get_mdl_wavelength_max() const;
-
-    const char* get_internal_space() const;
 
     bool depends_on_state_transform() const;
 
@@ -131,7 +132,7 @@ public:
 
     mi::base::Uuid get_slot_hash( mi::neuraylib::Material_slot slot) const;
 
-    const IValue_list* get_arguments() const;
+    const IExpression* lookup_sub_expression( const char* path) const;
 
     DB::Tag get_connected_function_db_name(
         DB::Transaction* transaction,
@@ -144,15 +145,24 @@ public:
 
     bool get_cutout_opacity( mi::Float32* cutout_opacity) const;
 
+    bool is_valid( DB::Transaction* transaction, Execution_context* context) const;
+
     // internal methods
 
-    /// Get the number of resource map entries.
+    /// Returns the internal space.
+    const char* get_internal_space() const;
+
+    /// Returns the temporaries.
+    const IExpression_list* get_temporaries() const;
+
+    /// Returns the arguments.
+    const IValue_list* get_arguments() const;
+
+    /// Get the number of resource table entries.
     mi::Size get_resource_entries_count() const;
 
     /// Get the index'th resource table entry.
     const Resource_tag_tuple* get_resource_entry( mi::Size index) const;
-
-    const IExpression_list* get_temporaries() const;
 
     /// Swaps *this and \p other.
     ///
@@ -160,22 +170,16 @@ public:
     /// existing API wrapper.
     void swap( Mdl_compiled_material& other);
 
-    /// Looks up a sub-expression of the compiled material.
-    ///
-    /// \param path            The path to follow in the body of this compiled material. The path
-    ///                        may contain dots or bracket pairs as separators. The path component
-    ///                        up to the next separator is used to select struct fields or direct
-    ///                        call arguments by name or other compound elements by index.
-    /// \return                A sub-expression for \p expr according to \p path, or \c NULL in case
-    ///                        of errors.
-    const IExpression* lookup_sub_expression( const char* path) const;
-
     /// Improved version of SERIAL::Serializable::dump().
     ///
     /// \param transaction   The DB transaction (for name lookups and tag versions). Can be \c NULL.
     void dump( DB::Transaction* transaction) const;
 
-    bool is_valid( DB::Transaction* transaction, Execution_context* context) const;
+    /// Returns the instance properties.
+    mi::mdl::IGenerated_code_dag::IMaterial_instance::Properties get_properties() const
+    {
+        return m_properties;
+    }
 
     // methods of SERIAL::Serializable
 
@@ -196,10 +200,6 @@ public:
     // methods of SCENE::Scene_element_base
 
     void get_scene_element_references( DB::Tag_set* result) const;
-
-    mi::mdl::IGenerated_code_dag::IMaterial_instance::Properties get_properties() const {
-        return m_properties;
-    }
 
 private:
     mi::base::Handle<IType_factory> m_tf;             ///< The type factory.

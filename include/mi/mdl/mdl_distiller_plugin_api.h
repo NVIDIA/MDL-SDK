@@ -1,4 +1,3 @@
-
 /******************************************************************************
  * Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
  *
@@ -26,12 +25,14 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
+
 /// \file mi/mdl/mdl_distiller_plugin_api.h
 /// \brief MDL distiller plugin API
 
 #ifndef MDL_DISTILLER_PLUGIN_API_H
 #define MDL_DISTILLER_PLUGIN_API_H
 
+#include <mi/mdl/mdl_streams.h>
 #include <mi/mdl/mdl_generated_dag.h>
 #include <mi/mdl/mdl_distiller_rules.h>
 
@@ -44,7 +45,7 @@ class ICall_name_resolver;
 /// A plugin is only accepted if it is compiled against the same API version
 /// than the SDK. This version needs to be incremented whenever something in
 /// this API changes.
-#define MI_MDL_DISTILLER_PLUGIN_API_VERSION 1
+#define MI_MDL_DISTILLER_PLUGIN_API_VERSION 2
 
 ///
 /// The rule engine handles the transformation of a compiled material by a rule set.
@@ -532,6 +533,7 @@ public:
     /// Immediately deletes this distiller plugin API
     virtual void release() const  = 0;
 
+    virtual void debug_node(IOutput_stream *outs, DAG_node const *node) = 0;
 };
 
 } // mdl

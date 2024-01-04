@@ -111,7 +111,7 @@ mi_static_assert( sizeof( IExpression::Kind) == sizeof( Uint32));
 /// A constant expression.
 ///
 /// Constant expressions represent values (see #mi::neuraylib::IValue). They appear basically
-/// everywhere where expression are used.
+/// everywhere where expressions are used.
 class IExpression_constant : public
     mi::base::Interface_declare<0x9da8d465,0x4058,0x46cb,0x83,0x6e,0x0e,0x38,0xa6,0x7f,0xcd,0xef,
                                 neuraylib::IExpression>
@@ -348,9 +348,23 @@ public:
     virtual const char* get_name( Size index) const = 0;
 
     /// Returns the expression for \p index, or \c NULL if there is no such expression.
+    ///
+    /// This index-based overload is faster than the name-based overload
+    /// #get_expression(const char*)const and should be preferred if the index is known.
+    ///
+    /// \note Expression lists for defaults and enable-if conditions might not contain an
+    ///       expression for every parameter. Therefore, indices in such lists are not
+    ///       guaranteed to match the parameter indices.
     virtual const IExpression* get_expression( Size index) const = 0;
 
     /// Returns the expression for \p index, or \c NULL if there is no such expression.
+    ///
+    /// This index-based overload is faster than the name-based overload
+    /// #get_expression<T>(const char*)const and should be preferred if the index is known.
+    ///
+    /// \note Expression lists for defaults and enable-if conditions might not contain an
+    ///       expression for every parameter. Therefore, indices in such lists are not
+    ///       guaranteed to match the parameter indices.
     template <class T>
     const T* get_expression( Size index) const
     {
@@ -363,9 +377,15 @@ public:
     }
 
     /// Returns the expression for \p name, or \c NULL if there is no such expression.
+    ///
+    /// The index-based overload #get_expression(const char*)const is faster than this name-based
+    /// overload and should be preferred if the index is known.
     virtual const IExpression* get_expression( const char* name) const = 0;
 
     /// Returns the expression for \p name, or \c NULL if there is no such expression.
+    ///
+    /// The index-based overload #get_expression<T>(const char*)const is faster than this name-based
+    /// overload and should be preferred if the index is known.
     template <class T>
     const T* get_expression( const char* name) const
     {
@@ -379,12 +399,19 @@ public:
 
     /// Sets an expression at a given index.
     ///
+    /// This index-based overload is faster than the name-based overload
+    /// #set_expression(const char*,const IExpression*) and should be preferred if the index is
+    /// known.
+    ///
     /// \return   -  0: Success.
     ///           - -1: Invalid parameter (\c NULL pointer).
     ///           - -2: \p index is out of bounds.
     virtual Sint32 set_expression( Size index, const IExpression* expression) = 0;
 
     /// Sets an expression identified by name.
+    ///
+    /// The index-based overload #set_expression(const char*,const IExpression*) is faster than
+    /// this name-based overload and should be preferred if the index is known.
     ///
     /// \return   -  0: Success.
     ///           - -1: Invalid parameter (\c NULL pointer).
@@ -702,8 +729,6 @@ public:
     ///                           type.
     ///                     - -3: A parameter that has no default was not provided with an argument
     ///                           value.
-    ///                     - -4: The function or material definition can not be instantiated
-    ///                           because it is not exported.
     ///                     - -5: A parameter type is uniform, but the corresponding argument has a
     ///                           varying return type.
     ///                     - -6: An argument expression is not a constant, a direct call, nor a

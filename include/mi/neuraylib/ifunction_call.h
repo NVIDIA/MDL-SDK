@@ -150,6 +150,9 @@ public:
 
     /// Sets the argument at \p index.
     ///
+    /// This index-based overload is faster than the name-based overload
+    /// #set_argument(const char*,const IExpression*) and should be preferred if the index is known.
+    ///
     /// \param index        The index of the argument.
     /// \param argument     The argument. Note that the expression is copied. This copy operation
     ///                     is a shallow copy, e.g., DB elements referenced in call expressions are
@@ -173,6 +176,9 @@ public:
     virtual Sint32 set_argument( Size index, const IExpression* argument) = 0;
 
     /// Sets an argument identified by name.
+    ///
+    /// This index-based overload #set_argument(const char*,const IExpression*) is faster than this
+    /// name-based overload and should be preferred if the index is known.
     ///
     /// \param name         The name of the parameter.
     /// \param argument     The argument. Note that the expression is copied. This copy operation

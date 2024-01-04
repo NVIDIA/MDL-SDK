@@ -1,0 +1,19 @@
+Count of all transactions: 1
+Count of open transactions: 1
+ID 0: pin count = 2, state = OPEN, next sequence number = 0, visibility ID = 4294967295
+
+Count of infos by distinct names: 0
+Count of infos by distinct tags: 0
+
+Count of all transactions: 1
+Count of open transactions: 0
+ID 0: pin count = 1, state = COMMITTED, next sequence number = 0, visibility ID = 1
+
+Count of infos by distinct names: 0
+Count of infos by distinct tags: 0
+
+Count of all transactions: 0
+Count of open transactions: 0
+Count of infos by distinct names: 0
+Count of infos by distinct tags: 0
+

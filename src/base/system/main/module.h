@@ -28,7 +28,7 @@
 /// \file
 /// \brief list of all modules, Module base class for all modules.
 ///
-/// We occasionally need module numbers, for example in base/data/log. List
+/// We occasionally need module numbers, for example in base/lib/log. List
 /// them all here. This file sits above all other modules and can't be part
 /// of one, so it lives in system/main. All module classes Mod_X must be
 /// derived from Module.

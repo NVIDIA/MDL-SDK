@@ -230,14 +230,15 @@ public:
 
     /// Returns a hash of the body and all temporaries.
     ///
-    /// The hash allows to quickly identify compiled materials that have the same body and
-    /// temporaries. Note that the arguments are not included in the hash value.
+    /// The hash allows to quickly identify compiled materials that have the same body,
+    /// temporaries, and parameter names. Note that the arguments are not included in the hash
+    /// value.
     ///
     /// \note For performance reasons, the hash for resources does not include the actual resource
     ///       data, but certain properties to identify resources: If the absolute MDL file path is
-    ///       available, it is used (including the gamma value for textures). If the absolute MDL
-    ///       file path is not available, some internal IDs that identify the resource in the
-    ///       database are used instead. \n
+    ///       available, it is used (including the gamma value and selector for textures). If the
+    ///       absolute MDL file path is not available, some internal IDs that identify the resource
+    ///       in the database are used instead. \n
     ///       For the latter case, the following applies: If two otherwise identical materials share
     ///       a resource (in the sense of there is one and only one DB element for that resource),
     ///       then their hash is also identical. But if the materials use distinct (but otherwise
@@ -251,14 +252,15 @@ public:
 
     /// Returns the hash of a particular material slot.
     ///
-    /// The slots hashes allow to quickly compare slots of compiled materials. Note that the
-    /// arguments are not included in the hash value.
+    /// The hash allows to quickly identify compiled materials that have the same body,
+    /// temporaries, and parameter names. Note that the arguments are not included in the hash
+    /// value.
     ///
     /// \note For performance reasons, the hash for resources does not include the actual resource
     ///       data, but certain properties to identify resources: If the absolute MDL file path is
-    ///       available, it is used (including the gamma value for textures). If the absolute MDL
-    ///       file path is not available, some internal IDs that identify the resource in the
-    ///       database are used instead. \n
+    ///       available, it is used (including the gamma value and selector for textures). If the
+    ///       absolute MDL file path is not available, some internal IDs that identify the resource
+    ///       in the database are used instead. \n
     ///       For the latter case, the following applies: If two otherwise identical materials share
     ///       a resource (in the sense of there is one and only one DB element for that resource),
     ///       then their hash is also identical. But if the materials use distinct (but otherwise

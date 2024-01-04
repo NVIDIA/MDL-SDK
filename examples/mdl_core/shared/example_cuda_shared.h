@@ -1427,13 +1427,16 @@ public:
     /// \param num_texture_results  the size of a renderer provided array for texture results
     ///                             in the MDL shading state in number of float4 elements
     ///                             processed by the init() function of distribution functions
-    /// \param enable_derivatives   If true, the generated code will expect the renderer to provide
+    /// \param enable_derivatives   if true, the generated code will expect the renderer to provide
     ///                             a state and a texture runtime with derivatives
+    /// \param df_handle_mode       controls how the handles of distribution functions can be used
+    /// \param lambda_return_mode   selects how results are returned by lambda functions
     Material_ptx_compiler(
         mi::mdl::IMDL     *mdl_compiler,
-        unsigned          num_texture_results,
-        bool              enable_derivatives,
-        const std::string df_handle_mode)
+        unsigned           num_texture_results,
+        bool               enable_derivatives,
+        const std::string &df_handle_mode,
+        const std::string &lambda_return_mode)
     : Material_compiler(mdl_compiler)
     , m_jit_be(mi::base::make_handle(mdl_compiler->load_code_generator("jit"))
         .get_interface<mi::mdl::ICode_generator_jit>())
@@ -1469,6 +1472,13 @@ public:
         // during rendering. This option controls how many parts are evaluated with each call into
         // the generated "evaluate" and "auxiliary" functions and how the data is passed.
         options.set_option(MDL_JIT_OPTION_LINK_LIBBSDF_DF_HANDLE_SLOT_MODE, df_handle_mode.c_str());
+
+        // Option "jit_lambda_return_mode": Default is "default".
+        // Selects how generated lambda functions return their results. For PTX, the default
+        // is equivalent to "sret" mode, where all values are returned in a buffer provided as
+        // first argument. In "value" mode, base types and vector types are directly returned
+        // by the functions, other types are returned as for the "sret" mode.
+        options.set_option(MDL_JIT_OPTION_LAMBDA_RETURN_MODE, lambda_return_mode.c_str());
 
         // After we set the options, we can create a link unit
         m_link_unit = mi::base::make_handle(m_jit_be->create_link_unit(
@@ -1851,22 +1861,21 @@ bool Material_ptx_compiler::add_material(
 
                 // Add the lambda function to the link unit. Note that it is save to pass
                 // no module cache here, as we do not use dropt_import_entries() in the Core API
-                size_t main_func_index;
+                size_t main_func_indices[2];
                 if (!m_link_unit->add(
                     dist_func.get(),
                     /*module_cache=*/nullptr,
                     &m_module_manager,
                     &arg_block_index,
-                    &main_func_index,
-                    1))
+                    main_func_indices,
+                    2))
                 {
                     function_descriptions[i].return_code = -1;
                     continue;
                 }
 
-                // for distribution functions, let function_index point to the init function,
-                // which does not count as main function
-                function_descriptions[i].function_index = main_func_index - 1;
+                // for distribution functions, let function_index point to the init function
+                function_descriptions[i].function_index = main_func_indices[0];
                 break;
             }
 

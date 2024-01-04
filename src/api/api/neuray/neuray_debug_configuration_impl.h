@@ -32,8 +32,8 @@
  ** Implements the IDebug_configuration interface
  **/
 
-#ifndef API_API_NEURAY_DEBUG_CONFIGURATION_IMPL_H
-#define API_API_NEURAY_DEBUG_CONFIGURATION_IMPL_H
+#ifndef API_API_NEURAY_NEURAY_DEBUG_CONFIGURATION_IMPL_H
+#define API_API_NEURAY_NEURAY_DEBUG_CONFIGURATION_IMPL_H
 
 #include <mi/base/interface_implement.h>
 #include <mi/neuraylib/idebug_configuration.h>
@@ -96,4 +96,4 @@ private:
 
 } // namespace MI
 
-#endif // API_API_NEURAY_DEBUG_CONFIGURATION_IMPL_H
+#endif // API_API_NEURAY_NEURAY_DEBUG_CONFIGURATION_IMPL_H

@@ -44,6 +44,7 @@ class MainInspection(UnittestBase):
                     for funcName, funcObj in inspect.getmembers(classObj):
                         if funcName == "IID":
                             iid: str = str(funcObj())
+                            # print(f"class: {className} Type-IID: {iid}")
                             hasIID = True
                             self.assertFalse(iid in type_dict)
                             type_dict[iid] = classObj

@@ -34,6 +34,7 @@
 #include "window.h"
 #include "window_image_file.h"
 #include "window_win32.h"
+#include <memory>
 
 #include <errhandlingapi.h>
 #include <strsafe.h>
@@ -153,13 +154,17 @@ LONG top_level_exection_filter(PEXCEPTION_POINTERS exception_information)
 
 // ------------------------------------------------------------------------------------------------
 
-int Base_application::run(Base_options* options, HINSTANCE hInstance, int nCmdShow)
+int Base_application::run(
+    Base_options* options,
+    Base_dynamic_options* dynamic_options,
+    HINSTANCE hInstance,
+    int nCmdShow)
 {
     // setup mini-dumps
     SetUnhandledExceptionFilter(top_level_exection_filter);
 
     // create graphics context, load MDL SDK, ...
-    if (!initialize_internal(options))
+    if (!initialize_internal(options, dynamic_options))
     {
         // give the user time to read the reason of failure
         std::this_thread::sleep_for(std::chrono::milliseconds(5000));
@@ -268,12 +273,15 @@ Descriptor_heap* Base_application::get_render_target_descriptor_heap()
 
 // ------------------------------------------------------------------------------------------------
 
-bool Base_application::initialize_internal(Base_options* options)
+bool Base_application::initialize_internal(
+    Base_options* options,
+    Base_dynamic_options* dynamic_options)
 {
     if (!initialize(options))
         return false;
 
     m_options = options;
+    m_dynamic_options = dynamic_options;
 
     UINT dxgi_factory_flags = 0;
     D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_12_1;
@@ -563,6 +571,21 @@ bool Base_application::initialize_internal(Base_options* options)
         return false;
     }
     return true;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+Base_dynamic_options::Base_dynamic_options(const Base_options* options) 
+    : m_restart_progressive_rendering(true)
+    , m_active_lpe(options->lpe.empty() ? "beauty" : options->lpe[0])
+{
+}
+
+bool Base_dynamic_options::get_restart_progressive_rendering()
+{
+    bool ret = m_restart_progressive_rendering;
+    m_restart_progressive_rendering = false;
+    return ret;
 }
 
 // ------------------------------------------------------------------------------------------------

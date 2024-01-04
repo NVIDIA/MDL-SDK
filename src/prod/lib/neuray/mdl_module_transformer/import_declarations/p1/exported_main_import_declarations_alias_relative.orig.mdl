@@ -1,0 +1,157 @@
+mdl 1.6;
+
+using alias2 = "down5_+";
+using alias1 = "same5_+";
+using alias0 = "up5_+";
+
+import ::state::normal;
+
+using limits9 = ::limits;
+using std9 = ::std;
+using base9 = ::base;
+using up10 = ..::up2;
+using same10 = .::same2;
+using down10 = .::p2::down2;
+using up11 = "up3_+";
+using same11 = "same3_+";
+using down11 = "down3_+";
+using up12 = "up4_+";
+using same12 = "same4_+";
+using down12 = "down4_+";
+using up14 = ..::"up6_+";
+using same14 = .::"same6_+";
+using down14 = .::p2::"down6_+";
+using same15b = "same7_+";
+
+import ..::up1::up1_f;
+import .::same1::same1_f;
+import .::p2::down1::down1_f;
+import limits9::FLOAT_MIN;
+import std9::FLOAT_MIN;
+import base9::mono_mode;
+import up10::up2_f;
+import same10::same2_f;
+import down10::down2_f;
+import ..::up11::up3_f;
+import .::same11::same3_f;
+import .::p2::down11::down3_f;
+import ..::up12::up4_f;
+import .::same12::same4_f;
+import .::p2::down12::down4_f;
+import ..::alias0::up5_f;
+import .::alias1::same5_f;
+import .::p2::alias2::down5_f;
+import up14::up6_f;
+import same14::same6_f;
+import down14::down6_f;
+import .::same15b::same7_f;
+
+export int use_up9_f() uniform
+{
+    return up1::up1_f();
+}
+
+export int use_same9_f() uniform
+{
+    return same1::same1_f();
+}
+
+export int use_down9_f() uniform
+{
+    return p2::down1::down1_f();
+}
+
+export int use_up10_f() uniform
+{
+    return up10::up2_f();
+}
+
+export int use_same10_f() uniform
+{
+    return same10::same2_f();
+}
+
+export int use_down10_f() uniform
+{
+    return down10::down2_f();
+}
+
+export float use_float_min() uniform
+{
+    return limits9::FLOAT_MIN;
+}
+
+export float use_std_float_min() uniform
+{
+    return std9::FLOAT_MIN;
+}
+
+export base9::mono_mode use_mono_mode() uniform
+{
+    return base9::mono_alpha;
+}
+
+export int use_up11_f() uniform
+{
+    return up11::up3_f();
+}
+
+export int use_same11_f() uniform
+{
+    return same11::same3_f();
+}
+
+export int use_down11_f() uniform
+{
+    return p2::down11::down3_f();
+}
+
+export int use_up12_f() uniform
+{
+    return up12::up4_f();
+}
+
+export int use_same12_f() uniform
+{
+    return same12::same4_f();
+}
+
+export int use_down12_f() uniform
+{
+    return p2::down12::down4_f();
+}
+
+export int use_up13_f() uniform
+{
+    return alias0::up5_f();
+}
+
+export int use_same13_f() uniform
+{
+    return alias1::same5_f();
+}
+
+export int use_down13_f() uniform
+{
+    return p2::alias2::down5_f();
+}
+
+export int use_up14_f() uniform
+{
+    return up14::up6_f();
+}
+
+export int use_same14_f() uniform
+{
+    return same14::same6_f();
+}
+
+export int use_down14_f() uniform
+{
+    return down14::down6_f();
+}
+
+export int use_same15_f() uniform
+{
+    return same15b::same7_f();
+}

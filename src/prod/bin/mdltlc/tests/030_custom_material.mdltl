@@ -1,0 +1,15 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Custom_material topdown {
+
+   import ::Custom_material;
+
+    material(_thin_walled,
+             material_surface(diffuse_reflection_bsdf(t,_r),
+                              _em),
+             _backface,_ior,_volume,_geometry,_hair)
+        -->
+        ::Custom_material::Custom_material(t);
+}

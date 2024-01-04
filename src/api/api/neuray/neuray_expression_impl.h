@@ -307,7 +307,8 @@ private:
     const mi::base::Handle<const mi::base::IInterface> m_owner;
 };
 
-class Annotation_definition : public mi::base::Interface_implement<mi::neuraylib::IAnnotation_definition>
+class Annotation_definition
+   : public mi::base::Interface_implement<mi::neuraylib::IAnnotation_definition>
 {
 public:
     Annotation_definition(

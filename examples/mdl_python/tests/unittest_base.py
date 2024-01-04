@@ -12,33 +12,47 @@ except ImportError:  # pragma: no cover
 class UnittestBase(UnittestFrameworkBase):
     # sdk: SDK  # declared in derived classes
 
-    def assertIsValidInterface(self, iinterface: pymdlsdk.IInterface):
-        self.assertIsNotNone(iinterface)
-        self.assertTrue(iinterface.is_valid_interface())
-        # UPCOMING ref1: int = iinterface.__iinterface_refs__()
-        # UPCOMING ptr1: int = iinterface.__iinterface_ptr_as_uint64__()
+    def assertNotNullOrEmpty(self, text: str, msg=None):
+        self.assertIsNotNone(text, msg)
+        self.assertNotEqual(text, '', msg)
+
+    def assertZero(self, number: int, msg=None):
+        self.assertEqual(number, 0, msg)
+
+    def assertIsValidInterface(self, iinterface: pymdlsdk.IInterface, msg=None):
+        self.assertIsNotNone(iinterface, msg)
+        self.assertTrue(iinterface.is_valid_interface(), msg)
+        ref1: int = iinterface.__iinterface_refs__()
+        ptr1: int = iinterface.__iinterface_ptr_as_uint64__()
         iinterface2 = iinterface  # this does not increase interface ref count
-        # UPCOMING self.assertEqual(ref1, iinterface2.__iinterface_refs__())
-        # UPCOMING self.assertEqual(ptr1, iinterface2.__iinterface_ptr_as_uint64__())  # same iinterface
+        self.assertEqual(ref1, iinterface2.__iinterface_refs__(), msg)
+        self.assertEqual(ptr1, iinterface2.__iinterface_ptr_as_uint64__(), msg)  # same iinterface
         iinterface = None  # doesn't matter which python variable is reset
-        # UPCOMING elf.assertEqual(ref1, iinterface2.__iinterface_refs__())
-        # UPCOMING elf.assertEqual(ptr1, iinterface2.__iinterface_ptr_as_uint64__())
+        self.assertEqual(ref1, iinterface2.__iinterface_refs__(), msg)
+        self.assertEqual(ptr1, iinterface2.__iinterface_ptr_as_uint64__(), msg)
 
         shortTime = iinterface2.get_interface(type(iinterface2))
-        self.assertTrue(shortTime.is_valid_interface())
-        # UPCOMING self.assertEqual(ref1 + 1, iinterface2.__iinterface_refs__())
+        self.assertTrue(shortTime.is_valid_interface(), msg)
+        self.assertLessEqual(ref1, iinterface2.__iinterface_refs__(), msg)
         shortTime.release()
-        # UPCOMING self.assertEqual(ref1, iinterface2.__iinterface_refs__())
-        self.assertFalse(shortTime.is_valid_interface())
+        self.assertEqual(ref1, iinterface2.__iinterface_refs__(), msg)
+        self.assertFalse(shortTime.is_valid_interface(), msg)
 
         with iinterface2.get_interface(pymdlsdk.IInterface) as iinterface3:
-            # UPCOMING self.assertEqual(ref1 + 1, iinterface3.__iinterface_refs__())
+            self.assertTrue(iinterface3.is_valid_interface(), msg)
+            self.assertLessEqual(ref1, iinterface3.__iinterface_refs__(), msg)
             with iinterface3.get_interface(type(iinterface2)) as iinterface4:
-                # UPCOMING self.assertEqual(ref1 + 2, iinterface4.__iinterface_refs__())
+                self.assertTrue(iinterface4.is_valid_interface(), msg)
+                self.assertLessEqual(ref1, iinterface4.__iinterface_refs__(), msg)
                 iinterface4.compare_iid(type(iinterface2).IID())
                 iinterface2.compare_iid(pymdlsdk.IInterface.IID())
+                # note, this is not guaranteed:
+                # for example when getting an IMaterial_instance from an IFunction_call, a new
+                # object of type IMaterial_instance is returned. This means the get interface will
+                # return a different object outside the inheritance hierarchy
                 # self.assertEqual(iinterface2.get_iid(), iinterface3.get_iid())
-        # UPCOMING self.assertEqual(ref1, iinterface2.__iinterface_refs__())
+        self.assertEqual(ref1, iinterface2.__iinterface_refs__(), msg)
+        self.assertNotEqual(iinterface2.get_iid(), pymdlsdk.Uuid(), msg)
 
     def log_context_messages(self, context: pymdlsdk.IMdl_execution_context) -> bool:
         """print all messages from the context. Return false if there have been errors"""
@@ -47,27 +61,28 @@ class UnittestBase(UnittestFrameworkBase):
         hasErrors: bool = context.get_error_messages_count() > 0
         for i in range(context.get_messages_count()):
             message: pymdlsdk.IMessage = context.get_message(i)
-            # UPCOMING level: str = "         "
-            # UPCOMING if message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_FATAL:
-            # UPCOMING     level = "fatal:   "
-            # UPCOMING     hasErrors = True
-            # UPCOMING elif message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_ERROR:
-            # UPCOMING     level = "error:   "
-            # UPCOMING     hasErrors = True
-            # UPCOMING elif message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_WARNING:
-            # UPCOMING     level = "warning: "
-            # UPCOMING elif message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_INFO:
-            # UPCOMING     level = "info:    "
-            # UPCOMING elif message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_VERBOSE:
-            # UPCOMING     level = "verbose: "
-            # UPCOMING elif message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_DEBUG:
-            # UPCOMING     level = "debug:   "
-            # UPCOMING print(f"{level} {message.get_string()}")
-            print(f"Context Message: {message.get_string()}")
+            kind: pymdlsdk.IMessage.Kind = message.get_kind()
+            self.assertNotEqual(kind, pymdlsdk.IMessage.Kind.MSG_FORCE_32_BIT)
+            level: str = ""
+            if message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_FATAL:
+                level = "fatal:"
+                hasErrors = True
+            elif message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_ERROR:
+                level = "error:"
+                hasErrors = True
+            elif message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_WARNING:
+                level = "warning:"
+            elif message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_INFO:
+                level = "info:"
+            elif message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_VERBOSE:
+                level = "verbose:"
+            elif message.get_severity() == pymdlsdk.Message_severity.MESSAGE_SEVERITY_DEBUG:
+                level = "debug:"
+            print(f"{level} {message.get_string()}")
         return not hasErrors
 
-    def assertContextNoErrors(self, context: pymdlsdk.IMdl_execution_context):
-        self.assertTrue(self.log_context_messages(context))
+    def assertContextNoErrors(self, context: pymdlsdk.IMdl_execution_context, msg=None):
+        self.assertTrue(self.log_context_messages(context), msg)
 
     def load_module(self, qualifiedModuleName: str):
         """Load the module given its name.
@@ -85,6 +100,6 @@ class UnittestBase(UnittestFrameworkBase):
                 return dbName.get_c_str()
         self.assertTrue(False, "Code path reached that should not be reached")  # pragma: no cover
 
-    def assertStartswith(self, text: str, prefix: str):
-        self.assertIsInstance(text, str)
-        self.assertTrue(text.startswith(prefix))
+    def assertStartswith(self, text: str, prefix: str, msg=None):
+        self.assertIsInstance(text, str, msg)
+        self.assertTrue(text.startswith(prefix), msg)

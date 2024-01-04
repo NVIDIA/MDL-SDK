@@ -1,0 +1,10 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Overlap_invalid topdown {
+
+      diffuse_reflection_bsdf(x, _, _) --> diffuse_reflection_bsdf(color(0.0), 0.0) if x == color(0.0);
+      diffuse_reflection_bsdf(_, _, _) --> diffuse_reflection_bsdf(color(0.0), 0.0);
+      diffuse_reflection_bsdf(_x, _, _) --> diffuse_reflection_bsdf(color(0.0), 0.0);
+}

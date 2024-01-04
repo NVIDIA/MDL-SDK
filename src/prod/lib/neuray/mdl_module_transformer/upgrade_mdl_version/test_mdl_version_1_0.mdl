@@ -1,0 +1,30 @@
+mdl 1.0;
+
+import ::df::*;
+import ::state::*;
+
+/* add spread parameter in 1.1 */
+export material test_spot_edf()
+= material(
+    surface: material_surface(emission: material_emission(emission: df::spot_edf(
+        exponent: 1.0
+    )))
+);
+
+/* add multiplier parameter in 1.1 */
+/* add tangent_u parameter in 1.2 */
+export material test_measured_edf()
+= material(
+    surface: material_surface(emission: material_emission(emission: df::measured_edf(
+        profile: light_profile()
+    )))
+);
+
+/* add roundness parameter in 1.3 */
+export float3 test_rounded_corner_normal()
+{
+    return state::rounded_corner_normal(
+        radius: 0.0,
+        across_materials: false
+    );
+}

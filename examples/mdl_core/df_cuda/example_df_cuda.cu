@@ -576,7 +576,7 @@ __device__ inline bool trace_sphere(
 
             float3 abs_coeff;
             as_expression(func_idx)(
-                &abs_coeff, &state, &mdl_resources.data, NULL, arg_block);
+                &abs_coeff, &state, &mdl_resources.data, arg_block);
 
             ray_state.weight.x *= abs_coeff.x > 0.0f ? expf(-abs_coeff.x * t) : 1.0f;
             ray_state.weight.y *= abs_coeff.y > 0.0f ? expf(-abs_coeff.y * t) : 1.0f;
@@ -592,13 +592,13 @@ __device__ inline bool trace_sphere(
         mdl_resources.set_target_code_index(params, func_idx); // init resource handler
         const char* arg_block = get_arg_block(params, func_idx); // get material parameters
         prepare_state(params, func_idx, state, normal); // init state
-        as_edf_init(func_idx)(&state, &mdl_resources.data, NULL, arg_block);
+        as_edf_init(func_idx)(&state, &mdl_resources.data, arg_block);
 
         // evaluate EDF
         Edf_evaluate_data<DF_HSM_NONE> eval_data;
         eval_data.k1 = make_float3(-ray_state.dir.x, -ray_state.dir.y, -ray_state.dir.z);
         eval_data.edf = make_float3(0.0, 0.0, 0.0);
-        as_edf_evaluate(func_idx)(&eval_data, &state, &mdl_resources.data, NULL, arg_block);
+        as_edf_evaluate(func_idx)(&eval_data, &state, &mdl_resources.data, arg_block);
 
         // evaluate intensity expression
         float3 emission_intensity = make_float3(0.0, 0.0, 0.0);
@@ -611,7 +611,7 @@ __device__ inline bool trace_sphere(
             prepare_state(params, func_idx, state, normal); // init state
 
             as_expression(func_idx)(
-                &emission_intensity, &state, &mdl_resources.data, NULL, arg_block);
+                &emission_intensity, &state, &mdl_resources.data, arg_block);
         }
 
         // add emission
@@ -629,7 +629,7 @@ __device__ inline bool trace_sphere(
 
         // initialize BSDF
         // Note, that this will change the state.normal (needs to be reset before using EDFs)
-        as_bsdf_init(func_idx)(&state, &mdl_resources.data, NULL, arg_block);
+        as_bsdf_init(func_idx)(&state, &mdl_resources.data, arg_block);
 
         // reuse memory for function data
         union
@@ -671,7 +671,7 @@ __device__ inline bool trace_sphere(
 
                 // evaluate the materials BSDF
                 as_bsdf_evaluate(func_idx)(
-                    &eval_data, &state, &mdl_resources.data, NULL, arg_block);
+                    &eval_data, &state, &mdl_resources.data, arg_block);
 
                 ray_state.contribution += ray_state.weight * f * 
                                           (eval_data.bsdf_diffuse + eval_data.bsdf_glossy);
@@ -698,7 +698,7 @@ __device__ inline bool trace_sphere(
 
                 // evaluate the materials BSDF
                 as_bsdf_evaluate(func_idx)(
-                    &eval_data, &state, &mdl_resources.data, NULL, arg_block);
+                    &eval_data, &state, &mdl_resources.data, arg_block);
 
                 const float mis_weight =
                     (params.mdl_test_type == MDL_TEST_EVAL) ? 1.0f : pdf / (pdf + eval_data.pdf);
@@ -716,7 +716,7 @@ __device__ inline bool trace_sphere(
 
 
             // sample the materials BSDF
-            as_bsdf_sample(func_idx)(&sample_data, &state, &mdl_resources.data, NULL, arg_block);
+            as_bsdf_sample(func_idx)(&sample_data, &state, &mdl_resources.data, arg_block);
 
 
             if (sample_data.event_type == BSDF_EVENT_ABSORB)
@@ -752,7 +752,7 @@ __device__ inline bool trace_sphere(
                     pdf_data.k2 = k2;
 
                     // get pdf corresponding to the materials BSDF
-                    as_bsdf_pdf(func_idx)(&pdf_data, &state, &mdl_resources.data, NULL, arg_block);
+                    as_bsdf_pdf(func_idx)(&pdf_data, &state, &mdl_resources.data, arg_block);
 
                     bsdf_pdf = pdf_data.pdf;
                 }

@@ -56,14 +56,15 @@ function resize() {
     $('#navigation').height(folder_components_height);
 
     resize_content_width();
-    set_annotate_max_width();
+    //set_annotate_max_width();
     set_code_comment_width();
     set_imagecode_width();
     adjust_footnotes();
     adjust_slanted_header_table();
     check_visible_link_boxes();
     adjust_toc_slider_height();
-    set_code_caption_width();
+    //set_code_caption_width();
+    //set_annotate_widths();
     $('#bottomspacer').height($("#page_content").height() * 0.9);
     resize_images();
     adjust_widths();

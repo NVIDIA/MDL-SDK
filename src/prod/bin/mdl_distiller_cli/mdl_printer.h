@@ -52,6 +52,8 @@ using mi::neuraylib::IExpression_list;
 class Mdl_printer {
   public:
     Mdl_printer(INeuray* neuray,
+                mi::neuraylib::IMdl_factory *mdl_factory,
+                mi::neuraylib::IExpression_factory *expr_factory,
                 std::ostream &out,
                 Options const* options,
                 char const *target,
@@ -232,6 +234,8 @@ class Mdl_printer {
     bool preserve_temporaries();
 
     INeuray *m_neuray;
+    mi::neuraylib::IMdl_factory *m_mdl_factory;
+    mi::neuraylib::IExpression_factory *m_expr_factory;
     std::ostream &m_out;
     Options const *m_options;
     char const *m_target;

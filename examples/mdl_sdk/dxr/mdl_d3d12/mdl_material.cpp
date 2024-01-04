@@ -226,17 +226,19 @@ bool Mdl_material::recompile_material(mi::neuraylib::IMdl_execution_context* con
             !compiled_material)
                 return false;
 
-        if (mdl_options.distilling_support_enabled &&
-            strcmp(mdl_options.distilling_target, "none") != 0)
+        if (mdl_options.distilling_support_enabled && mdl_options.distilling_target != "none")
         {
+            mi::Sint32 res = 0;
             mi::base::Handle<mi::neuraylib::ICompiled_material> distilled_material(
                 m_app->get_mdl_sdk().get_distiller().distill_material(
-                    compiled_material.get(), mdl_options.distilling_target));
-
-            if (distilled_material)
+                    compiled_material.get(), mdl_options.distilling_target.c_str(), nullptr, &res));
+            if (res == -2)
             {
-                log_error("Distilled material to '" + std::string(mdl_options.distilling_target) +
-                    "': " + get_name());
+                log_error("Distilling target not registered: '" + mdl_options.distilling_target);
+            }
+            else if (distilled_material)
+            {
+                log_info("Distilled material to '" + mdl_options.distilling_target + "': " + get_name());
 
                 const mi::base::Uuid compiled_hash = compiled_material->get_hash();
                 const mi::base::Uuid distilled_hash = distilled_material->get_hash();
@@ -358,9 +360,9 @@ std::vector<D3D12_STATIC_SAMPLER_DESC> Mdl_material::get_sampler_descriptions()
     // for standard textures
     D3D12_STATIC_SAMPLER_DESC  desc = {};
     desc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    desc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    desc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    desc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    desc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    desc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    desc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     desc.MipLODBias = 0.0f;
     desc.MaxAnisotropy = 16;
     desc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;

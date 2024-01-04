@@ -267,18 +267,19 @@ DB::Tag load_mdl_texture(
     if( !image_tag) {
         auto image = std::make_unique<DBIMAGE::Image>();
         result = image->reset_image_set( transaction, image_set, impl_hash);
+        if( result != 0)
+            return DB::Tag();
         image_tag = transaction->store_for_reference_counting(
             image.release(), db_image_name.c_str(), privacy_level);
-    } else {
-        result = 0;
     }
 
     auto texture = std::make_unique<TEXTURE::Texture>();
     texture->set_image( image_tag);
     texture->set_gamma( gamma);
-
     texture_tag = transaction->store_for_reference_counting(
         texture.release(), db_texture_name.c_str(), privacy_level);
+
+    result = 0;
     return texture_tag;
 }
 

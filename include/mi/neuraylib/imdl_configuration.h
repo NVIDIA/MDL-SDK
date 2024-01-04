@@ -32,6 +32,7 @@
 #define MI_NEURAYLIB_IMDL_CONFIGURATION_H
 
 #include <mi/base/interface_declare.h>
+#include <mi/neuraylib/version.h>
 
 namespace mi {
 
@@ -52,28 +53,6 @@ class IMdl_configuration : public
     mi::base::Interface_declare<0x2657ec0b,0x8a40,0x46c5,0xa8,0x3f,0x2b,0xb5,0x72,0xa0,0x8b,0x9c>
 {
 public:
-    /// \name Logging
-    //@{
-
-    /// Sets the logger.
-    ///
-    /// \if IRAY_API Sets the receiving logger, see also
-    /// #mi::neuraylib::ILogging_configuration::set_receiving_logger().\else
-    /// Installs a custom logger, and deinstalls the previously installed logger.
-    /// By default, an internal logger is installed that prints all messages of severity
-    /// #mi::base::details::MESSAGE_SEVERITY_INFO or higher to stderr.\endif
-    ///
-    /// \param logger   The new logger that receives all log messages. Passing \c NULL is allowed
-    ///                 to reinstall the default logger.
-    virtual void set_logger( base::ILogger* logger) = 0;
-
-    /// Returns the used logger.
-    ///
-    /// \return   \if IRAY_API Returns the forwarding logger. See
-    ///           also #mi::neuraylib::ILogging_configuration::get_forwarding_logger(). \else The
-    ///           currently used logger ( either explicitly installed via #set_logger(), or
-    ///           the default logger). Never returns \c NULL. \endif
-    virtual base::ILogger* get_logger() = 0;
 
     /// \name MDL paths
     //@{
@@ -311,6 +290,10 @@ public:
     virtual void set_entity_resolver( IMdl_entity_resolver* resolver) = 0;
 
     //@}
+
+    virtual void MI_NEURAYLIB_DEPRECATED_METHOD_14_1(set_logger)( base::ILogger* logger) = 0;
+
+    virtual base::ILogger* MI_NEURAYLIB_DEPRECATED_METHOD_14_1(get_logger)() = 0;
 };
 
 /**@}*/ // end group mi_neuray_configuration

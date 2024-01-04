@@ -1,0 +1,64 @@
+Count of all transactions: 2
+Count of open transactions: 1
+ID 1: pin count = 1, state = COMMITTED, next sequence number = 1, visibility ID = 3
+ID 2: pin count = 2, state = OPEN, next sequence number = 0, visibility ID = 4294967295
+
+Count of infos by distinct names: 1
+Index 0: name = "foo", count = 1
+    Index 0: transaction ID = 0 (cleared), version = 0, pin count = 0, tag = 1, removal = 0, references = { }
+
+Count of infos by distinct tags: 1
+Index 0: tag = 1, count = 2, pin count = 1, removed = 1
+    Index 0: transaction ID = 0 (cleared), version = 0, pin count = 0, tag = 1, removal = 0, name = "foo", references = { }
+    Index 1: transaction ID = 1 (set), version = 0, pin count = 0, tag = 1, removal = 1, name = (null), references = { }
+
+
+Count of all transactions: 3
+Count of open transactions: 2
+ID 1: pin count = 1, state = COMMITTED, next sequence number = 1, visibility ID = 3
+ID 2: pin count = 2, state = OPEN, next sequence number = 0, visibility ID = 4294967295
+ID 3: pin count = 3, state = OPEN, next sequence number = 0, visibility ID = 4294967295
+
+Count of infos by distinct names: 1
+Index 0: name = "foo", count = 1
+    Index 0: transaction ID = 0 (cleared), version = 0, pin count = 1, tag = 1, removal = 0, references = { }
+
+Count of infos by distinct tags: 1
+Index 0: tag = 1, count = 2, pin count = 1, removed = 1
+    Index 0: transaction ID = 0 (cleared), version = 0, pin count = 1, tag = 1, removal = 0, name = "foo", references = { }
+    Index 1: transaction ID = 1 (set), version = 0, pin count = 0, tag = 1, removal = 1, name = (null), references = { }
+
+
+Count of all transactions: 1
+Count of open transactions: 1
+ID 3: pin count = 3, state = OPEN, next sequence number = 0, visibility ID = 4294967295
+
+Count of infos by distinct names: 1
+Index 0: name = "foo", count = 1
+    Index 0: transaction ID = 0 (cleared), version = 0, pin count = 1, tag = 1, removal = 0, references = { }
+
+Count of infos by distinct tags: 1
+Index 0: tag = 1, count = 1, pin count = 0, removed = 1
+    Index 0: transaction ID = 0 (cleared), version = 0, pin count = 1, tag = 1, removal = 0, name = "foo", references = { }
+
+
+Count of all transactions: 1
+Count of open transactions: 1
+ID 3: pin count = 3, state = OPEN, next sequence number = 0, visibility ID = 4294967295
+
+Count of infos by distinct names: 1
+Index 0: name = "foo", count = 1
+    Index 0: transaction ID = 0 (cleared), version = 0, pin count = 0, tag = 1, removal = 0, references = { }
+
+Count of infos by distinct tags: 1
+Index 0: tag = 1, count = 1, pin count = 0, removed = 1
+    Index 0: transaction ID = 0 (cleared), version = 0, pin count = 0, tag = 1, removal = 0, name = "foo", references = { }
+
+
+Count of all transactions: 1
+Count of open transactions: 0
+ID 3: pin count = 1, state = COMMITTED, next sequence number = 0, visibility ID = 4
+
+Count of infos by distinct names: 0
+Count of infos by distinct tags: 0
+

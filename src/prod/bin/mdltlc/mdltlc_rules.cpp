@@ -44,7 +44,7 @@ Import::Import(Location const &loc, Symbol *symbol)
 {
 }
 
-Symbol *Import::get_symbol()
+Symbol *Import::get_symbol() const
 {
   return m_symbol;
 }
@@ -56,9 +56,31 @@ const char *Import::get_name() const
 
 // -------------------------------- Rule ---------------------------------
 
+// ------------------------------ Debug_out ------------------------------
+
+// Constructor.
+Debug_out::Debug_out(Location const &loc, Symbol *symbol)
+    : m_loc(loc)
+    , m_symbol(symbol)
+{
+}
+
+Symbol *Debug_out::get_symbol() const
+{
+  return m_symbol;
+}
+
+const char *Debug_out::get_name() const
+{
+  return m_symbol->get_name();
+}
+
+// -------------------------------- Rule ---------------------------------
+
 // Constructor.
 Rule::Rule(mi::mdl::Memory_arena *arena,
            Location const &location,
+           Symbol const *rule_name,
            Expr *expr_left,
            Expr *expr_right,
            Result_code result_code,
@@ -66,11 +88,13 @@ Rule::Rule(mi::mdl::Memory_arena *arena,
            Dead_rule dead_rule)
     : m_arena(arena)
     , m_loc(location)
+    , m_rule_name(rule_name)
     , m_expr_left(expr_left)
     , m_expr_right(expr_right)
     , m_result_code(result_code)
     , m_guard(guard)
     , m_bindings()
+    , m_debug_out()
     , m_dead_rule(dead_rule)
     , m_uid(0)
 {
@@ -132,7 +156,27 @@ Argument_list const &Rule::get_bindings() const {
     return m_bindings;
 }
 
+Debug_out_list const &Rule::get_debug_out() const {
+  return m_debug_out;
+}
+
+void Rule::set_debug_out(Debug_out_list &deb_outs)
+{
+  Debug_out *deb_out = deb_outs.front();
+  while (deb_out) {
+    deb_outs.pop_front();
+    m_debug_out.push(deb_out);
+    deb_out = deb_outs.front();
+  }
+}
+
 void Rule::pp(pp::Pretty_print &p) const {
+    if (m_rule_name != nullptr) {
+        p.string("rule");
+        p.space();
+        p.string(m_rule_name->get_name());
+        p.space();
+    }
     m_expr_left->pp(p);
     p.nl();
     p.string("-->");
@@ -154,7 +198,7 @@ void Rule::pp(pp::Pretty_print &p) const {
         p.nl();
         m_guard->pp(p);
     }
-    if (m_bindings.size() > 0) {
+    if (!m_bindings.empty()) {
         p.nl();
         p.string("where");
         p.space();
@@ -173,6 +217,23 @@ void Rule::pp(pp::Pretty_print &p) const {
         p.string("dead_rule");
         break;
     }
+    if (!m_debug_out.empty()) {
+        p.nl();
+        p.string("debug_out(");
+        int l = 0;
+        for (mi::mdl::Ast_list<Debug_out>::const_iterator it(m_debug_out.begin()),
+                 end(m_debug_out.end());
+             it != end;
+             ++it) {
+            if (l > 0) {
+                p.comma();
+                p.space();
+            }
+            p.string(it->get_name());
+            l++;
+        }
+        p.string(")");
+    }
     p.string(";");
 }
 
@@ -190,7 +251,7 @@ unsigned Rule::calc_hash(mi::mdl::IAllocator *alloc, char const *ruleset_name) {
         m_guard->pp(p);
     }
 
-    if (m_bindings.size() > 0) {
+    if (!m_bindings.empty()) {
         p.string(" where ");
         bool first = true;
         for (mi::mdl::Ast_list<Argument>::const_iterator it(m_bindings.begin()),
@@ -369,14 +430,18 @@ Rule_factory::Rule_factory(
 {
 }
 
-// Create an import.
 Import *Rule_factory::create_import(Location const &loc, Symbol *symbol)
 {
     return m_builder.create<Import>(loc, symbol);
 }
 
-// Create an rule.
+Debug_out *Rule_factory::create_debug_out(Location const &loc, Symbol *symbol)
+{
+    return m_builder.create<Debug_out>(loc, symbol);
+}
+
 Rule *Rule_factory::create_rule(Location const &location,
+                                Symbol const *rule_name,
                                 Expr *expr_left,
                                 Expr *expr_right,
                                 Rule::Result_code result_code,
@@ -385,6 +450,7 @@ Rule *Rule_factory::create_rule(Location const &location,
 {
     return m_builder.create<Rule>(&m_arena,
                                   location,
+                                  rule_name,
                                   expr_left,
                                   expr_right,
                                   result_code, guard, dead_rule);

@@ -400,7 +400,7 @@ std::string encode_name_add_missing_signature(
 ///                          template-like functions, ignored otherwise.
 /// \param return_type       The actual return type of the function call. Required for the cast
 ///                          operator, ignored otherwise.
-/// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
+/// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
 ///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
 ///                          implementing the identity transformation).
 /// \return                  The serialized function definition (and module) name, or \c NULL in
@@ -418,7 +418,7 @@ const mi::neuraylib::ISerialized_function_name* serialize_function_name(
 ///
 /// \param transaction       The DB transaction to use.
 /// \param function_name     The serialized function name.
-/// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
+/// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
 ///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
 ///                          implementing the identity transformation).
 /// \return                  The deserialized function name and argument types, or \c NULL in case
@@ -437,7 +437,7 @@ const IDeserialized_function_name* deserialize_function_name(
 /// \param transaction       The DB transaction to use.
 /// \param module_name       The serialized module name.
 /// \param function_name_without_module_name   The serialized function name without module name.
-/// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
+/// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
 ///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
 ///                          implementing the identity transformation).
 /// \return                  The deserialized function name and argument types, or \c NULL in case
@@ -454,7 +454,7 @@ const IDeserialized_function_name* deserialize_function_name(
 /// Loads the module if necessary. Performs overload resolution.
 ///
 /// \param module_name       The serialized module name.
-/// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
+/// \param mdle_callback     A callback to map the filename of MDLE modules. Ignored for
 ///                          non-MDLE modules. Can be \c NULL (which is treated like a callback
 ///                          implementing the identity transformation).
 /// \return                  The deserialized module name, or \c NULL in case of errors.
@@ -501,12 +501,18 @@ bool is_supported_prototype(
 /// (should not happen).
 Mdl_compiled_material* get_default_compiled_material( DB::Transaction* transaction);
 
+/// Returns the MDL module name of the module which defines \p type.
+///
+/// The module name is derived from the symbol of enum, struct, and alias types. For array
+/// types, the corresponding element type is considered. Frequency modifiers of alias types are
+/// ignored. Returns the name of the \c ::&lt;builtins&gt; module for all other types.
+std::string get_mdl_module_name( const IType* type);
+
 /// Represents an MDL compiler message. Similar to mi::mdl::IMessage.
 class Message
 {
 public:
-
-    enum Kind{
+    enum Kind {
         MSG_COMILER_CORE,
         MSG_COMILER_BACKEND,
         MSG_COMPILER_DAG,
@@ -1226,7 +1232,7 @@ private:
 
     private:
         std::mutex m_mutex;
-        std::unordered_map<std::string, Entry*> m_elements;
+        robin_hood::unordered_map<std::string, Entry*> m_elements;
     };
 
 
@@ -1288,7 +1294,7 @@ public:
     void cleanup_table(size_t transaction);
 
 private:
-    std::unordered_map<size_t, Table*> m_tables;
+    robin_hood::unordered_map<size_t, Table*> m_tables;
     std::mutex m_mutex;
 };
 

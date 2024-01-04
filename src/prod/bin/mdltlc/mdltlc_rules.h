@@ -48,7 +48,7 @@ class Import : public mi::mdl::Ast_list_element<Import>
 
 public:
 
-    Symbol *get_symbol();
+    Symbol *get_symbol() const;
     const char *get_name() const;
 
     Location const &get_location() const { return m_loc; }
@@ -69,6 +69,36 @@ protected:
 };
 
 typedef mi::mdl::Ast_list<Import> Import_list;
+
+class Debug_out : public mi::mdl::Ast_list_element<Debug_out>
+{
+    typedef mi::mdl::Ast_list_element<Import> Base;
+
+    friend class mi::mdl::Arena_builder;
+
+public:
+
+    Symbol *get_symbol() const;
+    const char *get_name() const;
+
+    Location const &get_location() const { return m_loc; }
+
+protected:
+    /// Constructor.
+    explicit Debug_out(Location const &loc,
+                       Symbol *symbol);
+
+private:
+    // non copyable
+    Debug_out(Debug_out const &) = delete;
+    Debug_out &operator=(Debug_out const &) = delete;
+
+protected:
+    Location m_loc;
+    Symbol *m_symbol;
+};
+
+typedef mi::mdl::Ast_list<Debug_out> Debug_out_list;
 
 /// Rule statement.
 class Rule : public mi::mdl::Ast_list_element<Rule>
@@ -103,6 +133,15 @@ public:
     Expr *get_rhs();
     Expr const *get_rhs() const;
 
+    /// Return the name of the rule (if any), or nullptr.
+    char const* get_rule_name() const {
+        if (m_rule_name != nullptr) {
+            return m_rule_name->get_name();
+        } else {
+            return nullptr;
+        }
+    }
+
     /// Return the result code of a rule).
     Result_code get_result_code() const;
 
@@ -122,6 +161,8 @@ public:
     Argument_list &get_bindings();
     Argument_list const &get_bindings() const;
 
+    Debug_out_list const &get_debug_out() const;
+    void set_debug_out(Debug_out_list &deb_outs);
     /// Pretty-print the rule using the given pretty-printer.
     void pp(pp::Pretty_print &p) const;
 
@@ -139,6 +180,7 @@ protected:
     /// Constructor.
     explicit Rule(mi::mdl::Memory_arena *arena,
                   Location const &loc,
+                  Symbol const *rule_name,
                   Expr *expr_left,
                   Expr *expr_right,
                   Result_code result_code,
@@ -156,11 +198,13 @@ protected:
     /// The location of this rule
     Location const m_loc;
 
+    Symbol const *m_rule_name;
     Expr* m_expr_left;
     Expr* m_expr_right;
     Result_code m_result_code;
     Expr* m_guard;
     Argument_list m_bindings;
+    Debug_out_list m_debug_out;
     Dead_rule m_dead_rule;
     unsigned m_uid;
 };
@@ -264,8 +308,11 @@ public:
     /// Create an import.
     Import *create_import(Location const &loc, Symbol *sym);
 
+    Debug_out *create_debug_out(Location const &loc, Symbol *sym);
+
     /// Create a rule.
     Rule *create_rule(Location const &location,
+                      Symbol const *rule_name,
                       Expr *expr_left,
                       Expr *expr_right,
                       Rule::Result_code result_code,

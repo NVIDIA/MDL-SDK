@@ -37,11 +37,15 @@
 namespace mi {
 namespace mdl {
 
+class IDefinition;
 class IModule;
-class Value_factory;
 class IType;
 class IMDL;
+class Definition_table;
 class Generated_code_dag;
+class Module;
+class Type_factory;
+class Value_factory;
 
 /// Base class for code checkers.
 class Code_checker
@@ -56,22 +60,38 @@ protected:
     /// Check a value factory for soundness.
     ///
     /// \param factory  the value factory to check
-    void check_factory(Value_factory const *factory);
+    void check_value_factory(
+        Value_factory const *factory);
 
     /// Check a given value for soundness.
     ///
-    /// \param value   the value to check
-    void check_value(IValue const *value);
+    /// \param owner  the owner factory of the value to check
+    /// \param value  the value to check
+    void check_value(
+        Value_factory const *owner,
+        IValue const        *value);
 
     /// Check a given type for soundness.
     ///
+    /// \param owner  the owner factory of the type to check
     /// \param type   the type to check
-    void check_type(IType const *type);
+    void check_type(
+        Type_factory const *owner,
+        IType const        *type);
+
+    /// Check a given definition for soundness.
+    ///
+    /// \param owner  the owner definition table of the definition to check
+    /// \param def   the definition to check
+    void check_definition(
+        Definition_table const *owner,
+        IDefinition const      *def);
 
     /// Report an error.
     ///
     /// \param msg  the error message
-    void report(char const *msg);
+    void report(
+        char const *msg);
 
     /// Get the error count.
     size_t get_error_count() const { return m_error_count; }
@@ -90,7 +110,7 @@ protected:
 };
 
 /// A checker for Modules.
-class Module_checker : protected Code_checker
+class Module_checker : protected Code_checker, private Module_visitor
 {
     typedef Code_checker Base;
 public:
@@ -107,11 +127,41 @@ public:
         bool          verbose);
 
 private:
+    /// Default post visitor for expressions.
+    ///
+    /// \param expr  the expression
+    IExpression *post_visit(IExpression *expr) MDL_FINAL;
+
+    // Post visitor for literal expressions.
+    ///
+    /// \param expr  the expression
+    IExpression *post_visit(IExpression_literal *expr) MDL_FINAL;
+
+    // Post visitor for reference expressions.
+    ///
+    /// \param expr  the expression
+    IExpression *post_visit(IExpression_reference *expr) MDL_FINAL;
+
+private:
     /// Constructor.
     ///
+    /// \param module    the module to check
     /// \param verbose  if true, write a verbose output to stderr
-    /// \param printer  the printer for writing error messages, takes ownership
-    explicit Module_checker(bool verbose, IPrinter *printer);
+    /// \param printer  if non-NULL, the printer for writing error messages, takes ownership
+    explicit Module_checker(
+        Module const *module,
+        bool         verbose,
+        IPrinter     *printer);
+
+private:
+    /// The value factory of the module to check.
+    Value_factory const *m_vf;
+
+    /// The type factory of the module to check.
+    Type_factory const *m_tf;
+
+    /// The definition table of the module to check.
+    Definition_table const *m_deftab;
 };
 
 /// Helper class to check that our input is really a Tree, and not a DAG.

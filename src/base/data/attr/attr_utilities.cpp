@@ -36,7 +36,7 @@
 #include "attr.h"
 
 #include <base/lib/cont/i_cont_rle_array.h>
-#include <base/lib/log/log.h>
+#include <base/lib/log/i_log_logger.h>
 
 #include <mi/math.h>
 

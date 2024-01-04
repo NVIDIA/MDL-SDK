@@ -102,22 +102,43 @@ BSDF_INLINE void add_elemental_bsdf_evaluate_contribution(
 BSDF_INLINE void add_elemental_bsdf_auxiliary_contribution(
     BSDF_auxiliary_data *data,
     const int handle,
-    const float3 &albedo,
-    const float3 &normal)
+    const float3 &inherited_weight,
+    const float3 &albedo_diffuse,
+    const float3 &albedo_glossy,
+    const float3 &normal,
+    const float glossy_roughness_u, // -1 if roughness does not apply
+    const float glossy_roughness_v)
 {
+    // compute the roughness for the auxiliary buffer
+    // the output is non-squared roughness, and sqrt of the product of u and v in case of anistropy
+    const float avg_weight = math::average(inherited_weight);
+    const float3 weighted_roughness = 
+        make<float3>(avg_weight * glossy_roughness_u, avg_weight * glossy_roughness_v, avg_weight);
+    // the z component sums the weights, the caller will divide by z if not zero
+
     #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMN
-        data->albedo += albedo;
-        data->normal += normal;
+        data->albedo_diffuse += inherited_weight * albedo_diffuse;
+        data->albedo_glossy += inherited_weight * albedo_glossy;
+        data->normal += avg_weight * normal;
+        data->roughness += weighted_roughness;
     #elif MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMP
     const int index = handle - data->handle_offset;
     if (index >= 0 && index < data->handle_count)
-        data->albedo[index] += albedo;
-        data->normal[index] += normal;
+    {
+        data->albedo_diffuse[index] += inherited_weight * albedo_diffuse;
+        data->albedo_glossy[index] += inherited_weight * albedo_glossy;
+        data->normal[index] += avg_weight * normal;
+        data->roughness[index] += weighted_roughness;
+    }
     #else
     const int index = handle - data->handle_offset;
     if (index >= 0 && index < MDL_DF_HANDLE_SLOT_MODE)
-        data->albedo[index] += albedo;
-        data->normal[index] += normal;
+    {
+        data->albedo_diffuse[index] += inherited_weight * albedo_diffuse;
+        data->albedo_glossy[index] += inherited_weight * albedo_glossy;
+        data->normal[index] += avg_weight * normal;
+        data->roughness[index] += weighted_roughness;
+    }
     #endif
     // (safe) normalization has to happen before reaching the data back to application
 }
@@ -288,7 +309,10 @@ BSDF_INLINE void elemental_bsdf_auxiliary(
     State *state, 
     const float3 &inherited_normal,
     const float3 &inherited_weight,
-    const float3 &tint,
+    const float3 &tint_diffuse,
+    const float3 &tint_glossy,
+    const float glossy_roughness_u,
+    const float glossy_roughness_v,
     const int handle)
 {
     Geometry g;
@@ -297,12 +321,15 @@ BSDF_INLINE void elemental_bsdf_auxiliary(
         return;
     }
 
-    const float3 albedo = math::saturate(tint);
     add_elemental_bsdf_auxiliary_contribution(
         data, 
         handle, 
-        inherited_weight * albedo, 
-        math::average(inherited_weight) * g.n.shading_normal);
+        inherited_weight,
+        math::saturate(tint_diffuse), // diffuse albedo
+        math::saturate(tint_glossy), // glossy albedo
+        g.n.shading_normal,
+        glossy_roughness_u,
+        glossy_roughness_v);
 }
 
 /////////////////////////////////////////////////////////////////////
@@ -347,7 +374,7 @@ BSDF_API void black_bsdf_auxiliary(
     const int handle)
 {
     elemental_bsdf_auxiliary(
-        data, state, inherited_normal, inherited_weight, make<float3>(0.0f), handle);
+        data, state, inherited_normal, inherited_weight, make<float3>(0.0f), make<float3>(0.0f), 1.0f, 1.0f, handle);
 }
 
 
@@ -410,7 +437,9 @@ BSDF_API void diffuse_reflection_bsdf_auxiliary(
     const float roughness,
     const int handle)
 {
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, make<float3>(0.0f), 
+        1.0f, 1.0f, // for the auxiliary functions we are interested only in glossy roughness.
+        handle);    // returning roughness 1.0 is the most consistent option here.
 }
 
 
@@ -468,7 +497,7 @@ BSDF_API void dusty_diffuse_reflection_bsdf_auxiliary(
     const float3 &tint,
     const int handle)
 {
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, make<float3>(0.0f), 1.0f, 1.0f, handle);
 }
 
 
@@ -526,7 +555,7 @@ BSDF_API void diffuse_transmission_bsdf_auxiliary(
     const float3 &tint,
     const int handle)
 {
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, make<float3>(0.0f), 1.0f, 1.0f, handle);
 }
 
 
@@ -707,7 +736,7 @@ BSDF_API void specular_bsdf_auxiliary(
     const scatter_mode mode,
     const int handle)
 {
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, make<float3>(0.0f), tint, 1.0f, 1.0f, handle);
 }
 
 /////////////////////////////////////////////////////////////////////
@@ -781,7 +810,7 @@ BSDF_API void thin_film_specular_bsdf_auxiliary(
     const float coating_thickness,
     const float3 &coating_ior)
 {
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, make<float3>(0.0f), tint, 1.0f, 1.0f, handle);
 }
 
 
@@ -1504,7 +1533,7 @@ BSDF_API void simple_glossy_bsdf_auxiliary(
     const scatter_mode mode,
     const int handle)
 {
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
 }
 
 /////////////////////////////////////////////////////////////////////
@@ -1638,7 +1667,7 @@ BSDF_API void thin_film_simple_glossy_bsdf_auxiliary(
     const float coating_thickness,
     const float3 &coating_ior)
 {
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
 }
 
 
@@ -1832,7 +1861,9 @@ BSDF_API void sheen_bsdf_auxiliary(
                 coord, 0, 0, 0, clamp, clamp, clamp, 0.0f).x;
     }
 
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint * rho1 + multiscatter_tint * (1.0f - rho1), handle);
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, multiscatter_tint * (1.0f - rho1), tint * rho1, 
+        1.0f, 1.0f, // let sheen behave like diffuse
+        handle);
 }
 
 
@@ -2164,7 +2195,7 @@ BSDF_API void backscattering_glossy_reflection_bsdf_auxiliary(
     const float3 &tangent_u,
     const int handle)
 {
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
 }
 
 
@@ -2308,7 +2339,7 @@ BSDF_API void microfacet_beckmann_vcavities_bsdf_auxiliary(
     const scatter_mode mode,
     const int handle)
 {
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
 }
 
 /////////////////////////////////////////////////////////////////////
@@ -2443,7 +2474,7 @@ BSDF_API void thin_film_microfacet_beckmann_vcavities_bsdf_auxiliary(
     const float coating_thickness,
     const float3 &coating_ior)
 {
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
 }
 
 
@@ -2586,7 +2617,7 @@ BSDF_API void microfacet_ggx_vcavities_bsdf_auxiliary(
     const scatter_mode mode,
     const int handle)
 {
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
 }
 
 /////////////////////////////////////////////////////////////////////
@@ -2721,7 +2752,7 @@ BSDF_API void thin_film_microfacet_ggx_vcavities_bsdf_auxiliary(
     const float coating_thickness,
     const float3 &coating_ior)
 {
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
 }
 
 /////////////////////////////////////////////////////////////////////
@@ -2876,7 +2907,7 @@ BSDF_API void microfacet_beckmann_smith_bsdf_auxiliary(
     const scatter_mode mode,
     const int handle)
 {
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
 }
 
 /////////////////////////////////////////////////////////////////////
@@ -3011,7 +3042,7 @@ BSDF_API void thin_film_microfacet_beckmann_smith_bsdf_auxiliary(
     const float coating_thickness,
     const float3 &coating_ior)
 {
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
 }
 
 /////////////////////////////////////////////////////////////////////
@@ -3166,7 +3197,7 @@ BSDF_API void microfacet_ggx_smith_bsdf_auxiliary(
     const scatter_mode mode,
     const int handle)
 {
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
 }
 
 /////////////////////////////////////////////////////////////////////
@@ -3301,7 +3332,7 @@ BSDF_API void thin_film_microfacet_ggx_smith_bsdf_auxiliary(
     const float coating_thickness,
     const float3 &coating_ior)
 {
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
 }
 
 
@@ -3600,7 +3631,7 @@ BSDF_API void ward_geisler_moroder_bsdf_auxiliary(
     const float3 &tangent_u,
     const int handle)
 {
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, handle);
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, make<float3>(0.0f), tint, roughness_u, roughness_v, handle);
 }
 
 
@@ -4010,8 +4041,12 @@ BSDF_API void measured_bsdf_auxiliary(
     add_elemental_bsdf_auxiliary_contribution(
         data,
         handle,
-        inherited_weight * (w_reflection * max_albedos.x + w_transmission * max_albedos.w),
-        math::average(inherited_weight) * n.shading_normal);
+        inherited_weight,
+        make<float3>(0.0f), // diffuse albedo, we can't tell, so better glossy
+        make<float3>(w_reflection * max_albedos.x + w_transmission * max_albedos.w), // glossy albedo
+        n.shading_normal,
+        -1.0f,   // unknown
+        -1.0f);  // unknown
 }
 
 

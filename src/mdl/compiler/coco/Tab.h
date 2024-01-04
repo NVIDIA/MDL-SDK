@@ -30,9 +30,10 @@ Coco/R itself) does not fall under the GNU General Public License.
 #if !defined(COCO_TAB_H__)
 #define COCO_TAB_H__
 
-#include "ArrayList.h"
+#include <string>
+#include <vector>
+
 #include "HashTable.h"
-#include "StringBuilder.h"
 #include "SortedList.h"
 #include "Scanner.h"
 #include "Position.h"
@@ -70,46 +71,65 @@ public:
 	BitArray *allSyncSets;      // union of all synchronisation sets
 	HashTable *literals;        // symbols that are used as literals
 
-	char* srcName;            // name of the atg file (including path)
-	char* srcDir;             // directory path of the atg file
-	char* nsName;             // namespace for generated files
-	char* tokenPrefix;        // prefix for generated tokens
-	char* frameDir;           // directory containing the frame files
-	char* outDir;             // directory for generated files
+	std::string srcName;         // name of the atg file (including path)
+	std::string srcDir;          // directory path of the atg file
+	std::string nsName;          // namespace for generated files
+	std::string tokenPrefix;     // prefix for generated tokens
+	std::string frameDir;        // directory containing the frame files
+	std::string outDir;          // directory for generated files
 	bool checkEOF;               // should coco generate a check for EOF at
 	                             // the end of Parser.Parse():
 	bool emitLines;              // emit line directives in generated parser
 	bool suppressRslvWarning;    // suppress misplaced resolver warning
 
-	BitArray *visited;                // mark list for graph traversals
 	Symbol *curSy;                     // current symbol in computation of sets
 
-	Parser *parser;                    // other Coco objects
+	Parser &parser;                    // other Coco objects
 	FILE* trace;
 
 	Errors *errors;
 
-	ArrayList terminals;
-	ArrayList pragmas;
-	ArrayList nonterminals;
+	std::vector<Symbol *> terminals;
+	std::vector<Symbol *> pragmas;
+	std::vector<Symbol *> nonterminals;
 
 
-	ArrayList nodes;
-	static const char* nTyp[];
+	std::vector<Node *> nodes;
+	static char const * const nTyp[];
 	Node *dummyNode;
 
-	ArrayList classes;
+	std::vector<CharClass *> classes;
 	int dummyName;
 
-
-	Tab(Parser *parser);
+	///
+	/// Constructor.
+	///
+	/// \param parser                the generated parser
+	/// \param srcName               the full path of the ATG grammar file
+	/// \param srcDir                the directory of the ATG grammar file
+	/// \param nsName                the name space of the generated parser
+	/// \param tokenPrefix           the prefix for generated token (enum) values
+	/// \param frameDir              the directory, where the .frame skeleton files can be found
+	/// \param outDir                the output directory
+	/// \param emitLines             if true, emit #line directives
+	/// \param suppressRslvWarning   if true, suppress "resolver warnings"
+	Tab(
+		Parser            &parser,
+		std::string const &srcName,
+		std::string const &srcDir,
+		std::string const &nsName,
+		std::string const &tokenPrefix,
+		std::string const &frameDir,
+		std::string const &outDir,
+		bool              emitLines,
+		bool              suppressRslvWarning);
 
 	//---------------------------------------------------------------------
 	//  Symbol list management
 	//---------------------------------------------------------------------
 
 
-	static const char* tKind[];
+	static char const *const tKind[];
 
 	Symbol* NewSym(Node::Kind typ, const char* name, int line);
 	Symbol* FindSym(const char* name);
@@ -152,8 +172,8 @@ public:
 	//  Character class management
 	//---------------------------------------------------------------------
 
-	CharClass* NewCharClass(char const *name, CharSet *s);
-	CharClass* FindCharClass(char const *name);
+	CharClass* NewCharClass(std::string const &name, CharSet *s);
+	CharClass* FindCharClass(std::string const &name);
 	CharClass* FindCharClass(CharSet *s);
 	CharSet* CharClassSet(int i);
 
@@ -167,20 +187,37 @@ public:
 	//  Symbol set computations
 	//---------------------------------------------------------------------
 
-	/* Computes the first set for the given Node. */
-	BitArray* First0(Node *p, BitArray *mark);
-	BitArray* First(Node *p);
+	/// Helper to compute the first set for the given Node.
+	///
+	/// \param p     the node
+	/// \param mark  marker set
+	///
+	/// \note  returns always a new BitArray
+	BitArray* First0(Node const *p, BitArray &mark);
+
+	/// Compute the first set for the given Node.
+	///
+	/// \param p     the node
+	///
+	/// \note  returns always a new BitArray
+	BitArray* First(Node const *p);
+
 	void CompFirstSets();
-	void CompFollow(Node *p);
-	void Complete(Symbol *sym);
+	void CompFollow(Node const *p, BitArray &visited);
+	void Complete(Symbol *sym, BitArray &visited);
 	void CompFollowSets();
 	Node* LeadingAny(Node *p);
 	void FindAS(Node *p); // find ANY sets
 	void CompAnySets();
+
+	/// \note returns always a new BitArray
 	BitArray* Expected(Node *p, Symbol *curSy);
-	// does not look behind resolvers; only called during LL(1) test and in CheckRes
+
+	/// does not look behind resolvers; only called during LL(1) test and in CheckRes.
+	///
+	/// \note returns always a new BitArray
 	BitArray* Expected0(Node *p, Symbol *curSy);
-	void CompSync(Node *p);
+	void CompSync(Node *p, BitArray &visited);
 	void CompSyncSets();
 	void SetupAnys();
 	void CompDeletableSymbols();
@@ -192,9 +229,9 @@ public:
 	//---------------------------------------------------------------------
 
 	char  Hex2Char(char const *s);
-	char *Char2Hex(char ch);
+	std::string Char2Hex(char ch);
 	char *Unescape(char const *s);
-	char* Escape(char const *s);
+	std::string Escape(char const *s);
 
 	//---------------------------------------------------------------------
 	//  Grammar checks
@@ -213,7 +250,7 @@ public:
 		}
 	};
 
-	void GetSingles(Node *p, ArrayList *singles);
+	void GetSingles(Node *p, std::vector<Symbol *> &singles);
 	bool NoCircularProductions();
 
 	//--------------- check for LL(1) errors ----------------------
@@ -232,8 +269,8 @@ public:
 
 	//------------- check if resolvers are legal  --------------------
 
-	void ResErr(Node *p, const char* msg);
-	void CheckRes(Node *p, bool rslvAllowed);
+	void ResErr(Node const *p, char const *msg);
+	void CheckRes(Node const *p, bool rslvAllowed);
 	void CheckResolvers();
 
 	//------------- check if every nts has a production --------------------
@@ -242,12 +279,12 @@ public:
 
 	//-------------- check if every nts can be reached  -----------------
 
-	void MarkReachedNts(Node *p);
+	void MarkReachedNts(Node *p, BitArray &visited);
 	bool AllNtReached();
 
 	//--------- check if every nts can be derived to terminals  ------------
 
-	bool IsTerm(Node *p, BitArray *mark); // true if graph can be derived to terminals
+	bool IsTerm(Node *p, BitArray &mark); // true if graph can be derived to terminals
 	bool AllNtToTerm();
 
 	//---------------------------------------------------------------------

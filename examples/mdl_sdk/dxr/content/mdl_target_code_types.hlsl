@@ -323,11 +323,19 @@ struct Bsdf_auxiliary_data {
                                     ///  DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple times
     #endif
     #if (MDL_DF_HANDLE_SLOT_MODE == -1)
-        float3 albedo;              ///< output: albedo
+        float3 albedo_diffuse;      ///< output: (diffuse part of the) albedo
+        float3 albedo_glossy;       ///< output: (glossy part of the) albedo
         float3 normal;              ///< output: normal
     #else
-        float3 albedo[MDL_DF_HANDLE_SLOT_MODE]; ///< output: albedo
-        float3 normal[MDL_DF_HANDLE_SLOT_MODE]; ///< output: normal
+        float3 albedo_diffuse[MDL_DF_HANDLE_SLOT_MODE]; ///< output: (diffuse part of the) albedo
+        float3 albedo_glossy[MDL_DF_HANDLE_SLOT_MODE];  ///< output: (glossy part of the) albedo
+        float3 normal[MDL_DF_HANDLE_SLOT_MODE];         ///< output: normal
+    #endif
+
+    #if (MDL_DF_HANDLE_SLOT_MODE == -1)
+        float3 roughness;                          ///< output: rougness_u, roughness_v, bsdf_weight
+    #else
+        float3 roughness[MDL_DF_HANDLE_SLOT_MODE]; ///< output: rougness_u, roughness_v, bsdf_weight
     #endif
 };
 

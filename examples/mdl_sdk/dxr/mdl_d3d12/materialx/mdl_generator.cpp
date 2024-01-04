@@ -207,6 +207,14 @@ void Mdl_generator::add_library(const std::string& mtlx_library)
 
 // ------------------------------------------------------------------------------------------------
 
+void Mdl_generator::set_mdl_version(const std::string& mdl_version)
+{
+    // parsing later behind a version ifdef
+    m_mdl_version = mdl_version;
+}
+
+// ------------------------------------------------------------------------------------------------
+
 bool Mdl_generator::set_source(const std::string& mtlx_material, const std::string& material_name)
 {
     if (!mi::examples::io::file_exists(mtlx_material))
@@ -309,7 +317,6 @@ bool Mdl_generator::generate(Mdl_sdk& mdl_sdk, Mdl_generator_result& inout_resul
     generator_context.getOptions().targetDistanceUnit = "meter";
 
     // load the actual material
-
     if (m_mtlx_source.empty())
     {
         log_error("[MTLX] Source file not specified.", SRC);
@@ -334,6 +341,20 @@ bool Mdl_generator::generate(Mdl_sdk& mdl_sdk, Mdl_generator_result& inout_resul
 
     // Clear user data on the generator.
     generator_context.clearUserData();
+
+// Specify the MDL target version, WIP for MaterialX 1.38.9
+#if (MATERIALX_MAJOR_VERSION >= 1 && MATERIALX_MINOR_VERSION >= 38 && MATERIALX_BUILD_VERSION >= 9)
+    mx::GenMdlOptionsPtr genMdlOptions = std::make_shared<mx::GenMdlOptions>();
+
+    if (m_mdl_version == "1.6")
+        genMdlOptions->targetVersion = mx::GenMdlOptions::MdlVersion::MDL_1_6;
+    else if (m_mdl_version == "1.7")
+        genMdlOptions->targetVersion = mx::GenMdlOptions::MdlVersion::MDL_1_7;
+    else
+        genMdlOptions->targetVersion = mx::GenMdlOptions::MdlVersion::MDL_LATEST; // 1_8
+
+    generator_context.pushUserData(mx::GenMdlOptions::GEN_CONTEXT_USER_DATA_KEY, genMdlOptions);
+#endif
 
     // Load source document.
     mx::DocumentPtr material_document = mx::createDocument();

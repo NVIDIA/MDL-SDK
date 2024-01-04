@@ -50,7 +50,7 @@
 #include <base/util/string_utils/i_string_utils.h>
 #include <base/hal/disk/disk.h>
 #include <base/hal/disk/disk_file_reader_writer_impl.h>
-#include <base/lib/log/log.h>
+#include <base/lib/log/i_log_logger.h>
 #include <base/lib/path/i_path.h>
 
 namespace mi { namespace neuraylib { class IReader; } }
@@ -250,7 +250,8 @@ Lightprofile_ies_parser::Lightprofile_ies_parser(
     {
         for(Uint i=0; i<m_nb_horizontal_angles; i++)
         {
-            const std::string description = "candela values for horizontal angle #" + std::to_string(i);
+            const std::string description
+                = "candela values for horizontal angle #" + std::to_string(i);
             if(m_valid)
                 parse_angles_data(m_candela_values[i], description);
         }
@@ -981,7 +982,8 @@ static void horizontal_flip(
     const Scalar max_angle = horizontal_angles[nb_horizontal_angles - 1];
 
     // miASSERT(-M_PI <= max_angle && max_angle <= 3 * M_PI);
-    const Scalar add = (max_angle>Scalar(M_PI)) ? Scalar(2.0*M_PI) : 0.f;   // Put reversed angle to [-PI,PI]
+    // Put reversed angle to [-PI,PI]
+    const Scalar add = (max_angle>Scalar(M_PI)) ? Scalar(2.0*M_PI) : 0.f;
 
     Uint i = 0;
     Uint j = nb_horizontal_angles-1;

@@ -64,7 +64,7 @@ namespace neuraylib {
 /// This is an object representing the \neurayLibraryName. Only one object of this type will exist
 /// at a time. It is used for configuration, startup and shutdown of the \neurayLibraryName.
 class INeuray : public
-    mi::base::Interface_declare<0x34b6a7c3,0xf040,0x43ec,0x9b,0x7c,0xc1,0x36,0x2f,0xe7,0x0a,0xaa>
+    mi::base::Interface_declare<0x46699619,0x23ce,0x4a44,0x8f,0xae,0x3e,0x69,0x8c,0xc7,0xe3,0x91>
 {
 public:
     /// Returns the interface version of the \neurayLibraryName.

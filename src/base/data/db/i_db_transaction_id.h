@@ -26,186 +26,172 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 
-/// \file
-/// \brief Transaction ID class, a Uint32 wrap around counter
-
 #ifndef BASE_DATA_DB_I_DB_TRANSACTION_ID_H
 #define BASE_DATA_DB_I_DB_TRANSACTION_ID_H
 
+#include <mi/base/types.h>
+
 #include <climits>
-#include <base/system/main/types.h> // Uint32
 
 namespace MI {
+
 namespace DB {
 
-// Transaction ID class, a Uint32 wrap around counter
+/// A wrap-around counter based on mi::Uint32.
 //
-// This implements a wrap around counter that allows the counters to
-// overflow while letting comparisons still return valid result. This is
-// based on the assumption that the compared ids are never expected to
-// be more than UINT32_MAX/2 apart from each other. If they are, than an
-// overflow is assumed and compare operators behave accordingly.
+/// This implements a wrap-around counter that allows the counters to overflow while letting
+/// comparisons still return meaningful result. This is based on the assumption that the compared
+/// IDs are never expected to be more than UINT_MAX/2 apart from each other. If they are, than an
+/// overflow is assumed and compare operators behave accordingly.
 //
-// Warning: the comparison operators do _not_ implement an order 
-// relationship. For large distributions of IDs, things like
-// sorted STL containers or sort algorithms will fall apart.
-//
+/// \note These comparison operators do \em not implement a strict total ordering. Standard library
+///       containers for Transaction_id require an explicit (different) key comparison function.
+///
+/// TODO: It would be better to skip ID 0 on initialization and wrap-around since some parts of the
+/// code base use ID 0 for an invalid/unavailable transaction ID.
 class Transaction_id
 {
-  private:
-    Uint32 m_id;                           // the actual counter
+public:
+    /// Default constructor.
+    Transaction_id() = default;
 
-  public:
-    // constructor
-    inline explicit Transaction_id( Uint32 id) : m_id( id) {}
+    /// Constructor from mi::Uint32.
+    explicit Transaction_id( mi::Uint32 id) : m_id( id) { }
 
-    // default constructor
-    inline Transaction_id() : m_id(0) {}
+    /// Copy constructor.
+    Transaction_id( const Transaction_id&) = default;
 
-    // return id value
-    inline Uint32 operator()() const { return m_id; }
+    /// Assignment operator.
+    Transaction_id& operator=( const Transaction_id& other) = default;
 
-    // return id value
-    Uint32 get_uint() const { return m_id; }
+    /// Assignment from mi::Uint32.
+    Transaction_id& operator=( mi::Uint32 other)
+    {
+        m_id = other;
+        return *this;
+    }
 
-    // assignment operator
-    inline Transaction_id &operator=( Uint32 value)
-        {
-            m_id = value;
-            return *this;
-        }
+    /// Returns the id value.
+    mi::Uint32 operator()() const { return m_id; }
 
-    // copy assignment operator
-    inline Transaction_id &operator=( const Transaction_id& source)
-        {
-            m_id = source.m_id;
-            return *this;
-        }
+    /// Returns the id value.
+    mi::Uint32 get_uint() const { return m_id; }
 
-    // postfix increment operator
-    inline const Transaction_id operator++(int)
-        {
-            Transaction_id id(m_id);
-            m_id++;
-            return id;
-        }
+    /// Postfix increment operator.
+    const Transaction_id operator++( int)
+    {
+        Transaction_id id( m_id);
+        m_id++;
+        return id;
+    }
 
-    // prefix increment operator
-    inline Transaction_id &operator++() { ++m_id; return *this; }
+    /// Prefix increment operator.
+    Transaction_id& operator++() { ++m_id; return *this; }
 
-    // postfix decrement operator
-    inline const Transaction_id operator--(int)
-        {
-            Transaction_id id(m_id);
-            m_id--;
-            return id;
-        }
+    /// Postfix decrement operator.
+    const Transaction_id operator--( int)
+    {
+        Transaction_id id( m_id);
+        m_id--;
+        return id;
+    }
 
-    // prefix decrement operator
-    inline Transaction_id &operator--() { --m_id; return *this; }
+    /// Prefix decrement operator.
+    Transaction_id& operator--() { --m_id; return *this; }
 
+private:
+    mi::Uint32 m_id = 0;
 };
 
-inline Transaction_id operator+( const Transaction_id &id1, const Transaction_id &id2)
+inline Transaction_id operator+( const Transaction_id& lhs, const Transaction_id& rhs)
 {
-    return Transaction_id(id1() + id2());
+    return Transaction_id( lhs() + rhs());
 }
 
-inline Transaction_id operator-( const Transaction_id &id1, const Transaction_id &id2)
+inline Transaction_id operator-( const Transaction_id& lhs, const Transaction_id& rhs)
 {
-    return Transaction_id(id1() - id2());
+    return Transaction_id( lhs() - rhs());
 }
 
-inline Transaction_id operator+( const Transaction_id &id1, const Uint32 id2)
+inline Transaction_id operator+( const Transaction_id& lhs, const mi::Uint32 rhs)
 {
-    return Transaction_id(id1() + id2);
+    return Transaction_id( lhs() + rhs);
 }
 
-inline Transaction_id operator-( const Transaction_id &id1, const Uint32 id2)
+inline Transaction_id operator-( const Transaction_id& lhs, const mi::Uint32 rhs)
 {
-    return Transaction_id(id1() - id2);
+    return Transaction_id( lhs() - rhs);
 }
 
-inline Transaction_id operator+( const Uint32 id1, const Transaction_id &id2)
+inline Transaction_id operator+( const mi::Uint32 lhs, const Transaction_id& rhs)
 {
-    return Transaction_id(id1 + id2());
+    return Transaction_id( lhs + rhs());
 }
 
-inline Transaction_id operator-( const Uint32 id1, const Transaction_id &id2)
+inline Transaction_id operator-( const mi::Uint32 lhs, const Transaction_id& rhs)
 {
-    return Transaction_id(id1 - id2());
+    return Transaction_id( lhs - rhs());
 }
 
+/// \name Comparison operators
+///
+/// If the difference between the two operands is greater than half of what the counter can hold, an
+/// overflow is assumed.
+///
+/// \note These comparison operators do \em not implement a strict total ordering. Standard library
+///       containers for Transaction_id require an explicit (different) key comparison function.
+//@{
 
-// comparison operator for wrap ids
-inline bool operator==( const Transaction_id &id1, const Transaction_id &id2)
+inline bool operator==( const Transaction_id& lhs, const Transaction_id& rhs)
 {
-    return id1() == id2();
+    return lhs() == rhs();
 }
 
-// comparison operator for wrap ids
-inline bool operator!=( const Transaction_id &id1, const Transaction_id &id2)
+inline bool operator!=( const Transaction_id& lhs, const Transaction_id& rhs)
 {
-    return id1() != id2();
+    return lhs() != rhs();
 }
 
-
-// comparison operator for IDs. If the difference between the
-// two operands is greater than half of what the counter can hold, an
-// overflow is assumed.
-// Warning: this is _not_ implementing an order relationship
-inline bool operator<( const Transaction_id &id1, const Transaction_id &id2)
+inline bool operator<( const Transaction_id& lhs, const Transaction_id& rhs)
 {
-    if (id1() == id2())
+    if( lhs() == rhs())
         return false;
-    if (id1() > id2())
-        return id1() - id2() > UINT_MAX / 2;
-    return id2() - id1() <= UINT_MAX / 2;
+    if( lhs() > rhs())
+        return lhs() - rhs() > UINT_MAX / 2;
+    return rhs() - lhs() <= UINT_MAX / 2;
 }
 
-
-// comparison operator for IDs. If the difference between the
-// two operands is greater than half of what the counter can hold, an
-// overflow is assumed.
-// Warning: this is _not_ implementing an order relationship
-inline bool operator<=( const Transaction_id &id1, const Transaction_id &id2)
+inline bool operator<=( const Transaction_id& lhs, const Transaction_id& rhs)
 {
-    if (id1() == id2())
+    if( lhs() == rhs())
         return true;
-    if (id1() > id2())
-        return id1() - id2() > UINT_MAX / 2;
-    return id2() - id1() <= UINT_MAX / 2;
+    if( lhs() > rhs())
+        return lhs() - rhs() > UINT_MAX / 2;
+    return rhs() - lhs() <= UINT_MAX / 2;
 }
 
-
-// comparison operator for IDs. If the difference between the
-// two operands is greater than half of what the counter can hold, an
-// overflow is assumed.
-// Warning: this is _not_ implementing an order relationship
-inline bool operator>( const Transaction_id &id1, const Transaction_id &id2)
+inline bool operator>( const Transaction_id& lhs, const Transaction_id& rhs)
 {
-    if (id1() == id2())
+    if( lhs() == rhs())
         return false;
-    if (id1() > id2())
-        return id1() - id2() <= UINT_MAX / 2;
-    return id2() - id1() > UINT_MAX / 2;
+    if( lhs() > rhs())
+        return lhs() - rhs() <= UINT_MAX / 2;
+    return rhs() - lhs() > UINT_MAX / 2;
 }
 
-
-// comparison operator for IDs. If the difference between the
-// two operands is greater than half of what the counter can hold, an
-// overflow is assumed.
-// Warning: this is _not_ implementing an order relationship
-inline bool operator>=( const Transaction_id &id1, const Transaction_id &id2)
+inline bool operator>=( const Transaction_id& lhs, const Transaction_id& rhs)
 {
-    if (id1() == id2())
+    if( lhs() == rhs())
         return true;
-    if (id1() > id2())
-        return id1() - id2() <= UINT_MAX / 2;
-    return id2() - id1() > UINT_MAX / 2;
+    if( lhs() > rhs())
+        return lhs() - rhs() <= UINT_MAX / 2;
+    return rhs() - lhs() > UINT_MAX / 2;
 }
 
-} // namespace DB
-} // namespace MI
+//@}
 
-#endif // BASE_DATA_DB_I_DB_TRANSACTION_ID_H
+} /// namespace DB
+
+} /// namespace MI
+
+#endif /// BASE_DATA_DB_I_DB_TRANSACTION_ID_H

@@ -33,8 +33,7 @@
 
 #include "module_registration_entry.h"
 #include "module.h"
-
-#include <base/lib/log/i_log_assert.h>
+#include "i_assert.h"
 
 #include <cstdio>
 #include <cstring>
@@ -142,7 +141,7 @@ void Module_registration_entry::call_init()
     mi::base::Lock::Block lock(&m_lock);
 
     if (m_reference_count++ == 0) {
-        ASSERT(M_MAIN,
+        MI_ASSERT(
             m_status == MODULE_STATUS_UNINITIALIZED ||
             m_status == MODULE_STATUS_FAILED ||
             m_status == MODULE_STATUS_EXITED);

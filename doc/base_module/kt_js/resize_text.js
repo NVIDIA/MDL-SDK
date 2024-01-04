@@ -88,6 +88,7 @@ function navshow() {
     adjust_widths();
     center_elements();
     set_code_comment_width();
+    //set_annotate_widths();
     set_imagecode_width();
     adjust_footnotes();
 }

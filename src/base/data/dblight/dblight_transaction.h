@@ -26,17 +26,18 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 
-/** \file
- ** \brief This file implements a very simple transaction
- **/
-
 #ifndef BASE_DATA_DBLIGHT_DBLIGHT_TRANSACTION_H
 #define BASE_DATA_DBLIGHT_DBLIGHT_TRANSACTION_H
 
 #include <atomic>
 
+#include <boost/core/noncopyable.hpp>
+#include <boost/intrusive_ptr.hpp>
+#include <boost/intrusive/set.hpp>
+
 #include <base/data/db/i_db_transaction.h>
 #include <base/data/db/i_db_tag.h>
+#include <base/hal/thread/i_thread_lock.h>
 
 namespace MI {
 
@@ -44,35 +45,86 @@ namespace DBLIGHT {
 
 class Database_impl;
 class Scope_impl;
+class Transaction_manager;
 
+namespace bi = boost::intrusive;
+
+/// A transaction of the database.
+///
+/// Transactions are created with pin count 1. The pin count is decremented again in
+/// #Transaction_manager::end_transaction().
+///
+/// "NI" means DBLIGHT does not implement/support that method of the interface.
 class Transaction_impl : public DB::Transaction
 {
 public:
-    Transaction_impl(Database_impl* database, Scope_impl* scope, DB::Transaction_id id);
+    /// The various states for transactions.
+    ///
+    ///                                     /-> COMMITTED
+    /// Transition diagram: OPEN -> CLOSING
+    ///                                     \-> ABORTED
+    enum State {
+        OPEN,        ///< Open transaction (after creation).
+        CLOSING,     ///< During commit() or abort().
+        COMMITTED,   ///< After commit().
+        ABORTED      ///< After abort().
+    };
 
-    ~Transaction_impl();
+    /// Constructor.
+    ///
+    /// \param database              Instance of the database this transaction belongs to.
+    /// \param transaction_manager   Manager that created this transaction.
+    /// \param scope                 Scope this transaction belongs to. RCS:NEU
+    /// \param transaction_id        ID of this transaction.
+    Transaction_impl(
+        Database_impl* database,
+        Transaction_manager* transaction_manager,
+        Scope_impl* scope,
+        DB::Transaction_id id);
 
-    void pin();
+    virtual ~Transaction_impl() { }
 
-    void unpin();
+    // methods of DB::Transaction
 
-    bool block_commit();
+    void pin() override { ++m_pin_count; }
 
-    bool unblock_commit();
+    /// Removes instance from Transaction_manager::m_all_transactions and invokes the destructor
+    /// if the pin count drops to zero.
+    void unpin() override;
 
-    bool commit();
+    DB::Transaction_id get_id() const override { return m_id; }
 
-    void abort();
+    DB::Scope* get_scope() override;
 
-    bool is_open(bool closing_is_open);
+    /// Note that this method does \em not increment the sequence number.
+    ///
+    /// Use #allocate_sequence_number() to allocate a valid sequence number for updates and to
+    /// increment the internal counter for the next allocation.
+    mi::Uint32 get_next_sequence_number() const override { return m_next_sequence_number; }
 
-    DB::Tag reserve_tag();
+    bool commit() override;
+
+    void abort() override;
+
+    bool is_open( bool closing_is_open) const override;
+
+    /*NI*/ bool block_commit_or_abort() override;
+
+    /*NI*/ bool unblock_commit_or_abort() override;
+
+    DB::Info* access_element( DB::Tag tag) override;
+
+    DB::Info* edit_element( DB::Tag tag) override;
+
+    void finish_edit( DB::Info* info, DB::Journal_type journal_type) override;
+
+    DB::Tag reserve_tag() override;
 
     DB::Tag store(
         DB::Element_base* element,
         const char* name,
         DB::Privacy_level privacy_level,
-        DB::Privacy_level store_level);
+        DB::Privacy_level store_level) override;
 
     void store(
         DB::Tag tag,
@@ -80,27 +132,13 @@ public:
         const char* name,
         DB::Privacy_level privacy_level,
         DB::Journal_type journal_type,
-        DB::Privacy_level store_level);
-
-    DB::Tag store(
-        SCHED::Job* job,
-        const char* name,
-        DB::Privacy_level privacy_level,
-        DB::Privacy_level store_level);
-
-    void store(
-        DB::Tag tag,
-        SCHED::Job* job,
-        const char* name,
-        DB::Privacy_level privacy_level,
-        DB::Journal_type journal_type,
-        DB::Privacy_level store_level);
+        DB::Privacy_level store_level) override;
 
     DB::Tag store_for_reference_counting(
         DB::Element_base* element,
         const char* name,
         DB::Privacy_level privacy_level,
-        DB::Privacy_level store_level);
+        DB::Privacy_level store_level) override;
 
     void store_for_reference_counting(
         DB::Tag tag,
@@ -108,105 +146,234 @@ public:
         const char* name,
         DB::Privacy_level privacy_level,
         DB::Journal_type journal_type,
-        DB::Privacy_level store_level);
+        DB::Privacy_level store_level) override;
 
-    DB::Tag store_for_reference_counting(
+    /*NI*/ DB::Tag store(
         SCHED::Job* job,
         const char* name,
         DB::Privacy_level privacy_level,
-        DB::Privacy_level store_level);
+        DB::Privacy_level store_level) override;
 
-    void store_for_reference_counting(
+    /*NI*/ void store(
         DB::Tag tag,
         SCHED::Job* job,
         const char* name,
         DB::Privacy_level privacy_level,
         DB::Journal_type journal_type,
-        DB::Privacy_level store_level);
+        DB::Privacy_level store_level) override;
 
-    void invalidate_job_results(DB::Tag tag);
+    /*NI*/ DB::Tag store_for_reference_counting(
+        SCHED::Job* job,
+        const char* name,
+        DB::Privacy_level privacy_level,
+        DB::Privacy_level store_level) override;
 
-    bool remove(DB::Tag tag, bool remove_local_copy);
+    /*NI*/ void store_for_reference_counting(
+        DB::Tag tag,
+        SCHED::Job* job,
+        const char* name,
+        DB::Privacy_level privacy_level,
+        DB::Journal_type journal_type,
+        DB::Privacy_level store_level) override;
 
-    void advise(DB::Tag tag);
+    /*NI*/ void localize(
+        DB::Tag tag, DB::Privacy_level privacy_level, DB::Journal_type journal_type) override;
 
-    void localize(
-        DB::Tag tag, DB::Privacy_level privacy_level, DB::Journal_type journal_type);
+    bool remove( DB::Tag tag, bool remove_local_copy) override;
 
-    const char* tag_to_name(DB::Tag tag);
+    const char* tag_to_name( DB::Tag tag) override;
 
-    DB::Tag name_to_tag(const char* name);
+    DB::Tag name_to_tag( const char* name) override;
 
-    SERIAL::Class_id get_class_id(DB::Tag tag);
+    bool get_tag_is_job( DB::Tag tag) override { return false; }
 
-    DB::Tag_version get_tag_version(DB::Tag tag);
+    SERIAL::Class_id get_class_id( DB::Tag tag) override;
 
-    Uint32 get_update_sequence_number();
+    DB::Privacy_level get_tag_privacy_level( DB::Tag tag) override { return 0; }
 
-    Uint32 get_tag_reference_count(DB::Tag tag);
+    DB::Privacy_level get_tag_storage_level( DB::Tag tag) override { return 0; }
 
-    bool can_reference_tag(DB::Privacy_level referencing_level, DB::Tag referenced_tag);
+    mi::Uint32 get_tag_reference_count( DB::Tag tag) override;
 
-    bool can_reference_tag(DB::Tag referencing_tag, DB::Tag referenced_tag);
+    DB::Tag_version get_tag_version( DB::Tag tag) override;
 
-    bool get_tag_is_removed(DB::Tag tag);
+    bool can_reference_tag( DB::Privacy_level referencing_level, DB::Tag referenced_tag) override;
 
-    bool get_tag_is_job(DB::Tag tag);
+    bool can_reference_tag( DB::Tag referencing_tag, DB::Tag referenced_tag) override;
 
-    DB::Privacy_level get_tag_privacy_level(DB::Tag tag);
+    bool get_tag_is_removed( DB::Tag tag) override;
 
-    DB::Privacy_level get_tag_storage_level(DB::Tag tag);
-
-    DB::Transaction_id get_id() const;
-
-    std::vector<std::pair<DB::Tag, DB::Journal_type> >* get_journal(
+    /*NI*/ std::unique_ptr<DB::Journal_query_result> get_journal(
          DB::Transaction_id last_transaction_id,
-         Uint32 last_transaction_change_version,
+         mi::Uint32 last_transaction_change_version,
          DB::Journal_type journal_type,
-         bool lookup_parents);
+         bool lookup_parents) override;
 
-    Sint32 execute_fragmented(DB::Fragmented_job* job, size_t count);
+    mi::Sint32 execute_fragmented( DB::Fragmented_job* job, size_t count) override;
 
-    Sint32 execute_fragmented_async(
-        DB::Fragmented_job* job, size_t count, DB::IExecution_listener* listener);
+    mi::Sint32 execute_fragmented_async(
+        DB::Fragmented_job* job, size_t count, DB::IExecution_listener* listener) override;
 
-    void cancel_fragmented_jobs();
+    /*NI*/ void cancel_fragmented_jobs() override;
 
-    bool get_fragmented_jobs_cancelled();
+    bool get_fragmented_jobs_cancelled() override { return false; }
 
-    DB::Scope* get_scope();
+    /*NI*/ void invalidate_job_results( DB::Tag tag) override;
 
-    /// Pins the return value (but currently always NULL).
-    DB::Info* get_job(DB::Tag tag);
+    /*NI*/ void advise( DB::Tag tag) override;
 
-    void store_job_result(DB::Tag tag, DB::Element_base* element);
+    /*NI*/ DB::Element_base* construct_empty_element( SERIAL::Class_id class_id) override;
 
-    void send_element_to_host(DB::Tag tag, NET::Host_id host_id);
+    Transaction* get_real_transaction() override { return this; }
 
-    DB::Update_list* get_received_updates();
+    // internal methods
 
-    void wait(DB::Update_list* needed_updates);
+    /// Returns the current pin count.
+    mi::Uint32 get_pin_count() const { return m_pin_count; }
 
-    /// Pins the return value.
-    DB::Info* edit_element(DB::Tag tag);
+    /// Sets the state.
+    void set_state( State state) { m_state = state; }
 
-    void finish_edit(DB::Info* info, DB::Journal_type journal_type);
+    /// Returns the current state.
+    State get_state() const { return m_state; }
 
-    /// Pins the return value.
-    DB::Info* get_element(DB::Tag tag, bool do_wait);
+    /// Sets the visibility_id.
+    void set_visibility_id( DB::Transaction_id visibility_id) { m_visibility_id = visibility_id; }
 
-    DB::Element_base* construct_empty_element(SERIAL::Class_id class_id);
+    /// Returns the current visibility_id.
+    DB::Transaction_id get_visibility_id() const { return m_visibility_id; }
 
-    Transaction* get_real_transaction();
+    /// Allocates a valid sequence number for updates and increments the internal counter for the
+    /// next allocation.
+    ///
+    /// Use #get_next_sequence_number() to query the number \em without incrementing it.
+    mi::Uint32 allocate_sequence_number() { return m_next_sequence_number++; }
+
+    /// Indicates whether changes from this transaction are visible for transaction \p id.
+    ///
+    /// \pre Both transactions belong to the same scope.
+    bool is_visible_for( DB::Transaction_id id) const;
 
 private:
-    Database_impl* m_database;
-    Scope_impl* m_scope;
-    DB::Transaction_id m_id;
-    std::atomic_uint32_t m_refcount;
-    std::atomic_uint32_t m_next_sequence_number;
-    bool m_is_open;
+    /// Instance of the database this transaction belongs to.
+    Database_impl* const m_database;
+    /// The manager that created this transaction.
+    Transaction_manager* const m_transaction_manager;
+    /// Scope this transaction belongs to.
+    Scope_impl* const m_scope;
+
+    /// ID of this transaction.
+    const DB::Transaction_id m_id;
+    /// Reference count of the transaction.
+    std::atomic_uint32_t m_pin_count = 1;
+    /// State of the transaction.
+    State m_state = OPEN;
+    /// Visibility of changes from this transaction when in committed or aborted state.
+    DB::Transaction_id m_visibility_id;
+    /// Sequence number for the next update within this transaction.
+    std::atomic_uint32_t m_next_sequence_number = 0;
+
+public:
+    /// Hook for Transaction_manager::m_all_transactions.
+    bi::set_member_hook<> m_all_transactions_hook;
+    /// Hook for Transaction_manager::m_open_transactions.
+    bi::set_member_hook<> m_open_transactions_hook;
 };
+
+/// Comparison operator for Transaction_impl.
+///
+/// Sorts by comparison of the transaction ID.
+inline bool operator<( const Transaction_impl& lhs, const Transaction_impl& rhs)
+{ return lhs.get_id() < rhs.get_id(); }
+
+/// Output operator for Transaction_impl::State.
+std::ostream& operator<<( std::ostream& s, const Transaction_impl::State& state);
+
+/// Manager for transactions.
+class Transaction_manager : private boost::noncopyable
+{
+public:
+    /// Constructor.
+    ///
+    /// \param database   Instance of the database this manager belongs to.
+    Transaction_manager( Database_impl* database) : m_database( database) { }
+
+    /// Destructor.
+    ///
+    /// Checks
+    /// - that there are no open transactions anymore and
+    /// - that there no alive transactions at all anymore.
+    ~Transaction_manager();
+
+    /// Starts a new transaction in the given scope.
+    ///
+    /// \param scope   Scope this transaction belongs to. RCS:NEU
+    /// \return        The new transaction. RCS:NEU
+    Transaction_impl* start_transaction( Scope_impl* scope);
+
+    /// Ends a transaction.
+    ///
+    /// Sets the state to CLOSING, removes the transaction from the set of open transactions,
+    /// sets the visibility ID, sets the state to COMMITTED or ABORTED depending on \p commit,
+    /// decrements the pin count, and invokes the garbage collection.
+    ///
+    /// \param transaction   The transaction to end. RCS:NEU
+    /// \param commit        \c true to commit, \c false to abort.
+    void end_transaction( Transaction_impl* transaction, bool commit);
+
+    /// Removes a transaction from the set of all transactions.
+    ///
+    /// Used by the destructor of Transaction_impl to remove itself from the set.
+    ///
+    /// \param transaction   The transaction to remove. RCS:NEU
+    void remove_from_all_transactions( Transaction_impl* transaction);
+
+    /// Returns the lowest ID of all open transactions (or the ID of the next transaction if there
+    /// are no open transactions).
+    DB::Transaction_id get_lowest_open_transaction_id() const;
+
+    /// Dumps the state of the transaction manager to the stream.
+    void dump( std::ostream& s, bool mask_pointer_values);
+
+private:
+    /// Instance of the database this manager belongs to.
+    Database_impl* const m_database;
+
+    /// Lock for m_all_transactions.
+    THREAD::Lock m_all_transaction_lock;
+
+    using All_transactions_hook = bi::member_hook<
+        Transaction_impl, bi::set_member_hook<>, &Transaction_impl::m_all_transactions_hook>;
+
+    using Open_transactions_hook = bi::member_hook<
+        Transaction_impl, bi::set_member_hook<>, &Transaction_impl::m_open_transactions_hook>;
+
+    /// Set of all still existing transactions.
+    ///
+    /// Needs m_all_transaction_lock. Used only by the dump() method.
+    bi::set<Transaction_impl, All_transactions_hook> m_all_transactions;
+
+    /// Set of all open transactions.
+    bi::set<Transaction_impl, Open_transactions_hook> m_open_transactions;
+
+    /// ID of the next transaction to be created.
+    DB::Transaction_id m_next_transaction_id;
+};
+
+// Used by the Boost intrusive pointer to Transaction_impl.
+inline void intrusive_ptr_add_ref( Transaction_impl* transaction)
+{
+    transaction->pin();
+}
+
+/// Used by the Boost intrusive pointer to Transaction_impl.
+inline void intrusive_ptr_release( Transaction_impl* transaction)
+{
+    transaction->unpin();
+}
+
+/// Intrusive pointer for Transaction_impl.
+using Transaction_impl_ptr = boost::intrusive_ptr<Transaction_impl>;
 
 } // namespace DBLIGHT
 

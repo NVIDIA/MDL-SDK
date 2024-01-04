@@ -40,7 +40,6 @@
 #include "mdl_elements_utilities.h"
 
 #include <sstream>
-#include <map>
 
 #include <mi/neuraylib/istring.h>
 #include <mi/mdl/mdl_archiver.h>
@@ -1496,20 +1495,22 @@ IExpression_list* Mdl_function_definition::check_and_prepare_arguments(
         && m_semantic != mi::neuraylib::IFunction_definition::DS_TERNARY);
 
     // prevent instantiation of non-exported function definitions
-    if( !m_is_exported) {
+    if( !m_is_exported && !create_direct_calls) {
         *errors = -4;
         return nullptr;
     }
 
-    std::map<std::string, bool> needs_cast;
+    mi::Size n_params = m_parameter_types->get_size();
+    std::vector<bool> needs_cast( n_params, false);
+
     SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
     bool allow_cast = mdlc_module->get_implicit_cast_enabled();
 
     // check that the provided arguments are parameters of the function definition and that their
     // types match the expected types
     if( arguments) {
-        mi::Size n = arguments->get_size();
-        for( mi::Size i = 0; i < n; ++i) {
+        mi::Size n_args = arguments->get_size();
+        for( mi::Size i = 0; i < n_args; ++i) {
             const char* name = arguments->get_name( i);
             mi::Size parameter_index = get_parameter_index( name);
             mi::base::Handle<const IType> expected_type(
@@ -1531,7 +1532,7 @@ IExpression_list* Mdl_function_definition::check_and_prepare_arguments(
                 *errors = -2;
                 return nullptr;
             }
-            needs_cast[name] = needs_cast_tmp;
+            needs_cast[parameter_index] = needs_cast_tmp;
 
             bool actual_type_varying
                 = (actual_type->get_all_type_modifiers()   & IType::MK_VARYING) != 0;
@@ -1559,10 +1560,10 @@ IExpression_list* Mdl_function_definition::check_and_prepare_arguments(
     }
 
     // build up complete argument set using the defaults where necessary
-    mi::Size n = m_parameter_types->get_size();
-    mi::base::Handle<IExpression_list> complete_arguments( m_ef->create_expression_list( n));
-    std::vector<mi::base::Handle<const IExpression> > call_context;
-    for( mi::Size i = 0; i < n;  ++i) {
+    mi::base::Handle<IExpression_list> complete_arguments( m_ef->create_expression_list( n_params));
+    std::vector<mi::base::Handle<const IExpression>> call_context;
+    call_context.reserve( n_params);
+    for( mi::Size i = 0; i < n_params;  ++i) {
         const char* name = get_parameter_name( i);
         mi::base::Handle<const IExpression> argument(
             arguments ? arguments->get_expression( name) : nullptr);
@@ -1572,7 +1573,7 @@ IExpression_list* Mdl_function_definition::check_and_prepare_arguments(
                 argument.get(), transaction, copy_immutable_calls));
             ASSERT( M_SCENE, argument_copy);
 
-            if( needs_cast[name]) {
+            if( needs_cast[i]) {
                 mi::base::Handle<const IType> expected_type(
                     m_parameter_types->get_type( i));
                 mi::Sint32 errors = 0;
@@ -1596,23 +1597,24 @@ IExpression_list* Mdl_function_definition::check_and_prepare_arguments(
                 *errors = -3;
                 return nullptr;
             }
-            if( create_direct_calls) {
-                Execution_context context;
-                default_ = int_expr_call_to_int_expr_direct_call(
-                    transaction, m_ef.get(), default_.get(), /*parameters*/ {}, &context);
-            }
-            mi::base::Handle<const IType> expected_type( m_parameter_types->get_type( name));
+            mi::base::Handle<const IType> expected_type( m_parameter_types->get_type( i));
             bool expected_type_uniform
                 = (expected_type->get_all_type_modifiers() & IType::MK_UNIFORM) != 0;
             if( expected_type_uniform && return_type_is_varying( transaction, default_.get())) {
                 *errors = -8;
                 return nullptr;
             }
-            // clone the default (also resolves parameter references)
-            mi::base::Handle<IExpression> default_copy(
-                deep_copy( m_ef.get(), transaction, default_.get(), call_context));
-            ASSERT( M_SCENE, default_copy);
-            argument = default_copy;
+            if( create_direct_calls) {
+                // convert indirect calls to direct calls and resolve parameter references
+                Execution_context context;
+                argument = int_expr_call_to_int_expr_direct_call(
+                    transaction, m_ef.get(), default_.get(), call_context, &context);
+                ASSERT( M_SCENE, argument);
+            } else {
+                // clone the default (also resolves parameter references)
+                argument = deep_copy( m_ef.get(), transaction, default_.get(), call_context);
+                ASSERT( M_SCENE, argument);
+            }
         }
         complete_arguments->add_expression_unchecked( name, argument.get());
         call_context.push_back( argument);
@@ -1942,7 +1944,8 @@ Mdl_function_definition::check_and_prepare_arguments_array_constructor_operator(
         return std::make_tuple( nullptr, nullptr, nullptr);
     }
 
-    std::map<std::string, bool> needs_cast;
+    std::vector<bool> needs_cast( n, false);
+
     SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
     bool allow_cast = mdlc_module->get_implicit_cast_enabled();
 
@@ -1964,7 +1967,12 @@ Mdl_function_definition::check_and_prepare_arguments_array_constructor_operator(
             return std::make_tuple( nullptr, nullptr, nullptr);
         }
         STLEXT::Likely<mi::Size> name_likely = STRING::lexicographic_cast_s<mi::Size>( name+5);
-        if( !name_likely.get_status() || *name_likely.get_ptr() >= n) {
+        if( !name_likely.get_status()) {
+            *errors = -3;
+            return std::make_tuple( nullptr, nullptr, nullptr);
+        }
+        mi::Size parameter_index = *name_likely.get_ptr();
+        if( parameter_index >= n) {
             *errors = -3;
             return std::make_tuple( nullptr, nullptr, nullptr);
         }
@@ -1987,7 +1995,7 @@ Mdl_function_definition::check_and_prepare_arguments_array_constructor_operator(
                 return std::make_tuple( nullptr, nullptr, nullptr);
             }
         }
-        needs_cast[name] = needs_cast_tmp;
+        needs_cast[parameter_index] = needs_cast_tmp;
 
         bool actual_type_varying
             = (actual_type->get_all_type_modifiers() & IType::MK_VARYING) != 0;
@@ -2019,7 +2027,7 @@ Mdl_function_definition::check_and_prepare_arguments_array_constructor_operator(
         mi::base::Handle<const IExpression> arg( arguments->get_expression( name.c_str()));
         mi::base::Handle<IExpression> new_arg(
             m_ef->clone( arg.get(), transaction, copy_immutable_calls));
-        if( needs_cast[name])
+        if( needs_cast[i])
             new_arg = m_ef->create_cast(
                 transaction,
                 new_arg.get(),

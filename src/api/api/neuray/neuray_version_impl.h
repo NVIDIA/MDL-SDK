@@ -32,8 +32,8 @@
  ** Implements the IVersion interface
  **/
 
-#ifndef API_API_NEURAY_VERSION_IMPL_H
-#define API_API_NEURAY_VERSION_IMPL_H
+#ifndef API_API_NEURAY_NEURAY_VERSION_IMPL_H
+#define API_API_NEURAY_NEURAY_VERSION_IMPL_H
 
 #include <mi/neuraylib/iversion.h>
 #include <mi/base/interface_implement.h>
@@ -78,4 +78,4 @@ private:
 
 } // namespace MI
 
-#endif // API_API_NEURAY_VERSION_IMPL_H
+#endif // API_API_NEURAY_NEURAY_VERSION_IMPL_H

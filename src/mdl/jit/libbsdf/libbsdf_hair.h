@@ -617,8 +617,12 @@ BSDF_API void chiang_hair_bsdf_auxiliary(
     add_elemental_bsdf_auxiliary_contribution(
         data,
         handle,
-        inherited_weight * diffuse_reflection_weight * diffuse_reflection_tint,
-        math::average(inherited_weight) * inherited_normal);
+        inherited_weight,
+        make<float3>(0.0f), // diffuse albedo, zero because from the appearance, hair is glossy
+        diffuse_reflection_weight * diffuse_reflection_tint, // glossy albedo
+        inherited_normal, 
+        roughness_R.x,
+        roughness_R.y);
 }
 
 

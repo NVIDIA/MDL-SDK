@@ -81,6 +81,12 @@ private:
     /// The current dag that is checked.
     Generated_code_dag const * const m_dag;
 
+    /// The type factory of the current DAG.
+    Type_factory const *m_tf;
+
+    /// The value factory of the current DAG.
+    Value_factory const *m_vf;
+
     /// The current material index.
     size_t m_current_mat_index;
 };
@@ -94,6 +100,8 @@ DAG_code_checker::DAG_code_checker(
     IPrinter                 *printer)
 : Base(verbose, printer)
 , m_dag(dag)
+, m_tf(dag->get_type_factory())
+, m_vf(dag->get_value_factory())
 , m_current_mat_index(-1)
 {
 }
@@ -118,7 +126,7 @@ bool DAG_code_checker::check(
     }
 
     // check all values
-    checker.check_factory(dag->get_value_factory());
+    checker.check_value_factory(dag->get_value_factory());
 
     checker.check_materials(dag);
 
@@ -153,14 +161,15 @@ void DAG_code_checker::check_materials(
 }
 
 // Check a DAG IR node.
-void DAG_code_checker::check_dag_node(DAG_node const *node)
+void DAG_code_checker::check_dag_node(
+    DAG_node const *node)
 {
     switch (node->get_kind()) {
     case DAG_node::EK_CONSTANT:
         {
             DAG_constant const *c = cast<DAG_constant>(node);
             IValue const *v = c->get_value();
-            check_value(v);
+            check_value(m_vf, v);
         }
         break;
     case DAG_node::EK_TEMPORARY:
@@ -184,7 +193,7 @@ void DAG_code_checker::check_dag_node(DAG_node const *node)
             }
 
             IType const *ret_type = c->get_type();
-            check_type(ret_type);
+            check_type(m_tf, ret_type);
 
             for (int i = 0, n = c->get_argument_count(); i < n; ++i) {
                 DAG_node const *arg = c->get_argument(i);
@@ -200,7 +209,7 @@ void DAG_code_checker::check_dag_node(DAG_node const *node)
 
             IType const *type = m_dag->get_material_parameter_type(
                 m_current_mat_index, param_index);
-            check_type(type);
+            check_type(m_tf, type);
         }
         break;
     default:

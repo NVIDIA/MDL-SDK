@@ -30,8 +30,8 @@
 set(PROJECT_NAME prod-lib-mdl_sdk)
 
 # collect sources
-set(PROJECT_SOURCES 
-    "mdl_sdk_factory.cpp" 
+set(PROJECT_SOURCES
+    "mdl_sdk_factory.cpp"
     "mdl_sdk_required_modules.cpp"
     "mdl_sdk_stubs.cpp"
     )
@@ -62,50 +62,21 @@ add_library(mdl_sdk ALIAS ${PROJECT_NAME})
 add_library(mdl::mdl_sdk ALIAS ${PROJECT_NAME})
 
 # add mdl and other dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME} 
-    DEPENDS 
+#set(_LINKER_DEPENDENCIES_BASE_LIST ${_LINKER_DEPENDENCIES_BASE})
+#separate_arguments(_LINKER_DEPENDENCIES_BASE_LIST)
+#list(TRANSFORM _LINKER_DEPENDENCIES_BASE_LIST STRIP)
+
+target_add_dependencies(TARGET ${PROJECT_NAME}
+    DEPENDS
         boost
         ${LINKER_WHOLE_ARCHIVE}
         ${LINKER_START_GROUP}
         mdl::include-mi
-        mdl::api-api-mdl
-        mdl::base-data-attr
-        mdl::base-data-db
-        mdl::base-data-dblight
-        mdl::base-data-serial
-        mdl::base-hal-disk
-        mdl::base-hal-hal
-        mdl::base-hal-link
-        mdl::base-hal-time
-        mdl::base-lib-config
-        mdl::base-lib-cont
-        mdl::base-lib-mem
-        mdl::base-lib-path
-        mdl::base-lib-plug
-        mdl::base-lib-log
-        mdl::base-lib-libzip
-        mdl::base-lib-tinyxml2
-        mdl::base-lib-zlib
-        mdl::base-util-string_utils
-        mdl::base-util-registry
-        mdl::base-system-main
-        mdl::base-system-stlext
-        mdl::base-system-version
-        mdl::io-image
-        mdl::io-scene
-        mdl::mdl-codegenerators-generator_dag
-        mdl::mdl-codegenerators-generator_code
-        mdl::mdl-compiler-compilercore
-        mdl::mdl-compiler-compiler_glsl
-        mdl::mdl-compiler-compiler_hlsl
-        mdl::mdl-distiller-dist
-        mdl::mdl-integration-mdlnr
-        mdl::mdl-integration-i18n
-        mdl::mdl-jit-generator_jit
-        mdl::mdl-runtime
-        mdl::render-baker-baker
-        mdl::render-mdl-backends
-        mdl::render-mdl-runtime
+        ${LINKER_DEPENDENCIES_API}
+        ${LINKER_DEPENDENCIES_BASE}
+        ${LINKER_DEPENDENCIES_IO}
+        ${LINKER_DEPENDENCIES_MDL_JIT}
+        ${LINKER_DEPENDENCIES_RENDER}
         ${LINKER_END_GROUP}
         llvm
         ${LINKER_NO_WHOLE_ARCHIVE}
@@ -117,7 +88,6 @@ if(NOT WINDOWS)
         target_add_rpath(TARGET ${PROJECT_NAME}
             RPATHS
                 ${CMAKE_BINARY_DIR}/src/shaders/plugin/dds/${CMAKE_BUILD_TYPE}
-                ${CMAKE_BINARY_DIR}/src/shaders/plugin/freeimage/${CMAKE_BUILD_TYPE}
                 ${CMAKE_BINARY_DIR}/src/shaders/plugin/openimageio/${CMAKE_BUILD_TYPE}
                 ${CMAKE_BINARY_DIR}/src/shaders/plugin/mdl_distiller/${CMAKE_BUILD_TYPE}
                 ${CMAKE_BINARY_DIR}/examples/mdl_sdk/distilling_target_plugin/${CMAKE_BUILD_TYPE}
@@ -132,7 +102,5 @@ add_target_install(
     TARGET ${PROJECT_NAME}
     )
 
-# -------------------------------------------------------------------------------------------------
-# Add tests if available
-# -------------------------------------------------------------------------------------------------
-add_tests(POST)
+# add unit tests
+add_unit_tests(POST)

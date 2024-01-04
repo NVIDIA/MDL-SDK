@@ -98,8 +98,9 @@ enum Attr_resv_id {
     OBJ_MATERIAL_INDEX_QUAD,	///< Uint        per-quad-face mtl idx as above
     OBJ_DERIVS,			///< Vector3[2]  surface derivatives
     OBJ_PRIM_LABEL,		///< Uint        user-defined primitive label
-                                //------------------ light --------------------
+                                //------------------ material --------------------
     EXCLUDE_FROM_WHITE_MODE,    /// < bool exclude from white mode
+                                //------------------ options --------------------
     OPT_ANIMATION_TIME,		///< dscalar     animation time
     OPT_FILTER,			///< uint        filter type: box triangle etc
     OPT_RADIUS,			///< scalar      filter radius in pixels
@@ -109,7 +110,8 @@ enum Attr_resv_id {
     OPT_FORCE_BUILTIN_BUMP_LINEAR_GAMMA, /// < bool force linear gamma for builtin bumps
     OPT_IRAY_ALLOW_SURFACE_VOLUME_COEFFICIENTS, /// < bool allow surface-varying volume coeffs in iray
     OPT_IRAY_SPECTRAL_OBSERVER_CUSTOM_CURVE, /// < Vector3[]  photometric spectral color response curve
-                                //------------------ obsolete options ---------
+    OPT_IGNORE_MAX_DISPLACE,    ///< bool        ignore max displacement setting on objects
+                                //------------------ object, no inheritance ---------
     OBJ_TEXTURE,		///< Scalar[]    first texture space
     OBJ_TEXTURE_NUM	= 256,	///<             number of texture spaces
 

@@ -60,14 +60,18 @@ void Logger::message(
     const mi::base::Message_details&,
     const char* message)
 {
+    const char *message_text = message;
+    if (0 == strncmp("info : ", message, 7)) {
+        message_text = message + 7;
+    }
     if (m_test_suite) {
         if (m_path.length() > 0) {
-            if (0 == strncmp("Rule <", message, 6)) {
+            if (0 == strncmp("Rule <", message_text, 6)) {
                 // In test suite mode we trace rule matches in rule_matches.txt                
                 std::ofstream rule_file((m_path + SLASH + RUID_FILE).c_str(),
                                         std::ios::out | std::ios::app);
                 rule_file << "//RUID ";
-                for (const char* s = message + 6; isdigit(*s); ++s)
+                for (const char* s = message_text + 6; isdigit(*s); ++s)
                     rule_file << *s;
                 rule_file << "\n";
                 rule_file.close();
@@ -86,9 +90,9 @@ void Logger::message(
     // Detect exception: we show the distiller trace "Info" messages irresective
     // of the verbose level setting if trace is enabled.
     bool trace_message = false;
-    if ( (0 == strncmp("Rule <", message, 6))
-         || (0 == strncmp("Check rule set '", message, 16))
-         || (m_debug_print && 0 == strncmp(">>> ", message, 4)))
+    if ( (0 == strncmp("Rule <", message_text, 6))
+         || (0 == strncmp("Check rule set '", message_text, 16))
+         || (m_debug_print && 0 == strncmp(">>> ", message_text, 4)))
         trace_message = true;
 
     if ( trace_message || (int(level) < m_level)) {

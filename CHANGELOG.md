@@ -1,8 +1,149 @@
 Change Log
 ==========
-MDL SDK 2023.0.6 (367100.5773): 03 Nov 2023
+MDL SDK 2023.1.0 (373000.1077): 14 Dec 2023
 -----------------------------------------------
 
+
+ABI compatible with the MDL SDK 2023.1.0 (373000.1077) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Known Issues and Restrictions**
+
+- MDLE export can fail in this release with broken .mlde files that contain malformed MDL code.
+
+**Added and Changed Features**
+
+- General
+    - Added `rotate_around_x/y/z` functions to `::nvidia::support_definitions`.
+    - The MDL SDK comes now with unit tests. Building of the unit tests is
+      controlled via the `cmake` option `MDL_ENABLE_UNIT_TESTS`. Unit
+      tests can be executed from the command line via CTest, `make test`,
+      or the Visual Studio solution. Some unit tests require the `idiff`
+      tool from `OpenImageIO`.
+    - The baker uses now multiple threads.
+    - The deprecated `FreeImage` plugin as been removed.
+    - The recommended `vcpkg` version has been updated. It is now also
+      recommended to install `GLEW` and `GLFW` via `vcpkg`. The
+      feature flag `tools` for `OpenImageIO` is now required by some
+      unit tests.
+    - The database used by the MDL SDK supports now multiple parallel
+      transactions. See the documentation of `ITransaction` for visibility
+      and conflict resolution. This change includes adding support for
+      `ITransaction::abort()`. As a consequence, if an `ITransaction` is
+      released without committing or aborting, it is now automatically aborted
+      with a warning instead of being committed with an error message.
+    - The new API component `ILogging_configuration` has been added to the
+      MDL SDK. The API methods `IMdl_configuration::set_logger()` and
+      `get_logger()` have been deprecated. Use
+      `ILogging_configuration::set_receiving_logger()` and
+      `ILogging_configuration::get_receiving/forwarding_logger()` instead. The
+      old methods are still available if `MI_NEURAYLIB_DEPRECATED_14_1` is
+      defined. Use `ILogging_configuration::set_log_prefix(0)` to prevent
+      the forwarding logger from automatically adding the severity to the log
+      message.
+    - Additional performance improvements, in particular with a focus on
+      creation of compiled materials.
+    - The new methods `IType_factory::get_mdl_type_name()` and
+      `create_from_mdl_type_name()` allow to serialize and deserialize types via
+      their type names.
+    - The new method `IType_factory::get_mdl_module_name()` returns the
+      name of the MDL module that defines a given type. This is primarily
+      useful for enum and struct types.
+    - The method `IType_array::get_deferred_size()` returns now the
+      "simple" symbol name, e.g., "N" instead of the fully qualified one.
+    - The method `IExpression_factory::create_direct_call()` allows now to
+      create calls to unexported functions. Note that such calls can only be
+      used in the same module as the called function.
+    - When loading textures via an MDL module, failures do no longer cause a
+      dummy instance of `ITexture` to be created and
+      `IValue_texture::get_value()` returns now a NULL pointer.
+    - Python Bindings:
+        - Added more missing interface functions to the bindings.
+        - Removed all generated `"declare_interface"`-types.
+        - Added post build step to strip unused types and functions and
+          marked constructors invalid.
+        - Fixed `"error"`-out-parameters by providing a ReturnCode type that can be passed
+          by reference.
+        - Added `UUID` comparison for interface types.
+        - Updated the binding of enums which are now Python enums in the appropriate scope.
+        - Extended unit tests written in Python.
+        - Added a coverage report option for the unit tests written in Python.
+        - Added missing and fixed existing `get/set_value` functions for various `IData` class bindings.
+        - Mapping now `mi::Size` to `Sint64` to handle `-1` returns correctly.
+        - Removed the `IAttribute_set` function from scene elements.
+      
+- MDL Compiler and Backends
+    - Removed unused `exception_state` parameter from generated functions for non-native backends
+      to improve performance. Needs update in renderers calling these functions.
+    - Let generated functions for material expressions of base types and vector types return
+      their values directly instead via a result buffer by setting the new backend option
+      `"lambda_return_mode"` to `"value"`. Only supported by the PTX and the LLVM-IR backend.
+    - Generated auxiliary functions now separate albedo into diffuse and glossy, similar to the evaluate functions.
+    - Generated auxiliary functions now also report roughness.  
+
+- MDL Distiller and Baker
+    - Debugging features for mdltlc: `debug_name` and `debug_print` statements
+      in MDLTL rules files.
+    - Added mdltl unit tests.
+
+- MDL SDK examples
+    - Replaced compiler define `NO_DIRECT_CALL` by command line parameter
+      `--use-direct-call` to make it easier to try both variants.
+    - Adapted MDL SDK df_cuda and OptiX 7 examples to use the new value return mode.
+      The MDL Core df_cuda example still uses the old default mode (`"sret"`).
+    - AxF Example:
+        - Updated to Pantora 1.9.0.
+        - Added search path command line options.
+    - Example DXR:
+        - Changed hardware sampler mode to clamp and implemented repeat by software
+          to fix edge cases when cropping.
+        - Added a MaterialX to MDL version number parameter in preparation for
+          upcoming MaterialX releases.
+        - Added options to render multiple auxiliary outputs to file in one run.
+
+**Fixed Bugs**
+
+- General
+    - base.mdl:
+        - Improved tangent space handling for bump maps. Noise-based bump mapping is now
+          oriented correctly for object and world space coordinate sources.
+        - Additionally, coordinate transforms change the orientation consistently now.
+          This adds one field to `base::texture_coordinate_info`.
+    - Added a work-around to handle user defined constants inside the code that is added using
+      `add_function()` to an existing MDL module in the `MDL_module_builder` interface.
+      This can only handle cases where the user defined type is either defined locally
+      or imported using an absolute path.
+    - Python Binding: Fixed proxy parameter handling of `"IMdl_distiller_api::create_baker"`
+      and `"ILight_profile::reset_*"` functions.
+
+- MDL Compiler and Backends
+    - Fixed auto-import of enum conversion operators.
+    - Fixed a case where the `auto-importer` was not able to import conversion operators
+      (`enum-to-int`), which caused wrong prefixed constructors when exporting MDL,
+      e.g. `base::int(value)`.
+    - Adapted data layout for PTX to match data layout used by CUDA compiler
+      to avoid problems with misaligned data types.
+    - Fixed wrong function indices set for init functions in single-init mode,
+      when `ILink_unit::add_material()` is called more than once.
+    - Fixed invalid CUDA prototypes returned by
+      `mi::neuraylib::ITarget_code::get_callable_function_prototype()`.
+    - Fixed `texremapu` in `base.mdl` for GLSL resulting in undefined behaviour
+      for negative texture coordinates.
+    - Improved handling of invalid MDL code in the MDL compiler.
+    
+- MDL Distiller and Baker
+    - Fixed printing of `NaN`, `+inf` and `-inf` constants in the `mdl_distiller_cli`
+      command line utility. They are now printed as `(0.0/0.0)`, `(1.0/0.0)` and `(-1.0/0.0)`
+      respectively, same as in the MDL compiler and SL backends.
+    - mdltlc: Fixed code generation for rules with node names.
+    - mdltlc: Fixed code generation for creation of conditional expressions.
+    
+- MDL SDK examples
+    - Example DXR: Fixed resource creation warnings reported with the
+      `"--gpu-debug"` option on Windows 11.    
+
+MDL SDK 2023.0.6 (367100.5773): 03 Nov 2023
+-----------------------------------------------
 
 ABI compatible with the MDL SDK 2023.0.6 (367100.5773) binary release
 (see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
@@ -47,7 +188,6 @@ ABI compatible with the MDL SDK 2023.0.6 (367100.5773) binary release
       (fixes only some asserts in debug mode).
     - Fixed HLSL/GLSL code generation for access to single element compound types,
       like arrays of length `1` or structs with only one field.
-    
 
 MDL SDK 2023.0.4 (367100.4957): 05 Oct 2023
 -----------------------------------------------

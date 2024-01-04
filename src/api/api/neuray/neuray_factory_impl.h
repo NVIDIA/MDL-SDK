@@ -32,8 +32,8 @@
  ** Implements the IFactory interface
  **/
 
-#ifndef API_API_NEURAY_FACTORY_IMPL_H
-#define API_API_NEURAY_FACTORY_IMPL_H
+#ifndef API_API_NEURAY_NEURAY_FACTORY_IMPL_H
+#define API_API_NEURAY_NEURAY_FACTORY_IMPL_H
 
 #include <mi/base/interface_implement.h>
 #include <mi/neuraylib/ifactory.h>
@@ -288,4 +288,4 @@ private:
 
 } // namespace MI
 
-#endif // API_API_NEURAY_FACTORY_IMPL_H
+#endif // API_API_NEURAY_NEURAY_FACTORY_IMPL_H

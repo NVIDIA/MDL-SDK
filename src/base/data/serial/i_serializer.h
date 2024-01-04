@@ -219,7 +219,7 @@ public:
     /// Write out a size_t. This function is special because a size_t has a different size on a 32
     /// bit machine than on a 64 bit machine. The policy is as follows: A size_t will always be
     /// serialized as a Uint64. On a 32 bit machines this can lead to overflow if actually more
-    /// than 32 bits are used. In that case the RealityServer terminates itself with a fatal.
+    /// than 32 bits are used. In that case a fatal error will be emitted.
     /// This has the consequence that pure 64 bit machine clusters can use the complete available
     /// address space. Still 32 bit and 64 bit machines can cooperate, but only as long as the
     /// used address space is restricted so that 32 bit machines can actually handle it.
@@ -345,7 +345,7 @@ public:
     /// Read in a size_t. This function is special because a size_t has a different size on a 32
     /// bit machine than on a 64 bit machine. The policy is as follows: A size_t will always be
     /// serialized as a Uint64. On a 32 bit machines this can lead to overflow if actually more
-    /// than 32 bits are used. In that case the RealityServer terminates itself with a fatal.
+    /// than 32 bits are used. In that case a fatal error will be emitted.
     /// This has the consequence that pure 64 bit machine clusters can use the complete available
     /// address space. Still 32 bit and 64 bit machines can cooperate, but only as long as the
     /// used address space is restricted so that 32 bit machines can actually handle it.

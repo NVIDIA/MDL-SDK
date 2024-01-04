@@ -32,8 +32,8 @@
  ** Implementation of IScope
  **/
 
-#ifndef API_API_NEURAY_SCOPE_IMPL_H
-#define API_API_NEURAY_SCOPE_IMPL_H
+#ifndef API_API_NEURAY_NEURAY_SCOPE_IMPL_H
+#define API_API_NEURAY_NEURAY_SCOPE_IMPL_H
 
 #include <mi/base/handle.h>
 #include <mi/base/lock.h>
@@ -97,4 +97,4 @@ private:
 
 } // namespace MI
 
-#endif // API_API_NEURAY_SCOPE_IMPL_H
+#endif // API_API_NEURAY_NEURAY_SCOPE_IMPL_H

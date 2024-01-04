@@ -154,10 +154,10 @@ mi::neuraylib::ITile* Image_file_reader_impl::read( mi::Uint32 z, mi::Uint32 lev
     mi::Uint8* data = static_cast<mi::Uint8*>( tile->get_data());
 
     try {
-        // Note that read_image() does not support specifying a range in z direction. This should not
-        // become necessary for the registered file formats. If this changes we need to read the entire
-        // image and extract the requested layer. Note that read_scanlines() allows to specify a range
-        // in z direction, but does not work for tiled images.
+        // Note that read_image() does not support specifying a range in z direction. This should
+        // not become necessary for the registered file formats. If this changes we need to read
+        // the entire image and extract the requested layer. Note that read_scanlines() allows to
+        // specify a range in z direction, but does not work for tiled images.
         assert( m_resolution_z == 1);
         if( m_resolution_z != 1)
             return nullptr;
@@ -177,7 +177,9 @@ mi::neuraylib::ITile* Image_file_reader_impl::read( mi::Uint32 z, mi::Uint32 lev
         return nullptr;
     }
 
-    if( (m_channel_names.size() == 2) && (m_channel_names[0] == "Y") && (m_channel_names[1] == "A"))
+    if( (m_channel_names.size() == 2)
+        && (m_channel_names[0] == "Y")
+        && ((m_channel_names[1] == "A") || (m_channel_names[1] == "Alpha")))
         expand_ya_to_rgba( bpc, m_resolution_x, m_resolution_y, data);
 
 #if defined(DUMP_PIXEL_X) && defined(DUMP_PIXEL_Y)
@@ -259,9 +261,6 @@ bool Image_file_reader_impl::setup_image_input( bool from_constructor) const
     m_image_input = OIIO::ImageInput::open( ext, &config, m_io_proxy.get());
     if( !m_image_input)
         return false;
-
-    // Disable OIIO internal thread pool since it causes shutdown problems in larger integrations.
-    m_image_input->threads( 1);
 
     return true;
 }

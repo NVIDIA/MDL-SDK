@@ -4385,6 +4385,15 @@ void Generated_code_dag::Material_instance::build_temporaries()
 void Generated_code_dag::Material_instance::calc_hashes()
 {
     MD5_hasher md5_hasher;
+    // Feed all parameter names (in order) into the hasher that is used for slot
+    // and instance hashes. This is required for compiled materials that only 
+    // differ in parameter order. They are different materials and we want to prevent 
+    // users to re-use target code in that case, therefore we include the parameters in
+    // the hashes so that misuse is avoided.
+    for (int i = 0; i < m_param_names.size(); ++i) {
+        md5_hasher.update(m_param_names[i].c_str());
+    }
+
     Dag_hasher dag_hasher(get_allocator(), md5_hasher);
 
     if ((m_properties & IP_TARGET_MATERIAL_MODEL) != 0) {
@@ -4405,6 +4414,7 @@ void Generated_code_dag::Material_instance::calc_hashes()
         for (int i = 0; i <= MS_LAST; ++i) {
             md5_hasher.update(m_slot_hashes[i].data(), m_slot_hashes[i].size());
         }
+
         md5_hasher.final(m_hash.data());
     }
 }
@@ -5139,7 +5149,7 @@ bool Generated_code_dag::Material_instance::Instantiate_helper::is_layer_qualifi
     return false;
 }
 
-// Returns true if this instance uses non-const scene data.
+// Process string constants.
 void Generated_code_dag::Material_instance::Instantiate_helper::process_string_constants(
     IValue const *v)
 {
@@ -5469,7 +5479,12 @@ private:
     {
     }
 
-    // Returns true if this instance uses non-const scene data.
+    /// Process string constants.
+    ///
+    /// \param v  a value to process
+    ///
+    /// Process all string constants that are part of the value v and v itself if v
+    /// is a string constant.
     void process_string_constants(IValue const *v)
     {
         if (IValue_string const *sval = as<IValue_string>(v)) {
@@ -5487,6 +5502,8 @@ private:
 
 
     /// Analyze a call to a user defined function.
+    ///
+    /// \param call  the call to process
     void analyze_unknown_call(IExpression_call const *call)
     {
         IExpression_reference const *ref = cast<IExpression_reference>(call->get_reference());
@@ -5582,6 +5599,8 @@ private:
     }
 
     /// Analyze a call to df::measured_edf().
+    ///
+    /// \param call  the call to process
     void analyze_measured_edf(IExpression_call const *call)
     {
         bool global_distribution = true;

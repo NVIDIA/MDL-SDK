@@ -1,0 +1,5 @@
+Count of all transactions: 0
+Count of open transactions: 0
+Count of infos by distinct names: 0
+Count of infos by distinct tags: 0
+

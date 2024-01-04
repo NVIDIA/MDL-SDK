@@ -68,6 +68,9 @@ class IMdl_execution_context;
 /// the various overloads of \p %set_value(). See #get_value(Size,T&)const and
 /// #get_value(const char*,T&)const  for an overview of the various overloads of \p %get_value().
 ///
+/// \note The index-based overloads are faster than the name-based overloads and should be
+/// preferred if the index/indices are known.
+///
 /// \note The argument editor does not expose the full functionality of the underlying interface,
 /// but provides access to it via #get_scene_element().
 ///
@@ -126,7 +129,7 @@ public:
     /// \return
     ///     -   0:   Success.
     ///     -  -1:   Repair failed. Check the \c context for details.
-    mi::Sint32 repair(mi::Uint32 flags, IMdl_execution_context* context);
+    mi::Sint32 repair( mi::Uint32 flags, IMdl_execution_context* context);
 
     /// Indicates whether the argument editor acts on a material instance or on a function call.
     ///
@@ -309,7 +312,7 @@ public:
     /// \param parameter_index  The index of the argument in question.
     /// \param[out] value       The current value of the specified argument.
     /// \param n                The size of the C array (needs to match the size of the argument
-    ///                         identifed by \p parameter_index).
+    ///                         identified by \p parameter_index).
     /// \return
     ///                         -  0: Success.
     ///                         - -1: #is_valid() returns \c false.
@@ -325,7 +328,7 @@ public:
     /// \param parameter_name   The name of the argument in question.
     /// \param[out] value       The current value of the specified argument.
     /// \param n                The size of the C array (needs to match the size of the argument
-    ///                         identifed by \p parameter_name).
+    ///                         identified by \p parameter_name).
     /// \return
     ///                         -  0: Success.
     ///                         - -1: #is_valid() returns \c false.
@@ -494,7 +497,7 @@ public:
     /// \param parameter_index  The index of the argument in question.
     /// \param value            The new value of the specified argument.
     /// \param n                The size of the C array (needs to match the size of the argument
-    ///                         identifed by \p parameter_index in case of immediate-sized arrays).
+    ///                         identified by \p parameter_index in case of immediate-sized arrays).
     /// \return
     ///                         -  0: Success.
     ///                         - -1: #is_valid() returns \c false.
@@ -514,7 +517,7 @@ public:
     /// \param parameter_name   The name of the argument in question.
     /// \param value            The new value of the specified argument.
     /// \param n                The size of the C array (needs to match the size of the argument
-    ///                         identifed by \p parameter_index in case of immediate-sized arrays).
+    ///                         identified by \p parameter_index in case of immediate-sized arrays).
     /// \return
     ///                         -  0: Success.
     ///                         - -1: #is_valid() returns \c false.

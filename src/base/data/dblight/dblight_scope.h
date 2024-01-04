@@ -26,17 +26,12 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 
-/** \file
- ** \brief This declares the database scope class.
- **
- ** This file contains the pure base class for the database scope class.
- **/
+#ifndef BASE_DATA_DBLIGHT_DBLIGHT_SCOPE_H
+#define BASE_DATA_DBLIGHT_DBLIGHT_SCOPE_H
 
-#ifndef BASE_DATA_DBLIGHT_SCOPE_H
-#define BASE_DATA_DBLIGHT_SCOPE_H
+#include <base/data/db/i_db_scope.h>
 
 #include <atomic>
-#include <base/data/db/i_db_scope.h>
 
 namespace MI {
 
@@ -44,41 +39,55 @@ namespace DBLIGHT {
 
 class Database_impl;
 
+/// A scope of the database.
+///
+/// Currently, there is only scope per database, the global scope.
+///
+/// "NI" means DBLIGHT does not implement/support that method of the interface.
 class Scope_impl : public DB::Scope
 {
 public:
-    Scope_impl(Database_impl* database);
-    ~Scope_impl();
-    void pin();
-    void unpin();
-    DB::Scope* create_child(
-        DB::Privacy_level level, bool is_temporary, const std::string& name);
-    DB::Scope_id get_id();
-    const std::string& get_name() const;
-    DB::Scope* get_parent();
-    DB::Privacy_level get_level();
-    DB::Transaction* start_transaction();
+    /// Constructor.
+    ///
+    /// \param database Instance of the database this scope belongs to.
+    Scope_impl( Database_impl* database) : m_database( database) { }
 
-    /// Increments #m_transaction_count.
-    Uint32 increment_transaction_count() { return ++m_transaction_count; }
-    /// Decrements #m_transaction_count.
-    void decrement_transaction_count() { --m_transaction_count; }
+    /// Destructor.
+    virtual ~Scope_impl() { }
+
+    // methods of DB::Scope
+
+    void pin() override { ++m_pin_count; }
+
+    /// Invokes the destructor if the pin count drops to zero.
+    void unpin() override { if( --m_pin_count == 0) delete this; }
+
+    DB::Scope_id get_id() override { return 0; }
+
+    const std::string& get_name() const override { return m_name; }
+
+    DB::Scope* get_parent() override { return nullptr; }
+
+    DB::Privacy_level get_level() override { return 0; }
+
+    /*NI*/ DB::Scope* create_child(
+        DB::Privacy_level level, bool is_temporary, const std::string& name) override
+    { return nullptr; }
+
+    DB::Transaction* start_transaction() override;
 
 private:
-    Database_impl* m_database;
-    std::string m_name;
-    std::atomic_uint32_t m_refcount;
+    /// The database instance this scope belongs to.
+    Database_impl* const m_database;
 
-    // The current (or last) transaction.
-    DB::Transaction* m_transaction;
-
-    // Number of transactions started and not yet committed in this scope. Used to limit the number
-    // of such transaction1 to 1.
-    std::atomic_uint32_t m_transaction_count;
+    /// The name of the scope.
+    const std::string m_name;
+    /// Reference count of the scope.
+    std::atomic_uint32_t m_pin_count = 1;
 };
 
 } // namespace DB
 
 } // namespace MI
 
-#endif
+#endif // BASE_DATA_DBLIGHT_DBLIGHT_SCOPE_H

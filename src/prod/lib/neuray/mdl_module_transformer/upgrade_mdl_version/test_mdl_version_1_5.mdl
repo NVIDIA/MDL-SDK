@@ -1,0 +1,60 @@
+mdl 1.5;
+
+import ::df::*;
+
+/* add multiscatter parameter in 1.6 */
+export material test_simple_glossy_bsdf()
+= material(
+    surface: material_surface(scattering: df::simple_glossy_bsdf(
+        roughness_u: 1.0
+    ))
+);
+
+/* add multiscatter parameter in 1.6 */
+export material test_backscattering_glossy_reflection_bsdf()
+= material(
+    surface: material_surface(scattering: df::backscattering_glossy_reflection_bsdf(
+        roughness_u: 1.0
+    ))
+);
+
+/* add multiscatter parameter in 1.6 */
+export material test_microfacet_beckmann_smith_bsdf()
+= material(
+    surface: material_surface(scattering: df::microfacet_beckmann_smith_bsdf(
+        roughness_u: 1.0
+    ))
+);
+
+/* add multiscatter parameter in 1.6 */
+export material test_microfacet_ggx_smith_bsdf()
+= material(
+    surface: material_surface(scattering: df::microfacet_ggx_smith_bsdf(
+        roughness_u: 1.0
+    ))
+);
+
+/* add multiscatter parameter in 1.6 */
+export material test_microfacet_beckmann_vcavities_bsdf()
+= material(
+    surface: material_surface(scattering: df::microfacet_beckmann_vcavities_bsdf(
+        roughness_u: 1.0
+    ))
+);
+
+/* add multiscatter parameter in 1.6 */
+export material test_microfacet_ggx_vcavities_bsdf()
+= material(
+    surface: material_surface(scattering: df::microfacet_ggx_vcavities_bsdf(
+        roughness_u: 1.0
+    ))
+);
+
+/* add multiscatter parameter in 1.6 */
+export material test_ward_geisler_moroder_bsdf()
+= material(
+    surface: material_surface(scattering: df::ward_geisler_moroder_bsdf(
+        roughness_u: 1.0
+    ))
+);
+

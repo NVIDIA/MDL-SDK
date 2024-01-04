@@ -31,49 +31,16 @@
 
 #include "pch.h"
 
-#include <io/scene/scene/i_scene_scene_element_base.h>
+
+#include <string>
+#include <mi/math.h>
+#include <base/data/db/i_db_tag.h>
 
 namespace mi { namespace neuraylib { class IReader; } }
 
 namespace MI {
 
-// needed because MDL and other scene elements are used without linking the SCENE module
-namespace SCENE {
-
-std::string get_class_name( SERIAL::Class_id id)
-{
-    return "";
-}
-
-std::string Scene_element_base::get_class_name() const
-{
-    return SCENE::get_class_name( this->get_class_id());
-}
-
-void Scene_element_base::swap( Scene_element_base& other)
-{
-    std::swap( m_attributes, other.m_attributes);
-}
-
-size_t Scene_element_base::get_size() const { return 0; }
-
-const SERIAL::Serializable* Scene_element_base::serialize( SERIAL::Serializer* serializer) const
-{
-    return this + 1;
-}
-
-SERIAL::Serializable* Scene_element_base::deserialize( SERIAL::Deserializer* deserializer)
-{
-    return this + 1;
-}
-
-void Scene_element_base::get_references( DB::Tag_set* result) const
-{
-    get_attributes()->get_references( result);
-    get_scene_element_references( result);
-}
-
-} // namespace SCENE
+namespace DB { class Transaction; }
 
 namespace VOLUME {
 
@@ -92,5 +59,7 @@ DB::Tag load_mdl_volume_texture(
     return DB::Tag{};
 }
 
-}
+} // namespace VOLUME
+
 } // namespace MI
+

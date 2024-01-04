@@ -67,7 +67,7 @@ function(FIND_ARNOLDSDK_EXT)
         endif()
     endforeach()
 
-    # store path that are later used in the add_arnoldsdk.cmake
+    # store paths that are later used in the add_arnoldsdk.cmake
     set(MDL_DEPENDENCY_ARNOLDSDK_INCLUDE ${_ASDK_INCLUDE} CACHE INTERNAL "Arnold SDK headers" FORCE)
     set(MDL_DEPENDENCY_ARNOLDSDK_LIBS ${_ASDK_LIBS} CACHE INTERNAL "Arnold SDK libs" FORCE)
     set(MDL_DEPENDENCY_ARNOLDSDK_BIN ${_ASDK_BIN} CACHE INTERNAL "Arnold SDK binary directory" FORCE)

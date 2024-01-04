@@ -30,8 +30,8 @@
  ** \brief Header for the IMdl_archive_api implementation.
  **/
 
-#ifndef API_API_NEURAY_MDL_ARCHIVE_API_IMPL_H
-#define API_API_NEURAY_MDL_ARCHIVE_API_IMPL_H
+#ifndef API_API_NEURAY_NEURAY_MDL_ARCHIVE_API_IMPL_H
+#define API_API_NEURAY_NEURAY_MDL_ARCHIVE_API_IMPL_H
 
 #include <mi/base/interface_implement.h>
 #include <mi/mdl/mdl_archiver.h>
@@ -167,4 +167,4 @@ private:
 
 } // namespace MI
 
-#endif // API_API_NEURAY_MDL_ARCHIVE_API_IMPL_H
+#endif // API_API_NEURAY_NEURAY_MDL_ARCHIVE_API_IMPL_H

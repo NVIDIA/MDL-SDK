@@ -195,7 +195,7 @@ void Parser::Coco() {
 	}
 	Expect(19 /* "END" */);
 	Expect(_ident);
-	if (!coco_string_equal(gramName, t->val))
+	if (strcmp(gramName, t->val) != 0)
 	 SemErr("name does not match grammar name");
 	tab->gramSy = tab->FindSym(gramName);
 	if (tab->gramSy == NULL)
@@ -233,7 +233,7 @@ void Parser::Coco() {
 void Parser::SetDecl() {
 		CharSet *s; 
 	Expect(_ident);
-	char *name = coco_string_create(t->val);
+	std::string name = t->val;
 	CharClass *c = tab->FindCharClass(name);
 	if (c != NULL) SemErr("name declared twice");
 	
@@ -263,7 +263,7 @@ void Parser::TokenDecl(Node::Kind typ) {
 		Expect(18 /* "." */);
 		if (kind == str) SemErr("a literal must not be declared with a structure");
 		tab->Finish(g);
-		if (tokenString == NULL || coco_string_equal(tokenString, noString))
+		if (tokenString == NULL || strcmp(tokenString, noString) == 0)
 		 dfa->ConvertToStates(g->l, sym);
 		else { // TokenExpr is a single string
 		 if ((*(tab->literals))[tokenString] != NULL)
@@ -929,7 +929,7 @@ void Errors::Warning(const char *s) {
 
 void Errors::Exception(const char *s) {
 	printf("%s", s);
-	exit(1);
+	exit(EXIT_FAILURE);
 }
 
 } // namespace

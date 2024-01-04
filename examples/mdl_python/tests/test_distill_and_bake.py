@@ -14,8 +14,7 @@ except ImportError:  # pragma: no cover
 
 
 # Purpose is to perform a test coverage of the API for distilling and baking materials
-
-class Main(UnittestBase):
+class MainDistillAndBake(UnittestBase):
     sdk: SDK = None
 
     @classmethod
@@ -48,11 +47,25 @@ class Main(UnittestBase):
         distillingApi: pymdlsdk.IMdl_distiller_api = self.sdk.neuray.get_api_component(pymdlsdk.IMdl_distiller_api)
         self.assertIsNotNone(distillingApi)
         self.assertTrue(distillingApi.is_valid_interface())
-        (distilledMaterial, res) = distillingApi.distill_material_with_ret(compiledMaterial, targetModel, None)
-        self.assertEqual(res, 0)
+        res: pymdlsdk.ReturnCode = pymdlsdk.ReturnCode()
+        distilledMaterial = distillingApi.distill_material(compiledMaterial, targetModel)
+        distilledMaterial = distillingApi.distill_material(compiledMaterial, targetModel, None)
+        distilledMaterial = distillingApi.distill_material(compiledMaterial, targetModel, None, res)
+        distilledMaterial = distillingApi.distill_material(compiledMaterial, targetModel, errors=res)
+        self.assertEqual(res.value, 0)
         self.assertIsNotNone(distilledMaterial)
         self.assertTrue(distilledMaterial.is_valid_interface())
         return distilledMaterial
+
+    def bakeMaterial(self, compiledMaterial: pymdlsdk.ICompiled_material):
+        # not baking for now but at least create the bakers
+        distillingApi: pymdlsdk.IMdl_distiller_api = self.sdk.neuray.get_api_component(pymdlsdk.IMdl_distiller_api)
+        baker0: pymdlsdk.IBaker = distillingApi.create_baker(compiledMaterial, "geometry.normal")
+        self.assertIsValidInterface(baker0)
+        baker1: pymdlsdk.IBaker = distillingApi.create_baker(compiledMaterial, "geometry.normal", pymdlsdk.Baker_resource.BAKE_ON_CPU)
+        self.assertIsValidInterface(baker1)
+        baker2: pymdlsdk.IBaker = distillingApi.create_baker(compiledMaterial, "geometry.normal", pymdlsdk.Baker_resource.BAKE_ON_CPU, 0)
+        self.assertIsValidInterface(baker2)
 
     def test_setupIsDone(self):
         self.assertIsNotNone(self.sdk)
@@ -69,8 +82,10 @@ class Main(UnittestBase):
         self.assertTrue(fct_definition.is_valid_interface())
         # create instance (call)
         functionCall: pymdlsdk.IFunction_call
-        (functionCall, ret) = fct_definition.create_function_call_with_ret(None)
-        self.assertEqual(ret, 0)
+        res: pymdlsdk.ReturnCode = pymdlsdk.ReturnCode()
+        functionCall = fct_definition.create_function_call(None)
+        functionCall = fct_definition.create_function_call(None, res)
+        self.assertEqual(res.value, 0)
         self.assertIsNotNone(functionCall)
         self.assertTrue(functionCall.is_valid_interface())
         # compile instance
@@ -78,6 +93,8 @@ class Main(UnittestBase):
         # distill instance
         distilledMaterial: pymdlsdk.ICompiled_material = self.distillMaterial(compiledMaterial, targetModel=targetModel)
         self.assertTrue(distilledMaterial.is_valid_interface())
+        # create baker
+        self.bakeMaterial(compiledMaterial)
 
     def test_distillAndBake_example_material(self):
         self._distillAndBake("::nvidia::sdk_examples::tutorials", "::example_material(color,float)", "transmissive_pbr", classCompilation=True)
@@ -130,5 +147,5 @@ class Main(UnittestBase):
 
 
 # run all tests of this file
-if __name__ == '__main__':  # pragma: no cover
-    unittest.main()
+if __name__ == '__main__':
+    unittest.main()  # pragma: no cover

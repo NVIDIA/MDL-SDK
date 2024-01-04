@@ -1,0 +1,81 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Attr_type_mismatch bottomup {
+
+      material(thin_walled,
+               surface,
+               backface,
+               ior,
+               volume,
+               geometry,
+               hair)
+      -->
+        material(thin_walled,
+                 surface,
+                 backface,
+                 ior,
+                 volume,
+                 geometry,
+                 hair)
+          [[ a = thin_walled ]]
+        ;
+
+      material(thin_walled,
+               material_surface(diffuse_reflection_bsdf(t0, r0)),
+               backface,
+               ior,
+               volume,
+               geometry,
+               hair)
+      -->
+        material(thin_walled,
+                 material_surface(diffuse_reflection_bsdf(t0, r0)),
+                 backface,
+                 ior,
+                 volume,
+                 geometry,
+                 hair)
+          [[ a = ior ]]
+        ;
+}
+
+rules Attr_type_mismatch_ok bottomup {
+
+      material(thin_walled,
+               surface,
+               backface,
+               ior,
+               volume,
+               geometry,
+               hair)
+      -->
+        material(thin_walled,
+                 surface,
+                 backface,
+                 ior,
+                 volume,
+                 geometry,
+                 hair)
+          [[ a = thin_walled ]]
+        ;
+
+      material(thin_walled,
+               material_surface(diffuse_reflection_bsdf(t0, r0)),
+               backface,
+               ior,
+               volume,
+               geometry,
+               hair)
+      -->
+        material(thin_walled,
+                 material_surface(diffuse_reflection_bsdf(t0, r0)),
+                 backface,
+                 ior,
+                 volume,
+                 geometry,
+                 hair)
+          [[ a = thin_walled ]]
+        ;
+}

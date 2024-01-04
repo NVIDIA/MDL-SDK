@@ -49,6 +49,7 @@ using mi::base::Handle;
 using mi::base::ILogger;
 
 using mi::neuraylib::ICompiled_material;
+using mi::neuraylib::ILogging_configuration;
 using mi::neuraylib::IMdl_configuration;
 using mi::neuraylib::IMdl_impexp_api;
 using mi::neuraylib::INeuray;
@@ -120,16 +121,19 @@ void configuration(
     std::vector<const char*> plugins,
     bool no_std_plugin)
 {
-    Handle<IMdl_configuration> mdl_config(
-        neuray->get_api_component<IMdl_configuration>());
     // Empty old log file if exists and in test mode
     if (options->test_suite) {
         std::ofstream log_file((options->test_dir + SLASH + LOG_FILE).c_str());
         log_file.flush();
         log_file.close();
     }
-    mdl_config->set_logger(logger);
 
+    Handle<ILogging_configuration> logging_config(
+        neuray->get_api_component<ILogging_configuration>());
+    logging_config->set_receiving_logger(logger);
+
+    Handle<IMdl_configuration> mdl_config(
+        neuray->get_api_component<IMdl_configuration>());
     for ( std::size_t i = 0; i < options->paths.size(); ++i) {
         check_success(mdl_config->add_mdl_path(options->paths[i]) == 0);
     }
@@ -520,9 +524,9 @@ mi::Sint32 mdl_distill_main( INeuray*    neuray,
         total_time.stop();
 
         // Obtain a logger.
-        Handle<IMdl_configuration> mdl_config(
-            neuray->get_api_component<IMdl_configuration>());
-        Handle<ILogger> logger(mdl_config->get_logger());
+        Handle<ILogging_configuration> logging_config(
+            neuray->get_api_component<ILogging_configuration>());
+        Handle<ILogger> logger(logging_config->get_forwarding_logger());
 
         if (options->test_suite) {
             // If requested by the user, run the test suite.

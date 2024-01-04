@@ -153,6 +153,7 @@ set(PROJECT_HEADERS_NEURAYLIB
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/iimage_plugin.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/iimpexp_base.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/ilightprofile.h"
+    "${MDL_INCLUDE_FOLDER}/mi/neuraylib/ilogging_configuration.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imap.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imaterial_instance.h"
     "${MDL_INCLUDE_FOLDER}/mi/neuraylib/imatrix.h"
@@ -235,3 +236,33 @@ source_group("base" FILES ${PROJECT_HEADERS_BASE})
 source_group("math" FILES ${PROJECT_HEADERS_MATH})
 source_group("mdl" FILES ${PROJECT_HEADERS_MDL})
 source_group("neuraylib" FILES ${PROJECT_HEADERS_NEURAYLIB})
+
+# -------------------------------------------------------------------------------------------------
+# Create installation rules to install public headers
+# -------------------------------------------------------------------------------------------------
+install(
+  FILES
+  ${PROJECT_HEADERS_TOPLEVEL}
+  DESTINATION include/mi
+  )
+
+install(
+  FILES
+  ${PROJECT_HEADERS_BASE}
+  DESTINATION include/mi/base
+  )
+install(
+  FILES
+  ${PROJECT_HEADERS_MATH}
+  DESTINATION include/mi/math
+  )
+install(
+  FILES
+  ${PROJECT_HEADERS_MDL}
+  DESTINATION include/mi/mdl
+  )
+install(
+  FILES
+  ${PROJECT_HEADERS_NEURAYLIB}
+  DESTINATION include/mi/neuraylib
+  )

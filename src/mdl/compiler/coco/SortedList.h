@@ -41,14 +41,12 @@ public:
 	SortedEntry* next;
 
 	SortedEntry(Symbol* Key, void* Value);
-	virtual ~SortedEntry();
 };
 
 class SortedList
 {
 public:
 	SortedList();
-	virtual ~SortedList();
 
 	void Set(Symbol *key, void *value);
 	void* Get( Symbol* key ) const; // Value

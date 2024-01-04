@@ -33,7 +33,7 @@
 
 #include "i_attr_registry.h"
 
-#include <base/lib/log/log.h>
+#include <base/lib/log/i_log_logger.h>
 
 #define INVALID_SPEC \
     Attribute_spec(null_index, "", ATTR::TYPE_UNDEF)

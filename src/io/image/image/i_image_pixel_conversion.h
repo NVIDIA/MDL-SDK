@@ -43,8 +43,8 @@
 /// Typically, there are two or three functions in each group for single pixels, for a contiguous
 /// region of pixels, and for rectangular regions with arbitrary row strides.
 
-#ifndef IO_IMAGE_IMAGE_IMAGE_PIXEL_CONVERSION_H
-#define IO_IMAGE_IMAGE_IMAGE_PIXEL_CONVERSION_H
+#ifndef IO_IMAGE_IMAGE_I_IMAGE_PIXEL_CONVERSION_H
+#define IO_IMAGE_IMAGE_I_IMAGE_PIXEL_CONVERSION_H
 
 #include "i_image_utilities.h"
 #include "i_image_quantization.h"
@@ -642,8 +642,10 @@ MI_HOST_DEVICE_INLINE void Pixel_converter<Source,Dest>::convert(
     for( mi::Size y = 0; y < height; ++y) {
 
         // use source3 and dest3 instead of source2 and dest2 inside a row
-        const Source_base_type* const __restrict source3 = reinterpret_cast<const Source_base_type*>( source2);
-        Dest_base_type*         const __restrict dest3   = reinterpret_cast<Dest_base_type*>(         dest2);
+        const Source_base_type* const __restrict source3
+            = reinterpret_cast<const Source_base_type*>( source2);
+        Dest_base_type*         const __restrict dest3
+            = reinterpret_cast<Dest_base_type*>( dest2);
 
         // call 3-args variant instead of explicit loop to benefit from its SSE specializations
         convert( source3, dest3, width);
@@ -657,8 +659,10 @@ template <Pixel_type Source, Pixel_type Dest>
 MI_HOST_DEVICE_INLINE void Pixel_converter<Source,Dest>::convert(
     const void* const source, void* const dest, const mi::Size count)
 {
-    const Source_base_type* const __restrict source2 = static_cast<const Source_base_type*>( source);
-    Dest_base_type* const __restrict dest2           = static_cast<Dest_base_type*>( dest);
+    const Source_base_type* const __restrict source2
+        = static_cast<const Source_base_type*>( source);
+    Dest_base_type* const __restrict dest2
+        = static_cast<Dest_base_type*>( dest);
     convert( source2, dest2, count);
 }
 
@@ -668,8 +672,10 @@ MI_HOST_DEVICE_INLINE void Pixel_converter<Source,Dest>::convert(
     const mi::Size width, const mi::Size height,
     const mi::Difference source_stride, const mi::Difference dest_stride)
 {
-    const Source_base_type* const __restrict source2 = static_cast<const Source_base_type*>( source);
-    Dest_base_type* const __restrict dest2           = static_cast<Dest_base_type*>( dest);
+    const Source_base_type* const __restrict source2
+        = static_cast<const Source_base_type*>( source);
+    Dest_base_type* const __restrict dest2
+        = static_cast<Dest_base_type*>( dest);
     convert( source2, dest2, width, height, source_stride, dest_stride);
 }
 
@@ -1755,7 +1761,9 @@ template<> MI_HOST_DEVICE_INLINE void Pixel_converter<PT_COLOR, PT_COLOR>::conve
 MI_FORCE_INLINE __m128i quantize_unsigned_sse(const float* const source)
 {
     __m128 fp0 = _mm_loadu_ps(source);         // 4 floats (RGBA or RGBR, GBRG, BRGB)
-    fp0 = _mm_mul_ps(_mm_min_ps(fp0, _mm_set1_ps(mi::base::binary_cast<float>(0x3f800000u-1))),_mm_set1_ps(256.0f)); // see quantize_unsigned(), need to mul by 256 and clamp instead of 255
+    // see quantize_unsigned(), need to mul by 256 and clamp instead of 255
+    fp0 = _mm_mul_ps(_mm_min_ps(fp0, _mm_set1_ps(mi::base::binary_cast<float>(0x3f800000u-1))),
+        _mm_set1_ps(256.0f));
     return _mm_cvttps_epi32(fp0);
 }
 
@@ -1805,8 +1813,10 @@ MI_HOST_DEVICE_INLINE void Pixel_converter<PT_RGB_FP,PT_RGB>::convert(
 #endif
 
     // use source3 and dest3 instead of source2 and dest2 inside a row
-    const Source_base_type* __restrict source3 = reinterpret_cast<const Source_base_type*>( source2);
-    Dest_base_type* __restrict         dest3   = reinterpret_cast<Dest_base_type*>(         dest2);
+    const Source_base_type* __restrict source3
+        = reinterpret_cast<const Source_base_type*>( source2);
+    Dest_base_type* __restrict dest3
+        = reinterpret_cast<Dest_base_type*>( dest2);
 
     for( ; i < count; ++i) {
         convert( source3, dest3);
@@ -1842,8 +1852,10 @@ MI_HOST_DEVICE_INLINE void Pixel_converter<PT_COLOR,PT_RGBA>::convert(
     i = count/4*4; // for falling through to the tail handling/non-SSE case below
 #endif
 
-    const Source_base_type* __restrict source3 = reinterpret_cast<const Source_base_type*>( source2);
-    Dest_base_type* __restrict         dest3   = reinterpret_cast<Dest_base_type*>(         dest2);
+    const Source_base_type* __restrict source3
+        = reinterpret_cast<const Source_base_type*>( source2);
+    Dest_base_type* __restrict dest3
+        = reinterpret_cast<Dest_base_type*>( dest2);
 
     for( ; i < count; ++i) {
         convert( source3, dest3);
@@ -1858,4 +1870,4 @@ MI_HOST_DEVICE_INLINE void Pixel_converter<PT_COLOR,PT_RGBA>::convert(
 
 } // namespace MI
 
-#endif // IO_IMAGE_IMAGE_IMAGE_PIXEL_CONVERSION_H
+#endif // IO_IMAGE_IMAGE_I_IMAGE_PIXEL_CONVERSION_H

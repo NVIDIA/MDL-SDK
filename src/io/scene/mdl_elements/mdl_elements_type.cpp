@@ -37,11 +37,15 @@
 #include <cstring>
 #include <sstream>
 
+#include <boost/core/ignore_unused.hpp>
+
+#include <base/system/main/access_module.h>
 #include <base/system/stlext/i_stlext_likely.h>
 #include <base/util/string_utils/i_string_lexicographic_cast.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/mem/i_mem_consumption.h>
 #include <base/data/serial/i_serializer.h>
+#include <mdl/integration/mdlnr/i_mdlnr.h>
 
 #include "mdl_elements_utilities.h"
 
@@ -732,10 +736,14 @@ mi::Size Type_list::get_index( const char* name) const
 {
     if( !name)
         return static_cast<mi::Size>( -1);
-    Name_index_map::const_iterator it = m_name_index.find( name);
-    if( it == m_name_index.end())
-        return static_cast<mi::Size>( -1);
-    return it->second;
+
+    // For typical list sizes a linear search is much faster than maintaining a map from names to
+    // indices.
+    for( mi::Size i = 0; i < m_index_name.size(); ++i)
+        if( m_index_name[i] == name)
+            return i;
+
+    return static_cast<mi::Size>( -1);
 }
 
 const char* Type_list::get_name( mi::Size index) const
@@ -792,7 +800,6 @@ mi::Sint32 Type_list::add_type( const char* name, const IType* type)
     if( index != static_cast<mi::Size>( -1))
         return -2;
     m_types.push_back( make_handle_dup( type));
-    m_name_index[name] = m_types.size() - 1;
     m_index_name.push_back( name);
     return 0;
 }
@@ -800,14 +807,12 @@ mi::Sint32 Type_list::add_type( const char* name, const IType* type)
 void Type_list::add_type_unchecked( const char* name, const IType* type)
 {
     m_types.push_back( make_handle_dup( type));
-    m_name_index[name] = m_types.size() - 1;
     m_index_name.push_back( name);
 }
 
 mi::Size Type_list::get_memory_consumption() const
 {
     return sizeof( *this)
-        + dynamic_memory_consumption( m_name_index)
         + dynamic_memory_consumption( m_index_name)
         + dynamic_memory_consumption( m_types);
 }
@@ -824,7 +829,8 @@ const IType_bool* Type_factory::create_bool() const
     return &TYPES::the_bool_type;
 }
 
-const IType_int* Type_factory::create_int() const {
+const IType_int* Type_factory::create_int() const
+{
     return &TYPES::the_int_type;
 }
 
@@ -971,7 +977,15 @@ const IType_array* Type_factory::create_immediate_sized_array(
 const IType_array* Type_factory::create_deferred_sized_array(
     const IType* element_type, const char* size) const
 {
-    return element_type && size ? new TYPES::Type_array( element_type, size) : nullptr;
+    if( !element_type || !size)
+        return nullptr;
+
+    SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
+    mi::base::Handle<mi::mdl::IMDL> mdl( mdlc_module->get_mdl());
+    if( !mdl->is_valid_mdl_identifier( size))
+        return nullptr;
+
+    return new TYPES::Type_array( element_type, size);
 }
 
 const IType_struct* Type_factory::create_struct( const char* symbol) const
@@ -1155,17 +1169,6 @@ mi::Sint32 Type_factory::is_compatible( const IType* src, const IType* dst) cons
 
 namespace {
 
-class String : public mi::base::Interface_implement<mi::IString>
-{
-public:
-    String( const char* str = nullptr) : m_string( str ? str : "") {}
-    const char* get_type_name() const { return "String"; }
-    const char* get_c_str() const { return m_string.c_str(); }
-    void set_c_str( const char* str) { m_string = str ? str : ""; }
-private:
-    std::string m_string;
-};
-
 std::string get_prefix( mi::Size depth)
 {
     std::string prefix;
@@ -1179,15 +1182,167 @@ std::string get_prefix( mi::Size depth)
 const mi::IString* Type_factory::dump( const IType* type, mi::Size depth) const
 {
     std::ostringstream s;
-    dump_static( type, depth, s);
-    return new String( s.str().c_str());
+    dump( type, depth, s);
+    return create_istring( s.str().c_str());
 }
 
 const mi::IString* Type_factory::dump( const IType_list* list, mi::Size depth) const
 {
     std::ostringstream s;
-    dump_static( list, depth, s);
-    return new String( s.str().c_str());
+    dump( list, depth, s);
+    return create_istring( s.str().c_str());
+}
+
+std::string Type_factory::get_mdl_type_name( const IType* type) const
+{
+    return get_mdl_type_name_static( type);
+}
+
+namespace {
+
+/// Converts a vector or matrix size from char to int. Returns 0 in case of errors.
+mi::Size get_size( char c)
+{
+    switch( c) {
+        case '2': return 2;
+        case '3': return 3;
+        case '4': return 4;
+        default:  return 0;
+    }
+}
+
+} // namespace
+
+const IType* Type_factory::create_from_mdl_type_name( const char* name) const
+{
+    if( !name)
+        return nullptr;
+
+    std::string s = name;
+    if( s.empty())
+        return nullptr;
+
+    // IType_alias
+    // TODO support named aliases
+    if( s.substr( 0, 8) == "uniform ") {
+        mi::base::Handle<const IType> aliased_type( create_from_mdl_type_name( s.c_str() + 8));
+        if( !aliased_type)
+            return nullptr;
+        return create_alias( aliased_type.get(), IType::MK_UNIFORM, nullptr);
+    }
+    if( s.substr( 0, 8) == "varying ") {
+        mi::base::Handle<const IType> aliased_type( create_from_mdl_type_name( s.c_str() + 8));
+        if( !aliased_type)
+            return nullptr;
+        return create_alias( aliased_type.get(), IType::MK_VARYING, nullptr);
+    }
+
+    // IType_array
+    size_t n = s.size();
+    if( s[n-1] == ']') {
+        size_t left_bracket = s.rfind( '[');
+        if( left_bracket == std::string::npos)
+            return nullptr;
+        std::string element_type_name = s.substr( 0, left_bracket);
+        mi::base::Handle<const IType> element_type(
+            create_from_mdl_type_name( element_type_name.c_str()));
+        if( !element_type)
+            return nullptr;
+        std::string size_name = s.substr( left_bracket+1, n-1-left_bracket-1);
+        STLEXT::Likely<mi::Size> size_likely = STRING::lexicographic_cast_s<mi::Size>( size_name);
+        if( size_likely.get_status())
+            return create_immediate_sized_array( element_type.get(), *size_likely.get_ptr());
+        else
+            return create_deferred_sized_array( element_type.get(), size_name.c_str());
+    }
+
+    // IType_atomic without IType_enum, and IType_color
+    if( s == "bool")
+         return create_bool();
+    if( s == "int")
+         return create_int();
+    if( s == "float")
+         return create_float();
+    if( s == "double")
+         return create_double();
+    if( s == "color")
+         return create_color();
+    if( s == "string")
+         return create_string();
+
+    // IType_resource
+    if( s == "texture_2d")
+        return create_texture( IType_texture::TS_2D);
+    if( s == "texture_3d")
+        return create_texture( IType_texture::TS_3D);
+    if( s == "texture_cube")
+        return create_texture( IType_texture::TS_CUBE);
+    if( s == "texture_ptex")
+        return create_texture( IType_texture::TS_PTEX);
+    if( s == "light_profile")
+        return create_light_profile();
+    if( s == "bsdf_measurement")
+        return create_bsdf_measurement();
+
+    // IType_df
+    if( s == "bsdf")
+        return create_bsdf();
+    if( s == "hair_bsdf")
+        return create_hair_bsdf();
+    if( s == "edf")
+        return create_edf();
+    if( s == "vdf")
+        return create_vdf();
+
+    // IType_vector and IType_matrix
+    const char* element_type_names[] =  { "bool", "int", "float", "double" };
+    for( const char* element_type_name: element_type_names) {
+
+        size_t m = strlen( element_type_name);
+        if( strncmp( s.c_str(), element_type_name, m) != 0)
+            continue;
+
+        // IType_vector
+        if( n == m+1) {
+            mi::Size size = get_size( s[m]);
+            if( size == 0)
+                 return nullptr;
+            mi::base::Handle<const IType> element_type(
+                create_from_mdl_type_name( element_type_name));
+            mi::base::Handle<const IType_atomic> element_type_atomic(
+                element_type->get_interface<IType_atomic>());
+            return create_vector( element_type_atomic.get(), size);
+        }
+
+        // IType_matrix
+        if( n == m+3) {
+            // element types "bool" and "int" are not allowed for matrices
+            if( m == 4 || m == 3)
+                return nullptr;
+            mi::Size columns = get_size( s[m]);
+            mi::Size rows    = get_size( s[m+2]);
+            if( columns == 0 || rows == 0 || s[m+1] != 'x')
+                 return nullptr;
+            mi::base::Handle<const IType> element_type(
+                create_from_mdl_type_name( element_type_name));
+            mi::base::Handle<const IType_atomic> element_type_atomic(
+                element_type->get_interface<IType_atomic>());
+            mi::base::Handle<const IType_vector> vector_type(
+                create_vector( element_type_atomic.get(), rows));
+            return create_matrix( vector_type.get(), columns);
+        }
+    }
+
+    // IType_enum and IType_struct
+    s = prefix_builtin_type_name( s.c_str());
+    const IType_enum* type_enum = create_enum( s.c_str());
+    if( type_enum)
+         return type_enum;
+    const IType_struct* type_struct = create_struct( s.c_str());
+    if( type_struct)
+         return type_struct;
+
+    return nullptr;
 }
 
 const IType_enum* Type_factory::create_enum(
@@ -1522,7 +1677,6 @@ const IType* Type_factory::deserialize( SERIAL::Deserializer* deserializer)
             for( mi::Size i = 0; i < count; ++i)
                 field_annotations[i] = ef->deserialize_annotation_block( deserializer);
 
-
             mi::Sint32 errors = 0;
             const IType_struct* result = create_struct(
                 symbol.c_str(), id, fields, annotations, field_annotations, &errors);
@@ -1555,7 +1709,6 @@ void Type_factory::serialize_list( SERIAL::Serializer* serializer, const IType_l
 {
     const Type_list* list_impl = static_cast<const Type_list*>( list);
 
-    write( serializer, list_impl->m_name_index);
     write( serializer, list_impl->m_index_name);
 
     mi::Size size = list_impl->m_types.size();
@@ -1568,7 +1721,6 @@ IType_list* Type_factory::deserialize_list( SERIAL::Deserializer* deserializer)
 {
     Type_list* list_impl = new Type_list( /*initial_capacity*/ 0);
 
-    read( deserializer, &list_impl->m_name_index);
     read( deserializer, &list_impl->m_index_name);
 
     mi::Size size;
@@ -1580,216 +1732,14 @@ IType_list* Type_factory::deserialize_list( SERIAL::Deserializer* deserializer)
     return list_impl;
 }
 
-std::string Type_factory::get_type_name( const IType* type, bool include_aliased_type)
-{
-    return get_type_name_static( type, include_aliased_type);
-}
-
-std::string Type_factory::get_serialization_type_name( const IType* type)
-{
-    IType::Kind kind = type->get_kind();
-
-    switch( kind) {
-        case IType::TK_ALIAS: {
-            mi::base::Handle<const IType_alias> type_alias(
-                type->get_interface<IType_alias>());
-            mi::base::Handle<const IType> aliased_type(
-                type_alias->get_aliased_type());
-            return get_serialization_type_name( aliased_type.get());
-        }
-        case IType::TK_ENUM: {
-            mi::base::Handle<const IType_enum> type_enum(
-                type->get_interface<IType_enum>());
-            return type_enum->get_symbol();
-        }
-        case IType::TK_STRUCT: {
-            mi::base::Handle<const IType_struct> type_struct(
-                type->get_interface<IType_struct>());
-            return type_struct->get_symbol();
-        }
-       case IType::TK_VECTOR: {
-            mi::base::Handle<const IType_vector> type_vector(
-                type->get_interface<IType_vector>());
-            mi::base::Handle<const IType> element_type(
-                type_vector->get_element_type());
-            std::ostringstream result;
-            result << get_serialization_type_name( element_type.get());
-            result << type_vector->get_size();
-            return result.str();
-        }
-        case IType::TK_MATRIX: {
-            mi::base::Handle<const IType_matrix> type_matrix(
-                type->get_interface<IType_matrix>());
-            mi::base::Handle<const IType_vector> vector_type(
-                type_matrix->get_element_type());
-            mi::base::Handle<const IType> element_type(
-                vector_type->get_element_type());
-            std::ostringstream result;
-            result << get_serialization_type_name( element_type.get());
-            result << type_matrix->get_size() << 'x' << vector_type->get_size();
-            return result.str();
-        }
-        case IType::TK_ARRAY: {
-            mi::base::Handle<const IType_array> type_array(
-                type->get_interface<IType_array>());
-            mi::base::Handle<const IType> element_type(
-                type_array->get_element_type());
-            std::ostringstream result;
-            result << get_serialization_type_name( element_type.get()) << '[';
-            if( type_array->is_immediate_sized())
-                result << type_array->get_size();
-            else {
-                // keep only part after last "::", similar to signatures
-                std::string s = type_array->get_deferred_size();
-                size_t scope = s.rfind( "::");
-                if( scope != std::string::npos)
-                    s = s.substr( scope+2);
-                result << s;
-            }
-            result << ']';
-            return result.str();
-        }
-        default: {
-            return get_type_name_static( type);
-        }
-    }
-
-    ASSERT( M_SCENE, false);
-    return std::string();
-}
-
-namespace {
-
-/// Converts a vector or matrix size from char to int. Returns 0 in case of errors.
-mi::Size get_size( char c)
-{
-    switch( c) {
-        case '2': return 2;
-        case '3': return 3;
-        case '4': return 4;
-        default:  return 0;
-    }
-}
-
-} // namespace
-
-const IType* Type_factory::create_type( const char* serialization_type_name) const
-{
-    if( !serialization_type_name)
-        return nullptr;
-
-    std::string s = serialization_type_name;
-    if( s.empty())
-        return nullptr;
-
-    // IType_array
-    size_t n = s.size();
-    if( s[n-1] == ']') {
-        size_t left_bracket = s.rfind( '[');
-        if( left_bracket == std::string::npos)
-            return nullptr;
-        std::string element_type_name = s.substr( 0, left_bracket);
-        mi::base::Handle<const IType> element_type( create_type( element_type_name.c_str()));
-        if( !element_type)
-            return nullptr;
-        std::string size_name = s.substr( left_bracket+1, n-1-left_bracket-1);
-        STLEXT::Likely<mi::Size> size_likely = STRING::lexicographic_cast_s<mi::Size>( size_name);
-        if( size_likely.get_status())
-            return create_immediate_sized_array( element_type.get(), *size_likely.get_ptr());
-        else
-            return create_deferred_sized_array( element_type.get(), size_name.c_str());
-    }
-
-    // IType_atomic without IType_enum, and IType_color
-    if( s == "bool")
-         return create_bool();
-    if( s == "int")
-         return create_int();
-    if( s == "float")
-         return create_float();
-    if( s == "double")
-         return create_double();
-    if( s == "color")
-         return create_color();
-    if( s == "string")
-         return create_string();
-
-    // IType_resource
-    if( s == "texture_2d")
-        return create_texture( IType_texture::TS_2D);
-    if( s == "texture_3d")
-        return create_texture( IType_texture::TS_3D);
-    if( s == "texture_cube")
-        return create_texture( IType_texture::TS_CUBE);
-    if( s == "texture_ptex")
-        return create_texture( IType_texture::TS_PTEX);
-    if( s == "light_profile")
-        return create_light_profile();
-    if( s == "bsdf_measurement")
-        return create_bsdf_measurement();
-
-    // IType_df
-    if( s == "bsdf")
-        return create_bsdf();
-    if( s == "hair_bsdf")
-        return create_hair_bsdf();
-    if( s == "edf")
-        return create_edf();
-    if( s == "vdf")
-        return create_vdf();
-
-    // IType_vector and IType_matrix
-    const char* element_type_names[] =  { "bool", "int", "float", "double" };
-    for( const char* element_type_name: element_type_names) {
-
-        size_t m = strlen( element_type_name);
-        if( strncmp( s.c_str(), element_type_name, m) != 0)
-            continue;
-
-        // IType_vector
-        if( n == m+1) {
-            mi::Size size = get_size( s[m]);
-            if( size == 0)
-                 return nullptr;
-            mi::base::Handle<const IType> element_type(
-                create_type( element_type_name));
-            mi::base::Handle<const IType_atomic> element_type_atomic(
-                element_type->get_interface<IType_atomic>());
-            return create_vector( element_type_atomic.get(), size);
-        }
-
-        // IType_matrix
-        if( n == m+3) {
-            mi::Size columns = get_size( s[m]);
-            mi::Size rows    = get_size( s[m+2]);
-            if( columns == 0 || rows == 0 || s[m+1] != 'x')
-                 return nullptr;
-            mi::base::Handle<const IType> element_type(
-                create_type( element_type_name));
-            mi::base::Handle<const IType_atomic> element_type_atomic(
-                element_type->get_interface<IType_atomic>());
-            mi::base::Handle<const IType_vector> vector_type(
-                create_vector( element_type_atomic.get(), rows));
-            return create_matrix( vector_type.get(), columns);
-        }
-    }
-
-    // IType_enum and IType_struct
-    const IType_enum* type_enum = create_enum( s.c_str());
-    if( type_enum)
-         return type_enum;
-    const IType_struct* type_struct = create_struct( s.c_str());
-    if( type_struct)
-         return type_struct;
-
-    return nullptr;
-}
-
 mi::Sint32 Type_factory::compare_static( const IType* lhs, const IType* rhs)
 {
-    if( !lhs && !rhs) return 0;
+    if( lhs == rhs)
+        return 0;
+
+    if( !lhs && !rhs) return  0;
     if( !lhs &&  rhs) return -1;
-    if( lhs && !rhs) return +1;
+    if(  lhs && !rhs) return +1;
     ASSERT( M_SCENE, lhs && rhs);
 
     IType::Kind lhs_kind = lhs->get_kind(); //-V522 PVS
@@ -1874,9 +1824,9 @@ mi::Sint32 Type_factory::compare_static( const IType* lhs, const IType* rhs)
 
 mi::Sint32 Type_factory::compare_static( const IType_list* lhs, const IType_list* rhs)
 {
-    if( !lhs && !rhs) return 0;
+    if( !lhs && !rhs) return  0;
     if( !lhs &&  rhs) return -1;
-    if( lhs && !rhs) return +1;
+    if(  lhs && !rhs) return +1;
     ASSERT( M_SCENE, lhs && rhs);
 
     mi::Size lhs_n = lhs->get_size(); //-V522 PVS
@@ -1900,76 +1850,12 @@ mi::Sint32 Type_factory::compare_static( const IType_list* lhs, const IType_list
     return 0;
 }
 
-std::string Type_factory::get_type_name_static( const IType* type, bool include_aliased_type)
+std::string Type_factory::get_dump_type_name( const IType* type, bool include_aliased_type)
 {
     IType::Kind kind = type->get_kind();
 
     switch( kind) {
 
-        case IType::TK_BOOL:             return "bool";
-        case IType::TK_INT:              return "int";
-
-        case IType::TK_ENUM: {
-            mi::base::Handle<const IType_enum> type_enum(
-                type->get_interface<IType_enum>());
-            std::string result = "enum \"";
-            result += type_enum->get_symbol();
-            result += '\"';
-            return result;
-        }
-
-        case IType::TK_FLOAT:            return "float";
-        case IType::TK_DOUBLE:           return "double";
-        case IType::TK_STRING:           return "string";
-        case IType::TK_COLOR:            return "color";
-
-        case IType::TK_TEXTURE: {
-            mi::base::Handle<const IType_texture> type_texture(
-                type->get_interface<IType_texture>());
-            IType_texture::Shape shape = type_texture->get_shape();
-            switch( shape) {
-                case IType_texture::TS_2D:   return "texture_2d";
-                case IType_texture::TS_3D:   return "texture_3d";
-                case IType_texture::TS_CUBE: return "texture_cube";
-                case IType_texture::TS_PTEX: return "texture_ptex";
-                case IType_texture::TS_BSDF_DATA:
-                    ASSERT( M_SCENE, false); return std::string();
-                case IType_texture::TS_FORCE_32_BIT:
-                    ASSERT( M_SCENE, false); return std::string();
-            }
-            ASSERT( M_SCENE, false);
-            return "";
-        }
-
-        case IType::TK_LIGHT_PROFILE:    return "light_profile";
-        case IType::TK_BSDF_MEASUREMENT: return "bsdf_measurement";
-        case IType::TK_BSDF:             return "bsdf";
-        case IType::TK_HAIR_BSDF:        return "hair_bsdf";
-        case IType::TK_EDF:              return "edf";
-        case IType::TK_VDF:              return "vdf";
-
-        case IType::TK_VECTOR: {
-            mi::base::Handle<const IType_vector> type_vector(
-                type->get_interface<IType_vector>());
-            mi::base::Handle<const IType> element_type(
-                type_vector->get_element_type());
-            std::ostringstream result;
-            result << get_type_name_static( element_type.get());
-            result << type_vector->get_size();
-            return result.str();
-        }
-        case IType::TK_MATRIX: {
-            mi::base::Handle<const IType_matrix> type_matrix(
-                type->get_interface<IType_matrix>());
-            mi::base::Handle<const IType_vector> vector_type(
-                type_matrix->get_element_type());
-            mi::base::Handle<const IType> element_type(
-                vector_type->get_element_type());
-            std::ostringstream result;
-            result << get_type_name_static( element_type.get());
-            result << type_matrix->get_size() << 'x' << vector_type->get_size();
-            return result.str();
-        }
         case IType::TK_ALIAS: {
             mi::base::Handle<const IType_alias> type_alias(
                 type->get_interface<IType_alias>());
@@ -1986,23 +1872,17 @@ std::string Type_factory::get_type_name_static( const IType* type, bool include_
             if( include_aliased_type) {
                 mi::base::Handle<const IType> aliased_type(
                     type_alias->get_aliased_type());
-                result << ' ' << get_type_name_static( aliased_type.get());
+                result << ' ' << get_dump_type_name( aliased_type.get(), include_aliased_type);
             }
             return result.str();
         }
-        case IType::TK_ARRAY: {
-            mi::base::Handle<const IType_array> type_array(
-                type->get_interface<IType_array>());
-            mi::base::Handle<const IType> element_type(
-                type_array->get_element_type());
-            std::ostringstream result;
-            result << get_type_name_static( element_type.get()) << '[';
-            if( type_array->is_immediate_sized())
-                result << type_array->get_size();
-            else
-                result << type_array->get_deferred_size();
-            result << ']';
-            return result.str();
+        case IType::TK_ENUM: {
+            mi::base::Handle<const IType_enum> type_enum(
+                type->get_interface<IType_enum>());
+            std::string result = "enum \"";
+            result += type_enum->get_symbol();
+            result += '\"';
+            return result;
         }
         case IType::TK_STRUCT: {
             mi::base::Handle<const IType_struct> type_struct(
@@ -2012,13 +1892,168 @@ std::string Type_factory::get_type_name_static( const IType* type, bool include_
             result += '\"';
             return result;
         }
+
+        case IType::TK_BOOL:
+        case IType::TK_INT:
+        case IType::TK_FLOAT:
+        case IType::TK_DOUBLE:
+        case IType::TK_STRING:
+        case IType::TK_VECTOR:
+        case IType::TK_MATRIX:
+        case IType::TK_COLOR:
+        case IType::TK_ARRAY:
+        case IType::TK_TEXTURE:
+        case IType::TK_LIGHT_PROFILE:
+        case IType::TK_BSDF_MEASUREMENT:
+        case IType::TK_BSDF:
+        case IType::TK_HAIR_BSDF:
+        case IType::TK_EDF:
+        case IType::TK_VDF:
         case IType::TK_FORCE_32_BIT:
-            ASSERT( M_SCENE, false);
-            return "";
+            return get_mdl_type_name_static( type);
+
     }
 
     ASSERT( M_SCENE, false);
-    return "";
+    return std::string();
+}
+
+std::string Type_factory::get_mdl_type_name_static( const IType* type)
+{
+    IType::Kind kind = type->get_kind();
+
+    switch( kind) {
+
+        case IType::TK_BOOL:             return "bool";
+        case IType::TK_INT:              return "int";
+        case IType::TK_FLOAT:            return "float";
+        case IType::TK_DOUBLE:           return "double";
+        case IType::TK_STRING:           return "string";
+        case IType::TK_COLOR:            return "color";
+        case IType::TK_LIGHT_PROFILE:    return "light_profile";
+        case IType::TK_BSDF_MEASUREMENT: return "bsdf_measurement";
+        case IType::TK_BSDF:             return "bsdf";
+        case IType::TK_HAIR_BSDF:        return "hair_bsdf";
+        case IType::TK_EDF:              return "edf";
+        case IType::TK_VDF:              return "vdf";
+
+        case IType::TK_ALIAS: {
+            mi::base::Handle<const IType_alias> type_alias(
+                type->get_interface<IType_alias>());
+            // TODO support named aliases
+            // const char* symbol = type_alias->get_symbol();
+            // if( symbol)
+            //     return symbol;
+            std::string result;
+            bool found = false;
+            switch( type_alias->get_type_modifiers()) {
+                case IType::MK_NONE:         found = true; break;
+                case IType::MK_UNIFORM:      found = true; result += "uniform "; break;
+                case IType::MK_VARYING:      found = true; result += "varying "; break;
+                case IType::MK_FORCE_32_BIT: break;
+            }
+            ASSERT( M_SCENE, found); // Handle combination of flags if this fails.
+            boost::ignore_unused( found);
+            mi::base::Handle<const IType> aliased_type(
+                type_alias->get_aliased_type());
+            result += get_mdl_type_name_static( aliased_type.get());
+            return result;
+        }
+        case IType::TK_ENUM: {
+            mi::base::Handle<const IType_enum> type_enum(
+                type->get_interface<IType_enum>());
+            const char* symbol = type_enum->get_symbol();
+            switch( type_enum->get_predefined_id()) {
+                case IType_enum::EID_USER:
+                case IType_enum::EID_TEX_GAMMA_MODE:
+                    return symbol;
+                case IType_enum::EID_INTENSITY_MODE:
+                    return remove_prefix_for_builtin_type_name( symbol, /*compare_string*/ false);
+                case IType_enum::EID_FORCE_32_BIT:
+                    break;
+            }
+            ASSERT( M_SCENE, false);
+            return std::string();
+        }
+        case IType::TK_VECTOR: {
+            mi::base::Handle<const IType_vector> type_vector(
+                type->get_interface<IType_vector>());
+            mi::base::Handle<const IType> element_type(
+                type_vector->get_element_type());
+            std::ostringstream result;
+            result << get_mdl_type_name_static( element_type.get());
+            result << type_vector->get_size();
+            return result.str();
+        }
+        case IType::TK_MATRIX: {
+            mi::base::Handle<const IType_matrix> type_matrix(
+                type->get_interface<IType_matrix>());
+            mi::base::Handle<const IType_vector> vector_type(
+                type_matrix->get_element_type());
+            mi::base::Handle<const IType> element_type(
+                vector_type->get_element_type());
+            std::ostringstream result;
+            result << get_mdl_type_name_static( element_type.get());
+            result << type_matrix->get_size() << 'x' << vector_type->get_size();
+            return result.str();
+        }
+        case IType::TK_STRUCT: {
+            mi::base::Handle<const IType_struct> type_struct(
+                type->get_interface<IType_struct>());
+            const char* symbol = type_struct->get_symbol();
+            switch( type_struct->get_predefined_id()) {
+                case IType_struct::SID_USER:
+                    return symbol;
+                case IType_struct::SID_MATERIAL_EMISSION:
+                case IType_struct::SID_MATERIAL_SURFACE:
+                case IType_struct::SID_MATERIAL_VOLUME:
+                case IType_struct::SID_MATERIAL_GEOMETRY:
+                case IType_struct::SID_MATERIAL:
+                    return remove_prefix_for_builtin_type_name( symbol, /*compare_string*/ false);
+                case IType_struct::SID_FORCE_32_BIT:
+                    break;
+            }
+            ASSERT( M_SCENE, false);
+            return std::string();
+        }
+        case IType::TK_ARRAY: {
+            mi::base::Handle<const IType_array> type_array(
+                type->get_interface<IType_array>());
+            mi::base::Handle<const IType> element_type(
+                type_array->get_element_type());
+            std::ostringstream result;
+            result << get_mdl_type_name_static( element_type.get()) << '[';
+            if( type_array->is_immediate_sized())
+                result << type_array->get_size();
+            else
+                result <<  type_array->get_deferred_size();
+            result << ']';
+            return result.str();
+        }
+        case IType::TK_TEXTURE: {
+            mi::base::Handle<const IType_texture> type_texture(
+                type->get_interface<IType_texture>());
+            IType_texture::Shape shape = type_texture->get_shape();
+            switch( shape) {
+                case IType_texture::TS_2D:   return "texture_2d";
+                case IType_texture::TS_3D:   return "texture_3d";
+                case IType_texture::TS_CUBE: return "texture_cube";
+                case IType_texture::TS_PTEX: return "texture_ptex";
+                case IType_texture::TS_BSDF_DATA:
+                    ASSERT( M_SCENE, false); return std::string();
+                case IType_texture::TS_FORCE_32_BIT:
+                    ASSERT( M_SCENE, false); return std::string();
+            }
+            ASSERT( M_SCENE, false);
+            return std::string();
+        }
+        case IType::TK_FORCE_32_BIT:
+            ASSERT( M_SCENE, false);
+            return std::string();
+    }
+
+    ASSERT( M_SCENE, false);
+    return std::string();
 }
 
 void Type_factory::unregister_enum_type( const IType_enum* type)
@@ -2038,10 +2073,22 @@ mi::Sint32 Type_factory::compare_static(
 {
     if( lhs == rhs)
         return 0;
+
     mi::Sint32 lhs_modifiers = lhs->get_type_modifiers();
     mi::Sint32 rhs_modifiers = rhs->get_type_modifiers();
     if( lhs_modifiers < rhs_modifiers) return -1;
     if( lhs_modifiers > rhs_modifiers) return +1;
+
+    const char* lhs_symbol = lhs->get_symbol();
+    const char* rhs_symbol = rhs->get_symbol();
+
+    if( !lhs_symbol &&  rhs_symbol) return -1;
+    if(  lhs_symbol && !rhs_symbol) return +1;
+    if(  lhs_symbol &&  rhs_symbol) {
+        mi::Sint32 result = strcmp( lhs_symbol, rhs_symbol);
+        if( result < 0) return -1;
+        if( result > 0) return +1;
+    }
 
     mi::base::Handle<const IType> lhs_aliased_type( lhs->get_aliased_type());
     mi::base::Handle<const IType> rhs_aliased_type( rhs->get_aliased_type());
@@ -2053,6 +2100,7 @@ mi::Sint32 Type_factory::compare_static(
 {
     if( lhs == rhs)
         return 0;
+
     ASSERT( M_SCENE, lhs->get_kind() != IType_array::s_kind);
     ASSERT( M_SCENE, rhs->get_kind() != IType_array::s_kind);
     ASSERT( M_SCENE, lhs->get_kind() != IType_struct::s_kind);
@@ -2075,6 +2123,7 @@ mi::Sint32 Type_factory::compare_static(
 {
     if( lhs == rhs)
         return 0;
+
     bool lhs_immediate_sized = lhs->is_immediate_sized();
     bool rhs_immediate_sized = rhs->is_immediate_sized();
     if(  lhs_immediate_sized && !rhs_immediate_sized) return -1;
@@ -2106,6 +2155,7 @@ mi::Sint32 Type_factory::compare_static(
 {
     if( lhs == rhs)
         return 0;
+
     IType_texture::Shape lhs_shape = lhs->get_shape();
     IType_texture::Shape rhs_shape = rhs->get_shape();
     if( lhs_shape < rhs_shape) return -1;
@@ -2113,13 +2163,13 @@ mi::Sint32 Type_factory::compare_static(
     return 0;
 }
 
-void Type_factory::dump_static(
+void Type_factory::dump(
     const IType* type, mi::Size depth, std::ostringstream& s)
 {
     if( !type)
         return;
 
-    std::string name = get_type_name_static( type);
+    std::string name = get_dump_type_name( type, /*include_aliased_type*/ false);
     ASSERT( M_SCENE, !name.empty());
 
     IType::Kind kind = type->get_kind();
@@ -2147,10 +2197,10 @@ void Type_factory::dump_static(
         case IType::TK_ALIAS: {
             mi::base::Handle<const IType_alias> type_alias(
                 type->get_interface<IType_alias>());
-            s << get_type_name_static( type, false) << '\n' << get_prefix( depth + 1);
+            s << name << '\n' << get_prefix( depth + 1);
             mi::base::Handle<const IType> aliased_type(
                 type_alias->get_aliased_type());
-            dump_static( aliased_type.get(), depth + 1, s);
+            dump( aliased_type.get(), depth + 1, s);
             return;
         }
         case IType::TK_ENUM: {
@@ -2176,7 +2226,7 @@ void Type_factory::dump_static(
                 s << prefix << "    ";
                 mi::base::Handle<const IType> field_type(
                     type_struct->get_field_type( i));
-                dump_static( field_type.get(), depth + 1, s);
+                dump( field_type.get(), depth + 1, s);
                 s << ' ' << type_struct->get_field_name( i) << ";\n";
             }
             s << prefix << '}';
@@ -2190,7 +2240,7 @@ void Type_factory::dump_static(
     ASSERT( M_SCENE, false);
 }
 
-void Type_factory::dump_static(
+void Type_factory::dump(
     const IType_list* list, mi::Size depth, std::ostringstream& s)
 {
     if( !list)
@@ -2203,9 +2253,9 @@ void Type_factory::dump_static(
     const std::string& prefix = get_prefix( depth);
     for( mi::Size i = 0; i < n; ++i) {
         mi::base::Handle<const IType> type( list->get_type( i));
-        s << prefix << "    ";
-        dump_static( type.get(), depth + 1, s);
-        s << ' ' << i << ": " << list->get_name( i) << ";\n";
+        s << prefix << "    "  << i << ": " << list->get_name( i) << " = ";
+        dump( type.get(), depth + 1, s);
+        s << '\n';
     }
 
     s << (n > 0 ? prefix : "") << ']';

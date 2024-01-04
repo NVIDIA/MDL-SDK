@@ -32,7 +32,6 @@ set(PROJECT_NAME mdl-compiler-coco)
 # collect sources
 set(PROJECT_HEADERS 
     "Action.h"
-    "ArrayList.h"
     "BitArray.h"
     "CharClass.h"
     "CharSet.h"
@@ -50,7 +49,6 @@ set(PROJECT_HEADERS
     "Sets.h"
     "SortedList.h"
     "State.h"
-    "StringBuilder.h"
     "Symbol.h"
     "Tab.h"
     "Target.h"
@@ -58,27 +56,20 @@ set(PROJECT_HEADERS
 
 set(PROJECT_SOURCES
     "Action.cpp"
-    "ArrayList.cpp"
     "BitArray.cpp"
-    "CharClass.cpp"
     "CharSet.cpp"
     "Coco.cpp"
-    "Comment.cpp"
     "DFA.cpp"
     "Generator.cpp"
     "HashTable.cpp"
-    "Melted.cpp"
     "Node.cpp"
     "Parser.cpp"
     "ParserGen.cpp"
-    "Position.cpp"
     "Scanner.cpp"
     "SortedList.cpp"
     "State.cpp"
-    "StringBuilder.cpp"
     "Symbol.cpp"
     "Tab.cpp"
-    "Target.cpp"
     ${PROJECT_HEADERS}
     )
 

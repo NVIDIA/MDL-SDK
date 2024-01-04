@@ -138,9 +138,6 @@ mi::neuraylib::IValue_texture* Mdl_factory_impl::create_texture(
     MDL::IType_texture::Shape int_shape = ext_shape_to_int_shape( shape);
     mi::base::Handle<MDL::IValue_texture> result( MDL::create_texture(
         db_transaction, file_path, int_shape, gamma, selector, shared, mdl_context));
-    // TODO MDL-1136 harmonize valid result XOR non-zero error messages count
-    if( mdl_context->get_error_messages_count() > 0)
-        return nullptr;
     if( !result)
         return nullptr;
 

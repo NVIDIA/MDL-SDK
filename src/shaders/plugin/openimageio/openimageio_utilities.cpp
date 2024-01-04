@@ -71,8 +71,8 @@ bool is_rgba( const OIIO::ImageSpec& spec)
         return false;
 
     assert( spec.channelnames.size() >= 4);
-    // Do not check whether spec.channelnames[3] == "A". There are files where the alpha channel
-    // has a generic name, e.g., "channel3".
+    // Do not check whether spec.channelnames[3] == "A" or "Alpha". There are files where the alpha
+    // channel has a generic name, e.g., "channel3".
     return spec.channelnames[0] == "R"
         && spec.channelnames[1] == "G"
         && spec.channelnames[2] == "B";
@@ -636,6 +636,25 @@ int get_channel_index(
     return -1;
 }
 
+/// Returns the channel index for which the concatention of \p part_prefix and the channel name
+/// equals \p selector1 or \p selector2.
+///
+/// Search in parallel instead of one after the other mimics what OpenImageIO itself is doing for
+/// OpenEXR images.
+int get_channel_index(
+    const OIIO::ImageSpec& spec,
+    const std::string& part_prefix,
+    const char* selector1,
+    const char* selector2)
+{
+    for( int i = 0; i < spec.nchannels;  ++i) {
+        std::string s = part_prefix + spec.channelnames[i];
+        if( s == selector1 || s == selector2)
+            return i;
+        }
+    return -1;
+}
+
 /// Returns the range of channel indices for which the concatention of \p part_prefix and the
 /// channel name is a prefix of selector_prefix, or (-1,-1) in case of failure.
 std::pair<int,int> get_selector_channel_range(
@@ -704,7 +723,7 @@ OIIO::ImageSpec extract_channels(
         s = s.substr( n);
     }
 
-    output.alpha_channel = get_channel_index( output, std::string(), "A");
+    output.alpha_channel = get_channel_index( output, std::string(), "A", "Alpha");
     output.z_channel     = get_channel_index( output, std::string(), "Z");
 
     return output;

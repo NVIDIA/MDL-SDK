@@ -1,0 +1,262 @@
+mdl 1.7;
+
+import ::df::*;
+import ::tex::*;
+import ::state::*;
+import ::math::*;
+
+// User defined types
+export struct user_struct {
+    float value_1;
+    float value_2 = 0.0;
+    float value_3 = 0.0;
+};
+
+export struct user_struct_2 {
+    float value_1;
+    float value_2;
+    float value_3;
+};
+
+export enum user_enum {
+    user_enum_value_1 = 0,
+    user_enum_value_2
+};
+
+export enum user_enum_2 {
+    user_enum_2_value_1 = 0,
+    user_enum_2_value_2
+};
+
+// Utility functions
+export int magic(int2 vec) = (1 - vec.x * vec.y) == 0 ? 1 : 0;
+export int magic(int3 vec) = (1 - vec.x * vec.y * vec.z) == 0 ? 1 : 0;
+export int magic(int4 vec) = (1 - vec.x * vec.y * vec.z * vec.w) == 0 ? 1 : 0;
+export int magic(int[<n>] arr) {
+    int p = 1;
+    for (int i = 0; i < n; i++)
+        p *= arr[i];
+    return 1 - p == 0 ? 1 : 0;
+}
+
+export float magic(float2 vec) = math::abs(1.0 - vec.x * vec.y) < 1e-6 ? 1.0 : 0.0;
+export float magic(float3 vec) = math::abs(1.0 - vec.x * vec.y * vec.z) < 1e-6 ? 1.0 : 0.0;
+export float magic(float4 vec) = math::abs(1.0 - vec.x * vec.y * vec.z * vec.w) < 1e-6 ? 1.0 : 0.0;
+export float magic(float2x2 mat) = magic(mat[0]) * magic(mat[1]);
+export float magic(float2x3 mat) = magic(mat[0]) * magic(mat[1]);
+export float magic(float2x4 mat) = magic(mat[0]) * magic(mat[1]);
+export float magic(float3x2 mat) = magic(mat[0]) * magic(mat[1]) * magic(mat[2]);
+export float magic(float3x3 mat) = magic(mat[0]) * magic(mat[1]) * magic(mat[2]);
+export float magic(float3x4 mat) = magic(mat[0]) * magic(mat[1]) * magic(mat[2]);
+export float magic(float4x2 mat) = magic(mat[0]) * magic(mat[1]) * magic(mat[2]) * magic(mat[3]);
+export float magic(float4x3 mat) = magic(mat[0]) * magic(mat[1]) * magic(mat[2]) * magic(mat[3]);
+export float magic(float4x4 mat) = magic(mat[0]) * magic(mat[1]) * magic(mat[2]) * magic(mat[3]);
+export float magic(float[<n>] arr) {
+    float p = 1.0;
+    for (int i = 0; i < n; i++)
+        p *= arr[i];
+    return math::abs(1.0 - p) < 1e-6 ? 1.0 : 0.0;
+}
+
+export double magic(double2 vec) = math::abs(1.0d - vec.x * vec.y) < 1e-6d ? 1.0d : 0.0d;
+export double magic(double3 vec) = math::abs(1.0d - vec.x * vec.y * vec.z) < 1e-6d ? 1.0d : 0.0d;
+export double magic(double4 vec) = math::abs(1.0d - vec.x * vec.y * vec.z * vec.w) < 1e-6d ? 1.0d : 0.0d;
+export double magic(double2x2 mat) = magic(mat[0]) * magic(mat[1]);
+export double magic(double2x3 mat) = magic(mat[0]) * magic(mat[1]);
+export double magic(double2x4 mat) = magic(mat[0]) * magic(mat[1]);
+export double magic(double3x2 mat) = magic(mat[0]) * magic(mat[1]) * magic(mat[2]);
+export double magic(double3x3 mat) = magic(mat[0]) * magic(mat[1]) * magic(mat[2]);
+export double magic(double3x4 mat) = magic(mat[0]) * magic(mat[1]) * magic(mat[2]);
+export double magic(double4x2 mat) = magic(mat[0]) * magic(mat[1]) * magic(mat[2]) * magic(mat[3]);
+export double magic(double4x3 mat) = magic(mat[0]) * magic(mat[1]) * magic(mat[2]) * magic(mat[3]);
+export double magic(double4x4 mat) = magic(mat[0]) * magic(mat[1]) * magic(mat[2]) * magic(mat[3]);
+export double magic(double[<n>] arr) {
+    double p = 1.0d;
+    for (int i = 0; i < n; i++)
+        p *= arr[i];
+    return math::abs(1.0d - p) < 1e-6d ? 1.0d : 0.0d;
+}
+
+// Material tests
+export material material_test_base(color arg_tint = color(0), float arg_roughness = 0.0)
+= material(
+    surface: material_surface(
+        scattering: df::diffuse_reflection_bsdf(
+            tint: arg_tint,
+            roughness: arg_roughness
+        )
+    )
+);
+
+export material material_test_variant(*) = material_test_base(arg_tint: color(0,1,0));
+
+export material material_test_bool(bool arg = false) = let { color c = arg ? color(0,1,0) : color(0,0,0); } in material_test_base(c);
+export material material_test_bool2(bool2 arg = bool2(false, false)) = let { color c = math::all(arg) ? color(0,1,0) : color(0,0,0); } in material_test_base(c);
+export material material_test_bool3(bool3 arg = bool3(false, false, false)) = let { color c = math::all(arg) ? color(0,1,0) : color(0,0,0); } in material_test_base(c);
+export material material_test_bool4(bool4 arg = bool4(false, false, false, false)) = let { color c = math::all(arg) ? color(0,1,0) : color(0,0,0); } in material_test_base(c);
+
+export material material_test_int(int arg = 0) = material_test_base(color(0, arg, 0));
+export material material_test_int2(int2 arg = int2(0, 0)) = material_test_base(color(0, magic(arg), 0));
+export material material_test_int3(int3 arg = int3(0, 0, 0)) = material_test_base(color(0, magic(arg), 0));
+export material material_test_int4(int4 arg = int4(0, 0, 0, 0)) = material_test_base(color(0, magic(arg), 0));
+
+export material material_test_float(float arg = 0.0) = material_test_base(color(0, arg, 0));
+export material material_test_float2(float2 arg = float2(0.0, 0.0)) = material_test_base(color(0, magic(arg), 0));
+export material material_test_float3(float3 arg = float3(0.0, 0.0, 0.0)) = material_test_base(color(0, magic(arg), 0));
+export material material_test_float4(float4 arg = float4(0.0, 0.0, 0.0, 0.0)) = material_test_base(color(0, magic(arg), 0));
+
+export material material_test_float2x2(float2x2 arg = float2x2(0.0)) = material_test_base(color(0, magic(arg), 0));
+export material material_test_float2x3(float2x3 arg = float2x3(0.0)) = material_test_base(color(0, magic(arg), 0));
+export material material_test_float2x4(float2x4 arg = 0.0) = material_test_base(color(0, magic(arg), 0));
+export material material_test_float3x2(float3x2 arg = float3x2(0.0)) = material_test_base(color(0, magic(arg), 0));
+export material material_test_float3x3(float3x3 arg = float3x3(0.0)) = material_test_base(color(0, magic(arg), 0));
+export material material_test_float3x4(float3x4 arg = float3x4(0.0)) = material_test_base(color(0, magic(arg), 0));
+export material material_test_float4x2(float4x2 arg = float4x2(0.0)) = material_test_base(color(0, magic(arg), 0));
+export material material_test_float4x3(float4x3 arg = float4x3(0.0)) = material_test_base(color(0, magic(arg), 0));
+export material material_test_float4x4(float4x4 arg = float4x4(0.0)) = material_test_base(color(0, magic(arg), 0));
+
+export material material_test_double(double arg = 0.0) = material_test_base(color(0, float(arg), 0));
+export material material_test_double2(double2 arg = 0.0) = material_test_base(color(0, float(magic(arg)), 0));
+export material material_test_double3(double3 arg = 0.0) = material_test_base(color(0, float(magic(arg)), 0));
+export material material_test_double4(double4 arg = 0.0) = material_test_base(color(0, float(magic(arg)), 0));
+
+export material material_test_double2x2(double2x2 arg = 0.0) = material_test_base(color(0, float(magic(arg)), 0));
+export material material_test_double2x3(double2x3 arg = 0.0) = material_test_base(color(0, float(magic(arg)), 0));
+export material material_test_double2x4(double2x4 arg = 0.0) = material_test_base(color(0, float(magic(arg)), 0));
+export material material_test_double3x2(double3x2 arg = 0.0) = material_test_base(color(0, float(magic(arg)), 0));
+export material material_test_double3x3(double3x3 arg = 0.0) = material_test_base(color(0, float(magic(arg)), 0));
+export material material_test_double3x4(double3x4 arg = 0.0) = material_test_base(color(0, float(magic(arg)), 0));
+export material material_test_double4x2(double4x2 arg = 0.0) = material_test_base(color(0, float(magic(arg)), 0));
+export material material_test_double4x3(double4x3 arg = 0.0) = material_test_base(color(0, float(magic(arg)), 0));
+export material material_test_double4x4(double4x4 arg = 0.0) = material_test_base(color(0, float(magic(arg)), 0));
+
+export material material_test_color(color arg = 0.0) = material_test_base(color(0, magic(float3(arg)), 0));
+export material material_test_string(string arg = "") = let {
+    color c = (arg == "the_correct_string_0") ? color(0,1,0) : color(0,0,0);
+} in material_test_base(c);
+
+export material material_test_intensity_mode(intensity_mode arg = intensity_radiant_exitance) = let {
+    color c = (arg == intensity_radiant_exitance) ? color(0,1,0) : color(0,0,0);
+} in material_test_base(c);
+
+export material material_test_texture_2d(uniform texture_2d arg = texture_2d()) = let {
+    float3 tex_coord3 = state::texture_coordinate(0);
+    color c = tex::lookup_color(arg, float2(tex_coord3.x, tex_coord3.y));
+} in material_test_base(color(0, magic(float3(c)), 0));
+
+export material material_test_user_struct(user_struct arg = user_struct(1.0, 2.0, 3.0)) = material_test_base(color(arg.value_1, arg.value_2, arg.value_3));
+export material material_test_user_enum(user_enum arg = user_enum_value_1) = let {
+    color c = (arg == user_enum_value_2) ? color(0,1,0) : color(0,0,0);
+} in material_test_base(c);
+
+export material material_test_cast_struct(user_struct_2 arg = user_struct_2(1.0, 2.0, 3.0)) = material_test_user_struct(cast<user_struct>(arg));
+
+export material material_test_cast_enum(user_enum_2 arg = user_enum_2_value_1) = material_test_user_enum(cast<user_enum>(arg));
+
+export material material_test_explicit_conversion_0(int arg = 0) = material_test_bool(bool(arg));
+export material material_test_explicit_conversion_1(float arg = 0.0) = material_test_bool(bool(arg));
+export material material_test_explicit_conversion_2(double arg = 0.0) = material_test_bool(bool(arg));
+export material material_test_explicit_conversion_3(float arg = 0.0) = material_test_int(int(arg));
+export material material_test_explicit_conversion_4(double arg = 0.0) = material_test_int(int(arg));
+
+export material material_test_implicit_conversion_0(bool arg = false) = material_test_int(arg);
+export material material_test_implicit_conversion_1(bool arg = false) = material_test_float(arg);
+export material material_test_implicit_conversion_2(bool arg = false) = material_test_double(arg);
+
+// Note: this has the same hash as material_test_int(int), because the
+// conversion float(int) is inserted by the compiler.
+// export material material_test_implicit_conversion_3(int arg = 0) = material_test_float(arg);
+
+export material material_test_implicit_conversion_4(int arg = 0) = material_test_double(arg);
+export material material_test_implicit_conversion_5(float arg = 0.0) = material_test_double(arg);
+
+export material material_test_operator_0(float arg_0 = 0.0) = material_test_float(-arg_0);
+export material material_test_operator_1(float arg_0 = 0.0, float arg_1 = 0.0) = material_test_float(arg_0 + arg_1);
+export material material_test_operator_2(float arg_0 = 0.0, float arg_1 = 0.0) = material_test_float(arg_0 - arg_1);
+export material material_test_operator_3(float arg_0 = 0.0, float arg_1 = 0.0) = material_test_float(arg_0 * arg_1);
+export material material_test_operator_4(float arg_0 = 0.0, float arg_1 = 0.0) = material_test_float(arg_0 / arg_1);
+export material material_test_operator_5(float arg_0 = 0.0, float arg_1 = 0.0) = material_test_bool(arg_0 == arg_1);
+export material material_test_operator_6(float arg_0 = 0.0, float arg_1 = 0.0) = material_test_bool(arg_0 != arg_1);
+export material material_test_operator_7(float arg_0 = 0.0, float arg_1 = 0.0) = material_test_bool(arg_0 > arg_1);
+export material material_test_operator_8(float arg_0 = 0.0, float arg_1 = 0.0) = material_test_bool(arg_0 >= arg_1);
+export material material_test_operator_9(float arg_0 = 0.0, float arg_1 = 1.0) = material_test_bool(arg_0 < arg_1);
+export material material_test_operator_10(float arg_0 = 0.0, float arg_1 = 0.0) = material_test_bool(arg_0 <= arg_1);
+export material material_test_operator_11(int arg_0 = 0) = material_test_int(~arg_0);
+export material material_test_operator_12(int arg_0 = 0, int arg_1 = 0) = material_test_int(arg_0 % arg_1);
+export material material_test_operator_13(int arg_0 = 0, int arg_1 = 0) = material_test_int(arg_0 ^ arg_1);
+export material material_test_operator_14(int arg_0 = 0, int arg_1 = 0) = material_test_int(arg_0 & arg_1);
+export material material_test_operator_15(int arg_0 = 0, int arg_1 = 0) = material_test_int(arg_0 | arg_1);
+export material material_test_operator_16(int arg_0 = 0, int arg_1 = 0) = material_test_int(arg_0 << arg_1);
+export material material_test_operator_17(int arg_0 = 0, int arg_1 = 0) = material_test_int(arg_0 >> arg_1);
+export material material_test_operator_18(int arg_0 = 0, int arg_1 = 0) = material_test_int(arg_0 >>> arg_1);
+export material material_test_operator_19(bool arg_0 = false) = material_test_bool(!arg_0);
+export material material_test_operator_20(bool arg_0 = false, bool arg_1 = false) = material_test_bool(arg_0 && arg_1);
+export material material_test_operator_21(bool arg_0 = false, bool arg_1 = false) = material_test_bool(arg_0 || arg_1);
+export material material_test_operator_22(bool arg_0 = false) = material_test_float(arg_0 ? 1.0 : 0.0);
+
+// Material array tests
+export material material_test_bool_array(bool[2] arg = bool[](false, false)) = let { color c = (arg[0] && arg[1]) ? color(0,1,0) : color(0,0,0); } in material_test_base(c);
+export material material_test_bool2_array(bool2[2] arg = bool2[](bool2(false), bool2(false))) = let { color c = (math::all(arg[0]) && math::all(arg[1])) ? color(0,1,0) : color(0,0,0); } in material_test_base(c);
+export material material_test_bool3_array(bool3[2] arg = bool3[](bool3(false), bool3(false))) = let { color c = (math::all(arg[0]) && math::all(arg[1])) ? color(0,1,0) : color(0,0,0); } in material_test_base(c);
+export material material_test_bool4_array(bool4[2] arg = bool4[](bool4(false), bool4(false))) = let { color c = (math::all(arg[0]) && math::all(arg[1])) ? color(0,1,0) : color(0,0,0); } in material_test_base(c);
+
+export material material_test_int_array(int[2] arg = int[](0, 0)) = material_test_base(color(0, arg[0] * arg[1], 0));
+export material material_test_int2_array(int2[2] arg = int2[](int2(0), int2(0))) = material_test_base(color(0, magic(arg[0]) * magic(arg[1]), 0));
+export material material_test_int3_array(int3[2] arg = int3[](int3(0), int3(0))) = material_test_base(color(0, magic(arg[0]) * magic(arg[1]), 0));
+export material material_test_int4_array(int4[2] arg = int4[](int4(0), int4(0))) = material_test_base(color(0, magic(arg[0]) * magic(arg[1]), 0));
+
+export material material_test_float_array(float[2] arg = float[](0.0, 0.0)) = material_test_base(color(0, arg[0] * arg[1], 0));
+export material material_test_float2_array(float2[2] arg = float2[](float2(0.0), float2(0.0))) = material_test_base(color(0, magic(arg[0]) * magic(arg[1]), 0));
+export material material_test_float3_array(float3[2] arg = float3[](float3(0.0), float3(0.0))) = material_test_base(color(0, magic(arg[0]) * magic(arg[1]), 0));
+export material material_test_float4_array(float4[2] arg = float4[](float4(0.0), float4(0.0))) = material_test_base(color(0, magic(arg[0]) * magic(arg[1]), 0));
+
+export material material_test_float2x2_array(float2x2[2] arg = float2x2[](float2x2(0.0), float2x2(0.0))) = material_test_base(color(0, magic(arg[0]) * magic(arg[1]), 0));
+export material material_test_float2x3_array(float2x3[2] arg = float2x3[](float2x3(0.0), float2x3(0.0))) = material_test_base(color(0, magic(arg[0]) * magic(arg[1]), 0));
+export material material_test_float2x4_array(float2x4[2] arg = float2x4[](float2x4(0.0), float2x4(0.0))) = material_test_base(color(0, magic(arg[0]) * magic(arg[1]), 0));
+export material material_test_float3x2_array(float3x2[2] arg = float3x2[](float3x2(0.0), float3x2(0.0))) = material_test_base(color(0, magic(arg[0]) * magic(arg[1]), 0));
+export material material_test_float3x3_array(float3x3[2] arg = float3x3[](float3x3(0.0), float3x3(0.0))) = material_test_base(color(0, magic(arg[0]) * magic(arg[1]), 0));
+export material material_test_float3x4_array(float3x4[2] arg = float3x4[](float3x4(0.0), float3x4(0.0))) = material_test_base(color(0, magic(arg[0]) * magic(arg[1]), 0));
+export material material_test_float4x2_array(float4x2[2] arg = float4x2[](float4x2(0.0), float4x2(0.0))) = material_test_base(color(0, magic(arg[0]) * magic(arg[1]), 0));
+export material material_test_float4x3_array(float4x3[2] arg = float4x3[](float4x3(0.0), float4x3(0.0))) = material_test_base(color(0, magic(arg[0]) * magic(arg[1]), 0));
+export material material_test_float4x4_array(float4x4[2] arg = float4x4[](float4x4(0.0), float4x4(0.0))) = material_test_base(color(0, magic(arg[0]) * magic(arg[1]), 0));
+
+export material material_test_double_array(double[2] arg = double[](0.0, 0.0)) = material_test_base(color(0, float(arg[0] * arg[1]), 0));
+export material material_test_double2_array(double2[2] arg = double2[](double2(0.0), double2(0.0))) = material_test_base(color(0, float(magic(arg[0]) * magic(arg[1])), 0));
+export material material_test_double3_array(double3[2] arg = double3[](double3(0.0), double3(0.0))) = material_test_base(color(0, float(magic(arg[0]) * magic(arg[1])), 0));
+export material material_test_double4_array(double4[2] arg = double4[](double4(0.0), double4(0.0))) = material_test_base(color(0, float(magic(arg[0]) * magic(arg[1])), 0));
+
+export material material_test_double2x2_array(double2x2[2] arg = double2x2[](double2x2(0.0), double2x2(0.0))) = material_test_base(color(0, float(magic(arg[0]) * magic(arg[1])), 0));
+export material material_test_double2x3_array(double2x3[2] arg = double2x3[](double2x3(0.0), double2x3(0.0))) = material_test_base(color(0, float(magic(arg[0]) * magic(arg[1])), 0));
+export material material_test_double2x4_array(double2x4[2] arg = double2x4[](double2x4(0.0), double2x4(0.0))) = material_test_base(color(0, float(magic(arg[0]) * magic(arg[1])), 0));
+export material material_test_double3x2_array(double3x2[2] arg = double3x2[](double3x2(0.0), double3x2(0.0))) = material_test_base(color(0, float(magic(arg[0]) * magic(arg[1])), 0));
+export material material_test_double3x3_array(double3x3[2] arg = double3x3[](double3x3(0.0), double3x3(0.0))) = material_test_base(color(0, float(magic(arg[0]) * magic(arg[1])), 0));
+export material material_test_double3x4_array(double3x4[2] arg = double3x4[](double3x4(0.0), double3x4(0.0))) = material_test_base(color(0, float(magic(arg[0]) * magic(arg[1])), 0));
+export material material_test_double4x2_array(double4x2[2] arg = double4x2[](double4x2(0.0), double4x2(0.0))) = material_test_base(color(0, float(magic(arg[0]) * magic(arg[1])), 0));
+export material material_test_double4x3_array(double4x3[2] arg = double4x3[](double4x3(0.0), double4x3(0.0))) = material_test_base(color(0, float(magic(arg[0]) * magic(arg[1])), 0));
+export material material_test_double4x4_array(double4x4[2] arg = double4x4[](double4x4(0.0), double4x4(0.0))) = material_test_base(color(0, float(magic(arg[0]) * magic(arg[1])), 0));
+
+export material material_test_color_array(color[2] arg = color[](color(0.0), color(0.0))) = material_test_base(color(0, magic(float3(arg[0])) * magic(float3(arg[1])), 0));
+export material material_test_string_array(string[2] arg = string[]("", "")) = let {
+    color c = (arg[0] == "the_correct_string_0" && arg[1] == "the_correct_string_1") ? color(0,1,0) : color(0,0,0);
+} in material_test_base(c);
+
+export material material_test_intensity_mode_array(intensity_mode[2] arg = intensity_mode[](intensity_power, intensity_power)) = let {
+    color c = (arg[0] == intensity_radiant_exitance && arg[1] == intensity_power) ? color(0,1,0) : color(0,0,0);
+} in material_test_base(c);
+
+export material material_test_texture_2d_array(uniform texture_2d[2] arg = texture_2d[](texture_2d(), texture_2d())) = let {
+    float3 tex_coord3 = state::texture_coordinate(0);
+    color c0 = tex::lookup_color(arg[0], float2(tex_coord3.x, tex_coord3.y));
+    color c1 = tex::lookup_color(arg[1], float2(tex_coord3.x, tex_coord3.y));
+} in material_test_base(color(0, magic(float3(c0)) * magic(float3(c1)), 0));
+
+export material material_test_user_struct_array(user_struct[2] arg = user_struct[](user_struct(0.0, 0.0, 0.0), user_struct(0.0, 0.0, 0.0))) = material_test_base(
+    color(arg[0].value_1 * arg[1].value_1, arg[0].value_2 * arg[1].value_2, arg[0].value_3 * arg[1].value_3)
+);
+export material material_test_user_enum_array(user_enum[2] arg = user_enum[](user_enum_value_1, user_enum_value_1)) = let {
+    color c = (arg[0] == user_enum_value_2 && arg[1] == user_enum_value_1) ? color(0,1,0) : color(0,0,0);
+} in material_test_base(c);
+
+export material material_test_cast_struct_array(user_struct_2[2] arg = user_struct_2[](user_struct_2(0.0, 0.0, 0.0), user_struct_2(0.0, 0.0, 0.0))) = material_test_user_struct_array(cast<user_struct[2]>(arg));
+
+export material material_test_cast_enum_array(user_enum_2[2] arg = user_enum_2[](user_enum_2_value_1, user_enum_2_value_1)) = material_test_user_enum_array(cast<user_enum[2]>(arg));

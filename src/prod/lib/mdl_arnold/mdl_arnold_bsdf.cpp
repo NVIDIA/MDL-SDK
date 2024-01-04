@@ -439,7 +439,8 @@ bsdf_albedo
             aux_data.ior2 = make<float3>(MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR);
         }
         aux_data.k1 = bsdf_data.outgoing;   // outgoing direction
-        aux_data.albedo = make<float3>(0.0f);
+        aux_data.albedo_diffuse = make<float3>(0.0f);
+        aux_data.albedo_glossy = make<float3>(0.0f);
         aux_data.normal = make<float3>(0.0f);
 
         mi::Sint32 res = bsdf_data.shader.target_code->execute_bsdf_auxiliary(
@@ -452,7 +453,10 @@ bsdf_albedo
         assert(res == 0 && "execute_bsdf_auxiliary failed");
         (void) res;
 
-        return AtRGB(aux_data.albedo.x, aux_data.albedo.y, aux_data.albedo.z);
+        return AtRGB(
+            aux_data.albedo_diffuse.x + aux_data.albedo_glossy.x,
+            aux_data.albedo_diffuse.y + aux_data.albedo_glossy.y,
+            aux_data.albedo_diffuse.z + aux_data.albedo_glossy.z);
     }
 
     // no BSDF, no albedo

@@ -152,8 +152,11 @@ namespace mi { namespace examples { namespace dxr
     enum class Display_buffer_options
     {
         Beauty = 0,
-        Albedo,
+        Albedo, //< diffuse and glossy
+        Albedo_Diffuse,
+        Albedo_Glossy,
         Normal,
+        Roughness,
 
         count
     };
@@ -233,7 +236,9 @@ namespace mi { namespace examples { namespace dxr
             bool recompile_only_the_selected_material,
             Gui_section_edit_material* mat_gui);
 
-        bool update_material_pipeline();
+        /// Evaluates and applies the dynamic options.
+        void apply_dynamic_options();
+
         bool update_rendering_pipeline();
 
         mdl_d3d12::Texture* m_frame_buffer;
@@ -242,11 +247,17 @@ namespace mi { namespace examples { namespace dxr
         mdl_d3d12::Texture* m_output_buffer;
         mdl_d3d12::Descriptor_heap_handle m_output_buffer_uav;
 
-        mdl_d3d12::Texture* m_albedo_buffer;
-        mdl_d3d12::Descriptor_heap_handle m_albedo_buffer_uav;
+        mdl_d3d12::Texture* m_albedo_diffuse_buffer;
+        mdl_d3d12::Descriptor_heap_handle m_albedo_diffuse_buffer_uav;
+
+        mdl_d3d12::Texture* m_albedo_glossy_buffer;
+        mdl_d3d12::Descriptor_heap_handle m_albedo_glossy_buffer_uav;
 
         mdl_d3d12::Texture* m_normal_buffer;
         mdl_d3d12::Descriptor_heap_handle m_normal_buffer_uav;
+
+        mdl_d3d12::Texture* m_roughness_buffer;
+        mdl_d3d12::Descriptor_heap_handle m_roughness_buffer_uav;
 
         mdl_d3d12::Descriptor_heap_handle m_acceleration_structure_srv;
         mdl_d3d12::Raytracing_pipeline* m_pipeline[2];

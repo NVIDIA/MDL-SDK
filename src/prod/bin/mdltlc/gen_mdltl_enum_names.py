@@ -168,11 +168,12 @@ def main():
             if not name.endswith("_FIRST") and not name.endswith("_LAST") and (include_nvidia_dfs or (not ("NVIDIA_DF" in name))):
                 f.write('    case mi::mdl::IDefinition::%s: return "%s";\n' % (name, name))
 
-        f.write('    default: return "<INVALID SEMANTICS>";\n');
-        # let mdltlc generate invalid code for unknown semantics
+        # mdltlc depends on a nullptr return value for unknown
+        # semantic values because of extended Distiller semantics.
+        f.write('    default: return nullptr;\n');
         f.write(
             "    }\n"
-            '    return "<INVALID SEMANTICS>";\n'
+            '    return nullptr;\n'
             "}\n")
 
 

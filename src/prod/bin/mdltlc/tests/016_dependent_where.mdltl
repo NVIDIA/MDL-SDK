@@ -1,0 +1,10 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Dependent_where_clauses topdown {
+      diffuse_reflection_bsdf(x) --> bsdf()
+      where
+        _b = a
+        a = x;
+}

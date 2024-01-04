@@ -118,8 +118,7 @@ Mipmap_impl::Mipmap_impl(
         return;
     }
 
-    std::string root, extension;
-    HAL::Ospath::splitext( filename, root, extension);
+    std::string extension = HAL::Ospath::get_ext( filename);
     if( !extension.empty() && extension[0] == '.' )
         extension = extension.substr( 1);
 
@@ -209,8 +208,7 @@ Mipmap_impl::Mipmap_impl(
         return;
     }
 
-    std::string root, extension;
-    HAL::Ospath::splitext( member_filename, root, extension);
+    std::string extension = HAL::Ospath::get_ext( member_filename);
     if( !extension.empty() && extension[0] == '.' )
         extension = extension.substr( 1);
 

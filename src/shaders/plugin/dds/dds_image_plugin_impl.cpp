@@ -37,7 +37,6 @@
 #include <mi/neuraylib/ireader.h>
 #include <mi/neuraylib/iwriter.h>
 #include <mi/neuraylib/ilogging_configuration.h>
-#include <mi/neuraylib/imdl_configuration.h>
 #include <base/system/version/i_version.h>
 
 #include <string>
@@ -54,12 +53,6 @@ bool Image_plugin_impl::init( mi::neuraylib::IPlugin_api* plugin_api)
         plugin_api->get_api_component<mi::neuraylib::ILogging_configuration>());
     if( logging_configuration)
         g_logger = logging_configuration->get_forwarding_logger();
-    else {
-        mi::base::Handle<mi::neuraylib::IMdl_configuration> mdl_configuration(
-            plugin_api->get_api_component<mi::neuraylib::IMdl_configuration>());
-        if( mdl_configuration)
-            g_logger = mdl_configuration->get_logger();
-    }
 
     std::string message = "Plugin \"";
     message += get_name();

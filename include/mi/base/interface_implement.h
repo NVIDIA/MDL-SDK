@@ -98,15 +98,15 @@ public:
 #if (__cplusplus >= 201103L)
     /// Move constructor.
     Interface_implement(Interface_implement&& other)
-    : m_refcnt{other.m_refcnt.swap(0)}
+        : m_refcnt{other.m_refcnt.swap(0)}
     {
     }
 
     /// Move assignment.
     Interface_implement& operator=(Interface_implement&& other)
     {
-    	other.m_refcnt = m_refcnt.swap(other.m_refcnt);
-    	return *this;
+        other.m_refcnt = m_refcnt.swap(other.m_refcnt);
+        return *this;
     }
 #endif
 

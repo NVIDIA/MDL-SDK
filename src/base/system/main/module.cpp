@@ -35,9 +35,9 @@
 /// module list).
 
 #include "pch.h"
-#include <base/system/main/module.h>
-#include <base/util/string_utils/i_string_utils.h>
-#include <base/lib/log/log.h>
+
+#include "module.h"
+#include "i_assert.h"
 
 #include <cstring>
 
@@ -65,7 +65,7 @@ struct Static_module
         const char *name)       // the name of the module
     : m_id(id)
     {
-        ASSERT(M_MAIN, id >= 0 && id < NUM_OF_MODULES);
+        MI_ASSERT(id >= 0 && id < NUM_OF_MODULES);
         g_module_names[id] = name;
     }
 
@@ -161,8 +161,8 @@ void Module::register_module(
     Module_id   mod,                    // module ID, one of M_*
     const char  *name)                  // module name, up to four characters
 {
-    ASSERT(M_MAIN, name);
-    ASSERT(M_MAIN, name && strlen(name) <= 6);
+    MI_ASSERT(name);
+    MI_ASSERT(name && strlen(name) <= 6);
     g_module_names[mod] = name;
 }
 
@@ -194,7 +194,7 @@ Module_status Module::get_status() const
 Module_status Module::get_status(
     Module_id            mod)           // return status of this module
 {
-    ASSERT(M_MAIN, mod >= 0 && mod < NUM_OF_MODULES);
+    MI_ASSERT(mod >= 0 && mod < NUM_OF_MODULES);
     if (modules[mod] != NULL)
         return modules[mod]->get_status();
 
@@ -224,7 +224,7 @@ const char *Module::get_name() const
 const char *Module::id_to_name(
     Module_id            mod)           // convert M_X to "X"
 {
-    ASSERT(M_MAIN, mod >= 0 && mod < NUM_OF_MODULES);
+    MI_ASSERT(mod >= 0 && mod < NUM_OF_MODULES);
     const char *res = modules[mod] ? modules[mod]->get_name() : g_module_names[mod];
     return res ? res : "UNKNOWN_MODULE";
 }
@@ -236,9 +236,13 @@ Module_id Module::name_to_id(
     int                 mod;            // for iterating over modules
 
     for (mod=1; mod < NUM_OF_MODULES; mod++)
-        if (!STRING::compare_case_insensitive(name, id_to_name((Module_id)mod), 4))
+#ifdef WIN_NT
+        if (!_strnicmp(name, id_to_name((Module_id)mod), 4))
+#else
+        if (!strncasecmp(name, id_to_name((Module_id)mod), 4))
+#endif
             break;
-    ASSERT(M_MAIN, mod != NUM_OF_MODULES);
+    MI_ASSERT(mod != NUM_OF_MODULES);
     return (Module_id)mod;
 }
 
@@ -255,13 +259,13 @@ Module::Module(
     const char          *name)          // module name, up to four characters
 {
 #ifdef DEBUG
-    ASSERT(M_MAIN, mod >= 0 && mod < NUM_OF_MODULES);
-    ASSERT(M_MAIN, !modules[mod]);              // no double inits
+    MI_ASSERT(mod >= 0 && mod < NUM_OF_MODULES);
+    MI_ASSERT(!modules[mod]);              // no double inits
     int namelen;
     for (namelen=0; namelen < 5 && name[namelen]; namelen++)
-        ASSERT(M_MAIN, (name[namelen] >= 'A' && name[namelen] <= 'Z') ||
-                       (name[namelen] >= '0' && name[namelen] <= '9'));
-    ASSERT(M_MAIN, namelen > 0 && namelen < 5);
+        MI_ASSERT((name[namelen] >= 'A' && name[namelen] <= 'Z') ||
+                  (name[namelen] >= '0' && name[namelen] <= '9'));
+    MI_ASSERT(namelen > 0 && namelen < 5);
 #endif
     m_status = ST_NOTINIT;
     m_mod    = mod;
@@ -278,8 +282,8 @@ Module::Module(
 
 Module::~Module()
 {
-    ASSERT(M_MAIN, m_mod >= 0 && m_mod < NUM_OF_MODULES);
-    ASSERT(M_MAIN, modules[m_mod]);
+    MI_ASSERT(m_mod >= 0 && m_mod < NUM_OF_MODULES);
+    MI_ASSERT(modules[m_mod]);
     modules[m_mod] = 0;
 }
 

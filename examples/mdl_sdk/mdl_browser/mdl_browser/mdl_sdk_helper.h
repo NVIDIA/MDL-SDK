@@ -29,33 +29,13 @@
  /// \file
  /// \brief sets up a basic mdl environment
 
-#ifndef MDL_SDK_EXAMPLES_MDL_SDK_HELPER_H 
+#ifndef MDL_SDK_EXAMPLES_MDL_SDK_HELPER_H
 #define MDL_SDK_EXAMPLES_MDL_SDK_HELPER_H
 
 // MDL SDK (and utils)
 #include <mi/mdl_sdk.h>
 #include "mdl_browser_command_line_options.h"
 
-
-/// Custom logger 
-class Mdl_browser_logger : public mi::base::Interface_implement<mi::base::ILogger>
-{
-public:
-    Mdl_browser_logger(bool trace) : m_trace(trace) {}
-
-    void message(
-        mi::base::Message_severity level,
-        const char* /*category*/,
-        const mi::base::Message_details& /*details*/,
-        const char* message) override
-    {
-        if ((m_trace) || (level == mi::base::MESSAGE_SEVERITY_ERROR))
-            fprintf(stderr, "%s\n", message);
-    }
-
-private:
-    bool m_trace;
-};
 
 mi::neuraylib::INeuray* load_mdl_sdk(const Mdl_browser_command_line_options& options)
 {
@@ -69,12 +49,14 @@ mi::neuraylib::INeuray* load_mdl_sdk(const Mdl_browser_command_line_options& opt
         return nullptr;
     }
 
+    // Set custom logger
+    auto logging_configuration = mi::base::Handle<mi::neuraylib::ILogging_configuration>(
+        neuray->get_api_component<mi::neuraylib::ILogging_configuration>());
+    logging_configuration->set_log_level(mi::base::MESSAGE_SEVERITY_ERROR);
+
     // Add MDL search paths
     auto mdl_configuration = mi::base::Handle<mi::neuraylib::IMdl_configuration>(
         neuray->get_api_component<mi::neuraylib::IMdl_configuration>());
-
-    auto logger = mi::base::make_handle(new Mdl_browser_logger(false));
-    mdl_configuration->set_logger(logger.get());
 
     // clear all search paths and add specified default ones
     mdl_configuration->clear_mdl_paths();

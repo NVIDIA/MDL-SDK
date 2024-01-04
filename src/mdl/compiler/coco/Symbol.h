@@ -64,7 +64,7 @@ public:
 
 
 	Symbol(Node::Kind typ, char const *name, int line);
-	virtual ~Symbol();
+	~Symbol();
 };
 
 }; // namespace

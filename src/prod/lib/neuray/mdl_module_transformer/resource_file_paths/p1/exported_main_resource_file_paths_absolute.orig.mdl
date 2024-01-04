@@ -1,0 +1,77 @@
+mdl 1.3;
+
+using anno import *;
+import ::state::normal;
+import ::tex::gamma_mode;
+
+export int f_up_strict_relative(
+    uniform texture_2d t = texture_2d("/up.png", ::tex::gamma_default) [[
+        ::unused()
+    ]]) uniform
+{
+    return 0;
+}
+
+export int f_up_weak_relative(
+    uniform texture_2d t = texture_2d("/up.png", ::tex::gamma_default) [[
+        ::unused()
+    ]]) uniform
+{
+    return 0;
+}
+
+export int f_up_absolute(
+    uniform texture_2d t = texture_2d("/up.png", ::tex::gamma_default) [[
+        ::unused()
+    ]]) uniform
+{
+    return 0;
+}
+
+export int f_same_strict_relative(
+    uniform texture_2d t = texture_2d("/p1/same.png", ::tex::gamma_default) [[
+        ::unused()
+    ]]) uniform
+{
+    return 0;
+}
+
+export int f_same_weak_relative(
+    uniform texture_2d t = texture_2d("/p1/same.png", ::tex::gamma_default) [[
+        ::unused()
+    ]]) uniform
+{
+    return 0;
+}
+
+export int f_same_absolute(
+    uniform texture_2d t = texture_2d("/p1/same.png", ::tex::gamma_default) [[
+        ::unused()
+    ]]) uniform
+{
+    return 0;
+}
+
+export int f_down_strict_relative(
+    uniform texture_2d t = texture_2d("/p1/p2/down.png", ::tex::gamma_default) [[
+        ::unused()
+    ]]) uniform
+{
+    return 0;
+}
+
+export int f_down_weak_relative(
+    uniform texture_2d t = texture_2d("/p1/p2/down.png", ::tex::gamma_default) [[
+        ::unused()
+    ]]) uniform
+{
+    return 0;
+}
+
+export int f_down_absolute(
+    uniform texture_2d t = texture_2d("/p1/p2/down.png", ::tex::gamma_default) [[
+        ::unused()
+    ]]) uniform
+{
+    return 0;
+}

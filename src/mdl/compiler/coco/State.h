@@ -44,7 +44,9 @@ public:
 	bool ctx;				// true if state is reached via contextTrans
 	State *next;
 	
-	State();
+	State(int nr);
+
+	/// \note: Takes ownership of the action.
 	void AddAction(Action *act);
 	void DetachAction(Action *act);
 	void MeltWith(State *s);

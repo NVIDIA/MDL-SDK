@@ -699,8 +699,9 @@ Definition const *Module::get_first_conversion_operator(IType const *type) const
 // Get the next conversion operator of a type or NULL.
 Definition const *Module::get_next_conversion_operator(Definition const *op_def) const
 {
-    if (op_def == NULL)
+    if (op_def == NULL) {
         return NULL;
+    }
 
     if (op_def->get_kind() == Definition::DK_CONSTRUCTOR &&
         op_def->get_semantics() == IDefinition::DS_CONV_OPERATOR)
@@ -712,7 +713,7 @@ Definition const *Module::get_next_conversion_operator(Definition const *op_def)
         {
             if (def->get_kind() == IDefinition::DK_CONSTRUCTOR &&
                 def->get_semantics() == IDefinition::DS_CONV_OPERATOR) {
-                    return def;
+                return def;
             }
         }
     }
@@ -1880,7 +1881,7 @@ IAnnotation *Module::clone_annotation(
 {
     IQualified_name const *new_name = clone_name(anno->get_name(), modifier);
     IAnnotation *new_anno = m_anno_factory.create_annotation(new_name);
-    for (int i = 0, n = anno->get_argument_count(); i < n; ++i) {
+    for (size_t i = 0, n = anno->get_argument_count(); i < n; ++i) {
         IArgument const *arg = anno->get_argument(i);
         IArgument const *new_arg = clone_arg(arg, modifier);
         new_anno->add_argument(new_arg);

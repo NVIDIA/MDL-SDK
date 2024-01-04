@@ -26,7 +26,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 /// \file
-/// \brief This module provides an implementation for the serializer and deserializer framework. 
+/// \brief This module provides an implementation for the serializer and deserializer framework.
 ///
 /// Currently it does not do anything.
 
@@ -41,7 +41,7 @@
 #include <base/lib/mem/i_mem_allocatable.h>
 #include <base/lib/cont/i_cont_bitvector.h>
 #include <limits>
-#include <base/lib/log/log.h>
+#include <base/lib/log/i_log_logger.h>
 
 using namespace std;
 
@@ -412,11 +412,6 @@ Deserialization_class::Deserialization_class(
 {
 }
 
-// destructor
-Deserialization_manager::~Deserialization_manager()
-{
-}
-
 // Create an instance of a class implementing the interface
 Deserialization_manager* Deserialization_manager::create()
 {
@@ -471,9 +466,11 @@ Serializable* Deserialization_manager_impl::construct(
     mi::base::Lock::Block block(&m_lock);
     Deserialization_class pattern(class_identifier);
     Class_set::const_iterator it  = m_classes.find(pattern);
-    ASSERT(M_DB, it != m_classes.end());
-    if (it == m_classes.end())
-        return NULL;
+    if (it == m_classes.end()) {
+        LOG::mod_log->fatal(M_SERIAL, LOG::Mod_log::C_MISC,
+                "Don't know how to deserialize class ID %#x",class_identifier);
+        return nullptr;
+    }
     Deserialization_class deserialization_class = *it;	// copy outside of the lock
     block.release();
 

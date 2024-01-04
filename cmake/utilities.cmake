@@ -37,7 +37,7 @@ set(LINKER_NO_AS_NEEDED     "$<$<CXX_COMPILER_ID:GNU>:-Wl,--no-as-needed>")
 # setup the compiler options and definitions.
 # very simple set of flags depending on the compiler instead of the combination of compiler, OS, ...
 # for more complex scenarios, replace this function by tool-chain files for instance
-# 
+#
 #   target_build_setup(TARGET <NAME>)
 #
 function(TARGET_BUILD_SETUP)
@@ -53,7 +53,7 @@ function(TARGET_BUILD_SETUP)
     # for more complex scenarios, replace that
 
     if(WINDOWS AND TARGET_BUILD_SETUP_WINDOWS_UNICODE)
-        set(_ADDITIONAL_COMPILER_DEFINES 
+        set(_ADDITIONAL_COMPILER_DEFINES
             "_UNICODE"
             "UNICODE"
         )
@@ -62,14 +62,14 @@ function(TARGET_BUILD_SETUP)
         endif()
     endif()
 
-    # GENERAL 
+    # GENERAL
     #---------------------------------------------------------------------------------------
 
     # specify the c++ standard to use
     set_property(TARGET ${TARGET_BUILD_SETUP_TARGET} PROPERTY CXX_STANDARD 17)
     set_property(TARGET ${TARGET_BUILD_SETUP_TARGET} PROPERTY C_STANDARD 11)
 
-    target_compile_definitions(${TARGET_BUILD_SETUP_TARGET} 
+    target_compile_definitions(${TARGET_BUILD_SETUP_TARGET}
         PRIVATE
             "$<$<CONFIG:DEBUG>:DEBUG>"
             "$<$<CONFIG:DEBUG>:_DEBUG>"
@@ -80,7 +80,7 @@ function(TARGET_BUILD_SETUP)
         )
 
 
-    target_compile_options(${TARGET_BUILD_SETUP_TARGET} 
+    target_compile_options(${TARGET_BUILD_SETUP_TARGET}
         PRIVATE
             ${MDL_ADDITIONAL_COMPILER_OPTIONS}   # additional user options
         )
@@ -89,14 +89,13 @@ function(TARGET_BUILD_SETUP)
     #---------------------------------------------------------------------------------------
     if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 
-        target_compile_options(${TARGET_BUILD_SETUP_TARGET} 
+        target_compile_options(${TARGET_BUILD_SETUP_TARGET}
         PRIVATE
             "/Zc:__cplusplus"                    # make visual studio report the correct __cplusplus
         )
 
-        target_compile_definitions(${TARGET_BUILD_SETUP_TARGET} 
+        target_compile_definitions(${TARGET_BUILD_SETUP_TARGET}
             PUBLIC
-                "MI_PLATFORM=\"${MI_PLATFORM_NAME}-vc\"" #todo fix version number
                 "MI_PLATFORM_WINDOWS"
                 "WIN_NT"
             PRIVATE
@@ -106,7 +105,7 @@ function(TARGET_BUILD_SETUP)
             )
 
         # set static or dynamic runtime
-        # cmake 3.15 has an option for that. MSVC_RUNTIME_LIBRARY 
+        # cmake 3.15 has an option for that. MSVC_RUNTIME_LIBRARY
         if(TARGET_BUILD_SETUP_DYNAMIC_MSVC_RUNTIME)
             # examples can use the dynamic runtime
             target_compile_options(${TARGET_BUILD_SETUP_TARGET} PRIVATE "/MD$<$<CONFIG:Debug>:d>")
@@ -121,14 +120,14 @@ function(TARGET_BUILD_SETUP)
             endif()
         endif()
 
-        target_compile_options(${TARGET_BUILD_SETUP_TARGET} 
+        target_compile_options(${TARGET_BUILD_SETUP_TARGET}
             PRIVATE
                 "/MP"
-                "/wd4267"   # Suppress Warning C4267	'argument': conversion from 'size_t' to 'int', possible loss of data
+                "/wd4267"   # Suppress Warning C4267 'argument': conversion from 'size_t' to 'int', possible loss of data
             )
 
         if(MSVC_VERSION GREATER 1900)
-            target_compile_options(${TARGET_BUILD_SETUP_TARGET} 
+            target_compile_options(${TARGET_BUILD_SETUP_TARGET}
                 PRIVATE
                     "/permissive-"  # show more errors
                 )
@@ -140,10 +139,10 @@ function(TARGET_BUILD_SETUP)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         target_compile_definitions(${TARGET_BUILD_SETUP_TARGET}
             PUBLIC
-                "MI_PLATFORM=\"${MI_PLATFORM_NAME}-gcc\"" #todo add major version number
                 "MI_PLATFORM_UNIX"
                 "$<$<STREQUAL:${MI_PLATFORM_NAME},linux-aarch64>:AARCH64>"
                 "$<$<STREQUAL:${MI_PLATFORM_NAME},linux-x86-64>:HAS_SSE>"
+                "LINUX"
             )
 
         target_compile_options(${TARGET_BUILD_SETUP_TARGET}
@@ -173,15 +172,14 @@ function(TARGET_BUILD_SETUP)
     # MACOSX
     #---------------------------------------------------------------------------------------
     if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
-        target_compile_definitions(${TARGET_BUILD_SETUP_TARGET} 
+        target_compile_definitions(${TARGET_BUILD_SETUP_TARGET}
             PUBLIC
-                "MI_PLATFORM=\"${MI_PLATFORM_NAME}-clang900\""
                 "MI_PLATFORM_MACOSX"
                 "$<$<STREQUAL:${MI_PLATFORM_NAME},macosx-aarch64>:AARCH64>"
                 "MACOSX"
             )
 
-        target_compile_options(${TARGET_BUILD_SETUP_TARGET} 
+        target_compile_options(${TARGET_BUILD_SETUP_TARGET}
             PRIVATE
                 "-fPIC"
                 "-m64"
@@ -215,7 +213,7 @@ function(TARGET_BUILD_SETUP)
 
     # setup specific to shared libraries
     if (_TARGET_TYPE STREQUAL "SHARED_LIBRARY" OR _TARGET_TYPE STREQUAL "MODULE_LIBRARY")
-        target_compile_definitions(${TARGET_BUILD_SETUP_TARGET} 
+        target_compile_definitions(${TARGET_BUILD_SETUP_TARGET}
             PRIVATE
                 "MI_DLL_BUILD"            # export/import macro
                 "MI_ARCH_LITTLE_ENDIAN"   # used in the .rc files
@@ -292,25 +290,33 @@ function(SETUP_IDE)
         return()
     endif()
 
-    # compute the folder relative to the top level and use it as project folder hierarchy in the IDEs 
+    # compute the folder relative to the top level and use it as project folder hierarchy in the IDEs
     get_filename_component(FOLDER_PREFIX ${CMAKE_SOURCE_DIR} REALPATH)
     get_filename_component(FOLDER_PATH ${CMAKE_CURRENT_SOURCE_DIR} REALPATH)
+    # remove potential trailing slash, e.g., if CMAKE_SOURCE_DIR refers to a drive letter
+    string(REGEX REPLACE "/$" "" FOLDER_PREFIX ${FOLDER_PREFIX})
     string(LENGTH ${FOLDER_PREFIX} OFFSET)
     string(LENGTH ${FOLDER_PATH} TOTAL_LENGTH)
     math(EXPR OFFSET ${OFFSET}+1)
     math(EXPR REMAINING ${TOTAL_LENGTH}-${OFFSET})
     string(SUBSTRING ${FOLDER_PATH} ${OFFSET} ${REMAINING} FOLDER_PATH)
-    
-    get_filename_component(FOLDER_NAME ${FOLDER_PATH} NAME)         # last folder is used as project name
-    get_filename_component(FOLDER_PATH ${FOLDER_PATH} PATH)         # drop the last folder (equals the project name)
+
+    get_filename_component(FOLDER_NAME ${FOLDER_PATH} NAME)         # last folder is used as IDE project label
+    get_filename_component(FOLDER_PATH ${FOLDER_PATH} PATH)         # drop the last folder (equals the IDE project label)
 
     if (SETUP_IDE_VS_PROJECT_NAME AND NOT (SETUP_IDE_VS_PROJECT_NAME STREQUAL ""))
         set(FOLDER_NAME ${SETUP_IDE_VS_PROJECT_NAME})
     endif()
 
-    set_target_properties(${SETUP_IDE_TARGET} PROPERTIES 
-        VS_DEBUGGER_WORKING_DIRECTORY           ${CMAKE_CURRENT_BINARY_DIR}/$(Configuration)   # working directory
-        PROJECT_LABEL                           ${FOLDER_NAME}                          # project name
+    # Move projects with tests one level down such that the project and the tests end up in the
+    # same folder.
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt)
+        set(FOLDER_PATH ${FOLDER_PATH}/${FOLDER_NAME})
+    endif()
+
+    set_target_properties(${SETUP_IDE_TARGET} PROPERTIES
+        VS_DEBUGGER_WORKING_DIRECTORY           ${CMAKE_CURRENT_BINARY_DIR}/$(Configuration)
+        PROJECT_LABEL                           ${FOLDER_NAME}
         MAP_IMPORTED_CONFIG_DEBUG               Debug
         MAP_IMPORTED_CONFIG_RELEASE             Release
         MAP_IMPORTED_CONFIG_MINSIZEREL          Release
@@ -318,7 +324,7 @@ function(SETUP_IDE)
         )
 
     if(NOT ${FOLDER_PATH}) # if not, fall back to root level
-        set_target_properties(${SETUP_IDE_TARGET} PROPERTIES 
+        set_target_properties(${SETUP_IDE_TARGET} PROPERTIES
             FOLDER                              ${FOLDER_PATH}      # hierarchy
         )
     endif()
@@ -389,7 +395,17 @@ function(TARGET_COPY_TO_OUTPUT_DIR)
                 TARGET ${TARGET_COPY_TO_OUTPUT_DIR_TARGET} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_directory ${_SOURCE_FILE} $<TARGET_FILE_DIR:${TARGET_COPY_TO_OUTPUT_DIR_TARGET}>/${TARGET_COPY_TO_OUTPUT_DIR_DEST_SUBFOLDER}${_FOLDER_PATH}
             )
-        else()   
+        elseif (TARGET ${_SOURCE_FILE})
+            GET_TARGET_PROPERTY(__libname ${_SOURCE_FILE} LOCATION)
+
+            if(MDL_LOG_FILE_DEPENDENCIES)
+                    MESSAGE(STATUS "- libname to copy: ${__libname} (for target: ${_SOURCE_FILE}) ")
+            endif()
+            add_custom_command(
+                TARGET ${TARGET_COPY_TO_OUTPUT_DIR_TARGET} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different ${__libname} $<TARGET_FILE_DIR:${TARGET_COPY_TO_OUTPUT_DIR_TARGET}>/${TARGET_COPY_TO_OUTPUT_DIR_DEST_SUBFOLDER}${_ELEMENT}
+            )
+        else()
             if(MDL_LOG_FILE_DEPENDENCIES)
                 MESSAGE(STATUS "- file to copy:   ${_SOURCE_FILE}")
             endif()
@@ -407,7 +423,8 @@ endfunction()
 # Adds a dependency to a target, meant as shortcut for several more or less similar examples
 # Meant for internal use by the function below
 function(__TARGET_ADD_DEPENDENCY)
-    set(options NO_RUNTIME_COPY NO_LINKING)
+    # TODO Why is NO_RUNTIME not handled here?
+    set(options NO_RUNTIME_COPY NO_LINKING NO_INCLUDE)
     set(oneValueArgs TARGET DEPENDS)
     set(multiValueArgs COMPONENTS)
     cmake_parse_arguments(__TARGET_ADD_DEPENDENCY "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
@@ -417,14 +434,15 @@ function(__TARGET_ADD_DEPENDENCY)
     # - __TARGET_ADD_DEPENDENCY_COMPONENTS
     # - __TARGET_ADD_DEPENDENCY_NO_RUNTIME_COPY
     # - __TARGET_ADD_DEPENDENCY_NO_LINKING
+    # - __TARGET_ADD_DEPENDENCY_NO_INCLUDE
 
     # handle some special symbols
     if(__TARGET_ADD_DEPENDENCY_DEPENDS STREQUAL LINKER_START_GROUP OR
-       __TARGET_ADD_DEPENDENCY_DEPENDS STREQUAL LINKER_END_GROUP OR 
-       __TARGET_ADD_DEPENDENCY_DEPENDS STREQUAL LINKER_WHOLE_ARCHIVE OR 
-       __TARGET_ADD_DEPENDENCY_DEPENDS STREQUAL LINKER_NO_WHOLE_ARCHIVE OR 
-       __TARGET_ADD_DEPENDENCY_DEPENDS STREQUAL LINKER_AS_NEEDED OR 
-       __TARGET_ADD_DEPENDENCY_DEPENDS STREQUAL LINKER_NO_AS_NEEDED) 
+       __TARGET_ADD_DEPENDENCY_DEPENDS STREQUAL LINKER_END_GROUP OR
+       __TARGET_ADD_DEPENDENCY_DEPENDS STREQUAL LINKER_WHOLE_ARCHIVE OR
+       __TARGET_ADD_DEPENDENCY_DEPENDS STREQUAL LINKER_NO_WHOLE_ARCHIVE OR
+       __TARGET_ADD_DEPENDENCY_DEPENDS STREQUAL LINKER_AS_NEEDED OR
+       __TARGET_ADD_DEPENDENCY_DEPENDS STREQUAL LINKER_NO_AS_NEEDED)
         target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET}
             PRIVATE
                 ${__TARGET_ADD_DEPENDENCY_DEPENDS}
@@ -444,7 +462,21 @@ function(__TARGET_ADD_DEPENDENCY)
 
     # log dependency
     if(MDL_LOG_DEPENDENCIES)
-        message(STATUS "- depends on:     " ${__TARGET_ADD_DEPENDENCY_DEPENDS})
+        set(_FLAGS "")
+        if(__TARGET_ADD_DEPENDENCY_NO_RUNTIME_COPY)
+            list(APPEND _FLAGS "NO_RUNTIME_COPY")
+        endif()
+        if(__TARGET_ADD_DEPENDENCY_NO_LINKING)
+            list(APPEND _FLAGS "NO_LINKING")
+        endif()
+        if(__TARGET_ADD_DEPENDENCY_NO_INCLUDE)
+            list(APPEND _FLAGS "NO_INCLUDE")
+        endif()
+        string(JOIN ", " _FLAGS ${_FLAGS})
+        if(_FLAGS)
+            set(_FLAGS " (${_FLAGS})")
+        endif()
+        message(STATUS "- depends on:     " ${__TARGET_ADD_DEPENDENCY_DEPENDS}${_FLAGS})
     endif()
 
     # customized dependency scripts have highest priority
@@ -462,7 +494,7 @@ function(__TARGET_ADD_DEPENDENCY)
         include(${_FILE_TO_INCLUDE})
     # if not, we try to interpret the dependency as a target contained in the top level project
     else()
-        
+
         # if this is no internal dependency we use the default find mechanism
         if(NOT TARGET ${__TARGET_ADD_DEPENDENCY_DEPENDS})
             # checks if there is such a "sub project"
@@ -476,24 +508,27 @@ function(__TARGET_ADD_DEPENDENCY)
         # check the type
         get_target_property(_TARGET_TYPE ${__TARGET_ADD_DEPENDENCY_DEPENDS} TYPE)
         # libraries
-        if (_TARGET_TYPE STREQUAL "STATIC_LIBRARY" OR 
+        if (_TARGET_TYPE STREQUAL "STATIC_LIBRARY" OR
             _TARGET_TYPE STREQUAL "SHARED_LIBRARY" OR
             _TARGET_TYPE STREQUAL "INTERFACE_LIBRARY" OR
             _TARGET_TYPE STREQUAL "MODULE_LIBRARY")
 
             # add the dependency to the target
-            if(__TARGET_ADD_DEPENDENCY_NO_LINKING)
-                # if NO_LINKING was specified, we add the include directories only
-                target_include_directories(${__TARGET_ADD_DEPENDENCY_TARGET} 
-                    PRIVATE
-                        $<TARGET_PROPERTY:${__TARGET_ADD_DEPENDENCY_DEPENDS},INTERFACE_INCLUDE_DIRECTORIES>
-                    )
-            else()
-                # include directories and link dependencies
+            if(NOT __TARGET_ADD_DEPENDENCY_NO_LINKING)
+                # include directories and link dependencies (ignore NO_INCLUDE)
                 target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET}
                     PRIVATE
                         ${__TARGET_ADD_DEPENDENCY_DEPENDS}
                     )
+            elseif(NOT __TARGET_ADD_DEPENDENCY_NO_INCLUDE)
+                # if NO_LINKING was specified, but not NO_INCLUDE, we add the include directories only
+                target_include_directories(${__TARGET_ADD_DEPENDENCY_TARGET}
+                    PRIVATE
+                        $<TARGET_PROPERTY:${__TARGET_ADD_DEPENDENCY_DEPENDS},INTERFACE_INCLUDE_DIRECTORIES>
+                    )
+            else()
+                # add dependency manually
+                add_dependencies(${__TARGET_ADD_DEPENDENCY_TARGET} ${__TARGET_ADD_DEPENDENCY_DEPENDS})
             endif()
         # executables, custom targets, ...
         else()
@@ -512,14 +547,14 @@ endfunction()
 #           mdl::base-system
 #           mdl::base-hal-disk
 #       )
-# 
+#
 #
 # * target_add_dependency(TARGET foo
-#       DEPENDS 
+#       DEPENDS
 #           qt
-#       COMPONENTS 
-#           core 
-#           quick 
+#       COMPONENTS
+#           core
+#           quick
 #           gui
 #       )
 function(TARGET_ADD_DEPENDENCIES)
@@ -599,7 +634,7 @@ endfunction()
 # This also works for tools that are part of the build, see scripts in the 'cmake/tools' sub folder.
 #
 # target_add_tool_dependency(TARGET foo
-#     TOOL 
+#     TOOL
 #         python
 #     )
 # message(STATUS "python_PATH> ${python_PATH}")
@@ -617,7 +652,7 @@ function(TARGET_ADD_TOOL_DEPENDENCY)
     if(MDL_LOG_DEPENDENCIES)
         message(STATUS "- depends on:     " ${TARGET_ADD_TOOL_DEPENDENCY_TOOL})
     endif()
-    
+
     set(_FILE_TO_INCLUDE "${MDL_BASE_FOLDER}/cmake/tools/add_${TARGET_ADD_TOOL_DEPENDENCY_TOOL}.cmake")
 
     # check if there is a add_dependency file to include
@@ -669,7 +704,7 @@ function(CREATE_FROM_BASE_PRESET)
 
     # create the project
     if(CREATE_FROM_BASE_PRESET_VERSION)
-        project(${CREATE_FROM_BASE_PRESET_TARGET} VERSION ${CREATE_FROM_BASE_PRESET_VERSION}) 
+        project(${CREATE_FROM_BASE_PRESET_TARGET} VERSION ${CREATE_FROM_BASE_PRESET_VERSION})
     else()
         project(${CREATE_FROM_BASE_PRESET_TARGET})
     endif()
@@ -792,17 +827,17 @@ function(CREATE_FROM_BASE_PRESET)
     endif()
 
     # configure visual studio and maybe other IDEs
-    setup_ide(TARGET ${CREATE_FROM_BASE_PRESET_TARGET} 
+    setup_ide(TARGET ${CREATE_FROM_BASE_PRESET_TARGET}
         SOURCES ${CREATE_FROM_BASE_PRESET_SOURCES}
         VS_PROJECT_NAME ${CREATE_FROM_BASE_PRESET_VS_PROJECT_NAME})
 endfunction()
 
 # -------------------------------------------------------------------------------------------------
-# Creates an object library to compile cuda sources to ptx and adds a rule to copy the ptx to 
+# Creates an object library to compile cuda sources to ptx and adds a rule to copy the ptx to
 # the related projects binary directory.
 #
 # target_add_cuda_ptx_rule(TARGET foo
-#     DEPENDS 
+#     DEPENDS
 #       mdl::mdl_sdk
 #       mdl_sdk_examples::mdl_sdk_shared
 #     CUDA_SOURCES
@@ -831,7 +866,7 @@ function(TARGET_ADD_CUDA_PTX_RULE)
 
     # create PTX target
     add_library(${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX OBJECT ${TARGET_ADD_CUDA_PTX_RULE_CUDA_SOURCES})
-    set_target_properties(${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX PROPERTIES 
+    set_target_properties(${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX PROPERTIES
         CUDA_PTX_COMPILATION ON
         CUDA_ARCHITECTURES ${CUDA_ARCH_VERSION}
         )
@@ -852,8 +887,8 @@ function(TARGET_ADD_CUDA_PTX_RULE)
     endif()
 
     # add dependencies (no linking no post builds since this creates a ptx only)
-    target_add_dependencies(TARGET ${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX 
-        DEPENDS 
+    target_add_dependencies(TARGET ${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX
+        DEPENDS
             ${TARGET_ADD_CUDA_PTX_RULE_DEPENDS}
             cuda
         NO_LINKING
@@ -861,17 +896,17 @@ function(TARGET_ADD_CUDA_PTX_RULE)
         )
 
     # configure visual studio and maybe other IDEs
-    setup_ide(TARGET ${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX 
-        SOURCES 
+    setup_ide(TARGET ${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX
+        SOURCES
             ${TARGET_ADD_CUDA_PTX_RULE_CUDA_SOURCES}
         )
 
     # extend to project names
     get_target_property(_PROJECT_LABEL ${TARGET_ADD_CUDA_PTX_RULE_TARGET} PROJECT_LABEL)
-    set_target_properties(${TARGET_ADD_CUDA_PTX_RULE_TARGET} PROPERTIES 
+    set_target_properties(${TARGET_ADD_CUDA_PTX_RULE_TARGET} PROPERTIES
         PROJECT_LABEL   "${_PROJECT_LABEL} (main)"      # project name
         )
-    set_target_properties(${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX PROPERTIES 
+    set_target_properties(${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX PROPERTIES
         PROJECT_LABEL   "${_PROJECT_LABEL} (ptx)"       # project name
         )
 
@@ -897,7 +932,7 @@ function(TARGET_ADD_CUDA_PTX_RULE)
             set(_CMAKEFILES_FOLDER /CMakeFiles)
         endif()
 
-        list(APPEND MOVE_COMMANDS 
+        list(APPEND MOVE_COMMANDS
             COMMAND ${CMAKE_COMMAND} -E echo "Copy ${_SRC_NAME}.ptx to binary dir..."
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 ${CMAKE_CURRENT_BINARY_DIR}${_CMAKEFILES_FOLDER}/${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX.dir${_PTX_CONFIG_FOLDER}/${_SRC_NAME}.ptx   # resulting ptx file
@@ -909,15 +944,15 @@ function(TARGET_ADD_CUDA_PTX_RULE)
     # due to a bug visual studio 2017 does not detect changes in cu files, so for now we compile ptx files every time
     # https://devtalk.nvidia.com/default/topic/1029759/visual-studio-2017-not-detecting-changes-in-cuda-cu-files/
     if(CMAKE_GENERATOR STREQUAL "Visual Studio 15 2017 Win64")
-        list(APPEND MOVE_COMMANDS 
+        list(APPEND MOVE_COMMANDS
             COMMAND ${CMAKE_COMMAND} -E echo "Delete ${_SRC_NAME}.ptx to force next rebuild..."
             COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_CURRENT_BINARY_DIR}${_CMAKEFILES_FOLDER}/${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX.dir
         )
     endif()
 
     add_custom_command(
-        OUTPUT ${PTX_OUTPUT}   # note, not correct for multi config generators (like VS) 
-                               # this will cause copying with every build (when using these generators) 
+        OUTPUT ${PTX_OUTPUT}   # note, not correct for multi config generators (like VS)
+                               # this will cause copying with every build (when using these generators)
         DEPENDS $<TARGET_OBJECTS:${TARGET_ADD_CUDA_PTX_RULE_TARGET}_PTX>
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}${_CONFIG_FOLDER}
         ${MOVE_COMMANDS}
@@ -1001,7 +1036,7 @@ function(TARGET_ADD_CONTENT)
             $<$<CONFIG:RelWithDebInfo>:$<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/../Debug/${TARGET_ADD_CONTENT_DEP_NAME}.d>
             )
         list(APPEND _COMMAND_LIST COMMAND ${CMAKE_COMMAND} -E remove -f $<$<CONFIG:Debug>:$<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/../Release/${TARGET_ADD_CONTENT_DEP_NAME}.d>$<$<CONFIG:Release>:$<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/../Debug/${TARGET_ADD_CONTENT_DEP_NAME}.d>$<$<CONFIG:RelWithDebInfo>:$<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/../Debug/${TARGET_ADD_CONTENT_DEP_NAME}.d>)
-        
+
         list(APPEND _COMMAND_LIST COMMAND ${CMAKE_COMMAND} -E echo "removing: "
             $<$<CONFIG:Debug>:$<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/../RelWithDebInfo/${TARGET_ADD_CONTENT_DEP_NAME}.d>
             $<$<CONFIG:Release>:$<TARGET_FILE_DIR:${TARGET_ADD_CONTENT_TARGET}>/../RelWithDebInfo/${TARGET_ADD_CONTENT_DEP_NAME}.d>
@@ -1012,7 +1047,7 @@ function(TARGET_ADD_CONTENT)
 
     # copy on files changed
     add_custom_command(
-        OUTPUT 
+        OUTPUT
             ${_DEP}
         DEPENDS
             ${_COPY_DEPENDS}
@@ -1047,7 +1082,7 @@ function(TARGET_ADD_VS_DEBUGGER_ENV_PATH)
     get_property(_ENV_PATHS_DEBUG TARGET ${TARGET_ADD_VS_DEBUGGER_ENV_PATH_TARGET} PROPERTY VS_DEBUGGER_PATHS_DEBUG)
     get_property(_ENV_PATHS_RELEASE TARGET ${TARGET_ADD_VS_DEBUGGER_ENV_PATH_TARGET} PROPERTY VS_DEBUGGER_PATHS_RELEASE)
     get_property(_ENV_PATHS_RELWITHDEBINFO TARGET ${TARGET_ADD_VS_DEBUGGER_ENV_PATH_TARGET} PROPERTY VS_DEBUGGER_PATHS_RELWITHDEBINFO)
-    
+
     foreach(_PATH ${TARGET_ADD_VS_DEBUGGER_ENV_PATH_PATHS})
         if(MDL_LOG_DEPENDENCIES)
             message(STATUS "- add property:   Visual Studio Debugger Environment path: ${_PATH}")
@@ -1102,7 +1137,7 @@ function(TARGET_ADD_VS_DEBUGGER_ENV_VAR)
 
     # read current property value
     get_property(_ENV_VARS TARGET ${TARGET_ADD_VS_DEBUGGER_ENV_VAR_TARGET} PROPERTY VS_DEBUGGER_ENV_VARS)
-    
+
     foreach(_VAR ${TARGET_ADD_VS_DEBUGGER_ENV_VAR_VARS})
         string(REPLACE "%3B" ";" _VAR ${_VAR})
         if(MDL_LOG_DEPENDENCIES)
@@ -1154,7 +1189,7 @@ function(TARGET_CREATE_VS_USER_SETTINGS)
     endif()
 
     file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/${SETTINGS_FILE}
-        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"	
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
         "<Project ToolsVersion=\"4.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n"
         "   <PropertyGroup Condition=\"'$(Configuration)'=='Debug'\">\n"
         "       <LocalDebuggerCommand>${_COMMAND}</LocalDebuggerCommand>\n"
@@ -1265,6 +1300,7 @@ endfunction()
 # python binding examples
 
 function(CREATE_FROM_PYTHON_PRESET)
+    set(options CREATE_COVERAGE_REPORT)
     set(oneValueArgs TARGET MAIN)
     set(multiValueArgs SOURCES)
     cmake_parse_arguments(CREATE_FROM_PYTHON_PRESET "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
@@ -1272,7 +1308,8 @@ function(CREATE_FROM_PYTHON_PRESET)
     # - CREATE_FROM_PYTHON_PRESET_TARGET
     # - CREATE_FROM_PYTHON_PRESET_MAIN
     # - CREATE_FROM_PYTHON_PRESET_SOURCES
-    
+    # - CREATE_FROM_PYTHON_PRESET_CREATE_COVERAGE_REPORT
+
     # add dummy-source to create a dummy-lib
     set(DUMMY_CPP ${CMAKE_CURRENT_BINARY_DIR}/generated/empty.cpp)
     if(NOT EXISTS ${DUMMY_CPP})
@@ -1296,6 +1333,11 @@ function(CREATE_FROM_PYTHON_PRESET)
 
     # create working directories for each configuration
     # and also a shell script for running the script (usually in unix environments)
+    if(${CREATE_FROM_PYTHON_PRESET_CREATE_COVERAGE_REPORT} AND ${MDL_ENABLE_PYTHON_UNIT_TEST_COVERAGE})
+        set(CREATE_COVERAGE_REPORT TRUE)
+    else()
+        set(CREATE_COVERAGE_REPORT FALSE)
+    endif()
     get_property(_GENERATOR_IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
     if(_GENERATOR_IS_MULTI_CONFIG)
         foreach(_CONFIG ${CMAKE_CONFIGURATION_TYPES})
@@ -1309,6 +1351,7 @@ function(CREATE_FROM_PYTHON_PRESET)
                 ${CMAKE_CURRENT_BINARY_DIR}/${_CONFIG}/run_example.bat
                 @ONLY)
         endforeach()
+        set(_CONFIG "$(Configuration)")
     else()
         set(_CONFIG ${CMAKE_BUILD_TYPE})
         file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${_CONFIG})
@@ -1438,17 +1481,6 @@ endfunction()
 # add tests if available
 if(MDL_ENABLE_TESTS)
     add_subdirectory(${MDL_BASE_FOLDER}/cmake/tests)
-
-    # convenience target to run tests with output
-    add_custom_target(check ${CMAKE_COMMAND} -E env CTEST_OUTPUT_ON_FAILURE=1 ${CMAKE_CTEST_COMMAND} 
-        --build-config $<CONFIG>                            # test current configuration only
-        --output-log ${CMAKE_BINARY_DIR}/Testing/log.txt    # test log in one file, individual logs are platform dependent
-        --parallel 1                                        # run tests in serial 
-        )
-    set_target_properties(check PROPERTIES
-        PROJECT_LABEL   "check"
-        FOLDER          "tests"
-        )
 endif()
 
 # add tests to individual targets when defined in a corresponding sub-directory
@@ -1461,6 +1493,208 @@ function(ADD_TESTS)
     if(MDL_ENABLE_TESTS AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt)
         # postpone the test until all regular targets are created
         if(ADD_TESTS_POST)
+            if(MDL_TEST_LIST_POST STREQUAL "") # first element
+                set(MDL_TEST_LIST_POST "${CMAKE_CURRENT_SOURCE_DIR}/tests" CACHE INTERNAL "list of test directories to add after regular targets are defined")
+            else()
+                set(MDL_TEST_LIST_POST "${MDL_TEST_LIST_POST};${CMAKE_CURRENT_SOURCE_DIR}/tests" CACHE INTERNAL "list of test directories to add after regular targets are defined")
+            endif()
+        else()
+            add_subdirectory(tests)
+        endif()
+    endif()
+endfunction()
+
+# -------------------------------------------------------------------------------------------------
+# unit tests
+
+function(CREATE_UNIT_TEST)
+    set(options USES_IDIFF)
+    set(oneValueArgs NAME)
+    set(multiValueArgs HEADERS SOURCES DEPENDS LINK_LIBRARIES COMPILE_DEFINITIONS RUNTIME_DEPENDS LIBRARY_PATHS VS_PROJECT_NAME)
+    cmake_parse_arguments(CREATE_UNIT_TEST "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    if(NOT MDL_ENABLE_UNIT_TESTS)
+        return()
+    endif()
+
+    # Defaults
+    if(NOT CREATE_UNIT_TEST_NAME)
+        set(CREATE_UNIT_TEST_NAME test)
+    endif()
+    if(NOT CREATE_UNIT_TEST_SOURCES)
+        set(CREATE_UNIT_TEST_SOURCES test.cpp)
+    endif()
+    if(NOT CREATE_UNIT_TEST_VS_PROJECT_NAME)
+        set(CREATE_UNIT_TEST_VS_PROJECT_NAME ${CREATE_UNIT_TEST_NAME})
+    endif()
+
+    set(CREATE_UNIT_TEST_TARGET ${PROJECT_NAME}-${CREATE_UNIT_TEST_NAME})
+
+    create_from_base_preset(
+        TARGET ${CREATE_UNIT_TEST_TARGET}
+        TYPE EXECUTABLE
+        OUTPUT_NAME ${CREATE_UNIT_TEST_NAME}
+        SOURCES ${CREATE_UNIT_TEST_SOURCES}
+        VS_PROJECT_NAME ${CREATE_UNIT_TEST_VS_PROJECT_NAME}
+    )
+
+    # Add build dependencies.
+    if(CREATE_UNIT_TEST_DEPENDS)
+        target_add_dependencies(
+            TARGET ${CREATE_UNIT_TEST_TARGET}
+            DEPENDS ${CREATE_UNIT_TEST_DEPENDS}
+        )
+    endif()
+
+    # Support link libraries like Boost::filesystem that have not yet an equivalence in
+    # target_add_dependencies().
+    if(CREATE_UNIT_TEST_LINK_LIBRARIES)
+        target_link_libraries(
+            ${CREATE_UNIT_TEST_TARGET} PRIVATE ${CREATE_UNIT_TEST_LINK_LIBRARIES})
+    endif()
+
+    # Add compile definitions.
+    if(CREATE_UNIT_TEST_COMPILE_DEFINITIONS)
+        target_compile_definitions(
+            ${CREATE_UNIT_TEST_TARGET}
+            PRIVATE ${CREATE_UNIT_TEST_COMPILE_DEFINITIONS}
+        )
+    endif()
+
+    # On Windows, always add /bigobj (could be turned into an option for selected tests).
+    if(WINDOWS)
+        target_compile_options(
+            ${CREATE_UNIT_TEST_TARGET}
+            PRIVATE "/bigobj"
+        )
+    endif()
+
+    # Add runtime dependencies as build dependencies if requested.
+    if(MDL_TREAT_RUNTIME_DEPS_AS_BUILD_DEPS AND CREATE_UNIT_TEST_RUNTIME_DEPENDS)
+        target_add_dependencies(
+            TARGET ${CREATE_UNIT_TEST_TARGET}
+            DEPENDS ${CREATE_UNIT_TEST_RUNTIME_DEPENDS}
+            NO_RUNTIME_COPY
+            NO_LINKING
+            NO_INCLUDE
+        )
+    endif()
+
+    # Add the CTest test for this target.
+    add_test(
+        NAME ${CREATE_UNIT_TEST_TARGET}
+        COMMAND ${CREATE_UNIT_TEST_NAME}
+    )
+
+    # Common label for all unit tests.
+    set_property(
+        TEST ${CREATE_UNIT_TEST_TARGET}
+        PROPERTY LABELS "unit_test"
+    )
+
+    # Obtain environment variable to modify for LIBRARY_PATHS option.
+    if(LINUX)
+        set(_PREFIX "LD_LIBRARY_PATH")
+    elseif(MACOSX)
+        set(_PREFIX "DYLD_LIBRARY_PATH")
+    elseif(WINDOWS)
+        set(_PREFIX "PATH")
+    endif()
+
+    # Obtain last directory component to add to LIBRARY_PATHS values.
+    get_property(_GENERATOR_IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+    if(_GENERATOR_IS_MULTI_CONFIG)
+        set(_SUFFIX "$<$<CONFIG:Debug>:Debug>$<$<CONFIG:Release>:Release>$<$<CONFIG:RelWithDebInfo>:RelWithDebInfo>")
+    else()
+        set(_SUFFIX ${CMAKE_BUILD_TYPE})
+    endif()
+
+    # Construct sequence of environment modifications for each LIBRARY_PATHS value. Repeat for
+    # each argument due to ambiguity of semicolon on Windows (separator of values inside PATH
+    # or between different environment variables.)
+    set(_PATHS "")
+    set(_SH_PATHS "")
+    set(_VS_PATHS "")
+    foreach(_PATH ${CREATE_UNIT_TEST_LIBRARY_PATHS})
+        set(_VALUE ${_PREFIX}=path_list_prepend:${_PATH}/${_SUFFIX})
+        set(_SH_VALUE "export ${_PREFIX}=${_PATH}/${_SUFFIX}:$${_PREFIX}")
+        set(_VS_VALUE "${_PATH}/$(Configuration)")
+        list(APPEND _PATHS ${_VALUE})
+        list(APPEND _SH_PATHS ${_SH_VALUE})
+        list(APPEND _VS_PATHS ${_VS_VALUE})
+        if(MDL_LOG_DEPENDENCIES)
+            message(STATUS "- ctest env:      " ${_VALUE})
+        endif()
+    endforeach()
+
+    # Set PATH for idiff from OpenImageIO.
+    if(CREATE_UNIT_TEST_USES_IDIFF)
+        if(NOT MDL_DEPENDENCY_OPENIMAGEIO_IDIFF)
+            message(WARNING "The idiff tool from OpenImageIO is required for this test, but was not found.")
+        else()
+            get_filename_component(_IDIFF_PATH ${MDL_DEPENDENCY_OPENIMAGEIO_IDIFF} DIRECTORY)
+            set(_VALUE PATH=path_list_prepend:${_IDIFF_PATH})
+            set(_SH_VALUE "export PATH=${_IDIFF_PATH}:$PATH")
+            set(_VS_VALUE "${_IDIFF_PATH}")
+            list(APPEND _PATHS ${_VALUE})
+            list(APPEND _SH_PATHS ${_SH_VALUE})
+            list(APPEND _VS_PATHS ${_VS_VALUE})
+            if(MDL_LOG_DEPENDENCIES)
+                message(STATUS "- ctest env:      " ${_VALUE})
+            endif()
+        endif()
+    endif()
+
+    # Flatten paths list (not necessary for _VS_PATHS).
+    string(JOIN ";" _PATHS ${_PATHS})
+    string(JOIN "\n" _SH_PATHS ${_SH_PATHS})
+
+    set(_MI_VARS "MI_SRC=set:${MDL_SRC_FOLDER};MI_DATA=unset:;MI_LARGE_DATA=unset:")
+
+    # Set environment variables for LIBRARY_PATHS option and MI variables.
+    set_property(
+        TEST ${CREATE_UNIT_TEST_TARGET}
+        PROPERTY ENVIRONMENT_MODIFICATION "${_MI_VARS};${_PATHS}"
+    )
+
+    # On Unix, add a script to run the test manually.
+    # Primarily for running in a debugger, otherwise launching via ctest is preferred.
+    if(NOT WINDOWS)
+        configure_file(
+            "${MDL_BASE_FOLDER}/cmake/run_test.sh.in"
+            "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}/run_${CREATE_UNIT_TEST_NAME}.sh"
+            @ONLY
+            FILE_PERMISSIONS
+                OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                GROUP_READ GROUP_EXECUTE
+                WORLD_READ WORLD_EXECUTE
+        )
+    endif()
+
+    # Set up environment for VS debugger.
+    target_add_vs_debugger_env_path(
+        TARGET ${CREATE_UNIT_TEST_TARGET}
+        PATHS ${_VS_PATHS}
+    )
+    target_add_vs_debugger_env_var(
+        TARGET ${CREATE_UNIT_TEST_TARGET}
+        VARS
+            "MI_SRC=${MDL_SRC_FOLDER}"
+            "MI_DATA="
+            "MI_LARGE_DATA="
+    )
+    target_create_vs_user_settings(TARGET ${CREATE_UNIT_TEST_TARGET})
+endfunction()
+
+function(ADD_UNIT_TESTS)
+    set(options POST)
+    set(oneValueArgs)
+    set(multiValueArgs)
+    cmake_parse_arguments(ADD_UNIT_TESTS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
+
+    if(MDL_ENABLE_UNIT_TESTS AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt)
+        # postpone the test until all regular targets are created
+        if(ADD_UNIT_TESTS_POST)
             if(MDL_TEST_LIST_POST STREQUAL "") # first element
                 set(MDL_TEST_LIST_POST "${CMAKE_CURRENT_SOURCE_DIR}/tests" CACHE INTERNAL "list of test directories to add after regular targets are defined")
             else()

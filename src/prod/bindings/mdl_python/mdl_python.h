@@ -62,18 +62,17 @@ public:
     }
 
     template<typename T>
-    T* get_iinterface_weak()
+    T* get_iinterface()
     {
-        mi::base::IInterface* b = get_iinterface();
+        mi::base::IInterface* b = get_pointee();
         if (!b)
             return nullptr;
 
         T* i = b->get_interface<T>();
-        b->release();
-
         if (!i)
             return nullptr;
 
+        i->retain();
         size_t ref_count = i->release();
         assert(ref_count > 0 && "get_iinterface_weak++: RefCounter is invalid");
         (void) ref_count;
@@ -113,8 +112,7 @@ protected:
         return s_print_ref_counts;
     }
 
-protected:
-    virtual mi::base::IInterface* get_iinterface() = 0;
+    virtual mi::base::IInterface* get_pointee() = 0;
 
 private:
     struct Open_handle
@@ -138,11 +136,13 @@ private:
 template<class T> class SmartPtr : public SmartPtrBase
 {
 public:
-    SmartPtr(T* pointee = nullptr)
+    SmartPtr(T* pointee = nullptr, const char* type_name = "")
         : m_pointee(pointee)
         , m_dropped(!m_pointee)
     {
+        _assign_open_handle_typename(m_pointee, type_name);
         std::unique_lock<std::recursive_mutex> lock(m_ref_mutex);
+        m_typename = type_name;
         _increment_counter(m_pointee); // incremented from the outside (get, new)
         keep_refcount("SmartPtr Constructor");
     }
@@ -151,6 +151,7 @@ public:
         : m_pointee(toCopy.m_pointee)
         , m_dropped(!m_pointee)
     {
+        _assign_open_handle_typename(m_pointee, toCopy.m_typename.c_str());
         increase_refcount("SmartPtr Copy Constructor");
     }
 
@@ -192,12 +193,6 @@ public:
         return *m_pointee;
     }
 
-    void assign_open_handle_typename(const char* name)
-    {
-        m_typename = name;
-        _assign_open_handle_typename((void*)m_pointee, name);
-    }
-
     const char* get_debug_str() const
     {
         std::unique_lock<std::recursive_mutex> lock(m_ref_mutex);
@@ -235,12 +230,9 @@ public:
     }
 
 protected:
-    mi::base::IInterface* get_iinterface() final
+    mi::base::IInterface* get_pointee() final
     {
-        if (!m_pointee)
-            return nullptr;
-
-        return m_pointee->template get_interface<mi::base::IInterface>();
+        return m_pointee;
     }
 
 private:
@@ -269,7 +261,7 @@ private:
             _decrement_counter((void*)m_pointee);
             size_t refCounter = m_pointee->release();
             if (_print_ref_counts())
-                printf("RefCount-- of %p: %d    (%s)\n", m_pointee, (int)refCounter, action);
+                printf("RefCount-- of %p %s: %d    (%s)\n", m_pointee, m_typename.c_str(), (int)refCounter, action);
             if (refCounter == 0)
                 m_pointee = nullptr;
         }
@@ -285,7 +277,7 @@ private:
         if (m_pointee)
         {
             if (_print_ref_counts())
-                printf("RefCount   of %p: %d    (%s)\n", m_pointee, (int)get_ref_count(), action);
+                printf("RefCount   of %p %s: %d    (%s)\n", m_pointee, m_typename.c_str(), (int)get_ref_count(), action);
         }
         else
         {

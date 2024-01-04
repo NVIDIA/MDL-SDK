@@ -559,6 +559,12 @@ bool GLSLang_context::has_uint_type() const
     return es_GE(300) || non_es_GE(130);
 }
 
+// Returns true if the GLSLang version has pointer types.
+bool GLSLang_context::has_pointer_types() const
+{
+    return has_extension(GL_NV_shader_buffer_load);
+}
+
 // returns true if non-quadratic matrices exists in this GLSLang version.
 bool GLSLang_context::has_non_quadratic_matrices() const
 {

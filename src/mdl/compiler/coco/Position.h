@@ -36,9 +36,12 @@ public:
 	int beg;      // start relative to the beginning of the file
 	int end;      // end of stretch
 	int col;      // column number of start position
-	int line;     // line number of beginnnig of source code stretch
+	int line;     // line number of beginning of source code stretch
 
-	Position(int beg, int end, int col, int line);
+	Position(int beg, int end, int col, int line)
+	: beg(beg), end(end), col(col), line(line)
+	{
+	}
 };
 
 }; // namespace

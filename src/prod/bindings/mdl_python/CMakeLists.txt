@@ -41,6 +41,7 @@ set(_GENERATOR_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/instantiate_templates_inline.py
     ${CMAKE_CURRENT_SOURCE_DIR}/post_swig.py
     ${CMAKE_CURRENT_SOURCE_DIR}/mdl_python_swig.i
+    ${CMAKE_CURRENT_SOURCE_DIR}/swig_library/mi_neuraylib_enums.i
     )
 
 # -------------------------------------------------------------------------------------------------
@@ -163,13 +164,15 @@ add_custom_command(
         ${_GENERATED_DIR}/mdl_python_swig.cpp
     COMMAND ${CMAKE_COMMAND} -E echo "SWIG binding code generation ..."
     COMMAND ${swig_PATH}
-        -c++ -python -doxygen
+        -c++ -python -py3 -doxygen
+        # -fastproxy -keyword -w511
         -w564
         -DSWIGWORDSIZE64
         ${_SWIG_MDL_SOURCE_RELEASE_OPTIONS}
         -I-
         -I${CMAKE_CURRENT_SOURCE_DIR}
         -I${_GENERATED_DIR}/processed_headers
+        -I${CMAKE_CURRENT_SOURCE_DIR}/swig_library
         -I${MDL_INCLUDE_FOLDER}
         -MMD -MP -MF ${_GENERATED_DIR}/mdl_python_swig.cpp.tmp.d
         -cppext cpp
@@ -183,6 +186,7 @@ add_custom_command(
     DEPENDS
         ${_GENERATED_DIR}${CONFIG_DIR}/processed_headers.d
         ${CMAKE_CURRENT_SOURCE_DIR}/mdl_python_swig.i
+        ${CMAKE_CURRENT_SOURCE_DIR}/swig_library/mi_neuraylib_enums.i
         ${CMAKE_CURRENT_SOURCE_DIR}/post_swig.py
         ${PROJECT_SOURCES}
     VERBATIM
@@ -196,6 +200,7 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E touch ${_GENERATED_DIR}/swig.d
     DEPENDS
         ${CMAKE_CURRENT_SOURCE_DIR}/mdl_python_swig.i
+        ${CMAKE_CURRENT_SOURCE_DIR}/swig_library/mi_neuraylib_enums.i
         ${_GENERATED_DIR}/mdl_python_swig.cpp
         ${_GENERATED_DIR}${CONFIG_DIR}/processed_headers.d
     VERBATIM

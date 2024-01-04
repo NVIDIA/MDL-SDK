@@ -46,3 +46,9 @@ create_from_base_preset(
     SOURCES ${PROJECT_SOURCES}
     )
 
+# additional definitions
+target_compile_definitions(${PROJECT_NAME}
+    PRIVATE
+        "MI_PLATFORM=\"${MI_PLATFORM_NAME}\""
+    )
+

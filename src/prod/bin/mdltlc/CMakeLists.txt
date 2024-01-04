@@ -27,7 +27,8 @@
 #*****************************************************************************
 
 # name of the target and the resulting library
-set(PROJECT_NAME prod-bin-mdltlc)
+set(PROJECT_LIB_NAME prod-bin-mdltlclib)
+set(PROJECT_BIN_NAME prod-bin-mdltlc)
 
 # generated Files
 set(_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
@@ -50,8 +51,7 @@ set(_GENERATOR_FILES
     )
 
 # collect sources
-set(PROJECT_HEADERS
-    "getopt.h"
+set(PROJECT_LIB_HEADERS
     "mdltlc_analysis.h"
     "mdltlc_codegen.h"
     "mdltlc_compilation_unit.h"
@@ -68,11 +68,10 @@ set(PROJECT_HEADERS
     "mdltlc_symbols.h"
     "mdltlc_types.h"
     "mdltlc_values.h"
+    "mdltlc_union_find_map.h"
     )
 
-set(PROJECT_SOURCES
-    "getopt.cpp"
-    "main.cpp"
+set(PROJECT_LIB_SOURCES
     "mdltlc_analysis.cpp"
     "mdltlc_codegen.cpp"
     "mdltlc_compilation_unit.cpp"
@@ -80,6 +79,7 @@ set(PROJECT_SOURCES
     "mdltlc_compiler_options.cpp"
     "mdltlc.cpp"
     "mdltlc_env.cpp"
+    "mdltlc_tc.cpp"
     "mdltlc_exprs.cpp"
     "mdltlc_expr_walker.cpp"
     "mdltlc_message.cpp"
@@ -90,7 +90,17 @@ set(PROJECT_SOURCES
     "mdltlc_values.cpp"
     ${_GENERATED_SOURCES}
     ${_GENERATOR_FILES}
-    ${PROJECT_HEADERS}
+    ${PROJECT_LIB_HEADERS}
+    )
+
+set(PROJECT_BIN_HEADERS
+    "getopt.h"
+    )
+
+set(PROJECT_BIN_SOURCES
+    "getopt.cpp"
+    "main.cpp"
+    ${PROJECT_BIN_HEADERS}
     )
 
 # mark files as generated to disable the check for existence during configure
@@ -100,17 +110,17 @@ set_source_files_properties(${_GENERATED_SOURCES} PROPERTIES GENERATED TRUE)
 set_source_files_properties(${_GENERATOR_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)
 source_group("generator" FILES ${_GENERATOR_FILES})
 
-# create target from template
+# create mdltlc library target from template
 create_from_base_preset(
-    TARGET ${PROJECT_NAME}
-    TYPE EXECUTABLE
-    OUTPUT_NAME "mdltlc"
-    SOURCES ${PROJECT_SOURCES}
+    TARGET ${PROJECT_LIB_NAME}
+    TYPE STATIC
+    OUTPUT_NAME "libmdltlc"
+    SOURCES ${PROJECT_LIB_SOURCES}
     ADDITIONAL_INCLUDE_DIRS ${_GENERATED_DIR}
 )
 
 # add mdl and other dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME}
+target_add_dependencies(TARGET ${PROJECT_LIB_NAME}
     DEPENDS
         ${LINKER_START_GROUP}
         mdl::mdl-compiler-compilercore
@@ -125,12 +135,36 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         ${LINKER_END_GROUP}
     )
 
+# create mdltlc binary target from template
+create_from_base_preset(
+    TARGET ${PROJECT_BIN_NAME}
+    TYPE EXECUTABLE
+    OUTPUT_NAME "mdltlc"
+    SOURCES ${PROJECT_BIN_SOURCES}
+)
+
+# add  dependencies to mdltlc binary
+target_add_dependencies(TARGET ${PROJECT_BIN_NAME}
+    DEPENDS
+        mdl::base-system-version
+        mdl::prod-bin-mdltlclib
+    )
+
+# extend to project names
+get_target_property(_PROJECT_LABEL ${PROJECT_BIN_NAME} PROJECT_LABEL)
+set_target_properties(${PROJECT_BIN_NAME} PROPERTIES
+    PROJECT_LABEL   "${_PROJECT_LABEL} (main)"      # project name
+    )
+set_target_properties(${PROJECT_LIB_NAME} PROPERTIES
+    PROJECT_LABEL   "${_PROJECT_LABEL} (lib)"       # project name
+    )
+
 # -------------------------------------------------------------------------------------------------
 # Code Generation Step
 # -------------------------------------------------------------------------------------------------
 
 # get and run coco
-target_add_tool_dependency(TARGET ${PROJECT_NAME} TOOL coco)
+target_add_tool_dependency(TARGET ${PROJECT_LIB_NAME} TOOL coco)
 add_custom_command(
     OUTPUT
         ${_GENERATED_DIR}/Parser.h
@@ -153,7 +187,7 @@ set(_STANDARD_MDL
     ${MDL_SRC_FOLDER}/shaders/mdl/nvidia/distilling_support.mdl
     )
 
-target_add_tool_dependency(TARGET ${PROJECT_NAME} TOOL python)
+target_add_tool_dependency(TARGET ${PROJECT_LIB_NAME} TOOL python)
 add_custom_command(
     OUTPUT
         ${_GENERATED_DIR}/mdltl_enum_names.i
@@ -173,5 +207,9 @@ add_custom_command(
 # Create installation rules to copy the build directory
 # -------------------------------------------------------------------------------------------------
 add_target_install(
-    TARGET ${PROJECT_NAME}
+    TARGET ${PROJECT_BIN_NAME}
     )
+
+
+# add unit tests
+add_unit_tests(POST)

@@ -599,7 +599,7 @@ ATTR::Type Attribute_set_impl_helper::get_attribute_type(
         if( array_length == 0)
             return element_type;
         // create ATTR::Type for the static array in array_type
-        ATTR::Type array_type( ATTR::TYPE_ARRAY, nullptr, 0);               // name does not matter here
+        ATTR::Type array_type( ATTR::TYPE_ARRAY, nullptr, 0); // name does not matter here
         array_type.set_child( element_type);
         return array_type;
 
@@ -676,7 +676,8 @@ const mi::IStructure_decl* Attribute_set_impl_helper::create_structure_decl( con
     ASSERT( M_NEURAY_API, type.get_typecode() == ATTR::TYPE_STRUCT);
 
     mi::base::Handle<mi::IStructure_decl> decl(
-        s_class_factory->create_type_instance<mi::IStructure_decl>( nullptr, "Structure_decl", 0, nullptr));
+        s_class_factory->create_type_instance<mi::IStructure_decl>(
+            nullptr, "Structure_decl", 0, nullptr));
 
     const ATTR::Type* member_type = type.get_child();
     while( member_type) {

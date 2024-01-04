@@ -386,8 +386,6 @@ public:
 
     /// Returns the abstract size of the array in case of deferred-sized arrays, and \c NULL
     /// otherwise.
-    ///
-    /// Note that the empty string is a valid return value for deferred-sized arrays.
     virtual const char* get_deferred_size() const = 0;
 };
 
@@ -531,7 +529,7 @@ public:
 /// The type of kind bsdf.
 class IType_hair_bsdf : public
     mi::base::Interface_declare<0x8eac6c90,0x2b8f,0x4650,0x8b,0x93,0x88,0xe0,0x42,0xff,0x19,0x9c,
-    neuraylib::IType_df>
+                                neuraylib::IType_df>
 {
 public:
     /// The kind of this subclass.
@@ -687,6 +685,13 @@ public:
         const IType* element_type, Size size) const = 0;
 
     /// Creates a new instance of a deferred-sized array type.
+    ///
+    /// \param element_type   The type of the array elements.
+    /// \param size           The size symbol, e.g., \c "N". The actual value of the size symbol
+    ///                       does \em not matter in most cases, e.g., for arguments. It \em does
+    ///                       matter when constructing new functions and materials using the module
+    ///                       builder (see #mi::neuraylib::IMdl_module_builder).
+    /// \return               The corresponding array type, or \c NULL in case of errors.
     virtual const IType_array* create_deferred_sized_array(
         const IType* element_type, const char* size) const = 0;
 
@@ -723,6 +728,33 @@ public:
     /// Returns a registered struct type, or \c NULL if \p id is unknown.
     virtual const IType_struct* get_predefined_struct( IType_struct::Predefined_id id) const = 0;
 
+    /// Creates a type based on its MDL type name.
+    ///
+    /// Contrary to MDL source code, whitespace is meaningful. In other words, only the strings
+    /// produced by #get_mdl_type_name() are supported here. For enums and structs, the
+    /// corresponding module must have been loaded, such that these types are registered.
+    ///
+    /// \note Named aliases are not yet supported.
+    virtual const IType* create_from_mdl_type_name( const char* name) const = 0;
+
+    /// Creates a type based on its MDL type name.
+    ///
+    /// Contrary to MDL source code, whitespace is meaningful. In other words, only the strings
+    /// produced by #get_mdl_type_name() are supported here. For enums and structs, the
+    /// corresponding module must have been loaded, such that these types are registered.
+    ///
+    /// \note Named aliases are not yet supported.
+    template <class T>
+    const T* create_from_mdl_type_name( const char* name) const
+    {
+        const IType* ptr_type = create_from_mdl_type_name( name);
+        if( !ptr_type)
+            return 0;
+        const T* ptr_T = static_cast<const T*>( ptr_type->get_interface( typename T::IID()));
+        ptr_type->release();
+        return ptr_T;
+    }
+
     //@}
     /// \name Cloning of type lists
     //@{
@@ -751,7 +783,8 @@ public:
     ///     If the element types are different, they determine the result of the comparison. If the
     ///     element types are identical the number of compound elements determines the result.
     ///   - #mi::neuraylib::IType_alias: If the modifiers are different, they determine the result
-    ///     of the comparison. If the modifiers are identical, the aliased types determine the
+    ///     of the comparison. If the modifiers are identical, then different symbols determine the
+    ///     result. If the modifiers and symbols are identical, the aliased types determine the
     ///     result.
     ///   - #mi::neuraylib::IType_texture: The result is determined by a comparison of the
     ///     corresponding shapes.
@@ -790,7 +823,7 @@ public:
     ///   order, or whether multiple enumeration value names share the same numerical value
     ///   do not matter.
     /// - \p src and \p dst are of type #mi::neuraylib::IType_array, both arrays are either
-    ///   immediated-sized or deferred-sized arrays, have the same size, and their element types
+    ///   immediate-sized or deferred-sized arrays, have the same size, and their element types
     ///   are compatible.
     ///
     /// \param src The source type.
@@ -829,6 +862,36 @@ public:
     virtual const IString* dump( const IType_list* list, Size depth = 0) const = 0;
 
     //@}
+    /// \name Miscellaneous methods
+    //@{
+
+    /// Returns the MDL module name of the module which defines \p type.
+    ///
+    /// The module name is derived from the symbol of enum, struct, and alias types. For array
+    /// types, the corresponding element type is considered. Frequency modifiers of alias types are
+    /// ignored. Returns the name of the \c ::&lt;builtins&gt; module for all other types.
+    ///
+    /// Use #mi::neuraylib::IMdl_factory::get_db_module_name() to compute the corresponding DB name.
+    virtual const IString* get_mdl_module_name( const IType* type) const = 0;
+
+    /// Returns the MDL type name of a type.
+    ///
+    /// The MDL type name is:
+    /// - for array types: the MDL type name of the element type followed by square brackets around
+    ///   the array size (for fixed-sized arrays) or the array size symbol (for deferred-sized
+    ///   arrays). Note that no additional angle brackets are used for deferred-sized arrays.
+    /// - for enum and struct types: the corresponding symbol. This string is fully-qualified,
+    ///   except for enum and structs types from the \c ::&lt;builtins&gt; module, e.g.,
+    ///   \c "material" or \c "intensity_mode".
+    /// - for alias types: the MDL type name of the aliased type prefixed by \c "uniform " or
+    ///   \c "varying ". Note that named aliases are not yet supported.
+    /// - for all other types: the corresponding reserved word from section 5.7 in [\ref MDLLS].
+    ///
+    /// \see #create_from_mdl_type_name()
+    virtual const IString* get_mdl_type_name( const IType* type) const = 0;
+
+    //@}
+
 };
 
 /**@}*/ // end group mi_neuray_mdl_types

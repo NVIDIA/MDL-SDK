@@ -33,12 +33,12 @@
 
 #include "i_hal_ospath.h"
 
-#include <base/lib/log/i_log_assert.h>
+#include <base/system/main/i_assert.h>
 #include <base/util/string_utils/i_string_utils.h>
-using namespace std::string_literals;
 
-#include <sstream>
 #include <algorithm>
+#include <sstream>
+#include <vector>
 
 #ifndef WIN_NT
 #include <unistd.h>
@@ -48,6 +48,7 @@ using namespace std::string_literals;
 #include <shlobj.h>
 #endif
 
+using namespace std::string_literals;
 
 namespace MI {
 namespace HAL {
@@ -230,7 +231,7 @@ std::string Ospath::normpath_only(
 std::string Ospath::normpath_v2(const std::string& path)
 {
     const std::string& separator = sep();
-    ASSERT(M_HAL, separator.size() == 1);
+    MI_ASSERT(separator.size() == 1);
 
     std::vector<std::string> path_components;
     MI::STRING::split(path, separator, path_components);

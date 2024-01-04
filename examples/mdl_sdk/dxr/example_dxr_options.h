@@ -178,8 +178,9 @@ namespace mi { namespace examples { namespace dxr
            "                          (default: " << defaults.meters_per_scene_unit << ")\n"
 
         << "--lpe <value>             LPE expression used on startup. Currently only 'beauty',\n"
-           "                          'albedo', and 'normal' are valid options.\n"
-           "                          (default: " << defaults.lpe<< ")\n"
+           "                          'albedo_diffuse', 'albedo_glossy', and 'normal' are valid options.\n"
+           "                          Also combinations seperated by ',' are valid with '--nogui'.\n"
+           "                          (default: " << defaults.lpe[0]<< ")\n"
 
         << "--no_console_window       There will be no console window in addition to the main\n"
            "                          window. stdout and stderr streams are also not redirected.\n"
@@ -197,6 +198,8 @@ namespace mi { namespace examples { namespace dxr
 
         << "--use_slang               Use the Slang shader compiler instead of DXC.\n"
 
+        << "--distill <target>        Distill the material before running the code generation.\n"
+
         #if MDL_ENABLE_MATERIALX
         << "--mtlx_path <path>        Specify an additional absolute search path location\n"
            "                          (e.g. '/projects/MaterialX'). This path will be queried when\n"
@@ -207,6 +210,10 @@ namespace mi { namespace examples { namespace dxr
            "                          library folder (e.g. 'libraries/custom'). MaterialX files\n"
            "                          at the root of this folder will be included in all content\n"
            "                          documents. Can occur multiple times.\n"
+
+        << "--mtlx_to_mdl <version>   Specify the MDL version to generate (WIP for MaterialX 1.38.9).\n"
+            "                         Supported values are \"1.6\", \"1.7\", \"1.8\", ... and \"latest\".\n"
+            "                         (default: \"latest\")\n"
 
         #endif
         ;
@@ -312,14 +319,27 @@ namespace mi { namespace examples { namespace dxr
                 }
                 else if (wcscmp(opt, L"--lpe") == 0 && i < argc - 1)
                 {
-                    options.lpe = mi::examples::strings::wstr_to_str(argv[++i]);
-                    if(options.lpe != "beauty" &&
-                        options.lpe != "albedo" &&
-                        options.lpe != "normal")
+                    std::string argument = mi::examples::strings::wstr_to_str(argv[++i]);
+                    auto expressions = mi::examples::strings::split(argument, ",");
+                    options.lpe.clear();
+                    for (std::string& expr : expressions)
                     {
-                        log_error("Invalid LPE option: '" + options.lpe + "'.");
-                        return_code = EXIT_FAILURE;
-                        return false;
+                        // remove white spaces
+                        expr.erase(std::remove_if(expr.begin(), expr.end(), [](unsigned char x) 
+                            { return std::isspace(x); }), expr.end());
+
+                        if (expr != "beauty" &&
+                            expr != "albedo" &&
+                            expr != "albedo_diffuse" &&
+                            expr != "albedo_glossy" &&
+                            expr != "normal" &&
+                            expr != "roughness")
+                        {
+                            log_error("Invalid LPE option: '" + expr + "'.");
+                            return_code = EXIT_FAILURE;
+                            return false;
+                        }
+                        options.lpe.push_back(expr);
                     }
                 }
                 else if (wcscmp(opt, L"--hdr") == 0 && i < argc - 1)
@@ -523,6 +543,10 @@ namespace mi { namespace examples { namespace dxr
                     }
                     options.shader_opt = opt;
                 }
+                else if (wcscmp(opt, L"--distill") == 0 && i < argc - 1)
+                {
+                    options.distilling_target = mi::examples::strings::wstr_to_str(argv[++i]);
+                }
                 else if (wcscmp(opt, L"--use_slang") == 0)
                 {
                     #if MDL_ENABLE_SLANG
@@ -554,10 +578,21 @@ namespace mi { namespace examples { namespace dxr
                         }
                         options.mtlx_libraries.push_back(mi::examples::io::normalize(path));
                     }
+                    else if (wcscmp(opt, L"--mtlx_to_mdl") == 0 && i < argc - 1)
+                    {
+                        std::string version = mi::examples::strings::wstr_to_str(argv[++i]);
+                        if (version != "1.6" && version != "1.7" && version != "1.8" && version != "latest")
+                        {
+                            log_error("Unexpected MaterialX to MDL version number: '" + version + "'.");
+                            return_code = EXIT_FAILURE;
+                            return false;
+                        }
+                        options.mtlx_to_mdl = version;
+                        }
                 #endif
                 else
                 {
-                    log_error("Unknown option: \"" + mi::examples::strings::wstr_to_str(argv[i]) + "\"", SRC);
+                    log_error("Unknown option: \"" + mi::examples::strings::wstr_to_str(argv[i]) + "\"");
                     print_options();
                     return_code = EXIT_FAILURE;
                     return false;
@@ -571,11 +606,19 @@ namespace mi { namespace examples { namespace dxr
 
                 if (!mi::examples::strings::remove_quotes(options.initial_scene))
                 {
-                    log_error("Unexpected quotes in: '" + options.initial_scene + "'.", SRC);
+                    log_error("Unexpected quotes in: '" + options.initial_scene + "'.");
                     return_code = EXIT_FAILURE;
                     return false;
                 }
             }
+        }
+
+        // options that can be set only if combination
+        if (options.lpe.size() > 1 && !options.no_gui)
+        {
+            log_error("Multiple LPE expressions can only be set in combination with '--nogui'.");
+            return_code = EXIT_FAILURE;
+            return false;
         }
 
         // set log to output

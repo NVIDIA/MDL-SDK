@@ -466,7 +466,9 @@ rules Make_diffuse_rules bottomup {
     bsdf() --> diffuse_reflection_bsdf( color(0.0), 0.0);
     diffuse_transmission_bsdf(tint) --> diffuse_reflection_bsdf( tint, 0.0);
     specular_bsdf(tint) --> diffuse_reflection_bsdf( tint, 0.0);
+
     simple_glossy_bsdf(ru,rv,tint,_,_) --> diffuse_reflection_bsdf(tint,0.5*(ru+rv));
+
     // bsdf_tint(c,diffuse_reflection_bsdf(c1,r1)) --> diffuse_reflection_bsdf(c*c1,r1);
     // bsdf_tint_ex(c,_,diffuse_reflection_bsdf(c1,r1)) --> diffuse_reflection_bsdf(c*c1,r1);
     bsdf_mix_1(w1,diffuse_reflection_bsdf(c1,r1)) --> diffuse_reflection_bsdf(w1*c1,r1);

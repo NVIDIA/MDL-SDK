@@ -472,9 +472,7 @@ DB::Tag mdl_texture_to_tag(
     mi::Sint32 result = 0;
     DB::Tag tag = TEXTURE::load_mdl_texture( transaction, &image_set, hash, shared, gamma, result);
     ASSERT( M_SCENE, result == 0 || result == -3 || result == -7 || result == -10);
-    // Note: tag.is_valid() && (result != 0) is feasible.
-    // TODO MDL-1136 harmonize valid tag XOR non-zero result
-    ASSERT( M_SCENE, tag.is_valid() | (result != 0));
+    ASSERT( M_SCENE, tag.is_valid() ^ (result != 0));
 
     if( result != 0) {
         std::string decoded_mdl_module_name = get_module_name_for_error_msg( module_name);
@@ -497,7 +495,7 @@ DB::Tag mdl_texture_to_tag(
         } else {
             add_error_message( context, msg.c_str(), result);
         }
-        return tag;
+        return DB::Tag();
     }
 
     LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_IO,
@@ -619,7 +617,6 @@ DB::Tag mdl_light_profile_to_tag(
         shared,
         result);
     ASSERT( M_SCENE, result == 0 || result == -7);
-    // Note: tag.is_valid() && (result != 0) is *not* feasible.
     ASSERT( M_SCENE, tag.is_valid() ^ (result != 0));
 
     if( result == -7) {
@@ -632,7 +629,7 @@ DB::Tag mdl_light_profile_to_tag(
         } else {
             add_error_message( context, msg.c_str(), result);
         }
-        return tag;
+        return DB::Tag();
     }
 
     LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_IO,
@@ -740,7 +737,6 @@ DB::Tag mdl_bsdf_measurement_to_tag(
         shared,
         result);
     ASSERT( M_SCENE, result == 0 || result == -7);
-    // Note: tag.is_valid() && (result != 0) is *not* feasible.
     ASSERT( M_SCENE, tag.is_valid() ^ (result != 0));
 
     if( result == -7) {
@@ -753,7 +749,7 @@ DB::Tag mdl_bsdf_measurement_to_tag(
         } else {
             add_error_message( context, msg.c_str(), result);
         }
-        return tag;
+        return DB::Tag();
     }
 
     LOG::mod_log->debug( M_SCENE, LOG::Mod_log::C_IO,

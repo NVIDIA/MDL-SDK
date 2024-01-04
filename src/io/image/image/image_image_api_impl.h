@@ -32,8 +32,8 @@
  ** Implements the IImage_api interface
  **/
 
-#ifndef IO_IMAGE_IMAGE_IMAGE_API_IMPL_H
-#define IO_IMAGE_IMAGE_IMAGE_API_IMPL_H
+#ifndef IO_IMAGE_IMAGE_IMAGE_IMAGE_API_IMPL_H
+#define IO_IMAGE_IMAGE_IMAGE_IMAGE_API_IMPL_H
 
 #include <mi/base/handle.h>
 #include <mi/base/interface_implement.h>
@@ -223,4 +223,4 @@ private:
 
 } // namespace MI
 
-#endif // IO_IMAGE_IMAGE_IMAGE_API_IMPL_H
+#endif // IO_IMAGE_IMAGE_IMAGE_IMAGE_API_IMPL_H

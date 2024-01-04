@@ -1,0 +1,10 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Create_constants topdown {
+      diffuse_reflection_bsdf(_, c) --> diffuse_reflection_bsdf(color(0.1)) if c == 1.0;
+      diffuse_reflection_bsdf(_, c) --> diffuse_reflection_bsdf(color(0.1)) if c == 2.0;
+      diffuse_reflection_bsdf(_, c) --> diffuse_reflection_bsdf(color(0.1, 0.2, 0.3)) if c == 3.0;
+      diffuse_reflection_bsdf(_, c) --> diffuse_reflection_bsdf(color(float3(0.1))) if c == 4.0;
+}

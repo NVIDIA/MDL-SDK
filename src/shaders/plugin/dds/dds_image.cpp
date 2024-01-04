@@ -395,7 +395,8 @@ bool Image::load( mi::neuraylib::IReader* reader)
                     size /= 2;
 
                 std::vector<mi::Uint8> buffer( size);
-                mi::Sint64 bytes_read = reader->read( reinterpret_cast<char*>( buffer.data()), size);
+                mi::Sint64 bytes_read = reader->read(
+                    reinterpret_cast<char*>( buffer.data()), size);
                 if( bytes_read != size) {
                     clear();
                     return false;

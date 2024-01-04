@@ -550,6 +550,19 @@ public:
 
     virtual const mi::IString* dump( const IType_list* list, mi::Size depth = 0) const = 0;
 
+    virtual std::string get_mdl_type_name( const IType* type) const = 0;
+
+    virtual const IType* create_from_mdl_type_name( const char* name) const = 0;
+
+    template <class T>
+    const T* create_from_mdl_type_name( const char* name) const
+    {
+        mi::base::Handle<const IType> ptr_type( create_from_mdl_type_name( name));
+        if( !ptr_type)
+            return nullptr;
+        return static_cast<const T*>( ptr_type->get_interface( typename T::IID()));
+    }
+
     //@}
     /// \name Type registration
     //@{
@@ -628,18 +641,6 @@ public:
     virtual IType_list* deserialize_list( SERIAL::Deserializer* deserializer) = 0;
 
     //@}
-
-    virtual std::string get_type_name( const IType* type, bool include_aliased_type = true) = 0;
-
-    /// Similar to get_type_name(), except that aliases are skipped and the "enum" and "struct"
-    /// keywords are omitted.
-    virtual std::string get_serialization_type_name( const IType* type) = 0;
-
-    /// Re-creates a types based on the string created by #get_serialization_type_name().
-    ///
-    /// For enums and structs, the corresponding module must have been loaded, such that these
-    /// types are registered.
-    virtual const IType* create_type( const char* serialization_type_name) const = 0;
 };
 
 /// Returns the global type factory.

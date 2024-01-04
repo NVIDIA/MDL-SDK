@@ -42,6 +42,7 @@
 #include <io/scene/texture/i_texture.h>
 #include <io/scene/scene/i_scene_journal_types.h>
 
+
 namespace MI {
 
 namespace NEURAY {
@@ -95,8 +96,7 @@ mi::Sint32 Texture_impl::set_image( const char* name)
     if( !can_reference_tag( tag))
         return -3;
 
-    DB::Typed_tag<DBIMAGE::Image> image_tag = tag;
-    if( !image_tag)
+    if( db_transaction->get_class_id( tag) != DBIMAGE::ID_IMAGE)
         return -4;
 
     get_db_element()->set_image( tag);
@@ -122,6 +122,7 @@ mi::Sint32 Texture_impl::set_volume( const char* name)
 
     if( !can_reference_tag( tag))
         return -3;
+
 
     get_db_element()->set_volume_data( tag);
     add_journal_flag( SCENE::JOURNAL_CHANGE_SHADER_ATTRIBUTE);
@@ -173,3 +174,4 @@ mi::neuraylib::Texture_compression Texture_impl::get_compression() const
 } // namespace NEURAY
 
 } // namespace MI
+

@@ -43,12 +43,16 @@ struct Axf_importer_options
     std::string axf_module_prefix;
     std::string axf_color_space;
     std::string axf_color_representation;
+    std::vector<std::string> mdl_paths;
+    bool nostdpath;
     
     Axf_importer_options()
         : mdl_output_filename("example_axf_to_mdl.mdl")
         , axf_module_prefix("axf")
         , axf_color_space("sRGB,E")
         , axf_color_representation("all")
+        , mdl_paths()
+        , nostdpath(false)
     {}
 };
 

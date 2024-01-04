@@ -26,12 +26,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 
-/** \file
- ** \brief Factory function for the lightweight database.
- **
- ** Factory function for the lightweight database.
- **/
-
 #ifndef BASE_DATA_DBLIGHT_I_DBLIGHT_H
 #define BASE_DATA_DBLIGHT_I_DBLIGHT_H
 
@@ -41,7 +35,9 @@ namespace DB { class Database; }
 
 namespace DBLIGHT {
 
-/// Create a database instance.
+// External interface.
+
+/// Creates an instance of the database.
 DB::Database* factory();
 
 } // namespace DBLIGHT

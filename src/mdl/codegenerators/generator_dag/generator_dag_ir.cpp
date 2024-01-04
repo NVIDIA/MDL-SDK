@@ -2283,8 +2283,9 @@ DAG_node const *DAG_node_factory_impl::create_call(
     // try to normalize a thin_film call
     if (sema == IDefinition::DS_INTRINSIC_DF_THIN_FILM) {
         if (DAG_node const *res = normalize_thin_film(
-                name, sema, call_args, num_call_args, ret_type))
+            name, sema, call_args, num_call_args, ret_type)) {
             return res;  // normalization was successful, return the result
+        }
     }
 
     if (m_opt_enabled && all_args_without_name(call_args, num_call_args)) {

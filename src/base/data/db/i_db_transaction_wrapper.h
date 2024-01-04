@@ -26,229 +26,236 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 
-/** \file i_db_transaction_wrapper.h
- ** \brief This transaction simply passes all function calls through to the wrapped transaction.
- **/
+#ifndef BASE_DATA_DB_I_DB_TRANSACTION_WRAPPER_H
+#define BASE_DATA_DB_I_DB_TRANSACTION_WRAPPER_H
 
-#ifndef BASE_DATA_DB_DB_TRANSACTION_WRAPPER_H
-#define BASE_DATA_DB_DB_TRANSACTION_WRAPPER_H
-
-#include "i_db_transaction.h"
 #include "i_db_tag.h"
-#include "i_db_element.h"
+#include "i_db_transaction.h"
 
-namespace MI
-{
+namespace MI {
 
-namespace DB
-{
+namespace DB {
 
-/// The transaction wrapper wraps another transaction and simply passes through all calls to the
-/// wrapped transaction.
+/// Wraps another transaction and simply passes through all calls to the wrapped transaction.
 ///
-/// By itself this does not make much sense but it is meant to be used to derive other wrapping
-/// transactions from. The derived transaction only has to overwrite those functions which actually
-/// have differing implementations.
+/// Not that useful by itself, but as base class for other transaction wrappers. Those need to
+/// overwrite only those functions which should have a different behavior.
 class Transaction_wrapper : public Transaction
 {
-  public:
+public:
+
     /// Constructor
     ///
-    /// \param transaction      The wrapped transaction
-    Transaction_wrapper(Transaction* transaction) { m_transaction = transaction; }
-
-    bool is_open(bool cio) { return m_transaction->is_open(cio); }
-
-    Tag reserve_tag() { return m_transaction->reserve_tag(); }
-
-    Tag store(Element_base* element, const char* name, Privacy_level privacy_level, 
-        Privacy_level store_level = 255)
-    {
-        return m_transaction->store(element, name, privacy_level, store_level);
-    }
-
-    void store(Tag tag, Element_base* element, const char* name, Privacy_level privacy_level, 
-        Journal_type journal_type, Privacy_level store_level = 255)
-    {
-        m_transaction->store(tag, element, name, privacy_level, journal_type, store_level);
-    }
-
-    Tag store(SCHED::Job* job, const char* name, Privacy_level privacy_level, 
-        Privacy_level store_level = 255)
-    {
-        return m_transaction->store(job, name, privacy_level, store_level);
-    }
-
-    void store(Tag tag, SCHED::Job* job, const char* name, Privacy_level privacy_level, 
-        Journal_type journal_type, Privacy_level store_level = 255)
-    {
-        m_transaction->store(tag, job, name, privacy_level, journal_type, store_level);
-    }
-
-    Tag store_for_reference_counting(Element_base* element, const char* name, 
-        Privacy_level privacy_level, Privacy_level store_level = 255)
-    {
-        return m_transaction->store_for_reference_counting(element, name, privacy_level, 
-            store_level);
-    }
-
-    void store_for_reference_counting(Tag tag, Element_base* element, const char* name,
-        Privacy_level privacy_level, Journal_type journal_type, Privacy_level store_level = 255)
-    {
-        m_transaction->store_for_reference_counting(tag, element, name, privacy_level, 
-            journal_type, store_level);
-    }
-
-    Tag store_for_reference_counting(SCHED::Job* job, const char* name, 
-        Privacy_level privacy_level, Privacy_level store_level = 255)
-    {
-        return m_transaction->store_for_reference_counting(job, name, privacy_level, store_level);
-    }
-
-    void store_for_reference_counting(Tag tag, SCHED::Job* job, const char* name, 
-        Privacy_level privacy_level, Journal_type journal_type, Privacy_level store_level = 255)
-    {
-        m_transaction->store_for_reference_counting(tag, job, name, privacy_level, journal_type, store_level);
-    }
-
-    Tag store_deferred(const char* name, Privacy_level privacy_level, Tag_set* references)
-    {
-        return m_transaction->store_deferred(name, privacy_level, references);
-    }
-
-    void advise(Tag tag) { m_transaction->advise(tag); }
-
-    void localize(Tag tag, Privacy_level privacy_level, Journal_type journal_type)
-    {
-        m_transaction->localize(tag, privacy_level, journal_type);
-    }
-
-    const char* tag_to_name(Tag tag) { return m_transaction->tag_to_name(tag); }
-
-    Tag name_to_tag(const char* name) { return m_transaction->name_to_tag(name); }
-
-    SERIAL::Class_id get_class_id(Tag tag) { return m_transaction->get_class_id(tag); }
-
-    Tag_version get_tag_version(Tag tag) { return m_transaction->get_tag_version(tag); }
-
-    Uint32 get_update_sequence_number() { return m_transaction->get_update_sequence_number(); }
-
-    Uint32 get_tag_reference_count(Tag tag) { return m_transaction->get_tag_reference_count(tag); }
-
-    bool can_reference_tag(Privacy_level referencing_level, Tag referenced_tag)
-    {
-        return m_transaction->can_reference_tag(referencing_level, referenced_tag);
-    }
-
-    bool can_reference_tag(Tag referencing_tag, Tag referenced_tag)
-    {
-        return m_transaction->can_reference_tag(referencing_tag, referenced_tag);
-    }
-
-    bool get_tag_is_removed(Tag tag) { return m_transaction->get_tag_is_removed(tag); }
-
-    bool get_tag_is_job(Tag tag) { return m_transaction->get_tag_is_job(tag); }
-
-    Privacy_level get_tag_privacy_level(Tag tag)
-    {
-        return m_transaction->get_tag_privacy_level(tag);
-    }
-
-    Privacy_level get_tag_storage_level(Tag tag)
-    {
-        return m_transaction->get_tag_storage_level(tag);
-    }
-
-    Transaction_id get_id() const { return m_transaction->get_id(); }
-
-    void invalidate_job_results(Tag tag) { m_transaction->invalidate_job_results(tag); }
-
-    bool remove(Tag tag, bool remove_local_copy)
-    {
-        return m_transaction->remove(tag, remove_local_copy);
-    }
-
-    Info* get_job(Tag tag) { return m_transaction->get_job(tag); }
-
-    void store_job_result(Tag tag, Element_base* element)
-    {
-        m_transaction->store_job_result(tag, element);
-    }
-
-    void send_element_to_host(Tag tag, NET::Host_id host_id)
-    {
-        m_transaction->send_element_to_host(tag, host_id);
-    }
-
-    Update_list* get_received_updates() { return m_transaction->get_received_updates(); }
-
-    void wait(Update_list* needed_updates) { m_transaction->wait(needed_updates); }
+    /// \param transaction   The wrapped transaction. RCS:NEU
+    Transaction_wrapper( Transaction* transaction) { m_transaction = transaction; }
 
     void pin() { m_transaction->pin(); }
 
     void unpin() { m_transaction->unpin(); }
 
-    bool block_commit() { return m_transaction->block_commit(); }
+    Transaction_id get_id() const { return m_transaction->get_id(); }
 
-    bool unblock_commit() { return m_transaction->unblock_commit(); }
+    Scope* get_scope() { return m_transaction->get_scope(); }
+
+    mi::Uint32 get_next_sequence_number() const
+    {
+        return m_transaction->get_next_sequence_number();
+    }
 
     bool commit() { return m_transaction->commit(); }
 
     void abort() { m_transaction->abort(); }
 
-    std::vector<std::pair<Tag, Journal_type> >* get_journal(
+    bool is_open( bool closing_is_open) const { return m_transaction->is_open( closing_is_open); }
+
+    bool block_commit_or_abort() { return m_transaction->block_commit_or_abort(); }
+
+    bool unblock_commit_or_abort() { return m_transaction->unblock_commit_or_abort(); }
+
+    Info* access_element( Tag tag) { return m_transaction->access_element( tag); }
+
+    Info* edit_element( Tag tag) { return m_transaction->edit_element( tag); }
+
+    void finish_edit( Info* info, Journal_type journal_type)
+    {
+        return m_transaction->finish_edit( info, journal_type);
+    }
+
+    Tag reserve_tag() { return m_transaction->reserve_tag(); }
+
+    Tag store(
+        Element_base* element,
+        const char* name = nullptr,
+        Privacy_level privacy_level = 0,
+        Privacy_level store_level = 255)
+    {
+        return m_transaction->store( element, name, privacy_level, store_level);
+    }
+
+    void store(
+        Tag tag,
+        Element_base* element,
+        const char* name = nullptr,
+        Privacy_level privacy_level = 0,
+        Journal_type journal_type = JOURNAL_ALL,
+        Privacy_level store_level = 255)
+    {
+        m_transaction->store( tag, element, name, privacy_level, journal_type, store_level);
+    }
+
+    Tag store_for_reference_counting(
+        Element_base* element,
+        const char* name = nullptr,
+        Privacy_level privacy_level = 0,
+        Privacy_level store_level = 255)
+    {
+        return m_transaction->store_for_reference_counting(
+            element, name, privacy_level, store_level);
+    }
+
+    void store_for_reference_counting(
+        Tag tag,
+        Element_base* element,
+        const char* name = nullptr,
+        Privacy_level privacy_level = 0,
+        Journal_type journal_type = JOURNAL_ALL,
+        Privacy_level store_level = 255)
+    {
+        m_transaction->store_for_reference_counting(
+            tag, element, name, privacy_level, journal_type, store_level);
+    }
+
+    Tag store(
+        SCHED::Job* job,
+        const char* name = nullptr,
+        Privacy_level privacy_level = 0,
+        Privacy_level store_level = 255)
+    {
+        return m_transaction->store( job, name, privacy_level, store_level);
+    }
+
+    void store(
+        Tag tag,
+        SCHED::Job* job,
+        const char* name = nullptr,
+        Privacy_level privacy_level = 0,
+        Journal_type journal_type = JOURNAL_NONE,
+        Privacy_level store_level = 255)
+    {
+        m_transaction->store( tag, job, name, privacy_level, journal_type, store_level);
+    }
+
+    Tag store_for_reference_counting(
+        SCHED::Job* job,
+        const char* name = nullptr,
+        Privacy_level privacy_level = 0,
+        Privacy_level store_level = 255)
+    {
+        return m_transaction->store_for_reference_counting(
+            job, name, privacy_level, store_level);
+    }
+
+    void store_for_reference_counting(
+        Tag tag,
+        SCHED::Job* job,
+        const char* name = nullptr,
+        Privacy_level privacy_level = 0,
+        Journal_type journal_type = JOURNAL_NONE,
+        Privacy_level store_level = 255)
+    {
+        m_transaction->store_for_reference_counting(
+            tag, job, name, privacy_level, journal_type, store_level);
+    }
+
+    void localize( Tag tag, Privacy_level privacy_level, Journal_type journal_type = JOURNAL_NONE)
+    {
+        m_transaction->localize( tag, privacy_level, journal_type);
+    }
+
+    bool remove( Tag tag, bool remove_local_copy = false)
+    {
+        return m_transaction->remove( tag, remove_local_copy);
+    }
+
+    const char* tag_to_name( Tag tag) { return m_transaction->tag_to_name( tag); }
+
+    Tag name_to_tag( const char* name) { return m_transaction->name_to_tag( name); }
+
+    bool get_tag_is_job( Tag tag) { return m_transaction->get_tag_is_job( tag); }
+
+    SERIAL::Class_id get_class_id( Tag tag) { return m_transaction->get_class_id( tag); }
+
+    Privacy_level get_tag_privacy_level( Tag tag)
+    {
+        return m_transaction->get_tag_privacy_level( tag);
+    }
+
+    Privacy_level get_tag_storage_level( Tag tag)
+    {
+        return m_transaction->get_tag_storage_level( tag);
+    }
+
+    Tag_version get_tag_version( Tag tag) { return m_transaction->get_tag_version( tag); }
+
+    mi::Uint32 get_tag_reference_count( Tag tag)
+    {
+        return m_transaction->get_tag_reference_count( tag);
+    }
+
+    bool can_reference_tag( Privacy_level referencing_level, Tag referenced_tag)
+    {
+        return m_transaction->can_reference_tag( referencing_level, referenced_tag);
+    }
+
+    bool can_reference_tag( Tag referencing_tag, Tag referenced_tag)
+    {
+        return m_transaction->can_reference_tag( referencing_tag, referenced_tag);
+    }
+
+    bool get_tag_is_removed( Tag tag) { return m_transaction->get_tag_is_removed( tag); }
+
+    std::unique_ptr<Journal_query_result> get_journal(
         Transaction_id last_transaction_id,
-        Uint32 last_transaction_change_version,
+        mi::Uint32 last_transaction_change_version,
         Journal_type journal_type,
         bool lookup_parents)
     {
-        return m_transaction->get_journal(last_transaction_id, last_transaction_change_version,
-            journal_type, lookup_parents);
+        return m_transaction->get_journal(
+            last_transaction_id, last_transaction_change_version, journal_type, lookup_parents);
     }
 
-    Sint32 execute_fragmented(Fragmented_job* job, size_t count)
+    mi::Sint32 execute_fragmented( Fragmented_job* job, size_t count)
     {
-        return m_transaction->execute_fragmented(job, count);
+        return m_transaction->execute_fragmented( job, count);
     }
 
-    Sint32 execute_fragmented_async(
-        Fragmented_job* job,
-        size_t count,
-        IExecution_listener* listener)
+    mi::Sint32 execute_fragmented_async(
+        Fragmented_job* job, size_t count, IExecution_listener* listener)
     {
-        return m_transaction->execute_fragmented_async(job, count, listener);
+        return m_transaction->execute_fragmented_async( job, count, listener);
     }
 
-    void cancel_fragmented_jobs()
-    {
-        m_transaction->cancel_fragmented_jobs();
-    }
+    void cancel_fragmented_jobs() { m_transaction->cancel_fragmented_jobs(); }
 
     bool get_fragmented_jobs_cancelled()
     {
         return m_transaction->get_fragmented_jobs_cancelled();
     }
 
+    void invalidate_job_results( Tag tag) { m_transaction->invalidate_job_results( tag); }
+
+    void advise( Tag tag) { m_transaction->advise( tag); }
+
+    Element_base* construct_empty_element( SERIAL::Class_id class_id)
+    {
+        return m_transaction->construct_empty_element( class_id);
+    }
+
+    /// RCS:NEU
     Transaction* get_real_transaction() { return m_transaction->get_real_transaction(); }
 
-    Info* edit_element(Tag tag) { return m_transaction->edit_element(tag); }
-
-    void finish_edit(Info* info, Journal_type journal_type)
-    {
-        return m_transaction->finish_edit(info, journal_type);
-    }
-
-    Info* get_element(Tag tag, bool do_wait) { return m_transaction->get_element(tag, do_wait); }
-
-    Element_base* construct_empty_element(SERIAL::Class_id class_id)
-    {
-        return m_transaction->construct_empty_element(class_id);
-    }
-
-    Scope* get_scope() { return m_transaction->get_scope(); }
-
-  protected:
-    /// The wrapped transaction
+protected:
+    /// The wrapped transaction.
     Transaction* m_transaction;
 };
 
@@ -256,4 +263,4 @@ class Transaction_wrapper : public Transaction
 
 } // namespace MI
 
-#endif // BASE_DATA_DB_DB_CACHING_TRANSACTION_H
+#endif // BASE_DATA_DB_I_DB_TRANSACTION_WRAPPER_H

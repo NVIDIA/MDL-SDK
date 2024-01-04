@@ -30,8 +30,8 @@
  ** \brief Header for the IFunction_definition implementation.
  **/
 
-#ifndef API_API_NEURAY_FUNCTION_DEFINITION_IMPL_H
-#define API_API_NEURAY_FUNCTION_DEFINITION_IMPL_H
+#ifndef API_API_NEURAY_NEURAY_FUNCTION_DEFINITION_IMPL_H
+#define API_API_NEURAY_NEURAY_FUNCTION_DEFINITION_IMPL_H
 
 #include <mi/neuraylib/ifunction_definition.h>
 
@@ -139,4 +139,4 @@ private:
 
 } // namespace MI
 
-#endif // API_API_NEURAY_FUNCTION_DEFINITION_IMPL_H
+#endif // API_API_NEURAY_NEURAY_FUNCTION_DEFINITION_IMPL_H

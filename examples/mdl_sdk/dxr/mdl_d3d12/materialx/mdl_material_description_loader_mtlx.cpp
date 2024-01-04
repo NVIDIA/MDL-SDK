@@ -40,6 +40,7 @@ Mdl_material_description_loader_mtlx::Mdl_material_description_loader_mtlx(
     : m_paths(options.mtlx_paths)
     , m_libraries(options.mtlx_libraries)
     , m_generated_mdl_path(options.generated_mdl_path)
+    , m_mdl_version(options.mtlx_to_mdl)
 {
     std::string version = MaterialX::getVersionString();
     log_info("Enable MaterialX loader using SDK version: " + version);
@@ -91,6 +92,9 @@ bool Mdl_material_description_loader_mtlx::generate_mdl_source_code(
 
     for (auto& l : m_libraries)
         mtlx2mdl.add_library(l);
+
+    // set the MDL language version
+    mtlx2mdl.set_mdl_version(m_mdl_version);
 
     // set the materials main source file
     bool valid = true;

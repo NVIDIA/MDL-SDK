@@ -22,9 +22,9 @@ class SDK():
         example_sp = os.getenv('MDL_SAMPLES_ROOT')
 
         # fall back to a path relative to this script file
-        if example_sp == None or not os.path.exists(example_sp):
+        if example_sp is None or not os.path.exists(example_sp):
             example_sp = os.path.join(os.path.dirname(os.path.realpath(__file__)))
-        if example_sp == None or not os.path.exists(example_sp):
+        if example_sp is None or not os.path.exists(example_sp):
             example_sp = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', '..')
 
         # go down into the mdl folder
@@ -42,7 +42,7 @@ class SDK():
         # load neuray
         self.neuray = pymdlsdk.load_and_get_ineuray('')
         if not self.neuray.is_valid_interface():
-            raise Exception('Failed to load the MDL SDK.')
+            raise Exception('Failed to load the MDL SDK.')  # pragma: no cover
 
         # add MDL search paths
         with self.neuray.get_api_component(pymdlsdk.IMdl_configuration) as cfg:
@@ -59,19 +59,18 @@ class SDK():
         # Load plugins
         if loadImagePlugins:
             if not pymdlsdk.load_plugin(self.neuray, 'nv_openimageio'):
-                raise Exception('Failed to load the \'nv_openimageio\' plugin.')
+                raise Exception('Failed to load the \'nv_openimageio\' plugin.')  # pragma: no cover
             if not pymdlsdk.load_plugin(self.neuray, 'dds'):
-                raise Exception('Failed to load the \'dds\' plugin.')
+                raise Exception('Failed to load the \'dds\' plugin.')  # pragma: no cover
 
         if loadDistillerPlugin:
             if not pymdlsdk.load_plugin(self.neuray, 'mdl_distiller'):
-                raise Exception('Failed to load the \'mdl_distiller\' plugin.')
+                raise Exception('Failed to load the \'mdl_distiller\' plugin.')  # pragma: no cover
 
         # start neuray
-        print(f"Starting neuray of version: {self.neuray.get_version()}")
         resultCode = self.neuray.start()
         if resultCode != 0:
-            raise Exception('Failed to initialize the SDK. Result code: ' + resultCode)
+            raise Exception('Failed to initialize the SDK. Result code: ' + resultCode)  # pragma: no cover
 
         # create a DB transaction
         with self.neuray.get_api_component(pymdlsdk.IDatabase) as database, \
@@ -93,4 +92,4 @@ class SDK():
 
         # Unload the MDL SDK
         if not pymdlsdk.unload():
-            raise Exception('Failed to unload the SDK.')
+            raise Exception('Failed to unload the SDK.')  # pragma: no cover

@@ -26,8 +26,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 
-#ifndef IO_IMAGE_IMAGE_IMAGE_I_MIPMAP_H
-#define IO_IMAGE_IMAGE_IMAGE_I_MIPMAP_H
+#ifndef IO_IMAGE_IMAGE_I_IMAGE_MIPMAP_H
+#define IO_IMAGE_IMAGE_I_IMAGE_MIPMAP_H
 
 #include <mi/base/interface_declare.h>
 
@@ -91,4 +91,4 @@ public:
 
 } // namespace MI
 
-#endif // MI_IO_IMAGE_IMAGE_I_IMAGE_MIPMAP_H
+#endif // IO_IMAGE_IMAGE_I_IMAGE_MIPMAP_H

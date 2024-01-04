@@ -30,7 +30,7 @@ function(FIND_OPENIMAGEIO_EXT)
 
     if(${CMAKE_VERSION} VERSION_LESS "3.19.0")
         find_package(OpenImageIO)
-        if(${OpenImageIO_FOUND})
+        if(OpenImageIO_FOUND)
             if(${OpenImageIO_VERSION} VERSION_LESS "2.4")
                 set(OpenImageIO_FOUND OFF)
                 message(WARNING "Found OpenImageIO version ${OpenImageIO_VERSION} is too old.")
@@ -48,13 +48,15 @@ function(FIND_OPENIMAGEIO_EXT)
 
     # Misuse OpenImageIO version to distinguish older vcpkg versions (e.g. 42f74e3db
     # plus patch) from newer vcpkg versions (e.g. 3640e7cb1).
-    if(${OpenImageIO_FOUND} AND (${OpenImageIO_VERSION} VERSION_LESS "2.4.5.0"))
-        # Needed by OpenImageIO::OpenImageIO target in older vcpkg versions
-        find_package(TIFF)
-        find_package(liblzma CONFIG)
+    if(OpenImageIO_FOUND)
+        if(${OpenImageIO_VERSION} VERSION_LESS "2.4.5.0")
+            # Needed by OpenImageIO::OpenImageIO target in older vcpkg versions
+            find_package(TIFF)
+            find_package(liblzma CONFIG)
+        endif()
     endif()
 
-    if(NOT ${OpenImageIO_FOUND} OR NOT ${OpenEXR_FOUND})
+    if(NOT OpenImageIO_FOUND OR NOT OpenEXR_FOUND)
 
         message(STATUS "OpenImageIO_FOUND: ${OpenImageIO_FOUND}")
         message(STATUS "OpenImageIO_DIR: ${OpenImageIO_DIR}")
@@ -67,6 +69,20 @@ function(FIND_OPENIMAGEIO_EXT)
 
     else()
 
+        # Used by some unit tests via the USES_IDIFF option.
+        find_program(
+            OpenImageIO_IDIFF
+            NAMES
+                idiff
+            PATHS
+                ${OpenImageIO_INCLUDE_DIR}/../tools/openimageio
+                ${OpenImageIO_INCLUDE_DIR}/../bin
+            )
+        if(NOT OpenImageIO_IDIFF)
+            message(WARNING "The idiff tool from \"OpenImageIO\" could not be found. Please specify "
+                "'CMAKE_TOOLCHAIN_FILE'. Alternatively, you can disable the option 'MDL_ENABLE_UNIT_TESTS'.")
+        endif()
+
         # store paths that are later used in the add_openimageio.cmake
         set(MDL_DEPENDENCY_OPENIMAGEIO_INCLUDE ${OpenImageIO_INCLUDE_DIR} CACHE INTERNAL
             "OpenImageIO header directory")
@@ -74,12 +90,15 @@ function(FIND_OPENIMAGEIO_EXT)
             "OpenImageIO library directory")
         set(MDL_DEPENDENCY_OPENIMAGEIO_VERSION ${OpenImageIO_VERSION} CACHE INTERNAL
             "OpenImageIO version")
+        set(MDL_DEPENDENCY_OPENIMAGEIO_IDIFF ${OpenImageIO_IDIFF} CACHE INTERNAL
+            "OpenImageIO version")
         set(MDL_OPENIMAGEIO_FOUND ON CACHE INTERNAL "")
 
         if(MDL_LOG_DEPENDENCIES)
             message(STATUS "[INFO] MDL_DEPENDENCY_OPENIMAGEIO_INCLUDE:   ${MDL_DEPENDENCY_OPENIMAGEIO_INCLUDE}")
             message(STATUS "[INFO] MDL_DEPENDENCY_OPENIMAGEIO_LIB:       ${MDL_DEPENDENCY_OPENIMAGEIO_LIB}")
             message(STATUS "[INFO] MDL_DEPENDENCY_OPENIMAGEIO_VERSION:   ${MDL_DEPENDENCY_OPENIMAGEIO_VERSION}")
+            message(STATUS "[INFO] MDL_DEPENDENCY_OPENIMAGEIO_IDIFF:     ${MDL_DEPENDENCY_OPENIMAGEIO_IDIFF}")
         endif()
 
     endif()

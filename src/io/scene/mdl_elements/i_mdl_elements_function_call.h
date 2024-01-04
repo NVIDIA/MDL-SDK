@@ -75,7 +75,7 @@ public:
         const char* module_db_name,
         DB::Tag definition_tag,
         Mdl_ident definition_ident,
-        bool m_is_material,
+        bool is_material,
         IExpression_list* arguments,
         mi::mdl::IDefinition::Semantics semantic,
         const char* definition_name,
@@ -91,7 +91,7 @@ public:
 
     // methods corresponding to mi::neuraylib::IFunction_call
 
-    DB::Tag get_function_definition(DB::Transaction *transaction) const;
+    DB::Tag get_function_definition( DB::Transaction* transaction) const;
 
     const char* get_mdl_function_definition() const;
 
@@ -137,7 +137,7 @@ public:
     ///
     /// This method may only be set to \c true by the MDL integration itself, not by external
     /// callers.
-    void make_mutable(DB::Transaction* transaction);
+    void make_mutable( DB::Transaction* transaction);
 
     /// Returns the MDL semantic of the corresponding definition.
     mi::mdl::IDefinition::Semantics get_mdl_semantic() const;
@@ -218,7 +218,6 @@ public:
     ///
     /// \note If it is detected, that a thin-walled material instance has different
     ///       transmission for surface and backface, a warning is generated.
-
     const mi::mdl::IGenerated_code_dag::IMaterial_instance* create_dag_material_instance(
         DB::Transaction* transaction,
         bool use_temporaries,

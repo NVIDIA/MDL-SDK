@@ -154,9 +154,10 @@ private:
     /// Stores the return values of get_attribute_type_name(). The signature requires us to
     /// return a const char*, but the strings are not constant (e.g., in case of arrays).
     ///
-    /// The map does not guarantee that all string-addresses remain valid. Since we guarantee only that the
-    /// last one remains valid we'd need only to cache the last string. But since the implementation
-    /// cached all strings and these strings might still be valid, leave it now as is.
+    /// The map does not guarantee that all string-addresses remain valid. Since we guarantee only
+    /// that the last one remains valid we'd need only to cache the last string. But since the
+    /// implementation cached all strings and these strings might still be valid, leave it now as
+    /// is.
     mutable robin_hood::unordered_map<std::string, std::string> m_cached_type_names;
 };
 
@@ -222,9 +223,11 @@ const char* Attribute_set_impl<T>::get_attribute_type_name( const char* name) co
     if( result.empty())
         return nullptr;
 #ifdef __clang__
-    return m_cached_type_names.insert(robin_hood::pair<std::string,std::string>(name, result)).first->second.c_str();
+    return m_cached_type_names.insert(
+        robin_hood::pair<std::string,std::string>( name, result)).first->second.c_str();
 #else
-    return m_cached_type_names.insert(robin_hood::pair<const std::string,std::string>(name, result)).first->second.c_str();
+    return m_cached_type_names.insert(
+    robin_hood::pair<const std::string,std::string>( name, result)).first->second.c_str();
 #endif
 }
 

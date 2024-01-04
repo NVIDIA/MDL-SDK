@@ -141,7 +141,6 @@ struct GLSLAstTraits {
     typedef glsl::Expr_call             Expr_call;
     typedef glsl::Expr_compound         Expr_compound;
     typedef glsl::Expr_literal          Expr_literal;
-    typedef glsl::Parameter_qualifier   Parameter_qualifier;
     typedef glsl::Location              Location;
 };
 
@@ -357,6 +356,29 @@ protected:
     void add_array_specifiers(
         Decl_type  *decl,
         glsl::Type *type);
+
+    /// Add parameter qualifier from a function type parameter at index.
+    ///
+    /// \param param_type_name   the type name of a parameter
+    /// \param func_type         the GLSL function type
+    /// \param index             the parameter index inside the function type
+    static void add_param_qualifier(
+        glsl::Type_name     *param_type_name,
+        glsl::Type_function *func_type,
+        size_t              index);
+
+    /// Returns the return type if the first parameter of a function type is a output parameter.
+    ///
+    /// \param func_type  a GLSL function type
+    static glsl::Type *return_type_from_first_parameter(
+        glsl::Type_function *func_type)
+    {
+        glsl::Type_function::Parameter *param = func_type->get_parameter(0);
+        if (param->get_modifier() == glsl::Type_function::Parameter::PM_OUT) {
+            return param->get_type();
+        }
+        return nullptr;
+    }
 
     /// Add a field to a struct declaration.
     ///

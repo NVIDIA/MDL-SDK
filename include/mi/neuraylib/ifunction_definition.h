@@ -589,7 +589,7 @@ public:
     ///             - \c false  The definition is invalid.
     virtual bool is_valid( IMdl_execution_context* context) const = 0;
 
-    /// Returns the direct call expression that represents the body of the function (if possible).
+    /// Returns the expression that represents the body of the function (if possible).
     ///
     /// \note Functions bodies with control flow can not be represented by an expression. For such
     ///       functions, this method always returns \c NULL. For all other functions, i.e., for

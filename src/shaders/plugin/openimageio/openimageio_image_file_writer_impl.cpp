@@ -121,9 +121,6 @@ Image_file_writer_impl::Image_file_writer_impl(
         image_spec["compression"] = "lzw";
     }
 
-    // Disable OIIO internal thread pool since it causes shutdown problems in larger integrations.
-    m_image_output->threads( 1);
-
     m_image_output->open( ext, image_spec);
 }
 

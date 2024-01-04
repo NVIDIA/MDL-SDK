@@ -123,7 +123,7 @@ function(FIND_VULKAN_EXT)
         endif()
     endif()
 
-    # store path that are later used in the add_vulkan.cmake
+    # store paths that are later used in the add_vulkan.cmake
     set(MDL_DEPENDENCY_GLSLANG_INCLUDE ${_GLSLANG_INCLUDE} CACHE INTERNAL "glslang headers")
     set(MDL_DEPENDENCY_GLSLANG_LIBS ${_GLSLANG_LIB} CACHE INTERNAL "glslang libs")
     if(WIN32)

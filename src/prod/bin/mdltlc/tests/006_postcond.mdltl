@@ -1,0 +1,11 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Postcond topdown {
+    import df;
+    bsdf() --> diffuse_reflection_bsdf( color(0.0), 0.0);
+    bsdf_tint( tint, diffuse_reflection_bsdf(c1,r1)) --> diffuse_reflection_bsdf(c,r1)
+        where c = tint*c1;
+    postcond nonode(bsdf_tint);
+}

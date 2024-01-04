@@ -131,7 +131,8 @@ mi::Sint32 Mdl_module_transformer_impl::inline_imported_modules(
     MDL::Execution_context default_context;
     MDL::Execution_context* context_impl = unwrap_and_clear_context( context, default_context);
 
-    return m_impl->inline_imported_modules( include_filter, exclude_filter, omit_anno_origin, context_impl);
+    return m_impl->inline_imported_modules(
+        include_filter, exclude_filter, omit_anno_origin, context_impl);
 }
 
 mi::Sint32 Mdl_module_transformer_impl::export_module(

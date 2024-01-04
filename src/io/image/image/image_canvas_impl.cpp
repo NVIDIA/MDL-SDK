@@ -140,8 +140,7 @@ Canvas_impl::Canvas_impl(
         return;
     }
 
-    std::string root, extension;
-    HAL::Ospath::splitext( filename, root, extension);
+    std::string extension = HAL::Ospath::get_ext( filename);
     if( !extension.empty() && extension[0] == '.' )
         extension = extension.substr( 1);
 
@@ -301,8 +300,7 @@ Canvas_impl::Canvas_impl(
         return;
     }
 
-    std::string root, extension;
-    HAL::Ospath::splitext( member_filename, root, extension);
+    std::string extension = HAL::Ospath::get_ext( member_filename);
     if( !extension.empty() && extension[0] == '.' )
         extension = extension.substr( 1);
 
@@ -802,8 +800,8 @@ mi::neuraylib::ITile* Canvas_impl::do_load_tile( mi::Uint32 z) const
     if( !reader)
         return nullptr;
 
-    std::string root, extension;
-    HAL::Ospath::splitext( !m_filename.empty() ? m_filename : m_member_filename, root, extension);
+    std::string extension
+        = HAL::Ospath::get_ext( !m_filename.empty() ? m_filename : m_member_filename);
     if( !extension.empty() && extension[0] == '.' )
         extension = extension.substr( 1);
 

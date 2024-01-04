@@ -47,6 +47,7 @@
 #include <render/baker/baker/i_baker.h>
 #include <mi/mdl/mdl_distiller_rules.h>
 #include <mi/mdl/mdl_distiller_options.h>
+#include <mi/mdl/mdl_distiller_plugin_api.h>
 
 #include "neuray_compiled_material_impl.h"
 #include "neuray_transaction_impl.h"
@@ -126,19 +127,82 @@ const char* Mdl_distiller_api_impl::get_target_name( mi::Size index) const
     return m_dist_module->get_target_name(index);
 }
 
-mi::Size Mdl_distiller_api_impl::get_required_module_count(const char *target) const {
+mi::Size Mdl_distiller_api_impl::get_required_module_count(const char *target) const
+{
     return m_dist_module->get_required_module_count(target);
 }
 
-const char* Mdl_distiller_api_impl::get_required_module_name(const char *target, mi::Size index) const {
+const char* Mdl_distiller_api_impl::get_required_module_name(
+    const char *target, mi::Size index) const
+{
     return m_dist_module->get_required_module_name(target, index);
 }
 
-const char* Mdl_distiller_api_impl::get_required_module_code(const char *target, mi::Size index) const {
+const char* Mdl_distiller_api_impl::get_required_module_code(
+    const char *target, mi::Size index) const
+{
     return m_dist_module->get_required_module_code(target, index);
 }
 
 namespace {
+
+class Debug_print_stream : public mi::mdl::IOutput_stream {
+private:
+    char buffer[120] = {0};
+    size_t buf_len{0};
+
+public:
+    /// Write a character to the output stream.
+    virtual void write_char(char c) {
+        if (c == '\n') {
+            flush();
+            return;
+        }
+        if (buf_len >= sizeof(buffer) - 2) {
+            buffer[buf_len++] = c;
+            flush();
+            return;
+        }
+        buffer[buf_len++] = c;
+    }
+
+    /// Write a string to the stream.
+    virtual void write(const char *string) {
+        for (char const *p = string; *p; ++p) {
+            write_char(*p);
+        }
+    }
+
+    /// Flush stream.
+    virtual void flush() {
+        buffer[buf_len] = '\0';
+        LOG::mod_log->info(SYSTEM::M_DIST, LOG::ILogger::C_COMPILER, ">>> %s", buffer);
+        buf_len = 0;
+    }
+
+    /// Remove the last character from output stream if possible.
+    ///
+    /// \param c  remove this character from the output stream
+    ///
+    /// \return true if c was the last character in the stream and it was successfully
+    /// removed, false otherwise
+    virtual bool unput(char c) {
+        // unsupported
+        return false;
+    }
+
+    // from IInterface: This object is not reference counted.
+    virtual Uint32 retain() const { return 1; }
+    virtual Uint32 release() const { return 1; }
+    virtual const mi::base::IInterface* get_interface(mi::base::Uuid const &interface_id) const {
+        return nullptr;
+    }
+    virtual mi::base::IInterface* get_interface(mi::base::Uuid const &interface_id) {
+        return nullptr;
+    }
+    virtual mi::base::Uuid get_iid() const { return IID(); }
+
+};
 
 /// The event handler for distilling events.
 class Rule_matcher_event : public mi::mdl::IRule_matcher_event
@@ -209,6 +273,34 @@ class Rule_matcher_event : public mi::mdl::IRule_matcher_event
             LOG::ILogger::C_COMPILER, "Postcond check failed for path '%s'.", path);
     }
 
+    virtual void debug_print(
+        mi::mdl::IDistiller_plugin_api &plugin_api,
+        char const *rule_set_name,
+        unsigned   rule_id,
+        char const *rule_name,
+        char const *file_name,
+        unsigned   line_number,
+        char const *var_name,
+        mi::mdl::DAG_node const *value)
+    {
+        if (file_name == nullptr)
+            file_name = "<unknown>";
+        if (var_name == nullptr)
+            var_name = "<unknown>";
+        LOG::mod_log->info(
+            SYSTEM::M_DIST,
+            LOG::ILogger::C_COMPILER,
+            "Rule <%u> %s:%u: matching rule %s::%s:",
+            rule_id, file_name, line_number, rule_set_name, rule_name);
+        LOG::mod_log->info(
+            SYSTEM::M_DIST,
+            LOG::ILogger::C_COMPILER,
+            ">>> %s = ", var_name);
+        Debug_print_stream outs;
+        plugin_api.debug_node(&outs, value);
+        outs.flush();
+    }
+
 public:
     /// Initialize match event handler with options to control trace level.
     Rule_matcher_event( const mi::mdl::Distiller_options* options) : m_options(options) {}
@@ -244,6 +336,7 @@ mi::neuraylib::ICompiled_material* Mdl_distiller_api_impl::distill_material(
     get_option( distiller_options, "_dbg_quiet", options.quiet);
     get_option( distiller_options, "_dbg_verbosity", options.verbosity);
     get_option( distiller_options, "_dbg_trace", options.trace);
+    get_option( distiller_options, "_dbg_debug_print", options.debug_print);
 
     const Compiled_material_impl* material_impl
         = static_cast<const Compiled_material_impl*>( material);
@@ -270,7 +363,7 @@ mi::neuraylib::ICompiled_material* Mdl_distiller_api_impl::distill_material(
         new_dag_material_instance(
             m_dist_module->distill(
                 resolver,
-                (options.trace != 0) ? &event_handler : nullptr,
+                (options.trace != 0 || options.debug_print) ? &event_handler : nullptr,
                 dag_material_instance.get(),
                 target,
                 &options,

@@ -30,8 +30,8 @@
  ** \brief Header for the IMdl_impexp_api implementation.
  **/
 
-#ifndef API_API_NEURAY_MDL_IMPEXP_API_IMPL_H
-#define API_API_NEURAY_MDL_IMPEXP_API_IMPL_H
+#ifndef API_API_NEURAY_NEURAY_MDL_IMPEXP_API_IMPL_H
+#define API_API_NEURAY_NEURAY_MDL_IMPEXP_API_IMPL_H
 
 #include <mi/base/interface_implement.h>
 #include <mi/neuraylib/imdl_impexp_api.h>
@@ -196,4 +196,4 @@ public:
 
 } // namespace MI
 
-#endif // API_API_NEURAY_MDL_IMPEXP_API_IMPL_H
+#endif // API_API_NEURAY_NEURAY_MDL_IMPEXP_API_IMPL_H

@@ -37,7 +37,6 @@
 #include "neuray_impexp_utilities.h"
 #include "neuray_lightprofile_impl.h"
 #include "neuray_mdl_execution_context_impl.h"
-#include "neuray_mdl_resource_callback.h"
 #include "neuray_module_impl.h"
 #include "neuray_string_impl.h"
 #include "neuray_transaction_impl.h"
@@ -54,6 +53,7 @@
 #include <io/scene/bsdf_measurement/i_bsdf_measurement.h>
 #include <io/scene/lightprofile/i_lightprofile.h>
 #include <io/scene/mdl_elements/i_mdl_elements_module.h>
+#include <io/scene/mdl_elements/i_mdl_elements_resource_callback.h>
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
 #include <mdl/integration/mdlnr/i_mdlnr.h>
 
@@ -459,7 +459,7 @@ mi::Sint32 Mdl_impexp_api_impl::export_module_common(
         = filename ? Impexp_utilities::convert_filename_to_uri( filename) : "";
     mi::base::Handle<mi::neuraylib::IExport_result_ext> export_result_ext(
         transaction->create<mi::neuraylib::IExport_result_ext>( "Export_result_ext"));
-    Resource_callback resource_callback(
+    MDL::Resource_callback resource_callback(
         db_transaction,
         module,
         module_name,

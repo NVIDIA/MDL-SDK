@@ -396,7 +396,7 @@ public:
 
     virtual const IType_texture* get_type() const = 0;
 
-    virtual Float32 get_gamma() const = 0;
+    virtual mi::Float32 get_gamma() const = 0;
 
     virtual const char* get_selector() const = 0;
 };

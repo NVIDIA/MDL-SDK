@@ -49,7 +49,7 @@
 
 #include <cstdio>
 #include <base/hal/hal/hal.h>
-#include <base/lib/log/log.h>
+#include <base/lib/log/i_log_logger.h>
 #include <base/lib/mem/i_mem_allocatable.h>
 #include <base/util/string_utils/i_string_utils.h>
 

@@ -197,9 +197,11 @@ namespace fx { namespace gltf
             std::string result = (uri.rfind(".mdl") != std::string::npos)
                 ? uri.substr(0, uri.size() - 4) : uri;
 
-            // remove mdl://
-            if (result.find("mdl://") != std::string::npos)
-                result = result.substr(6);
+            // remove mdl schema
+            if (result.find("mdl:///") != std::string::npos)
+                result = result.substr(6); // remove "mdl://", leave one '/'
+            else if (result.find("mdl:/") != std::string::npos)
+                result = result.substr(4); // remove "mdl:", leave the '/'
 
             // remove preceding . and ..
             if (result[0] == '.')

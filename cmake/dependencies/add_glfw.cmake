@@ -50,24 +50,9 @@ else()
         )
 
     # static library
-    if(WIN32)
-        target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET} 
-            PRIVATE
-                ${MDL_DEPENDENCY_GLFW_LIBS}
-            )
-    else()
-        target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET} 
-            PRIVATE
-                ${MDL_DEPENDENCY_GLFW_SHARED}
-            )
-    endif()
+    target_link_libraries(${__TARGET_ADD_DEPENDENCY_TARGET} 
+        PRIVATE
+            ${MDL_DEPENDENCY_GLFW_LIBS}
+        )
 
-    # copy runtime dependencies
-    # copy system libraries only on windows, we assume the libraries are installed in a unix environment
-    if(NOT __TARGET_ADD_DEPENDENCY_NO_RUNTIME_COPY AND WINDOWS)
-        target_copy_to_output_dir(TARGET ${__TARGET_ADD_DEPENDENCY_TARGET}
-            FILES
-                ${MDL_DEPENDENCY_GLFW_SHARED}
-            )
-    endif()
 endif()

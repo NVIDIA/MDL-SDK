@@ -104,6 +104,9 @@ public:
         const char* module_mdl_name,
         bool resolve_resources);
 
+    /// Copy constructor.
+    Mdl_function_definition( const Mdl_function_definition&) = default;
+
     Mdl_function_definition& operator=( const Mdl_function_definition&) = delete;
 
     // methods corresponding to mi::neuraylib::IFunction_definition
@@ -176,8 +179,7 @@ public:
     // internal methods
 
     /// The API method mi::neuraylib::IExpression_factory::create_direct_call() uses this method to
-    /// do the actual work, and finally calls MDL::Ixpression_factory::create_direct_call() to
-    /// create the actual instance.
+    /// do the actual work.
     IExpression_direct_call* create_direct_call(
         DB::Transaction* transaction,
         const IExpression_list* arguments,

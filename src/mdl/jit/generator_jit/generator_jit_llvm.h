@@ -53,6 +53,7 @@ namespace llvm {
     class ExecutionEngine;
     class Function;
     class Module;
+    class TargetMachine;
     namespace legacy {
         class FunctionPassManager;
     }
@@ -1272,6 +1273,14 @@ public:
         RTK_LAST = RTK_STRINGS
     };
 
+    /// Specifies how functions return their results.
+    enum Return_mode {
+        RETMODE_DEFAULT,        ///< Chooses the return mode based on the selected target language.
+        RETMODE_SRET,           ///< Return the result in a buffer provided as first argument
+        RETMODE_VALUE,          ///< Return the result directly as return value. If the type
+                                ///< is not supported as return type, it falls back to RETMODE_SRET
+    };
+
     /// RAII helper class.
     class MDL_module_scope {
     public:
@@ -1816,6 +1825,9 @@ public:
     llvm::Function *get_target_operator_function(
         mi::mdl::IExpression_binary::Operator op,
         llvm::Type                            *arg_type);
+
+    /// Create the target machine for PTX code generation.
+    std::unique_ptr<llvm::TargetMachine> create_ptx_target_machine();
 
     /// Compile the given module into PTX code.
     ///
@@ -3448,9 +3460,9 @@ private:
     bool target_uses_exception_state_parameter() const {
         switch (m_target_lang) {
         case ICode_generator::TL_NATIVE:
+            return true;
         case ICode_generator::TL_PTX:
         case ICode_generator::TL_LLVM_IR:
-            return true;
         case ICode_generator::TL_HLSL:
         case ICode_generator::TL_GLSL:
             return false;
@@ -3754,6 +3766,11 @@ private:
     /// \param name  a valid call mode name
     static Function_context::Tex_lookup_call_mode parse_call_mode(char const *name);
 
+    // Parse a return mode option.
+    ///
+    /// \param name  a valid return mode name
+    Return_mode parse_return_mode(char const *name);
+
     /// Parse the Df_handle_slot_mode
     ///
     /// \param name  a valid Df_handle_slot_mode name
@@ -3763,6 +3780,18 @@ private:
     ///
     /// \param s  the string value object
     mi::mdl::IValue_string const *get_internalized_string(mi::mdl::IValue_string const *s);
+
+    /// Get the optimization level from the options and environment.
+    static unsigned get_opt_level_from_options(
+        Target_language target_lang,
+        Options_impl const &options);
+
+    /// Get the math options from the options and environment, returning the fast math option
+    /// and setting the finite and reciprocal math in the given buffers.
+    static bool get_math_options_from_options(
+        Options_impl const &options,
+        bool *finite_math,
+        bool *reciprocal_math);
 
 private:
     /// The memory arena used to allocate context data on.
@@ -3864,17 +3893,17 @@ private:
     /// The LLVM function pass manager for the current module.
     std::unique_ptr<llvm::legacy::FunctionPassManager> m_func_pass_manager;
 
-    /// If true, fast-math transformations are enabled.
-    bool m_fast_math;
-
-    /// If true, the read-only segment generation is enabled.
-    bool m_enable_ro_segment;
-
     /// If true, finite-math-only transformations are enabled.
     bool m_finite_math;
 
     /// If true, reciprocal math transformations are enabled (i.e. a/b = a * 1/b).
     bool m_reciprocal_math;
+
+    /// If true, fast-math transformations are enabled.
+    bool m_fast_math;
+
+    /// If true, the read-only segment generation is enabled.
+    bool m_enable_ro_segment;
 
     /// If true, generated functions should get an AlwaysInline attribute.
     bool m_always_inline;
@@ -3899,6 +3928,9 @@ private:
 
     /// The target language.
     Target_language m_target_lang;
+
+    /// The return mode for lambda functions.
+    Return_mode m_lambda_return_mode;
 
     /// The function remapper.
     Function_remap m_func_remap;
@@ -3946,6 +3978,18 @@ private:
 
     /// The map storing context data for definitions.
     Context_data_map m_context_data;
+
+    /// Optimization level.
+    unsigned m_opt_level;
+
+    /// If PTX mode is enabled, the SM_version we compile for.
+    unsigned m_sm_version;
+
+    /// If non-zero, the minimum PTX version required.
+    unsigned m_min_ptx_version;
+
+    /// The target machine used with this code generator in PTX mode.
+    std::unique_ptr<llvm::TargetMachine> m_ptx_target_machine;
 
     /// The data layout to be used with this code generator.
     llvm::DataLayout m_data_layout;
@@ -4075,9 +4119,6 @@ private:
     /// If set, a resource map for mapping resources to tags.
     Resource_tag_map const *m_resource_tag_map;
 
-    /// Optimization level.
-    unsigned m_opt_level;
-
     /// The debug mode.
     Jit_debug_mode m_jit_dbg_mode;
 
@@ -4086,12 +4127,6 @@ private:
 
     /// The number of texture result entries.
     unsigned m_num_texture_results;
-
-    /// If PTX mode is enabled, the SM_version we compile for.
-    unsigned m_sm_version;
-
-    /// If non-zero, the minimum PTX version required.
-    unsigned m_min_ptx_version;
 
     /// Analysis object storing state usage information per function and updating
     State_usage_analysis m_state_usage_analysis;

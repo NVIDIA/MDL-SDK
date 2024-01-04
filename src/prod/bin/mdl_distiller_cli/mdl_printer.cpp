@@ -1,4 +1,3 @@
-
 /******************************************************************************
  * Copyright (c) 2021-2023, NVIDIA CORPORATION. All rights reserved.
  *
@@ -363,6 +362,8 @@ static std::string drop_module_prefix(std::string qualified_name)
 /// Mdl_printer Constructor.
 Mdl_printer::Mdl_printer(
     INeuray* neuray,
+    mi::neuraylib::IMdl_factory *mdl_factory,
+    mi::neuraylib::IExpression_factory *expr_factory,
     std::ostream &out,
     Options const* options,
     char const *target,
@@ -373,6 +374,8 @@ Mdl_printer::Mdl_printer(
     bool do_bake,
     ITransaction *transaction)
     : m_neuray(neuray)
+    , m_mdl_factory(mdl_factory)
+    , m_expr_factory(expr_factory)
     , m_out(out)
     , m_options(options)
     , m_target(target)
@@ -875,10 +878,22 @@ void Mdl_printer::print_value(IValue const *value, std::string const &path_prefi
         mdl_assert(float_val.is_valid_interface());
 
         float f = float_val->get_value();
+        if (std::isnan(f)) {
+            m_out << "(0.0f/0.0f)";
+            break;
+        }
+        if (std::isinf(f)) {
+            if (f < 0.0f) {
+                m_out << "(-1.0f/0.0f)";
+            } else {
+                m_out << "(1.0f/0.0f)";
+            }
+            break;
+        }
         if (f == float(int(f))) {
-            m_out << int(f) << ".0";
+            m_out << int(f) << ".0f";
         } else {
-            m_out << f;
+            m_out << f << "f";
         }
         break;
     }
@@ -889,6 +904,18 @@ void Mdl_printer::print_value(IValue const *value, std::string const &path_prefi
         mdl_assert(double_val.is_valid_interface());
 
         double d = double_val->get_value();
+        if (std::isnan(d)) {
+            m_out << "(0.0/0.0)";
+            break;
+        }
+        if (std::isinf(d)) {
+            if (d < 0.0) {
+                m_out << "(-1.0/0.0)";
+            } else {
+                m_out << "(1.0/0.0)";
+            }
+            break;
+        }
 
         m_out << d;
         break;
@@ -961,7 +988,7 @@ void Mdl_printer::print_value(IValue const *value, std::string const &path_prefi
         Handle<IValue_float const> g(d->get_value(1));
         Handle<IValue_float const> b(d->get_value(2));
         m_out << "color(";
-        if (r->get_value() == g->get_value() && r->get_value() == b->get_value()) {
+        if (std::isfinite(r->get_value()) && r->get_value() == g->get_value() && r->get_value() == b->get_value()) {
             if (r->get_value() != 0.0) {
                 print_value(r.get(), path_prefix); // FIXME: what prefix is correct?
             }
@@ -1107,11 +1134,7 @@ void Mdl_printer::print_direct_call(IExpression_direct_call const *call, std::st
         m_transaction->access<IFunction_definition>(call->get_definition()));
     std::string function_name = drop_signature(function->get_mdl_name());
 
-    Handle<mi::neuraylib::IMdl_factory> mdl_factory(
-        m_neuray->get_api_component<mi::neuraylib::IMdl_factory>());
-    mdl_assert(mdl_factory.is_valid_interface());
-
-    Handle<const IString> s(mdl_factory->decode_name(function_name.c_str()));
+    Handle<const IString> s(m_mdl_factory->decode_name(function_name.c_str()));
     function_name = s->get_c_str();
 
     if (function_name.substr(0,30) == std::string("::nvidia::distilling_support::")) {
@@ -1290,13 +1313,6 @@ void Mdl_printer::print_direct_call(IExpression_direct_call const *call, std::st
         }
 
         Handle<IExpression_list const> defaults(function->get_defaults());
-        Handle<mi::neuraylib::IMdl_factory> mdl_factory(
-            m_neuray->get_api_component<mi::neuraylib::IMdl_factory>());
-        mdl_assert(mdl_factory.is_valid_interface());
-
-        Handle<mi::neuraylib::IExpression_factory> expr_factory(mdl_factory->create_expression_factory(m_transaction));
-        mdl_assert(expr_factory.is_valid_interface());
-
 
         mi::Size argc = arguments->get_size();
         bool param_printed = false;
@@ -1315,8 +1331,7 @@ void Mdl_printer::print_direct_call(IExpression_direct_call const *call, std::st
             if (m_suppress_default_parameters
                 && name
                 && arg_def
-                && expr_factory->compare(arg_expr.get(), arg_def.get()) == 0) {
-//                warning("omitting default parameter for call to " + function_name);
+                && m_expr_factory->compare(arg_expr.get(), arg_def.get()) == 0) {
                 continue;
             }
             if (param_printed) {
@@ -1628,9 +1643,7 @@ void Mdl_printer::analyze_expression(IExpression const *expr, std::string const 
             m_transaction->access<IFunction_definition>(call->get_definition()));
         std::string function_name = drop_signature( function->get_mdl_name());
 
-        Handle<mi::neuraylib::IMdl_factory> mdl_factory(
-            m_neuray->get_api_component<mi::neuraylib::IMdl_factory>());
-        Handle<const IString> s(mdl_factory->decode_name( function_name.c_str()));
+        Handle<const IString> s(m_mdl_factory->decode_name( function_name.c_str()));
         function_name = s->get_c_str();
 
         if ( function_name.substr(0,30) == std::string("::nvidia::distilling_support::")) {

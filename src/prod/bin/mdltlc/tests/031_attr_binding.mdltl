@@ -1,0 +1,12 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Attr_Binding bottomup {
+    custom_curve_layer(w1,_,_,_w,
+                            bsdf() [[ diffuse_color ~ diffuse_color_layer ]],
+                            bsdf() [[ diffuse_color ~ diffuse_color_base  ]],
+                            _normal )
+        --> bsdf() [[   diffuse_color = math::lerp(diffuse_color_base@color, diffuse_color_layer, w1) ]]
+        ;
+}

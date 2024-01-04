@@ -92,7 +92,7 @@ enum BSDF_event_type
 #error "Compile constant 'MDL_DF_HANDLE_SLOT_MODE' not defined."
 #endif
 
-struct BSDF_sample_data
+struct __align__(16) BSDF_sample_data
 {
     float3 ior1;                // mutual input: IOR current medium
     float3 ior2;                // mutual input: IOR other side
@@ -107,7 +107,7 @@ struct BSDF_sample_data
     int handle;                 // output:  handle of the sampled elemental BSDF (lobe)
 };
 
-struct BSDF_evaluate_data
+struct __align__(16) BSDF_evaluate_data
 {
     float3 ior1;                // mutual input: IOR current medium
     float3 ior2;                // mutual input: IOR other side
@@ -134,7 +134,7 @@ struct BSDF_evaluate_data
     float  pdf;                 // output: pdf (non-projected hemisphere)
 };
 
-struct BSDF_pdf_data
+struct __align__(16) BSDF_pdf_data
 {
     float3 ior1;                // mutual input: IOR current medium
     float3 ior2;                // mutual input: IOR other side
@@ -144,7 +144,7 @@ struct BSDF_pdf_data
     float pdf;                  // output:  pdf (non-projected hemisphere)
 };
 
-struct BSDF_auxiliary_data
+struct __align__(16) BSDF_auxiliary_data
 {
     float3 ior1;                // mutual input: IOR current medium
     float3 ior2;                // mutual input: IOR other side
@@ -157,15 +157,55 @@ struct BSDF_auxiliary_data
         int handle_count;       // input: number of elements of 'albedo' and 'normal'
     #endif
 
+    // output: albedo 2x float3
+    // The albedo output is split into diffuse and glossy albedo corresponding the BSDF_evaluate_data.
     #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMN
-        float3 albedo;          // output: albedo
-        float3 normal;          // output: normal
+        float3 albedo_diffuse;
+        float3 albedo_glossy;
     #elif MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMP
-        float3* albedo;         // output: albedo
-        float3* normal;         // output: normal
+        float3* albedo_diffuse;
+        float3* albedo_glossy;
     #else
-        float3 albedo[MDL_DF_HANDLE_SLOT_MODE]; // output: albedo
-        float3 normal[MDL_DF_HANDLE_SLOT_MODE]; // output: normal
+        float3 albedo_diffuse[MDL_DF_HANDLE_SLOT_MODE];
+        float3 albedo_glossy[MDL_DF_HANDLE_SLOT_MODE];
+    #endif
+
+    // output: normal
+    // The normal is normlized if not a zero vector. It is computed as a weighted linear combination
+    // based on the weights of the BSDF in the layering tree.
+    // For a weighted combination of normals from multiple calls to the auxiliary function,
+    // one could aggregate the slot normals using the wights provided in the last component of the
+    // `roughness` output of the corresponding slot.
+    #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMN
+        float3 normal;
+    #elif MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMP
+        float3* normal;
+    #else
+        float3 normal[MDL_DF_HANDLE_SLOT_MODE];
+    #endif
+
+    // output: roughness (float3)
+    // The components x and y contain roughness values corresponding to roughness_u and roughness_v
+    // as specified by glossy BSDFs. Diffuse BSDFs are considered to have a roughness of 1.0 in this
+    // context. Specular BSDFs have a roughness of 0.0. The invalid black BSDF as well as BSDF
+    // measurements also report a roughness of 0.0.
+    // The z component carries the cumulated weight of the BSDFs in the layering tree.
+    //
+    // If only a single BSDF is used in the material or is evaluated using handles, x and y reproduce
+    // exactly the arguments passed to the BSDF. The z component will hold the weight of the evaluated
+    // BSDF in the layering tree. When aggregating roughness values over multiple calls to the auxiliary
+    // function, one could compute a weighted average by: 
+    //      sum(roughness_i.xy * roughness_i.z) / sum(roughness_i.z)
+    //
+    // When multiple elemental BSDF are evaluated at once (e.g. without handles), the components x and y
+    // will already contain the weighted average computed by the formula above. The z component will
+    // hold the cumulated weights in order to allow the same external aggregation.
+    #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMN
+        float3 roughness;
+    #elif MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMP
+        float3* roughness;
+    #else
+        float3 roughness[MDL_DF_HANDLE_SLOT_MODE];
     #endif
 };
 
@@ -187,7 +227,7 @@ enum EDF_event_type
     EDF_EVENT_EMISSION = 1,
 };
 
-struct EDF_sample_data
+struct __align__(16) EDF_sample_data
 {
     float4 xi;                  // input: pseudo-random sample numbers
 
@@ -198,7 +238,7 @@ struct EDF_sample_data
     int handle;                 // output: handle of the sampled elemental EDF (lobe)
 };
 
-struct EDF_evaluate_data
+struct __align__(16) EDF_evaluate_data
 {
     float3 k1;                  // input: outgoing direction
     #if MDL_DF_HANDLE_SLOT_MODE != BSDF_HSMN
@@ -219,14 +259,14 @@ struct EDF_evaluate_data
     float pdf;                  // output: pdf (non-projected hemisphere)
 };
 
-struct EDF_pdf_data
+struct __align__(16) EDF_pdf_data
 {
     float3 k1;                  // input: outgoing direction
 
     float pdf;                  // output: pdf (non-projected hemisphere)
 };
 
-struct EDF_auxiliary_data
+struct __align__(16) EDF_auxiliary_data
 {
     float3 k1;                  // input: outgoing direction
     #if MDL_DF_HANDLE_SLOT_MODE != BSDF_HSMN

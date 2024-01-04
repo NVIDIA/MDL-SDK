@@ -87,20 +87,13 @@ class Default_allocator
     // Since this is a stateless allocator there is no real construction
     // code required - hence all constructors/destructors do nothing.
     // Default constructor.
-    Default_allocator();
-
-    // Copy constructor
-    Default_allocator(
-	const Default_allocator&);	// the other allocator
+    Default_allocator() = default;
 
     // Conversion copy constructor
     template <typename U>
     Default_allocator(
 	const Default_allocator<U>&)	// the other allocator
     {}
-
-    // Trivial destructor.
-    ~Default_allocator();
 
 
     // Initialize element at p with given value.

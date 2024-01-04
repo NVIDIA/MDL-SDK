@@ -42,6 +42,8 @@ namespace mi { namespace neuraylib { class IExtension_api; } }
 
 namespace MI {
 
+namespace DB { class Database; }
+
 namespace NEURAY {
 
 class Class_factory;
@@ -63,7 +65,9 @@ public:
     ///
     /// Part 2 encompasses the API wrappers for DB elements and related classes. They need the
     /// database or the deserialization manager and can only be user after neuray has been started.
-    static void register_classes_part2( Class_factory* factory);
+    ///
+    /// The \p db parameter is only used by the MDL SDK implementation.
+    static void register_classes_part2( Class_factory* factory, DB::Database* db);
 
     /// Registers all built-in structure declarations
     static void register_structure_declarations( Class_factory* factory);

@@ -29,7 +29,8 @@ Coco/R itself) does not fall under the GNU General Public License.
 #if !defined(COCO_GENERATOR_H__)
 #define COCO_GENERATOR_H__
 
-#include <stdio.h>
+#include <string>
+#include <cstdio>
 #include "Tab.h"
 #include "Parser.h"
 
@@ -37,7 +38,7 @@ namespace Coco {
 
 class Generator {
 public:
-	Generator(Tab *tab, Errors *errors);
+	Generator(Tab &tab, Errors &errors);
 	FILE* OpenFrame(const char* frame);
 	FILE* OpenGen(const char *genName);
 	void GenCopyright();
@@ -46,11 +47,11 @@ public:
 	void CopyFramePart(const char *stop);
 
 private:
+	Tab &tab;
+	Errors &errors;
 	FILE* fram;
 	FILE* gen;
-	Tab *tab;
-	char* frameFile;
-	Errors *errors;
+	std::string frameFile;
 
 	void CopyFramePart(const char* stop, bool generateOutput);
 

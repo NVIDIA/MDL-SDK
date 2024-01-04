@@ -1,0 +1,73 @@
+/***************************************************************************************************
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ **************************************************************************************************/
+
+// Keep MDL version at 1.3 such the failures are reported as warnings, not as
+// errors. Otherwise, we can't run our checks later. Also uses weak-relative paths.
+mdl 1.3;
+
+import ::df::*;
+using ::anno import *;
+import ::base::*;
+import ::state::*;
+
+
+// Test invalid resources.
+export int fd_texture_invalid(
+    uniform texture_2d t = texture_2d("") [[ unused() ]]
+) { return 0; }
+
+// Test invalid resources.
+export int fd_light_profile_invalid(
+    uniform light_profile l = light_profile("") [[ unused() ]]
+) { return 0; }
+
+// Test invalid resources.
+export int fd_bsdf_measurement_invalid(
+    uniform bsdf_measurement b = bsdf_measurement("") [[ unused() ]]
+) { return 0; }
+
+
+// Test resource lookup with "." (triggers error message).
+export int fd_texture_failure(
+    uniform texture_2d t = texture_2d("./test.png") [[ unused() ]]
+) { return 0; }
+
+// Test resource lookup with too many ".." (triggers error message).
+export int fd_light_profile_failure(
+    uniform light_profile l = light_profile("../../test.ies") [[ unused() ]]
+) { return 0; }
+
+// Test resource lookup with non-leading ".." (triggers error message).
+export int fd_bsdf_measurement_failure(
+    uniform bsdf_measurement b = bsdf_measurement("resources/../resources/test.mbsdf") [[ unused() ]]
+) { return 0; }
+
+// Test resource lookup with absolute ".." (triggers error message).
+export int fd_bsdf_measurement_failure2(
+    uniform bsdf_measurement b = bsdf_measurement("/../mdl_elements/resources/test.mbsdf") [[ unused() ]]
+) { return 0; }

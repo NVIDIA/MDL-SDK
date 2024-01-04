@@ -148,7 +148,7 @@ function(FIND_CUDA_EXT)
         endif()
     endif()
 
-    # store path that are later used in the add_cuda.cmake
+    # store paths that are later used in the add_cuda.cmake
     set(MDL_DEPENDENCY_CUDA_INCLUDE ${_CUDA_INCLUDE} CACHE INTERNAL "cuda headers")
     set(MDL_DEPENDENCY_CUDA_LIBS ${_CUDA_LIBS} CACHE INTERNAL "cuda libs")
     set(MDL_DEPENDENCY_CUDA_SHARED ${_CUDA_SHARED} CACHE INTERNAL "cuda shared libs")

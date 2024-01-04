@@ -334,7 +334,12 @@ float apply_wrap_and_crop(
         }
         coord = coord * (crop.y - crop.x) + crop.x;
     }
-    return coord;
+    // Manually implement repeat here. The sampler is configured to clamp.
+    // Because frac(1.0) = 0.0, we need to handle this separately.
+    // floor(0.0) needs to be 0. 
+    // floor(n) is 1, which is achieved by the clamp mode.
+    float truncated = floor(coord);
+    return coord == truncated ? truncated : frac(coord);
 }
 
 // Modify texture coordinates to get better texture filtering,
@@ -1123,57 +1128,56 @@ float3 df_bsdf_measurement_sample(
     const uint res_x = bm.angular_resolution_theta[part];
     const uint res_y = bm.angular_resolution_phi[part];
 
-    // compute the theta_in index (flipping input and output, BSDFs are symmetric)
-    uint idx_theta_in = uint(theta_phi_out[0] * 2.0 * M_ONE_OVER_PI * float(res_x));
-    idx_theta_in = min(idx_theta_in, res_x - 1);
+    uint idx_theta_out = uint(theta_phi_out[0] * 2.0 * M_ONE_OVER_PI * float(res_x));
+    idx_theta_out = min(idx_theta_out, res_x - 1);
 
-    // sample theta_out
+    // sample theta_in
     //-------------------------------------------
     float xi0 = xi[0];
-    const uint theta_data_offset = idx_theta_in * res_x;
-    const uint idx_theta_out = sample_cdf(sample_data, theta_data_offset, res_x, xi0); // binary search
+    const uint theta_data_offset = idx_theta_out * res_x;
+    const uint idx_theta_in = sample_cdf(sample_data, theta_data_offset, res_x, xi0); // binary search
 
-    float prob_theta = sample_data[theta_data_offset + idx_theta_out];
-    if (idx_theta_out > 0)
+    float prob_theta = sample_data[theta_data_offset + idx_theta_in];
+    if (idx_theta_in > 0)
     {
-        const float tmp = sample_data[theta_data_offset + idx_theta_out - 1];
+        const float tmp = sample_data[theta_data_offset + idx_theta_in - 1];
         prob_theta -= tmp;
         xi0 -= tmp;
     }
     xi0 /= prob_theta; // rescale for re-usage
 
-    // sample phi_out
+    // sample phi
     //-------------------------------------------
     float xi1 = xi[1];
     const uint phi_data_offset = (res_x * res_x)                                 // CDF theta block
-                               + (idx_theta_in * res_x + idx_theta_out) * res_y; // selected CDF phi
+                               + (idx_theta_out * res_x + idx_theta_in) * res_y; // selected CDF phi
 
     // select which half-circle to choose with probability 0.5
     const bool flip = (xi1 > 0.5);
     if (flip) xi1 = 1.0 - xi1;
     xi1 *= 2.0;
 
-    const uint idx_phi_out = sample_cdf(sample_data, phi_data_offset, res_y, xi1); // binary search
-    float prob_phi = sample_data[phi_data_offset + idx_phi_out];
-    if (idx_phi_out > 0)
+    const uint idx_phi = sample_cdf(sample_data, phi_data_offset, res_y, xi1); // binary search
+    float prob_phi = sample_data[phi_data_offset + idx_phi];
+    if (idx_phi > 0)
     {
-        const float tmp = sample_data[phi_data_offset + idx_phi_out - 1];
+        const float tmp = sample_data[phi_data_offset + idx_phi - 1];
         prob_phi -= tmp;
         xi1 -= tmp;
     }
     xi1 /= prob_phi; // rescale for re-usage
 
-    // compute theta and phi out
+    // compute direction
     //-------------------------------------------
     const float s_theta = (0.5 * M_PI) * (1.0 / float(res_x));
     const float s_phi   = (1.0 * M_PI) * (1.0 / float(res_y));
 
-    const float cos_theta_0 = cos(float(idx_theta_out)      * s_theta);
-    const float cos_theta_1 = cos(float(idx_theta_out + 1u) * s_theta);
+    const float cos_theta_0 = cos(float(idx_theta_in)      * s_theta);
+    const float cos_theta_1 = cos(float(idx_theta_in + 1u) * s_theta);
 
     const float cos_theta = lerp(cos_theta_0, cos_theta_1, xi1);
     result[0] = acos(cos_theta);
-    result[1] = (float(idx_phi_out) + xi0) * s_phi;
+    result[1] = (float(idx_phi) + xi0) * s_phi;
 
     if (flip)
         result[1] = 2.0 * M_PI - result[1]; // phi \in [0, 2pi]
@@ -1210,32 +1214,32 @@ float df_bsdf_measurement_pdf(
 
     // compute indices in the CDF data
     const float3 uvw = bsdf_compute_uvw(theta_phi_in, theta_phi_out); // phi_delta, theta_out, theta_in
-    uint idx_theta_in  = uint(theta_phi_in[0]  * M_ONE_OVER_PI * 2.0 * float(res_x));
-    uint idx_theta_out = uint(theta_phi_out[0] * M_ONE_OVER_PI * 2.0 * float(res_x));
-    uint idx_phi_out   = uint(uvw.x * float(res_y));
+    uint idx_theta_in  = uint(uvw.z * float(res_x));
+    uint idx_theta_out = uint(uvw.y * float(res_x));
+    uint idx_phi       = uint(uvw.x * float(res_y));
     idx_theta_in = min(idx_theta_in, res_x - 1);
     idx_theta_out = min(idx_theta_out, res_x - 1);
-    idx_phi_out = min(idx_phi_out, res_y - 1);
+    idx_phi = min(idx_phi, res_y - 1);
 
-    // get probability to select theta_out
-    const uint theta_data_offset = idx_theta_in * res_x;
-    float prob_theta = sample_data[theta_data_offset + idx_theta_out];
-    if (idx_theta_out > 0)
-        prob_theta -= sample_data[theta_data_offset + idx_theta_out - 1];
+    // get probability to select theta_in
+    const uint theta_data_offset = idx_theta_out * res_x;
+    float prob_theta = sample_data[theta_data_offset + idx_theta_in];
+    if (idx_theta_in > 0)
+        prob_theta -= sample_data[theta_data_offset + idx_theta_in - 1];
 
-    // get probability to select phi_out
+    // get probability to select phi
     const uint phi_data_offset = (res_x * res_x)                                 // CDF theta block
-                               + (idx_theta_in * res_x + idx_theta_out) * res_y; // selected CDF phi
-    float prob_phi = sample_data[phi_data_offset + idx_phi_out];
-    if (idx_phi_out > 0)
-        prob_phi -= sample_data[phi_data_offset + idx_phi_out - 1];
+                               + (idx_theta_out * res_x + idx_theta_in) * res_y; // selected CDF phi
+    float prob_phi = sample_data[phi_data_offset + idx_phi];
+    if (idx_phi > 0)
+        prob_phi -= sample_data[phi_data_offset + idx_phi - 1];
 
     // compute probability to select a position in the sphere patch
     const float s_theta = (0.5 * M_PI) * (1.0 / float(res_x));
     const float s_phi   = (1.0 * M_PI) * (1.0 / float(res_y));
 
-    const float cos_theta_0 = cos(float(idx_theta_out)      * s_theta);
-    const float cos_theta_1 = cos(float(idx_theta_out + 1u) * s_theta);
+    const float cos_theta_0 = cos(float(idx_theta_in)      * s_theta);
+    const float cos_theta_1 = cos(float(idx_theta_in + 1u) * s_theta);
 
     return prob_theta * prob_phi * 0.5 / (s_phi * (cos_theta_0 - cos_theta_1));
 }

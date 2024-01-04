@@ -30,8 +30,8 @@
  ** \brief Header for the IModule implementation.
  **/
 
-#ifndef API_API_NEURAY_MODULE_IMPL_H
-#define API_API_NEURAY_MODULE_IMPL_H
+#ifndef API_API_NEURAY_NEURAY_MODULE_IMPL_H
+#define API_API_NEURAY_NEURAY_MODULE_IMPL_H
 
 #include <mi/neuraylib/imodule.h>
 
@@ -138,4 +138,4 @@ public:
 
 } // namespace MI
 
-#endif // API_API_NEURAY_MODULE_IMPL_H
+#endif // API_API_NEURAY_NEURAY_MODULE_IMPL_H

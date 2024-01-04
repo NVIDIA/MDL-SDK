@@ -1,0 +1,125 @@
+mdl 1.6;
+
+using ::anno import *;
+import ::up11::up11_f;
+import ::p1::same11::same11_f;
+import ::p1::p2::down11::down11_f;
+import ::limits::FLOAT_MAX;
+import ::std::FLOAT_MAX;
+import ::base::gradient_mode;
+import .::same12::same12_f;
+import .::p2::down12::down12_f;
+using ::up15 import up15_f;
+using ::p1::same15 import same15_f;
+using ::p1::p2::down15 import down15_f;
+using ::limits import DOUBLE_MAX;
+using ::limits import INT_MAX;
+using ::base import color_layer_mode;
+using .::same16 import same16_f;
+using .::p2::down16 import down16_f;
+import ::state::normal;
+import ::tex::gamma_mode;
+
+export int use_up11_f() uniform
+{
+    return up11::up11_f();
+}
+
+export int use_same11_f() uniform
+{
+    return p1::same11::same11_f();
+}
+
+export int use_down11_f() uniform
+{
+    return p1::p2::down11::down11_f();
+}
+
+export int use_same12_f() uniform
+{
+    return same12::same12_f();
+}
+
+export int use_down12_f() uniform
+{
+    return p2::down12::down12_f();
+}
+
+export int use_up15_f() uniform
+{
+    return ::up15_f();
+}
+
+export int use_same15_2() uniform
+{
+    return ::same15_f();
+}
+
+export int use_down15_f() uniform
+{
+    return ::down15_f();
+}
+
+export int use_same16_f() uniform
+{
+    return ::same16_f();
+}
+
+export int use_down16_f() uniform
+{
+    return ::down16_f();
+}
+
+export float use_float_max() uniform
+{
+    return limits::FLOAT_MAX;
+}
+
+export double use_double_max() uniform
+{
+    return ::DOUBLE_MAX;
+}
+
+export float use_std_float_max() uniform
+{
+    return std::FLOAT_MAX;
+}
+
+export int use_std_int_max() uniform
+{
+    return ::INT_MAX;
+}
+
+export base::gradient_mode use_gradient_mode() uniform
+{
+    return base::gradient_linear;
+}
+
+export ::color_layer_mode use_color_layer_mode() uniform
+{
+    return ::color_layer_blend;
+}
+
+export int f_up_weak_relative(
+    uniform texture_2d t = texture_2d("/up2.png", ::tex::gamma_default) [[
+        ::unused()
+    ]]) uniform
+{
+    return 0;
+}
+
+export int f_same_weak_relative(
+    uniform texture_2d t = texture_2d("./same2.png", ::tex::gamma_default) [[
+        ::unused()
+    ]]) uniform
+{
+    return 0;
+}
+
+export int f_down_weak_relative(
+    uniform texture_2d t = texture_2d("./p2/down2.png", ::tex::gamma_default) [[
+        ::unused()
+    ]]) uniform
+{
+    return 0;
+}

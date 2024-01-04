@@ -32,8 +32,8 @@
  ** Implements the IMdl_i18n_configuration interface
  **/
 
-#ifndef API_API_NEURAY_MDL_I18N_CONFIGURATION_IMPL_H
-#define API_API_NEURAY_MDL_I18N_CONFIGURATION_IMPL_H
+#ifndef API_API_NEURAY_NEURAY_MDL_I18N_CONFIGURATION_IMPL_H
+#define API_API_NEURAY_NEURAY_MDL_I18N_CONFIGURATION_IMPL_H
 
 #include <mi/base/interface_implement.h>
 #include <mi/neuraylib/imdl_i18n_configuration.h>
@@ -105,4 +105,4 @@ private:
 
 } // namespace MI
 
-#endif // API_API_NEURAY_MDL_I18N_CONFIGURATION_IMPL_H
+#endif // API_API_NEURAY_NEURAY_MDL_I18N_CONFIGURATION_IMPL_H

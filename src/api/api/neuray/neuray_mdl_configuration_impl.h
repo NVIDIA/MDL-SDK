@@ -32,8 +32,8 @@
  ** Implements the IMdl_configuration interface
  **/
 
-#ifndef API_API_NEURAY_MDL_CONFIGURATION_IMPL_H
-#define API_API_NEURAY_MDL_CONFIGURATION_IMPL_H
+#ifndef API_API_NEURAY_NEURAY_MDL_CONFIGURATION_IMPL_H
+#define API_API_NEURAY_NEURAY_MDL_CONFIGURATION_IMPL_H
 
 #include <mi/base/interface_implement.h>
 #include <mi/base/handle.h>
@@ -66,11 +66,6 @@ public:
     ~Mdl_configuration_impl();
 
     // public API methods
-
-    void set_logger( mi::base::ILogger* logger) final;
-
-    mi::base::ILogger* get_logger() final;
-
 
     mi::Sint32 add_mdl_path( const char* path) final;
 
@@ -114,10 +109,15 @@ public:
 
     bool get_simple_glossy_bsdf_legacy_enabled() const final;
 
-    
+
     mi::neuraylib::IMdl_entity_resolver* get_entity_resolver() const final;
 
     void set_entity_resolver( mi::neuraylib::IMdl_entity_resolver* resolver) final;
+
+
+    void deprecated_set_logger( mi::base::ILogger* logger) final;
+
+    mi::base::ILogger* deprecated_get_logger() final;
 
     // internal methods
 
@@ -154,9 +154,9 @@ private:
     SYSTEM::Access_module<PATH::Path_module> m_path_module; // path module
     SYSTEM::Access_module<MDLC::Mdlc_module> m_mdlc_module; // mdlc module
 
-    bool m_implicit_cast_enabled;
-    bool m_expose_names_of_let_expressions;
-    bool m_simple_glossy_bsdf_legacy_enabled;
+    bool m_implicit_cast_enabled = true;
+    bool m_expose_names_of_let_expressions = false;
+    bool m_simple_glossy_bsdf_legacy_enabled = false;
     mi::base::Handle<mi::neuraylib::IMdl_entity_resolver> m_entity_resolver;
     std::vector<std::string> m_mdl_system_paths;
     std::vector<std::string> m_mdl_user_paths;
@@ -166,4 +166,5 @@ private:
 
 } // namespace MI
 
-#endif // API_API_NEURAY_MDL_CONFIGURATION_IMPL_H
+#endif // API_API_NEURAY_NEURAY_MDL_CONFIGURATION_IMPL_H
+

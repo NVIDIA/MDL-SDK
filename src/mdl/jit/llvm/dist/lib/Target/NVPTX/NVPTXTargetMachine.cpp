@@ -100,7 +100,8 @@ static std::string computeDataLayout(bool is64Bit, bool UseShortPointers) {
   else if (UseShortPointers)
     Ret += "-p3:32:32-p4:32:32-p5:32:32";
 
-  Ret += "-i64:64-i128:128-v16:16-v32:32-n16:32:64";
+  // CUDA uses the element alignment for vectors with 3 elements
+  Ret += "-i64:64-i128:128-v16:16-v24:8:32-v32:32-v48:16:64-v96:32:128-v192:64:256-n16:32:64";
 
   return Ret;
 }

@@ -187,7 +187,8 @@ Shader_library::Shader_library(IDxcBlob* blob, const std::vector<std::string>& e
     // Create one export descriptor per symbol
     for (size_t i = 0; i < exported_symbols.size(); i++)
     {
-        m_d3d_data->m_exported_symbols_w[i] = mi::examples::strings::str_to_wstr(exported_symbols[i]);
+        m_d3d_data->m_exported_symbols_w[i] =
+            mi::examples::strings::str_to_wstr(exported_symbols[i]);
         m_d3d_data->m_exports[i] = {};
         m_d3d_data->m_exports[i].Name = m_d3d_data->m_exported_symbols_w[i].c_str();
         m_d3d_data->m_exports[i].ExportToRename = nullptr;
@@ -225,7 +226,8 @@ std::vector<Shader_library> Shader_compiler::compile_shader_library(
         log_error("Failed to load shader source from file: " + file_name, SRC);
         return {};
     }
-    return compile_shader_library_from_string(options, shader_source, file_name, defines, entry_points);
+    return compile_shader_library_from_string(
+        options, shader_source, file_name, defines, entry_points);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -508,7 +510,8 @@ std::vector<Shader_library> Shader_compiler::compile_shader_library_from_string_
     SlangProfileID slang_profile = spFindProfile(slang_session.get(), "lib_6_3");
     if (slang_profile == SLANG_PROFILE_UNKNOWN)
     {
-        log_error("spFindProfile failed to find a compatible profile for 'lib_6_3': " + debug_name, SRC);
+        log_error("spFindProfile failed to find a compatible profile for 'lib_6_3': " +
+            debug_name, SRC);
         return {};
     }
 
@@ -523,7 +526,8 @@ std::vector<Shader_library> Shader_compiler::compile_shader_library_from_string_
     }
     //spSetPassThrough(slang_compile_request, SLANG_PASS_THROUGH_DXC);
 
-    int unit_index = spAddTranslationUnit(slang_compile_request, SLANG_SOURCE_LANGUAGE_HLSL, nullptr);
+    int unit_index = spAddTranslationUnit(
+        slang_compile_request, SLANG_SOURCE_LANGUAGE_HLSL, nullptr);
 
     for (const auto& it : entry_points)
     {
@@ -547,7 +551,8 @@ std::vector<Shader_library> Shader_compiler::compile_shader_library_from_string_
 
     size_t sep_pos = base_file_name.rfind('/');
     std::string filepath = include_path + "/" + base_file_name.substr(sep_pos + 1) + ".hlsl";
-    spAddTranslationUnitSourceString(slang_compile_request, unit_index, filepath.c_str(), shader_source.c_str());
+    spAddTranslationUnitSourceString(
+        slang_compile_request, unit_index, filepath.c_str(), shader_source.c_str());
 
     if (defines)
     {
@@ -573,7 +578,8 @@ std::vector<Shader_library> Shader_compiler::compile_shader_library_from_string_
                 size_t lineLocBegin = errMsg.find_first_of('(');
                 size_t lineLocEnd = errMsg.find_first_of(')');
                 if (lineLocBegin != std::string::npos) {
-                    std::string lineStr = errMsg.substr(lineLocBegin + 1, lineLocEnd - lineLocBegin - 1);
+                    std::string lineStr = errMsg.substr(
+                        lineLocBegin + 1, lineLocEnd - lineLocBegin - 1);
                     msg = errMsg.substr(lineLocEnd + 3);
 
                     line = std::stoi(lineStr);
@@ -589,7 +595,8 @@ std::vector<Shader_library> Shader_compiler::compile_shader_library_from_string_
             std::string message = "Shader Compiler Error: " + debug_name + "\n";
             message.append(spGetDiagnosticOutput(slang_compile_request));
             log_error(message, SRC);
-            log_error("spCompile failed with code " + std::to_string(result) + ": " + debug_name, SRC);
+            log_error("spCompile failed with code " + 
+                std::to_string(result) + ": " + debug_name,SRC);
             return {};
         }
     }
@@ -603,12 +610,14 @@ std::vector<Shader_library> Shader_compiler::compile_shader_library_from_string_
         spGetEntryPointCode(slang_compile_request, i, &entry_point_code_size);
 
         std::vector<char> code(entry_point_code_size);
-        const void* entry_point_code = spGetEntryPointCode(slang_compile_request, i, &entry_point_code_size);
+        const void* entry_point_code = spGetEntryPointCode(
+            slang_compile_request, i, &entry_point_code_size);
 
         // get the DXIL code block
         ISlangBlob* dxil_blob = nullptr;
         spGetEntryPointCodeBlob(slang_compile_request, i, target_index, &dxil_blob);
-        SlangReflectionEntryPoint* entry_point_relf = spReflection_getEntryPointByIndex(slang_reflection, i);
+        SlangReflectionEntryPoint* entry_point_relf =
+            spReflection_getEntryPointByIndex(slang_reflection, i);
         const char* entry_point_name = spReflectionEntryPoint_getName(entry_point_relf);
         dxil_libraries.push_back(Shader_library((IDxcBlob*)dxil_blob, { entry_point_name }));
 
@@ -619,8 +628,8 @@ std::vector<Shader_library> Shader_compiler::compile_shader_library_from_string_
             spGetEntryPointCodeBlob(slang_compile_request, i, target_index_asm, &asm_blob);
             if (asm_blob)
             {
-                std::wstring filename_ll =
-                    mi::examples::strings::str_to_wstr(base_file_name + "_" + entry_point_name + ".ll");
+                std::wstring filename_ll = mi::examples::strings::str_to_wstr(
+                    base_file_name + "_" + entry_point_name + ".ll");
                 FILE* file = _wfopen(filename_ll.c_str(), L"wb");
                 if (file)
                 {
@@ -1191,19 +1200,22 @@ bool Shader_binding_tables::finalize()
         std::max(D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT,
                     D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT));
 
+    m_binding_table_buffer_latest_requested_state = D3D12_RESOURCE_STATE_COMMON;
     auto heap_properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
     if (log_on_failure(m_app->get_device()->CreateCommittedResource(
         &heap_properties, D3D12_HEAP_FLAG_NONE, &desc,
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr,
+        m_binding_table_buffer_latest_requested_state, nullptr,
         IID_PPV_ARGS(&m_binding_table_buffer)),
         "Failed to create buffer for shader binding table: " + m_debug_name, SRC))
         return false;
     set_debug_name(m_binding_table_buffer.Get(), m_debug_name);
 
+    m_binding_table_buffer_upload_latest_requested_state = 
+        D3D12_RESOURCE_STATE_GENERIC_READ | D3D12_RESOURCE_STATE_COPY_SOURCE;
     heap_properties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
     if (log_on_failure(m_app->get_device()->CreateCommittedResource(
         &heap_properties, D3D12_HEAP_FLAG_NONE, &desc,
-        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+        m_binding_table_buffer_upload_latest_requested_state, nullptr,
         IID_PPV_ARGS(&m_binding_table_buffer_upload)),
         "Failed to create upload buffer for shader binding table: " + m_debug_name, SRC))
         return false;
@@ -1295,16 +1307,35 @@ void Shader_binding_tables::upload(D3DCommandList* command_list)
         return;
     }
 
-    auto resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_binding_table_buffer.Get(),
+    // transition the resources on first usage
+    if (m_binding_table_buffer_upload_latest_requested_state == D3D12_RESOURCE_STATE_COMMON)
+    {
+        auto rb = CD3DX12_RESOURCE_BARRIER::Transition(m_binding_table_buffer_upload.Get(),
+            D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_GENERIC_READ);
+        command_list->ResourceBarrier(1, &rb);
+        m_binding_table_buffer_upload_latest_requested_state = D3D12_RESOURCE_STATE_GENERIC_READ;
+    }
+    if (m_binding_table_buffer_latest_requested_state == D3D12_RESOURCE_STATE_COMMON)
+    {
+        auto rb = CD3DX12_RESOURCE_BARRIER::Transition(m_binding_table_buffer.Get(),
+            D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        command_list->ResourceBarrier(1, &rb);
+        m_binding_table_buffer_latest_requested_state = 
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    }
+
+    auto rb = CD3DX12_RESOURCE_BARRIER::Transition(m_binding_table_buffer.Get(),
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST);
-    command_list->ResourceBarrier(1, &resource_barrier);
+    command_list->ResourceBarrier(1, &rb);
+    m_binding_table_buffer_latest_requested_state = D3D12_RESOURCE_STATE_COPY_DEST;
 
     command_list->CopyResource(
         m_binding_table_buffer.Get(), m_binding_table_buffer_upload.Get());
 
-    resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(m_binding_table_buffer.Get(),
+    rb = CD3DX12_RESOURCE_BARRIER::Transition(m_binding_table_buffer.Get(),
         D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    command_list->ResourceBarrier(1, &resource_barrier);
+    command_list->ResourceBarrier(1, &rb);
+    m_binding_table_buffer_latest_requested_state = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 }
 
 // ------------------------------------------------------------------------------------------------

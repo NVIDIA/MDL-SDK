@@ -63,9 +63,15 @@ public:
 
     virtual ~Distiller_plugin_api_impl() {}
 
+    virtual void debug_node(IOutput_stream *outs, DAG_node const *node);
+
     void dump_attributes(IGenerated_code_dag::IMaterial_instance const *inst);
     void dump_attributes(IGenerated_code_dag::IMaterial_instance const *inst,
                          DAG_node const *node);
+
+    void dump_attributes(IGenerated_code_dag::IMaterial_instance const *inst, std::ostream &outs);
+    void dump_attributes(IGenerated_code_dag::IMaterial_instance const *inst,
+                         DAG_node const *node, std::ostream &outs);
 
     void set_attribute(DAG_node const * node, char const *name,
                        DAG_node const *value) MDL_FINAL;
@@ -522,12 +528,13 @@ private:
 
     void import_attributes(IGenerated_code_dag::IMaterial_instance const *inst);
 
-    void mb_print_attrs(IGenerated_code_dag::IMaterial_instance const *inst,
-                        DAG_node const *node,
-                        int level);
+    void pprint_attributes(IGenerated_code_dag::IMaterial_instance const *inst,
+                           DAG_node const *node,
+                           int level, std::ostream &outs);
     void pprint_node(IGenerated_code_dag::IMaterial_instance const *inst,
                      DAG_node const *node,
-                     int level = 0);
+                     int level, std::ostream &outs);
+    void pprint_material(IGenerated_code_dag::IMaterial_instance const *inst, std::ostream &outs);
 
 private:
     /// The allocator.

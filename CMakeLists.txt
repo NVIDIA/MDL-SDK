@@ -54,7 +54,7 @@ elseif(NOT CMAKE_TOOLCHAIN_FILE AND NOT UNIX)
 endif()
 
 # before project() due to its use in CMAKE_TOOLCHAIN_FILE
-if(WIN32 AND NOT UNIX)
+if(WIN32 AND NOT UNIX AND NOT DEFINED VCPKG_TARGET_TRIPLET)
     set(VCPKG_TARGET_TRIPLET x64-windows-static)
 endif()
 
@@ -72,7 +72,6 @@ option(MDL_BUILD_SDK_EXAMPLES "Adds MDL SDK examples to the build." ON)
 option(MDL_BUILD_CORE_EXAMPLES "Adds MDL Core examples to the build." ON)
 option(MDL_BUILD_ARNOLD_PLUGIN "Enable the build of the MDL Arnold plugin." OFF)
 option(MDL_BUILD_DDS_PLUGIN "Enable the build of the MDL DDS image plugin." ON)
-option(MDL_BUILD_FREEIMAGE_PLUGIN "Enable the build of the MDL Freeimage image plugin." OFF)
 option(MDL_BUILD_OPENIMAGEIO_PLUGIN "Enable the build of the MDL OpenImageIO image plugin." ON)
 option(MDL_LOG_PLATFORM_INFOS "Prints some infos about the current build system (relevant for error reports)." ON)
 option(MDL_LOG_DEPENDENCIES "Prints the list of dependencies during the generation step." ON)
@@ -98,12 +97,11 @@ if(MDL_LOG_PLATFORM_INFOS)
     MESSAGE(STATUS "[INFO] MDL_BUILD_CORE_EXAMPLES:              ${MDL_BUILD_CORE_EXAMPLES}")
     MESSAGE(STATUS "[INFO] MDL_BUILD_ARNOLD_PLUGIN:              ${MDL_BUILD_ARNOLD_PLUGIN}")
     MESSAGE(STATUS "[INFO] MDL_BUILD_OPENIMAGEIO_PLUGIN:         ${MDL_BUILD_OPENIMAGEIO_PLUGIN}")
-    MESSAGE(STATUS "[INFO] MDL_BUILD_FREEIMAGE_PLUGIN:           ${MDL_BUILD_FREEIMAGE_PLUGIN}")
     MESSAGE(STATUS "[INFO] MDL_BUILD_DDS_PLUGIN:                 ${MDL_BUILD_DDS_PLUGIN}")
 endif()
 
-# enable tests if available
-if(MDL_ENABLE_TESTS)
+# enable CTest if requested
+if(MDL_ENABLE_TESTS OR MDL_ENABLE_UNIT_TESTS)
     enable_testing()
 endif()
 
@@ -118,82 +116,16 @@ include(${MDL_BASE_FOLDER}/cmake/utilities.cmake)
 #--------------------------------------------------------------------------------------------------
 add_subdirectory(${MDL_INCLUDE_FOLDER})
 
-# MDL SDK and MDL CORE
+# MDL SDK, MDL CORE, libs/tools, and plugins
 #--------------------------------------------------------------------------------------------------
 
-# first thing to build
-add_subdirectory(${MDL_SRC_FOLDER}/base/system/main)
-add_subdirectory(${MDL_SRC_FOLDER}/base/system/stlext)
-add_subdirectory(${MDL_SRC_FOLDER}/base/system/version)
-
-# third party
-add_subdirectory(${MDL_SRC_FOLDER}/base/lib/libzip)
-add_subdirectory(${MDL_SRC_FOLDER}/base/lib/zlib)
-add_subdirectory(${MDL_SRC_FOLDER}/base/lib/tinyxml2)
-add_subdirectory(${MDL_SRC_FOLDER}/mdl/compiler/coco)
-add_subdirectory(${MDL_SRC_FOLDER}/mdl/jit/llvm)
-
-# libs
-add_subdirectory(${MDL_SRC_FOLDER}/base/util/string_utils)
-add_subdirectory(${MDL_SRC_FOLDER}/base/util/registry)
-add_subdirectory(${MDL_SRC_FOLDER}/base/hal/disk)
-add_subdirectory(${MDL_SRC_FOLDER}/base/hal/hal)
-add_subdirectory(${MDL_SRC_FOLDER}/base/hal/link)
-add_subdirectory(${MDL_SRC_FOLDER}/base/hal/time)
-add_subdirectory(${MDL_SRC_FOLDER}/base/lib/config)
-add_subdirectory(${MDL_SRC_FOLDER}/base/lib/cont)
-add_subdirectory(${MDL_SRC_FOLDER}/base/lib/log)
-add_subdirectory(${MDL_SRC_FOLDER}/base/lib/mem)
-add_subdirectory(${MDL_SRC_FOLDER}/base/lib/path)
-add_subdirectory(${MDL_SRC_FOLDER}/base/lib/plug)
-add_subdirectory(${MDL_SRC_FOLDER}/base/data/attr)
-add_subdirectory(${MDL_SRC_FOLDER}/base/data/db)
-add_subdirectory(${MDL_SRC_FOLDER}/base/data/dblight)
-add_subdirectory(${MDL_SRC_FOLDER}/base/data/serial)
-add_subdirectory(${MDL_SRC_FOLDER}/io/image)
-add_subdirectory(${MDL_SRC_FOLDER}/io/scene)
-add_subdirectory(${MDL_SRC_FOLDER}/api/api/mdl)
-add_subdirectory(${MDL_SRC_FOLDER}/mdl/codegenerators/generator_code)
-add_subdirectory(${MDL_SRC_FOLDER}/mdl/codegenerators/generator_dag)
-add_subdirectory(${MDL_SRC_FOLDER}/mdl/compiler/compilercore)
-add_subdirectory(${MDL_SRC_FOLDER}/mdl/compiler/compiler_glsl)
-add_subdirectory(${MDL_SRC_FOLDER}/mdl/compiler/compiler_hlsl)
-add_subdirectory(${MDL_SRC_FOLDER}/mdl/distiller/dist)
-add_subdirectory(${MDL_SRC_FOLDER}/mdl/jit/libbsdf)
-add_subdirectory(${MDL_SRC_FOLDER}/mdl/jit/libmdlrt)
-add_subdirectory(${MDL_SRC_FOLDER}/mdl/jit/devlib)
-add_subdirectory(${MDL_SRC_FOLDER}/mdl/jit/generator_jit)
-add_subdirectory(${MDL_SRC_FOLDER}/mdl/no_jit/generator_stub)
-add_subdirectory(${MDL_SRC_FOLDER}/mdl/runtime)
-add_subdirectory(${MDL_SRC_FOLDER}/mdl/integration/i18n)
-add_subdirectory(${MDL_SRC_FOLDER}/mdl/integration/mdlnr)
-add_subdirectory(${MDL_SRC_FOLDER}/render/baker/baker)
-add_subdirectory(${MDL_SRC_FOLDER}/render/mdl/backends)
-add_subdirectory(${MDL_SRC_FOLDER}/render/mdl/runtime)
-
-# libs/products
-add_subdirectory(${MDL_SRC_FOLDER}/prod/lib/mdl_core)
-add_subdirectory(${MDL_SRC_FOLDER}/prod/lib/mdl_sdk)
-add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/i18n)
-add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdlc)
-add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdlm)
-add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdltlc)
-add_subdirectory(${MDL_SRC_FOLDER}/prod/bin/mdl_distiller_cli)
-
-# PLUGINS
-#--------------------------------------------------------------------------------------------------
-
-if(MDL_BUILD_DDS_PLUGIN)
-    add_subdirectory(${MDL_SRC_FOLDER}/shaders/plugin/dds)
-endif()
-if(MDL_BUILD_FREEIMAGE_PLUGIN)
-    add_subdirectory(${MDL_SRC_FOLDER}/shaders/plugin/freeimage)
-endif()
-if(MDL_BUILD_OPENIMAGEIO_PLUGIN)
-    add_subdirectory(${MDL_SRC_FOLDER}/shaders/plugin/openimageio)
-endif()
-
-add_subdirectory(${MDL_SRC_FOLDER}/shaders/plugin/mdl_distiller)
+add_subdirectory(${MDL_SRC_FOLDER}/api)
+add_subdirectory(${MDL_SRC_FOLDER}/base)
+add_subdirectory(${MDL_SRC_FOLDER}/mdl)
+add_subdirectory(${MDL_SRC_FOLDER}/io)
+add_subdirectory(${MDL_SRC_FOLDER}/render)
+add_subdirectory(${MDL_SRC_FOLDER}/prod)
+add_subdirectory(${MDL_SRC_FOLDER}/shaders)
 
 # EXAMPLES
 #--------------------------------------------------------------------------------------------------
@@ -280,8 +212,7 @@ if(MDL_BUILD_SDK_EXAMPLES OR MDL_BUILD_CORE_EXAMPLES)
     add_subdirectory(${MDL_EXAMPLES_FOLDER}/mdl)
 endif()
 
-# MDL SDK libs/products and
-# PLUGINS FOR EXTERNAL APPLICATIONS that use the MDL SDK and mdl_sdk::shared
+# MDL SDK libs/products and plugins that depend on the MDL SDK and mdl_sdk::shared
 #--------------------------------------------------------------------------------------------------
 # MDL Arnold
 if(MDL_BUILD_ARNOLD_PLUGIN)

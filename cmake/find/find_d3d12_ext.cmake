@@ -149,7 +149,7 @@ function(FIND_D3D12_EXT)
         endif()   
     endforeach()
 
-    # store path that are later used in the add_opengl.cmake
+    # store paths that are later used in the add_d3d12.cmake
     set(MDL_DEPENDENCY_D3D12_INCLUDE ${_D3D12_INCLUDE_DIR} CACHE INTERNAL "d3d12 headers")
     set(MDL_DEPENDENCY_DXGI_INCLUDE ${_DXGI_INCLUDE_DIR} CACHE INTERNAL "dxgi headers")
     set(MDL_DEPENDENCY_WINRT_INCLUDE ${_WINRT_INCLUDE_DIR} CACHE INTERNAL "winrt headers")

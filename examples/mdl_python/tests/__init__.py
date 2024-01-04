@@ -1,7 +1,7 @@
 import unittest
 import os
 
-report_coverage: bool = True
+report_coverage: bool = os.getenv('CREATE_COVERAGE_REPORT') == "ON"
 
 if report_coverage:
     try:
@@ -16,7 +16,6 @@ def run():
     suite = loader.discover(os.path.dirname(os.path.abspath(__file__)), pattern="test_*.py")
     runner = unittest.TextTestRunner()
     runner.run(suite)
-    print("Done: Running Tests")
 
 
 # run all tests
@@ -31,6 +30,5 @@ if __name__ == '__main__':
         cov.stop()
         cov.save()
         cov.html_report(directory=folder)
-        print("Done: Creating Coverage Report")
     else:
         run()

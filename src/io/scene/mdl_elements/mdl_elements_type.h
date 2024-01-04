@@ -28,15 +28,14 @@
 /// \file
 /// \brief      Header for the IType hierarchy and IType_factory implementation.
 
-#ifndef IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_TYPE_IMPL_H
-#define IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_TYPE_IMPL_H
+#ifndef IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_TYPE_H
+#define IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_TYPE_H
 
 #include "i_mdl_elements_type.h"
 
 #include <mi/base/interface_implement.h>
 #include <mi/base/lock.h>
 
-#include <map>
 #include <shared_mutex>
 #include <vector>
 
@@ -85,9 +84,6 @@ public:
     friend class Type_factory; // for serialization/deserialization
 
 private:
-
-    using Name_index_map = std::map<std::string, mi::Size>;
-    Name_index_map m_name_index;
 
     using Index_name_vector = std::vector<std::string>;
     Index_name_vector m_index_name;
@@ -166,6 +162,10 @@ public:
 
     const mi::IString* dump( const IType_list* list, mi::Size depth = 0) const override;
 
+    std::string get_mdl_type_name( const IType* type) const override;
+
+    const IType* create_from_mdl_type_name( const char* name) const  override;
+
     const IType_enum* create_enum(
         const char* symbol,
         IType_enum::Predefined_id id,
@@ -188,17 +188,9 @@ public:
 
     using IType_factory::deserialize;
 
-    void serialize_list(
-        SERIAL::Serializer* serializer,
-        const IType_list* list) const override;
+    void serialize_list( SERIAL::Serializer* serializer, const IType_list* list) const override;
 
     IType_list* deserialize_list( SERIAL::Deserializer* deserializer) override;
-
-    std::string get_type_name( const IType* type, bool include_aliased_type) override;
-
-    std::string get_serialization_type_name( const IType* type) override;
-
-    const IType* create_type( const char* serialization_type_name) const  override;
 
     // internal methods
 
@@ -206,7 +198,14 @@ public:
 
     static mi::Sint32 compare_static( const IType_list* lhs, const IType_list* rhs);
 
-    static std::string get_type_name_static( const IType* type, bool include_aliased_type = true);
+    /// Returns a type name suitable for the dump() methods.
+    ///
+    /// Similar to #get_mdl_type_name(), but more verbose for aliases, enums, and structs.
+    ///
+    /// This factory typically calls it with \p include_aliased_type set to \c true for full
+    /// details, whereas the value factory typically calls it with \p include_aliased_type set to
+    /// \c false for less details.
+    static std::string get_dump_type_name( const IType* type, bool include_aliased_type);
 
     /// Acquires the mutex.
     void lock() const { m_mutex.lock(); }
@@ -222,6 +221,8 @@ public:
 
 private:
 
+    static std::string get_mdl_type_name_static( const IType* type);
+
     static mi::Sint32 compare_static( const IType_alias* lhs, const IType_alias* rhs);
 
     static mi::Sint32 compare_static( const IType_compound* lhs, const IType_compound* rhs);
@@ -230,9 +231,9 @@ private:
 
     static mi::Sint32 compare_static( const IType_texture* lhs, const IType_texture* rhs);
 
-    static void dump_static( const IType* type, mi::Size depth, std::ostringstream& s);
+    static void dump( const IType* type, mi::Size depth, std::ostringstream& s);
 
-    static void dump_static( const IType_list* list, mi::Size depth, std::ostringstream& s);
+    static void dump( const IType_list* list, mi::Size depth, std::ostringstream& s);
 
 
     /// Performs the checks for create_enum() that need to happen under the lock.
@@ -296,4 +297,4 @@ private:
 
 } // namespace MI
 
-#endif // IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_TYPE_IMPL_H
+#endif // IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_TYPE_H

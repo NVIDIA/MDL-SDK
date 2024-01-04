@@ -1,0 +1,25 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Complex_where topdown {
+    material(tw,material_surface(bsdf_mix_2(
+        w2,custom_curve_layer(f0,f90,e,w,layer,diffuse_reflection_bsdf(tint2,r2),n),
+        w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1)
+        ),em),
+            bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,material_surface(bsdf_mix_2(
+            w2b,custom_curve_layer(f0,f90,e,w,layer,diffuse_reflection_bsdf( c4,r2),n),
+            w1b,microfacet_ggx_vcavities_bsdf(ru1,rv1,c4,color(0.0),t1)
+            ),em),
+                bf,ior,vol,material_geometry(d,cutout,ng))
+        skip_recursion
+        maybe tint1 != tint2 && w == 0.0
+        where
+        c4 = tint1*w1+tint2*w2
+        w2b = 1.0-w1b //use the fact that w1+w2 must be 1.0 here
+        w1b = math::saturate(w1a/(w1a+w2a)) //safe because one weight is always >0
+        w2a = w2*math::max_value(tint2)
+        w1a = w1*math::max_value(tint1)
+    ;
+}

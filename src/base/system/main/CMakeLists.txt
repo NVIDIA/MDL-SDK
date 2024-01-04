@@ -53,3 +53,6 @@ create_from_base_preset(
     TARGET ${PROJECT_NAME}
     SOURCES ${PROJECT_SOURCES}
     )
+
+# add unit tests
+add_unit_tests(POST)

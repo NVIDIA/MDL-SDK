@@ -35,32 +35,6 @@
 namespace mi { namespace examples { namespace mdl_d3d12
 {
 
-namespace
-{
-
-/// Custom logger
-class Mdl_disabled_logger : public mi::base::Interface_implement<mi::base::ILogger>
-{
-public:
-    void message(
-        mi::base::Message_severity level,
-        const char* /*category*/,
-        const mi::base::Message_details& /*details*/,
-        const char* message) override
-    {
-        // the application uses the context to report errors in a more local context
-        // therefore this global logger is used only for fatal events
-        if (level == mi::base::MESSAGE_SEVERITY_FATAL)
-        {
-            std::string log = "[FATAL] ";
-            log += message;
-            log_error(log);
-        }
-    }
-};
-
-} // anonymous
-
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 
@@ -81,7 +55,7 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
     m_mdl_options.fold_all_enum_parameters = false;
     m_mdl_options.enable_shader_cache = app->get_options()->enable_shader_cache;
     m_mdl_options.distilling_support_enabled = false;
-    m_mdl_options.distilling_target = "none";
+    m_mdl_options.distilling_target = app->get_options()->distilling_target;
 
     // Access the MDL SDK
     m_neuray = mi::examples::mdl::load_and_get_ineuray();
@@ -96,8 +70,10 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
     log_info("Loaded MDL SDK library version: " + std::string(version->get_string()));
 
     m_config = m_neuray->get_api_component<mi::neuraylib::IMdl_configuration>();
-    mi::base::Handle<mi::base::ILogger> logger(new Mdl_disabled_logger());
-    m_config->set_logger(logger.get());
+
+    mi::base::Handle<mi::neuraylib::ILogging_configuration> logging_configuration(
+        m_neuray->get_api_component<mi::neuraylib::ILogging_configuration>());
+    logging_configuration->set_log_level(mi::base::MESSAGE_SEVERITY_FATAL);
 
     // search path setup is done during scene loading as the scene folder is added too
     // reconfigure_search_paths();
@@ -120,12 +96,19 @@ Mdl_sdk::Mdl_sdk(Base_application* app)
         return;
     }
 
-    const bool distiller_loaded = 
+    const bool distiller_loaded =
         mi::examples::mdl::load_plugin(m_neuray.get(), "mdl_distiller" MI_BASE_DLL_FILE_EXT) == 0;
 
     if (!distiller_loaded)
     {
         log_error("Failed to load the 'mdl_distiller' plugin. Continue without distilling support.");
+    }
+
+    // optional lod distiller
+    // serves as example for a custom distiller plugin
+    if (mi::examples::mdl::load_plugin(m_neuray.get(), "mdl_lod_distiller" MI_BASE_DLL_FILE_EXT) == 0)
+    {
+        log_info("Loaded 'mdl_lod_distiller' plugin.");
     }
 
     // Start the MDL SDK

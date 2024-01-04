@@ -36,3 +36,5 @@ Changes:
    for the object is properly registered
  - removed lib/ExecutionEngine/Orc/SpeculateAnalyses.cpp, this file is not used anywhere but adds a dependency
    to the PassBuilder class (we want to avoid)
+ - adapt NVPTX data layout to use same alignment for vectors with 3 elements as CUDA on the ABI
+   in lib/Target/NVPTX/NVPTXTargetMachine.cpp

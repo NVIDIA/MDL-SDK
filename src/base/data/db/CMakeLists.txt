@@ -38,7 +38,6 @@ endif()
 # collect sources
 set(PROJECT_HEADERS
     "i_db_access.h"
-    "i_db_cacheable.h"
     "i_db_database.h"
     "i_db_element.h"
     "i_db_info.h"

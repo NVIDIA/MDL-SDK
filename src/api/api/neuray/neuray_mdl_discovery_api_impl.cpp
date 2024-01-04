@@ -270,8 +270,10 @@ void Mdl_package_info_impl::sort_children()
 
     std::sort(m_modules.begin(), m_modules.end(), compare_simple_names<Mdl_module_info_impl>);
     std::sort(m_textures.begin(), m_textures.end(), compare_simple_names<Mdl_texture_info_impl>);
-    std::sort(m_lightprofiles.begin(), m_lightprofiles.end(), compare_simple_names<Mdl_lightprofile_info_impl>);
-    std::sort(m_measured_bsdfs.begin(), m_measured_bsdfs.end(), compare_simple_names<Mdl_measured_bsdf_info_impl>);
+    std::sort(m_lightprofiles.begin(), m_lightprofiles.end(),
+        compare_simple_names<Mdl_lightprofile_info_impl>);
+    std::sort(m_measured_bsdfs.begin(), m_measured_bsdfs.end(),
+        compare_simple_names<Mdl_measured_bsdf_info_impl>);
 }
 
 mi::Sint32 Mdl_package_info_impl::shadow_module(Mdl_module_info_impl* new_module)
@@ -1203,7 +1205,8 @@ bool Mdl_discovery_api_impl::discover_archive_recursive(
                 if (idx >= 0) {
                     // Reuse package
                     mi::base::Handle<const Mdl_package_info_impl> mg(parent->get_package(idx));
-                    mi::base::Handle<Mdl_package_info_impl> reuse_pkg(new Mdl_package_info_impl(*mg));
+                    mi::base::Handle<Mdl_package_info_impl> reuse_pkg(
+                        new Mdl_package_info_impl(*mg));
                     if (!is_known_search_path(search_path, reuse_pkg)) {
                         reuse_pkg->add_path(search_path);
                         reuse_pkg->add_path_index(s_idx);
@@ -1313,7 +1316,8 @@ bool Mdl_discovery_api_impl::read_archive(
                 std::vector<std::string>::iterator it;
                 if (s_pos != std::string::npos) {
                     std::string package_path = e.substr(0, s_pos);
-                    it = std::find(unhandled_packages.begin(), unhandled_packages.end(), package_path);
+                    it = std::find(
+                        unhandled_packages.begin(), unhandled_packages.end(), package_path);
                     if (it == unhandled_packages.end()) {
                         // Add an unhandled path 
                         if (is_filtered)

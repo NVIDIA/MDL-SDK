@@ -48,6 +48,7 @@
 #include <mi/neuraylib/iuser_class.h>
 
 #include <sstream>
+#include <cstring>
 
 #include <base/data/db/i_db_access.h>
 #include <base/data/db/i_db_tag.h>
@@ -89,14 +90,12 @@ Transaction_impl::Transaction_impl(
 Transaction_impl::~Transaction_impl()
 {
     if( m_commit_or_abort_warning) {
-        // Abort/commit the transaction here if it was not aborted or committed yet. Since this is
-        // not a proper usage, emit a warning/error. The MDL SDK does not support abort(), therefore
-        // we have to call commit(). This is unfortunate since it advantages users to omit the
-        // commit() call. Hence, it is treated as an error and not just as a warning.
-        LOG::mod_log->error( SYSTEM::M_NEURAY_API, LOG::Mod_log::C_DATABASE,
+        // Abort the transaction here if it was not aborted or committed yet. Since this is not a
+        // proper usage, emit a warning.
+        LOG::mod_log->warning( SYSTEM::M_NEURAY_API, LOG::Mod_log::C_DATABASE,
             "Transaction is released without being committed or aborted. Automatically "
-            "committing.");
-        commit();
+            "aborting.");
+        this->abort();
     }
     m_db_transaction->unpin();
 
@@ -132,9 +131,24 @@ mi::Sint32 Transaction_impl::commit()
 
 void Transaction_impl::abort()
 {
-    LOG::mod_log->error( SYSTEM::M_NEURAY_API, LOG::Mod_log::C_DATABASE,
-        "ITransaction::abort() is not supported.");
-    return;
+    if( !is_open())
+        return;
+
+    check_no_referenced_elements( "aborted");
+
+    m_commit_or_abort_warning = false;
+
+#ifdef VERBOSE_TX
+    LOG::mod_log->info( SYSTEM::M_NEURAY_API, LOG::Mod_log::C_DATABASE,
+        "TX %u aborting ...", m_id_as_uint);
+#endif
+
+    m_db_transaction->abort();
+
+#ifdef VERBOSE_TX
+    LOG::mod_log->info( SYSTEM::M_NEURAY_API, LOG::Mod_log::C_DATABASE,
+        "TX %u aborting done.", m_id_as_uint);
+#endif
 }
 
 bool Transaction_impl::is_open() const
@@ -359,8 +373,8 @@ const char* Transaction_impl::get_time_stamp() const
 {
     const DB::Transaction_id transaction_id = m_db_transaction->get_id();
 
-    // Note that get_update_sequence_number() returns the sequence number for the *next* update.
-    const mi::Uint32 next_sequence_number = m_db_transaction->get_update_sequence_number();
+    // Note that get_next_sequence_number() returns the sequence number for the *next* update.
+    const mi::Uint32 next_sequence_number = m_db_transaction->get_next_sequence_number();
     const mi::Sint32 current_sequence_number = static_cast<mi::Sint32>( next_sequence_number) - 1;
 
     m_timestamp = std::to_string( transaction_id());
@@ -466,13 +480,15 @@ mi::IArray* Transaction_impl::list_elements(
 
     // create result array
     mi::base::Handle<mi::IDynamic_array> result(
-        m_class_factory->create_type_instance<mi::IDynamic_array>( nullptr, "String[]", 0, nullptr));
+        m_class_factory->create_type_instance<mi::IDynamic_array>(
+            nullptr, "String[]", 0, nullptr));
 
     // start DFS post-order graph traversal at root_tag
     std::set<DB::Tag> tags_seen;
     tags_seen.insert( root_tag); // not really needed if the graph is acyclic
     list_elements_internal(
-        root_tag, name_pattern ? &name_regex : nullptr, type_names ? &class_ids : nullptr, result.get(), tags_seen);
+        root_tag, name_pattern ? &name_regex : nullptr, type_names ? &class_ids : nullptr,
+        result.get(), tags_seen);
 
     result->retain();
     return result.get();

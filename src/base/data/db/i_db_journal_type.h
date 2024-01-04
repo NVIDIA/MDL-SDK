@@ -26,185 +26,74 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 
-/// \file i_db_journal_type.h
-/// \brief The definition of the Journal_type
+#ifndef BASE_DATA_DB_I_DB_JOURNAL_TYPE_H
+#define BASE_DATA_DB_I_DB_JOURNAL_TYPE_H
 
-#ifndef BASE_DATA_DB_JOURNAL_TYPE_H
-#define BASE_DATA_DB_JOURNAL_TYPE_H
-
-#include <base/system/main/types.h>
+#include <mi/base/types.h>
 
 namespace MI {
+
 namespace DB {
 
-/// This Journal_type is used for internal book-keeping functionality.
-///
-/// Structure to hold a journal type entry. This is in principal a Uint32. It has been wrapped into
-/// a structure to avoid confused parameter orders to various functions
+/// The journal type is a bit field that is used to track types of changes per DB element.
 class Journal_type
 {
-  public:
+public:
     /// Constructor.
-    /// \param type bitmask for journal entry
-    inline explicit Journal_type(
-        Uint32 type=0);
+    ///
+    /// \param type   Initial value.
+    explicit Journal_type( mi::Uint32 type = 0) : m_type( type) { }
 
-    /// Copy constructor.
-    /// \param j the other journal
-    inline Journal_type(
-        const Journal_type& j);
+    /// Default copy constructor.
+    Journal_type( const Journal_type&) = default;
 
-    /// Assignment operator.
-    /// \param j the other journal
-    inline Journal_type& operator=(
-        const Journal_type& j);
+    /// Default assignment operator.
+    Journal_type& operator=( const Journal_type&) = default;
 
-    /// Add type.
-    /// \param type new journal entry type
-    inline void add_journal(
-        Uint32 type);
+    /// Sets the bits set in \p other.
+    void add_journal( mi::Uint32 other) { m_type |= other; }
 
-    /// Add type.
-    /// \param j new journal entry
-    inline void add_journal(
-        Journal_type j);
+    /// Sets the bits set in \p other.
+    void add_journal( Journal_type other) {  m_type |= other.get_type(); }
 
-    /// Restrict to given types.
-    /// \param mask restrict to this mask
-    inline void restrict_journal(
-        Uint32 mask);
+    /// Clears the bits not set in \p other.
+    void restrict_journal( mi::Uint32 other) { m_type &= other; }
 
-    /// Restrict to given types.
-    /// \param mask restrict to this journal
-    inline void restrict_journal(
-        Journal_type mask);
+    /// Clears the bits not set in \p other.
+    void restrict_journal( Journal_type other) { m_type &= other.get_type(); }
 
-    /// Retrieve type.
-    /// \return the stored journal type entry
-    inline Uint32 get_type() const;
+    /// Returns the bit field.
+    mi::Uint32 get_type() const { return m_type; }
 
-    /// Retrieve whether the given mask is set.
-    /// \param mask the flag we are interested in
-    /// \return whether the given mask is set
-    inline bool is_set(
-        Journal_type mask) const;
+    /// Indicates whether all the bits set in \p other are set in this journal type.
+    bool is_set( Journal_type other) const
+    { return (m_type & other.get_type()) == other.get_type(); }
 
-  private:
-    Uint32 m_type;                              ///< bitmask for journal entry
+private:
+    /// Representation of the bit field.
+    mi::Uint32 m_type;
 };
 
-/// Equality operator for Journal_types.
-/// \param one the one
-/// \param other the other
-/// \return true when equal, false else
-inline bool operator==(
-    const Journal_type& one,
-    const Journal_type& other);
-
-/// Unequality operator for Journal_types.
-/// \param one the one
-/// \param other the other
-/// \return true when not equal, false else
-inline bool operator!=(
-    const Journal_type& one,
-    const Journal_type& other);
-
-
-/// Constant for journal types
-static const Journal_type JOURNAL_NONE(0);
-/// Constant for journal types
-static const Journal_type JOURNAL_ALL(0xffffffff);
-
-// Constructor.
-inline Journal_type::Journal_type(
-    Uint32 type)                        // bitmask for journal entry
-  : m_type(type)
-{}
-
-
-// Copy constructor.
-inline Journal_type::Journal_type(
-    const Journal_type& j)              // the other journal
-  : m_type(j.get_type())
-{}
-
-
-// Assignment operator.
-inline Journal_type& Journal_type::operator=(
-    const Journal_type& j)              // the other journal
+/// Equality operator for journal_types.
+inline bool operator==( const Journal_type& lhs, const Journal_type& rhs)
 {
-    if (this == &j)
-        return *this;
-    m_type = j.get_type();
-    return *this;
+    return lhs.get_type() == rhs.get_type();
 }
 
-
-// Add type.
-inline void Journal_type::add_journal(
-    Uint32 type)                        // new journal entry type
+/// Inequality operator for journal_types.
+inline bool operator!=( const Journal_type& lhs, const Journal_type& rhs)
 {
-    m_type |= type;
+    return !(lhs == rhs);
 }
 
+/// Constant for a journal type with no bits set.
+static const Journal_type JOURNAL_NONE( 0u);
 
-// Add type.
-inline void Journal_type::add_journal(
-    Journal_type j)                     // new journal entry
-{
-    m_type |= j.get_type();
-}
+/// Constant for a journal type with all bits set.
+static const Journal_type JOURNAL_ALL( ~0u);
 
+} // namespace DB
 
-// Restrict to given types.
-inline void Journal_type::restrict_journal(
-    Uint32 mask)                        // restrict to this mask
-{
-    m_type &= mask;
-}
+} // namespace MI
 
-
-// Restrict to given types.
-inline void Journal_type::restrict_journal(
-    Journal_type mask)                  // restrict to this journal
-{
-    m_type &= mask.get_type();
-}
-
-
-// Retrieve type.
-inline Uint32 Journal_type::get_type() const
-{
-    return m_type;
-}
-
-
-// Retrieve whether the given mask is set.
-inline bool Journal_type::is_set(
-    Journal_type mask) const
-{
-    return (m_type & mask.get_type()) == mask.get_type();
-}
-
-
-// Equality operator for Journal_types.
-inline bool operator==(
-    const Journal_type& one,            // the one
-    const Journal_type& other)          // the other
-{
-    return one.get_type() == other.get_type();
-}
-
-
-// Unequality operator for Journal_types.
-inline bool operator!=(
-    const Journal_type& one,            // the one
-    const Journal_type& other)          // the other
-{
-    return !(one == other);
-}
-
-}
-}
-
-#endif
+#endif // BASE_DATA_DB_I_DB_JOURNAL_TYPE_H

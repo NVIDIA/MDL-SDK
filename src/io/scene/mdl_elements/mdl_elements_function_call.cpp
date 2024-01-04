@@ -488,7 +488,7 @@ mi::Sint32 Mdl_function_call::reset_argument(
     if( argument) {
 
         // clone the default (also resolves parameter references)
-        std::vector<mi::base::Handle<const IExpression> > call_context;
+        std::vector<mi::base::Handle<const IExpression>> call_context;
         for( mi::Size i = 0; i < index; ++i)
             call_context.push_back( make_handle( m_arguments->get_expression( i)));
         argument = deep_copy( m_ef.get(), transaction, argument.get(), call_context);
@@ -812,7 +812,7 @@ mi::mdl::IGenerated_code_lambda_function* Mdl_function_call::create_jitted_funct
 /// The cache assumes that the transaction's view on the database does *not* change during the
 /// caches lifetime. Do *not* use the cache if this not guaranteed.
 ///
-/// Cached methods: get_class_id(), name_to_tag(), get_element().
+/// Cached methods: get_class_id(), name_to_tag(), access_element().
 class Caching_transaction : public DB::Transaction_wrapper
 {
 public:
@@ -849,7 +849,7 @@ public:
         return tag;
     }
 
-    DB::Info* get_element( DB::Tag tag, bool do_wait) final
+    DB::Info* access_element( DB::Tag tag) final
     {
         auto it = m_elements.find( tag);
         if( it != m_elements.end()) {
@@ -857,7 +857,7 @@ public:
             return it->second;
         }
 
-        DB::Info* element = m_transaction->get_element( tag, do_wait);
+        DB::Info* element = m_transaction->access_element( tag);
         element->pin();
         m_elements[tag] = element;
         return element;

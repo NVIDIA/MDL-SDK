@@ -42,6 +42,7 @@ print("Loaded the MDL Python Bindings")
 # Utilities
 #--------------------------------------------------------------------------------------------------
 
+
 def get_examples_search_path():
     """Try to get the example search path or returns 'mdl' sub folder of the current directory if it failed."""
 
@@ -67,6 +68,7 @@ def get_examples_search_path():
 # MDL Python Example
 #--------------------------------------------------------------------------------------------------
 
+
 def load_module(neuray: pymdlsdk.INeuray, transaction: pymdlsdk.ITransaction, mdl_module_name: str) -> str:
     """Load the module given it's db name"""
 
@@ -74,13 +76,14 @@ def load_module(neuray: pymdlsdk.INeuray, transaction: pymdlsdk.ITransaction, md
          neuray.get_api_component(pymdlsdk.IMdl_factory) as mdl_factory, \
          mdl_factory.create_execution_context() as context:
 
-            if imp_exp.load_module(transaction, mdl_module_name, context) < 0:
-                return "" # loading failed
-            
-            with mdl_factory.get_db_module_name(mdl_module_name) as istring:
-                return istring.get_c_str()
+        if imp_exp.load_module(transaction, mdl_module_name, context) < 0:
+            return "" # loading failed
+
+        with mdl_factory.get_db_module_name(mdl_module_name) as istring:
+            return istring.get_c_str()
 
 #--------------------------------------------------------------------------------------------------
+
 
 def get_function_by_name(neuray: pymdlsdk.INeuray, transaction: pymdlsdk.ITransaction, module_db_name: str, mdl_function_name: str) -> str:
     """Access an MDL module and find the first function that matches a given name"""
@@ -106,7 +109,7 @@ def get_function_by_name(neuray: pymdlsdk.INeuray, transaction: pymdlsdk.ITransa
                 return ""
             if overloads.get_length() != 1:
                 print(f"WARNING: the selected function `{mdl_function}` is not unique in module `{mdl_module.get_mdl_name()}`")
-                
+
             with overloads.get_element(0) as element:
                 with element.get_interface(pymdlsdk.IString) as istring_db_name:
                     return istring_db_name.get_c_str()
@@ -140,6 +143,10 @@ def run_example(neuray):
              mdl_factory.create_expression_factory(transaction) as ef, \
              mdl_factory.create_value_factory(transaction) as vf:
 
+            if not plastic_definition.is_valid_interface() or not checker_definition.is_valid_interface():
+                print("Failed to access function definition.")
+                return
+
             # create the color_checker call
             checker_call_db_name = "mdlexample::color_checker"
             with ef.create_expression_list() as parameters, \
@@ -147,7 +154,7 @@ def run_example(neuray):
                  ef.create_constant(scale_value) as scale_arg, \
                  vf.create_color(0.25, 0.5, 0.75) as b_value, \
                  ef.create_constant(b_value) as b_arg:
-                 # we leave the parameter 'a' at its default value (white)
+                # we leave the parameter 'a' at its default value (white)
 
                 # add the created constant expressions to the new parameter list
                 parameters.add_expression("scale", scale_arg)
@@ -158,6 +165,11 @@ def run_example(neuray):
                 # Parameter without default need to be specified (visible in the definitions).
                 with checker_definition.create_function_call(parameters) as checker_call:
                     transaction.store(checker_call, checker_call_db_name)
+
+                ret: pymdlsdk.ReturnCode = pymdlsdk.ReturnCode()
+                with checker_definition.create_function_call(parameters, ret) as checker_call:
+                    transaction.store(checker_call, checker_call_db_name)
+                    print(f"Return code: {ret.value}")
 
             # create the plastic call
             plastic_call_db_name = "mdlexample::pastic"
@@ -186,21 +198,21 @@ def run_example(neuray):
                  ef.create_annotation_block() as empty_anno_block:
 
                 # create a module builder and add the material as a variant
-                with mdl_factory.create_module_builder(transaction, module_name, pymdlsdk.MDL_VERSION_1_6, pymdlsdk.MDL_VERSION_LATEST, execution_context) as module_builder:
+                with mdl_factory.create_module_builder(transaction, module_name, pymdlsdk.Mdl_version.MDL_VERSION_1_6, pymdlsdk.Mdl_version.MDL_VERSION_LATEST, execution_context) as module_builder:
 
                     if not module_builder.is_valid_interface():
                         print("Error: Failed to create a module builder.")
                         return
 
                     if module_builder.add_variant(
-                        "MyGraphMaterial", # material/function name
-                        plastic_call.get_function_definition(), # prototype
-                        plastic_call.get_arguments(), # default arguments, basically our graph
-                        empty_anno_block, # drop annotations
-                        empty_anno_block, # drop annotations
-                        True, # export the material/function
-                        execution_context) != 0:
-                        
+                            "MyGraphMaterial",  # material/function name
+                            plastic_call.get_function_definition(),  # prototype
+                            plastic_call.get_arguments(),  # default arguments, basically our graph
+                            empty_anno_block,  # drop annotations
+                            empty_anno_block,  # drop annotations
+                            True,  # export the material/function
+                            execution_context) != 0:
+
                         print("Error: Failed to add variant to module builder")
                         for i in range(execution_context.get_messages_count()):
                             print(execution_context.get_message(i).get_string())
@@ -224,9 +236,10 @@ def run_example(neuray):
 #--------------------------------------------------------------------------------------------------
 
 def main():
+    print(f"Running Example {__file__} in process with id: {os.getpid()}")
 
     # Get the INeuray interface in a suitable smart pointer that works as context manager
-    with  pymdlsdk.load_and_get_ineuray('') as neuray:
+    with pymdlsdk.load_and_get_ineuray('') as neuray:
         if not neuray.is_valid_interface():
             raise Exception('Failed to load the MDL SDK.')
 

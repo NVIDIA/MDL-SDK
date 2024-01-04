@@ -1,0 +1,3 @@
+mdl 1.6;
+
+export int down15_f() { return 42; }

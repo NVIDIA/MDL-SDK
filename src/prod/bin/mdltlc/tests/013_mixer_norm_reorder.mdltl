@@ -1,0 +1,41 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Mixer_norm_reorder topdown {
+
+    material(tw,
+             material_surface(
+                 custom_curve_layer(f0_3,f90_3,e3,w3,
+                                         microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,_,t4),
+        bsdf_mix_2(
+            w1,microfacet_ggx_vcavities_bsdf(ru1,rv1,tint1,_,t1),
+            w2,custom_curve_layer(f0,f90,e,w,
+                                       microfacet_ggx_vcavities_bsdf(ru2,rv2,tint2,_,t2),base,n)
+            ),n3)
+            ,em),bf,ior,vol,material_geometry(d,cutout,ng)) -->
+        material(tw,
+                 material_surface(
+                     custom_curve_layer(
+                         f0_3,f90_3,e3,w3,
+                         microfacet_ggx_vcavities_bsdf(ru4,rv4,tint4,color(0.0),t4),
+                         bsdf_mix_2(
+                             w1,microfacet_ggx_vcavities_bsdf(
+                                 nvidia::distilling_support::average(w1,ru1,w2,ru2),
+                                 nvidia::distilling_support::average(w1,rv1,w2,rv2),
+                                 tint1,
+                                 color(0.0),
+                                 t1),
+                             w2,custom_curve_layer(
+                                 f0,f90,e,w,
+                                 microfacet_ggx_vcavities_bsdf(
+                                     nvidia::distilling_support::average(w1,ru1,w2,ru2),
+                                     nvidia::distilling_support::average(w1,rv1,w2,rv2),
+                                     tint2,
+                                     color(0.0),
+                                     t2),
+                                 base,n)),
+                         n3),em),
+                 bf,ior,vol,material_geometry(d,cutout,ng)) skip_recursion maybe ru2 != ru1
+        deadrule; //sorting triggers other rule
+}

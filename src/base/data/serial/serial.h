@@ -236,7 +236,7 @@ public:
     Deserialization_manager* mgr);
 
     // destructor
-    virtual ~Deserialization_manager();
+    virtual ~Deserialization_manager() = default;
 
     // Any module may register a factory function for a given Class_id. When the deserializer finds
     // this Class_id it will call the given factory function to create an appropriate object. This

@@ -36,22 +36,63 @@
 #include "mdltlc_analysis.h"
 #include "mdltlc_compilation_unit.h"
 
+static char const *copyright_string =
+R"(/******************************************************************************
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *****************************************************************************/
+)";
+
 /// Return the name of the identifier at the head of `expr`. It can be
-/// a call or reference expression.  Return nullptr otherwise.
-char const *node_name(Expr const *expr) {
-    if (Expr_binary const *eb = as<Expr_binary>(expr)) {
-        if (eb->get_operator() == Expr_binary::Operator::OK_TILDE) {
-            expr = eb->get_right_argument();
-        } else {
-            return nullptr;
+/// a call or reference expression. Alias expressions and attributes will
+/// be skipped while looking for the node name. Return nullptr otherwise.
+char const* node_name(Expr const* expr) {
+    while (true) {
+        if (Expr_attribute const* att = as<Expr_attribute>(expr)) {
+            expr = att->get_argument();
+        }
+        else if (Expr_binary const* eb = as<Expr_binary>(expr)) {
+            if (eb->get_operator() == Expr_binary::Operator::OK_TILDE) {
+                expr = eb->get_right_argument();
+            }
+            else {
+                break;
+            }
+        }
+        else if (Expr_call const* ec = as<Expr_call>(expr)) {
+            expr = ec->get_callee();
+        }
+        else if (Expr_ref const* er = as<Expr_ref>(expr)) {
+            return er->get_name()->get_name();
+        }
+        else {
+            break;
         }
     }
-    if (Expr_call const *ec = as<Expr_call>(expr)) {
-        expr = ec->get_callee();
-    }
-    if (Expr_ref const *er = as<Expr_ref>(expr)) {
-        return er->get_name()->get_name();
-    }
+
     return nullptr;
 }
 
@@ -571,8 +612,18 @@ void Compilation_unit::output_cpp_bsdf_call(
                     p.string(node_type->get_signature().c_str());
                     p.string("\",");
                     p.space();
-                    p.string("IDefinition::");
-                    p.string(get_semantics_name(node_type->semantics));
+                    char const *mdl_semantics_name =
+                        get_semantics_name(node_type->semantics);
+                    if (mdl_semantics_name) {
+                        // Normal MDL semantics value.
+                        p.string("IDefinition::");
+                        p.string(mdl_semantics_name);
+                    } else {
+                        // Extended Distiller semantics value.
+                        p.string("static_cast<mi::mdl::IDefinition::Semantics>(");
+                        p.string(find_selector(call));
+                        p.string(")");
+                    }
                     p.comma();
                     p.space();
                     p.with_indent([&] (pp::Pretty_print &p) {
@@ -1208,12 +1259,17 @@ void Compilation_unit::output_cpp_matcher_body(pp::Pretty_print &p,
         used_vars(assign->get_right_argument(), used);
     }
 
-        output_cpp_match_variables(p, rule.get_lhs(), pfx, used);
+    Debug_out_list const &deb_outs = rule.get_debug_out();
+    for (Debug_out_list::const_iterator ait(deb_outs.begin()), aend(deb_outs.end());
+         ait != aend; ++ait) {
+        used.insert(ait->get_symbol());
+    }
 
-        // Generate code for creating where bindings.
+    output_cpp_match_variables(p, rule.get_lhs(), pfx, used);
 
-        //    Argument_list const &bindings = rule.get_bindings();
-    if (bindings.size() > 0) {
+    // Generate code for creating where bindings.
+
+    if (!bindings.empty()) {
         output_reversed(p, bindings.begin(), bindings.end());
     }
 
@@ -1237,9 +1293,40 @@ void Compilation_unit::output_cpp_matcher_body(pp::Pretty_print &p,
         p.nl();
     }
 
+    // Generate code for debug output.
+
+    if (!deb_outs.empty()) {
+        p.nl();
+        p.string("if (event_handler != nullptr && options != nullptr && options->debug_print)");
+        p.space();
+        p.with_braces([&] (pp::Pretty_print &p) {
+            p.with_indent([&] (pp::Pretty_print &p) {
+                for (mi::mdl::Ast_list<Debug_out>::const_iterator it(deb_outs.begin()),
+                         end(deb_outs.end());
+                     it != end;
+                     ++it) {
+                    p.nl();
+                    char const *var_name = it->get_name();
+                    p.string("fire_debug_print(e, *event_handler,");
+                    p.space();
+                    p.integer(rule_index);
+                    p.comma();
+                    p.space();
+                    p.string("\"");
+                    p.string(var_name);
+                    p.string("\", v_");
+                    p.string(var_name);
+                    p.string(");");
+                }
+            });
+            p.nl();
+        });
+        p.nl();
+    }
+
     // Generate tracer code.
 
-    p.string("if (event_handler != NULL)");
+    p.string("if (event_handler != nullptr)");
     p.with_indent([&] (pp::Pretty_print &p) {
             p.nl();
             p.string("fire_match_event(*event_handler, ");
@@ -1311,15 +1398,25 @@ void Compilation_unit::output_cpp_matcher(pp::Pretty_print &p,Ruleset &ruleset, 
                                 Rule const &rule = **it;
 
                                 Expr const *lhs_call = rule.get_lhs();
-                                if (lhs_call->get_kind() == Expr::EK_ATTRIBUTE) {
-                                    Expr_attribute const *l = cast<Expr_attribute>(lhs_call);
-                                    lhs_call = l->get_argument();
+                                while (true) {
+                                    if (lhs_call->get_kind() == Expr::EK_ATTRIBUTE) {
+                                        Expr_attribute const* l = cast<Expr_attribute>(lhs_call);
+                                        lhs_call = l->get_argument();
+                                    } if (Expr_binary const* bin = as<Expr_binary>(lhs_call)) {
+                                        if (bin->get_operator() == Expr_binary::Operator::OK_TILDE) {
+                                            lhs_call = bin->get_right_argument();
+                                        } else {
+                                            break;
+                                        }
+                                    } else {
+                                        break;
+                                    }
                                 }
 
                                 char const *lhs_node_name = node_name(lhs_call);
                                 MDL_ASSERT(lhs_node_name);
 
-                                if ( !last_node || node_name(last_node) != lhs_node_name) {
+                                if (!last_node || strcmp(node_name(last_node), lhs_node_name) != 0) {
                                     // either first match or a new top-level node name for a match
                                     if ( last_node) {
                                         // new top-level node, need to close last 'case'
@@ -1414,6 +1511,7 @@ void Compilation_unit::output_cpp_pattern_condition(
         Expr const *callee = call->get_callee();
         Type_function const *callee_type = cast<Type_function>(callee->get_type());
         mi::mdl::Node_type const *nt = callee_type->get_node_type();
+//        printf("nt: %s\n", nt->mdl_type_name.c_str());
         if (!nt) {
             error(expr->get_location(),
                   "[BUG] NULL node_type in output_cpp_pattern_condition");
@@ -1886,6 +1984,59 @@ void Compilation_unit::output_cpp_event_handler(pp::Pretty_print &p,
         });
     p.nl();
     p.nl();
+
+    p.string("void ");
+    p.string(ruleset.get_name());
+    p.string("::fire_debug_print");
+    p.with_parens([&] (pp::Pretty_print &p) {
+        p.with_indent([&] (pp::Pretty_print &p) {
+            p.nl();
+            p.string("mi::mdl::IDistiller_plugin_api &plugin_api,");
+            p.nl();
+            p.string("mi::mdl::IRule_matcher_event &event_handler,");
+            p.nl();
+            p.string("std::size_t idx,");
+            p.nl();
+            p.string("char const *var_name,");
+            p.nl();
+            p.string("DAG_node const *value");
+        });
+    });
+    p.nl();
+    p.with_braces([&] (pp::Pretty_print &p) {
+        p.with_indent([&] (pp::Pretty_print &p) {
+            p.nl();
+            p.string("Rule_info const &ri = g_rule_info[idx];");
+            p.nl();
+            p.string("event_handler.debug_print");
+            p.with_indent([&] (pp::Pretty_print &p) {
+                p.with_parens([&] (pp::Pretty_print &p) {
+                    p.string("plugin_api,");
+                    p.space();
+                    p.string("\"");
+                    p.string(ruleset.get_name());
+                    p.string("\",");
+                    p.space();
+                    p.string("ri.ruid,");
+                    p.space();
+                    p.string("ri.rname,");
+                    p.space();
+                    p.string("ri.fname,");
+                    p.space();
+                    p.string("ri.fline,");
+                    p.space();
+                    p.string("var_name,");
+                    p.space();
+                    p.string("value");
+                });
+                p.semicolon();
+            });
+        });
+        p.nl();
+    });
+    p.nl();
+    p.nl();
+
 }
 
 /// Comparison functor for sorting rules by the root node value of the pattern
@@ -1946,10 +2097,8 @@ void Compilation_unit::output_cpp(mi::mdl::string const &stem_name, mi::mdl::str
 
     // Write copyright line and include the generated header file.
 
+    p.string_with_nl(copyright_string);
     p.string_with_nl(
-        "//*****************************************************************************\n"
-        "// Copyright 2023 NVIDIA Corporation. All rights reserved.\n"
-        "//*****************************************************************************\n"
         "// Generated by mdltlc\n"
         "\n"
         "#include \"pch.h\"\n"
@@ -2122,14 +2271,16 @@ void Compilation_unit::output_cpp(mi::mdl::string const &stem_name, mi::mdl::str
                                 p.integer(rule.get_uid());
                                 p.string(", \"");
 
-                                Expr const *lhs = rule.get_lhs();
-                                if (Expr_attribute const *att = as<Expr_attribute>(lhs)) {
-                                    lhs = att->get_argument();
+                                char const *rule_name = rule.get_rule_name();
+                                if (rule_name == nullptr) {
+                                    Expr const *lhs = rule.get_lhs();
+                                   
+                                    char const *lhs_node_name = node_name(lhs);
+                                    MDL_ASSERT(lhs_node_name);
+                                    rule_name = lhs_node_name;
                                 }
-                                char const *lhs_node_name = node_name(lhs);
-                                MDL_ASSERT(lhs_node_name);
 
-                                p.string(lhs_node_name);
+                                p.string(rule_name);
                                 p.string("\", \"");
                                 p.string(m_filename_only);
                                 p.string("\", ");
@@ -2255,10 +2406,8 @@ void Compilation_unit::output_h(
 
     // Write out copyright and header guard.
 
+    p.string_with_nl(copyright_string);
     p.string_with_nl(
-        "//*****************************************************************************\n"
-        "// Copyright 2023 NVIDIA Corporation. All rights reserved.\n"
-        "//*****************************************************************************\n"
         "// Generated by mdltlc\n"
         "\n"
         "#ifndef MDL_DISTILLER_DIST_");
@@ -2353,6 +2502,22 @@ void Compilation_unit::output_h(
                             "\nmi::mdl::IRule_matcher_event &event_handler);");
                     });
                 p.nl();
+                p.string_with_nl(
+                    "\n\n"
+                    "static void fire_debug_print(");
+                p.with_indent([&] (pp::Pretty_print &p) {
+                    p.nl();
+                    p.string("mi::mdl::IDistiller_plugin_api &plugin_api,");
+                    p.nl();
+                    p.string("mi::mdl::IRule_matcher_event &event_handler,");
+                    p.nl();
+                    p.string("std::size_t idx,");
+                    p.nl();
+                    p.string("char const *var_name,");
+                    p.nl();
+                    p.string("mi::mdl::DAG_node const *value);");
+                });
+
 
                 // Print prototypes for postcondition support functions.
 

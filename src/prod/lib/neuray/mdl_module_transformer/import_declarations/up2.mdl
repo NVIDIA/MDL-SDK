@@ -1,0 +1,4 @@
+mdl 1.6;
+
+export int up2_f() { return 42; }
+

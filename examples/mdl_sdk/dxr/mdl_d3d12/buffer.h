@@ -88,7 +88,9 @@ namespace mi { namespace examples { namespace mdl_d3d12
         const size_t m_size_in_byte;
 
     private:
+        D3D12_RESOURCE_STATES m_resource_latest_requested_state;
         ComPtr<ID3D12Resource> m_resource;
+        D3D12_RESOURCE_STATES m_upload_resource_latest_requested_state;
         ComPtr<ID3D12Resource> m_upload_resource;
     };
 
@@ -203,7 +205,8 @@ namespace mi { namespace examples { namespace mdl_d3d12
                 D3D12_RESOURCE_STATE_GENERIC_READ,
                 nullptr,
                 IID_PPV_ARGS(&m_resource)),
-                "Failed to create resource of " + std::to_string(m_size_in_byte) + " bytes for: " + m_debug_name, SRC))
+                "Failed to create resource of " + std::to_string(m_size_in_byte) + " bytes for: " +
+                    m_debug_name, SRC))
                 return;
 
             set_debug_name(m_resource.Get(), m_debug_name);

@@ -53,8 +53,8 @@ create_from_base_preset(
 )
 
 # add mdl and other dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME} 
-    DEPENDS 
+target_add_dependencies(TARGET ${PROJECT_NAME}
+    DEPENDS
         boost
         llvm
         ${LINKER_START_GROUP}
@@ -69,15 +69,10 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
         mdl::base-system-version
         ${LINKER_END_GROUP}
     )
-    
+
 # -------------------------------------------------------------------------------------------------
 # Create installation rules to copy the build directory
 # -------------------------------------------------------------------------------------------------
 add_target_install(
     TARGET ${PROJECT_NAME}
     )
-
-# -------------------------------------------------------------------------------------------------
-# Add tests if available
-# -------------------------------------------------------------------------------------------------
-add_tests(POST)

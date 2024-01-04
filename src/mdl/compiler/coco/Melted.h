@@ -43,7 +43,13 @@ public:
 	State *state;				// new state
 	Melted *next;
 	
-	Melted(BitArray *set, State *state);
+	Melted(BitArray *set, State *state, Melted *next)
+	: set(set)
+	, state(state)
+	, next(next)
+	{
+	}
+
 };
 
 }; // namespace

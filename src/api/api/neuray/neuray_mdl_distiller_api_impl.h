@@ -30,8 +30,8 @@
  ** \brief Header for the IMdl_distiller_api implementation.
  **/
 
-#ifndef API_API_NEURAY_MDL_DISTILLER_API_IMPL_H
-#define API_API_NEURAY_MDL_DISTILLER_API_IMPL_H
+#ifndef API_API_NEURAY_NEURAY_MDL_DISTILLER_API_IMPL_H
+#define API_API_NEURAY_NEURAY_MDL_DISTILLER_API_IMPL_H
 
 #include <mi/neuraylib/imdl_distiller_api.h>
 
@@ -150,4 +150,4 @@ private:
 
 } // namespace MI
 
-#endif // API_API_NEURAY_MDL_DISTILLER_API_IMPL_H
+#endif // API_API_NEURAY_NEURAY_MDL_DISTILLER_API_IMPL_H

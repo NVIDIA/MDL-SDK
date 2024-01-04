@@ -14,7 +14,7 @@ except ImportError:  # pragma: no cover
 
 
 # Test basic features of the binding logic it self
-class MainBindings(UnittestBase):
+class MainBinding(UnittestBase):
     sdk: SDK = None
     tf: pymdlsdk.IType_factory = None
 
@@ -36,6 +36,7 @@ class MainBindings(UnittestBase):
     # Meaning the returned object is NOT None.
     def test_with_nullptr(self):
         color: pymdlsdk.IType_color = self.tf.create_color()
+        self.assertIsValidInterface(color)
 
         # acquiring an incompatible interface
         invalidInt: pymdlsdk.IType_int = color.get_interface(pymdlsdk.IType_int)
@@ -48,7 +49,7 @@ class MainBindings(UnittestBase):
             self.assertFalse(invalidTexture.is_valid_interface())  # but the interface is not valid
 
     # Accessing, i.e. calling, invalid IInterfaces should throw an Exception rather than crashing.
-    def UPCOMING_test_nullptr_access(self):  # pragma: no cover
+    def test_nullptr_access(self):
         invalidBool: pymdlsdk.IType_bool = self.tf.create_color().get_interface(pymdlsdk.IType_bool)
         self.assertIsNotNone(invalidBool)  # returned object exists
         self.assertFalse(invalidBool.is_valid_interface())  # but the interface is not valid
@@ -64,7 +65,7 @@ class MainBindings(UnittestBase):
 
     def test_manual_release(self):
         color: pymdlsdk.IType_color = self.tf.create_color()
-        # UPCOMING self.assertEqual(color.__iinterface_refs__(), 1)
+        self.assertEqual(color.__iinterface_refs__(), 1)
         self.assertTrue(color.is_valid_interface())
         color.release()  # the manual release
         self.assertFalse(color.is_valid_interface())

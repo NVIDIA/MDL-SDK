@@ -138,6 +138,7 @@ target_add_cuda_ptx_rule(TARGET ${PROJECT_NAME}
     CUDA_SOURCES
         "optix7_mdl.cu"
         "optix7_mdl_closest_hit_radiance.cu"
+        "optix7_mdl_closest_hit_radiance_direct_call.cu"
     FAST_MATH
     )
 
@@ -148,8 +149,3 @@ add_target_install(
     TARGET ${PROJECT_NAME}
     DESTINATION "examples/mdl_sdk/optix7"
     )
-
-# -------------------------------------------------------------------------------------------------
-# Add tests if available
-# -------------------------------------------------------------------------------------------------
-add_tests()

@@ -39,7 +39,7 @@ class MainIValue(UnittestBase):
         self.sdk = None
         print(f"\nFinished tests in {__file__}\n")
 
-    def setUp(self):
+    def test_setupIsDone(self):
         self.assertIsNotNone(self.sdk)
         self.assertIsValidInterface(self.sdk.neuray)
         self.assertIsValidInterface(self.sdk.transaction)
@@ -180,7 +180,7 @@ class MainIValue(UnittestBase):
             self.assertEqual(typeTyped.get_shape(), pymdlsdk.IType_texture.Shape.TS_3D)
         if itypeClass == pymdlsdk.IType_structure:
             self.assertEqual(typeTyped.get_symbol(), "::material_surface")
-            # UPCOMING self.assertEqual(typeTyped.get_predefined_id(), pymdlsdk.IType_structure.Predefined_id.SID_MATERIAL_SURFACE)
+            self.assertEqual(typeTyped.get_predefined_id(), pymdlsdk.IType_structure.Predefined_id.SID_MATERIAL_SURFACE)
             for i in range(typeTyped.get_size()):
                 fieldName: str = typeTyped.get_field_name(i)
                 self.assertEqual(typeTyped.find_field(fieldName), i)
@@ -192,7 +192,7 @@ class MainIValue(UnittestBase):
             self.assertIsNotNone(annoBlock)
         if itypeClass == pymdlsdk.IType_enumeration:
             self.assertEqual(typeTyped.get_symbol(), "::intensity_mode")
-            # UPCOMING self.assertEqual(typeTyped.get_predefined_id(), pymdlsdk.IType_enumeration.Predefined_id.EID_INTENSITY_MODE)
+            self.assertEqual(typeTyped.get_predefined_id(), pymdlsdk.IType_enumeration.Predefined_id.EID_INTENSITY_MODE)
             for i in range(typeTyped.get_size()):
                 name: str = typeTyped.get_value_name(i)
                 code: int = typeTyped.get_value_code(i)
@@ -215,10 +215,11 @@ class MainIValue(UnittestBase):
         if asCompound.is_valid_interface():
             self.assertIsValidInterface(asCompound)
             self.assertEqual(asCompound.get_kind(), typeTyped.get_kind())
+            size: int = asCompound.get_size()
             if isDeferredSizedArray:
-                self.assertEqual(asCompound.get_size(), -1)
+                self.assertEqual(size, -1)
             else:
-                self.assertGreater(asCompound.get_size(), 0)
+                self.assertGreater(size, 0)
             fieldType: pymdlsdk.IType = asCompound.get_component_type(0)
             self.assertIsValidInterface(fieldType)
         asAtomic: pymdlsdk.IType_atomic = typeTyped.get_interface(pymdlsdk.IType_atomic)
@@ -245,18 +246,13 @@ class MainIValue(UnittestBase):
         self.run_itype_test(pymdlsdk.IType_double, pymdlsdk.IValue_double, tDouble)
         self.run_itype_test(pymdlsdk.IType_string, pymdlsdk.IValue_string, self.tf.create_string())
         self.run_itype_test(pymdlsdk.IType_color, pymdlsdk.IValue_color, self.tf.create_color())
-        # UPCOMING self.run_itype_test(pymdlsdk.IType_texture, pymdlsdk.IValue_texture, self.tf.create_texture(pymdlsdk.IType_texture.Shape.TS_3D))
-        # UPCOMING self.run_itype_test(pymdlsdk.IType_enumeration, pymdlsdk.IValue_enumeration, self.tf.get_predefined_enum(pymdlsdk.IType_enumeration.Predefined_id.EID_INTENSITY_MODE))
-        # UPCOMING self.run_itype_test(pymdlsdk.IType_structure, pymdlsdk.IValue_structure, self.tf.get_predefined_struct(pymdlsdk.IType_structure.Predefined_id.SID_MATERIAL_SURFACE))
-        # MEANWHILE
-        self.run_itype_test(pymdlsdk.IType_texture, pymdlsdk.IValue_texture, self.tf.create_texture(pymdlsdk.IType_texture.Shape.TS_3D.value))
-        self.run_itype_test(pymdlsdk.IType_enumeration, pymdlsdk.IValue_enumeration, self.tf.get_predefined_enum(1))  # 1 = EID_INTENSITY_MODE
-        self.run_itype_test(pymdlsdk.IType_structure, pymdlsdk.IValue_structure, self.tf.get_predefined_struct(1))  # = SID_MATERIAL_SURFACE
-        # MEANWHILE END
+        self.run_itype_test(pymdlsdk.IType_texture, pymdlsdk.IValue_texture, self.tf.create_texture(pymdlsdk.IType_texture.Shape.TS_3D))
         self.run_itype_test(pymdlsdk.IType_light_profile, pymdlsdk.IValue_light_profile, self.tf.create_light_profile())
         self.run_itype_test(pymdlsdk.IType_bsdf_measurement, pymdlsdk.IValue_bsdf_measurement, self.tf.create_bsdf_measurement())
         self.run_itype_test(pymdlsdk.IType_enumeration, pymdlsdk.IValue_enumeration, self.tf.create_enum("::intensity_mode"))
         self.run_itype_test(pymdlsdk.IType_structure, pymdlsdk.IValue_structure, self.tf.create_struct("::material_surface"))
+        self.run_itype_test(pymdlsdk.IType_enumeration, pymdlsdk.IValue_enumeration, self.tf.get_predefined_enum(pymdlsdk.IType_enumeration.Predefined_id.EID_INTENSITY_MODE))
+        self.run_itype_test(pymdlsdk.IType_structure, pymdlsdk.IValue_structure, self.tf.get_predefined_struct(pymdlsdk.IType_structure.Predefined_id.SID_MATERIAL_SURFACE))
         self.run_itype_test(pymdlsdk.IType_array, pymdlsdk.IValue_array, self.tf.create_immediate_sized_array(tInt, 10))
         self.run_itype_test(pymdlsdk.IType_array, pymdlsdk.IValue_array, self.tf.create_deferred_sized_array(tInt, "X"))
         tbsdf: pymdlsdk.IType_bsdf = self.tf.create_bsdf()

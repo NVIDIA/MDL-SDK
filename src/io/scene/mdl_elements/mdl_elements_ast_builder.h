@@ -29,6 +29,9 @@
 /// \brief      Module-internal utilities for building MDL AST from neuray
 ///             expressions/types
 
+#ifndef IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_AST_BUILDER_H
+#define IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_AST_BUILDER_H
+
 #include <map>
 #include <set>
 #include <string>
@@ -231,6 +234,9 @@ private:
     /// The Symbol table of \c m_owner.
     mi::mdl::Symbol_table& m_st;
 
+    /// The MDL type factory.
+    mi::base::Handle<MDL::IType_factory> m_mdl_tf;
+
     /// The count for temporary generation.
     unsigned m_tmp_idx;
 
@@ -274,4 +280,7 @@ private:
 };
 
 } // namespace MDL
+
 } // namespace MI
+
+#endif // IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_AST_BUILDER_H

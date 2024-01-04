@@ -1,0 +1,103 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Complex_alias bottomup {
+    import state;
+    import math;
+
+    material( tw,
+              material_surface(_,_) [[ local_normal ~ nl ]],
+              bf,ior,vol,
+              material_geometry(d,cutout,n), hair)
+        --> material(tw,material_surface(),bf,ior,vol,material_geometry(d,cutout,nprime),hair)
+        maybe n != nl
+        where nprime = nvidia::distilling_support::add_detail_normal( nl, n);
+    a ~ bsdf() --> a [[ local_normal_w = 0.0, local_normal=state::normal() ]];
+
+    a ~ diffuse_reflection_bsdf(_,_) --> a [[ local_normal_w = 0.0, local_normal=state::normal() ]];
+
+    // diffuse_transmission_bsdf(_) --> local_normal(0.0,state::normal());
+    // specular_bsdf(_) --> local_normal(0.0,state::normal());
+    // simple_glossy_bsdf(_,_,_,_,_) --> local_normal(0.0,state::normal());
+    // // bsdf_tint(_,base) --> base;
+    // // bsdf_tint_ex(_,_,base) --> base;
+    // bsdf_mix_1(w1, local_normal(nw,nl)) --> local_normal( w1 * nw, nl);
+    // bsdf_color_mix_1(w1, local_normal(nw,nl))
+    //     --> local_normal( math::luminance(w1) * nw, nl);
+    // bsdf_mix_2(w1,local_normal(nw1,nl1),w2,local_normal(nw2,nl2))
+    //     --> local_normal( w1 * nw1 + w2 * nw2, nl1)
+    //     if nl1 == nl2;
+    // bsdf_mix_2(w1,local_normal(nw1,nl1),w2,local_normal(nw2,nl2))
+    //     --> local_normal( w1 * nw1 + w2 * nw2,
+    //             nvidia::distilling_support::affine_normal_sum( w1 * nw1, nl1, w2 * nw2, nl2));
+    // bsdf_color_mix_2(w1,local_normal(nw1,nl1),w2,local_normal(nw2,nl2))
+    //     --> local_normal( math::luminance(w1) * nw1 + math::luminance(w2) * nw2, nl1)
+    //     if nl1 == nl2;
+    // bsdf_color_mix_2(w1,local_normal(nw1,nl1),w2,local_normal(nw2,nl2))
+    //     --> local_normal( w1p * nw1 + w2p * nw2,
+    //             nvidia::distilling_support::affine_normal_sum( w1p * nw1, nl1, w2p * nw2, nl2))
+    //     where w1p = math::luminance(w1)
+    //           w2p = math::luminance(w2);
+    // bsdf_mix_3(w1,local_normal(nw1,nl1),
+    //            w2,local_normal(nw2,nl2),
+    //            w3,local_normal(nw3,nl3))
+    //     --> local_normal( w1 * nw1 + w2 * nw2 + w3 * nw3, nl1)
+    //     if (nl1 == nl2) && (nl1 == nl3);
+    // bsdf_mix_3(w1,local_normal(nw1,nl1),
+    //            w2,local_normal(nw2,nl2),
+    //            w3,local_normal(nw3,nl3))
+    //      --> local_normal( w1 * nw1 + w2 * nw2 + w3 * nw3,
+    //              nvidia::distilling_support::affine_normal_sum(
+    //                  w1 * nw1, nl1, w2 * nw2, nl2, w3 * nw3, nl3));
+    // bsdf_color_mix_3(w1,local_normal(nw1,nl1),
+    //                  w2,local_normal(nw2,nl2),
+    //                  w3,local_normal(nw3,nl3))
+    //     --> local_normal( math::luminance(w1) * nw1 + math::luminance(w2) * nw2
+    //                                    + math::luminance(w3) * nw3, nl1)
+    //     if (nl1 == nl2) && (nl1 == nl3);
+    // bsdf_color_mix_3(w1,local_normal(nw1,nl1),
+    //            w2,local_normal(nw2,nl2),
+    //            w3,local_normal(nw3,nl3))
+    //      --> local_normal( w1p * nw1 + w2p * nw2 + w3p * nw3,
+    //              nvidia::distilling_support::affine_normal_sum(
+    //                  w1p * nw1, nl1, w2p * nw2, nl2, w3p * nw3, nl3))
+    //     where w1p = math::luminance(w1)
+    //           w2p = math::luminance(w2)
+    //           w3p = math::luminance(w3);
+    // weighted_layer(w,local_normal(_,nl1),local_normal(nw2,nl2),n)
+    //     --> local_normal( nw2 * (1.0-w) + w, n)
+    //     if (n == nl1) && (n == nl2);
+    // weighted_layer(w,local_normal(nw1,nl1),local_normal(nw2,nl2),n)
+    //     --> local_normal( nw2 * (1.0-w) + w,
+    //             nvidia::distilling_support::affine_normal_sum(
+    //                 (1.0-w)*nw2, nl2, w*(1.0-nw1), n, w*nw1, nl1));
+    // color_weighted_layer(w,local_normal(_,nl1),local_normal(nw2,nl2),n)
+    //     --> local_normal( nw2 * (1.0-math::luminance(w)) + math::luminance(w), n)
+    //     if (n == nl1) && (n == nl2);
+    // color_weighted_layer(w,local_normal(nw1,nl1),local_normal(nw2,nl2),n)
+    //     --> local_normal( nw2 * (1.0-wp) + wp,
+    //             nvidia::distilling_support::affine_normal_sum(
+    //                 (1.0-wp)*nw2, nl2, wp*(1.0-nw1), n, wp*nw1, nl1))
+    //     where wp = math::luminance(w);
+    // fresnel_layer(_,w0,local_normal(_,nl1),local_normal(nw2,nl2),n)
+    //     --> local_normal( nw2 * (1.0-w) + w, n)
+    //     if (n == nl1) && (n == nl2)
+    //     where w = w0 * option( top_layer_weight);
+    // fresnel_layer(_,w0,local_normal(nw1,nl1),
+    //                    local_normal(nw2,nl2),n)
+    //     --> local_normal( nw2 * (1.0-w) + w,
+    //             nvidia::distilling_support::affine_normal_sum(
+    //                 (1.0-w)*nw2, nl2, w*(1.0-nw1), n, w*nw1, nl1))
+    //     where w = w0 * option( top_layer_weight);
+    // color_fresnel_layer(_,w0,local_normal(_,nl1),local_normal(nw2,nl2),n)
+    //     --> local_normal( nw2 * (1.0-w) + w, n)
+    //     if (n == nl1) && (n == nl2)
+    //                       where w = math::luminance(w0) * option( top_layer_weight);
+    // color_fresnel_layer(_,w0,local_normal(nw1,nl1),
+    //                          local_normal(nw2,nl2),n)
+    //     --> local_normal( nw2 * (1.0-w) + w,
+    //             nvidia::distilling_support::affine_normal_sum(
+    //                 (1.0-w)*nw2, nl2, w*(1.0-nw1), n, w*nw1, nl1))
+    //     where w = math::luminance(w0) * option( top_layer_weight);
+}

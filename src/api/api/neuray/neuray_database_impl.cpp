@@ -149,7 +149,7 @@ mi::neuraylib::IScope* Database_impl::get_scope( const char* id_string) const
     DB::Scope_id scope_id( id);
 
     DB::Scope* scope = m_database->lookup_scope( scope_id);
-    if(! scope)
+    if( !scope)
         return nullptr;
 
     return new Scope_impl( scope, s_class_factory);
@@ -163,7 +163,7 @@ mi::neuraylib::IScope* Database_impl::get_named_scope( const char* name) const
         return nullptr;
 
     DB::Scope* scope = m_database->lookup_scope( name);
-    if(! scope)
+    if( !scope)
         return nullptr;
 
     return new Scope_impl( scope, s_class_factory);
@@ -187,20 +187,20 @@ mi::Sint32 Database_impl::remove_scope( const char* id_string) const
     return m_database->remove( scope_id) ? 0 : -1;
 }
 
-void Database_impl::lock( mi::Uint32 lock_id)
-{
-    m_database->lock( DB::Tag( lock_id));
-}
-
-mi::Sint32 Database_impl::unlock( mi::Uint32 lock_id)
-{
-    return m_database->unlock( DB::Tag( lock_id)) ? 0 : -1;
-}
-
 void Database_impl::garbage_collection(
     mi::neuraylib::IDatabase::Garbage_collection_priority priority)
 {
     m_database->garbage_collection( static_cast<int>( priority));
+}
+
+void Database_impl::lock( mi::Uint32 lock_id)
+{
+    m_database->lock( lock_id);
+}
+
+mi::Sint32 Database_impl::unlock( mi::Uint32 lock_id)
+{
+    return m_database->unlock( lock_id) ? 0 : -1;
 }
 
 mi::Sint32 Database_impl::start( DB::Database* database)

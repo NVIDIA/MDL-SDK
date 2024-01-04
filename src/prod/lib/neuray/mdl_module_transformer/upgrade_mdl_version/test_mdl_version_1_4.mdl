@@ -1,0 +1,13 @@
+mdl 1.4;
+
+import ::df::*;
+import ::tex::*;
+
+/* add hair parameter in 1.5 */
+export material test_material_constructor()
+= material(
+    surface: material_surface(),
+    backface: material_surface(),
+    ior: color(1.0),
+    volume: material_volume()
+);

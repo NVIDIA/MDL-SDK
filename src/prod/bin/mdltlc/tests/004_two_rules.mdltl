@@ -1,0 +1,9 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Two_rules topdown {
+    import df;
+    bsdf() --> diffuse_reflection_bsdf(color(0.0), 3.1, "hlp");
+    diffuse_transmission_bsdf(tint) --> diffuse_reflection_bsdf(tint);
+}

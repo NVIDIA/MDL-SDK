@@ -25,6 +25,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
+
 /// \file mi/mdl/mdl_distiller_rules.h
 /// \brief MDL distiller rule definitions and rule base class
 
@@ -39,6 +40,7 @@ namespace mi {
 namespace mdl {
 
 class IDistiller_plugin_api;
+class Debug_output_callback;
 class DAG_node;
 class Node_types;
 
@@ -175,6 +177,30 @@ public:
     /// \param path   the path that failed
     virtual void postcondition_failed_path(
         char const *path) = 0;
+
+    /// A rule with an attached debug_print() statement has matched. This function
+    /// receives the same arguments as rule_match_event() plus the name of the variable
+    /// to be printed and the value of the variable after matching succeeded.
+    ///
+    /// \param plugin_api      reference to the distiller plugin API that issued this
+    ///                        debug_print() event
+    /// \param rule_set_name   the name of the rule set
+    /// \param rule_id         the rule id
+    /// \param rule_name       the name of the rule that matched
+    /// \param file_name       if non-NULL, the file name where the rule was declared
+    /// \param line_number     if non-ZERO, the line number where the rule was declared
+    /// \param var_name        name of the variable whose value is printed
+    /// \param value           value to be printed
+    virtual void debug_print(
+        IDistiller_plugin_api &plugin_api,
+        char const *rule_set_name,
+        unsigned   rule_id,
+        char const *rule_name,
+        char const *file_name,
+        unsigned   line_number,
+        char const *var_name,
+        DAG_node const *value) = 0;
+
 };
 
 ///

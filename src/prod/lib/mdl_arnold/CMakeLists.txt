@@ -35,7 +35,7 @@ set(SOURCES_HEADERS
     "mdl_arnold_interface.h"
     "mdl_arnold_utils.h"
     )
-set(PROJECT_SOURCES 
+set(PROJECT_SOURCES
     "mdl_arnold.cpp"
     "mdl_arnold_edf.cpp"
     "mdl_arnold_bsdf.cpp"
@@ -145,16 +145,7 @@ else()
     # TODO remove this from the binary release
     if(MDL_INTERNAL_BUILD)
         # copy and rename libraries from the internal build output
-        if (CMAKE_BUILD_TYPE STREQUAL "Release")
-            set(_SDK_BINARY_DIR ${MI_OBJ_O})
-        elseif (CMAKE_BUILD_TYPE STREQUAL "Debug")
-            set(_SDK_BINARY_DIR ${MI_OBJ_G})
-        elseif (CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-            set(_SDK_BINARY_DIR ${MI_OBJ_O_G})
-        else()
-            set(_SDK_BINARY_DIR $<$<CONFIG:Debug>:${MI_OBJ_G}>$<$<CONFIG:Release>:${MI_OBJ_O}>$<$<CONFIG:RelWithDebInfo>:${MI_OBJ_O_G}>)
-        endif()
-
+        set(_SDK_BINARY_DIR ${MI_OBJ_${CMAKE_BUILD_TYPE}})
         set(_OPENIMAGEIO_BINARY_DIR ${_SDK_BINARY_DIR})
         set(_DDS_BINARY_DIR ${_SDK_BINARY_DIR})
 
@@ -208,14 +199,14 @@ endif()
 
 # creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)
 set(_VS_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$(Configuration)/lib)
-set_target_properties(${PROJECT_NAME} 
+set_target_properties(${PROJECT_NAME}
     PROPERTIES
         VS_DEBUGGER_COMMAND             "${MDL_DEPENDENCY_ARNOLDSDK_BIN}/kick${CMAKE_BINARY_LIBRARY_SUFFIX}"
         VS_DEBUGGER_COMMAND_ARGUMENTS   "-t 0 -v 4 -nostdin -i ${CMAKE_CURRENT_SOURCE_DIR}/example_scene/cornell_single.ass -ipr q"
     )
 set_property(TARGET ${PROJECT_NAME} PROPERTY VS_ ${MDL_DEPENDENCY_ARNOLDSDK_BIN}/kick${CMAKE_BINARY_LIBRARY_SUFFIX})
 target_add_vs_debugger_env_var(TARGET ${PROJECT_NAME}
-    VARS 
+    VARS
         "ARNOLD_PLUGIN_PATH=${CMAKE_CURRENT_BINARY_DIR}/$(Configuration)/lib"
         "MDL_PATHS=${CMAKE_CURRENT_SOURCE_DIR}/example_scene/mdl"
     )

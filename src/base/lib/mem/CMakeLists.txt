@@ -31,15 +31,13 @@ set(PROJECT_NAME base-lib-mem)
 
 # collect sources
 set(PROJECT_HEADERS
-    "i_mem_aligned.h"
     "i_mem_allocatable.h"
     "i_mem_consumption.h"
     "mem.h"
     "mem_debug_alloc.h"
-    "mem_memtrack.h"
     )
 
-set(PROJECT_SOURCES 
+set(PROJECT_SOURCES
     "mem.cpp"
     "mem_debug_alloc.cpp"
     ${PROJECT_HEADERS}
@@ -52,7 +50,10 @@ create_from_base_preset(
     )
 
 # add dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME} 
-    DEPENDS 
+target_add_dependencies(TARGET ${PROJECT_NAME}
+    DEPENDS
         boost
         )
+
+# add unit tests
+add_unit_tests(POST)

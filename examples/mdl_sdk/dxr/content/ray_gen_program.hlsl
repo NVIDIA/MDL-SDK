@@ -47,8 +47,10 @@ RWTexture2D<float4> FrameBuffer  : register(u1,space0); // 8bit
 // from the MDL material perspective albedo (approximation) and normals can be generated.
 #if defined(ENABLE_AUXILIARY)
     // in order to limit the payload size, this data is written directly from the hit programs
-    RWTexture2D<float4> AlbedoBuffer : register(u2,space0);
-    RWTexture2D<float4> NormalBuffer : register(u3,space0);
+    RWTexture2D<float4> AlbedoDiffuseBuffer : register(u2, space0);
+    RWTexture2D<float4> AlbedoGlossyBuffer : register(u3, space0);
+    RWTexture2D<float4> NormalBuffer : register(u4, space0);
+    RWTexture2D<float4> RoughnessBuffer : register(u5, space0);
 #endif
 
 // Ray tracing acceleration structure, accessed as a SRV
@@ -139,17 +141,24 @@ void RayGenProgram()
         // in order to limit the payload size, this data is written directly from the hit programs
         // for a progressive refinement of the buffer content we store the current value locally
         // this has other costs: register usage + additional reads/writes to global memory (here)
-        float4 tmp_albedo = float4(0, 0, 0, 1);
+        float4 tmp_albedo_diffuse = float4(0, 0, 0, 1);
+        float4 tmp_albedo_glossy = float4(0, 0, 0, 1);
         float4 tmp_normal = float4(0, 0, 0, 1);
+        float4 tmp_roughness = float4(0, 0, 0, 1);
         if (progressive_iteration == 0)
-        {
-            AlbedoBuffer[launch_index.xy] = tmp_albedo; // could be replaced by clear call from CPU
-            NormalBuffer[launch_index.xy] = tmp_normal; // could be replaced by clear call from CPU
+        { 
+            // could be replaced by clear calls from CPU
+            AlbedoDiffuseBuffer[launch_index.xy] = tmp_albedo_diffuse;
+            AlbedoGlossyBuffer[launch_index.xy] = tmp_albedo_glossy;
+            NormalBuffer[launch_index.xy] = tmp_normal;
+            RoughnessBuffer[launch_index.xy] = tmp_roughness;
         }
         else
         {
-            tmp_albedo = AlbedoBuffer[launch_index.xy];
+            tmp_albedo_diffuse = AlbedoDiffuseBuffer[launch_index.xy];
+            tmp_albedo_glossy = AlbedoGlossyBuffer[launch_index.xy];
             tmp_normal = NormalBuffer[launch_index.xy];
+            tmp_roughness = RoughnessBuffer[launch_index.xy];
         }
     #endif
 
@@ -184,8 +193,10 @@ void RayGenProgram()
         #if defined(ENABLE_AUXILIARY)
             // note, while the 'OutputBuffer' contains converging image, the auxiliary buffers contain
             // only the last values and 'tmp_*' stores the converged data
-            tmp_albedo = lerp(tmp_albedo, AlbedoBuffer[launch_index.xy], it_weight);
+            tmp_albedo_diffuse = lerp(tmp_albedo_diffuse, AlbedoDiffuseBuffer[launch_index.xy], it_weight);
+            tmp_albedo_glossy = lerp(tmp_albedo_glossy, AlbedoGlossyBuffer[launch_index.xy], it_weight);
             tmp_normal = lerp(tmp_normal, NormalBuffer[launch_index.xy], it_weight);
+            tmp_roughness = lerp(tmp_roughness, RoughnessBuffer[launch_index.xy], it_weight);
         #endif
     }
 
@@ -214,13 +225,29 @@ void RayGenProgram()
     {
         case 1: /* albedo */
         {
-            color = tmp_albedo.xyz;
+            color = tmp_albedo_diffuse.xyz + tmp_albedo_glossy.xyz;
+            break;
+        }
+        case 2: /* albedo diffuse */
+        {
+            color = tmp_albedo_diffuse.xyz;
+            break;
+        }
+        case 3: /* albedo glossy */
+        {
+            color = tmp_albedo_glossy.xyz;
             break;
         }
 
-        case 2: /* normal */
+        case 4: /* normal */
         {
             color = valid_normal ? (tmp_normal.xyz * 0.5f + 0.5f) : 0.0f;
+            break;
+        }
+
+        case 5: /* roughness */
+        {
+            color = tmp_roughness.xyz;
             break;
         }
 
@@ -235,7 +262,9 @@ void RayGenProgram()
 
     // write auxiliary buffer
     #if defined(ENABLE_AUXILIARY)
-        AlbedoBuffer[launch_index.xy] = tmp_albedo;
+        AlbedoDiffuseBuffer[launch_index.xy] = tmp_albedo_diffuse;
+        AlbedoGlossyBuffer[launch_index.xy] = tmp_albedo_glossy;
         NormalBuffer[launch_index.xy] = tmp_normal;
+        RoughnessBuffer[launch_index.xy] = tmp_roughness;
     #endif
 }

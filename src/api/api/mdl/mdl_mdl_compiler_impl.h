@@ -32,8 +32,8 @@
  ** Implements the IMdl_compiler interface
  **/
 
-#ifndef API_API_MDL_MDL_COMPILER_IMPL_H
-#define API_API_MDL_MDL_COMPILER_IMPL_H
+#ifndef API_API_MDL_MDL_MDL_COMPILER_IMPL_H
+#define API_API_MDL_MDL_MDL_COMPILER_IMPL_H
 
 #include <mi/base/handle.h>
 #include <mi/base/interface_implement.h>
@@ -111,4 +111,4 @@ private:
 
 } // namespace MI
 
-#endif // API_API_MDL_MDL_COMPILER_IMPL_H
+#endif // API_API_MDL_MDL_MDL_COMPILER_IMPL_H

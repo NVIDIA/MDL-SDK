@@ -1485,6 +1485,11 @@ public:
             bool is_layer_qualified(DAG_node const *expr);
 
             /// Process string constants.
+            ///
+            /// \param v  a value to process
+            ///
+            /// Process all string constants that are part of the value v and v itself if v
+            /// is a string constant.
             void process_string_constants(IValue const *v);
 
         private:

@@ -40,18 +40,11 @@ set(PROJECT_HEADERS
     "cont_allocators.h"
     "cont_allocators_inline.h"
     "cont_array_inline.h"
-    "cont_bitset_inline.h"
     "cont_bitvector_inline.h"
-    "cont_dlist_inline.h"
     "cont_rle_array_inline.h"
-    "cont_set_inline.h"
-    "cont_tree.h"
     "i_cont_array.h"
-    "i_cont_bitset.h"
     "i_cont_bitvector.h"
-    "i_cont_dlist.h"
     "i_cont_rle_array.h"
-    "i_cont_set.h"
     "i_cont_traits.h"
     )
 
@@ -65,3 +58,6 @@ create_from_base_preset(
     TARGET ${PROJECT_NAME}
     SOURCES ${PROJECT_SOURCES}
     )
+
+# add unit tests
+add_unit_tests(POST)

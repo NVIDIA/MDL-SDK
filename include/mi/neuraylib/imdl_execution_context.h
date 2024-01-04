@@ -51,8 +51,9 @@ class IMessage: public
 public:
 
     /// The possible kinds of messages.
-    /// A message can be uniquely identified by the message code and kind,
-    /// except for uncategorized messages.
+    ///
+    /// A message can be uniquely identified by the message code and kind, except for
+    /// importer/exporter messages, integration messages, and uncategorized messages.
     enum Kind {
 
         /// MDL Core compiler message.
@@ -63,11 +64,11 @@ public:
         MSG_COMPILER_DAG,
         /// MDL Core archive tool message.
         MSG_COMPILER_ARCHIVE_TOOL,
-        /// MDL import/exporter message.
+        /// MDL import/exporter message (currently unused).
         MSG_IMP_EXP,
         /// MDL integration message.
         MSG_INTEGRATION,
-        /// Uncategorized messages do not have a code.
+        /// Uncategorized message.
         MSG_UNCATEGORIZED,
         //  Undocumented, for alignment only.
         MSG_FORCE_32_BIT = 0xffffffffU
@@ -108,12 +109,16 @@ public:
 /// - #mi::Sint32 "optimization_level": Sets the optimization level. Possible values: 0 (all
 ///   optimizations are disabled), 1 (only intra procedural optimizations are enabled), 2 (intra
 ///   and inter procedural optimizations are enabled). Default: 2.
-/// - \c std::string "internal_space": Set the internal space of the backend. Possible values:
+/// - \c std::string "internal_space": Sets the internal space of the backend. Possible values:
 ///   \c "coordinate_world", \c "coordinate_object". Default: \c "coordinate_world".
 /// - \c bool "mdl_next": If \c true, enables (possible incomplete) features from upcoming
 ///   MDL version. Default: \c false.
 /// - \c bool "experimental": If \c true, enables undocumented experimental MDL features. Default:
 ///   \c false.
+/// - #mi::base::IInterface* "user_data": A user-supplied pointer to an arbitrary interface. This
+///   option can be used to pass additional data from a call site of
+///   #mi::neuraylib::IMdl_impexp_api::load_module() to a custom implementation of the entity
+///   resolver. Default: \c NULL.
 ///
 /// Options for MDL export
 /// - \c bool "bundle_resources": If \c true, referenced resources are exported into the same

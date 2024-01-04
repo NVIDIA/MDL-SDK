@@ -51,7 +51,7 @@ set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "_cmake")
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 # Instruct CMake to run not moc automatically (Qt)
-# We select the files manually and add the generated files to the project and the IDEs. 
+# We select the files manually and add the generated files to the project and the IDEs.
 # set(CMAKE_AUTOMOC ON)
 
 # custom properties
@@ -197,7 +197,7 @@ if(MDL_LOG_PLATFORM_INFOS)
     MESSAGE(STATUS "[INFO] CMAKE_GENERATOR:                      ${CMAKE_GENERATOR}")
     get_property(_GENERATOR_IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
     MESSAGE(STATUS "[INFO] GENERATOR_IS_MULTI_CONFIG:            ${_GENERATOR_IS_MULTI_CONFIG}")
-    
+
     MESSAGE(STATUS "[INFO] CMAKE_CXX_COMPILER_ID:                ${CMAKE_CXX_COMPILER_ID}")
     MESSAGE(STATUS "[INFO] CMAKE_CXX_COMPILER_VERSION:           ${CMAKE_CXX_COMPILER_VERSION}")
     MESSAGE(STATUS "[INFO] CMAKE_CXX_COMPILER:                   ${CMAKE_CXX_COMPILER}")
@@ -210,10 +210,10 @@ if(MDL_LOG_PLATFORM_INFOS)
     MESSAGE(STATUS "[INFO] CMAKE_CXX_FLAGS_RELEASE:              ${CMAKE_CXX_FLAGS_RELEASE}")
     MESSAGE(STATUS "[INFO] CMAKE_CXX_FLAGS_RELWITHDEBINFO:       ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
 
-    MESSAGE(STATUS "[INFO] FREEIMAGE_DIR:                        ${FREEIMAGE_DIR}")
+    MESSAGE(STATUS "[INFO] CMAKE_EXE_LINKER_FLAGS:               ${CMAKE_EXE_LINKER_FLAGS}")
+
     MESSAGE(STATUS "[INFO] CMAKE_TOOLCHAIN_FILE:                 ${CMAKE_TOOLCHAIN_FILE}")
-    MESSAGE(STATUS "[INFO] GLEW_DIR:                             ${GLEW_DIR}")
-    MESSAGE(STATUS "[INFO] GLFW_DIR:                             ${GLFW_DIR}")
+    MESSAGE(STATUS "[INFO] VCPKG_TARGET_TRIPLET:                 ${VCPKG_TARGET_TRIPLET}")
     MESSAGE(STATUS "[INFO] Qt5_DIR:                              ${Qt5_DIR}")
     MESSAGE(STATUS "[INFO] CMAKE_CUDA_COMPILER:                  ${CMAKE_CUDA_COMPILER}")
     MESSAGE(STATUS "[INFO] PYTHON_DIR:                           ${PYTHON_DIR}")
@@ -249,6 +249,7 @@ option(MDL_ENABLE_OPTIX7_EXAMPLES "Enable examples that require OptiX 7." OFF)
 option(MDL_ENABLE_MATERIALX "Enable MaterialX in examples that support it." OFF)
 option(MDL_ENABLE_SLANG "Enable Slang in examples that support it." OFF)
 option(MDL_ENABLE_PYTHON_BINDINGS "Enable the generation of python bindings." OFF)
+option(MDL_ENABLE_PYTHON_UNIT_TEST_COVERAGE "Generates a coverage report when running python unit test. Requires the `coverage` module installed." OFF)
 
 if(EXISTS ${MDL_SRC_FOLDER}/api)
     option(MDL_BUILD_DOCUMENTATION "Enable the build of the API reference documentation." ON)
@@ -257,18 +258,19 @@ else()
 endif()
 
 if(EXISTS ${MDL_BASE_FOLDER}/cmake/tests/CMakeLists.txt)
-    option(MDL_ENABLE_TESTS "Generates unit and example tests." OFF)
+    option(MDL_ENABLE_TESTS "Generates example tests." OFF)
 else()
-    set(MDL_ENABLE_TESTS OFF CACHE INTERNAL "Generates unit and example tests." FORCE)
+    set(MDL_ENABLE_TESTS OFF CACHE INTERNAL "Generates example tests." FORCE)
+endif()
+
+if(EXISTS ${MDL_SRC_FOLDER}/api)
+    option(MDL_ENABLE_UNIT_TESTS "Generates unit tests." ON)
+else()
+    set(MDL_ENABLE_UNIT_TESTS OFF CACHE INTERNAL "Generates unit tests." FORCE)
 endif()
 
 # list of tests that can be defined only after all other targets are setup (clear that list here)
 set(MDL_TEST_LIST_POST "" CACHE INTERNAL "list of test directories to add after regular targets are defined")
-
-if(MDL_BUILD_FREEIMAGE_PLUGIN AND EXISTS ${MDL_BASE_FOLDER}/cmake/find/find_freeimage_ext.cmake)
-    include(${MDL_BASE_FOLDER}/cmake/find/find_freeimage_ext.cmake)
-    find_freeimage_ext()
-endif()
 
 if(EXISTS ${MDL_BASE_FOLDER}/cmake/find/find_openimageio_ext.cmake)
     include(${MDL_BASE_FOLDER}/cmake/find/find_openimageio_ext.cmake)
@@ -366,5 +368,6 @@ if(MDL_LOG_PLATFORM_INFOS)
     MESSAGE(STATUS "[INFO] MDL_ENABLE_SLANG:                     ${MDL_ENABLE_SLANG}")
     MESSAGE(STATUS "[INFO] MDL_ENABLE_PYTHON_BINDINGS:           ${MDL_ENABLE_PYTHON_BINDINGS}")
     MESSAGE(STATUS "[INFO] MDL_ENABLE_TESTS:                     ${MDL_ENABLE_TESTS}")
+    MESSAGE(STATUS "[INFO] MDL_ENABLE_UNIT_TESTS:                ${MDL_ENABLE_UNIT_TESTS}")
     MESSAGE(STATUS "[INFO] MDL_BUILD_DOCUMENTATION:              ${MDL_BUILD_DOCUMENTATION}")
 endif()

@@ -281,7 +281,8 @@ void Dxt_decompressor::decompress_dxtc5( const mi::Uint8* const block, mi::Uint8
             for( mi::Uint32 x = 0; x < BLOCK_PIXEL_DIM; ++x) {
 
                 const mi::Uint32 index = y * BLOCK_PIXEL_DIM + x;
-                const mi::Uint8 index_alpha = static_cast<mi::Uint8>( alpha_bits >> (index * 3)) & 0x07;
+                const mi::Uint8 index_alpha = static_cast<mi::Uint8>(
+                    alpha_bits >> (index * 3)) & 0x07;
                 const mi::Uint8 value = alpha[index_alpha];
 
                 if( m_mode == ALPHA_AS_GREY)

@@ -305,7 +305,7 @@ void Errors::Warning(const char *s) {
 
 void Errors::Exception(const char *s) {
 	printf("%s", s);
-	exit(1);
+	exit(EXIT_FAILURE);
 }
 
 -->namespace_close

@@ -134,7 +134,8 @@ rules Make_normal_for_tpbr bottomup {
                   df @ bsdf [[ local_normal_n ~ nl ]]),
               bf,ior,vol,
               material_geometry(d,cutout,_n), hair)
-        --> material(tw,material_surface(df),bf,ior,vol,material_geometry(d,cutout,nl),hair);
+        --> material(tw,material_surface(df),bf,ior,vol,material_geometry(d,cutout,nl),hair)
+    debug_print(nl);
 
     b ~ bsdf() --> b [[ local_normal_w = 0.0, local_normal_n = state::normal() ]];
     b ~ bsdf_tint(_, _bs [[ local_normal_w ~ nw, local_normal_n ~ n ]]) -->

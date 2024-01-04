@@ -73,13 +73,15 @@ D3D12_GPU_DESCRIPTOR_HANDLE Descriptor_heap_handle::get_gpu_handle() const
     if (!m_descriptor_heap)
         return D3D12_GPU_DESCRIPTOR_HANDLE{ NULL };
 
+    assert(m_descriptor_heap->m_gpu_heap_start.ptr != 0);
+
     D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle(m_descriptor_heap->m_gpu_heap_start);
     gpu_handle.ptr += m_index * m_descriptor_heap->m_element_size;
     return gpu_handle;
 }
 
 // ------------------------------------------------------------------------------------------------
-// --------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 
 Descriptor_heap::Entry::Entry()
     : resource_name("")
@@ -90,7 +92,7 @@ Descriptor_heap::Entry::Entry()
 {
 }
 
-// --------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 
 Descriptor_heap::Descriptor_heap(
@@ -114,7 +116,9 @@ Descriptor_heap::Descriptor_heap(
     heap_desc.NumDescriptors = static_cast<UINT>(size);
     heap_desc.Type = m_type;
 
-    if(m_type != D3D12_DESCRIPTOR_HEAP_TYPE_RTV && m_type != D3D12_DESCRIPTOR_HEAP_TYPE_DSV)
+    bool shader_visible =
+        m_type != D3D12_DESCRIPTOR_HEAP_TYPE_RTV && m_type != D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+    if(shader_visible)
         heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 
     if (log_on_failure(
@@ -124,7 +128,8 @@ Descriptor_heap::Descriptor_heap(
     set_debug_name(m_heap.Get(), m_debug_name);
 
     m_cpu_heap_start = m_heap->GetCPUDescriptorHandleForHeapStart();
-    m_gpu_heap_start = m_heap->GetGPUDescriptorHandleForHeapStart();
+    if (shader_visible)
+        m_gpu_heap_start = m_heap->GetGPUDescriptorHandleForHeapStart();
 }
 
 // ------------------------------------------------------------------------------------------------

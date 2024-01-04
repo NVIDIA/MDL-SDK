@@ -141,7 +141,7 @@ TOKENS
     SKIP_RECURSION = "skip_recursion" .
 
     RULES = "rules" .
-    RULE = "rule" .
+
     DEADRULE = "deadrule" .
     POSTCOND = "postcond" .
     IF_KW = "if" .
@@ -151,6 +151,9 @@ TOKENS
 
     NONODE = "nonode" .
     MATCH = "match" .
+
+    DEBUG_NAME = "debug_name" .
+    DEBUG_PRINT = "debug_print" .
 
 // We allow nested comments in MDL to "comment out" code
 COMMENTS FROM "/*" TO "*/" NESTED
@@ -210,6 +213,8 @@ rule<Ruleset *&ruleset> =
       Rule::Dead_rule dead_rule = Rule::Dead_rule::DR_NO_DEAD_RULE;
 
       Argument_list bindings;
+      Debug_out_list deb_outs;
+      Symbol *rule_name = nullptr;
     .)
 
     node<expr_left>
@@ -220,18 +225,36 @@ rule<Ruleset *&ruleset> =
     [ result_code<res_code> ]
     [ guard<expr_guard> ]
     [ where<bindings> ]
-    [ DEADRULE (. dead_rule = Rule::Dead_rule::DR_DEAD; .)]
+    [
+        (
+          DEBUG_NAME
+          STRING_LITERAL
+          (.
+            mi::mdl::string dname(m_alloc);
+            dname = t->val;
+            dname = dname.substr(1, dname.size() - 2);
+
+            rule_name = m_symtab->get_symbol(dname.c_str());
+          .)
+        )
+    ]
+    {
+        ( debug_print<deb_outs> )
+    }
+    [ DEADRULE (. dead_rule = Rule::Dead_rule::DR_DEAD; .) ]
     ';'
     (.
       if (!expr_left)
         return;
       Rule *rule = m_rule_factory->create_rule(rule_loc,
+          rule_name,
           expr_left,
           expr_right,
           res_code,
           expr_guard,
           dead_rule);
       rule->set_bindings(bindings);
+      rule->set_debug_out(deb_outs);
       ruleset->add_rule(rule);
     .) .
 
@@ -349,6 +372,25 @@ guard<Expr *&guard_expr>
     (. guard_expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->get_bool(), Expr_unary::OK_IF_GUARD, expr); .)
     | MAYBE expression<expr>
     (. guard_expr = m_expr_factory->create_unary(CURR_LOC, m_type_factory->get_bool(), Expr_unary::OK_MAYBE_GUARD, expr); .) .
+
+debug_print<Debug_out_list &deb_outs> = DEBUG_PRINT '(' debug_variable_list<deb_outs> ')' .
+
+debug_variable_list<Debug_out_list &deb_outs> =
+    (. Symbol *sym = nullptr;
+       Location loc = CURR_LOC;
+    .)
+    [ identifier<sym>
+      (.
+        Debug_out* deb_out = m_rule_factory->create_debug_out(loc, sym);
+        deb_outs.push(deb_out);
+      .)
+      { ',' (. Location loc = CURR_LOC; .) identifier<sym>
+      (.
+        Debug_out* deb_out = m_rule_factory->create_debug_out(loc, sym);
+        deb_outs.push(deb_out);
+      .)
+      }
+    ] .
 
 where<Argument_list &bindings> = WHERE binding_list<bindings> .
 

@@ -31,20 +31,22 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 Images and Resource Files License
 ---------------------------------
 
-The following images are licensed under the [Creative Commons Attribution-NoDerivatives 4.0 International License](http://creativecommons.org/licenses/by-nd/4.0/) ![Creative Commons License](https://i.creativecommons.org/l/by-nd/4.0/80x15.png):
+The following images are licensed under the
+[Creative Commons Attribution-NoDerivatives 4.0 International License](http://creativecommons.org/licenses/by-nd/4.0/)
+![Creative Commons License](https://i.creativecommons.org/l/by-nd/4.0/80x15.png):
 
 * [doc/images/mdl_material_examples.jpg](doc/images/mdl_material_examples.jpg)
 * [doc/images/mdl_local_coordinates.jpg](doc/images/mdl_local_coordinates.jpg)
 * [doc/images/mdl_icon.png](doc/images/mdl_icon.png)
 
-Images (.png, .jpg and .hdr file extensions), lightprofile 
-files (.ies file extension), and BSDF measurement files (.mbsdf file extension) in the 
-[examples/mdl/nvidia/](examples/mdl/nvidia/) directory, are collectively called MDL Example 
+Images (.png, .jpg and .hdr file extensions), lightprofile
+files (.ies file extension), and BSDF measurement files (.mbsdf file extension) in the
+[examples/mdl/nvidia/](examples/mdl/nvidia/) directory, are collectively called MDL Example
 Resources and are licensed under the
 [CC0 1.0 Universal Public Domain Dedication](http://creativecommons.org/publicdomain/zero/1.0/).
 ![CC0 License](https://licensebuttons.net/p/zero/1.0/80x15.png)
-To the extent possible under law, NVIDIA Corporation has waived all copyright 
-and related or neighboring rights to the MDL Example Resources. 
+To the extent possible under law, NVIDIA Corporation has waived all copyright
+and related or neighboring rights to the MDL Example Resources.
 
 
 Copyrights and Licenses for Third-Party Software in the MDL SDK
@@ -63,7 +65,7 @@ licenses, and/or restrictions:
 * zlib:   [src/base/lib/zlib/README](src/base/lib/zlib/README)
 * robin_hood:   [src/base/lib/robin_hood/LICENSE](src/base/lib/robin_hood/LICENSE)
 * Coco/R: [src/mdl/compiler/coco/LICENSE](src/mdl/compiler/coco/LICENSE) (1)
-* tinyxml2: 
+* tinyxml2:
   [src/base/lib/tinyxml2/tinyxml2.h](src/base/lib/tinyxml2/tinyxml2.h)
   [src/base/lib/tinyxml2/tinyxml2.cpp](src/base/lib/tinyxml2/tinyxml2.cpp)
   [examples/thirdparty/tinyxml2/include/tinyxml2.h](examples/thirdparty/tinyxml2/include/tinyxml2.h)
@@ -74,12 +76,12 @@ licenses, and/or restrictions:
 * nlohmann/json: [examples/thirdparty/gltf/nlohmann/license.txt](examples/thirdparty/gltf/nlohmann/license.txt) (2)
 * Google Noto Fonts: [examples/thirdparty/content/fonts/LICENSE.txt](examples/thirdparty/content/fonts/LICENSE.txt) (2)
 
-The documentation uses the following fonts, CSS, and JavaScript frameworks with 
+The documentation uses the following fonts, CSS, and JavaScript frameworks with
 additional or alternate copyrights, licenses, and/or restrictions:
 
 * jQuery v3.6.4: [doc/js/jquery/jquery-3.6.4.min.js](doc/js/jquery/jquery-3.6.4.min.js), see https://jquery.org/license
-* jQuery v3.2.1: [doc/base_module/ext/jquery/jquery-3.2.1.min.js](doc/base_module/ext/jquery/jquery-3.2.1.min.js),
-  [doc/core_definitions/ext/jquery/jquery-3.2.1.min.js](doc/core_definitions/ext/jquery/jquery-3.2.1.min.js), see https://jquery.org/license
+* jQuery v3.7.0: [doc/base_module/ext/jquery/jquery-3.7.0.min.js](doc/base_module/ext/jquery/jquery-3.7.0.min.js),
+  [doc/core_definitions/ext/jquery/jquery-3.7.0.min.js](doc/core_definitions/ext/jquery/jquery-3.7.0.min.js), see https://jquery.org/license
 * jQuery UI v1.12.1: [doc/base_module/ext/jquery/jquery-ui-1.12.1.custom/LICENSE.txt](doc/base_module/ext/jquery/jquery-ui-1.12.1.custom/LICENSE.txt),
   [doc/core_definitions/ext/jquery/jquery-ui-1.12.1.custom/LICENSE.txt](doc/core_definitions/ext/jquery/jquery-ui-1.12.1.custom/LICENSE.txt)
 * Linux Libertine font: [doc/css/linux-libertine/SIL Open Font License.txt](doc/css/linux-libertine/SIL Open Font License.txt),
@@ -97,5 +99,5 @@ additional or alternate copyrights, licenses, and/or restrictions:
 (1) Coco/R is only used for code generation in the build process and is not
     integrated by itself in the MDL SDK binaries.
 
-(2) Dear ImGui, stb, D3DX12, fx-gltf, nlohmann/json, and the Google Noto Fonts are only used in the examples 
+(2) Dear ImGui, stb, D3DX12, fx-gltf, nlohmann/json, and the Google Noto Fonts are only used in the examples
     and are not integrated by themselves in the MDL SDK binaries.

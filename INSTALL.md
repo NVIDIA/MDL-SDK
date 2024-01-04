@@ -18,9 +18,9 @@ the examples.
 The build with the following 64-bit platform-compiler combinations has been
 successfully tested:
 
--   **Windows 10:**            Microsoft Visual Studio 2019 (msvc v142)
--   **CentOS 7, Debian 11:**   GCC 7 or GCC 10 (on x86-64 or aarch64)
--   **Mac OS X 12.6:**         Xcode 12.4 (Apple Clang 12.0.0)
+-   **Windows 10:**            Microsoft Visual Studio 2022 (msvc v143)
+-   **CentOS 7, Debian 12:**   GCC 12 (on x86-64 or aarch64)
+-   **Mac OS X 12.6:**         Xcode 14.2 (Apple Clang 14.0.0, on x86-64 or aarch64)
 
 The versions listed with the following dependencies have been
 successfully tested. Where not mentioned otherwise, other versions
@@ -29,43 +29,26 @@ might work as well.
 <a name="thirdparty-dependencies-libs"></a>
 The following third-party libraries and tools are required to build the MDL SDK:
 
--   <a name="vcpkg">**vcpkg**</a> *(git commit ID 3640e7cb1)*  
+-   <a name="vcpkg">**vcpkg**</a> *(git commit ID fe1e9f5)*  
     [Vcpkg](https://vcpkg.io/en/getting-started.html) is the recommended way to
-    install other dependencies like Boost and OpenImageIO. The vcpkg version
-    mentioned above corresponds to the versions mentioned for these
-    dependencies below.  
+    install other dependencies like Boost, OpenImageIO, GLEW, and GLFW. The
+    vcpkg version mentioned above corresponds to the versions mentioned for
+    these dependencies below.  
     Windows: It is strongly recommended to select the same toolset that is used
     later to build the MDL SDK, e.g., by adding
-    *set(VCPKG_PLATFORM_TOOLSET v142)* (or similar) to
+    *set(VCPKG_PLATFORM_TOOLSET v143)* (or similar) to
     *triplets/x64-windows-static.cmake*. See the corresponding section in the
     [vcpkg documentation](https://learn.microsoft.com/en-us/vcpkg/users/triplets#windows-specific-variables)
     for further details. Add the vcpkg option *--triplet=x64-windows-static* to
     the *install* command. There is no need to run the *integrate* command.
 
--   **Boost** *(1.81.0)*  
+-   **Boost** *(1.83.0)*  
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
     packages *boost-any* and *boost-uuid*.  
-    Linux: Alternatively, install the *libboost-dev* package from your native
-    package manager. Do **not** mix packages for Boost and OpenImageIO (see
-    next item) from your native package manager and from vcpkg.
 
--   **OpenImageIO** *(2.4.5)*  
+-   **OpenImageIO** *(2.4.14.0)*  
     Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
-    package *openimageio*.  
-    Since the release of the above vcpkg version, the hash of the source code
-    archive on GitHub has changed (the name of the top-level directory inside
-    the archive changed).
-    Thus you need to patch the SHA512 argument to *vcpkg_from_github()* near
-    the beginning of the file *ports/openimageio/portfile.cmake* in the vcpkg
-    directory to:
-
-        REF v${VERSION}
-        SHA512 3d42d266d69119bf48f69b053948b4218d29c99f9a58007d24b0df0e4d111abbec26d65629b9754a868e33c5c00d2425de241368f1bf20182f5c7a96c0acb56f
-        HEAD_REF master
-
-    Linux: Alternatively, install the *libopenimageio-dev* package from your
-    native package manager. Do **not** mix packages for Boost (see previous
-    item) and OpenImageIO from your native package manager and from vcpkg.
+    packages *openimageio[gif,openjpeg,tools,webp]*.  
 
 -   **Python3** *(3.8.0)*  
     Linux: Install the *python* package.  
@@ -76,15 +59,6 @@ The following third-party libraries and tools are required to build the MDL SDK:
     Using version 12.0.1 is mandatory.  
     Pre-compiled binaries can be found on
     [llvm.org](http://releases.llvm.org/download.html#12.0.1).
-
-In order to build the deprecated image plugin based on FreeImage (disabled by
-default), the following additional dependency is required:
-
--   **FreeImage** *(3.18.0)*  
-    Linux: Install the *libfreeimage-dev* package.  
-    Windows: Download and extract the pre-compiled binaries from 
-    [freeimage.sourceforge.net](http://freeimage.sourceforge.net/download.html).  
-    Mac OS X: Install the *freeimage* package using brew.
 
 None of the remaining dependencies are strictly required. If not available, the
 corresponding functionality needs to be disabled, as indicated by the error
@@ -129,21 +103,17 @@ of examples is of no interest to you.
     Download and extract the pre-compiled x64 binaries from
     [github](https://github.com/microsoft/DirectXShaderCompiler/releases).
 
--   **GLEW** *(2.1.0)*  
+-   **GLEW** *(2.2.0)*  
     This dependency is required for all OpenGL-based examples.  
-    Linux: Install the *libglew-dev* package.  
-    Windows: Download and extract the pre-compiled binaries from
-    [glew.sourceforge.net](http://glew.sourceforge.net/).  
-    Mac OS X: Install the *glew* package using brew.
+    Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
+    package *glew*.  
 
--   **GLFW** *(3.2.1, 3.3.3)*  
+-   **GLFW** *(3.3.8)*  
     This dependency is required for all OpenGL- and Vulkan-based examples.  
-    Linux: Install the *libglfw3-dev* package.  
-    Windows: Download and extract the pre-compiled x64 binaries from
-    [glfw.org](http://www.glfw.org/download.html).  
-    Mac OS X: Install the *glfw* package using brew.
+    Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
+    package *glfw3*.  
 
--   **NVIDIA CUDA Toolkit** *(11.x)*  
+-   **NVIDIA CUDA Toolkit** *(12.x)*  
     This dependency is required for all CUDA-based examples.  
     Please follow the instructions on the
     [CUDA Developer Website](https://developer.nvidia.com/cuda-toolkit).
@@ -188,7 +158,7 @@ features.
     example.  
     Please follow the instructions on the [Qt Website](https://www.qt.io/).
 
--   **X-Rite AxF SDK** *(1.8.1)*  
+-   **X-Rite AxF SDK** *(1.9.0)*  
     This dependency is required to build the AxF-to-MDL example.  
     Please send the "Request AxF SDK" document from the
     [X-Rite AxF Website](https://www.xrite.com/axf).
@@ -210,12 +180,12 @@ features.
     binaries.
 
     It is recommended that you build into a subdirectory, not into the repository root.
-    *C:/projects/mdl-sdk/build/vs2019* for example is fine, assuming you cloned the repository to:
+    *C:/projects/mdl-sdk/build/vs2017* for example is fine, assuming you cloned the repository to:
 
         C:/projects/mdl-sdk
 
 3.  After clicking ``Configure``, CMake asks you to choose the Generator.
-    Select `Visual Studio 16 2019` (or higher), enter `host=x64` as toolset
+    Select `Visual Studio 15 2017` (or higher), enter `host=x64` as toolset
     and click `Finish`. CMake starts to configure the build and stops several
     times when user input is required to resolve dependencies.
 
@@ -248,15 +218,6 @@ features.
     -   **DXC_DIR** in Ungrouped Entries,  
         for example: *C:/projects/thirdparty/dxc_2022_07_18*
 
-    -   **FREEIMAGE_DIR** in Ungrouped Entries,  
-        for example: *C:/projects/thirdparty/freeimage_3_18_0/Dist/x64*
-
-    -   **GLEW_DIR** in the GLEW group,  
-        for example: *C:/projects/thirdparty/glew-2.1.0*
-
-    -   **GLFW_DIR** in Ungrouped Entries,  
-        for example: *C:/projects/thirdparty/glfw-3.2.1.bin.WIN64*
-
     -   **MATERIALX_DIR** in Ungrouped Entries,  
         for example: *C:/projects/thirdparty/git/MaterialX*  
         For MaterialX support, the option **MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES** has to be enabled.
@@ -272,6 +233,9 @@ features.
 
     -   **VULKAN_SDK_DIR** in Ungrouped Entries (only if the environment variable VULKAN_SDK is not set),  
         for example: *C:/VulkanSDK/1.2.198.1*
+
+    -   **PANTORA_AXF_DIR** in Ungrouped Entries,  
+        for example: *C:/projects/thirdparty/pantora-axf-1.9.0*
 
     Note: when you installed a new Visual Studio version after installing CUDA,
     you may have to reinstall CUDA to register it correctly with Visual Studio.
@@ -307,6 +271,13 @@ features.
     For the *mdl_core* examples, you need *libmdl_core.dll* from
     *build/src/prod/lib/mdl_core*.
 
+8. Similarly, the unit tests can be run via the ``RUN_TESTS`` project in the
+    ``_cmake`` folder, or individually from the corresponding project in the
+    solution. Alternatively, you can run them from the command line. A very
+    flexible way to do that is via the ``ctest`` command from the top-level
+    build directory, which also sets up the environment correctly (MI_SRC and
+    PATH for the library and the plugins).
+
 
 ## Building on Linux
 
@@ -320,9 +291,6 @@ features.
 
     ```bash
     sudo apt-get install git git-lfs build-essential python cmake
-    sudo apt-get install libboost-dev libboost-filesystem-dev libboost-thread-dev
-    sudo apt-get install libopenimageio-dev libopenexr-dev libopencv-core-dev
-    sudo apt-get install libglew-dev libglfw3-dev
     ```
 
     Please note that the build also requires clang 12.0.1. Please download the
@@ -385,12 +353,12 @@ features.
         [Windows build](#thirdparty-dependencies-options) for a list of
         supported flags. On Unix-like systems, it is assumed that the
         specified paths contain a directory named *include* for headers
-        files and subdirectories named `lib64` or `lib` that contain shared
-        libraries. For a custom build of the GLEW library for example, the
-        call to CMake could look as follows:
+        files and subdirectories named `lib64` or `lib` that contains shared
+        libraries. For the Vulkan SDK for example, the call to CMake could look
+        as follows:
 
         ```bash
-        cmake -DGLEW_DIR=$HOME/projects/thirdparty/glew-2.1.0 ..
+        cmake -DVULKAN_SDK_DIR=$HOME/projects/thirdparty/vulkansdk-linux-x86_64-1.2.198.1/1.2.198.1/x86_64 ..
         ```
 
         When a different clang compiler is installed on your system, you
@@ -413,8 +381,8 @@ features.
         compiler names when calling CMake as follows:
 
         ```bash
-        sudo apt-get install gcc-7 g++-7
-        cmake -DCMAKE_C_COMPILER=/usr/bin/gcc-7 -DCMAKE_CXX_COMPILER=/usr/bin/g++-7 ..
+        sudo apt-get install gcc-12 g++-12
+        cmake -DCMAKE_C_COMPILER=/usr/bin/gcc-12 -DCMAKE_CXX_COMPILER=/usr/bin/g++-12 ..
         ```
         
         To create an optimized build on a Unix-like system, set the build type to *Release*:
@@ -463,6 +431,21 @@ features.
     ./modules
     ```
 
+6.  Similarly, the unit tests can be run via the ``make test`` target, or in a
+    more flexible way via the ``ctest`` command, which also sets up the
+    environment correctly (MI_SRC and LD_LIBRARY_PATH for the library and the
+    plugins):
+
+    ```bash
+    cd $MDL_SDK_BUILD
+    ctest
+    ```
+
+    For debugging, there is a run script next to each test executable. This
+    test script also sets up the environment correctly and can be easily
+    modified to launch the debugger of your choice.
+
+
 ## Building on Mac OS X
 
 1.  Before generating make files, you need to install the required
@@ -505,6 +488,21 @@ features.
     cd $MDL_SDK_BUILD/examples/mdl_sdk/modules/Debug
     ./modules
     ```
+
+5.  Similarly, the unit tests can be run via the ``make test`` target, or in a
+    more flexible way via the ``ctest`` command, which also sets up the
+    environment correctly (MI_SRC and LD_LIBRARY_PATH for the library and the
+    plugins):
+
+    ```bash
+    cd $MDL_SDK_BUILD
+    ctest
+    ```
+
+    For debugging, there is a run script next to each test executable. This
+    test script also sets up the environment correctly and can be easily
+    modified to launch the debugger of your choice.
+
 
 ## Additional CMake Options
 
@@ -550,6 +548,9 @@ select particular logging information:
 
 -   **MDL_ENABLE_MATERIALX**  
     [ON/OFF] enable/disable MaterialX in examples that support it.
+
+-   **MDL_ENABLE_UNIT_TESTS**  
+    [ON/OFF] enable/disable the build of unit tests.
 
 -   **MDL_LOG_PLATFORM_INFOS**  
     [ON/OFF] enable/disable the logging of platform and CMake settings.

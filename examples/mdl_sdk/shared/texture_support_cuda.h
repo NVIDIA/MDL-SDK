@@ -1028,31 +1028,30 @@ extern "C" __device__ void df_bsdf_measurement_sample(
     if (res.x < 1 || res.y < 1)
         return;  // invalid resolution
 
-    // compute the theta_in index (flipping input and output, BSDFs are symmetric)
-    unsigned idx_theta_in = unsigned(theta_phi_out[0] * float(M_ONE_OVER_PI * 2.0f) * float(res.x));
-    idx_theta_in = min(idx_theta_in, res.x - 1);
+    unsigned idx_theta_out = unsigned(theta_phi_out[0] * float(M_ONE_OVER_PI * 2.0f) * float(res.x));
+    idx_theta_out = min(idx_theta_out, res.x - 1);
 
-    // sample theta_out
+    // sample theta_in
     //-------------------------------------------
     float xi0 = xi[0];
-    const float* cdf_theta = sample_data + idx_theta_in * res.x;
-    unsigned idx_theta_out = sample_cdf(cdf_theta, res.x, xi0);       // binary search
+    const float* cdf_theta = sample_data + idx_theta_out * res.x;
+    unsigned idx_theta_in = sample_cdf(cdf_theta, res.x, xi0);       // binary search
 
-    float prob_theta = cdf_theta[idx_theta_out];
-    if (idx_theta_out > 0)
+    float prob_theta = cdf_theta[idx_theta_in];
+    if (idx_theta_in > 0)
     {
-        const float tmp = cdf_theta[idx_theta_out - 1];
+        const float tmp = cdf_theta[idx_theta_in - 1];
         prob_theta -= tmp;
         xi0 -= tmp;
     }
     xi0 /= prob_theta;  // rescale for re-usage
 
-    // sample phi_out
+    // sample phi
     //-------------------------------------------
     float xi1 = xi[1];
     const float* cdf_phi = sample_data +
                            (res.x * res.x) +                                // CDF theta block
-                           (idx_theta_in * res.x + idx_theta_out) * res.y;  // selected CDF phi
+                           (idx_theta_out * res.x + idx_theta_in) * res.y;  // selected CDF phi
 
     // select which half-circle to choose with probability 0.5
     const bool flip = (xi1 > 0.5f);
@@ -1060,29 +1059,29 @@ extern "C" __device__ void df_bsdf_measurement_sample(
         xi1 = 1.0f - xi1;
     xi1 *= 2.0f;
 
-    unsigned idx_phi_out = sample_cdf(cdf_phi, res.y, xi1);           // binary search
-    float prob_phi = cdf_phi[idx_phi_out];
-    if (idx_phi_out > 0)
+    unsigned idx_phi = sample_cdf(cdf_phi, res.y, xi1);           // binary search
+    float prob_phi = cdf_phi[idx_phi];
+    if (idx_phi > 0)
     {
-        const float tmp = cdf_phi[idx_phi_out - 1];
+        const float tmp = cdf_phi[idx_phi - 1];
         prob_phi -= tmp;
         xi1 -= tmp;
     }
     xi1 /= prob_phi;  // rescale for re-usage
 
-    // compute theta and phi out
+    // compute direction
     //-------------------------------------------
     const float2 inv_res = bm.inv_angular_resolution[part_idx];
 
     const float s_theta = float(0.5 * M_PI) * inv_res.x;
     const float s_phi   = float(1.0 * M_PI) * inv_res.y;
 
-    const float cos_theta_0 = cosf(float(idx_theta_out)      * s_theta);
-    const float cos_theta_1 = cosf(float(idx_theta_out + 1u) * s_theta);
+    const float cos_theta_0 = cosf(float(idx_theta_in)      * s_theta);
+    const float cos_theta_1 = cosf(float(idx_theta_in + 1u) * s_theta);
 
     const float cos_theta = cos_theta_0 * (1.0f - xi1) + cos_theta_1 * xi1;
     result[0] = acosf(cos_theta);
-    result[1] = (float(idx_phi_out) + xi0) * s_phi;
+    result[1] = (float(idx_phi) + xi0) * s_phi;
 
     if (flip)
         result[1] = float(2.0 * M_PI) - result[1];  // phi \in [0, 2pi]
@@ -1124,30 +1123,30 @@ extern "C" __device__ float df_bsdf_measurement_pdf(
 
     // compute indices in the CDF data
     float3 uvw = bsdf_compute_uvw(theta_phi_in, theta_phi_out); // phi_delta, theta_out, theta_in
-    unsigned idx_theta_in  = unsigned(theta_phi_in[0]  * float(M_ONE_OVER_PI * 2.0f) * float(res.x));
-    unsigned idx_theta_out = unsigned(theta_phi_out[0] * float(M_ONE_OVER_PI * 2.0f) * float(res.x));
-    unsigned idx_phi_out   = unsigned(uvw.x * float(res.y));
+    unsigned idx_theta_in = unsigned(uvw.z * float(res.x));
+    unsigned idx_theta_out  = unsigned(uvw.y * float(res.x));
+    unsigned idx_phi   = unsigned(uvw.x * float(res.y));
     idx_theta_in  = min(idx_theta_in, res.x - 1);
     idx_theta_out = min(idx_theta_out, res.x - 1);
-    idx_phi_out   = min(idx_phi_out, res.y - 1);
+    idx_phi   = min(idx_phi, res.y - 1);
 
-    // get probability to select theta_out
-    const float* cdf_theta = sample_data + idx_theta_in * res.x;
-    float prob_theta = cdf_theta[idx_theta_out];
-    if (idx_theta_out > 0)
+    // get probability to select theta_in
+    const float* cdf_theta = sample_data + idx_theta_out * res.x;
+    float prob_theta = cdf_theta[idx_theta_in];
+    if (idx_theta_in > 0)
     {
-        const float tmp = cdf_theta[idx_theta_out - 1];
+        const float tmp = cdf_theta[idx_theta_in - 1];
         prob_theta -= tmp;
     }
 
-    // get probability to select phi_out
+    // get probability to select phi
     const float* cdf_phi = sample_data +
         (res.x * res.x) +                                // CDF theta block
-        (idx_theta_in * res.x + idx_theta_out) * res.y;  // selected CDF phi
-    float prob_phi = cdf_phi[idx_phi_out];
-    if (idx_phi_out > 0)
+        (idx_theta_out * res.x + idx_theta_in) * res.y;  // selected CDF phi
+    float prob_phi = cdf_phi[idx_phi];
+    if (idx_phi > 0)
     {
-        const float tmp = cdf_phi[idx_phi_out - 1];
+        const float tmp = cdf_phi[idx_phi - 1];
         prob_phi -= tmp;
     }
 
@@ -1157,8 +1156,8 @@ extern "C" __device__ float df_bsdf_measurement_pdf(
     const float s_theta = float(0.5 * M_PI) * inv_res.x;
     const float s_phi = float(1.0 * M_PI) * inv_res.y;
 
-    const float cos_theta_0 = cosf(float(idx_theta_out)      * s_theta);
-    const float cos_theta_1 = cosf(float(idx_theta_out + 1u) * s_theta);
+    const float cos_theta_0 = cosf(float(idx_theta_in)      * s_theta);
+    const float cos_theta_1 = cosf(float(idx_theta_in + 1u) * s_theta);
 
     return prob_theta * prob_phi * 0.5f
         / (s_phi * (cos_theta_0 - cos_theta_1));

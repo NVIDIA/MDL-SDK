@@ -254,13 +254,6 @@ int MAIN_UTF8( int argc, char* argv[])
     mi::base::Handle<mi::neuraylib::INeuray> neuray( mi::examples::mdl::load_and_get_ineuray());
     check_success( neuray.is_valid_interface());
 
-    // Install logger
-    mi::base::Handle<mi::neuraylib::IMdl_configuration> mdl_config(
-        neuray->get_api_component<mi::neuraylib::IMdl_configuration>());
-    mi::base::Handle<mi::base::ILogger> logger( new mi::examples::mdl::Default_logger());
-    mdl_config->set_logger( logger.get());
-    mdl_config = 0;
-
     // Start the neuray library
     mi::Sint32 ret = neuray->start();
     if (ret != 0)

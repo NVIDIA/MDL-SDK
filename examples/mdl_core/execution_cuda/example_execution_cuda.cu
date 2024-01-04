@@ -204,7 +204,7 @@ extern "C" __global__ void evaluate_mat_expr(
 
         // Add result for current sample
         float3 cur_res;
-        mdl_functions[material_index](&cur_res, &mdl_state, &res_data_pair, NULL, arg_block);
+        mdl_functions[material_index](&cur_res, &mdl_state, &res_data_pair, arg_block);
         res.x += cur_res.x;
         res.y += cur_res.y;
         res.z += cur_res.z;

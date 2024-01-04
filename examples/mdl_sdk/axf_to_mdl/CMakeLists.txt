@@ -59,7 +59,7 @@ if (MDL_ENABLE_AXF_EXAMPLES)
         )
 endif()
 
-    
+
 # creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)
 target_create_vs_user_settings(TARGET ${PROJECT_NAME})
 
@@ -70,8 +70,3 @@ add_target_install(
     TARGET ${PROJECT_NAME}
     DESTINATION "examples/mdl_sdk/axf_to_mdl"
     )
-
-# -------------------------------------------------------------------------------------------------
-# Add tests if available
-# -------------------------------------------------------------------------------------------------
-add_tests()

@@ -68,22 +68,24 @@ void Action::AddTargets(Action *a) {// add copy of a.targets to action.targets
 	}
 }
 
-CharSet* Action::Symbols(Tab *tab) {
+CharSet* Action::Symbols(Tab &tab) {
 	CharSet *s;
 	if (typ == Node::clas) {
-		s = tab->CharClassSet(sym)->Clone();
+		s = tab.CharClassSet(sym)->Clone();
 	}  else {
 		s = new CharSet(); s->Set(sym);
 	}
 	return s;
 }
 
-void Action::ShiftWith(CharSet *s, Tab *tab) {
+void Action::ShiftWith(CharSet *s, Tab &tab) {
 	if (s->Elements() == 1) {
 		typ = Node::chr; sym = s->First();
 	} else {
-		CharClass *c = tab->FindCharClass(s);
-		if (c == NULL) c = tab->NewCharClass("#", s); // class with dummy name
+		CharClass *c = tab.FindCharClass(s);
+		if (c == NULL) {
+			c = tab.NewCharClass("#", s); // class with dummy name
+		}
 		typ = Node::clas; sym = c->n;
 	}
 }

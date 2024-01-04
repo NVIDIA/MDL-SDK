@@ -33,7 +33,7 @@
 #include "config.h"
 #include "config_impl.h"
 
-#include <base/lib/log/log.h>
+#include <base/lib/log/i_log_logger.h>
 #include <base/lib/log/i_log_module.h>
 #include <base/system/main/access_module.h>
 #include <base/system/main/i_module_id.h>

@@ -35,7 +35,7 @@ set(PROJECT_HEADERS
     "i_hal_ospath.h"
     )
 
-set(PROJECT_SOURCES 
+set(PROJECT_SOURCES
     "hal.cpp"
     "hal_color.cpp"
     "hal_ospath.cpp"
@@ -49,7 +49,10 @@ create_from_base_preset(
     )
 
 # add dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME} 
-    DEPENDS 
+target_add_dependencies(TARGET ${PROJECT_NAME}
+    DEPENDS
         boost
     )
+
+# add unit tests
+add_unit_tests(POST)

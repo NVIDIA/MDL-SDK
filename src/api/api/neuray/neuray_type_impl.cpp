@@ -36,6 +36,7 @@
 
 #include "neuray_class_factory.h"
 #include "neuray_expression_impl.h"
+#include "neuray_string_impl.h"
 
 namespace MI {
 
@@ -547,6 +548,12 @@ const mi::neuraylib::IType_struct* Type_factory::get_predefined_struct(
     return create<mi::neuraylib::IType_struct>( result_int.get(), /*owner*/ nullptr);
 }
 
+const mi::neuraylib::IType* Type_factory::create_from_mdl_type_name( const char* name) const
+{
+    mi::base::Handle<const MDL::IType> result_int( m_tf->create_from_mdl_type_name( name));
+    return create<mi::neuraylib::IType>( result_int.get(), /*owner*/ nullptr);
+}
+
 mi::neuraylib::IType_list* Type_factory::clone( const mi::neuraylib::IType_list* type_list) const
 {
     mi::base::Handle<const MDL::IType_list> type_list_int( get_internal_type_list( type_list));
@@ -588,6 +595,23 @@ const mi::IString* Type_factory::dump( const mi::neuraylib::IType_list* list, mi
 {
     mi::base::Handle<const MDL::IType_list> list_int( get_internal_type_list( list));
     return m_tf->dump( list_int.get(), depth);
+}
+
+const mi::IString* Type_factory::get_mdl_type_name( const mi::neuraylib::IType* type) const
+{
+    mi::base::Handle<const MDL::IType> type_int( get_internal_type( type));
+    const std::string& s = m_tf->get_mdl_type_name( type_int.get());
+    return new String_impl( s.c_str());
+}
+
+const mi::IString* Type_factory::get_mdl_module_name( const mi::neuraylib::IType* type) const
+{
+    if( !type)
+        return nullptr;
+
+    mi::base::Handle<const MDL::IType> type_int( get_internal_type( type));
+    const std::string& s = MDL::get_mdl_module_name( type_int.get());
+    return new String_impl( s.c_str());
 }
 
 const mi::neuraylib::IType* Type_factory::create(

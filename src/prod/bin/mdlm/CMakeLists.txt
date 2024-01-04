@@ -69,19 +69,12 @@ create_from_base_preset(
 # add dependencies
 target_add_dependencies(TARGET ${PROJECT_NAME}
     DEPENDS
-        boost
         ${LINKER_START_GROUP}
-        mdl::api-api-mdl
-        mdl::base-hal-disk
-        mdl::base-hal-hal
-        mdl::base-lib-log
-        mdl::base-lib-path
-        mdl::base-system-main
-        mdl::base-util-string_utils
+        ${LINKER_DEPENDENCIES_BASE}
         ${LINKER_END_GROUP}
-        mdl::mdl_sdk
+        boost
     )
-    
+
 # creates a user settings file to setup the debugger (visual studio only, otherwise this is a no-op)
 target_create_vs_user_settings(TARGET ${PROJECT_NAME})
 

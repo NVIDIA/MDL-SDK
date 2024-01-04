@@ -142,7 +142,6 @@ struct HLSLAstTraits {
     typedef hlsl::Expr_call             Expr_call;
     typedef hlsl::Expr_compound         Expr_compound;
     typedef hlsl::Expr_literal          Expr_literal;
-    typedef hlsl::Parameter_qualifier   Parameter_qualifier;
     typedef hlsl::Location              Location;
 };
 
@@ -329,6 +328,29 @@ protected:
     void add_array_specifiers(
         Decl_type  *decl,
         hlsl::Type *type);
+
+    /// Add parameter qualifier from a function type parameter at index.
+    ///
+    /// \param param_type_name   the type name of a parameter
+    /// \param func_type         the HLSL function type
+    /// \param index             the parameter index inside the function type
+    static void add_param_qualifier(
+        hlsl::Type_name     *param_type_name,
+        hlsl::Type_function *func_type,
+        size_t              index);
+
+    /// Returns the return type if the first parameter of a function type is a output parameter.
+    ///
+    /// \param func_type  a HLSL function type
+    static hlsl::Type *return_type_from_first_parameter(
+        hlsl::Type_function *func_type)
+    {
+        hlsl::Type_function::Parameter *param = func_type->get_parameter(0);
+        if (param->get_modifier() == hlsl::Type_function::Parameter::PM_OUT) {
+            return param->get_type();
+        }
+        return nullptr;
+    }
 
     /// Add a field to a struct declaration.
     ///

@@ -32,8 +32,8 @@
  ** Implements the IImage_api interface
  **/
 
-#ifndef API_API_NEURAY_IMAGE_API_IMPL_H
-#define API_API_NEURAY_IMAGE_API_IMPL_H
+#ifndef API_API_NEURAY_NEURAY_IMAGE_API_IMPL_H
+#define API_API_NEURAY_NEURAY_IMAGE_API_IMPL_H
 
 #include <mi/base/interface_implement.h>
 #include <mi/neuraylib/iimage_api.h>
@@ -199,4 +199,4 @@ private:
 
 } // namespace MI
 
-#endif // API_API_NEURAY_IMAGE_API_IMPL_H
+#endif // API_API_NEURAY_NEURAY_IMAGE_API_IMPL_H

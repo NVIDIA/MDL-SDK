@@ -60,6 +60,8 @@
 
 
 
+#include <base/data/dblight/dblight_database.h>
+
 // for the factory methods
 #include "neuray_array_impl_proxy.h"
 #include "neuray_attribute_container_impl.h"
@@ -232,7 +234,7 @@ void Class_registration::register_classes_part1( Class_factory* factory)
 #undef REG3
 }
 
-void Class_registration::register_classes_part2( Class_factory* factory)
+void Class_registration::register_classes_part2( Class_factory* factory, DB::Database* db)
 {
 // The result is not checked since DiCE and the MDL SDK support INeuray::start() after
 // INeuray::shutdown() and there is no unregistration implemented. That is, for subsequent calls
@@ -267,6 +269,11 @@ void Class_registration::register_classes_part2( Class_factory* factory)
     // register API classes without DB counterparts
     REG( "Export_result_ext", Export_result_ext_impl::create_api_class);
 
+    // register DB classes
+    DBLIGHT::Database_impl* db_impl = static_cast<DBLIGHT::Database_impl*>( db);
+    SERIAL::Deserialization_manager* manager = db_impl->get_deserialization_manager();
+    manager->register_class( Attribute_container::id, Attribute_container::factory);
+
 
 #undef REG
 }
@@ -283,64 +290,38 @@ void Class_registration::register_structure_declarations( Class_factory* factory
     ASSERT( M_NEURAY_API, result == 0)
 
 
-    decl = factory->create_type_instance<mi::IStructure_decl>( nullptr, "Structure_decl", 0, nullptr);
+    decl = factory->create_type_instance<mi::IStructure_decl>(
+        nullptr, "Structure_decl", 0, nullptr);
     decl->add_member( "String", "key");
     decl->add_member( "String", "value");
     REG( "Manifest_field", decl.get());
 
-    decl = factory->create_type_instance<mi::IStructure_decl>( nullptr, "Structure_decl", 0, nullptr);
+    decl = factory->create_type_instance<mi::IStructure_decl>(
+        nullptr, "Structure_decl", 0, nullptr);
     decl->add_member( "String", "material_name");
     decl->add_member( "String", "prototype_name");
     decl->add_member( "Interface", "parameters");
     decl->add_member( "Interface", "annotations");
     REG( "Material_data", decl.get());
 
-    decl = factory->create_type_instance<mi::IStructure_decl>(nullptr, "Structure_decl", 0, nullptr);
-    decl->add_member( "String", "definition_name");
-    decl->add_member( "String", "prototype_name");
-    decl->add_member( "Interface", "parameters");
-    decl->add_member( "Interface", "annotations");
-    decl->add_member( "Interface", "return_annotations");
-    REG( "Create_materials_data", decl.get());
-
-    decl = factory->create_type_instance<mi::IStructure_decl>( nullptr, "Structure_decl", 0, nullptr);
-    decl->add_member( "String", "path");
-    decl->add_member( "String", "name");
-    decl->add_member( "Boolean", "enforce_uniform");
-    decl->add_member( "Interface", "annotations");
-    REG( "Parameter_data", decl.get());
-
-    // deprecated
-    decl = factory->create_type_instance<mi::IStructure_decl>( nullptr, "Structure_decl", 0, nullptr);
-    decl->add_member( "String", "preset_name");
-    decl->add_member( "String", "prototype_name");
-    decl->add_member( "Interface", "defaults");
-    decl->add_member( "Interface", "annotations");
-    REG( "Preset_data", decl.get());
-
-    // deprecated
-    decl = factory->create_type_instance<mi::IStructure_decl>( nullptr, "Structure_decl", 0, nullptr);
-    decl->add_member( "String", "variant_name");
-    decl->add_member( "String", "prototype_name");
-    decl->add_member( "Interface", "defaults");
-    decl->add_member( "Interface", "annotations");
-    REG( "Variant_data", decl.get());
-
-    decl = factory->create_type_instance<mi::IStructure_decl>( nullptr, "Structure_decl", 0, nullptr);
+    decl = factory->create_type_instance<mi::IStructure_decl>(
+        nullptr, "Structure_decl", 0, nullptr);
     decl->add_member( "Sint32", "u");
     decl->add_member( "Sint32", "v");
     decl->add_member( "Size", "frame");
     decl->add_member( "Interface", "canvas");
     REG( "Uvtile", decl.get());
 
-    decl = factory->create_type_instance<mi::IStructure_decl>( nullptr, "Structure_decl", 0, nullptr);
+    decl = factory->create_type_instance<mi::IStructure_decl>(
+        nullptr, "Structure_decl", 0, nullptr);
     decl->add_member( "Sint32", "u");
     decl->add_member( "Sint32", "v");
     decl->add_member( "Size", "frame");
     decl->add_member( "Interface", "reader");
     REG( "Uvtile_reader", decl.get());
 
-    decl = factory->create_type_instance<mi::IStructure_decl>( nullptr, "Structure_decl", 0, nullptr);
+    decl = factory->create_type_instance<mi::IStructure_decl>(
+        nullptr, "Structure_decl", 0, nullptr);
     decl->add_member( "String", "prototype_name");
     decl->add_member( "Interface", "defaults");
     decl->add_member( "Interface", "annotations");
@@ -348,7 +329,8 @@ void Class_registration::register_structure_declarations( Class_factory* factory
     decl->add_member( "Interface", "user_files");
     REG( "Mdle_data", decl.get());
 
-    decl = factory->create_type_instance<mi::IStructure_decl>( nullptr, "Structure_decl", 0, nullptr);
+    decl = factory->create_type_instance<mi::IStructure_decl>(
+        nullptr, "Structure_decl", 0, nullptr);
     decl->add_member( "String", "source_path");
     decl->add_member( "String", "target_path");
     REG( "Mdle_user_file", decl.get());
@@ -370,10 +352,6 @@ void Class_registration::unregister_structure_declarations( Class_factory* facto
 
     UNREG( "Manifest_field");
     UNREG( "Material_data");
-    UNREG( "Create_materials_data");
-    UNREG( "Parameter_data");
-    UNREG( "Preset_data");  // deprecated
-    UNREG( "Variant_data"); // deprecated
     UNREG( "Uvtile");
     UNREG( "Uvtile_reader");
     UNREG( "Mdle_data");
@@ -388,14 +366,6 @@ bool Class_registration::is_predefined_structure_declaration( const char* name)
     if( strcmp( name, "Manifest_field") == 0)
         return true;
     if( strcmp( name, "Material_data") == 0)
-        return true;
-    if (strcmp( name, "Create_materials_data") == 0)
-        return true;
-    if( strcmp( name, "Parameter_data") == 0)
-        return true;
-    if( strcmp( name, "Preset_data") == 0)
-        return true;
-    if( strcmp( name, "Variant_data") == 0)
         return true;
     if( strcmp( name, "Uvtile") == 0)
         return true;

@@ -44,6 +44,7 @@
 #include <base/lib/log/i_log_assert.h>
 #include <base/lib/log/i_log_logger.h>
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
+#include <io/scene/mdl_elements/mdl_elements_utilities.h>
 #include <mdl/compiler/compilercore/compilercore_positions.h>
 
 namespace MI {
@@ -335,12 +336,13 @@ mi::mdl::IMDL_import_result* Core_entity_resolver_impl::resolve_module(
 
     // Sanity check against returned module names that do not match the query. We cannot really
     // check that the entity resolver did everything right, but the query string (without ".::" and
-    // "..::" prefixes) needs to be a suffix of the reply.
+    // "..::" prefixes, plus leading "::" and possibly "/") needs to be a suffix of the reply.
     std::string suffix = encoded_module_name;
     if( suffix.substr( 0, 3) == ".::")       // strip ".::" once
         suffix = suffix.substr( 3);
     while( suffix.substr( 0, 4) == "..::")   // strip "..::" repeatedly
         suffix = suffix.substr( 4);
+    suffix = MDL::add_slash_in_front_of_encoded_drive_letter( suffix);
     if( suffix.substr( 0, 2) != "::")        // add "::" if necessary
         suffix = "::" + suffix;
     size_t suffix_n = suffix.size();
@@ -348,8 +350,9 @@ mi::mdl::IMDL_import_result* Core_entity_resolver_impl::resolve_module(
     if( (reply_n < suffix_n) || (suffix != (returned_module_name + reply_n-suffix_n))) {
         // TODO Upgrade warning later to an error
         LOG::mod_log->warning( M_NEURAY_API, LOG::Mod_log::C_MISC,
-            "Incorrectly resolved module name \"%s\" does not match queried module name \"%s\".",
-            returned_module_name, encoded_module_name.c_str());
+            "Incorrectly resolved module name \"%s\" does not match queried module name \"%s\" "
+            "(expected suffix \"%s\").",
+            returned_module_name, encoded_module_name.c_str(), suffix.c_str());
     }
 
     return new Core_mdl_import_result_impl( result.get());

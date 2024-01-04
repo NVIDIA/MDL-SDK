@@ -115,6 +115,12 @@ public:
     /// Initially, host ID 0 is used until this method is called.
     virtual void set_host_id( unsigned int host_id) = 0;
 
+    /// Sets the host name.
+    ///
+    /// This method is supposed to be used by users of the LOG module if they care about the
+    /// hostname (to avoid a dependeny on MSG here). Initially, the host name is set to "localhost".
+    virtual void set_host_name( const char* host_name) = 0;
+
     /// Emits a log message.
     ///
     /// This method is supposed only to be used by the DATA module for log message from remote

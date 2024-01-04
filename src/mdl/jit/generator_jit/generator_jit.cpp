@@ -126,6 +126,10 @@ static void fill_default_cg_options(
         "vtable",
         "The mode for texture lookup functions on GPU (vtable, direct_call or optix_cp)");
     options.add_option(
+        MDL_JIT_OPTION_LAMBDA_RETURN_MODE,
+        "default",
+        "The return mode for generated lambda functions (default, sret or value)");
+    options.add_option(
         MDL_JIT_OPTION_MAP_STRINGS_TO_IDS,
         "false",
         "Map string constants to identifiers");
@@ -2203,13 +2207,13 @@ IGenerated_code_executable *Code_generator_jit::compile_unit(
             code_obj->get_interface<mi::mdl::Generated_code_source>());
 
         Target_language target = unit.get_target_language();
-	if (llvm_ir_output || target == ICode_generator::TL_LLVM_IR) {
+        if (llvm_ir_output || target == ICode_generator::TL_LLVM_IR) {
             if (options.get_bool_option(MDL_JIT_OPTION_WRITE_BITCODE)) {
                 unit->llvm_bc_compile(llvm_module, code->access_src_code());
             } else {
                 unit->llvm_ir_compile(llvm_module, code->access_src_code());
             }
-	} else {
+        } else {
             switch (target) {
             case ICode_generator::TL_PTX:
                 unit->ptx_compile(llvm_module, code->access_src_code());
@@ -2223,7 +2227,7 @@ IGenerated_code_executable *Code_generator_jit::compile_unit(
                 MDL_ASSERT(!"unexpected target kind");
                 break;
             }
-	}
+        }
         unit->fill_function_info(code.get());
 
         // set the read-only data segment
@@ -2669,9 +2673,10 @@ bool Link_unit_jit::add(
         return false;
     }
 
-    // wrong size of main_function_indices array?
+    // Wrong size of main_function_indices array?
+    // Must be number of main functions + init function
     if (main_function_indices != NULL &&
-        num_main_function_indices != dist_func->get_main_function_count())
+        num_main_function_indices != dist_func->get_main_function_count() + 1)
     {
         return false;
     }

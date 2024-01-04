@@ -2701,7 +2701,7 @@ mi::Sint32 Link_unit::add_material_single_init(
 
     // ... and add to link unit
     size_t arg_block_index = ~0;
-    std::vector<size_t> main_func_indices(func_list.size());
+    std::vector<size_t> main_func_indices(func_list.size() + 1);  // +1 for init function
 
     SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module(/*deferred=*/false);
     MDL::Module_cache module_cache(m_transaction, mdlc_module->get_module_wait_queue(), {});
@@ -2721,13 +2721,13 @@ mi::Sint32 Link_unit::add_material_single_init(
         return -1;
     }
 
-    // The init function is always the first function
-    function_descriptions[0].function_index = 0;
+    // Fill output field for the init function, which is always added first
+    function_descriptions[0].function_index = main_func_indices[0];
     function_descriptions[0].distribution_kind = mi::neuraylib::ITarget_code::DK_NONE;
 
     // Fill output fields for the other main functions
     for (mi::Size i = 1; i < description_count; ++i) {
-        function_descriptions[i].function_index = main_func_indices[i - 1];
+        function_descriptions[i].function_index = main_func_indices[i];
         mi::base::Handle<mi::mdl::ILambda_function> main_func(
             dist_func->get_main_function(i - 1));
         mi::mdl::DAG_node const *main_node = main_func->get_body();
@@ -3067,15 +3067,15 @@ mi::Sint32 Link_unit::add_material(
         }
 
         // ... and add it to the compilation unit
-        size_t index;
         if (add_list_items[i].dist_func) {
+            size_t indices[2];
             if (!m_unit->add(
                 add_list_items[i].dist_func.get(),
                 &module_cache,
                 &resolver,
                 &arg_block_index,
-                &index,
-                1))
+                indices,
+                2))
             {
                 MDL::convert_and_log_messages(m_unit->access_messages(), context);
                 MDL::add_error_message(context,
@@ -3084,10 +3084,10 @@ mi::Sint32 Link_unit::add_material(
                 function_descriptions[i].return_code = -300;
                 return -1;
             }
-            // for distribution functions, let function_index point to the init function,
-            // which does not count as main function
-            function_descriptions[i].function_index = index - 1;
+            // for distribution functions, let function_index point to the init function
+            function_descriptions[i].function_index = indices[0];
         } else {
+            size_t index;
             if (!m_unit->add(
                 add_list_items[i].lambda_func.get(),
                 &module_cache,
@@ -3363,6 +3363,9 @@ Mdl_llvm_backend::Mdl_llvm_backend(
     // by default we use vtable tex_lookup calls
     options.set_option(MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE, "vtable");
 
+    // by default let the target language decide which return mode to use
+    options.set_option(MDL_JIT_OPTION_LAMBDA_RETURN_MODE, "default");
+
     // do we map strings to identifiers?
     options.set_option(MDL_JIT_OPTION_MAP_STRINGS_TO_IDS, string_ids ? "true" : "false");
 
@@ -3372,7 +3375,7 @@ Mdl_llvm_backend::Mdl_llvm_backend(
     // by default, no function remap
     options.set_option(MDL_JIT_OPTION_REMAP_FUNCTIONS, "");
 
-    // Argh, why are the defaults for HLSl/GLSL different
+    // defaults for HLSL/GLSL are different
     if (kind == mi::neuraylib::IMdl_backend_api::MB_HLSL) {
         options.set_option(MDL_JIT_OPTION_SL_CORE_STATE_API_NAME, "Shading_state_material");
         options.set_option(MDL_JIT_OPTION_SL_ENV_STATE_API_NAME,  "Shading_state_environment");
@@ -3631,6 +3634,22 @@ mi::Sint32 Mdl_llvm_backend::set_option(
 
     if (strcmp(name, "visible_functions") == 0) {
         jit_options.set_option(MDL_JIT_OPTION_VISIBLE_FUNCTIONS, value);
+        return 0;
+    }
+
+    if (strcmp(name, "lambda_return_mode") == 0) {
+        // only supported for CUDA_PTX and LLVM_IR
+        if (m_kind != mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX &&
+                m_kind != mi::neuraylib::IMdl_backend_api::MB_LLVM_IR)
+            return -1;
+
+        if (strcmp(value, "default") == 0) {
+        } else if (strcmp(value, "sret") == 0) {
+        } else if (strcmp(value, "value") == 0) {
+        } else {
+            return -2;
+        }
+        jit_options.set_option(MDL_JIT_OPTION_LAMBDA_RETURN_MODE, value);
         return 0;
     }
 
@@ -4459,9 +4478,9 @@ mi::neuraylib::ITarget_code const *Mdl_llvm_backend::translate_link_unit(
 
     mi::base::Handle<mi::mdl::IGenerated_code_executable> code(m_jit->compile_unit(
         cg_ctx.get(),
-	&module_cache,
-	mi::base::make_handle(lu->get_compilation_unit()).get(),
-	!m_output_target_lang));
+        &module_cache,
+        mi::base::make_handle(lu->get_compilation_unit()).get(),
+        !m_output_target_lang));
 
     if (!code.is_valid_interface()) {
         MDL::add_error_message(context,

@@ -31,11 +31,13 @@ Coco/R itself) does not fall under the GNU General Public License.
 
 namespace Coco {
 
-State::State() {
-	this->firstAction = NULL;
-	this->endOf       = NULL;
-	this->ctx         = false;
-	this->next        = NULL;
+State::State(int nr)
+: nr(nr)
+, firstAction(NULL)
+, endOf(NULL)
+, ctx(false)
+, next(NULL)
+{
 }
 
 void State::AddAction(Action *act) {

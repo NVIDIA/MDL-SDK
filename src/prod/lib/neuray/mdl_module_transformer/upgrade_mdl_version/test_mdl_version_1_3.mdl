@@ -1,0 +1,23 @@
+mdl 1.3;
+
+import ::df::*;
+import ::tex::*;
+
+/* function name changes to color_fresnel_layer() in 1.4 */
+export material test_fresnel_layer()
+= material(
+    surface: material_surface(scattering: df::fresnel_layer(
+       ior: color()
+    ))
+);
+
+/* add uv_tile parameter in 1.4 */
+export int test_height() { return tex::height(texture_2d()); }
+export int test_width()  { return tex::width(texture_2d()); }
+
+/* add uv_tile parameter in 1.4 */
+export color  test_texel_color()  { return tex::texel_color(texture_2d(), int2(0,0)); }
+export float  test_texel_float()  { return tex::texel_float(texture_2d(), int2(0,0)); }
+export float2 test_texel_float2() { return tex::texel_float2(texture_2d(), int2(0,0)); }
+export float3 test_texel_float3() { return tex::texel_float3(texture_2d(), int2(0,0)); }
+export float4 test_texel_float4() { return tex::texel_float4(texture_2d(), int2(0,0)); }

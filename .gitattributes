@@ -1,2 +1,6 @@
 examples/thirdparty/content/fonts/NotoSansCJK-Medium.ttc filter=lfs diff=lfs merge=lfs -text
 examples/mdl/nvidia/sdk_examples/resources/environment.hdr filter=lfs diff=lfs merge=lfs -text
+src/io/image/image/tests/reference/export_of_test_gray_alpha_bpc_2.png.png filter=lfs diff=lfs merge=lfs -text
+src/io/image/image/tests/reference/export_of_test_pt_uint16.png.tif filter=lfs diff=lfs merge=lfs -text
+src/io/image/image/tests/reference/export_of_test_jpg_progressive.jpg.png filter=lfs diff=lfs merge=lfs -text
+src/io/image/image/tests/test_pt_uint16.png filter=lfs diff=lfs merge=lfs -text

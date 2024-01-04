@@ -42,6 +42,7 @@
 
 #include <mi/mdl/mdl_entity_resolver.h>
 #include <mi/mdl/mdl_mdl.h>
+#include <mi/neuraylib/ilogging_configuration.h>
 
 #include <base/lib/log/i_log_assert.h>
 #include <base/lib/log/i_log_logger.h>
@@ -51,19 +52,14 @@
 #include <mdl/integration/mdlnr/i_mdlnr.h>
 #include <io/scene/mdl_elements/i_mdl_elements_utilities.h>
 
-#include <api/api/mdl/mdl_neuray_impl.h>
-
 namespace MI {
 
 namespace NEURAY {
 
 Mdl_configuration_impl::Mdl_configuration_impl( mi::neuraylib::INeuray* neuray)
-  : m_neuray(neuray)
-  , m_path_module(/*deferred=*/false)
-  , m_mdlc_module(/*deferred=*/true)
-  , m_implicit_cast_enabled(true)
-  , m_expose_names_of_let_expressions(false)
-  , m_simple_glossy_bsdf_legacy_enabled(false)
+  : m_neuray( neuray),
+    m_path_module( /*deferred=*/false),
+    m_mdlc_module( /*deferred=*/true)
 {
     const std::string& separator = HAL::Ospath::get_path_set_separator();
 
@@ -86,18 +82,6 @@ Mdl_configuration_impl::~Mdl_configuration_impl()
 {
     m_path_module.reset();
     m_mdlc_module.reset();
-}
-
-void Mdl_configuration_impl::set_logger( mi::base::ILogger* logger)
-{
-    MDL::Neuray_impl* mdl_neuray_impl = static_cast<MDL::Neuray_impl*>(m_neuray);
-    mdl_neuray_impl->set_logger(logger);
-}
-
-mi::base::ILogger* Mdl_configuration_impl::get_logger()
-{
-    MDL::Neuray_impl* mdl_neuray_impl = static_cast<MDL::Neuray_impl*>(m_neuray);
-    return mdl_neuray_impl->get_logger();
 }
 
 mi::Sint32 Mdl_configuration_impl::add_mdl_path( const char* path)
@@ -245,6 +229,20 @@ void Mdl_configuration_impl::set_entity_resolver( mi::neuraylib::IMdl_entity_res
     mi::base::Handle<mi::mdl::IEntity_resolver> mdl_resolver(
         new Core_entity_resolver_impl( mdl.get(), resolver));
     mdl->set_external_entity_resolver( mdl_resolver.get());
+}
+
+void Mdl_configuration_impl::deprecated_set_logger( mi::base::ILogger* logger)
+{
+    mi::base::Handle<mi::neuraylib::ILogging_configuration> logging_configuration(
+        m_neuray->get_api_component<mi::neuraylib::ILogging_configuration>());
+    logging_configuration->set_receiving_logger( logger);
+}
+
+mi::base::ILogger* Mdl_configuration_impl::deprecated_get_logger()
+{
+    mi::base::Handle<mi::neuraylib::ILogging_configuration> logging_configuration(
+        m_neuray->get_api_component<mi::neuraylib::ILogging_configuration>());
+    return logging_configuration->get_forwarding_logger();
 }
 
 mi::Sint32 Mdl_configuration_impl::start()

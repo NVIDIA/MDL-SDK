@@ -1,0 +1,24 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Unused_vars topdown {
+      // c is unused
+      diffuse_reflection_bsdf(_, c) --> diffuse_reflection_bsdf(color(0.1));
+
+      // x is used
+      diffuse_reflection_bsdf(_, x) --> diffuse_reflection_bsdf(color(0.1), x);
+
+      // c is unused, but d is used
+      diffuse_reflection_bsdf(_, c) --> diffuse_reflection_bsdf(color(0.1), d) where d = 1.0;
+
+      // c and e are unused
+      diffuse_reflection_bsdf(_, c) --> diffuse_reflection_bsdf(color(0.1)) where e = 1.0;
+
+      // c and e are unused, x is used
+      diffuse_reflection_bsdf(_, c) --> diffuse_reflection_bsdf(color(0.1), x) where e = 1.0 x = 2.0;
+
+      // c is unused
+      // ensure that type annotations are taken into account
+      diffuse_reflection_bsdf(_, c@float) --> diffuse_reflection_bsdf(color(0.1), d) where d = 2.0;
+}

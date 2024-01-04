@@ -63,9 +63,9 @@ target_add_dependencies(TARGET ${PROJECT_NAME}
 
 # copy additional resources
 target_copy_to_output_dir(TARGET ${PROJECT_NAME}
-    RELATIVE    
+    RELATIVE
         "${CMAKE_CURRENT_SOURCE_DIR}"
-    FILES       
+    FILES
         ${PROJECT_RESOURCES}
     )
 
@@ -82,8 +82,3 @@ add_target_install(
     TARGET ${PROJECT_NAME}
     DESTINATION "examples/mdl_sdk/execution_glsl_vk"
     )
-
-# -------------------------------------------------------------------------------------------------
-# Add tests if available
-# -------------------------------------------------------------------------------------------------
-add_tests()

@@ -63,8 +63,10 @@
 // from the MDL material perspective albedo (approximation) and normals can be generated.
 #if defined(ENABLE_AUXILIARY)
     // in order to limit the payload size, this data is written directly from the hit programs
-    RWTexture2D<float4> AlbedoBuffer : register(u2, space0);
-    RWTexture2D<float4> NormalBuffer : register(u3, space0);
+    RWTexture2D<float4> AlbedoDiffuseBuffer : register(u2, space0);
+    RWTexture2D<float4> AlbedoGlossyBuffer : register(u3, space0);
+    RWTexture2D<float4> NormalBuffer : register(u4, space0);
+    RWTexture2D<float4> RoughnessBuffer : register(u5, space0);
 #endif
 
 // Ray tracing acceleration structure, accessed as a SRV
@@ -473,11 +475,15 @@ void MDL_RADIANCE_CLOSEST_HIT_PROGRAM(inout RadianceHitInfo payload, Attributes 
 
         uint3 launch_index =  DispatchRaysIndex();
         #if (MDL_DF_HANDLE_SLOT_MODE == -1)
-            AlbedoBuffer[launch_index.xy] = float4(aux_data.albedo, 1.0f);
+            AlbedoDiffuseBuffer[launch_index.xy] = float4(aux_data.albedo_diffuse, 1.0f);
+            AlbedoGlossyBuffer[launch_index.xy] = float4(aux_data.albedo_glossy, 1.0f);
             NormalBuffer[launch_index.xy] = float4(aux_data.normal, 1.0f);
+            RoughnessBuffer[launch_index.xy] = float4(aux_data.roughness.xy, 0.0f, 1.0f);
         #else
-            AlbedoBuffer[launch_index.xy] = float4(aux_data.albedo[0], 1.0f);
+            AlbedoDiffuseBuffer[launch_index.xy] = float4(aux_data.albedo_diffuse[0], 1.0f);
+            AlbedoGlossyBuffer[launch_index.xy] = float4(aux_data.albedo_glossy[0], 1.0f);
             NormalBuffer[launch_index.xy] = float4(aux_data.normal[0], 1.0f);
+            RoughnessBuffer[launch_index.xy] = float4(aux_data.roughness[0].xy, 0.0f, 1.0f);
         #endif
     }
     #endif

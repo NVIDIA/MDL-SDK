@@ -38,12 +38,14 @@
 #include <string>
 #include <vector>
 
-#include <base/data/db/i_db_tag.h>
 #include <mi/base/interface_implement.h>
 #include <mi/mdl/mdl_definitions.h>
 #include <mi/mdl/mdl_mdl.h>
 #include <mi/neuraylib/ifunction_definition.h>
 #include <mi/neuraylib/imdl_loading_wait_handle.h>
+
+#include <base/data/db/i_db_tag.h>
+#include <base/lib/robin_hood/robin_hood.h>
 #include <mdl/compiler/compilercore/compilercore_visitor.h>
 
 #include "i_mdl_elements_expression.h"
@@ -73,7 +75,7 @@ class Name_mangler;
 
 // These functions are supposed to centralize all parsing/splitting of strings.
 //
-// More of these methods can be found in i_mdl_elements_utilities.
+// More of these methods can be found in i_mdl_elements_utilities.h.
 //
 // Command to find all locations where parsing happens in this module (one long string without any
 // line breaks):
@@ -125,6 +127,15 @@ std::string strip_deprecated_suffix( const std::string& name);
 
 /// Adds a "::" prefix for builtin enum/struct type names.
 std::string prefix_builtin_type_name( const char* name);
+
+/// Removes the "::" prefix for builtin enum/struct type names.
+///
+/// \param check_string   Pass \p true if it is not known whether \p name is one of the builtin
+///                       enum/struct type names. In this case the input is compared against the
+///                       list of builtin enum/struct type names and the result is based on that.
+///                       Pass \p false if the caller already knows that \p name is one of the
+///                       builtin enum/struct type names (optimization).
+std::string remove_prefix_for_builtin_type_name( const char* name, bool check_string = true);
 
 // Returns the simple MDL module name from an MDL module name.
 ///
@@ -236,6 +247,10 @@ const char* get_container_membername( const char* filename);
 /// Otherwise, returns filename as is.
 std::string add_slash_in_front_of_drive_letter( const std::string& filename);
 
+/// Adds a slash at the front if the name starts with a drive letter and encoded colon (Windows
+/// only). Otherwise, returns name as is.
+std::string add_slash_in_front_of_encoded_drive_letter( const std::string& name);
+
 /// Removes a leading slash if the input starts with slash, drive letter, colon (Windows only).
 /// Otherwise, returns the input as is.
 std::string remove_slash_in_front_of_drive_letter( const std::string& input);
@@ -283,6 +298,22 @@ const IType* mdl_type_to_int_type(
     const Mdl_annotation_block* annotations = nullptr,
     const Mdl_annotation_block_vector* member_annotations = nullptr);
 
+/// Converts mi::mdl::IType to MI::MDL::IType.
+///
+/// Template version of the function above.
+template <class T>
+const T* mdl_type_to_int_type(
+    IType_factory* tf,
+    const mi::mdl::IType* type,
+    const Mdl_annotation_block* annotations = nullptr,
+    const Mdl_annotation_block_vector* member_annotations = nullptr)
+{
+    mi::base::Handle<const IType> ptr_type(
+        mdl_type_to_int_type( tf, type, annotations, member_annotations));
+    if( !ptr_type)
+        return nullptr;
+    return static_cast<const T*>( ptr_type->get_interface( typename T::IID()));
+}
 
 /// Converts mi::mdl::IType_enum to MI::MDL::IType_enum and checks,
 /// if the type conflicts with an existing type.
@@ -309,23 +340,6 @@ bool mdl_type_struct_to_int_type_test(
     const mi::mdl::IType_struct* type,
     const Mdl_annotation_block* annotations = nullptr,
     const Mdl_annotation_block_vector* member_annotations = nullptr);
-
-/// Converts mi::mdl::IType to MI::MDL::IType.
-///
-/// Template version of the function above.
-template <class T>
-const T* mdl_type_to_int_type(
-    IType_factory* tf,
-    const mi::mdl::IType* type,
-    const Mdl_annotation_block* annotations = nullptr,
-    const Mdl_annotation_block_vector* member_annotations = nullptr)
-{
-    mi::base::Handle<const IType> ptr_type(
-        mdl_type_to_int_type( tf, type, annotations, member_annotations));
-    if( !ptr_type)
-        return nullptr;
-    return static_cast<const T*>( ptr_type->get_interface( typename T::IID()));
-}
 
 /// Converts mi::mdl::DAG_node to MI::MDL::IExpression and MI::MDL::IAnnotation
 class Mdl_dag_converter
@@ -356,6 +370,37 @@ public:
         DB::Tag prototype_tag,
         bool resolve_resources,
         std::set<Mdl_tag_ident>* user_modules_seen);
+
+    /// Converts mi::mdl::IType to MI::MDL::IType.
+    ///
+    /// Similar to MDL::mdl_type_to_int_type(), except that it caches the results for enums and
+    /// structs.
+    ///
+    /// \param type                 The type to convert.
+    /// \param annotations          For enums and structs the annotations of the enum/struct itself,
+    ///                             otherwise \c NULL.
+    /// \param member_annotations   For enums and structs the annotations of the values/fields,
+    ///                             otherwise \c NULL.
+    const IType* mdl_type_to_int_type(
+        const mi::mdl::IType* type,
+        const Mdl_annotation_block* annotations = nullptr,
+        const Mdl_annotation_block_vector* member_annotations = nullptr) const;
+
+    /// Converts mi::mdl::IType to MI::MDL::IType.
+    ///
+    /// Template version of the function above.
+    template <class T>
+    const T* mdl_type_to_int_type(
+        const mi::mdl::IType* type,
+        const Mdl_annotation_block* annotations = nullptr,
+        const Mdl_annotation_block_vector* member_annotations = nullptr) const
+    {
+        mi::base::Handle<const IType> ptr_type(
+            mdl_type_to_int_type( type, annotations, member_annotations));
+        if( !ptr_type)
+            return nullptr;
+        return static_cast<const T*>( ptr_type->get_interface( typename T::IID()));
+    }
 
     /// Converts mi::mdl::IValue to MI::MDL::IValue.
     ///
@@ -426,11 +471,16 @@ private:
 
     /// The MDL module name. Optional, used for localization only.
     const char* m_loc_module_mdl_name;
-    /// The prototype of the converted definition. Optional, used for localization only.
-    DB::Tag     m_loc_prototype_tag;
 
-    bool        m_resolve_resources;
+    /// The prototype of the converted definition. Optional, used for localization only.
+    DB::Tag m_loc_prototype_tag;
+
+    bool m_resolve_resources;
+
     mutable std::set<Mdl_tag_ident>* m_user_modules_seen;
+
+    /// Cache used by mdl_type_to_int_type().
+    mutable robin_hood::unordered_map<const mi::mdl::IType*, const MDL::IType*> m_cached_types;
 };
 
 /// Wrapper around mi::mdl::IGenerated_code_dag that dispatches between functions and materials.
@@ -500,25 +550,23 @@ private:
 
 /// Traverses an expression and replaces call expressions by direct call expressions.
 ///
-/// Nodes matching an expression in \p parameters are replaced by parameter reference
-/// expression.
+/// Parameter references are resolved using \p call_context.
 IExpression* int_expr_call_to_int_expr_direct_call(
     DB::Transaction* transaction,
     IExpression_factory* ef,
     const IExpression* expr,
-    const std::vector<mi::base::Handle<const IExpression>>& parameters,
+    const std::vector<mi::base::Handle<const IExpression>>& call_context,
     Execution_context* context);
 
 /// Traverses an expression and replaces call expressions by direct call expressions.
 ///
-/// Nodes matching an expression in \p parameters are replaced by a parameter reference
-/// expression.
+/// Parameter references are resolved using \p call_context.
 IExpression* int_expr_call_to_int_expr_direct_call(
     DB::Transaction* transaction,
     IExpression_factory* ef,
     const IType* type,
     const Mdl_function_call* call,
-    const std::vector<mi::base::Handle<const IExpression>>& parameters,
+    const std::vector<mi::base::Handle<const IExpression>>& call_context,
     Execution_context* context);
 
 // ********** Misc utility functions around MI::MDL ************************************************
@@ -560,17 +608,17 @@ bool return_type_is_varying( DB::Transaction* transaction, const IExpression* ar
 ///
 /// "Deep copy" is defined as duplication of the DB elements referenced in calls and application of
 /// the deep copy to its arguments. Note that referenced resources are not duplicated (to save
-/// memory). Parameter references are resolved using \p context.
+/// memory). Parameter references are resolved using \p call_context.
 ///
 /// \param transaction            The DB transaction to use (to duplicate the attachments).
 /// \param expr                   The expression from which to create the deep copy.
-/// \param context                The context to resolve parameter references.
+/// \param call_context           The context to resolve parameter references.
 /// \return                       An copy of \p expr with all expressions replaced by duplicates.
 IExpression* deep_copy(
     const IExpression_factory* ef,
     DB::Transaction* transaction,
     const IExpression* expr,
-    const std::vector<mi::base::Handle<const IExpression> >& context);
+    const std::vector<mi::base::Handle<const IExpression>>& call_context);
 
 /// Returns a hash value for a resource (light profiles and BSDF measurements).
 ///
@@ -735,19 +783,6 @@ mi::mdl::IQualified_name* signature_to_qualified_name(
 /// \return                       The MDL AST expression reference for the signature.
 const mi::mdl::IExpression_reference* signature_to_reference(
     mi::mdl::IModule* module, const char* signature, Name_mangler* name_mangler);
-
-/// Creates an MDL AST expression reference for a given MDL type.
-///
-/// TODO merge with Mdl_ast_builder::create_type_name()
-///
-/// \param module                 The module on which the qualified name is created.
-/// \param type                   The type.
-/// \param name_mangler           The name mangler.
-/// \return                       The MDL AST expression reference for the type, or for arrays the
-///                               MDL AST expression reference for the corresponding array
-///                               constructor.
-mi::mdl::IType_name* type_to_type_name(
-    mi::mdl::IModule* module, const mi::mdl::IType* type, Name_mangler* name_mangler);
 
 /// Helper class to associate all resource literals inside a code DAG with their DB tags.
 /// Handles also bodies of called functions.
@@ -923,6 +958,10 @@ mi::base::Uuid get_hash( const mi::mdl::IMDL_resource_set* set);
 
 /// Generates a unique ID.
 Uint64 generate_unique_id();
+
+/// Returns in instance of mi::IString holding the string \p s (or the empty string if \p s is
+/// \c NULL).
+mi::IString* create_istring( const char* s);
 
 } // namespace MDL
 

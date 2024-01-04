@@ -30,7 +30,9 @@ Coco/R itself) does not fall under the GNU General Public License.
 #if !defined(COCO_DFA_H__)
 #define COCO_DFA_H__
 
-#include <stddef.h>
+#include <cstddef>
+#include <string>
+
 #include "Action.h"
 #include "Comment.h"
 #include "State.h"
@@ -49,6 +51,11 @@ class BitArray;
 class DFA
 {
 public:
+	Parser &parser;        // other Coco objects
+	Tab &tab;
+	Errors &errors;
+	FILE *trace;
+
 	int maxStates;
 	int lastStateNr;	// highest state number
 	State *firstState;
@@ -63,29 +70,24 @@ public:
 	bool hasCtxMoves;	// DFA has context transitions
 	bool *existLabel;	// checking the Labels (in order to avoid the warning messages)
 
-	Parser     *parser;        // other Coco objects
-	Tab        *tab;
-	Errors     *errors;
-	FILE* trace;
-
 	Melted *firstMelted;	// head of melted state list
 	Comment *firstComment;	// list of comments
 
 	//---------- Output primitives
-	char* Ch(unsigned ch);
-	char* ChCond(unsigned ch);
+	std::string Ch(unsigned ch);
+	std::string ChCond(unsigned ch);
 	void  PutRange(CharSet *s);
 
 	//---------- State handling
 	State* NewState();
 	void NewTransition(State *from, State *to, int typ, int sym, Node::TransCode tc);
 	void CombineShifts();
-	void FindUsedStates(State *state, BitArray *used);
+	void FindUsedStates(State *state, BitArray &used);
 	void DeleteRedundantStates();
 	State* TheState(Node *p);
-	void Step(State *from, Node *p, BitArray *stepped);
+	void Step(State *from, Node const *p, BitArray &stepped);
 	void NumberNodes(Node *p, State *state, bool renumIter);
-	void FindTrans(Node *p, bool start, BitArray &marked);
+	void FindTrans(Node const *p, bool start, BitArray &marked);
 	void ConvertToStates(Node *p, Symbol *sym);
 	// match string against current automaton; store it either as a fixedToken or as a litToken
 	void MatchLiteral(char const *s, Symbol *sym);
@@ -93,7 +95,7 @@ public:
 	bool Overlap(Action *a, Action *b);
 	bool MakeUnique(State *state); // return true if actions were split
 	void MeltStates(State *state);
-	void FindCtxStates();
+	void MarkCtxStates();
 	void MakeDeterministic();
 	void PrintStates();
 	void CheckLabels();
@@ -105,10 +107,10 @@ public:
 	//------------------------- melted states ------------------------------
 	Melted* NewMelted(BitArray *set, State *state);
 	BitArray* MeltedSet(int nr);
-	Melted* StateWithSet(BitArray *s);
+	Melted* StateWithSet(BitArray const &s);
 
 	//------------------------ comments --------------------------------
-	char* CommentStr(Node *p);
+	std::string CommentStr(Node *p);
 	void NewComment(Node *from, Node *to, bool nested);
 
 	//------------------------ scanner generation ----------------------
@@ -118,13 +120,13 @@ public:
 	void CopyFramePart(const char* stop);
 	char const *SymName(Symbol *sym); // real name value is stored in Tab.literals
 	void GenLiterals ();
-	int GenNamespaceOpen(const char* nsName);
+	int GenNamespaceOpen(std::string const &nsName);
 	void GenNamespaceClose(int nrOfNs);
 	void WriteState(State *state);
 	void WriteStartTab();
 	void OpenGen(const char* genName, bool backUp); /* pdt */
 	void WriteScanner();
-	DFA(Parser *parser);
+	DFA(Parser &parser);
 };
 
 }; // namespace

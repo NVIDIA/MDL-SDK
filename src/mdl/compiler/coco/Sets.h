@@ -35,47 +35,54 @@ namespace Coco {
 
 class Sets {
 public:
-	static int First(BitArray const *s) {
-		int max = s->getCount();
-		for (int i=0; i<max; i++)
-			if ((*s)[i]) return i;
-		return -1;
-	}
-
-	static int Elements(BitArray const *s) {
-		int max = s->getCount();
-		int n = 0;
-		for (int i=0; i<max; i++)
-			if ((*s)[i]) n++;
+	/// |s|
+	static size_t Elements(BitArray const &s) {
+		size_t max = s.getCount();
+		size_t n = 0;
+		for (size_t i = 0; i < max; ++i) {
+			if (s[i]) {
+				n++;
+			}
+		}
 		return n;
 	}
 	
-	static bool Equals(BitArray const *a, BitArray const *b) {
-		int max = a->getCount();
-		for (int i=0; i<max; i++)
-			if ((*a)[i] != (*b)[i]) return false;
+	/// a == b ?
+	static bool Equals(BitArray const &a, BitArray const &b) {
+		size_t max = a.getCount();
+		for (size_t i = 0; i < max; ++i) {
+			if (a[i] != b[i]) {
+				return false;
+			}
+		}
 		return true;
 	}
 
-	static bool Includes(BitArray const *a, BitArray const *b) {	// a > b ?
-		int max = a->getCount();
-		for (int i=0; i<max; i++)
-			if ((*b)[i] && ! (*a)[i]) return false;
+	/// a > b ?
+	static bool Includes(BitArray const &a, BitArray const &b) {
+		size_t max = a.getCount();
+		for (size_t i = 0; i < max; ++i) {
+			if (b[i] && !a[i]) {
+				return false;
+			}
+		}
 		return true;
 	}
 	
-	static bool Intersect(BitArray const *a, BitArray const *b) { // a * b != {}
-		int max = a->getCount();
-		for (int i=0; i<max; i++)
-			if ((*a)[i] && (*b)[i]) return true;
+	/// a * b != {}
+	static bool Intersect(BitArray const &a, BitArray const &b) {
+		size_t max = a.getCount();
+		for (size_t i = 0; i < max; ++i) {
+			if (a[i] && b[i]) {
+				return true;
+			}
+		}
 		return false;
 	}
 	
-	static void Subtract(BitArray *a, BitArray const *b) { // a = a - b
-		BitArray *c = b->Clone();
-		c->Not();
-		a->And(c);
-		delete c;
+	 /// a = a - b
+	static void Subtract(BitArray &a, BitArray const &b) {
+		a.AndNot(b);
 	}
 };
 

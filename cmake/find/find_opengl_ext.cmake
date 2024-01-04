@@ -28,8 +28,6 @@
 
 function(FIND_OPENGL_EXT)
 
-    set(GLEW_DIR "" CACHE PATH "Directory that contains the glew include dir, libs and binaries")
-
     if(NOT MDL_ENABLE_OPENGL_EXAMPLES)
         message(WARNING "Examples that require OpenGL are disabled. Enable the option 'MDL_ENABLE_OPENGL_EXAMPLES' and resolve the required dependencies to re-enable them.")
         return()
@@ -78,7 +76,7 @@ function(FIND_OPENGL_EXT)
 
     endif()
 
-    # store path that are later used in the add_opengl.cmake
+    # store paths that are later used in the add_opengl.cmake
     set(MDL_DEPENDENCY_GL_INCLUDE ${OPENGL_INCLUDE_DIR} CACHE INTERNAL "gl headers")
     set(MDL_DEPENDENCY_GL_SHARED ${_GL_SHARED} CACHE INTERNAL "gl libs")
 
@@ -86,66 +84,27 @@ function(FIND_OPENGL_EXT)
         message(STATUS "[INFO] MDL_DEPENDENCY_GL_INCLUDE:            ${MDL_DEPENDENCY_GL_INCLUDE}")
         message(STATUS "[INFO] MDL_DEPENDENCY_GL_SHARED:             ${MDL_DEPENDENCY_GL_SHARED}")
     endif()
+
     #-----------------------------------------------------------------------------------------------
 
-    # extend find GLEW
-    set(_SAVED_GLEW_DIR ${GLEW_DIR}) # since cmake 3.15 FindGLEW overrides our GLEW_DIR variable
     find_package(GLEW QUIET)
+
     if(GLEW_FOUND)
-        set(_GLEW_INCLUDE ${GLEW_INCLUDE_DIR})
-        set(_GLEW_SHARED GLEW::GLEW)
+        get_target_property(_GLEW_INCLUDE GLEW::GLEW INTERFACE_INCLUDE_DIRECTORIES)
+        set(_GLEW_LIB "GLEW::GLEW")
     else()
-        # restore saved dir
-        set(GLEW_DIR ${_SAVED_GLEW_DIR} CACHE PATH "Directory that contains the glew include dir, libs and binaries" FORCE)
-
-        # try to find GLEW manually
-        set(_GLEW_INCLUDE "NOTFOUND")
-        set(_GLEW_LIB "NOTFOUND")
-        set(_GLEW_SHARED "NOTFOUND")
-
-        if(EXISTS ${GLEW_DIR})
-            set(_GLEW_INCLUDE ${GLEW_DIR}/include)
-
-            # now, look for binaries and libs
-            if(WINDOWS)
-                # assuming that the windows binaries from http://glew.sourceforge.net/ are used
-                set(_GLEW_LIB "${GLEW_DIR}/lib/Release/x64/glew32.lib")
-                set(_GLEW_SHARED "${GLEW_DIR}/bin/Release/x64/glew32.dll")
-
-            else()
-                # link dynamic
-                set(_GLEW_LIB "")  # not used
-                find_file(_GLEW_SHARED "${CMAKE_SHARED_LIBRARY_PREFIX}GLEW${CMAKE_SHARED_LIBRARY_SUFFIX}"
-                    HINTS 
-                        ${GLEW_DIR}
-                        ${GLEW_DIR}/lib64
-                        ${GLEW_DIR}/lib
-                        /usr/lib64/
-                        /usr/lib/x86_64-linux-gnu
-                        /usr/lib
-                    )
-            endif()
-        endif()
-
-        # error if dependencies can not be resolved
-        if(NOT EXISTS ${_GLEW_INCLUDE} OR (WINDOWS AND NOT EXISTS ${_GLEW_LIB}) OR NOT EXISTS ${_GLEW_SHARED})
-            message(STATUS "GLEW_DIR: ${GLEW_DIR}")
-            message(STATUS "_GLEW_INCLUDE: ${_GLEW_INCLUDE}")
-            message(STATUS "_GLEW_LIB: ${_GLEW_LIB}")
-            message(STATUS "_GLEW_SHARED: ${_GLEW_SHARED}")
-            message(FATAL_ERROR "The dependency \"glew\" could not be resolved. Please specify GLEW_DIR. Alternatively, you can disable the option 'MDL_ENABLE_OPENGL_EXAMPLES'.")
-        endif()    
+        message(STATUS "_GLEW_INCLUDE: ${_GLEW_INCLUDE}")
+        message(STATUS "_GLEW_LIB: ${_GLEW_LIB}")
+        message(FATAL_ERROR "The dependency \"glew\" could not be resolved. Please specify 'CMAKE_TOOLCHAIN_FILE'. Alternatively, you can disable the option 'MDL_ENABLE_OPENGL_EXAMPLES'.")
     endif()
 
-    # store path that are later used in the add_opengl.cmake
+    # store paths that are later used in the add_opengl.cmake
     set(MDL_DEPENDENCY_GLEW_INCLUDE ${_GLEW_INCLUDE} CACHE INTERNAL "glew headers")
     set(MDL_DEPENDENCY_GLEW_LIBS ${_GLEW_LIB} CACHE INTERNAL "glew libs")
-    set(MDL_DEPENDENCY_GLEW_SHARED ${_GLEW_SHARED} CACHE INTERNAL "glew shared libs")
 
     if(MDL_LOG_DEPENDENCIES)
         message(STATUS "[INFO] MDL_DEPENDENCY_GLEW_INCLUDE:          ${MDL_DEPENDENCY_GLEW_INCLUDE}")
         message(STATUS "[INFO] MDL_DEPENDENCY_GLEW_LIBS:             ${MDL_DEPENDENCY_GLEW_LIBS}")
-        message(STATUS "[INFO] MDL_DEPENDENCY_GLEW_SHARED:           ${MDL_DEPENDENCY_GLEW_SHARED}")
     endif()
 
 endfunction()

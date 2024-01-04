@@ -26,170 +26,164 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 
-/** \file
- ** \brief Implementation of the lightweight database.
- **
- ** This is an implementation of the database. It does only very few things.
- **/
-
-#ifndef BASE_DATA_DBLIGHT_DBLIGHT_IMPL_H
-#define BASE_DATA_DBLIGHT_DBLIGHT_IMPL_H
+#ifndef BASE_DATA_DBLIGHT_DBLIGHT_DATABASE_H
+#define BASE_DATA_DBLIGHT_DBLIGHT_DATABASE_H
 
 #include <base/data/db/i_db_database.h>
 
-#include <string>
-#include <map>
 #include <atomic>
-#include <mi/base/lock.h>
+#include <map>
+#include <memory>
+#include <string>
+
+#include <base/hal/thread/i_thread_rw_lock.h>
 
 namespace MI {
 
-namespace DB { class Info; }
-
+namespace SERIAL { class Deserialization_manager; }
+namespace THREAD_POOL { class Thread_pool; }
 
 namespace DBLIGHT {
 
+class Info_manager;
 class Scope_impl;
-
-/// Map of tags to infos
-typedef std::map<DB::Tag, DB::Info*> Tag_map;
-
-/// Map of names (strings) to tags
-typedef std::map<std::string, DB::Tag> Named_tag_map;
-
-/// Map of tags to names (strings)
-typedef std::map<DB::Tag, std::string> Reverse_named_tag_map;
-
-/// Set of tags flagged for removal
-typedef std::set<DB::Tag> Flagged_for_removal_set;
-
-/// Map of tags to reference count
-typedef std::map<DB::Tag, Uint32> Reference_count_map;
-
-/// Set of tags with reference count zero
-typedef std::set<DB::Tag> Reference_count_zero_set;
+class Transaction_manager;
 
 /// The database class manages the whole database.
+///
+/// Limits:
+/// - Tags: at most 2^32-1 tags. If exceeded, wraps around to the invalid tag, and subsequently
+///   allocates tags possibly still in use as new tags.
+/// - Transaction IDs: wrap around at 2^32-1 is supported. At any time there must be at least a
+///   range of 2^31 unused transaction IDs for proper ordering. Elements created more that 2^31
+///   transactions ago will become invisible due to ordering problems.
+/// - Versions within a transaction: at most 2^32 versions. If exceeded, wraps around and mixes up
+///   the ordering.
+///
+/// "NI" means DBLIGHT does not implement/support that method of the interface.
 class Database_impl : public DB::Database
 {
 public:
     /// Constructor
     Database_impl();
 
-    /// Destructor, empties the database
-    ~Database_impl();
+    /// Destructor, clears the database.
+    virtual ~Database_impl();
 
-    // Implementation of the virtual database interface
-    void prepare_close();
-    void close();
-    void garbage_collection(int /*priority*/);
-    DB::Scope* get_global_scope();
-    DB::Scope* lookup_scope(DB::Scope_id id);
-    DB::Scope* lookup_scope(const std::string& name);
-    bool remove(DB::Scope_id id);
-    Sint32 set_memory_limits(size_t low_water, size_t high_water);
-    void get_memory_limits(size_t& low_water, size_t& high_water) const;
-    Sint32 set_disk_swapping(const char* path);
-    const char* get_disk_swapping() const;
-    void lock(DB::Tag tag);
-    bool unlock(DB::Tag tag);
-    void check_is_locked(DB::Tag tag);
-    bool wait_for_notify(DB::Tag tag, TIME::Time timeout);
-    void notify(DB::Tag tag);
-    std::string get_next_name(const std::string& pattern);
-    DB::Database_statistics get_statistics();
-    DB::Db_status get_database_status();
-    void register_status_listener(DB::IStatus_listener* listener);
-    void unregister_status_listener(DB::IStatus_listener* listener);
-    void register_transaction_listener(DB::ITransaction_listener* listener);
-    void unregister_transaction_listener(DB::ITransaction_listener* listener);
-    void register_scope_listener(DB::IScope_listener* listener);
-    void unregister_scope_listener(DB::IScope_listener* listener);
-    void lowest_open_transaction_id_changed(DB::Transaction_id transaction_id);
+    // methods of DB::Database
 
-    void set_ready_event(EVENT::Event0_base* event);
-    DB::Transaction* get_transaction(DB::Transaction_id id);
-    void cancel_all_fragmented_jobs();
+    DB::Scope* get_global_scope() override;
+    DB::Scope* lookup_scope( DB::Scope_id id) override;
+    DB::Scope* lookup_scope( const std::string& name) override;
+    bool remove( DB::Scope_id id) override { return false; }
 
-    Sint32 execute_fragmented(DB::Fragmented_job* job, size_t count);
-    Sint32 execute_fragmented_async(
-        DB::Fragmented_job* job, size_t count,  DB::IExecution_listener* listener);
-    void suspend_current_job();
-    void resume_current_job();
-    void yield();
+    void prepare_close() override { }
+    void close() override { delete this; }
 
-    /// Used by the transaction to allocate new tags
-    DB::Tag allocate_tag() { return DB::Tag(++m_next_tag); }
+    void garbage_collection( int priority) override;
 
-    /// Used by the scope to allocate new transaction ids
-    DB::Transaction_id allocate_transaction_id()
-    { return DB::Transaction_id(++m_next_transaction_id); }
+    /*NI*/ void lock( mi::Uint32 lock_id) override;
+    /*NI*/ bool unlock( mi::Uint32 lock_id) override;
+    /*NI*/ void check_is_locked( mi::Uint32 lock_id) override;
 
-    /// Used by the info/transaction to increment the reference count of the tag.
-    /// Needs #m_lock.
-    void increment_reference_count(DB::Tag tag);
+    /*NI*/ mi::Sint32 set_memory_limits( size_t low_water, size_t high_water) override;
+    /*NI*/ void get_memory_limits( size_t& low_water, size_t& high_water) const override;
 
-    /// Used by the info/transaction to decrement the reference counts of the tag.
-    /// Needs #m_lock.
-    void decrement_reference_count(DB::Tag tag);
+    /*NI*/ void register_status_listener( DB::Status_listener* listener) override;
+    /*NI*/ void unregister_status_listener( DB::Status_listener* listener) override;
+    /*NI*/ void register_transaction_listener( DB::ITransaction_listener* listener) override;
+    /*NI*/ void unregister_transaction_listener( DB::ITransaction_listener* listener) override;
+    /*NI*/ void register_scope_listener( DB::IScope_listener* listener) override;
+    /*NI*/ void unregister_scope_listener( DB::IScope_listener* listener) override;
 
-    /// Used by the info to increment the reference counts of the referenced elements.
-    /// Needs #m_lock.
-    void increment_reference_counts(const DB::Tag_set& tag_set);
+    mi::Sint32 execute_fragmented( DB::Fragmented_job* job, size_t count) override;
+    mi::Sint32 execute_fragmented_async(
+        DB::Fragmented_job* job, size_t count, DB::IExecution_listener* listener) override;
+    void suspend_current_job() override;
+    void resume_current_job() override;
+    void yield() override;
 
-    /// Used by the info to decrement the reference counts of the referenced elements.
-    /// Needs #m_lock.
-    void decrement_reference_counts(const DB::Tag_set& tag_set);
+    // internal methods
 
-    /// Returns the reference count of the tag.
-    Uint32 get_tag_reference_count(DB::Tag tag);
+    /// Returns the central database lock.
+    THREAD::Shared_lock& get_lock() { return m_lock; }
 
-    /// Used by the transaction during commit(). The caller must ensure that there is no open
-    /// transaction.
-    void garbage_collection_internal();
+    /// Returns the info manager.
+    Info_manager* get_info_manager() { return m_info_manager.get(); }
 
-    /// Used by the transaction to access the tag map. Needs #m_lock.
-    Tag_map& get_tag_map() { return m_tags; }
-    /// Used by the transaction to access the named tag map. Needs #m_lock.
-    Named_tag_map& get_named_tag_map() { return m_named_tags; }
-    /// Used by the transaction to access the reverse tag map. Needs #m_lock.
-    Reverse_named_tag_map& get_reverse_named_tag_map() { return m_reverse_named_tags; }
-    /// Used by the transaction to track removal requests. Needs #m_lock.
-    Flagged_for_removal_set& get_flagged_for_removal_set() { return m_tags_flagged_for_removal; }
+    /// Returns the transaction manager.
+    Transaction_manager* get_transaction_manager() { return m_transaction_manager.get(); }
 
+    /// Used by transactions to allocate new tags.
+    DB::Tag allocate_tag() { return DB::Tag( m_next_tag++); }
 
-private:
-    /// This is used for allocating tags
-    std::atomic_uint32_t m_next_tag;
-    /// This is used for allocating transaction ids
-    std::atomic_uint32_t m_next_transaction_id;
+    /// Implementation of DB::Database::execute_fragmented() and
+    /// DB::Transaction::execute_fragmented().
+    ///
+    /// \param transaction   The transaction to be passed around. Might be \c NULL. RCS:NEU
+    /// \param job           The fragmented job to be executed. RCS:NEU
+    /// \param count         See #DB::Database::execute_fragmented() for details.
+    /// \return              See #DB::Database::execute_fragmented() for details.
+    mi::Sint32 execute_fragmented(
+        DB::Transaction* transaction, DB::Fragmented_job* job, size_t count);
 
-public:
-    /// The lock for the six containers below.
-    mi::base::Lock m_lock;
+    /// Implementation of DB::Database::execute_fragmented_async() and
+    /// DB::Transaction::execute_fragmented_async().
+    ///
+    /// \param transaction   The transaction to be passed around. Might be \c NULL.
+    /// \param job           The fragmented job to be executed. RCS:NEU
+    /// \param count         See #DB::Database::execute_fragmented() for details.
+    /// \param listener      See #DB::Database::execute_fragmented() for details. RCS:NEU
+    /// \return              See #DB::Database::execute_fragmented() for details.
+    mi::Sint32 execute_fragmented_async(
+        DB::Transaction* transaction,
+        DB::Fragmented_job* job,
+        size_t count,
+        DB::IExecution_listener* listener);
+
+    /// Returns the deserialization manager used for serialization checks.
+    SERIAL::Deserialization_manager* get_deserialization_manager();
+
+    /// Indicates whether serialization should be tested in Transaction::store().
+    bool get_check_serialization_store() const { return m_check_serialization_store; }
+
+    /// Indicates whether serialization should be tested in Transaction::finish_edit().
+    bool get_check_serialization_edit() const { return m_check_serialization_edit; }
+
+    /// Dumps the state of the database to the stream.
+    void dump( std::ostream& s, bool mask_pointer_values = false);
 
 private:
-    /// Holds the DB::Info for each tag. Needs #m_lock.
-    Tag_map m_tags;
-    /// This is used for converting names in the corresponding tags. Needs #m_lock.
-    Named_tag_map m_named_tags;
-    /// This is used for converting tags into names. Needs #m_lock.
-    Reverse_named_tag_map m_reverse_named_tags;
-    /// This holds the tags flagged for removal. Needs #m_lock.
-    Flagged_for_removal_set m_tags_flagged_for_removal;
-    /// Holds the reference count for each tag. Needs #m_lock.
-    Reference_count_map m_reference_counts;
-    /// Holds the tags with reference count zero. Needs #m_lock.
-    Reference_count_zero_set m_reference_count_zero;
+    /// The central database lock.
+    THREAD::Shared_lock m_lock;
 
-    /// The global scope is currently the only scope
+    /// The info manager.
+    std::unique_ptr<Info_manager> m_info_manager;
+
+    /// The transaction manager.
+    std::unique_ptr<Transaction_manager> m_transaction_manager;
+
+    /// The global scope is currently the only scope.
     Scope_impl* m_global_scope;
 
+    /// The thread pool.
+    std::unique_ptr<THREAD_POOL::Thread_pool> m_thread_pool;
+
+    /// The next tag to allocate.
+    std::atomic_uint32_t m_next_tag;
+
+    /// The deserialization manager.
+    SERIAL::Deserialization_manager* m_deserialization_manager;
+
+    /// Indicates whether serialization should be tested in Transaction::store().
+    bool m_check_serialization_store = false;
+
+    /// Indicates whether serialization should be tested in Transaction::finish_edit().
+    bool m_check_serialization_edit = false;
 };
 
 } // namespace DBLIGHT
 
 } // namespace MI
 
-#endif // BASE_DATA_DBLIGHT_DBLIGHT_IMPL_H
-
+#endif // BASE_DATA_DBLIGHT_DBLIGHT_DATABASE_H

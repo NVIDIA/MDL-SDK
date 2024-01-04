@@ -79,9 +79,9 @@ The example source code requires a C++17 compiler. Some examples require additio
 The build with the following x64-platform-compiler combinations has been 
 successfully tested:
 
--   **Windows 10:**            Microsoft Visual Studio 2019 (msvc v142)
--   **CentOS 7, Debian 11**:   GCC 7 or GCC 10 (on x86-64 or aarch64)
--   **Mac OS X 12.6:**         Xcode 12.4 (Apple Clang 12.0.0)
+-   **Windows 10:**            Microsoft Visual Studio 2022 (msvc v143)
+-   **CentOS 7, Debian 12**:   GCC 12 (on x86-64 or aarch64)
+-   **Mac OS X 12.6:**         Xcode 14.2 (Apple Clang 14.0.0, on x86-64 or aarch64)
 
 The versions listed with the following dependencies have been
 successfully tested. Where not mentioned otherwise, other versions
@@ -90,6 +90,19 @@ might work as well.
 The following third-party dependencies are used by several and/or major
 examples. Installation is strongly recommended unless the corresponding group
 of examples is of no interest to you.
+
+-   <a name="vcpkg">**vcpkg**</a> (git commit ID fe1e9f5)
+    [Vcpkg](https://vcpkg.io/en/getting-started.html) is the recommended way to
+    install other dependencies like GLEW and GLFW. The
+    vcpkg version mentioned above corresponds to the versions mentioned for
+    these dependencies below. \n
+    Windows: It is strongly recommended to select the same toolset that is used
+    later to build the examples, e.g., by adding
+    *set(VCPKG_PLATFORM_TOOLSET v143)* (or similar) to
+    *triplets/x64-windows-static.cmake*. See the corresponding section in the
+    [vcpkg documentation](https://learn.microsoft.com/en-us/vcpkg/users/triplets#windows-specific-variables)
+    for further details. Add the vcpkg option *--triplet=x64-windows-static* to
+    the *install* command. There is no need to run the *integrate* command.
 
 -   **DirectX Raytracing support** (Windows only) \n
     Building the DXR example requires Windows 10 version 1909 and the
@@ -102,21 +115,17 @@ of examples is of no interest to you.
     Download and extract the pre-compiled x64 binaries from
     [github](https://github.com/microsoft/DirectXShaderCompiler/releases).
 
--   **GLEW** (2.1.0) \n
+-   **GLEW** (2.2.0) \n
     This dependency is required for all OpenGL-based examples. \n
-    Linux: Install the *libglew-dev* package. \n
-    Windows: Download and extract the pre-compiled binaries from 
-    [glew.sourceforge.net](http://glew.sourceforge.net/) \n
-    Mac OS X: Install the *glew* package using brew.
+    Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
+    package *glew*.
 
--   **GLFW** (3.2.1, 3.3.3) \n
+-   **GLFW** (3.3.8) \n
     This dependency is required for all OpenGL- and Vulkan-based examples. \n
-    Linux: Install the *libglfw3-dev* package. \n
-    Windows: Download and extract the pre-compiled x64 binaries from 
-    [glfw.org](http://www.glfw.org/download.html). \n
-    Mac OS X: Install the *glfw* package using brew.
+    Installation via [vcpkg](#vcpkg) is strongly recommended. Install the vcpkg
+    package *glfw3*.
 
--   **NVIDIA CUDA Toolkit** (11.x) \n
+-   **NVIDIA CUDA Toolkit** (12.x) \n
     This dependency is required for all CUDA-based examples. \n
     Please follow the instructions on the 
     [CUDA Developer Website](https://developer.nvidia.com/cuda-toolkit).
@@ -173,7 +182,7 @@ features.
     example. \n
     Please follow the instructions on the [Qt Website](https://www.qt.io/).
 
--   **X-Rite AxF SDK** (1.8.1) \n
+-   **X-Rite AxF SDK** (1.9.0) \n
     This dependency is required to build the AxF-to-MDL example. \n
     Please send the "Request AxF SDK" document from the
     [X-Rite AxF Website](https://www.xrite.com/axf).
@@ -193,12 +202,12 @@ features.
     example binaries.
 
     It is recommended that you build into a subdirectory, not into the example root.
-    C:/projects/mdl-sdk/examples/build/vs2019 for example is fine, assuming you extracted the mdl-sdk to:
+    C:/projects/mdl-sdk/examples/build/vs2017 for example is fine, assuming you extracted the mdl-sdk to:
 
         C:/projects/mdl-sdk
 
 3.  After clicking ``Configure``, CMake asks you to choose the
-    Generator. Select `Visual Studio 16 2019` (or higher) and click
+    Generator. Select `Visual Studio 17 2022` (or higher) and click
     `Finish`. CMake starts to configure the build and stops several
     times when user input is required to resolve dependencies.
 
@@ -227,12 +236,6 @@ features.
     -   **DXC_DIR** in Ungrouped Entries, \n
         for example: *C:/projects/thirdparty/dxc_2022_07_18*
 
-    -   **GLEW_DIR** in the GLEW group \n
-        for example: *C:/projects/thirdparty/glew-2.1.0*
-
-    -   **GLFW_DIR** in Ungrouped Entries \n
-        for example: *C:/projects/thirdparty/glfw-3.2.1.bin.WIN64*
-
     -   **MATERIALX_DIR** in Ungrouped Entries, \n
         for example: *C:/projects/thirdparty/git/MaterialX* \n
         For MaterialX support, the option **MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES** has to be enabled.
@@ -245,6 +248,9 @@ features.
 
     -   **VULKAN_SDK_DIR** in Ungrouped Entries (only if not installed using the installer) \n
         for example: *C:/VulkanSDK/1.2.198.1*
+
+    -   **PANTORA_AXF_DIR** in Ungrouped Entries \n
+        for example: *C:/projects/thirdparty/pantora-axf-1.9.0*
 
     Note: when you installed a new Visual Studio version after installing CUDA,
     you may have to reinstall CUDA to register it correctly with Visual Studio.
@@ -301,17 +307,17 @@ features.
         \link mi_neuray_getting_started_windows_build Windows build\endlink for a list of supported flags. 
         On Unix-like systems, it is assumed that the 
         specified paths contain a directory named *include* for headers 
-        files and subdirectories named `lib64` or `lib` that contain shared 
-        libraries. For a custom build of the GLEW library for example, the 
-        call to CMake could look as follows:
+        files and subdirectories named `lib64` or `lib` that contains shared 
+        libraries. For the Vulkan SDK for example, the call to CMake could
+        look as follows:
 
-            cmake -DGLEW_DIR=$HOME/thirdparty/glew-2.1.0 ../..
+            cmake -DVULKAN_SDK_DIR=$HOME/projects/thirdparty/vulkansdk-linux-x86_64-1.2.198.1/1.2.198.1/x86_64 ../..
 
         For builds using a different compiler version, you need to pass the 
         compiler names when calling CMake as follows:
 
-            sudo apt-get install gcc-7 g++-7
-            cmake -DCMAKE_C_COMPILER=/usr/bin/gcc-7 -DCMAKE_CXX_COMPILER=/usr/bin/g++-7 ../..
+            sudo apt-get install gcc-11 g++-11
+            cmake -DCMAKE_C_COMPILER=/usr/bin/gcc-11 -DCMAKE_CXX_COMPILER=/usr/bin/g++-11 ../..
 
     3.  In case CMake is not able to find a working CUDA compiler for the 
         examples, make sure the *nvcc* is reachable through the system PATH 

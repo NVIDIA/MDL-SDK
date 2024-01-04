@@ -40,14 +40,14 @@ namespace neuraylib {
 class ISerializer;
 class IDeserializer;
 
-/** 
+/**
     \defgroup mi_neuray_plugins Extensions and Plugins
     \ingroup mi_neuray
 
     Various ways to extend the \NeurayApiName, for example, \if IRAY_API image and \endif video
     plugins, or user-defined DB elements.
 */
-/** 
+/**
 \if IRAY_API \addtogroup mi_neuray_plugins
 \elseif MDL_SDK_API \addtogroup mi_neuray_plugins
 \else \addtogroup mi_neuray_dice
@@ -303,6 +303,24 @@ public:
 };
 
 /**@}*/ // end group mi_neuray_plugins / mi_neuray_dice
+
+/** \ifnot DICE_API \addtogroup mi_neuray_database_access
+    \else \addtogroup mi_neuray_dice
+    \endif
+@{
+*/
+
+/// Provides information about the context in which a job is executed.
+class IJob_execution_context
+{
+public:
+    /// Returns the thread ID.
+    ///
+    /// \return   The ID of thread the job is executed in.
+    virtual Uint64 get_thread_id() const = 0;
+};
+
+/**@}*/ // end group mi_neuray_database_access/mi_neuray_dice
 
 } // namespace neuraylib
 

@@ -60,10 +60,23 @@ MI_HOST_DEVICE_INLINE constexpr Enum& operator OP##=(Enum& e, const T s) { \
 MI_MAKE_ENUM_BITOPS_PAIR(Enum,|) \
 MI_MAKE_ENUM_BITOPS_PAIR(Enum,&) \
 MI_MAKE_ENUM_BITOPS_PAIR(Enum,^) \
+MI_MAKE_ENUM_BITOPS_PAIR(Enum,+) \
+MI_MAKE_ENUM_BITOPS_PAIR(Enum,-) \
 MI_MAKE_ENUM_SHIFTOPS_PAIR(Enum,<<) \
 MI_MAKE_ENUM_SHIFTOPS_PAIR(Enum,>>) \
 MI_HOST_DEVICE_INLINE constexpr Enum operator ~(const Enum e) { \
     return static_cast<Enum>(~static_cast<std::underlying_type_t<Enum>>(e)); }
+
+namespace mi {
+
+/** \brief Converts an enumerator to its underlying integral value. */
+template <typename T, std::enable_if_t<std::is_enum<T>::value,bool> = true>
+constexpr auto to_underlying(const T val) { return std::underlying_type_t<T>(val); }
+
+template <typename T, std::enable_if_t<std::is_integral<T>::value,bool> = true>
+constexpr auto to_underlying(const T val) { return val; }
+
+}
 
 #else
 #define MI_MAKE_ENUM_BITOPS(Enum)

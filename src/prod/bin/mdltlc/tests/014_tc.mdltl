@@ -1,0 +1,12 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Simple_rule topdown {
+    microfacet_ggx_vcavities_bsdf(ru,rv,tint,_,t,mode) -->
+                custom_curve_layer( nvidia::distilling_support::refl_from_ior(option( global_float_ior)),
+                    1.0,5.0,1.0, microfacet_ggx_vcavities_bsdf(ru,rv,tint,color(0.0),t,scatter_reflect), simple_glossy_bsdf(ru,rv,tint,color(0.0),t,scatter_transmit))
+        if mode == scatter_reflect_transmit;
+
+}
+

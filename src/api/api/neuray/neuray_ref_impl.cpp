@@ -38,6 +38,7 @@
 #include "i_neuray_db_element.h"
 #include "neuray_transaction_impl.h"
 
+#include <base/lib/log/i_log_assert.h>
 #include <base/data/db/i_db_transaction.h>
 #include <base/data/db/i_db_access.h>
 

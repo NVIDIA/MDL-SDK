@@ -34,7 +34,6 @@
 #include <memory>
 #include <regex>
 #include <set>
-#include <stack>
 
 #include <mi/mdl/mdl_modules.h>
 #include <mi/mdl/mdl_names.h>
@@ -66,109 +65,19 @@ namespace MI {
 
 namespace MDL {
 
-namespace {
-
-/// Converts an absolute qualified name given as vector of strings into a string representation.
-std::string stringify(
-    const std::vector<std::string>& name, bool ignore_last_component = false)
-{
-    std::string result;
-    mi::Size n = name.size() - (ignore_last_component ? 1 : 0);
-    for( mi::Size i = 0; i < n; ++i)
-       result += "::" + name[i];
-    return result;
-}
-
-/// Converts a qualified name into a string representation.
-std::string stringify( const mi::mdl::IQualified_name* name)
-{
-    std::string result;
-    if( name->is_absolute())
-        result += "::";
-    for( mi::Uint32 i = 0, n = name->get_component_count(); i < n; ++i) {
-        const mi::mdl::ISimple_name* simple = name->get_component( i);
-        if( i > 0)
-            result += "::";
-        result += simple->get_symbol()->get_name();
-    }
-    return result;
-}
-
-/// Restores import entries in the constructor and drops them in the destructor.
-class Import_entries_holder : public boost::noncopyable
-{
-public:
-    Import_entries_holder(
-        SYSTEM::Access_module<MDLC::Mdlc_module>& mdlc_module,
-        DB::Transaction* transaction,
-        mi::mdl::Module* mdl_module)
-      : m_mdlc_module( mdlc_module),
-        m_transaction( transaction),
-        m_module( mdl_module, mi::base::DUP_INTERFACE)
-    {
-        Module_cache module_cache(
-            m_transaction, m_mdlc_module->get_module_wait_queue(), {});
-        m_module->restore_import_entries( &module_cache);
-    }
-
-    ~Import_entries_holder()
-    {
-        m_module->drop_import_entries();
-    }
-
-private:
-    SYSTEM::Access_module<MDLC::Mdlc_module>& m_mdlc_module;
-    DB::Transaction* m_transaction;
-    mi::base::Handle<mi::mdl::Module> m_module;
-};
-
-/// Converts constants of user types back to references and constructor calls.
-/// This is necessary whenever the analyzer is called again after a module transformation,
-/// because the analyzer will add new instances of the user types, while the user constants
-/// would still point to the old instances.
-class User_constant_remover : protected mi::mdl::Module_visitor
-{
-public:
-    User_constant_remover(
-        mi::mdl::Module* module);
-
-protected:
-    /// Converts the literal, if it contains a user constant, otherwise keeps it unmodified.
-    mi::mdl::IExpression *post_visit( mi::mdl::IExpression_literal* expr) override;
-
-private:
-    /// Converts a value, if it contains a user constant, otherwise returns nullptr.
-    mi::mdl::IExpression *convert_user_value( mi::mdl::IValue const *value);
-
-    // Converts an enum value to a reference expression.
-    mi::mdl::IExpression *convert_enum_value( mi::mdl::IValue_enum const *value);
-
-    /// Converts a struct or array value to a call expression to the corresponding constructor.
-    mi::mdl::IExpression *convert_compound_value( mi::mdl::IValue_compound const *value);
-
-    /// Creates a qualified name from a scope.
-    mi::mdl::IQualified_name *create_qualified_name( mi::mdl::Scope const *scope);
-
-protected:
-    mi::mdl::Module* m_module;
-    mi::mdl::IExpression_factory* m_ef;
-    mi::mdl::IValue_factory* m_vf;
-    mi::mdl::IName_factory* m_nf;
-
-private:
-    typedef std::stack<mi::mdl::ISymbol const *> Symbol_stack;
-
-    /// Temporarily used symbol stack.
-    Symbol_stack m_sym_stack;
-};
-
 User_constant_remover::User_constant_remover(
-    mi::mdl::Module* module)
-  : m_module( module)
+    mi::mdl::IModule* module)
+  : m_module( impl_cast<mi::mdl::Module>( module))
 {
     m_ef = m_module->get_expression_factory();
     m_vf = m_module->get_value_factory();
     m_nf = m_module->get_name_factory();
+}
+
+// Process it.
+void User_constant_remover::process()
+{
+    visit(m_module);
 }
 
 // Creates a qualified name from a scope.
@@ -318,6 +227,64 @@ mi::mdl::IExpression *User_constant_remover::post_visit( mi::mdl::IExpression_li
 
     return converted_expr;
 }
+
+
+namespace {
+
+/// Converts an absolute qualified name given as vector of strings into a string representation.
+std::string stringify(
+    const std::vector<std::string>& name, bool ignore_last_component = false)
+{
+    std::string result;
+    mi::Size n = name.size() - (ignore_last_component ? 1 : 0);
+    for( mi::Size i = 0; i < n; ++i)
+       result += "::" + name[i];
+    return result;
+}
+
+/// Converts a qualified name into a string representation.
+std::string stringify( const mi::mdl::IQualified_name* name)
+{
+    std::string result;
+    if( name->is_absolute())
+        result += "::";
+    for( mi::Uint32 i = 0, n = name->get_component_count(); i < n; ++i) {
+        const mi::mdl::ISimple_name* simple = name->get_component( i);
+        if( i > 0)
+            result += "::";
+        result += simple->get_symbol()->get_name();
+    }
+    return result;
+}
+
+/// Restores import entries in the constructor and drops them in the destructor.
+class Import_entries_holder : public boost::noncopyable
+{
+public:
+    Import_entries_holder(
+        SYSTEM::Access_module<MDLC::Mdlc_module>& mdlc_module,
+        DB::Transaction* transaction,
+        mi::mdl::Module* mdl_module)
+      : m_mdlc_module( mdlc_module),
+        m_transaction( transaction),
+        m_module( mdl_module, mi::base::DUP_INTERFACE)
+    {
+        Module_cache module_cache(
+            m_transaction, m_mdlc_module->get_module_wait_queue(), {});
+        m_module->restore_import_entries( &module_cache);
+    }
+
+    ~Import_entries_holder()
+    {
+        m_module->drop_import_entries();
+    }
+
+private:
+    SYSTEM::Access_module<MDLC::Mdlc_module>& m_mdlc_module;
+    DB::Transaction* m_transaction;
+    mi::base::Handle<mi::mdl::Module> m_module;
+};
+
 
 /// Upgrades the MDL version of the module including all its call references.
 ///

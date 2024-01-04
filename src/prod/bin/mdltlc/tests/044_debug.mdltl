@@ -1,0 +1,14 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+// Test debug_print() statements.
+rules Debug bottomup {
+    matched_bsdf ~ bsdf_mix_2(_ [[x, y ~ diffuse_reflection_bsdf()]], _, _, bsdf()) --> matched_bsdf [[ x = x + 1 ]]
+      debug_print(matched_bsdf, x, y);
+    matched_bsdf ~ bsdf_mix_2(_, bsdf(), b, c) --> matched_bsdf
+      debug_print(b)
+      debug_print(c);
+    matched_bsdf ~ diffuse_reflection_bsdf(_, _) --> matched_bsdf
+      debug_name "matched";
+}

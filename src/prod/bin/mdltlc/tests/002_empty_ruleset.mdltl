@@ -1,0 +1,7 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+/* Empty rule set. This is allowed. */
+rules Empty_ruleset topdown {
+}

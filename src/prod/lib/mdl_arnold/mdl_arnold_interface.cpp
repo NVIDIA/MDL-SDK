@@ -120,9 +120,9 @@ class Internal_logger : public mi::base::Interface_implement<mi::base::ILogger>
 public:
     Internal_logger(Mdl_sdk_interface* mdl_sdk) : m_mdl_sdk(mdl_sdk) {}
 
-    void message(mi::base::Message_severity level, 
-        const char* mc, 
-        const mi::base::Message_details&, 
+    void message(mi::base::Message_severity level,
+        const char* mc,
+        const mi::base::Message_details&,
         const char* message) override
     {
         // forward important internal messages only
@@ -147,7 +147,7 @@ namespace
     }
 
     std::string resolve_dynamic_library(
-        const std::string& plugin_path, 
+        const std::string& plugin_path,
         const char* filename)
     {
         // check if the library is located next to the Arnold shared library
@@ -294,7 +294,9 @@ Mdl_sdk_interface::Mdl_sdk_interface()
 
     // init logger
     auto logger = mi::base::make_handle(new Internal_logger(this));
-    m_mdl_config->set_logger(logger.get());
+    mi::base::Handle<mi::neuraylib::ILogging_configuration> logging_conf(
+        m_mdl_sdk->get_api_component<mi::neuraylib::ILogging_configuration>());
+    logging_conf->set_receiving_logger(logger.get());
 
     // load image plug-ins for texture loading
     mi::base::Handle<mi::neuraylib::IPlugin_configuration> plugin_conf(
@@ -308,7 +310,7 @@ Mdl_sdk_interface::Mdl_sdk_interface()
         AiMsgWarning("[mdl] Loading MDL SDK OpenImageIO library failed.");
         return;
     }
-    
+
     result = plugin_conf->load_plugin_library(
         resolve_dynamic_library(plugin_path, "dds_ai" MI_BASE_DLL_FILE_EXT).c_str());
     if (result != 0)

@@ -34,16 +34,26 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <stack>
 
 #include <mi/base/handle.h>
 #include <mi/mdl/mdl_mdl.h>
 #include <mi/neuraylib/imodule.h> // for Mdl_version
 #include <boost/core/noncopyable.hpp>
 #include <base/system/main/access_module.h>
+#include <mdl/compiler/compilercore/compilercore_visitor.h>
 
 namespace mi {
-namespace mdl { class IInline_import_callback; class IMDL; class IModule; class Module; }
-}
+namespace mdl {
+class IInline_import_callback;
+class IMDL;
+class IModule;
+class IName_factory;
+class IQualified_name;
+class Module;
+class Scope;
+}  // mdl
+}  // mi
 
 namespace MI {
 
@@ -150,6 +160,53 @@ private:
 
     mi::base::Handle<mi::mdl::IMDL> m_mdl;
     mi::base::Handle<mi::mdl::Module> m_module;
+};
+
+/// Helper class to convert constants of user types back to references and constructor calls.
+/// This is necessary whenever the analyzer is called again after a module transformation,
+/// because the analyzer will add new instances of the user types, while the user constants
+/// would still point to the old instances.
+class User_constant_remover : protected mi::mdl::Module_visitor
+{
+public:
+    /// Constructor.
+    ///
+    /// \param imodule  the module to process
+    User_constant_remover(
+        mi::mdl::IModule *imodule);
+
+    /// Process it.
+    void process();
+
+protected:
+    /// Converts the given literal, if it contains a user constant, to a reference,
+    /// otherwise keeps it unmodified.
+    mi::mdl::IExpression *post_visit(mi::mdl::IExpression_literal *expr) override;
+
+private:
+    /// Converts a value, if it contains a user constant, otherwise returns nullptr.
+    mi::mdl::IExpression *convert_user_value(mi::mdl::IValue const *value);
+
+    // Converts an enum value to a reference expression.
+    mi::mdl::IExpression *convert_enum_value(mi::mdl::IValue_enum const *value);
+
+    /// Converts a struct or array value to a call expression to the corresponding constructor.
+    mi::mdl::IExpression *convert_compound_value(mi::mdl::IValue_compound const *value);
+
+    /// Creates a qualified name from a scope.
+    mi::mdl::IQualified_name *create_qualified_name(mi::mdl::Scope const *scope);
+
+protected:
+    mi::mdl::Module *m_module;
+    mi::mdl::IExpression_factory *m_ef;
+    mi::mdl::IValue_factory *m_vf;
+    mi::mdl::IName_factory *m_nf;
+
+private:
+    typedef std::stack<mi::mdl::ISymbol const *> Symbol_stack;
+
+    /// Temporarily used symbol stack.
+    Symbol_stack m_sym_stack;
 };
 
 } // namespace MDL

@@ -26,8 +26,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 
-#ifndef IO_SCENE_MDL_ELEMENTS_I_ANNOTATION_DEFINITION_PROXY_H
-#define IO_SCENE_MDL_ELEMENTS_I_ANNOTATION_DEFINITION_PROXY_H
+#ifndef IO_SCENE_MDL_ELEMENTS_I_MDL_ELEMENTS_ANNOTATION_DEFINITION_PROXY_H
+#define IO_SCENE_MDL_ELEMENTS_I_MDL_ELEMENTS_ANNOTATION_DEFINITION_PROXY_H
 
 #include <string>
 
@@ -57,7 +57,7 @@ public:
     Mdl_annotation_definition_proxy( const char* module_name);
 
     /// Copy constructor.
-    Mdl_annotation_definition_proxy( const Mdl_annotation_definition_proxy& other) = default;
+    Mdl_annotation_definition_proxy( const Mdl_annotation_definition_proxy&) = default;
 
     Mdl_annotation_definition_proxy& operator=( const Mdl_annotation_definition_proxy&) = delete;
 
@@ -94,4 +94,4 @@ private:
 
 } // namespace MI
 
-#endif // IO_SCENE_MDL_ELEMENTS_I_ANNOTATION_DEFINITION_PROXY_H
+#endif // IO_SCENE_MDL_ELEMENTS_I_MDL_ELEMENTS_ANNOTATION_DEFINITION_PROXY_H

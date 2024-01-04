@@ -65,6 +65,9 @@ public:
     /// No dummy BSDF data is set for reflection and transmission.
     Bsdf_measurement();
 
+    /// Copy constructor.
+    Bsdf_measurement( const Bsdf_measurement&) = default;
+
     Bsdf_measurement& operator=( const Bsdf_measurement&) = delete;
 
     // methods of mi::neuraylib::IBsdf_measurement

@@ -28,7 +28,8 @@
 
 // examples/mdl_sdk/axf_to_mdl/axf_to_mdl.cpp
 //
-// Converts a X-Rite AxF(Appearance Exchange Format) physical material representration to MDL format.
+// Converts a X-Rite AxF(Appearance Exchange Format) physical material representration to 
+// MDL format.
 
 #include <iostream>
 #include <string>
@@ -45,35 +46,44 @@ using namespace mi::examples::impaxf;
 using namespace std;
 
 // Print command line usage to console and terminate the application.
-void usage(char const* prog_name, bool failure = false)
+void usage(char const* prog_name, bool failure = true)
 {
+    if (failure)
+        std::cout << "No or wrong arguments passed." << std::endl << std::endl;
+
     std::cout
         << "Usage: " << prog_name << " [options] <input_AxF_filename> [<output_MDL_filename>]\n"
         << "Options:\n"
-        << "  -h   | --help                           Print this text and exit\n"
-        << "  -v   | --version                        Print the MDL SDK version string and exit\n"
+        << " -h | --help                            Print this text and exit\n"
+        << " -v | --version                         Print the MDL SDK version string and exit\n"
         << "\n"
-        << "  -ap  | --axf_prefix <prefix>            AxF module prefix\n"
-        << "                                            (default: \"axf\")\n"
+        << " -ap | --axf_prefix <prefix>            AxF module prefix\n"
+        << "                                          (default: \"axf\")\n"
         << "\n"
-        << "  -acs | --axf_color_space <color_space>  AxF color space. Options:\n"
-        << "                                            \"XYZ\"             : CIE 1931 XYZ.\n"
-        << "                                            \"sRGB,E\" (default): Linear sRGB,E.\n"
-        << "                                            \"AdobeRGB,E\"      : Linear Adobe RGB,E.\n"
-        << "                                            \"WideGamutRGB,E\"  : Linear Adobe wide gamut RGB,E.\n"
-        << "                                            \"ProPhotoRGB,E\"   : Linear Prophoto RGB,E.\n"
+        << " -p | --mdl_path <path>                 Add the given path to the MDL search path.\n"
+        << " -n | --nostdpath                       Prevent adding the MDL system and user search\n"
+        << "                                        path(s) to the MDL search path.\n"
+        << "\n"
+        << " -acs | --axf_color_space <color_space> AxF color space. Options:\n"
+        << "                                          \"XYZ\"             : CIE 1931 XYZ\n"
+        << "                                          \"sRGB,E\" (default): Linear sRGB,E\n"
+        << "                                          \"AdobeRGB,E\"      : Linear Adobe RGB,E\n"
+        << "                                          \"WideGamutRGB,E\"  : Linear Adobe wide\n"
+        << "                                                                gamut RGB,E\n"
+        << "                                          \"ProPhotoRGB,E\"   : Linear Prophoto\n"
+        << "                                                                RGB,E\n"
         // not supported by MDL
-        //<< "                                            \"P3,E\"            : Linear P3,E.\n"
-        //<< "                                            \"Rec2020,E\"       : Linear Rec2020,E.\n"
-        //<< "                                            \"ACEScg,E\"        : ACEScg,E.\n"
+        //<< "                                        \"P3,E\"            : Linear P3,E.\n"
+        //<< "                                        \"Rec2020,E\"       : Linear Rec2020,E.\n"
+        //<< "                                        \"ACEScg,E\"        : ACEScg,E.\n"
         << "\n"
-        << "  -acr | --axf_color_repr <color_repr>    AxF color representation. Options:\n"
-        << "                                            \"rgb\"             : RGB.\n"
-        << "                                            \"spectral\"        : Spectral.\n"
-        << "                                            \"all\" (default)   : All.\n"
+        << " -acr | --axf_color_repr <color_repr>   AxF color representation. Options:\n"
+        << "                                          \"rgb\"             : RGB.\n"
+        << "                                          \"spectral\"        : Spectral.\n"
+        << "                                          \"all\" (default)   : All.\n"
         << std::endl;
 
-    exit_failure();
+    exit(failure ? -1 : 0);
 }
 
 int MAIN_UTF8( int argc, char* argv[])
@@ -93,7 +103,7 @@ Axf_importer_options importer_options;
         {
             if (strcmp(opt, "-h") == 0 || strcmp(opt, "--help") == 0)
             {
-                usage(argv[0]);
+                usage(argv[0], false);
             }
             else if (strcmp(opt, "-v") == 0 || strcmp(opt, "--version") == 0)
             {
@@ -103,7 +113,17 @@ Axf_importer_options importer_options;
             {
                 importer_options.axf_module_prefix = std::string(argv[++i]);
             }
-            else if ((strcmp(opt, "-acs") == 0 || strcmp(opt, "--axf_color_space") == 0) && i < argc - 1)
+            else if ((strcmp(opt, "-p") == 0 || strcmp(opt, "--mdl_path") == 0) && i < argc - 1)
+            {
+                if (i == argc - 1)
+                {
+                    std::cerr << "error: Argument for -p|--mdl_path missing." << std::endl;
+                    usage(argv[0]);
+                }
+                importer_options.mdl_paths.push_back(argv[++i]);
+            }
+            else if ((strcmp(opt, "-acs") == 0 || strcmp(opt, "--axf_color_space") == 0) &&
+                i < argc - 1)
             {
                 char const* cs = argv[++i];
 
@@ -123,7 +143,8 @@ Axf_importer_options importer_options;
                     usage(argv[0]);
                 }
             }
-            else if ((strcmp(opt, "-acr") == 0 || strcmp(opt, "--axf_color_repr") == 0) && i < argc - 1)
+            else if ((strcmp(opt, "-acr") == 0 || strcmp(opt, "--axf_color_repr") == 0)
+                && i < argc - 1)
             {
                 char const* cr = argv[++i];
 
@@ -159,7 +180,10 @@ Axf_importer_options importer_options;
                 if (dot_pos == std::string::npos)
                     importer_options.mdl_output_filename = axf_filename + ".mdl";
                 else
-                    importer_options.mdl_output_filename = axf_filename.substr(0, dot_pos) + ".mdl";
+                {
+                    importer_options.mdl_output_filename =
+                        axf_filename.substr(0, dot_pos) + ".mdl";
+                }
             }
 
             printf("AxF Filename: %s\n", axf_filename.c_str());
@@ -193,7 +217,16 @@ Axf_importer_options importer_options;
 
 
     // Configure the MDL SDK
-    if (!mi::examples::mdl::configure(neuray.get()))
+    // Apply the search path setup described on the command line
+    mi::examples::mdl::Configure_options configure_options;
+    configure_options.additional_mdl_paths = importer_options.mdl_paths;
+    if (importer_options.nostdpath)
+    {
+        configure_options.add_admin_space_search_paths = false;
+        configure_options.add_user_space_search_paths = false;
+        configure_options.add_example_search_path = false;
+    }
+    if (!mi::examples::mdl::configure(neuray.get(), configure_options))
         exit_failure("Failed to initialize the SDK.");
 
     // Start the MDL SDK

@@ -214,6 +214,25 @@ __device__ inline Mat_expr_func* as_expression(const Mdl_function_index& index)
     return mdl_functions[index.z + 0].expression;
 }
 
+// Expression functions
+#ifdef ENABLE_DERIVATIVES
+template <typename T>
+__device__ inline typename Material_function<T>::Type_with_derivs *as_expression_typed(
+    const Mdl_function_index& index)
+{
+    return reinterpret_cast<typename Material_function<T>::Type_with_derivs *>(
+        mdl_functions[index.z + 0].expression);
+}
+#else
+template <typename T>
+__device__ inline typename Material_function<T>::Type *as_expression_typed(
+    const Mdl_function_index& index)
+{
+    return reinterpret_cast<typename Material_function<T>::Type *>(
+        mdl_functions[index.z + 0].expression);
+}
+#endif
+
 // BSDF functions
 __device__ inline Bsdf_sample_func* as_bsdf_sample(const Mdl_function_index& index)
 {
@@ -903,15 +922,14 @@ __device__ inline bool trace_shadow(
         const char* arg_block = get_arg_block(params, func_idx);  // get material parameters
 
         // initialize the state
-        as_init(func_idx)(&state, &mdl_resources.data, NULL, arg_block);
+        as_init(func_idx)(&state, &mdl_resources.data, arg_block);
 
         // handle cutouts be treating the opacity as chance to hit the surface
         // if we don't hit it, the ray will continue with the same direction
         func_idx = get_mdl_function_index(material.cutout_opacity);
         if (is_valid(func_idx))
         {
-            float opacity = 1.f;
-            as_expression(func_idx)(&opacity, &state, &mdl_resources.data, NULL, arg_block);
+            float opacity = as_expression_typed<float>(func_idx)(&state, &mdl_resources.data, arg_block);
             const float x_anyhit = rnd(seed);
             in_shadow = (x_anyhit <= opacity);
         }
@@ -983,15 +1001,14 @@ __device__ inline bool trace_scene(
     const char* arg_block = get_arg_block(params, func_idx);  // get material parameters
 
     // initialize the state
-    as_init(func_idx)(&state, &mdl_resources.data, NULL, arg_block);
+    as_init(func_idx)(&state, &mdl_resources.data, arg_block);
 
     // handle cutouts be treating the opacity as chance to hit the surface
     // if we don't hit it, the ray will continue with the same direction
     func_idx = get_mdl_function_index(material.cutout_opacity);
     if (is_valid(func_idx))
     {
-        float opacity = 1.f;
-        as_expression(func_idx)(&opacity, &state, &mdl_resources.data, NULL, arg_block);
+        float opacity = as_expression_typed<float>(func_idx)(&state, &mdl_resources.data, arg_block);
         const float x_anyhit = rnd(seed);
         if (x_anyhit > opacity)
         {
@@ -1017,8 +1034,10 @@ __device__ inline bool trace_scene(
                                                 // has to match eval_data.handle_count and
                                                 // aux_data.handle_count)
 
-        float3 result_buffer_0[df_eval_slots];  // used for bsdf_diffuse, edf, and albedo
-        float3 result_buffer_1[df_eval_slots];  // used for bsdf_specular and normal
+        float3 result_buffer_0[df_eval_slots];  // used for bsdf_diffuse, albedo_diffue, and edf
+        float3 result_buffer_1[df_eval_slots];  // used for bsdf_glossy, albedo_glossy
+        float3 result_buffer_2[df_eval_slots];  // used for normal
+        float3 result_buffer_3[df_eval_slots];  // used for roughness
     #elif DF_HANDLE_SLOTS == DF_HSM_NONE
         // handles are ignored, all parts of the BSDF are returned at once without loops (fastest)
         const unsigned df_eval_slots = 1;
@@ -1035,8 +1054,7 @@ __device__ inline bool trace_scene(
         func_idx = get_mdl_function_index(material.volume_absorption);
         if (is_valid(func_idx))
         {
-            float3 abs_coeff;
-            as_expression(func_idx)(&abs_coeff, &state, &mdl_resources.data, NULL, arg_block);
+            float3 abs_coeff = as_expression_typed<float3>(func_idx)(&state, &mdl_resources.data, arg_block);
 
             ray_state.weight.x *= abs_coeff.x > 0.0f ? expf(-abs_coeff.x * hit.distance) : 1.0f;
             ray_state.weight.y *= abs_coeff.y > 0.0f ? expf(-abs_coeff.y * hit.distance) : 1.0f;
@@ -1048,8 +1066,8 @@ __device__ inline bool trace_scene(
     bool thin_walled = false;
     Mdl_function_index thin_walled_func_idx = get_mdl_function_index(material.thin_walled);
     if (is_valid(thin_walled_func_idx))
-        as_expression(thin_walled_func_idx)(
-            &thin_walled, &state, &mdl_resources.data, NULL, arg_block);
+        thin_walled = as_expression_typed<bool>(thin_walled_func_idx)(
+            &state, &mdl_resources.data, arg_block);
 
     // add emission
     func_idx = get_mdl_function_index((thin_walled && ray_state.inside_cutout) ? material.backface_edf : material.edf);
@@ -1061,8 +1079,8 @@ __device__ inline bool trace_scene(
             (thin_walled && ray_state.inside_cutout) ? material.backface_emission_intensity : material.emission_intensity);
         if (is_valid(intensity_func_idx))
         {
-            as_expression(intensity_func_idx)(
-                &emission_intensity, &state, &mdl_resources.data, NULL, arg_block);
+            emission_intensity = as_expression_typed<float3>(intensity_func_idx)(
+                &state, &mdl_resources.data, arg_block);
         }
 
         // evaluate EDF
@@ -1088,7 +1106,7 @@ __device__ inline bool trace_scene(
         #endif
 
             // evaluate the materials EDF
-            as_edf_evaluate(func_idx)(&eval_data, &state, &mdl_resources.data, NULL, arg_block);
+            as_edf_evaluate(func_idx)(&eval_data, &state, &mdl_resources.data, arg_block);
 
             // iterate over all lobes (tags that appear in the df)
             for (unsigned lobe = 0; (lobe < df_eval_slots) &&
@@ -1146,8 +1164,10 @@ __device__ inline bool trace_scene(
         if (params.enable_auxiliary_output && ray_state.intersection == 0)
         {
             #if DF_HANDLE_SLOTS == DF_HSM_POINTER
-                aux_data.albedo = result_buffer_0;
-                aux_data.normal = result_buffer_1;
+                aux_data.albedo_diffuse = result_buffer_0;
+                aux_data.albedo_glossy = result_buffer_1;
+                aux_data.normal = result_buffer_2;
+                aux_data.roughness = result_buffer_3;
                 aux_data.handle_count = df_eval_slots;
             #endif
 
@@ -1160,7 +1180,7 @@ __device__ inline bool trace_scene(
             #endif
 
                 // evaluate the materials auxiliary
-                as_bsdf_auxiliary(func_idx)(&aux_data, &state, &mdl_resources.data, NULL, arg_block);
+                as_bsdf_auxiliary(func_idx)(&aux_data, &state, &mdl_resources.data, arg_block);
 
                 // iterate over all lobes (tags that appear in the df)
                 for (unsigned lobe = 0; (lobe < df_eval_slots) &&
@@ -1169,10 +1189,11 @@ __device__ inline bool trace_scene(
                     // to keep it simpler, the individual albedo and normals are averaged
                     // however, the parts can also be used separately, e.g. for LPEs
                     #if DF_HANDLE_SLOTS == DF_HSM_NONE
-                        ray_state.aux->albedo += aux_data.albedo;
+                        ray_state.aux->albedo += aux_data.albedo_diffuse + aux_data.albedo_glossy;
                         ray_state.aux->normal += aux_data.normal;
                     #else
-                        ray_state.aux->albedo += aux_data.albedo[lobe];
+                        ray_state.aux->albedo += aux_data.albedo_diffuse[lobe] +
+                                                 aux_data.albedo_glossy[lobe];
                         ray_state.aux->normal += aux_data.normal[lobe];
                     #endif
                     ray_state.aux->num++;
@@ -1220,7 +1241,7 @@ __device__ inline bool trace_scene(
 
                     // evaluate the materials BSDF
                     as_bsdf_evaluate(func_idx)(
-                        &eval_data, &state, &mdl_resources.data, NULL, arg_block);
+                        &eval_data, &state, &mdl_resources.data, arg_block);
 
                     // we know if we reflect or transmit
                     if (dot(to_light, ray_state.inside_cutout ? -hit.normal : hit.normal) > 0.0f) {
@@ -1309,7 +1330,7 @@ __device__ inline bool trace_scene(
 
                     // evaluate the materials BSDF
                     as_bsdf_evaluate(func_idx)(
-                        &eval_data, &state, &mdl_resources.data, NULL, arg_block);
+                        &eval_data, &state, &mdl_resources.data, arg_block);
 
                     const float mis_weight =
                         (params.mdl_test_type == MDL_TEST_EVAL) ? 1.0f : pdf / (pdf + eval_data.pdf);
@@ -1371,7 +1392,7 @@ __device__ inline bool trace_scene(
 
 
             // sample the materials BSDF
-            as_bsdf_sample(func_idx)(&sample_data, &state, &mdl_resources.data, NULL, arg_block);
+            as_bsdf_sample(func_idx)(&sample_data, &state, &mdl_resources.data, arg_block);
 
             if (sample_data.event_type == BSDF_EVENT_ABSORB)
                 return false;
@@ -1431,7 +1452,7 @@ __device__ inline bool trace_scene(
                     pdf_data.k2 = k2;
 
                     // get pdf corresponding to the materials BSDF
-                    as_bsdf_pdf(func_idx)(&pdf_data, &state, &mdl_resources.data, NULL, arg_block);
+                    as_bsdf_pdf(func_idx)(&pdf_data, &state, &mdl_resources.data, arg_block);
 
                     bsdf_pdf = pdf_data.pdf;
                 }

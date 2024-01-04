@@ -63,6 +63,9 @@ public:
     /// Default constructor.
     Lightprofile();
 
+    /// Copy constructor.
+    Lightprofile( const Lightprofile&) = default;
+
     Lightprofile& operator=( const Lightprofile&) = delete;
 
     // methods of mi::neuraylib::ILightprofile
@@ -350,6 +353,9 @@ public:
         mi::Float32 delta_phi,
         mi::Float32 delta_theta,
         const std::vector<mi::Float32>& data);
+
+    /// Copy constructor.
+    Lightprofile_impl( const Lightprofile_impl&) = default;
 
     Lightprofile_impl& operator=( const Lightprofile_impl&) = delete;
 

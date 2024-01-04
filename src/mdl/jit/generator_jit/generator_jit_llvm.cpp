@@ -1254,11 +1254,11 @@ LLVM_code_generator::LLVM_code_generator(
     options.get_string_option(MDL_JIT_OPTION_VISIBLE_FUNCTIONS),
     jitted_code->get_allocator()))
 , m_func_pass_manager()
-, m_fast_math(options.get_bool_option(MDL_JIT_OPTION_FAST_MATH))
-, m_enable_ro_segment(
-    options.get_bool_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT))
 , m_finite_math(false)
 , m_reciprocal_math(false)
+, m_fast_math(get_math_options_from_options(options, &m_finite_math, &m_reciprocal_math))
+, m_enable_ro_segment(
+    options.get_bool_option(MDL_JIT_OPTION_ENABLE_RO_SEGMENT))
 , m_always_inline(options.get_bool_option(MDL_JIT_OPTION_INLINE_AGGRESSIVELY))
 , m_eval_dag_ternary_strictly(options.get_bool_option(MDL_JIT_OPTION_EVAL_DAG_TERNARY_STRICTLY))
 , m_sl_use_resource_data(options.get_bool_option(MDL_JIT_OPTION_SL_USE_RESOURCE_DATA))
@@ -1268,6 +1268,8 @@ LLVM_code_generator::LLVM_code_generator(
     MDL_JIT_OPTION_USE_RENDERER_ADAPT_NORMAL))
 , m_in_intrinsic_generator(false)
 , m_target_lang(target_lang)
+, m_lambda_return_mode(
+    parse_return_mode(options.get_string_option(MDL_JIT_OPTION_LAMBDA_RETURN_MODE)))
 , m_func_remap(
     jitted_code->get_allocator(), options.get_string_option(MDL_JIT_OPTION_REMAP_FUNCTIONS))
 , m_runtime(create_mdl_runtime(
@@ -1285,7 +1287,17 @@ LLVM_code_generator::LLVM_code_generator(
 , m_object_to_world(NULL)
 , m_object_id(0)
 , m_context_data(0, Context_data_map::hasher(), Context_data_map::key_equal(), get_allocator())
-, m_data_layout(jitted_code->get_layout_data())  // copy the data layout without the struct cache
+, m_opt_level(get_opt_level_from_options(target_lang, options))
+, m_sm_version(target_lang == ICode_generator::TL_PTX ? sm_version : 0)
+, m_min_ptx_version(40)
+, m_ptx_target_machine(
+    target_lang == ICode_generator::TL_PTX
+        ? create_ptx_target_machine()
+        : nullptr)
+, m_data_layout(
+    target_lang == ICode_generator::TL_PTX
+        ? m_ptx_target_machine->createDataLayout()
+        : jitted_code->get_layout_data())  // copy the data layout without the struct cache
 , m_type_mapper(
     jitted_code->get_allocator(),
     m_llvm_context,
@@ -1319,12 +1331,9 @@ LLVM_code_generator::LLVM_code_generator(
 , m_captured_args_type(NULL)
 , m_sl_funcs()
 , m_resource_tag_map(NULL)
-, m_opt_level(unsigned(options.get_int_option(MDL_JIT_OPTION_OPT_LEVEL)))
 , m_jit_dbg_mode(JDBG_NONE)
 , m_num_texture_spaces(num_texture_spaces)
 , m_num_texture_results(num_texture_results)
-, m_sm_version(target_lang == ICode_generator::TL_PTX ? sm_version : 0)
-, m_min_ptx_version(0)
 , m_state_usage_analysis(*this)
 , m_enable_full_debug(enable_debug)
 , m_enable_type_debug(target_is_structured_language(target_lang))
@@ -1431,29 +1440,9 @@ LLVM_code_generator::LLVM_code_generator(
 
     char const *s;
 
-    s = getenv("MI_MDL_JIT_OPTLEVEL");
-    unsigned optlevel;
-    if (s != NULL && sscanf(s, "%u", &optlevel) == 1) {
-        m_opt_level = optlevel;
-    }
-
     s = getenv("MI_MDL_JIT_DEBUG_INFO");
     if (s != NULL) {
         m_enable_full_debug = true;
-    }
-
-    s = getenv("MI_MDL_JIT_FAST_MATH");
-    unsigned level;
-    if (s != NULL && sscanf(s, "%u", &level) == 1) {
-        m_fast_math = m_finite_math = m_reciprocal_math = false;
-        if (level >= 3) {
-            m_fast_math = true;
-        } else if (level >= 2) {
-            m_finite_math = true;
-        }
-        if (level >= 1) {
-            m_reciprocal_math = true;
-        }
     }
 
     s = getenv("MI_MDL_JIT_NOINLINE");
@@ -1466,21 +1455,63 @@ LLVM_code_generator::LLVM_code_generator(
         m_jit_dbg_mode = JDBG_PRINT;
     }
 
-    if (target_lang == ICode_generator::TL_PTX) {
-        // Optimization level 3+ activates argument promotion. This is bad, because the NVPTX
-        // backend cannot handle aggregate types passed by value. Hence limit the level to
-        // 2 in this case.
-        if (m_opt_level > 2) {
-            m_opt_level = 2;
-        }
-    }
-
     if (!target_is_structured_language()) {
         // this option can only be set for GLSL/HLSL
         m_sl_use_resource_data = false;
     }
 
     prepare_internal_functions();
+}
+
+// Get the optimization level from the options and environment.
+unsigned LLVM_code_generator::get_opt_level_from_options(
+    Target_language target_lang,
+    Options_impl const &options)
+{
+    unsigned opt_level = unsigned(options.get_int_option(MDL_JIT_OPTION_OPT_LEVEL));
+
+    char const *s = getenv("MI_MDL_JIT_OPTLEVEL");
+    unsigned env_opt_level;
+    if (s != NULL && sscanf(s, "%u", &env_opt_level) == 1) {
+        opt_level = env_opt_level;
+    }
+
+    if (target_lang == ICode_generator::TL_PTX) {
+        // Optimization level 3+ activates argument promotion. This is bad, because the NVPTX
+        // backend cannot handle aggregate types passed by value. Hence limit the level to
+        // 2 in this case.
+        if (opt_level > 2) {
+            opt_level = 2;
+        }
+    }
+
+    return opt_level;
+}
+
+// Get the math options from the options and environment.
+bool LLVM_code_generator::get_math_options_from_options(
+    Options_impl const &options,
+    bool *finite_math,
+    bool *reciprocal_math)
+{
+    bool fast_math = options.get_bool_option(MDL_JIT_OPTION_FAST_MATH);
+
+    char *s = getenv("MI_MDL_JIT_FAST_MATH");
+    unsigned level;
+    if (s != NULL && sscanf(s, "%u", &level) == 1) {
+        fast_math = *finite_math = *reciprocal_math = false;
+        if (level >= 3) {
+            fast_math = true;
+        }
+        if (level >= 2) {
+            *finite_math = true;
+        }
+        if (level >= 1) {
+            *reciprocal_math = true;
+        }
+    }
+
+    return fast_math;
 }
 
 // Prepare the internal functions.
@@ -2646,8 +2677,13 @@ llvm::Function *LLVM_code_generator::compile_lambda(
 
     reset_lambda_state();
 
-    // generic functions return the result by reference if supported
-    m_lambda_force_sret = target_supports_sret_for_lambda();
+    // Don't allow returning structs at ABI level, even in value mode
+    m_lambda_force_sret = m_lambda_return_mode == Return_mode::RETMODE_SRET
+        || (m_lambda_return_mode == Return_mode::RETMODE_VALUE &&
+            is<mi::mdl::IType_struct>(lambda.get_return_type()->skip_type_alias()));
+
+    // only force, when actually supported by backend
+    m_lambda_force_sret &= target_supports_sret_for_lambda();
 
     // generic functions always includes a render state in its interface
     m_lambda_force_render_state = true;
@@ -3159,6 +3195,7 @@ LLVM_context_data *LLVM_code_generator::declare_lambda(
 
     bool is_sret_func = m_dist_func_state != DFSTATE_INIT &&
         (m_lambda_force_sret || need_reference_return(lambda->get_return_type()));
+
     if (is_sret_func) {
         // add a hidden parameter for the struct return
         arg_types.push_back(Type_mapper::get_ptr(ret_tp));
@@ -9930,20 +9967,13 @@ MDL_JIT_module_key LLVM_code_generator::jit_compile(llvm::Module *module)
     return module_key;
 }
 
-// Compile the given module into PTX code.
-void LLVM_code_generator::ptx_compile(
-    llvm::Module *module,
-    string       &code)
+/// Create the target machine for PTX code generation.
+std::unique_ptr<llvm::TargetMachine> LLVM_code_generator::create_ptx_target_machine()
 {
     char mcpu[16];
     char features[16];
-    {
-    raw_string_ostream SOut(code);
-    llvm::buffer_ostream Out(SOut);
 
-    bool       is64bit   = get_target_layout_data()->getPointerSizeInBits() == 64;
-    char const *march    = is64bit ? "nvptx64" : "nvptx";
-    std::string triple = llvm::Triple(march, "nvidia", "cuda").str();
+    std::string triple = llvm::Triple("nvptx64", "nvidia", "cuda").str();
 
     // LLVM supports only "known" processors, so ensure that we do not pass an unsupported one
     unsigned sm_version = m_sm_version;
@@ -9978,7 +10008,7 @@ void LLVM_code_generator::ptx_compile(
     }
 
     std::string error;
-    llvm::Target const *target = llvm::TargetRegistry::lookupTarget(march, error);
+    llvm::Target const *target = llvm::TargetRegistry::lookupTarget("nvptx64", error);
     MDL_ASSERT(target != NULL);  // backend not found, should not happen
 
     llvm::CodeGenOpt::Level OLvl = llvm::CodeGenOpt::None;
@@ -9995,18 +10025,28 @@ void LLVM_code_generator::ptx_compile(
     if (m_finite_math) {
         options.NoInfsFPMath = options.NoNaNsFPMath = true;
     }
+
     std::unique_ptr<llvm::TargetMachine> target_machine(target->createTargetMachine(
         triple, mcpu, features, options,
         llvm::None, llvm::None, OLvl));
-    llvm::legacy::PassManager pm;
+    return target_machine;
+}
 
-    // set the data layout
-    module->setDataLayout(target_machine->createDataLayout());
+// Compile the given module into PTX code.
+void LLVM_code_generator::ptx_compile(
+    llvm::Module *module,
+    string       &code)
+{
+    {
+        raw_string_ostream SOut(code);
+        llvm::buffer_ostream Out(SOut);
 
-    target_machine->addPassesToEmitFile(
-        pm, Out, nullptr, llvm::CodeGenFileType::CGFT_AssemblyFile);
+        llvm::legacy::PassManager pm;
 
-    pm.run(*module);
+        m_ptx_target_machine->addPassesToEmitFile(
+            pm, Out, nullptr, llvm::CodeGenFileType::CGFT_AssemblyFile);
+
+        pm.run(*module);
     }
 
 #if 0 // dump generated PTX to file
@@ -10017,27 +10057,137 @@ void LLVM_code_generator::ptx_compile(
 
     // create prototypes for PTX and CUDA
     for (Exported_function &exp_func : m_exported_func_list) {
+        // fetch the function by name, as it may have been optimized away
+        llvm::Function *func = module->getFunction(exp_func.name.c_str());
+        if (func == nullptr)
+            continue;  // does not exist anymore, skip
+        if (func->getLinkage() == llvm::GlobalValue::InternalLinkage)
+            continue;  // still exists, but won't be exported anymore
+
         // PTX prototype
-        string p(".extern .func " + exp_func.name);
-        if (exp_func.function_kind == IGenerated_code_executable::FK_DF_INIT) {
-            p += "(.param .b64 a, .param .b64 b, .param .b64 c, .param .b64 d);";
-        } else if (exp_func.function_kind == IGenerated_code_executable::FK_SWITCH_LAMBDA) {
-            p += "(.param .b64 a, .param .b64 b, .param .b64 c, .param .b64 d, .param .b64 e, "
-                ".param .b64 f);";
-        } else {
-            p += "(.param .b64 a, .param .b64 b, .param .b64 c, .param .b64 d, .param .b64 e);";
+        string p(".extern .func ", get_allocator());
+
+        llvm::Type *ret_type = exp_func.func->getReturnType();
+        bool returns_value = !ret_type->isVoidTy();
+
+        if (returns_value) {
+            switch (ret_type->getTypeID()) {
+            case llvm::Type::IntegerTyID:  // bool and int
+            case llvm::Type::FloatTyID:
+                p += "(.param .b32 func_retval0) ";
+                break;
+
+            case llvm::Type::DoubleTyID:
+                p += "(.param .b64 func_retval0) ";
+                break;
+
+            case llvm::Type::FixedVectorTyID:
+                p += "(.param .align ";
+                p += std::to_string(m_data_layout.getABITypeAlignment(ret_type)).c_str();
+                p += " .b8 func_retval0[";
+                p += std::to_string(m_data_layout.getTypeAllocSize(ret_type)).c_str();
+                p += "]) ";
+                break;
+
+            default:
+                MDL_ASSERT(!"Unexpected return type");
+                p += "<INVALID RETURN TYPE> ";  // add syntax error to prototype
+                break;
+            }
         }
+
+        p += exp_func.name;
+
+        if (exp_func.function_kind == IGenerated_code_executable::FK_DF_INIT) {
+            p += "(.param .b64 a, .param .b64 b, .param .b64 c);";
+        } else {
+            if (!returns_value) {
+                if (exp_func.function_kind == IGenerated_code_executable::FK_SWITCH_LAMBDA) {
+                    p += "(.param .b64 a, .param .b64 b, .param .b64 c, .param .b64 d, .param .b64 e);";
+                }
+                else {
+                    p += "(.param .b64 a, .param .b64 b, .param .b64 c, .param .b64 d);";
+                }
+            } else {
+                if (exp_func.function_kind == IGenerated_code_executable::FK_SWITCH_LAMBDA) {
+                    p += "(.param .b64 a, .param .b64 b, .param .b64 c, .param .b64 d);";
+                }
+                else {
+                    p += "(.param .b64 a, .param .b64 b, .param .b64 c);";
+                }
+            }
+        }
+
         exp_func.set_function_prototype(IGenerated_code_executable::PL_PTX, p.c_str());
 
         // CUDA prototype
-        p = "extern " + exp_func.name;
-        if (exp_func.function_kind == IGenerated_code_executable::FK_DF_INIT) {
-            p += "(void *, void *, void *, void *);";
-        } else if (exp_func.function_kind == IGenerated_code_executable::FK_SWITCH_LAMBDA) {
-            p += "(void *, void *, void *, void *, void *, int);";
+        p = "extern \"C\" ";
+
+        if (!returns_value) {
+            p += "void";
         } else {
-            p += "(void *, void *, void *, void *, void *);";
+            unsigned num_elems = 1;
+            llvm::Type *elem_type = ret_type;
+            if (llvm::FixedVectorType *vt = llvm::dyn_cast<llvm::FixedVectorType>(ret_type)) {
+                num_elems = vt->getNumElements();
+                elem_type = vt->getElementType();
+            }
+
+            switch (elem_type->getTypeID()) {
+            case llvm::Type::IntegerTyID:
+                {
+                    llvm::IntegerType *int_tp = llvm::cast<llvm::IntegerType>(elem_type);
+                    if (int_tp->getBitWidth() <= 8) {
+                        if (num_elems == 1) {
+                            p += "bool";
+                        } else {
+                            p += "uchar";  // CUDA has builtin uchar vectors, but no bool vectors
+                        }
+                    }
+                    else {
+                        p += "int";
+                    }
+                    break;
+                }
+            case llvm::Type::FloatTyID:
+                p += "float";
+                break;
+            case llvm::Type::DoubleTyID:
+                p += "double";
+                break;
+            default:
+                MDL_ASSERT(!"Unexpected return type");
+                p += "<INVALID RETURN TYPE> ";  // add syntax error to prototype
+                break;
+            }
+
+            // for vectors, add vector size
+            if (num_elems > 1) {
+                p += std::to_string(num_elems).c_str();
+            }
         }
+
+        p += " __device__ ";
+        p += exp_func.name;
+
+        if (exp_func.function_kind == IGenerated_code_executable::FK_DF_INIT) {
+            p += "(void *, void *, void *);";
+        } else {
+            if (!returns_value) {
+                if (exp_func.function_kind == IGenerated_code_executable::FK_SWITCH_LAMBDA) {
+                    p += "(void *, void *, void *, void *, int);";
+                } else {
+                    p += "(void *, void *, void *, void *);";
+                }
+            } else {
+                if (exp_func.function_kind == IGenerated_code_executable::FK_SWITCH_LAMBDA) {
+                    p += "(void *, void *, void *, int);";
+                } else {
+                    p += "(void *, void *, void *);";
+                }
+            }
+        }
+
         exp_func.set_function_prototype(IGenerated_code_executable::PL_CUDA, p.c_str());
     }
 }
@@ -10856,6 +11006,19 @@ Function_context::Tex_lookup_call_mode LLVM_code_generator::parse_call_mode(char
         return Function_context::TLCM_OPTIX_CP;
     }
     return Function_context::TLCM_VTABLE;
+}
+
+// Parse a return mode option.
+LLVM_code_generator::Return_mode LLVM_code_generator::parse_return_mode(char const *name)
+{
+    if (strcmp(name, "sret") == 0) {
+        return Return_mode::RETMODE_SRET;
+    } else if (strcmp(name, "value") == 0) {
+        return Return_mode::RETMODE_VALUE;
+    }
+    // default case
+    return target_supports_sret_for_lambda()
+        ? Return_mode::RETMODE_SRET : Return_mode::RETMODE_VALUE;
 }
 
 /// Parse the Df_handle_slot_mode

@@ -103,9 +103,10 @@ public:
 
     /// Add a distribution function to this link unit.
     ///
-    /// Currently only BSDFs are supported.
-    /// For a BSDF it results in four functions, with their names built from the name of the
-    /// main DF function of \p dist_func suffixed with \c "_init", \c "_sample", \c "_evaluate"
+    /// The distribution function can contain BSDFs, hair BSDFs, EDFs and/or non-DF expressions.
+    /// The first added function is always an init function.
+    /// For a BSDF it results in three functions, with their names built from the name of the
+    /// main DF function of \p dist_func suffixed with \c "_sample", \c "_evaluate"
     /// and \c "_pdf", respectively.
     ///
     /// \param dist_func                  the distribution function to compile
@@ -114,6 +115,7 @@ public:
     /// \param arg_block_index            variable receiving the index of the target argument block
     ///                                   used for this distribution function or ~0 if none is used
     /// \param main_function_indices      array receiving the (first) indices of the main functions.
+    ///                                   The first index is the one of the init function.
     ///                                   This parameter is optional, provide NULL if not required.
     /// \param num_main_function_indices  the size of \p main_function_indices in number of entries
     /// \return true on success

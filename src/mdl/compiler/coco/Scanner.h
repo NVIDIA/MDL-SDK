@@ -30,10 +30,10 @@ Coco/R itself) does not fall under the GNU General Public License.
 #if !defined(Coco_COCO_SCANNER_H__)
 #define Coco_COCO_SCANNER_H__
 
-#include <limits.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <climits>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 // io.h and fcntl are used to ensure binary read from streams on windows
 #if _MSC_VER >= 1300
@@ -77,9 +77,6 @@ bool  coco_string_endswith(const char* data, const char *value);
 int   coco_string_indexof(const char* data, const char value);
 int   coco_string_lastindexof(const char* data, const char value);
 void  coco_string_merge(char* &data, const char* value);
-bool  coco_string_equal(const char* data1, const char* data2);
-bool  coco_string_equal(const char* data1, const char* data2, int len);
-int   coco_string_compareto(const char* data1, const char* data2);
 unsigned coco_string_hash(char const *data);
 unsigned coco_string_hash(char const *data, size_t len);
 
@@ -239,7 +236,7 @@ public:
 
 	int get(int len, char const *key, int defaultVal) {
 		Elem *e = tab[coco_string_hash(key, len) % 128];
-		while (e != NULL && (len != e->len || !coco_string_equal(e->key, key, len))) {
+		while (e != NULL && (len != e->len || strncmp(e->key, key, len) != 0)) {
 			e = e->next;
 		}
 		return e == NULL ? defaultVal : e->val;

@@ -382,6 +382,18 @@ void HLSLWriterBasePass::add_array_specifiers(
     }
 }
 
+// Add parameter qualifier from a function type parameter at index.
+void HLSLWriterBasePass::add_param_qualifier(
+    hlsl::Type_name     *param_type_name,
+    hlsl::Type_function *func_type,
+    size_t              index)
+{
+    hlsl::Type_function::Parameter *param = func_type->get_parameter(index);
+
+    hlsl::Parameter_qualifier param_qualifier = convert_type_modifier_to_param_qualifier(param);
+    param_type_name->get_qualifier().set_parameter_qualifier(param_qualifier);
+}
+
 // Add a field to a struct declaration.
 hlsl::Type_struct::Field HLSLWriterBasePass::add_struct_field(
     hlsl::Declaration_struct *decl_struct,

@@ -28,15 +28,14 @@
 /// \file
 /// \brief      Header for the IValue hierarchy and IValue_factory implementation.
 
-#ifndef IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_VALUE_IMPL_H
-#define IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_VALUE_IMPL_H
+#ifndef IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_VALUE_H
+#define IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_VALUE_H
 
 #include <mi/base/handle.h>
 #include <mi/base/interface_implement.h>
 
 #include "i_mdl_elements_value.h"
 
-#include <map>
 #include <string>
 #include <vector>
 #include <base/lib/log/i_log_assert.h>
@@ -53,7 +52,7 @@ class Value_base : public mi::base::Interface_implement<V>
 public:
     using Value = V;
     using Type  = T;
-    typedef Value_base<V, T> Base;
+    using Base  = Value_base<V, T>;
 
     Value_base( const T* type) : m_type( type, mi::base::DUP_INTERFACE) { }
 
@@ -498,9 +497,6 @@ public:
 
 private:
 
-    typedef std::map<std::string, mi::Size> Name_index_map;
-    Name_index_map m_name_index;
-
     using Index_name_vector = std::vector<std::string>;
     Index_name_vector m_index_name;
 
@@ -648,4 +644,4 @@ private:
 
 } // namespace MI
 
-#endif // IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_VALUE_IMPL_H
+#endif // IO_SCENE_MDL_ELEMENTS_MDL_ELEMENTS_VALUE_H

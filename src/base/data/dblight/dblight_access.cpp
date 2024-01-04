@@ -26,113 +26,82 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 
-/** \file
- ** \brief Remaining definitions of methods of DB::Access_base.
- **/
-
 #include "pch.h"
 
-#include <base/system/main/i_assert.h>
 #include <base/data/db/i_db_access.h>
-#include <base/data/db/i_db_info.h>
+#include <base/data/db/i_db_transaction.h>
+#include <base/lib/log/i_log_logger.h>
 
 namespace MI {
 
 namespace DB {
 
-Access_base::Access_base()
-  : m_pointer(nullptr),
-    m_transaction(nullptr),
-    m_info(nullptr),
-    m_is_edit(false)
+Access_base::Access_base( const Access_base& other)
+  : m_element( nullptr),
+    m_transaction( nullptr),
+    m_info( nullptr),
+    m_is_edit( false)
 {
+    set_access( other);
 }
 
-Access_base::Access_base(const Access_base& access)
-  : m_pointer(nullptr),
-    m_transaction(nullptr),
-    m_info(nullptr),
-    m_is_edit(false)
+Access_base& Access_base::operator=( const Access_base& other)
 {
-    set_access(access);
-}
-
-Access_base& Access_base::operator=(const Access_base& access)
-{
-    set_access(access);
-    MI_ASSERT(!m_is_edit);
+    MI_ASSERT( !m_is_edit);
+    set_access( other);
     return *this;
 }
 
 Access_base::~Access_base()
 {
     cleanup();
-    if (m_transaction)
+    if( m_transaction)
         m_transaction->unpin();
 }
 
-Element_base* Access_base::set_access(
-    Tag tag,
-    Transaction* transaction,
-    SERIAL::Class_id id,
-    bool wait)
+Tag_version Access_base::get_tag_version() const
+{
+    if( !m_info)
+        return Tag_version();
+
+    return Tag_version( m_tag, m_info->get_transaction_id(), m_info->get_version());
+}
+
+const SCHED::Job* Access_base::get_job() const
+{
+    return m_info && m_info->get_is_job() ? m_info->get_job() : nullptr;
+}
+
+Element_base* Access_base::set_access( Tag tag, Transaction* transaction, SERIAL::Class_id id)
 {
     cleanup();
 
     m_tag = tag;
-    if (transaction) {
-        if (m_transaction)
+
+    if( transaction) {
+        if( m_transaction)
             m_transaction->unpin();
         m_transaction = transaction;
         m_transaction->pin();
     }
 
-    if (tag.is_invalid()) {
-        // does not point to anything, anymore
-        m_pointer = nullptr;
+    if( !tag) {
+        m_element = nullptr;
         m_info = nullptr;
         return nullptr;
     }
 
-    // lookup the tag in the context of the current transaction
-    m_info = m_transaction->get_element(tag, wait);
-    if (m_info) {
-        m_pointer = m_info->get_element();
-        return m_pointer;
+    m_info = m_transaction->access_element( tag);
+    if( m_info) {
+        m_element = m_info->get_element();
+        return m_element;
     }
 
-#if 1
-    MI_ASSERT(false);
-#else
-    LOG::mod_log->debug(M_DB, LOG::Mod_log::C_DATABASE,
-        "Access will return empty element (transaction no longer open or "
-        "fragmented jobs have been cancelled).");
-#endif
-    m_pointer = m_transaction->construct_empty_element(id); //-V779 PVS
-    return m_pointer;
-}
-
-Element_base* Access_base::set_access(const Access_base& source)
-{
-    cleanup();
-
-    m_tag = source.m_tag;
-    if (m_transaction)
-        m_transaction->unpin();
-    m_transaction = source.m_transaction;
-    if (m_transaction)
-        m_transaction->pin();
-    m_info = source.m_info;
-    m_journal_type = source.m_journal_type;
-
-    if (!m_info) {
-        m_pointer = nullptr;
-        return nullptr;
-    }
-
-    m_info->pin();
-    m_pointer = m_info->get_element();
-    return m_pointer;
+    // Unclear whether this location can be reached.
+    MI_ASSERT( !"Unexpected creation of dummy element");
+    LOG::mod_log->debug( M_DB, LOG::Mod_log::C_DATABASE, "Access will return an empty element.");
+    m_element = m_transaction->construct_empty_element( id);
+    return m_element;
 }
 
 Element_base* Access_base::set_edit(
@@ -143,81 +112,100 @@ Element_base* Access_base::set_edit(
 {
     cleanup();
 
-    m_is_edit = true;
     m_tag = tag;
     m_journal_type = journal_type;
-    if (transaction) {
-        if (m_transaction)
+    m_is_edit = true;
+
+    if( transaction) {
+        if( m_transaction)
             m_transaction->unpin();
         m_transaction = transaction;
         m_transaction->pin();
     }
 
-    if (tag.is_invalid()) {
-        // does not point to anything, anymore
-        m_pointer = nullptr;
+    if( !tag) {
+        m_element = nullptr;
         m_info = nullptr;
         return nullptr;
     }
 
-    m_info = m_transaction->edit_element(tag);
-    if (m_info) {
-        m_pointer =  m_info->get_element();
-        return m_pointer;
+    m_info = m_transaction->edit_element( tag);
+    if( m_info) {
+        m_element = m_info->get_element();
+        return m_element;
     }
 
-    m_pointer = m_transaction->construct_empty_element(id);
-    return m_pointer;
-}
-
-const SCHED::Job* Access_base::get_job() const
-{
-    MI_ASSERT(false);
-    if (m_tag.is_invalid() || !m_transaction || !m_info->get_is_job()) //-V779 PVS
-        return nullptr;
-    return m_info->get_job();
-}
-
-Tag_version Access_base::get_tag_version() const
-{
-    if (!m_info)
-        return Tag_version();
-
-    Tag_version result;
-    result.m_tag = m_tag;
-    result.m_transaction_id = m_info->get_transaction_id();
-    result.m_version = m_info->get_version();
-    return result;
+    // Unclear whether this location can be reached.
+    MI_ASSERT( !"Unexpected creation of dummy element");
+    LOG::mod_log->debug( M_DB, LOG::Mod_log::C_DATABASE, "Edit will return an empty element.");
+    m_element = m_transaction->construct_empty_element( id);
+    return m_element;
 }
 
 void Access_base::clear_transaction()
 {
-    if (m_transaction) {
+    MI_ASSERT( !m_is_edit);
+    if( m_transaction) {
         m_transaction->unpin();
-        m_transaction = 0;
+        m_transaction = nullptr;
     }
 }
 
 void Access_base::cleanup()
 {
-    if (m_is_edit) {
-        if (m_info) {
-            // cleanup after an edit was finished. This includes updating references,
-            // sending data over the network etc.
-            m_transaction->finish_edit(m_info, m_journal_type);
+    if( m_is_edit) {
+
+        if( m_info) {
+            m_transaction->finish_edit( m_info, m_journal_type);
             m_info = nullptr;
-        }
-        m_is_edit = false;
-    } else {
-        // unpin old info, if any
-        if (m_info) {
-            m_info->unpin();
+            m_element = nullptr;
         } else {
-            // This is not valid. We might have returned a dummy element, though,
-            // which we have to delete, now.
-            delete m_pointer;
+            // Delete the dummy element we might have created.
+            delete m_element;
+            m_element = nullptr;
+        }
+
+        m_is_edit = false;
+
+    } else {
+
+        if( m_info) {
+            m_info->unpin();
+            m_info = nullptr;
+            m_element = nullptr;
+        } else {
+            // Delete the dummy element we might have created.
+            delete m_element;
+            m_element = nullptr;
         }
     }
+
+    m_journal_type = JOURNAL_NONE;
+}
+
+Element_base* Access_base::set_access( const Access_base& other)
+{
+    cleanup();
+
+    m_tag = other.m_tag;
+
+    if( m_transaction)
+        m_transaction->unpin();
+    m_transaction = other.m_transaction;
+    if( m_transaction)
+        m_transaction->pin();
+
+    m_info = other.m_info;
+    m_journal_type = other.m_journal_type;
+
+    if( !m_info) {
+        m_element = nullptr;
+        return nullptr;
+    }
+
+    m_info->pin();
+    m_element = m_info->get_element();
+    return m_element;
 }
 
 } // namespace DB

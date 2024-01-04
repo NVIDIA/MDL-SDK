@@ -1119,6 +1119,9 @@ class ICode_generator_jit : public
     /// The name of the option that steers the call mode for the GPU texture lookup.
     #define MDL_JIT_OPTION_TEX_LOOKUP_CALL_MODE "jit_tex_lookup_call_mode"
 
+    /// The name of the option that steers how generated lambda functions return their results.
+    #define MDL_JIT_OPTION_LAMBDA_RETURN_MODE "jit_lambda_return_mode"
+
     /// The name of the option stating whether the texture runtime uses derivatives.
     #define MDL_JIT_OPTION_TEX_RUNTIME_WITH_DERIVATIVES "jit_tex_runtime_with_derivs"
 
@@ -1648,6 +1651,7 @@ These options are specific to the MDL JIT code generator:
 - \ref mdl_option_jit_map_strings_to_ids         "jit_map_strings_to_ids"
 - \ref mdl_option_jit_opt_level                  "jit_opt_level"
 - \ref mdl_option_jit_tex_lookup_call_mode       "jit_tex_lookup_call_mode"
+- \ref mdl_option_jit_lambda_return_mode         "jit_lambda_return_mode"
 - \ref mdl_option_jit_tex_runtime_with_derivs    "jit_tex_runtime_with_derivs"
 - \ref mdl_option_jit_use_bitangent              "jit_use_bitangent"*/
 /*!
@@ -1762,6 +1766,15 @@ These options are specific to the MDL JIT code generator:
   - \c "direct_call": the texture functions will be called directly (by name) in the PTX code
   - \c "optix_cp": the generated code will contain OptiX \c rtCallableProgramId variables for
     each texture function which you have to set in your application
+
+\anchor mdl_option_jit_lambda_return_mode
+- <b>jit_lambda_return_mode</b>: Selects how generated lambda functions return their results.
+  Possible value:
+  - \c "default": Use the default mode for the backend, currently always sret mode
+  - \c "sret": Write the result into a buffer provided as first argument
+  - \c "value": Return the value directly. If the type is not supported as return type
+                by the backend, fallback to sret mode. Currently only supports base types
+                and vector types as return types.
 
 \anchor mdl_option_jit_tex_runtime_with_derivs
 - <b>jit_tex_runtime_with_derivs</b>: If set to \c "true", the generated code will calculate

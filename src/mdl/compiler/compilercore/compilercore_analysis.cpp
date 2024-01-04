@@ -1039,6 +1039,11 @@ public:
     {
         IValue const *value = lit->get_value();
         if (IValue_enum const *v = as<IValue_enum>(value)) {
+#ifdef ENABLE_ASSERT
+            bool already_known = m_dst.get_type_factory()->find_imported_user_type(
+                v->get_type()->get_symbol()) != NULL;
+#endif
+
             // cloning an enum, might need an auto-import
             IValue_enum const *nv = cast<IValue_enum>(m_dst.import_value(v));
 
@@ -1055,9 +1060,11 @@ public:
                     if (tp_def != NULL) {
                         m_auto_imports.insert(tp_def);
                     } else {
-                        // this should only happen, if some error has occurred, specifically
-                        // in an import
-                        MDL_ASSERT(m_dst.access_messages().get_error_message_count()> 0);
+                        // assume we have the already imported type
+                        // the original is already in the auto importer list
+                        MDL_ASSERT(
+                            (already_known || m_dst.access_messages().get_error_message_count() > 0)
+                            && "freshly imported type not in auto-import list");
                     }
 
                     Expression_factory *fact = m_dst.get_expression_factory();
@@ -1806,7 +1813,7 @@ void Analysis::err_redeclaration(
     if (kind != def->get_kind()) {
         err = REDECLARATION_OF_DIFFERENT_KIND;
     } else if (as_mat && kind == IDefinition::DK_FUNCTION) {
-        // Argh, materials are functions returning "material"
+        // Materials are functions returning "material"
         IType const *ret_type = as<IType_function>(def->get_type())->get_return_type();
 
         if (ret_type != m_tc.material_type) {
@@ -2667,7 +2674,8 @@ NT_analysis::NT_analysis(
 , m_opt_dump_cg(
     compiler->get_compiler_bool_option(&ctx, MDL::option_dump_call_graph, /*def_value=*/false))
 , m_opt_keep_original_resource_file_paths(
-    compiler->get_compiler_bool_option(&ctx, MDL::option_keep_original_resource_file_paths, /*def_value*/false))
+    compiler->get_compiler_bool_option(
+        &ctx, MDL::option_keep_original_resource_file_paths, /*def_value=*/false))
 , m_is_module_annotation(false)
 , m_is_return_annotation(false)
 , m_has_array_assignment(module.get_mdl_version() >= IMDL::MDL_VERSION_1_3)
@@ -9913,7 +9921,7 @@ IExpression const *NT_analysis::find_init_constructor(
         // already error state
         return init_expr;
     }
-    
+
     type = type->skip_type_alias();
 
     if (init_expr != NULL) {
@@ -9970,6 +9978,21 @@ IExpression const *NT_analysis::find_init_constructor(
 
     MDL_ASSERT(!is<IType_auto>(callee->get_type()));
 
+    if (!is_error(initial_def)) {
+        // For invalid input, it is possible that initial_def is not a constructor
+        // definition. Evidence found by fuzzing:
+        // mdl 1.0;
+        // material l()
+        // {
+        //     l[let int i; in 0] f = l[0]();
+        // }
+        if (initial_def->get_kind() != Definition::DK_CONSTRUCTOR) {
+            if (init_expr != nullptr) {
+                const_cast<IExpression*>(init_expr)->set_type(m_tc.error_type);
+            }
+            return init_expr;
+        }
+    }
     MDL_ASSERT(is_error(initial_def) || initial_def->get_kind() == Definition::DK_CONSTRUCTOR);
 
 
@@ -10218,17 +10241,18 @@ void NT_analysis::check_argument_range(
     } else if (IDeclaration_type_struct const *s_decl = as<IDeclaration_type_struct>(decl)) {
         if (idx < s_decl->get_field_count()) {
             // when calling a struct constructor, the declaration of the struct is passed
-            ISimple_name const* f_name = s_decl->get_field_name(idx);
+            ISimple_name const *f_name = s_decl->get_field_name(idx);
 
-            if (IAnnotation_block const* block = s_decl->get_annotations(idx)) {
-                IAnnotation const* range =
-                    find_annotation_by_semantics(block, IDefinition::DS_HARD_RANGE_ANNOTATION);
+            if (IAnnotation_block const *block = s_decl->get_annotations(idx)) {
+                IAnnotation const       *range = find_annotation_by_semantics(
+                    block, IDefinition::DS_HARD_RANGE_ANNOTATION);
 
                 if (range == NULL) {
                     return;
                 }
 
-                check_expression_range(range, expr, ARGUMENT_OUTSIDE_HARD_RANGE, f_name->get_symbol());
+                check_expression_range(
+                    range, expr, ARGUMENT_OUTSIDE_HARD_RANGE, f_name->get_symbol());
             }
         }
     }
@@ -10700,7 +10724,7 @@ void NT_analysis::reformat_annotation_arguments(
             el = pos->get_end_line();
             ec = pos->get_end_column();
         }
-        IArgument_positional const* new_arg = fact->create_positional_argument(
+        IArgument_positional const *new_arg = fact->create_positional_argument(
             expr, sl, sc, el, ec);
 
         if (k < pos_arg_count + named_arg_count) {
@@ -11292,7 +11316,7 @@ bool NT_analysis::pre_visit(IDeclaration_type_alias *alias_decl)
 // Start an enum type declaration
 bool NT_analysis::pre_visit(IDeclaration_type_enum *enum_decl)
 {
-    ISimple_name const* name = enum_decl->get_name();
+    ISimple_name const *name = enum_decl->get_name();
     bool sym_error = is_error(name);
     ISymbol const *sym = name->get_symbol();
 
@@ -11910,18 +11934,19 @@ IType const *NT_analysis::handle_allowed_var_type(
     return var_type;
 }
 
+// Check if the expression is a call to the 'auto' constructor.
 void NT_analysis::check_auto_constructor(IExpression const *expr)
 {
     if (expr == NULL) {
         return;
     }
-    if (IExpression_call const* call = as<IExpression_call>(expr)) {
-        if (IExpression_reference const* rf = as<IExpression_reference>(call->get_reference())) {
-            IType_name const* tn = rf->get_name();
-            IQualified_name const* qn = tn->get_qualified_name();
+    if (IExpression_call const *call = as<IExpression_call>(expr)) {
+        if (IExpression_reference const *rf = as<IExpression_reference>(call->get_reference())) {
+            IType_name const *tn = rf->get_name();
+            IQualified_name const *qn = tn->get_qualified_name();
             size_t n = qn->get_component_count();
-            ISimple_name const* sn = qn->get_component(n - 1);
-            ISymbol const* sym = sn->get_symbol();
+            ISimple_name const *sn = qn->get_component(n - 1);
+            ISymbol const *sym = sn->get_symbol();
             if (sym->get_id() == ISymbol::SYM_TYPE_AUTO) {
                 error(
                     INVALID_USE_OF_AUTO,
@@ -12792,28 +12817,28 @@ IExpression *NT_analysis::post_visit(IExpression_binary *bin_expr)
             int arr_size = -1;
             switch (lhs_type->get_kind()) {
             case IType::TK_VECTOR:
-            {
-                IType_vector const *t = cast<IType_vector>(lhs_type);
-                res_type = t->get_element_type();
-                arr_size = t->get_size();
-                break;
-            }
-            case IType::TK_MATRIX:
-            {
-                IType_matrix const *t = cast<IType_matrix>(lhs_type);
-                res_type = t->get_element_type();
-                arr_size = t->get_columns() * t->get_element_type()->get_size();
-                break;
-            }
-            case IType::TK_ARRAY:
-            {
-                IType_array const *t = cast<IType_array>(lhs_type);
-                res_type = t->get_element_type();
-                if (t->is_immediate_sized()) {
+                {
+                    IType_vector const *t = cast<IType_vector>(lhs_type);
+                    res_type = t->get_element_type();
                     arr_size = t->get_size();
                 }
                 break;
-            }
+            case IType::TK_MATRIX:
+                {
+                    IType_matrix const *t = cast<IType_matrix>(lhs_type);
+                    res_type = t->get_element_type();
+                    arr_size = t->get_columns() * t->get_element_type()->get_size();
+                }
+                break;
+            case IType::TK_ARRAY:
+                {
+                    IType_array const *t = cast<IType_array>(lhs_type);
+                    res_type = t->get_element_type();
+                    if (t->is_immediate_sized()) {
+                        arr_size = t->get_size();
+                    }
+                }
+                break;
             case IType::TK_AUTO:
                 // suppress error message, it will be reported at occurrences
                 res_type = m_tc.error_type;
@@ -13547,13 +13572,15 @@ bool NT_analysis::pre_visit(IType_name *type_name)
     }
 
     if (type_name->is_array() && type_name->is_concrete_array()) {
-        IExpression const* arr_size = type_name->get_array_size();
+        IExpression const *arr_size = type_name->get_array_size();
         if (arr_size != NULL && is<IExpression_let>(arr_size)) {
             // When the array size is a let expression, later analysis fails (since let
             // expressions introduce variables and therefore nodes in the data dependency
             // graph), so we replace them with an error node. An error message is produced
             // when visiting the let expression itself.
-            type_name->set_array_size(m_module.get_expression_factory()->create_invalid());
+            IExpression_invalid * inv_expr = m_module.get_expression_factory()->create_invalid();
+            inv_expr->set_type(m_tc.error_type);
+            type_name->set_array_size(inv_expr);
             type_name->set_type(type);
         }
     }
@@ -16025,6 +16052,17 @@ public:
             IType_name const *type_name = ref->get_name();
 
             if (imp_def->get_kind() == Definition::DK_CONSTRUCTOR) {
+                if (imp_def->get_semantics() == Definition::DS_CONV_OPERATOR) {
+                    // conversion operators seems to "live" in the scope of there return type
+                    IType_function const *func_type = cast<IType_function>(imp_def->get_type());
+                    IType const          *ret_type  =
+                        func_type->get_return_type()->skip_type_alias();
+
+                    scope = m_def_tab.get_type_scope(ret_type);
+                    // Note: so far, we have only conversion to "int", but the algorithm is general
+                    MDL_ASSERT(
+                        scope != NULL && "return type of a conversion operator has no scope");
+                }
                 // constructors are inside the type scope, skip it
                 scope = scope->get_parent();
             }
@@ -16238,10 +16276,25 @@ void NT_analysis::fix_auto_imports()
                     m_module.register_import(imp_mod);
                 }
 
-                bool res = auto_import(imp_mod, def->get_sym());
+                ISymbol const *symbol_to_import = def->get_sym();
+                if (def->get_kind() == IDefinition::DK_CONSTRUCTOR) {
+                    // constructors cannot be found in global scope.
+                    // import the containing type, this automatically also imports the constructors
+                    if (Scope const *type_scope = def->get_def_scope()) {
+                        if (ISymbol const *type_scope_symbol = type_scope->get_scope_name()) {
+                            symbol_to_import = type_scope_symbol;
+                        } else {
+                            MDL_ASSERT(!"no scope name found for type scope");
+                        }
+                    } else {
+                        MDL_ASSERT(!"no def scope found for constructor");
+                    }
+                }
+
+                bool res = auto_import(imp_mod, symbol_to_import);
                 if (res) {
                     // add an import declaration
-                    add_auto_import_declaration(imp_mod, def->get_sym());
+                    add_auto_import_declaration(imp_mod, symbol_to_import);
 
                     entry.imported = m_module.find_imported_definition(def);
                     MDL_ASSERT(entry.imported != NULL && "Could not find autoimported entity");
@@ -16905,7 +16958,7 @@ Definition const *NT_analysis::get_definition_for_reference(
             def = get_error_definition();
         } else if (is_syntax_error(qual_name)) {
             // This can happen as a follow-up error, when an invalid type declaration causes
-            // an invalid type with an error symbol as the name to be entered into the 
+            // an invalid type with an error symbol as the name to be entered into the
             // declaration table.
             def = get_error_definition();
         } else {

@@ -1,0 +1,8 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Undefined_vars topdown {
+      // c is unused
+      diffuse_reflection_bsdf(_, _) --> diffuse_reflection_bsdf(x);
+}

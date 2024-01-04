@@ -49,7 +49,7 @@ typedef mi::neuraylib::Bsdf_evaluate_function               Bsdf_evaluate_func;
 typedef mi::neuraylib::Shading_state_material               Mdl_state;
 #endif
 
-#ifdef NO_DIRECT_CALL
+#ifndef USE_DIRECT_CALL
 
 //
 // Declarations of generated MDL functions
@@ -58,7 +58,7 @@ typedef mi::neuraylib::Shading_state_material               Mdl_state;
 extern "C" __device__ Bsdf_init_func     mdlcode_init;
 extern "C" __device__ Bsdf_sample_func   mdlcode_sample;
 extern "C" __device__ Bsdf_evaluate_func mdlcode_evaluate;
-extern "C" __device__ Mat_expr_func      mdlcode_thin_walled;
+extern "C" __device__ mi::neuraylib::Material_function<bool>::Type mdlcode_thin_walled;
 
 
 //
@@ -137,26 +137,26 @@ extern "C" __device__ __inline__ void __itexCubemap_float4(
 
 #else
 
-#define mdlcode_init(state, res_data, exception_state, arg_block_data)                 \
-    optixDirectCall<void>(rt_data->mdl_callable_base_index,                            \
-        state, res_data, nullptr, arg_block_data)
+#define mdlcode_init(state, res_data, arg_block_data)                 \
+    optixDirectCall<void>(rt_data->mdl_callable_base_index,           \
+        state, res_data, arg_block_data)
 
-#define mdlcode_sample(data, state, res_data, exception_state, arg_block_data)         \
-    optixDirectCall<void>(rt_data->mdl_callable_base_index + 1,                        \
-        data, state, res_data, nullptr, arg_block_data)
+#define mdlcode_sample(data, state, res_data, arg_block_data)         \
+    optixDirectCall<void>(rt_data->mdl_callable_base_index + 1,       \
+        data, state, res_data, arg_block_data)
 
-#define mdlcode_evaluate(data, state, res_data, exception_state, arg_block_data)       \
-    optixDirectCall<void>(rt_data->mdl_callable_base_index + 2,                        \
-        data, state, res_data, nullptr, arg_block_data)
+#define mdlcode_evaluate(data, state, res_data, arg_block_data)       \
+    optixDirectCall<void>(rt_data->mdl_callable_base_index + 2,       \
+        data, state, res_data, arg_block_data)
 
 // not used in this example
-#define mdlcode_pdf(data, state, res_data, exception_state, arg_block_data)            \
-    optixDirectCall<void>(rt_data->mdl_callable_base_index + 3,                        \
-        data, state, res_data, nullptr, arg_block_data)
+#define mdlcode_pdf(data, state, res_data, arg_block_data)            \
+    optixDirectCall<void>(rt_data->mdl_callable_base_index + 3,       \
+        data, state, res_data, arg_block_data)
 
-#define mdlcode_thin_walled(result, state, res_data, exception_state, arg_block_data)  \
-    optixDirectCall<void>(rt_data->mdl_callable_base_index + 4,                        \
-        result, state, res_data, nullptr, arg_block_data)
+#define mdlcode_thin_walled(state, res_data, arg_block_data)          \
+    optixDirectCall<bool>(rt_data->mdl_callable_base_index + 4,       \
+        state, res_data, arg_block_data)
 
 #endif
 
@@ -658,10 +658,9 @@ extern "C" __global__ void __closesthit__radiance()
         rt_data->texture_handler
     };
 
-    mdlcode_init(&state, &res_data, nullptr, rt_data->arg_block);
+    mdlcode_init(&state, &res_data, rt_data->arg_block);
 
-    bool thin_walled;
-    mdlcode_thin_walled(&thin_walled, &state, &res_data, nullptr, rt_data->arg_block);
+    bool thin_walled = mdlcode_thin_walled(&state, &res_data, rt_data->arg_block);
 
     uint32_t seed = prd->seed;
     float3 cur_weight = prd->weight;
@@ -688,7 +687,7 @@ extern "C" __global__ void __closesthit__radiance()
         sample_data.k1 = -ray_dir;
         sample_data.xi = make_float4(z1, z2, z3, z4);
 
-        mdlcode_sample(&sample_data, &state, &res_data, nullptr, rt_data->arg_block);
+        mdlcode_sample(&sample_data, &state, &res_data, rt_data->arg_block);
 
         // stop on absorption
         if (sample_data.event_type == mi::neuraylib::BSDF_EVENT_ABSORB)
@@ -749,7 +748,7 @@ extern "C" __global__ void __closesthit__radiance()
             eval_data.bsdf_diffuse = make_float3(0.0f);
             eval_data.bsdf_glossy = make_float3(0.0f);
 
-            mdlcode_evaluate(&eval_data, &state, &res_data, nullptr, rt_data->arg_block);
+            mdlcode_evaluate(&eval_data, &state, &res_data, rt_data->arg_block);
 
             const float mis_weight = pdf == DIRAC
                 ? 1.0f

@@ -31,7 +31,6 @@
 #include <mi/base.h>
 #include <mi/neuraylib/iimage_api.h>
 #include <mi/neuraylib/ilogging_configuration.h>
-#include <mi/neuraylib/imdl_configuration.h>
 #include <mi/neuraylib/iplugin_api.h>
 #include <mi/neuraylib/ireader.h>
 #include <mi/neuraylib/iwriter.h>
@@ -76,12 +75,6 @@ bool Image_plugin_impl::init( mi::neuraylib::IPlugin_api* plugin_api)
         plugin_api->get_api_component<mi::neuraylib::ILogging_configuration>());
     if( logging_configuration)
         g_logger = logging_configuration->get_forwarding_logger();
-    else {
-        mi::base::Handle<mi::neuraylib::IMdl_configuration> mdl_configuration(
-            plugin_api->get_api_component<mi::neuraylib::IMdl_configuration>());
-        if( mdl_configuration)
-            g_logger = mdl_configuration->get_logger();
-    }
 
     std::string message = "Plugin \"";
     message += m_name;
@@ -135,11 +128,25 @@ bool Image_plugin_impl::init( mi::neuraylib::IPlugin_api* plugin_api)
         m_pixel_types = { PT_RGBA, PT_RGB };
     else if( m_name == "oiio_tif")
         m_pixel_types = {
-            PT_RGBA, PT_RGB, PT_RGBA_16, PT_RGB_16, PT_COLOR, PT_RGB_FP, PT_FLOAT32, PT_SINT8, PT_SINT32 };
+            PT_RGBA, PT_RGB, PT_RGBA_16, PT_RGB_16, PT_COLOR, PT_RGB_FP, PT_FLOAT32, PT_SINT8,
+            PT_SINT32 };
     else if( m_name == "oiio_webp")
         m_pixel_types = { PT_RGBA, PT_RGB };
     else
         assert( false);
+
+    // Disable OIIO internal thread pool since it causes shutdown problems in larger integrations.
+    // Unfortunately, setting the global property first creates a default thread pool with N
+    // threads, and then destroys them again right away. Still better than creating them implicitly
+    // later, possibly without destroying them before the plugin is unloaded.
+    bool result = OIIO::attribute( "threads", 1);
+    assert( result);
+
+    // Disable EXR internal thread pool via the global property. Calling OIIO::ImageInput::threads()
+    // is too late since EXR threads might already be created in OIIO::ImageInput::open().
+    result = OIIO::attribute( "exr_threads", -1);
+    assert( result);
+    (void) result;
 
     return true;
 }

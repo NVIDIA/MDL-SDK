@@ -1,0 +1,69 @@
+mdl 1.3;
+
+
+using anno import *;
+
+
+
+// import
+
+// weak relative as absolute
+import up11::up11_f;
+import p1::same11::same11_f;
+import p1::p2::down11::down11_f;
+import limits::FLOAT_MAX;
+import std::FLOAT_MAX;
+import base::gradient_mode;
+
+// weak relative as relative
+import same12::same12_f;
+import p2::down12::down12_f;
+
+
+// using
+
+// weak relative as absolute
+using up15 import up15_f;
+using p1::same15 import same15_f;
+using p1::p2::down15 import down15_f;
+using ::limits import DOUBLE_MAX;
+using limits import INT_MAX;
+using base import color_layer_mode;
+
+// weak relative as relative
+using same16 import same16_f;
+using p2::down16 import down16_f;
+
+
+
+export int use_up11_f()   { return up11::up11_f(); }
+export int use_same11_f() { return p1::same11::same11_f(); }
+export int use_down11_f() { return p1::p2::down11::down11_f(); }
+
+export int use_same12_f() { return same12::same12_f(); }
+export int use_down12_f() { return p2::down12::down12_f(); }
+
+
+export int use_up15_f()   { return up15_f(); }
+export int use_same15_2() { return same15_f(); }
+export int use_down15_f() { return down15_f(); }
+
+export int use_same16_f() { return same16_f(); }
+export int use_down16_f() { return down16_f(); }
+
+
+export float use_float_max()   { return limits::FLOAT_MAX; }
+export double use_double_max() { return DOUBLE_MAX; }
+
+export float use_std_float_max() { return std::FLOAT_MAX; }
+export int use_std_int_max()     { return INT_MAX; }
+
+export base::gradient_mode use_gradient_mode()    { return base::gradient_linear; }
+export color_layer_mode    use_color_layer_mode() { return color_layer_blend; }
+
+
+
+export int f_up_weak_relative(   uniform texture_2d t = texture_2d("up2.png")      [[ unused() ]]) { return 0; }
+export int f_same_weak_relative( uniform texture_2d t = texture_2d("same2.png")    [[ unused() ]]) { return 0; }
+export int f_down_weak_relative( uniform texture_2d t = texture_2d("p2/down2.png") [[ unused() ]]) { return 0; }
+

@@ -30,8 +30,8 @@
  ** \brief Header for the IMaterial_instance implementation.
  **/
 
-#ifndef API_API_NEURAY_MATERIAL_INSTANCE_IMPL_H
-#define API_API_NEURAY_MATERIAL_INSTANCE_IMPL_H
+#ifndef API_API_NEURAY_NEURAY_MATERIAL_INSTANCE_IMPL_H
+#define API_API_NEURAY_NEURAY_MATERIAL_INSTANCE_IMPL_H
 
 #include <mi/neuraylib/imaterial_instance.h>
 
@@ -113,4 +113,4 @@ private:
 
 } // namespace MI
 
-#endif // API_API_NEURAY_MATERIAL_INSTANCE_IMPL_H
+#endif // API_API_NEURAY_NEURAY_MATERIAL_INSTANCE_IMPL_H

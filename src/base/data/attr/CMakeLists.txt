@@ -47,7 +47,7 @@ set(PROJECT_HEADERS
     "i_attr_utilities.h"
 )
 
-set(PROJECT_SOURCES 
+set(PROJECT_SOURCES
     "attr.cpp"
     "attr_attribute.cpp"
     "attr_attribute_list.cpp"
@@ -66,7 +66,10 @@ create_from_base_preset(
     )
 
 # add dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME} 
-    DEPENDS 
+target_add_dependencies(TARGET ${PROJECT_NAME}
+    DEPENDS
         boost
     )
+
+# add unit tests
+add_unit_tests(POST)

@@ -36,4 +36,5 @@ create_from_python_preset(
         "__init__.py"
         "setup.py"
         "test_mi_idata.py"
+    CREATE_COVERAGE_REPORT
     )

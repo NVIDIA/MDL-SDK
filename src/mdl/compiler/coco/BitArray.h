@@ -34,33 +34,34 @@ namespace Coco {
 class BitArray
 {
 public:
-	BitArray(int length = 0, bool defaultValue = false) ;
-	BitArray(const BitArray &copy );
-	virtual ~BitArray();
+	BitArray(size_t length = 0, bool defaultValue = false);
+	BitArray(BitArray const &copy);
+	BitArray(BitArray &&tmp) noexcept;
+	~BitArray();
 
-	int getCount() const;
+	size_t getCount() const;
 
-	bool Get(const int index) const;
-	void Set(const int index, const bool value);
+	bool Get(size_t index) const;
+	void Set(size_t index, const bool value);
 	void SetAll(const bool value);
-	bool Equal(const BitArray *right ) const;
-	bool Overlaps(const BitArray *right ) const;
-	bool operator[](const int index) const { return Get(index); };
+	bool Equal(BitArray const &right) const;
+	bool Overlaps(BitArray const &right) const;
+	bool operator[](size_t index) const { return Get(index); };
 
-	const BitArray &operator=(const BitArray &right);
+	BitArray const &operator=(BitArray const &right);
+	BitArray const &operator=(BitArray &&tmp);
 
 	void Not();
-	void And(const BitArray *value);
-	void Or(const BitArray *value);
-	void Xor(const BitArray *value);
+	void And(BitArray const &value);
+	void AndNot(BitArray const &value);
+	void Or(BitArray const &value);
+	void Xor(BitArray const &value);
 
-	BitArray* Clone() const;
+	BitArray *Clone() const;
 
 private:
-	int Count;
+	size_t Count;
 	unsigned char* Data;
-	void setMem(int length, bool value);
-
 };
 
 }

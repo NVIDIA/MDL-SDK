@@ -1,0 +1,8 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Pattern_invalid topdown {
+      // Calls in patterns must have bsdf- or material-like types.
+      diffuse_reflection_bsdf(color(a,b,c), _) --> bsdf();
+}

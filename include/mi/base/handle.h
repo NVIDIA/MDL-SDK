@@ -117,7 +117,7 @@ static const Dup_interface DUP_INTERFACE = 0;
 ///
 /// Note that this use case often shows up when you store a pointer passed in via a member function
 /// as a class member.
-/// 
+///
 /// \if IRAY_API See also [:ipmlink overview_of_library_design Handle class] for an extended
 /// example (and [:ipmlink overview_of_library_design Reference counting] for the same example
 /// without handle class). \endif
@@ -129,7 +129,7 @@ static const Dup_interface DUP_INTERFACE = 0;
 ///    \par Include File:
 ///    <tt> \#include <mi/base/handle.h></tt>
 ///
-/// \sa
+/// \see
 ///     #make_handle() and #make_handle_dup() for creating a typed handle from a typed
 ///     interface %pointer
 template <class Interface>
@@ -367,8 +367,9 @@ public:
         return m_iptr;
     }
 
-    /// Returns a new handle for a possibly different interface type, which is the equivalent of a
-    /// dynamic cast.
+    /// Returns a new handle for a possibly different interface type, similar to a dynamic cast,
+    /// but not necessarily restricted to derived interfaces, but also for otherwise related
+    /// interfaces.
     ///
     /// Returns a handle with an invalid interface if the requested interface type is not supported
     /// by the underlying interface implementation or if this interface is itself already invalid.

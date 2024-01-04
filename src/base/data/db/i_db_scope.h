@@ -26,112 +26,108 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 
-/** \file i_db_scope.h
- ** \brief This declares the database scope class.
- **
- ** This file contains the pure virtual base class for the database scope class.
- **/
-
 #ifndef BASE_DATA_DB_I_DB_SCOPE_H
 #define BASE_DATA_DB_I_DB_SCOPE_H
 
-#include <base/system/main/types.h>
 #include <string>
 
-namespace MI
-{
+#include <boost/core/noncopyable.hpp>
 
-namespace DB
-{
+#include <mi/base/types.h>
+
+namespace MI {
+
+namespace DB {
 
 class Transaction;
 
 /// The privacy level defines to which level changes to an element go.
-typedef Uint8 Privacy_level;
+using Privacy_level = mi::Uint8;
 
-/// Each scope (see below) is identified by a globally unique scope id
-typedef Uint32 Scope_id;
+/// Each scope is identified by a cluster-unique scope ID.
+using Scope_id = mi::Uint32;
 
-/// A scope limits visibility of changes to transactions which live within the same scope. Scopes
-/// may be nested and each inner scope sees all changes from all its ancestor scopes (but not vice
-/// versa). Scopes are identified with a network unique scope id. Scopes must be accessible from
-/// within the whole network. The information about a scope which is needed is which child scopes it
-/// has and what is its parent scope. Thus the creation and destruction of scopes must be
-/// distributed to the whole network. Each time a new scope is created, the scope id and the id of
-/// the parent scope is sent to all hosts. Each host builds up a tree of scopes which it will use to
-/// resolve tags.
-class Scope
+/// A scope is the context which determines the visibility of database elements.
+///
+/// Scopes are organized in a tree-like fashion and have a so-called \em privacy \em level. The root
+/// of the tree is called \em global \em scope and has privacy level 0. On each path from the global
+/// scope to one of the leafs of the tree the privacy levels are strictly increasing. Scopes are
+/// identified with a cluster-unique ID which can be used to access a scope on any host in the
+/// cluster.
+///
+/// A database element stored in a given scope is only visible in this scope and all child scopes.
+/// For example, a database element stored in the global scope is visible in all scopes. This
+/// visibility concept for database elements is similar to visibility of stack variables in
+/// programming languages.
+///
+/// Any database element can exist in multiple versions (at most one version per scope). In this
+/// case the scope at hand does not just determine the visibility itself but also determines which
+/// version is visible. The version from the current scope has highest priority, next is the version
+/// from the parent scope, etc., until the global scope is reached. Again, this is similar to
+/// shadowing of variables with the same name in programming languages.
+class Scope : private boost::noncopyable
 {
-  public:
-    /// Pin the scope incrementing its reference count
+public:
+    /// Pins the scope, incrementing its reference count.
     virtual void pin() = 0;
 
-    /// Unpin the scope decrementing its reference count. When the application holds no more
-    /// reference, the database may decide to destroy the scope. Although the application may no
-    /// longer use the scope it may actually live longer. This might be the case if there are still
-    /// transactions taking place in the scope. It might not be possible to abort them at once. Note
-    /// that the application should abort or commit all transactions from this scope before
-    /// releasing the last reference to it.
+    /// Unpins the scope, decrementing its reference count.
+    ///
+    /// When the user holds no more references, the database may decide to destroy the scope.
+    /// Although the user may no longer use the scope it may actually live longer than the last
+    /// reference from the user. This might be the case if there are still transactions taking
+    /// place in the scope. It might not be possible to abort them at once. Note that the user
+    /// should commit or abort all transactions from this scope before releasing the last reference
+    /// to it.
     virtual void unpin() = 0;
 
-    /// Create a new scope which is a child of this scope. This may involve network operations and
-    /// thus may take a while. The call will not return before the scope is created.
-    ///
-    /// The created scope is either temporary or not temporary. A temporary scope will be removed
-    /// when the host which created the scope is removed from the cluster. A scope which is not
-    /// temporary will not be removed when the host which created the scope is removed from
-    /// the cluster.
-    ///
-    /// The final argument to this method is a bool that indicates if the scope created as a result
-    /// of calling this method is temporary or not temporary. Note that a scope that is not
-    /// temporary can not be created as the child of a scope that is temporary.
-    ///
-    /// \param level                    Privacy level for the new scope.
-    /// \param is_temporary             A bool indicating if the new scope is temporary
-    /// \param name                     The name of the scope. If empty the scope is unnamed.
-    /// \return                         The created child scope. Can be NULL, if creation failed.
-    virtual Scope *create_child(
-        Privacy_level level,
-        bool is_temporary = false,
-        const std::string& name = "")= 0;
-
-    /// Get the id of a scope. This needs to be in the interface because for some applications the
-    /// id of a scope needs to be stored in database elements.
-    ///
-    /// \return                         The scope id of this scope.
+    /// Returns the ID of this scope.
     virtual Scope_id get_id() = 0;
 
-    /// Get the name of a scope. An unnamed scope returns the empty string.
-    ///
-    /// \return                         The name of the scope.
+    /// Returns the name of this scope (or the empty string for unnamed scopes).
     virtual const std::string& get_name() const = 0;
 
-    /// Get the direct parent of this scope
+    /// Returns the direct parent of this scope (or \c NULL for the global scope).
     ///
-    /// \return                         The parent of this scope.
+    /// \return   The parent scope. RCS:NEU
     virtual Scope* get_parent() = 0;
 
-    /// Get the privacy level of the scope
-    ///
-    /// \return                         The privacy level of this scope.
+    /// Returns the privacy level of this scope.
     virtual Privacy_level get_level() = 0;
 
-    /// Start a transaction. This is part of the scope interface because each transaction belongs to
-    /// a scope. The database will ensure that the scope is known to all hosts which will take part
-    /// in transactions created within this scope. This may involve network operations and thus may
-    /// take a while. The call will not return before the transaction is created.
+    /// Creates a new scope as a child of this scope.
     ///
-    /// \return                         The created transaction
-    virtual Transaction *start_transaction() = 0;
+    /// This may involve network operations and thus may take a while. The call will not return
+    /// before the scope is created.
+    ///
+    /// The created scope is either temporary or not temporary. A temporary scope will be removed
+    /// when the host which created the scope is removed from the cluster. A non-temporary scope
+    /// will not be automatically removed in such a situation. Note that all child scopes of a
+    /// temporary scope also need to be temporary.
+    ///
+    /// \param level                    Privacy level for the new scope. Must be higher than the
+    ///                                 privacy level of the current scope.
+    /// \param is_temporary             Flag for temporary scopes.
+    /// \param name                     The name of the scope. The empty string creates an unnamed
+    ///                                 scope.
+    /// \return                         The created child scope, or \c NULL in case of failure.
+    ///                                 RCS:NEU
+    virtual Scope* create_child(
+        Privacy_level level,
+        bool is_temporary = false,
+        const std::string& name = "") = 0;
 
-  protected:
-    /// The destructor is private because only the database may delete scopes when they are no
-    /// longer needed.
-    virtual ~Scope() { }
+    /// Creates a new transaction associated with this scope.
+    ///
+    /// This may involve network operations and thus may take a while. The call will not return
+    /// before the transaction is created.
+    ///
+    /// \return   The created transaction. RCS:NEU
+    virtual Transaction* start_transaction() = 0;
 };
 
 } // namespace DB
 
 } // namespace MI
 
-#endif
+#endif // BASE_DATA_DB_I_DB_SCOPE_H

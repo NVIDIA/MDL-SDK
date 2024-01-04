@@ -271,23 +271,22 @@ namespace mi { namespace examples { namespace io
 
     // --------------------------------------------------------------------------------------------
 
-    /// Get filename (with extension if selected) of a given path without its parent folders or an
-    /// empty string if there is no parent directory in \c path.
+    /// Get filename (with extension if selected) of a given path without its parent folders or 
+    /// \c path (with or without extension) if there is no parent directory in \c path.
     inline std::string basename(const std::string& path, bool with_extension = true)
     {
         std::string npath = normalize(path);
 
         size_t pos = npath.rfind('/');
-        if (pos == std::string::npos)
-            return "";
+        if (pos != std::string::npos)
+            npath = npath.substr(pos + 1);
 
-        std::string name = npath.substr(pos + 1);
         if (!with_extension)
         {
-            pos = name.rfind('.');
-            name = pos == std::string::npos ? name : name.substr(0, pos);
+            pos = npath.rfind('.');
+            npath = pos == std::string::npos ? npath : npath.substr(0, pos);
         }
-        return name;
+        return npath;
     }
 
     // --------------------------------------------------------------------------------------------

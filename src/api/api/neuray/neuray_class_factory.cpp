@@ -320,7 +320,8 @@ mi::Sint32 Class_factory::register_enum_decl(
         return -6;
 
     // Clone the declaration such that modifications after registration have no effect.
-    mi::base::Handle<mi::IEnum_decl> copy( create_class_instance<mi::IEnum_decl>( nullptr, "Enum_decl"));
+    mi::base::Handle<mi::IEnum_decl> copy(
+        create_class_instance<mi::IEnum_decl>( nullptr, "Enum_decl"));
     for( mi::Size i = 0; i < n; ++i) {
         mi::Sint32 result = copy->add_enumerator( decl->get_name( i), decl->get_value( i));
         ASSERT( M_NEURAY_API, result == 0);
@@ -694,11 +695,6 @@ mi::base::IInterface* Class_factory::create_structure_instance(
 
     if( argc != 0)
         return nullptr;
-
-    if( strcmp( type_name, "Preset_data") == 0)
-        LOG::mod_log->warning( M_NEURAY_API, LOG::Mod_log::C_DATABASE,
-            "The type name \"Preset_data\" is deprecated. Please use \"Variant_data\" instead (and"
-            " use the member \"variant_name\" instead of \"preset_name\").");
 
     const mi::base::IInterface* new_argv[2];
     new_argv[0] = decl;

@@ -62,24 +62,24 @@ public:
 	FILE* fram;       // parser frame file
 	FILE* gen; // generated parser source file
 	char* err; // generated parser error messages
-	ArrayList symSet;
+	std::vector<BitArray *> symSet;
 
-	Tab *tab;         // other Coco objects
+	Tab &tab;         // other Coco objects
+	Errors &errors;
 	FILE* trace;
-	Errors *errors;
 	Buffer *buffer;
 
 	void Indent(int n);
-	bool UseSwitch(Node *p);
+	bool UseSwitch(Node const *p);
 	void CopyFramePart(const char *stop);
 	void CopySourcePart(Position *pos, int indent);
-	int GenNamespaceOpen(const char* nsName);
+	int GenNamespaceOpen(std::string const &nsName);
 	void GenNamespaceClose(int nrOfNs);
 	void GenErrorMsg(ErrorType errTyp, Symbol *sym);
-	int  NewCondSet(const BitArray *s);
-	void GenCond(const BitArray *s, Node *p);
-	void PutCaseLabels(const BitArray *s);
-	void GenCode(Node *p, int indent, BitArray &isChecked);
+	int  NewCondSet(BitArray const &s);
+	void GenCond(BitArray const &s, Node const *p);
+	void PutCaseLabels(BitArray const &s);
+	void GenCode(Node const *p, int indent, BitArray &isChecked);
 	void GenTokensHeader();
 	void GenPragmas();
 	void GenCodePragmas();
@@ -90,7 +90,7 @@ public:
 	void WriteParser();
 	void WriteStatistics();
 	void WriteSymbolOrCode(FILE *gen, const Symbol *sym);
-	ParserGen (Parser *parser);
+	ParserGen(Parser &parser);
 
 };
 

@@ -1235,7 +1235,7 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
         reset_lambda_state();
 
         // generic functions return the result by reference if supported
-        m_lambda_force_sret         = target_supports_sret_for_lambda();
+        m_lambda_force_sret         = m_lambda_return_mode == Return_mode::RETMODE_SRET;
 
         // generic functions always includes a render state in its interface
         m_lambda_force_render_state = true;
@@ -1327,6 +1327,10 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
             }
         }
 
+        if (main_function_indices != NULL) {
+            main_function_indices[0] = m_exported_func_list.size();
+        }
+
         m_exported_func_list.push_back(
             Exported_function(
                 get_allocator(),
@@ -1351,9 +1355,6 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
         context.create_void_return();
     }
 
-    // generic functions return the result by reference if supported
-    m_lambda_force_sret = target_supports_sret_for_lambda();
-
     for (size_t idx = 0, n_main = dist_func.get_main_function_count(); idx < n_main; ++idx) {
         m_cur_main_func_index = idx;
 
@@ -1371,11 +1372,19 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
         }
 
         if (main_function_indices != NULL) {
-            main_function_indices[idx] = m_exported_func_list.size();
+            main_function_indices[idx + 1] = m_exported_func_list.size();
         }
 
         llvm::Twine base_name(lambda.get_name());
         Function_instance inst(get_allocator(), &lambda);
+
+        // Don't allow returning structs at ABI level, even in value mode
+        m_lambda_force_sret = m_lambda_return_mode == Return_mode::RETMODE_SRET
+            || (m_lambda_return_mode == Return_mode::RETMODE_VALUE &&
+                is<mi::mdl::IType_struct>(lambda.get_return_type()->skip_type_alias()));
+
+        // only force, when actually supported by backend
+        m_lambda_force_sret &= target_supports_sret_for_lambda();
 
         // non-distribution function?
         if (dist_kind == IGenerated_code_executable::DK_NONE) {
@@ -2113,7 +2122,7 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
         }
 
         if (p_data->has_captured_args_param()) {
-            // pass exc_state_param parameter
+            // pass captured_arguments parameter
             llvm_args.push_back(ctx.get_cap_args_parameter(exec_ctx));
         }
     }
@@ -2729,7 +2738,7 @@ Expression_result LLVM_code_generator::generate_expr_lambda_call(
     Lambda_function const *expr_lambda_impl = impl_cast<Lambda_function>(expr_lambda);
 
     // expression and special lambdas always return by reference via first parameter,
-    // if supported by the target
+    // if supported by the target, unless "value" lambda return mode is used
 
     llvm::Function *func = m_module_lambda_funcs[m_module_lambda_index_map[expr_lambda]];
     llvm::Type *lambda_retptr_type = func->getFunctionType()->getParamType(0);
@@ -2743,10 +2752,11 @@ Expression_result LLVM_code_generator::generate_expr_lambda_call(
             opt_results_buffer, ctx.get_constant(int(opt_result_index)));
     }
 
-    if (!target_supports_sret_for_lambda()) {
+    if (!func->getReturnType()->isVoidTy()) {
+        // lambda function directly returns the result
         res_pointer = NULL;
     } else if (opt_dest_ptr != NULL &&
-        (dest_type = opt_dest_ptr->getType()->getPointerElementType()) == lambda_res_type) {
+            (dest_type = opt_dest_ptr->getType()->getPointerElementType()) == lambda_res_type) {
         res_pointer = opt_dest_ptr;
     } else {
         res_pointer = ctx.create_local(lambda_res_type, "res_buf");
@@ -2772,12 +2782,17 @@ Expression_result LLVM_code_generator::generate_expr_lambda_call(
 
     llvm::CallInst *call = ctx->CreateCall(func, lambda_args);
     if (res_pointer == NULL) {
-        if (opt_results_buffer != NULL && target_is_structured_language()) {
-            store_to_float4_array(
-                ctx,
-                call,
-                opt_results_buffer,
-                m_texture_result_offsets[opt_result_index]);
+        if (opt_results_buffer != NULL) {
+            if (target_is_structured_language()) {
+                store_to_float4_array(
+                    ctx,
+                    call,
+                    opt_results_buffer,
+                    m_texture_result_offsets[opt_result_index]);
+            } else {
+                ctx.convert_and_store(call, opt_dest_ptr);
+                return Expression_result::ptr(opt_dest_ptr);
+            }
         }
         return Expression_result::value(call);
     }
@@ -4665,13 +4680,25 @@ void LLVM_code_generator::translate_distribution_function(
                     {
                         value_ptr = ctx->CreateGEP(
                             ctx.get_function()->arg_begin(),
-                            { ctx.get_constant(int(0)), ctx.get_constant(int(3)) }); // albedo
+                            { ctx.get_constant(int(0)), ctx.get_constant(int(3)) }); // albedo diff
                         ctx->CreateStore(
                             llvm::ConstantStruct::get(m_float3_struct_type, elems), value_ptr);
 
                         value_ptr = ctx->CreateGEP(
                             ctx.get_function()->arg_begin(),
-                            { ctx.get_constant(int(0)), ctx.get_constant(int(4)) }); // normal
+                            { ctx.get_constant(int(0)), ctx.get_constant(int(4)) }); // albedo glos
+                        ctx->CreateStore(
+                            llvm::ConstantStruct::get(m_float3_struct_type, elems), value_ptr);
+
+                        value_ptr = ctx->CreateGEP(
+                            ctx.get_function()->arg_begin(),
+                            { ctx.get_constant(int(0)), ctx.get_constant(int(5)) }); // normal
+                        ctx->CreateStore(
+                            llvm::ConstantStruct::get(m_float3_struct_type, elems), value_ptr);
+
+                        value_ptr = ctx->CreateGEP(
+                            ctx.get_function()->arg_begin(),
+                            { ctx.get_constant(int(0)), ctx.get_constant(int(6)) }); // roughness
                         ctx->CreateStore(
                             llvm::ConstantStruct::get(m_float3_struct_type, elems), value_ptr);
                     }
@@ -4725,11 +4752,17 @@ void LLVM_code_generator::translate_distribution_function(
                 // git indices of the fields to initialize
                 int value_0_idx = -1;
                 int value_1_idx = -1;
+                int value_2_idx = -1;
+                int value_3_idx = -1;
                 if (df_kind == mi::mdl::IType::TK_BSDF || df_kind == mi::mdl::IType::TK_HAIR_BSDF) {
-                    value_0_idx = 
-                        m_dist_func_state == DFSTATE_EVALUATE ? 5 : 4; // bsdf_diffuse/albedo
-                    value_1_idx = 
-                        m_dist_func_state == DFSTATE_EVALUATE ? 6 : 5; // bsdf_specular/normal
+                    value_0_idx =
+                        m_dist_func_state == DFSTATE_EVALUATE ? 5 : 4; // bsdf_diffuse/albedo_diffuse
+                    value_1_idx =
+                        m_dist_func_state == DFSTATE_EVALUATE ? 6 : 5; // bsdf_glossy/albedo_glossy
+                    value_2_idx =
+                        m_dist_func_state == DFSTATE_EVALUATE ? -1 : 6; // normal
+                    value_3_idx =
+                        m_dist_func_state == DFSTATE_EVALUATE ? -1 : 7; // roughness
                 } else if (df_kind == mi::mdl::IType::TK_EDF &&
                     m_dist_func_state == DFSTATE_EVALUATE) {
                     value_0_idx = 3;                                  // edf
@@ -4757,6 +4790,25 @@ void LLVM_code_generator::translate_distribution_function(
                         ctx->CreateStore(llvm::ConstantStruct::get(
                             m_float3_struct_type, elems), result_value_ptr);
                     }
+
+                    if (value_2_idx >= 0) {
+                        llvm::Value* result_value_ptr_ptr = ctx->CreateGEP(
+                            ctx.get_function()->arg_begin(),
+                            { ctx.get_constant(int(0)), ctx.get_constant(int(value_2_idx + 1)) });
+                        llvm::Value* result_value_ptr = ctx->CreateLoad(result_value_ptr_ptr);
+                        result_value_ptr = ctx->CreateGEP(result_value_ptr, cur_index);
+                        ctx->CreateStore(llvm::ConstantStruct::get(
+                            m_float3_struct_type, elems), result_value_ptr);
+                    }
+                    if (value_3_idx >= 0) {
+                        llvm::Value* result_value_ptr_ptr = ctx->CreateGEP(
+                            ctx.get_function()->arg_begin(),
+                            { ctx.get_constant(int(0)), ctx.get_constant(int(value_3_idx + 1)) });
+                        llvm::Value* result_value_ptr = ctx->CreateLoad(result_value_ptr_ptr);
+                        result_value_ptr = ctx->CreateGEP(result_value_ptr, cur_index);
+                        ctx->CreateStore(llvm::ConstantStruct::get(
+                            m_float3_struct_type, elems), result_value_ptr);
+                    }
                 } else {
                     // m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_FIXED_X
                     if (value_0_idx >= 0) {
@@ -4774,6 +4826,26 @@ void LLVM_code_generator::translate_distribution_function(
                             ctx.get_function()->arg_begin(),
                             { ctx.get_constant(int(0)), 
                               ctx.get_constant(int(value_1_idx)), 
+                              cur_index });
+                        ctx->CreateStore(llvm::ConstantStruct::get(
+                            m_float3_struct_type, elems), result_value_ptr);
+                    }
+
+                    if (value_2_idx >= 0) {
+                        llvm::Value* result_value_ptr = ctx->CreateGEP(
+                            ctx.get_function()->arg_begin(),
+                            { ctx.get_constant(int(0)),
+                              ctx.get_constant(int(value_2_idx)),
+                              cur_index });
+                        ctx->CreateStore(llvm::ConstantStruct::get(
+                            m_float3_struct_type, elems), result_value_ptr);
+                    }
+
+                    if (value_3_idx >= 0) {
+                        llvm::Value* result_value_ptr = ctx->CreateGEP(
+                            ctx.get_function()->arg_begin(),
+                            { ctx.get_constant(int(0)),
+                              ctx.get_constant(int(value_3_idx)),
                               cur_index });
                         ctx->CreateStore(llvm::ConstantStruct::get(
                             m_float3_struct_type, elems), result_value_ptr);
@@ -4806,7 +4878,9 @@ void LLVM_code_generator::translate_distribution_function(
             ctx.get_resource_data_parameter(),
             ctx.create_simple_gep_in_bounds(exec_ctx, 1u));
         ctx->CreateStore(
-            ctx.get_exc_state_parameter(),
+            target_uses_exception_state_parameter()
+                ? ctx.get_exc_state_parameter()
+                : llvm::ConstantPointerNull::get(m_type_mapper.get_exc_state_ptr_type()),
             ctx.create_simple_gep_in_bounds(exec_ctx, 2u));
         ctx->CreateStore(
             ctx.get_cap_args_parameter(),
@@ -4891,11 +4965,122 @@ void LLVM_code_generator::translate_distribution_function(
 
         if (m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_NONE) {
             // no handles
-            // find normal in the data structure (element at index 4)
-            llvm::Value *result_normal_ptr = ctx->CreateGEP(
-                ctx.get_function()->arg_begin(),  // result pointer
-                { ctx.get_constant(int(0)), ctx.get_constant(int(4)) });
 
+            {
+                // normalize the normals
+                // find normal in the data structure (element at index 5)
+                llvm::Value *result_normal_ptr = ctx->CreateGEP(
+                    ctx.get_function()->arg_begin(),  // result pointer
+                    { ctx.get_constant(int(0)), ctx.get_constant(int(5)) });
+
+                llvm::Value *result_normal = ctx.load_and_convert(
+                    m_type_mapper.get_float3_type(), result_normal_ptr);
+
+                llvm::Value *cond_x = ctx->CreateFCmpONE(ctx.create_extract(result_normal, 0), zero);
+                llvm::Value *cond_y = ctx->CreateFCmpONE(ctx.create_extract(result_normal, 1), zero);
+                llvm::Value *cond_z = ctx->CreateFCmpONE(ctx.create_extract(result_normal, 2), zero);
+                llvm::Value *cond_normalize = ctx->CreateOr(cond_x, ctx->CreateOr(cond_y, cond_z));
+
+                // setup a block and index
+                llvm::BasicBlock *if_non_zero_block = ctx.create_bb("if_non_zero_normal");
+                llvm::BasicBlock *if_non_zero_block_end = ctx.create_bb("if_non_zero_normal_end");
+
+                ctx->CreateCondBr(cond_normalize, if_non_zero_block, if_non_zero_block_end);
+                ctx->SetInsertPoint(if_non_zero_block);
+
+                // if (cond_normalize)
+                //     result_normalized = normalize(result_normalized)
+                llvm::Value *result_normalized = call_rt_func(ctx, norm_func, {result_normal});
+                ctx.convert_and_store(result_normalized, result_normal_ptr);
+                ctx->CreateBr(if_non_zero_block_end);
+
+                ctx->SetInsertPoint(if_non_zero_block_end);
+            }
+            {
+                // apply weights to the roughness, i.e. divide the weighted sums by the summed weights
+                llvm::Value *result_roughness_ptr = ctx->CreateGEP(
+                    ctx.get_function()->arg_begin(),  // result pointer
+                    { ctx.get_constant(int(0)), ctx.get_constant(int(6)) });
+
+                llvm::Value *result_roughness = ctx.load_and_convert(
+                    m_type_mapper.get_float3_type(), result_roughness_ptr);
+
+                // condition for applying the wight is that the z component is not zero
+                llvm::Value *roughness_u = ctx.create_extract(result_roughness, 0);
+                llvm::Value *roughness_v = ctx.create_extract(result_roughness, 1);
+                llvm::Value *summed_weights = ctx.create_extract(result_roughness, 2);
+                llvm::Value *cond = ctx->CreateFCmpONE(summed_weights, zero);
+                llvm::BasicBlock *if_non_zero_block = ctx.create_bb("if_non_zero_weight");
+                llvm::BasicBlock *if_non_zero_block_end = ctx.create_bb("if_non_zero_weight_end");
+
+                ctx->CreateCondBr(cond, if_non_zero_block, if_non_zero_block_end);
+                ctx->SetInsertPoint(if_non_zero_block);
+
+                // if (cond)
+                //     rougness_u = rougness_u / summed_weights;
+                //     rougness_v = rougness_v / summed_weights;
+                roughness_u = ctx.create_fdiv(roughness_u->getType(), roughness_u, summed_weights);
+                roughness_v = ctx.create_fdiv(roughness_v->getType(), roughness_v, summed_weights);
+                result_roughness = ctx.create_insert(result_roughness, roughness_u, 0);
+                result_roughness = ctx.create_insert(result_roughness, roughness_v, 1);
+
+                ctx.convert_and_store(result_roughness, result_roughness_ptr);
+                ctx->CreateBr(if_non_zero_block_end);
+
+                ctx->SetInsertPoint(if_non_zero_block_end);
+            }
+            return;
+        }
+
+        // number of elements in the buffer/array
+        llvm::Value *handle_count = NULL;
+        if (m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_POINTER) {
+            handle_count = ctx->CreateLoad(
+                ctx.create_simple_gep_in_bounds(ctx.get_function()->arg_begin(), 4));
+        } else { // m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_FIXED_X
+            handle_count = ctx.get_constant(static_cast<int>(m_link_libbsdf_df_handle_slot_mode));
+        }
+
+        // setup a block and index
+        llvm::BasicBlock *loop_block = ctx.create_bb("post_loop");
+        llvm::BasicBlock *loop_block_end = ctx.create_bb("post_loop_end");
+
+        llvm::Value *index_ptr = ctx.create_local(m_type_mapper.get_int_type(), "post_loop_index");
+        ctx->CreateStore(ctx.get_constant(int(0)), index_ptr);
+
+        // start loop
+        ctx->CreateBr(loop_block);
+        ctx->SetInsertPoint(loop_block);
+        llvm::Value *cur_index = ctx->CreateLoad(index_ptr);
+
+        // get a pointer to the normal at the current index
+        llvm::Value *result_normal_ptr = NULL;
+        llvm::Value *result_roughness_ptr = NULL;
+        if (m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_POINTER) {
+            llvm::Value *result_normal_ptr_ptr = ctx->CreateGEP(
+                ctx.get_function()->arg_begin(),
+                { ctx.get_constant(int(0)), ctx.get_constant(int(7)) });
+            result_normal_ptr = ctx->CreateLoad(result_normal_ptr_ptr);
+            result_normal_ptr = ctx->CreateGEP(result_normal_ptr, cur_index);
+
+            llvm::Value *result_roughness_ptr_ptr = ctx->CreateGEP(
+                ctx.get_function()->arg_begin(),
+                { ctx.get_constant(int(0)), ctx.get_constant(int(8)) });
+            result_roughness_ptr = ctx->CreateLoad(result_roughness_ptr_ptr);
+            result_roughness_ptr = ctx->CreateGEP(result_roughness_ptr, cur_index);
+
+        } else { // m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_FIXED_X
+            result_normal_ptr = ctx->CreateGEP(
+                ctx.get_function()->arg_begin(),
+                { ctx.get_constant(int(0)), ctx.get_constant(int(6)), cur_index });
+            result_roughness_ptr = ctx->CreateGEP(
+                ctx.get_function()->arg_begin(),
+                { ctx.get_constant(int(0)), ctx.get_constant(int(7)), cur_index });
+        }
+
+        {
+            // normalize the normals
+            // load, check if none-zero, normalize, store
             llvm::Value *result_normal = ctx.load_and_convert(
                 m_type_mapper.get_float3_type(), result_normal_ptr);
 
@@ -4913,74 +5098,40 @@ void LLVM_code_generator::translate_distribution_function(
 
             // if (cond_normalize)
             //     result_normalized = normalize(result_normalized)
-            llvm::Value *result_normalized = call_rt_func(ctx, norm_func, {result_normal});
+            llvm::Value *result_normalized = call_rt_func(ctx, norm_func, { result_normal });
             ctx.convert_and_store(result_normalized, result_normal_ptr);
             ctx->CreateBr(if_non_zero_block_end);
 
             ctx->SetInsertPoint(if_non_zero_block_end);
-
-            return;
         }
+        {
+            // apply weights to the roughness, i.e. divide the weighted sums by the summed weights
+            llvm::Value *result_roughness = ctx.load_and_convert(
+                m_type_mapper.get_float3_type(), result_roughness_ptr);
 
-        // number of elements in the buffer/array
-        llvm::Value *handle_count = NULL;
-        if (m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_POINTER) {
-            handle_count = ctx->CreateLoad(
-                ctx.create_simple_gep_in_bounds(ctx.get_function()->arg_begin(), 4));
-        } else { // m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_FIXED_X
-            handle_count = ctx.get_constant(static_cast<int>(m_link_libbsdf_df_handle_slot_mode));
+            llvm::Value *roughness_u = ctx.create_extract(result_roughness, 0);
+            llvm::Value *roughness_v = ctx.create_extract(result_roughness, 1);
+            llvm::Value *summed_weights = ctx.create_extract(result_roughness, 2);
+            llvm::Value *cond = ctx->CreateFCmpONE(summed_weights, zero);
+            llvm::BasicBlock *if_non_zero_block = ctx.create_bb("if_non_zero_weight");
+            llvm::BasicBlock *if_non_zero_block_end = ctx.create_bb("if_non_zero_weight_end");
+
+            ctx->CreateCondBr(cond, if_non_zero_block, if_non_zero_block_end);
+            ctx->SetInsertPoint(if_non_zero_block);
+
+            // if (cond)
+            //     rougness_u = rougness_u / summed_weights;
+            //     rougness_v = rougness_v / summed_weights;
+            roughness_u = ctx.create_fdiv(roughness_u->getType(), roughness_u, summed_weights);
+            roughness_v = ctx.create_fdiv(roughness_v->getType(), roughness_v, summed_weights);
+            result_roughness = ctx.create_insert(result_roughness, roughness_u, 0);
+            result_roughness = ctx.create_insert(result_roughness, roughness_v, 1);
+
+            ctx.convert_and_store(result_roughness, result_roughness_ptr);
+            ctx->CreateBr(if_non_zero_block_end);
+
+            ctx->SetInsertPoint(if_non_zero_block_end);
         }
-
-        // setup a block and index
-        llvm::BasicBlock *loop_block = ctx.create_bb("normal_loop");
-        llvm::BasicBlock *loop_block_end = ctx.create_bb("normal_loop_end");
-
-        llvm::Value *index_ptr = ctx.create_local(m_type_mapper.get_int_type(), "normal_index");
-        ctx->CreateStore(ctx.get_constant(int(0)), index_ptr);
-
-        // start loop
-        ctx->CreateBr(loop_block);
-        ctx->SetInsertPoint(loop_block);
-        llvm::Value *cur_index = ctx->CreateLoad(index_ptr);
-
-        // get a pointer to the normal at the current index
-        llvm::Value *result_normal_ptr = NULL;
-        if (m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_POINTER) {
-            llvm::Value *result_normal_ptr_ptr = ctx->CreateGEP(
-                ctx.get_function()->arg_begin(),
-                {ctx.get_constant(int(0)), ctx.get_constant(int(6))});
-            result_normal_ptr = ctx->CreateLoad(result_normal_ptr_ptr);
-            result_normal_ptr = ctx->CreateGEP(result_normal_ptr, cur_index);
-        } else { // m_link_libbsdf_df_handle_slot_mode == mi::mdl::DF_HSM_FIXED_X
-            result_normal_ptr = ctx->CreateGEP(
-                ctx.get_function()->arg_begin(),
-                {ctx.get_constant(int(0)), ctx.get_constant(int(5)), cur_index});
-        }
-
-        // load, check if none-zero, normalize, store
-        llvm::Value *result_normal = ctx.load_and_convert(
-            m_type_mapper.get_float3_type(), result_normal_ptr);
-
-        llvm::Value *cond_x = ctx->CreateFCmpONE(ctx.create_extract(result_normal, 0), zero);
-        llvm::Value *cond_y = ctx->CreateFCmpONE(ctx.create_extract(result_normal, 1), zero);
-        llvm::Value *cond_z = ctx->CreateFCmpONE(ctx.create_extract(result_normal, 2), zero);
-        llvm::Value *cond_normalize = ctx->CreateOr(cond_x, ctx->CreateOr(cond_y, cond_z));
-
-        // setup a block and index
-        llvm::BasicBlock *if_non_zero_block = ctx.create_bb("if_non_zero");
-        llvm::BasicBlock *if_non_zero_block_end = ctx.create_bb("if_non_zero_end");
-
-        ctx->CreateCondBr(cond_normalize, if_non_zero_block, if_non_zero_block_end);
-        ctx->SetInsertPoint(if_non_zero_block);
-
-        // if (cond_normalize)
-        //     result_normalized = normalize(result_normalized)
-        llvm::Value *result_normalized = call_rt_func(ctx, norm_func, {result_normal});
-        ctx.convert_and_store(result_normalized, result_normal_ptr);
-        ctx->CreateBr(if_non_zero_block_end);
-
-        ctx->SetInsertPoint(if_non_zero_block_end);
-
         // increment index, next iteration or end of loop 
         llvm::Value *new_index = ctx->CreateAdd(cur_index, ctx.get_constant(1));
         ctx->CreateStore(new_index, index_ptr);

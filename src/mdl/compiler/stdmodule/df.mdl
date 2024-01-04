@@ -393,7 +393,7 @@ export struct color_edf_component  [[ since(1,4) ]] {
 };
 
 export struct color_vdf_component  [[ since(1,7) ]] {
-    uniform color weight = color(0.0)  [[ hard_range(color(0.0), color(1.0)) ]];
+    color weight = color(0.0)  [[ hard_range(color(0.0), color(1.0)) ]];
     vdf component = vdf();
 };
 

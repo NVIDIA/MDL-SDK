@@ -68,25 +68,6 @@ namespace MI
 namespace CONT
 {
 
-// Default constructor.
-template <typename T>
-inline
-Default_allocator<T>::Default_allocator()
-{}
-
-// Copy constructor
-template <typename T>
-inline
-Default_allocator<T>::Default_allocator(
-    const Default_allocator&)		// the other allocator
-{}
-
-// Trivial destructor.
-template <typename T>
-inline
-Default_allocator<T>::~Default_allocator()
-{}
-
 
 // Create an element at given position p with given value val.
 template <typename T>

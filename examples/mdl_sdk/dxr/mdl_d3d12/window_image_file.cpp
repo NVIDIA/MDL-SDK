@@ -94,46 +94,83 @@ int Window_image_file::show(int nCmdShow)
     if (m_app->get_options()->no_console_window)
         message_step = 0;
 
+    for (const std::string& expr : m_app->get_options()->lpe)
     {
-        Timing t("rendering");
-        for (size_t i = 0; i < m_iteration_count; ++i)
+        m_app->get_dynamic_options()->set_active_lpe(expr);
+        if (expr == "beauty")
         {
-            m_message_pump_interface.paint();
-            command_queue->flush();
+            Timing t("rendering");
+            for (size_t i = 0; i < m_iteration_count; ++i)
+            {
+                m_message_pump_interface.paint();
+                command_queue->flush();
+                if (message_step > 10 && (i + 1) % message_step == 0)
+                    log_info("rendering completed to " +
+                        std::to_string((i + 1) * 100 / m_iteration_count) + '%');
 
-            if (message_step > 10 && (i + 1) % message_step == 0)
-                log_info("rendering completed to " +
-                    std::to_string((i + 1) * 100 / m_iteration_count) + '%');
+                if (m_close)
+                    return 0;
+            }
+        }
+        else
+        {
+            // 64 samples for multisampling (anti aliasing)
+            // currently only the auxiliary data can be rendered here so there is no variance
+            for (size_t i = 0; i < 64; ++i)
+            {
+                if (message_step > 10 && i == 0)
+                    log_info("rendering '" + expr + "'");
 
-            if (m_close)
-                return 0;
+                m_message_pump_interface.paint();
+                command_queue->flush();
+                if (m_close)
+                    return 0;
+            }
+        }
+
+        // commit work and make sure the result is ready
+        auto command_list = command_queue->get_command_list();
+        m_back_buffer->transition_to(command_list, D3D12_RESOURCE_STATE_COMMON);
+        command_queue->execute_command_list(command_list);
+        m_app->flush_command_queues();
+
+        // use neuray to write the image file
+        const char* format = "Rgba";
+        if (m_back_buffer->get_format() == DXGI_FORMAT_R32G32B32A32_FLOAT)
+            format = "Float32<4>";
+
+        mi::base::Handle<mi::neuraylib::ICanvas> canvas(
+            m_app->get_mdl_sdk().get_image_api().create_canvas(
+                format,
+                static_cast<mi::Uint32>(m_back_buffer->get_width()),
+                static_cast<mi::Uint32>(m_back_buffer->get_height())));
+
+        mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile());
+
+        // download texture and save to output file
+        if (m_back_buffer->download(tile->get_data()))
+        {
+            std::string filename = m_file_path;
+            if (filename.find("<LPE>") != std::string::npos)
+            {
+                // if a marker is used, just insert the current expresssion name
+                filename = mi::examples::strings::replace(filename, "<LPE>", expr);
+            }
+            else
+            {
+                // if no marker is used and multiple expressions are selected,
+                // append the expression name if it's different than 'beauty'
+                if (m_app->get_options()->lpe.size() > 1 && expr != "beauty")
+                {
+                    std::string ext = mi::examples::io::extension(filename);
+                    filename = filename.substr(0, filename.size() - ext.size() - 1);
+                    filename += std::string("_") + expr + "." + ext;
+                }
+            }
+            m_app->get_mdl_sdk().get_impexp_api().export_canvas(filename.c_str(), canvas.get());
         }
     }
 
-    // commit work and make sure the result is ready
-    auto command_list = command_queue->get_command_list();
-    m_back_buffer->transition_to(command_list, D3D12_RESOURCE_STATE_COMMON);
-    command_queue->execute_command_list(command_list);
-    m_app->flush_command_queues();
-
-    // use neuray to write the image file
-    const char* format = "Rgba";
-    if (m_back_buffer->get_format() == DXGI_FORMAT_R32G32B32A32_FLOAT)
-        format = "Float32<4>";
-
-    mi::base::Handle<mi::neuraylib::ICanvas> canvas(
-        m_app->get_mdl_sdk().get_image_api().create_canvas(
-        format,
-        static_cast<mi::Uint32>(m_back_buffer->get_width()),
-        static_cast<mi::Uint32>(m_back_buffer->get_height())));
-
-    mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile());
-
-    // download texture and save to output file
-    if (m_back_buffer->download(tile->get_data()))
-    {
-        m_app->get_mdl_sdk().get_impexp_api().export_canvas(m_file_path.c_str(), canvas.get());
-    }
 
     // keep console open in debug
     if (IsDebuggerPresent())

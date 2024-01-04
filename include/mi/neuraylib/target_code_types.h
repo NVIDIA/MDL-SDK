@@ -878,8 +878,12 @@ struct Bsdf_auxiliary_data : public Bsdf_auxiliary_data_base
     tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of more then
                                      ///  DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple
                                      ///  times
-    tct_float3       albedo[static_cast<size_t>(N)];    ///< output: albedo
-    tct_float3       normal[static_cast<size_t>(N)];    ///< output: normal
+    tct_float3       albedo_diffuse[static_cast<size_t>(N)];///< output: (diffuse part of the)
+                                                            /// albedo
+    tct_float3       albedo_glossy[static_cast<size_t>(N)]; ///< output: (glossy part of the) albedo
+    tct_float3       normal[static_cast<size_t>(N)];        ///< output: normal
+    tct_float3       roughness[static_cast<size_t>(N)];     ///< output: rougness_u, roughness_v,
+                                                            ///  bsdf_weight
 };
 
 template<>
@@ -893,8 +897,11 @@ struct Bsdf_auxiliary_data<DF_HSM_POINTER> : public Bsdf_auxiliary_data_base
                                      ///  DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple
                                      ///  times
     tct_int          handle_count;   ///< input: number of elements of 'albedo' and 'normal'
-    tct_float3*      albedo;         ///< output: albedo
+    tct_float3*      albedo_diffuse; ///< output: (diffuse part of the) albedo
+    tct_float3*      albedo_glossy;  ///< output: (glossy part of the) albedo
     tct_float3*      normal;         ///< output: normal
+    tct_float3*      roughness;      ///< output: rougness_u, roughness_v, bsdf_weight
+
 };
 
 template<>
@@ -904,8 +911,10 @@ struct Bsdf_auxiliary_data<DF_HSM_NONE> : public Bsdf_auxiliary_data_base
     tct_float3       ior2;           ///< mutual input: IOR other side
     tct_float3       k1;             ///< mutual input: outgoing direction
 
-    tct_float3       albedo;         ///< output: albedo
+    tct_float3       albedo_diffuse; ///< output: (diffuse part of the) albedo
+    tct_float3       albedo_glossy;  ///< output: (glossy part of the) albedo
     tct_float3       normal;         ///< output: normal
+    tct_float3       roughness;      ///< output: rougness_u, roughness_v, bsdf_weight
 };
 
 // Signatures for generated target code functions.
@@ -917,13 +926,11 @@ struct Bsdf_auxiliary_data<DF_HSM_NONE> : public Bsdf_auxiliary_data_base
 /// \param result           pointer to the result buffer which must be large enough for the result
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   unused, should be \c NULL
 typedef void (Environment_function)(
     void                             *result,
     Shading_state_environment const  *state,
     Resource_data const              *res_data,
-    void const                       *exception_state,
     char const                       *arg_block_data);
 
 
@@ -934,13 +941,11 @@ typedef void (Environment_function)(
 /// \param result           pointer to the result buffer which must be large enough for the result
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Material_expr_function)(
     void                          *result,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
-    void const                    *exception_state,
     char const                    *arg_block_data);
 
 
@@ -951,14 +956,48 @@ typedef void (Material_expr_function)(
 /// \param result           pointer to the result buffer which must be large enough for the result
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Material_expr_function_with_derivs)(
     void                                      *result,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
-    void const                                *exception_state,
     char const                                *arg_block_data);
+
+
+// SWIG has problems with these function type definitions, so ignore in SWIG.
+#ifndef SWIG
+template<typename T>
+struct Material_function
+{
+    /// Signature of material expression functions created via
+    /// #mi::neuraylib::IMdl_backend::translate_material_expression() and
+    /// #mi::neuraylib::ILink_unit::add_material_expression(),
+    /// with the lambda_return_mode backend option set to "value".
+    ///
+    /// \param state            the shading state
+    /// \param res_data         the resources
+    /// \param arg_block_data   the target argument block data, if class compilation was used
+    /// \return                 the result of the material expression
+    typedef T (Type)(
+        Shading_state_material const  *state,
+        Resource_data const           *res_data,
+        char const                    *arg_block_data);
+
+    /// Signature of material expression functions created via
+    /// #mi::neuraylib::IMdl_backend::translate_material_expression() and
+    /// #mi::neuraylib::ILink_unit::add_material_expression(),
+    /// with the lambda_return_mode backend option set to "value".
+    ///
+    /// \param state            the shading state
+    /// \param res_data         the resources
+    /// \param arg_block_data   the target argument block data, if class compilation was used
+    /// \return                 the result of the material expression
+    typedef T (Type_with_derivs)(
+        Shading_state_material_with_derivs const  *state,
+        Resource_data const                       *res_data,
+        char const                                *arg_block_data);
+};
+#endif  // not SWIG
 
 
 /// Signature of the initialization function for material distribution functions created via
@@ -971,12 +1010,10 @@ typedef void (Material_expr_function_with_derivs)(
 ///
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_init_function)(
     Shading_state_material  *state,
     Resource_data const     *res_data,
-    void const              *exception_state,
     char const              *arg_block_data);
 
 
@@ -990,12 +1027,10 @@ typedef void (Bsdf_init_function)(
 ///
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_init_function_with_derivs)(
     Shading_state_material_with_derivs  *state,
     Resource_data const                 *res_data,
-    void const                          *exception_state,
     char const                          *arg_block_data);
 
 
@@ -1006,13 +1041,11 @@ typedef void (Bsdf_init_function_with_derivs)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_sample_function)(
     Bsdf_sample_data              *data,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
-    void const                    *exception_state,
     char const                    *arg_block_data);
 
 
@@ -1023,13 +1056,11 @@ typedef void (Bsdf_sample_function)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_sample_function_with_derivs)(
     Bsdf_sample_data                          *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
-    void const                                *exception_state,
     char const                                *arg_block_data);
 
 
@@ -1040,13 +1071,11 @@ typedef void (Bsdf_sample_function_with_derivs)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_evaluate_function)(
     Bsdf_evaluate_data_base               *data,
     Shading_state_material const          *state,
     Resource_data const                   *res_data,
-    void const                            *exception_state,
     char const                            *arg_block_data);
 
 
@@ -1057,13 +1086,11 @@ typedef void (Bsdf_evaluate_function)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_evaluate_function_with_derivs)(
     Bsdf_evaluate_data_base                     *data,
     Shading_state_material_with_derivs const    *state,
     Resource_data const                         *res_data,
-    void const                                  *exception_state,
     char const                                  *arg_block_data);
 
 
@@ -1074,13 +1101,11 @@ typedef void (Bsdf_evaluate_function_with_derivs)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_pdf_function)(
     Bsdf_pdf_data                 *data,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
-    void const                    *exception_state,
     char const                    *arg_block_data);
 
 
@@ -1091,13 +1116,11 @@ typedef void (Bsdf_pdf_function)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_pdf_function_with_derivs)(
     Bsdf_pdf_data                             *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
-    void const                                *exception_state,
     char const                                *arg_block_data);
 
 /// Signature of the auxiliary function for material distribution functions created via
@@ -1107,13 +1130,11 @@ typedef void (Bsdf_pdf_function_with_derivs)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_auxiliary_function)(
     Bsdf_auxiliary_data_base      *data,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
-    void const                    *exception_state,
     char const                    *arg_block_data);
 
 
@@ -1124,13 +1145,11 @@ typedef void (Bsdf_auxiliary_function)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Bsdf_auxiliary_function_with_derivs)(
     Bsdf_auxiliary_data_base                  *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
-    void const                                *exception_state,
     char const                                *arg_block_data);
 
 /// The type of events created by EDF importance sampling.
@@ -1237,12 +1256,10 @@ struct Edf_auxiliary_data<DF_HSM_NONE> : public Edf_auxiliary_data_base
 ///
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_init_function)(
     Shading_state_material  *state,
     Resource_data const     *res_data,
-    void const              *exception_state,
     char const              *arg_block_data);
 
 
@@ -1256,12 +1273,10 @@ typedef void (Edf_init_function)(
 ///
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_init_function_with_derivs)(
     Shading_state_material_with_derivs  *state,
     Resource_data const                 *res_data,
-    void const                          *exception_state,
     char const                          *arg_block_data);
 
 
@@ -1272,13 +1287,11 @@ typedef void (Edf_init_function_with_derivs)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_sample_function)(
     Edf_sample_data               *data,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
-    void const                    *exception_state,
     char const                    *arg_block_data);
 
 
@@ -1289,13 +1302,11 @@ typedef void (Edf_sample_function)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_sample_function_with_derivs)(
     Edf_sample_data                           *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
-    void const                                *exception_state,
     char const                                *arg_block_data);
 
 
@@ -1306,13 +1317,11 @@ typedef void (Edf_sample_function_with_derivs)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_evaluate_function)(
     Edf_evaluate_data_base       *data,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
-    void const                    *exception_state,
     char const                    *arg_block_data);
 
 
@@ -1323,13 +1332,11 @@ typedef void (Edf_evaluate_function)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_evaluate_function_with_derivs)(
     Edf_evaluate_data_base                    *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
-    void const                                *exception_state,
     char const                                *arg_block_data);
 
 
@@ -1340,13 +1347,11 @@ typedef void (Edf_evaluate_function_with_derivs)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_pdf_function)(
     Edf_pdf_data                  *data,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
-    void const                    *exception_state,
     char const                    *arg_block_data);
 
 
@@ -1357,13 +1362,11 @@ typedef void (Edf_pdf_function)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_pdf_function_with_derivs)(
     Edf_pdf_data                              *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
-    void const                                *exception_state,
     char const                                *arg_block_data);
 
 /// Signature of the auxiliary function for material distribution functions created via
@@ -1373,13 +1376,11 @@ typedef void (Edf_pdf_function_with_derivs)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_auxiliary_function)(
     Edf_auxiliary_data_base       *data,
     Shading_state_material const  *state,
     Resource_data const           *res_data,
-    void const                    *exception_state,
     char const                    *arg_block_data);
 
 
@@ -1390,13 +1391,11 @@ typedef void (Edf_auxiliary_function)(
 /// \param data             the input and output structure
 /// \param state            the shading state
 /// \param res_data         the resources
-/// \param exception_state  unused, should be \c NULL
 /// \param arg_block_data   the target argument block data, if class compilation was used
 typedef void (Edf_auxiliary_function_with_derivs)(
     Edf_auxiliary_data_base                   *data,
     Shading_state_material_with_derivs const  *state,
     Resource_data const                       *res_data,
-    void const                                *exception_state,
     char const                                *arg_block_data);
 
 /**@}*/ // end group mi_neuray_mdl_compiler

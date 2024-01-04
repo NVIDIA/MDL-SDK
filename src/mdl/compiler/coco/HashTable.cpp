@@ -55,7 +55,7 @@ HashTable::~HashTable() {
 HashTable::Obj* HashTable::Get0(char const *key) const {
 	int k = coco_string_hash(key) % size;
 	HashTable::Obj *o = data[k];
-	while (o != NULL && !coco_string_equal(key, o->key)) {
+	while (o != NULL && strcmp(key, o->key) != 0) {
 		o = o->next;
 	}
 	return o;

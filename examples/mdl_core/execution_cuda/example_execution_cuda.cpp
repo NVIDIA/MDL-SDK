@@ -230,7 +230,8 @@ int MAIN_UTF8(int argc, char* argv[])
             mdl_compiler.get(),
             /*num_texture_results=*/ 0,
             options.enable_derivatives,
-            /*df_handle_mode=*/ "none");
+            /*df_handle_mode=*/ "none",
+            /*handle_return_mode=*/ "default");
 
         for (std::size_t i = 0; i < options.mdl_paths.size(); ++i)
             mc.add_module_path(options.mdl_paths[i].c_str());

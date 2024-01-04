@@ -164,7 +164,7 @@ Coco                            (. Symbol *sym; Graph *g, *g1, *g2; char* gramNa
                                 WEAK
     '.'
   }
-  "END" ident                   (. if (!coco_string_equal(gramName, t->val))
+  "END" ident                   (. if (strcmp(gramName, t->val) != 0)
                                      SemErr("name does not match grammar name");
                                    tab->gramSy = tab->FindSym(gramName);
                                    if (tab->gramSy == NULL)
@@ -203,7 +203,7 @@ Coco                            (. Symbol *sym; Graph *g, *g1, *g2; char* gramNa
 
 SetDecl                         (. CharSet *s; .)
 =
-  ident                         (. char *name = coco_string_create(t->val);
+  ident                         (. std::string name = t->val;
                                    CharClass *c = tab->FindCharClass(name);
                                    if (c != NULL) SemErr("name declared twice");
                                  .)
@@ -284,7 +284,7 @@ TokenDecl<Node::Kind typ>       (. char* name = NULL; int kind; Symbol *sym; Gra
   SYNC
   ( '=' TokenExpr<g> '.'        (. if (kind == str) SemErr("a literal must not be declared with a structure");
                                    tab->Finish(g);
-                                   if (tokenString == NULL || coco_string_equal(tokenString, noString))
+                                   if (tokenString == NULL || strcmp(tokenString, noString) == 0)
                                      dfa->ConvertToStates(g->l, sym);
                                    else { // TokenExpr is a single string
                                      if ((*(tab->literals))[tokenString] != NULL)

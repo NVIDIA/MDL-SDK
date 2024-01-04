@@ -32,8 +32,8 @@
  ** Implements the API to be used by integrators to integrate the neuray library.
  **/
 
-#ifndef API_API_MDL_NEURAY_IMPL_H
-#define API_API_MDL_NEURAY_IMPL_H
+#ifndef API_API_MDL_MDL_NEURAY_IMPL_H
+#define API_API_MDL_MDL_NEURAY_IMPL_H
 
 #include <mi/base/handle.h>
 #include <mi/base/interface_implement.h>
@@ -42,14 +42,16 @@
 
 #include <atomic>
 #include <map>
+#include <memory>
 
 #include <boost/core/noncopyable.hpp>
 
 #include <base/system/main/access_module.h>
+#include <base/lib/log/i_log_module.h>
 
 namespace mi {
-    namespace base { class ILogger; }
-    namespace neuraylib { class IVersion; }
+namespace base { class ILogger; }
+namespace neuraylib { class IVersion; }
 }
 
 namespace MI {
@@ -63,6 +65,7 @@ class Database_impl;
 class Debug_configuration_impl;
 class Factory_impl;
 class Image_api_impl;
+class Logging_configuration_impl;
 class Mdl_archive_api_impl;
 class Mdl_backend_api_impl;
 class Mdl_compatibility_api_impl;
@@ -76,11 +79,11 @@ class Mdl_impexp_api_impl;
 class Mdle_api_impl;
 class Plugin_api_impl;
 class Plugin_configuration_impl;
+class Receiving_logger;
 }
 
 namespace MDL {
 
-class Logger;
 class Mdl_compiler_impl;
 
 class Neuray_impl
@@ -121,10 +124,6 @@ public:
 
     //  internal methods
 
-    void set_logger( mi::base::ILogger* logger);
-
-    mi::base::ILogger* get_logger();
-
     /// Returns the class factory.
     ///
     /// \note This method does \em not increase the reference count of the return value.
@@ -141,7 +140,7 @@ public:
     static std::atomic_uint32_t s_instance_count;
 
 private:
-      /// Logs the startup message (library path and version information).
+    /// Logs the startup message (library path and version information).
     void log_startup_message();
 
     /// The version number.
@@ -155,6 +154,7 @@ private:
     NEURAY::Database_impl* m_database_impl;
     NEURAY::Debug_configuration_impl* m_debug_configuration_impl;
     NEURAY::Image_api_impl* m_image_api_impl;
+    NEURAY::Logging_configuration_impl* m_logging_configuration_impl;
     Mdl_compiler_impl* m_mdl_compiler_impl;
     NEURAY::Mdl_archive_api_impl* m_mdl_archive_api_impl;
     NEURAY::Mdl_backend_api_impl* m_mdl_backend_api_impl;
@@ -169,6 +169,7 @@ private:
     NEURAY::Mdle_api_impl* m_mdle_api_impl;
     NEURAY::Plugin_api_impl* m_plugin_api_impl;
     NEURAY::Plugin_configuration_impl* m_plugin_configuration_impl;
+
     /// Status of the instance, see #get_status().
     Status m_status;
 
@@ -179,9 +180,6 @@ private:
     /// The lock for the map that stores the registered API components
     mutable mi::base::Lock m_api_components_lock;
 
-    /// The logger.
-    Logger* m_logger;
-
     /// The database.
     DB::Database* m_database;
 };
@@ -190,4 +188,4 @@ private:
 
 } // namespace MI
 
-#endif // API_API_MDL_NEURAY_IMPL_H
+#endif // API_API_MDL_MDL_NEURAY_IMPL_H

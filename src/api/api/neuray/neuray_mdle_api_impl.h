@@ -30,30 +30,21 @@
  ** \brief Header for the IMdle_api implementation.
  **/
 
-#ifndef API_API_NEURAY_MDLE_API_IMPL_H
-#define API_API_NEURAY_MDLE_API_IMPL_H
+#ifndef API_API_NEURAY_NEURAY_MDLE_API_IMPL_H
+#define API_API_NEURAY_NEURAY_MDLE_API_IMPL_H
 
-#include <mi/base/interface_implement.h>
 #include <mi/neuraylib/imdle_api.h>
-#include <mi/mdl/mdl_encapsulator.h>
-#include <base/system/main/access_module.h>
-
-#include "neuray_mdl_resource_callback.h"
 
 #include <vector>
+#include <mi/base/interface_implement.h>
+#include <mi/mdl/mdl_encapsulator.h>
+#include <base/system/main/access_module.h>
 #include <base/lib/robin_hood/robin_hood.h>
+#include <io/scene/mdl_elements/i_mdl_elements_resource_callback.h>
 
 namespace mi {
-
-    namespace mdl {
-        class IEntity_resolver;
-        class IMDL;
-        class IMDL_resource_reader;
-    }
-
-    namespace neuraylib {
-        class INeuray;
-    }
+namespace mdl { class IEntity_resolver; class IMDL; class IMDL_resource_reader; }
+namespace neuraylib { class INeuray; }
 }
 
 namespace MI {
@@ -64,10 +55,10 @@ namespace MDLC { class Mdlc_module; }
 
 namespace NEURAY {
 
-class Mdle_resource_mapper : public Resource_callback
+class Mdle_resource_mapper : public MDL::Resource_callback
                            , public mi::mdl::IEncapsulate_tool_resource_collector
 {
-    typedef Resource_callback Base;
+    typedef MDL::Resource_callback Base;
 public:
 
     explicit Mdle_resource_mapper(
@@ -195,4 +186,4 @@ private:
 } // namespace NEURAY
 } // namespace MI
 
-#endif // API_API_NEURAY_MDLE_API_IMPL_H
+#endif // API_API_NEURAY_NEURAY_MDLE_API_IMPL_H

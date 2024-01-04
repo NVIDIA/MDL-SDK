@@ -43,6 +43,7 @@
 
 using mi::base::Handle;
 using mi::base::ILogger;
+using mi::neuraylib::ILogging_configuration;
 using mi::neuraylib::INeuray;
 using mi::neuraylib::Neuray_factory;
 using mi::neuraylib::IMdl_i18n_configuration;
@@ -88,16 +89,14 @@ void add_user_path(IMdl_configuration* mdl_config, vector<string> & directories)
 }
 
 /// Configure the MDL SDK with module search paths and load necessary plugins.
-void configuration(INeuray* neuray, ILogger* logger, Application::Options* options)
+void configuration(INeuray* neuray, Application::Options* options)
 {
-    mi::base::Handle<IMdl_configuration> mdl_config(neuray->get_api_component<IMdl_configuration>());
-    mdl_config->set_logger(logger);
-
     mi::base::Handle<IPlugin_configuration> plug_config(neuray->get_api_component<IPlugin_configuration>());
     plug_config->load_plugin_library("nv_openimageio" MI_BASE_DLL_FILE_EXT);
     plug_config->load_plugin_library("dds" MI_BASE_DLL_FILE_EXT);
 
     // Gather list of path to add to MDL search path
+    mi::base::Handle<IMdl_configuration> mdl_config(neuray->get_api_component<IMdl_configuration>());
     vector<string> directories;
     if (!options->m_nostdpath)
     {
@@ -145,7 +144,7 @@ void configuration(INeuray* neuray, ILogger* logger, Application::Options* optio
     Handle<IMdl_i18n_configuration> i18n_configuration(
         neuray->get_api_component<IMdl_i18n_configuration>());
     check_success(i18n_configuration != 0);
-    i18n_configuration->set_locale(NULL);
+    i18n_configuration->set_locale(nullptr);
 
 #if defined(DEBUG)
     // Test
@@ -165,7 +164,7 @@ Application & Application::theApp()
 }
 
 Application::Application()
-    : m_command(NULL), m_factory(NULL)
+    : m_command(nullptr), m_factory(nullptr)
 {
 }
 
@@ -176,6 +175,7 @@ Application::~Application()
     {
         check_success(neuray()->shutdown() == 0);
     }
+    m_logger.reset();
     delete m_factory;
 }
 
@@ -267,19 +267,25 @@ mi::Sint32 Application::initialize(int argc, char *argv[])
         setup_options(argc, argv) == 0
         , Errors::ERR_PARSING_ARGUMENTS);
 
-    // Create an instance of our logger
-    if (m_options.m_quiet)
-    {
-        m_options.m_verbosity = 0;
-    }
-    m_logger = new Logger(m_options.m_verbosity);
+    // Create an early instance of our logger
+    m_logger = new Logger();
 
     // Access the MDL SDK
     m_factory = new Neuray_factory(m_logger.get());
     check_success(m_factory->get_result_code() == Neuray_factory::RESULT_SUCCESS);
 
+    // Set the log level and the receiving logger
+    mi::base::Handle<mi::neuraylib::ILogging_configuration> logging_configuration(
+        neuray()->get_api_component<mi::neuraylib::ILogging_configuration>());
+    if (m_options.m_quiet)
+        logging_configuration->set_log_level(static_cast<mi::base::Message_severity>(0));
+    else
+        logging_configuration->set_log_level(static_cast<mi::base::Message_severity>(
+            std::max(m_options.m_verbosity-1, 0)));
+    m_logger = logging_configuration->get_forwarding_logger();
+
     // Configure the MDL SDK library
-    configuration(neuray(), m_logger.get(), &m_options);
+    configuration(neuray(), &m_options);
 
     // Start the MDL SDK
     return neuray()->start();
@@ -292,8 +298,9 @@ void Application::shutdown()
     {
         check_success(neuray()->shutdown() == 0);
     }
+    m_logger.reset();
     delete m_factory;
-    m_factory = NULL;
+    m_factory = nullptr;
 }
 
 mi::neuraylib::INeuray * Application::neuray()
@@ -302,7 +309,7 @@ mi::neuraylib::INeuray * Application::neuray()
     {
         return m_factory->get();
     }
-    return NULL;
+    return nullptr;
 }
 
 const mi::base::Handle<mi::base::ILogger> & Application::logger()

@@ -1,0 +1,104 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Attr bottomup {
+
+      material(thin_walled,
+               surface,
+               backface,
+               ior,
+               volume,
+               geometry,
+               hair)
+      -->
+        material(thin_walled,
+                 surface,
+                 backface,
+                 ior,
+                 volume,
+                 geometry,
+                 hair)
+          [[ is_thin_walled = thin_walled ]]
+        ;
+
+      material(thin_walled,
+               material_surface(diffuse_reflection_bsdf(_, r)),
+               backface,
+               ior,
+               volume,
+               geometry,
+               hair)
+          [[ some_color ]]
+      -->
+        material(thin_walled,
+                 material_surface(diffuse_reflection_bsdf(some_color, r)),
+                 backface,
+                 ior,
+                 volume,
+                 geometry,
+                 hair)
+        ;
+
+      material(_,
+               material_surface(diffuse_reflection_bsdf(_, r)),
+               backface,
+               ior,
+               volume,
+               geometry,
+               hair)
+          [[ is_thin_walled, _some_color ~ c]]
+      -->
+        material(is_thin_walled,
+                 material_surface(diffuse_reflection_bsdf(c, r)),
+                 backface,
+                 ior,
+                 volume,
+                 geometry,
+                 hair)
+        ;
+
+      diffuse_reflection_bsdf(c, r)
+      -->
+          diffuse_reflection_bsdf(c, r) [[ surface_value=color(1.0) ]]
+        ;
+
+      material(thin_walled,
+               material_surface(diffuse_reflection_bsdf(_, r) [[ surface_value ~ _ ]] ),
+               backface,
+               ior,
+               volume,
+               geometry,
+               hair2)
+          [[ some_color ]]
+      -->
+        material(thin_walled,
+                 material_surface(diffuse_reflection_bsdf(some_color, r)),
+                 backface,
+                 ior,
+                 volume,
+                 geometry,
+                 hair2)
+            [[ global_value = surface_value ]]
+        ;
+
+      material(thin_walled,
+               material_surface(diffuse_reflection_bsdf(tint, r)),
+               _backface,
+               ior,
+               volume,
+               geometry,
+               hair)
+          [[ _bsdf1 ~ diffuse_reflection_bsdf(t1, r1) ]]
+      -->
+        material(thin_walled,
+                 material_surface(diffuse_reflection_bsdf(t1, r1)),
+                 material_surface(diffuse_reflection_bsdf(tint, r)),
+                 ior,
+                 volume,
+                 geometry,
+                 hair)
+            [[ is_thin_walled = thin_walled,
+               global_tint = color(2.0) ]]
+        ;
+}

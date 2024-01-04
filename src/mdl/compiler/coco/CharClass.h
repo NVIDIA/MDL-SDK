@@ -29,6 +29,7 @@ Coco/R itself) does not fall under the GNU General Public License.
 #if !defined(COCO_CHARCLASS_H__)
 #define COCO_CHARCLASS_H__
 
+#include <string>
 #include "CharSet.h"
 
 namespace Coco {
@@ -36,11 +37,22 @@ namespace Coco {
 class CharClass {
 public:
 	int n;                // class number
-	char const *name;     // class name
+	std::string name;     // class name
 	CharSet *set;         // set representing the class
 
-	CharClass(char const * name, CharSet *s);
-	~CharClass();
+	/// Constructor.
+	///
+	/// \param name  the name of the character class
+	/// \param s     the associated character set, takes ownership
+	CharClass(std::string const &name, CharSet *s)
+	: n(0)
+	, name(name)
+	, set(s)
+	{
+	}
+
+	/// Destructor.
+	~CharClass() { delete set; }
 };
 
 }; // namespace

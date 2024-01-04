@@ -274,6 +274,9 @@ const ICompiled_material* mdl_distill( INeuray* neuray,
     Handle<IMdl_factory> mdl_factory(
         neuray->get_api_component<IMdl_factory>());
 
+    Handle<mi::neuraylib::IExpression_factory> expr_factory
+        (mdl_factory->create_expression_factory(transaction));
+
     Handle<mi::neuraylib::IFactory> factory(
         neuray->get_api_component<mi::neuraylib::IFactory>());
     Handle<mi::IMap> distiller_options( factory->create<mi::IMap>("Map<Interface>"));
@@ -311,7 +314,8 @@ const ICompiled_material* mdl_distill( INeuray* neuray,
     std::stringstream new_material;
 
     {
-        Mdl_printer mdl_printer(neuray, new_material, options, target, material_name,
+        Mdl_printer mdl_printer(neuray, mdl_factory.get(), expr_factory.get(),
+                                new_material, options, target, material_name,
                                 new_material_name, distilled_material.get(),
                                 NULL, // bake_paths
                                 false, // do_bake
@@ -347,7 +351,8 @@ const ICompiled_material* mdl_distill( INeuray* neuray,
 
     std::stringstream new_material_baked;
     {
-        Mdl_printer mdl_printer(neuray, new_material, options, target, material_name,
+        Mdl_printer mdl_printer(neuray, mdl_factory.get(), expr_factory.get(),
+                                new_material, options, target, material_name,
                                 new_material_name, distilled_material.get(),
                                 NULL, // bake_paths
                                 false, // do_bake
@@ -386,7 +391,8 @@ const ICompiled_material* mdl_distill( INeuray* neuray,
         if (options->verbosity > 3)
             std::cerr << "Info: bake textures\n";
         {
-            Mdl_printer mdl_printer(neuray, new_material_baked, options,
+            Mdl_printer mdl_printer(neuray, mdl_factory.get(), expr_factory.get(),
+                                    new_material_baked, options,
                                     target, material_name, new_material_name,
                                     distilled_material.get(),
                                     &bake_paths,
@@ -474,7 +480,8 @@ const ICompiled_material* mdl_distill( INeuray* neuray,
             (*out) << new_material_baked.str();
         } else {
             {
-                Mdl_printer mdl_printer(neuray, *out, options, target, material_name,
+                Mdl_printer mdl_printer(neuray, mdl_factory.get(), expr_factory.get(),
+                                        *out, options, target, material_name,
                                         new_material_name, distilled_material.get(),
                                         NULL, // bake_paths
                                         false, // do_bake
@@ -482,7 +489,6 @@ const ICompiled_material* mdl_distill( INeuray* neuray,
                 if ( options->outline) {
                     mdl_printer.set_outline_mode(true);
                 }
-//                    mdl_printer.set_suppress_default_parameters(true);
                 mdl_printer.print_module();
             }
         }

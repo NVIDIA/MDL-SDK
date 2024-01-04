@@ -294,6 +294,10 @@ namespace mi { namespace examples { namespace mdl
 
     inline bool unload()
     {
+        // Reset the global logger whose destructor might be defined in the library we are going to
+        // unload now.
+        g_logger.reset();
+
     #ifdef MI_PLATFORM_WINDOWS
         BOOL result = FreeLibrary(g_dso_handle);
         if( !result) {
@@ -335,45 +339,6 @@ namespace mi { namespace examples { namespace mdl
             return 0;
         }
 
-        // Special handling for free image in the open source release.
-        // In the open source version of the plugin we are linking against a dynamic
-        // vanilla freeimage library. In the binary release, you can download from the MDL website,
-        // freeimage is linked statically and thereby requires no special handling.
-        #if defined(MI_PLATFORM_WINDOWS) && defined(MDL_SOURCE_RELEASE)
-            if (strstr(path, "nv_freeimage" MI_BASE_DLL_FILE_EXT) != nullptr)
-            {
-                // load the freeimage (without nv_ prefix) first
-                std::string freeimage_3rd_party_path = mi::examples::strings::replace(
-                    path, "nv_freeimage" MI_BASE_DLL_FILE_EXT, "freeimage" MI_BASE_DLL_FILE_EXT);
-                HMODULE handle_tmp = LoadLibraryA(freeimage_3rd_party_path.c_str());
-                if (!handle_tmp)
-                {
-                    LPTSTR buffer = 0;
-                    LPCTSTR message = TEXT("unknown failure");
-                    DWORD error_code = GetLastError();
-                    if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-                        FORMAT_MESSAGE_IGNORE_INSERTS, 0, error_code,
-                        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&buffer, 0, 0))
-                        message = buffer;
-                    fprintf(stderr, "Failed to pre-load library '%s' (%u): " FMT_LPTSTR,
-                        freeimage_3rd_party_path.c_str(), error_code, message);
-                }
-                else
-                {
-                    fprintf(stderr, "Successfully pre-loaded library '%s'\n",
-                        freeimage_3rd_party_path.c_str());
-                }
-
-                // try to load the plugin itself now
-                res = plugin_conf->load_plugin_library(path);
-                if (res == 0)
-                {
-                    fprintf(stderr, "Successfully loaded the plugin library '%s'\n", path);
-                    return 0;
-                }
-            }
-        #endif
-
         // fall back to libraries in a relative lib folder, relevant for install targets
         if (strstr(path, "../../../lib/") != path)
         {
@@ -393,24 +358,12 @@ namespace mi { namespace examples { namespace mdl
     {
     public:
         void message(
-            mi::base::Message_severity level,
+            mi::base::Message_severity /*level*/,
             const char* /*module_category*/,
             const mi::base::Message_details& /*details*/,
             const char* message) override
         {
-            const char* severity = 0;
-            switch (level) {
-            case mi::base::MESSAGE_SEVERITY_FATAL:        severity = "fatal: "; break;
-            case mi::base::MESSAGE_SEVERITY_ERROR:        severity = "error: "; break;
-            case mi::base::MESSAGE_SEVERITY_WARNING:      severity = "warn:  "; break;
-            case mi::base::MESSAGE_SEVERITY_INFO:         severity = "info:  "; break;
-            case mi::base::MESSAGE_SEVERITY_VERBOSE:      return;
-            case mi::base::MESSAGE_SEVERITY_DEBUG:        return;
-            case mi::base::MESSAGE_SEVERITY_FORCE_32_BIT: return;
-            }
-
-            fprintf(stderr, "%s%s\n", severity, message);
-
+            fprintf(stderr, "%s\n", message);
 #ifdef MI_PLATFORM_WINDOWS
             fflush(stderr);
 #endif
@@ -438,20 +391,21 @@ namespace mi { namespace examples { namespace mdl
             return false;
         }
 
+        mi::base::Handle<mi::neuraylib::ILogging_configuration> logging_config(
+            neuray->get_api_component<mi::neuraylib::ILogging_configuration>());
         mi::base::Handle<mi::neuraylib::IMdl_configuration> mdl_config(
             neuray->get_api_component<mi::neuraylib::IMdl_configuration>());
 
         // set user defined or default logger
         if (options.logger)
         {
-            mdl_config->set_logger(options.logger);
-            g_logger = mi::base::make_handle_dup(options.logger);
+            logging_config->set_receiving_logger(options.logger);
         }
         else
         {
-            g_logger = mi::base::make_handle(new Default_logger());
-            mdl_config->set_logger(g_logger.get());
+            logging_config->set_receiving_logger(mi::base::make_handle(new Default_logger()).get());
         }
+        g_logger = logging_config->get_forwarding_logger();
 
         // set the module and texture search path.
         // mind the order
@@ -614,7 +568,7 @@ namespace mi { namespace examples { namespace mdl
             module->get_function_overloads(material_name.c_str()));
         if (!result || result->get_length() != 1)
             return std::string();
-        
+
         mi::base::Handle<const mi::IString> overloads(
             result->get_element<mi::IString>(static_cast<mi::Size>(0)));
         return overloads->get_c_str();
@@ -655,4 +609,3 @@ namespace mi { namespace examples { namespace mdl
 }}}
 
 #endif
-

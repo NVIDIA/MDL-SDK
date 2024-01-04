@@ -170,7 +170,8 @@ Each rule definition consists of
 - an optional return code (`skip_recursion` or `repeat_rules`)
 - an optional guard expression
 - a where clause with one or more variable bindings
-- an optional dead_rule declaration.
+- debug statements
+- an optional `dead_rule` declaration.
 
 The meaning of the return code is as follows:
 
@@ -203,6 +204,35 @@ example uses two where-bound variables to make the code more readable:
           where wp1 = math::clamp( math::luminance(w1), 0.001, 0.999)
                 wp2 = math::clamp( math::luminance(w2), 0.001, 0.999);
 \endcode
+
+Three are two kinds of debug statements:
+
+- `debug_name "rule name" assigns the given name in the string literal
+  to the rule. The name will be used in tracing and debug output for
+  this rule during the matching process.
+- `debug_print(identifier, ...) will print the values of the variables
+  with the given identifiers during the matching process, if debug
+  printing is switched on with the distilling option
+  `_dbg_debug_print` set to `true`.
+
+The following example illustrates the use of these debug statements:
+
+\code
+    d ~ simple_glossy_bsdf(ru,rv,tint,_,_) --> diffuse_reflection_bsdf(tint,0.5*(ru+rv))
+    debug_name "remove_glossy"
+    debug_print(d, rv)
+    debug_print(ru);
+\endcode
+
+When this rule is matched, the name of the rule will be
+`remove_glossy` in trace and debug output, and the values of the
+variables `d`, `rv` and `ru` will be displayed to the user during
+matching. The format of the output and how it is presented is
+dependent on the integrating application.
+
+The `dead_rule` declaration marks the rule as one that is not expected
+to match a node. This is mainly a tool for testing and can be used by
+coverage tools to exclude the rule.
 
 \section mi_neuray_mdltl_spec_patterns Patterns
 

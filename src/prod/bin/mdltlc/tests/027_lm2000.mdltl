@@ -1,0 +1,36 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Run_lm2000 bottomup {
+    material(thin_walled,
+             material_surface(diffuse_reflection_bsdf(t,r),
+                              me),
+             backface,ior,volume,geometry,hair)
+    --> material(thin_walled,
+                 material_surface(diffuse_reflection_bsdf(t,r) [[ roughness = 0.5 ]], me),
+                 backface,ior,volume,geometry,hair) [[ hit = true ]];
+}
+
+rules Run_lm2000 topdown {
+    diffuse_reflection_bsdf(t, _)  [[ roughness ~ _ ]] --> diffuse_reflection_bsdf(t, roughness / 2.0);
+    material(thin_walled,
+             material_surface(diffuse_reflection_bsdf(t,r),
+                              me),
+             backface,ior,volume,geometry,hair)  [[ hit ]]
+    --> material(thin_walled,
+                 material_surface(diffuse_reflection_bsdf(t,r), me),
+                 backface,ior,volume,geometry,hair);
+}
+
+rules Finalize_lm2000 bottomup {
+    diffuse_reflection_bsdf(t, r) --> diffuse_reflection_bsdf(t, r) [[ roughness = r + 0.1]];
+
+    material(thin_walled,
+             material_surface(diffuse_reflection_bsdf(t,_) [[ roughness ~ _ ]],
+                              me),
+             backface,ior,volume,geometry,hair) [[ hit ~ _ ]]
+    --> material(thin_walled,
+                 material_surface(diffuse_reflection_bsdf(t,roughness), me),
+                 backface,ior,volume,geometry,hair);
+}

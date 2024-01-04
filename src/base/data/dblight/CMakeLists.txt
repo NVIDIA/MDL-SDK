@@ -32,17 +32,21 @@ set(PROJECT_NAME base-data-dblight)
 # collect sources
 set(PROJECT_HEADERS
     "dblight_database.h"
+    "dblight_fragmented_job.h"
+    "dblight_info.h"
     "dblight_scope.h"
     "dblight_transaction.h"
+    "dblight_util.h"
     "i_dblight.h"
     )
 
-set(PROJECT_SOURCES 
+set(PROJECT_SOURCES
     "dblight_access.cpp"
     "dblight_database.cpp"
     "dblight_info.cpp"
     "dblight_scope.cpp"
     "dblight_transaction.cpp"
+    "dblight_util.cpp"
     ${PROJECT_HEADERS}
     )
 
@@ -53,7 +57,10 @@ create_from_base_preset(
     )
 
 # add dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME} 
-    DEPENDS 
+target_add_dependencies(TARGET ${PROJECT_NAME}
+    DEPENDS
         boost
     )
+
+# add unit tests
+add_unit_tests(POST)

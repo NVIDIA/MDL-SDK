@@ -159,22 +159,6 @@ public:
     /// \return                The logging level, in case of success, -1 in case of failure.
     virtual base::Message_severity get_log_level_by_category( const char* category) const = 0;
 
-    /// Sets the logging priority of this host.
-    ///
-    /// The log priority determines which host becomes the logging host. The preferred logging host
-    /// should have the highest number, and fallbacks in case of problems should have lower numbers,
-    /// in the preferred order of fallbacks. Hosts with the highest logging priority will take over
-    /// from designated logging hosts that have failed. The default logging priority is 0.
-    ///
-    /// This can only be configured before \NeurayProductName has been started.
-    ///
-    /// \param priority        The logging priority
-    /// \return                0, in case of success, -1 in case of failure.
-    virtual Sint32 set_log_priority( Sint32 priority) = 0;
-
-    /// Returns the logging priority of this host.
-    virtual Sint32 get_log_priority() const = 0;
-
     /// Sets the log message prefix.
     ///
     /// The log message prefix consists of several optional components that provide context for the
@@ -190,6 +174,33 @@ public:
     ///                        #mi::neuraylib::Log_prefix).
     virtual Uint32 get_log_prefix() const = 0;
 
+    /// \if MDL_SDK_API
+    /// Not supported.
+    /// \else
+    /// Sets the logging priority of this host.
+    ///
+    /// The log priority determines which host becomes the logging host. The preferred logging host
+    /// should have the highest number, and fallbacks in case of problems should have lower numbers,
+    /// in the preferred order of fallbacks. Hosts with the highest logging priority will take over
+    /// from designated logging hosts that have failed. The default logging priority is 0.
+    ///
+    /// This can only be configured before \NeurayProductName has been started.
+    ///
+    /// \param priority        The logging priority
+    /// \return                0, in case of success, -1 in case of failure.
+    /// \endif
+    virtual Sint32 set_log_priority( Sint32 priority) = 0;
+
+    /// \if MDL_SDK_API
+    /// Not supported.
+    /// \else
+    /// Returns the logging priority of this host.
+    /// \endif
+    virtual Sint32 get_log_priority() const = 0;
+
+    /// \if MDL_SDK_API
+    /// Not supported.
+    /// \else
     /// Enables or disables local logging.
     ///
     /// If local logging is enabled, all log messages from this host are sent to the local logger.
@@ -200,9 +211,14 @@ public:
     /// \param value           \c true to enable the local logging, \c false to disable it (the
     ///                        default).
     /// \return                0, in case of success, -1 in case of failure.
+    /// \endif
     virtual Sint32 set_log_locally( bool value) = 0;
 
+    /// \if MDL_SDK_API
+    /// Not supported.
+    /// \else
     /// Indicates whether local logging is enabled or not.
+    /// \endif
     virtual bool get_log_locally() const = 0;
 };
 

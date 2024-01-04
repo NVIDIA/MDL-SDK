@@ -1,0 +1,9 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+// Regression test for mixer normalization.
+rules Mixer_error bottomup {
+    matched_bsdf ~ bsdf_mix_2(_ [[x ~ _xx]], _, _, bsdf()) --> matched_bsdf [[ x = 1 ]];
+    matched_bsdf ~ bsdf_mix_2(_, bsdf(), _, _) --> matched_bsdf ;
+}

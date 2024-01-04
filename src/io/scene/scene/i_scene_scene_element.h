@@ -68,14 +68,6 @@ class Scene_element: public P
     /// \return an instance of this class
     static SERIAL::Serializable *factory();
 
-    /// Default constructor needed because of the copy constructor
-    Scene_element();
-
-    /// Copy constructor which will call the copy constructor of the base class.
-    /// \param source element to copy construct from
-    Scene_element(
-        const Scene_element &source);
-
     /// \name NetworkingFunctions
     /// Scene_element networking functions. See description header in i_db_element.h.
     //@{

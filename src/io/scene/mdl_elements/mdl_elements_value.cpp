@@ -31,6 +31,7 @@
 #include "pch.h"
 
 #include "mdl_elements_expression.h"
+#include "mdl_elements_utilities.h"
 #include "mdl_elements_value.h"
 #include "mdl_elements_type.h"
 
@@ -524,10 +525,14 @@ mi::Size Value_list::get_index( const char* name) const
 {
     if( !name)
         return static_cast<mi::Size>( -1);
-    Name_index_map::const_iterator it = m_name_index.find( name);
-    if( it == m_name_index.end())
-        return static_cast<mi::Size>( -1);
-    return it->second;
+
+    // For typical list sizes a linear search is much faster than maintaining a map from names to
+    // indices.
+    for( mi::Size i = 0; i < m_index_name.size(); ++i)
+        if( m_index_name[i] == name)
+            return i;
+
+    return static_cast<mi::Size>( -1);
 }
 
 const char* Value_list::get_name( mi::Size index) const
@@ -582,7 +587,6 @@ mi::Sint32 Value_list::add_value( const char* name, const IValue* value)
     if( index != static_cast<mi::Size>( -1))
         return -2;
     m_values.push_back( make_handle_dup( value));
-    m_name_index[name] = m_values.size() - 1;
     m_index_name.push_back( name);
     return 0;
 }
@@ -590,14 +594,12 @@ mi::Sint32 Value_list::add_value( const char* name, const IValue* value)
 void Value_list::add_value_unchecked( const char* name, const IValue* value)
 {
     m_values.push_back( make_handle_dup( value));
-    m_name_index[name] = m_values.size() - 1;
     m_index_name.push_back( name);
 }
 
 mi::Size Value_list::get_memory_consumption() const
 {
     return sizeof( *this)
-        + dynamic_memory_consumption( m_name_index)
         + dynamic_memory_consumption( m_index_name)
         + dynamic_memory_consumption( m_values);
 }
@@ -1175,17 +1177,6 @@ IValue_list* Value_factory::clone( const IValue_list* list) const
 
 namespace {
 
-class String : public mi::base::Interface_implement<mi::IString>
-{
-public:
-    String( const char* str = nullptr) : m_string( str ? str : "") { }
-    const char* get_type_name() const { return "String"; }
-    const char* get_c_str() const { return m_string.c_str(); }
-    void set_c_str( const char* str) { m_string = str ? str : ""; }
-private:
-    std::string m_string;
-};
-
 std::string get_prefix( mi::Size depth)
 {
     std::string prefix;
@@ -1204,7 +1195,7 @@ const mi::IString* Value_factory::dump(
 {
     std::ostringstream s;
     dump_static( transaction, value, name, depth, s);
-    return new String( s.str().c_str());
+    return create_istring( s.str().c_str());
 }
 
 const mi::IString* Value_factory::dump(
@@ -1215,7 +1206,7 @@ const mi::IString* Value_factory::dump(
 {
     std::ostringstream s;
     dump_static( transaction, list, name, depth, s);
-    return new String( s.str().c_str());
+    return create_istring( s.str().c_str());
 }
 
 mi::Sint32 Value_factory::compare_static( const IValue* lhs, const IValue* rhs, mi::Float64 epsilon)
@@ -1415,7 +1406,8 @@ void Value_factory::dump_static(
     mi::base::Handle<const IType> type( value->get_type());
 
     if( name) {
-        std::string type_name = Type_factory::get_type_name_static( type.get());
+        std::string type_name = Type_factory::get_dump_type_name(
+            type.get(), /*include_aliased_type*/ true);
         s << type_name << ' ' << name << " = ";
     }
 
@@ -1927,7 +1919,6 @@ void Value_factory::serialize_list(
 {
     const Value_list* list_impl = static_cast<const Value_list*>( list);
 
-    write( serializer, list_impl->m_name_index);
     write( serializer, list_impl->m_index_name);
 
     mi::Size size = list_impl->m_values.size();
@@ -1940,7 +1931,6 @@ IValue_list* Value_factory::deserialize_list( SERIAL::Deserializer* deserializer
 {
     Value_list* list_impl = new Value_list( /*initial_capacity*/ 0);
 
-    read( deserializer, &list_impl->m_name_index);
     read( deserializer, &list_impl->m_index_name);
 
     mi::Size size;

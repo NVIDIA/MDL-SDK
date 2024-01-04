@@ -42,7 +42,7 @@ set(PROJECT_HEADERS
     "i_disk_zip_file.h"
     )
 
-set(PROJECT_SOURCES 
+set(PROJECT_SOURCES
     "disk.cpp"
     "diskdirectory.cpp"
     "diskfile.cpp"
@@ -59,7 +59,10 @@ create_from_base_preset(
     )
 
 # add dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME} 
-    DEPENDS 
+target_add_dependencies(TARGET ${PROJECT_NAME}
+    DEPENDS
         boost
     )
+
+# add unit tests
+add_unit_tests(POST)

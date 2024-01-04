@@ -214,9 +214,9 @@ public:
         const Value_factory* vf, Internal_value* value, const mi::base::IInterface* owner)
       : Base( vf, value, owner) { }
 
-    Float32 get_value() const { return m_value->get_value(); }
+    mi::Float32 get_value() const { return m_value->get_value(); }
 
-    void set_value( Float32 value) { m_value->set_value( value); }
+    void set_value( mi::Float32 value) { m_value->set_value( value); }
 };
 
 
@@ -228,9 +228,9 @@ public:
         const Value_factory* vf, Internal_value* value, const mi::base::IInterface* owner)
       : Base( vf, value, owner) { }
 
-    Float64 get_value() const { return m_value->get_value(); }
+    mi::Float64 get_value() const { return m_value->get_value(); }
 
-    void set_value( Float64 value) { m_value->set_value( value); }
+    void set_value( mi::Float64 value) { m_value->set_value( value); }
 };
 
 
@@ -249,7 +249,8 @@ public:
 
 
 class Value_string_localized
-    : public Value_base<mi::neuraylib::IValue_string_localized, MDL::IValue_string_localized, mi::neuraylib::IType_string>
+    : public Value_base<mi::neuraylib::IValue_string_localized, MDL::IValue_string_localized,
+        mi::neuraylib::IType_string>
 {
 public:
     Value_string_localized(
@@ -532,7 +533,8 @@ public:
 
     mi::neuraylib::IValue_string* create_string( const char* value) const;
 
-    mi::neuraylib::IValue_string_localized* create_string_localized( const char* value, const char* original) const;
+    mi::neuraylib::IValue_string_localized* create_string_localized(
+        const char* value, const char* original) const;
 
     mi::neuraylib::IValue_vector* create_vector( const mi::neuraylib::IType_vector* type) const;
 

@@ -188,7 +188,6 @@ class SLWriterPass : public BasePass
     typedef typename AST::Expr_call             Expr_call;
     typedef typename AST::Expr_compound         Expr_compound;
     typedef typename AST::Expr_literal          Expr_literal;
-    typedef typename AST::Parameter_qualifier   Parameter_qualifier;
     typedef typename AST::Location              Location;
 
 public:

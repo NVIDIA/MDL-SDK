@@ -438,6 +438,9 @@ public:
     /// Returns true if the GLSLang version has the uint type.
     bool has_uint_type() const;
 
+    /// Returns true if the GLSLang version has pointer types.
+    bool has_pointer_types() const;
+
     /// Returns true if non-quadratic matrices exists in this GLSLang version.
     bool has_non_quadratic_matrices() const;
 

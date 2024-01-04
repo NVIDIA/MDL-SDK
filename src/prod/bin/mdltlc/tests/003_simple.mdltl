@@ -1,0 +1,9 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+// One simple rule, plus one import statement (ignored at the moment).
+rules Simple_rule topdown {
+    import df;
+    bsdf() --> diffuse_reflection_bsdf( color(0.0), 0.0);
+}

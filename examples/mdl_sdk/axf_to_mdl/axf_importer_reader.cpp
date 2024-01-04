@@ -131,7 +131,8 @@ static void compute_spectral_texture_metadata(
     }
 
     const size_t meta_data_size = sizeof(Texture_spectral_metadata) +
-        (matrix.size() - 1) * sizeof(float); // -1 as Texture_spectral_metadata already has float matrix[1]
+        (matrix.size() - 1) * sizeof(float);
+        // -1 as Texture_spectral_metadata already has float matrix[1]
 
     meta_data_buf.resize(meta_data_size);
     Texture_spectral_metadata *meta_data =
@@ -164,7 +165,7 @@ static size_t compute_num_spectral_meta_layers(
 }
 
 // spectra returned by the AxF SDK often immediately drop to zero below a certain minimum
-// wavelength and above a certain maximum maximum wavelength (presumably because there is no data)...
+// wavelength and above a certain maximum maximum wavelength (presumably because there is no data)
 // this is problematic for volume coefficients (since it suddenly leads to zero extinction)
 // -> repeat the last non-zero entries instead of dropping to zero
 static void expand_spectrum(std::vector<float> &spectrum)
@@ -332,8 +333,11 @@ bool Axf_reader::read_material(
     const size_t display_name_buf_size = AXF::axfGetMaterialDisplayName(material_h, nullptr, 0);
     if (display_name_buf_size > 0) {
         std::vector<wchar_t> display_name_buf(display_name_buf_size);
-        if (AXF::axfGetMaterialDisplayName(material_h, display_name_buf.data(), display_name_buf_size))
+        if (AXF::axfGetMaterialDisplayName(
+            material_h, display_name_buf.data(), display_name_buf_size))
+        {
             m_material_display_name = wchar_to_utf8(display_name_buf.data());
+        }
     }
 
     // we check the profiles one by one, as we do support different clearcoat coatings
@@ -403,7 +407,8 @@ bool Axf_reader::read_material(
         success = handle_representation(rep_h, conversion_flags, impexp_state);
 
     if (!success) {
-        const string msg = string("No supported representation found for AxF material ") + m_material_name;
+        const string msg = string("No supported representation found for AxF material ") +
+            m_material_name;
         Axf_importer::report_message(6005, mi::base::MESSAGE_SEVERITY_ERROR, msg, impexp_state);
     }
     return success;
@@ -805,11 +810,15 @@ bool Axf_reader::handle_carpaint_representation(
 
     // query refractiveness of clearcoat
     Clearcoat_model_variant clearcoat_variant;
-    const bool has_clearcoat = get_clearcoat_params(m_refractive_clearcoat, clearcoat_variant, tex_decoder);
+    const bool has_clearcoat = get_clearcoat_params(
+        m_refractive_clearcoat, clearcoat_variant, tex_decoder);
     if (has_clearcoat) {
-        // refractive clearcoat should never have the correct eta scaling, Dassault mode should not occur
-        assert((m_refractive_clearcoat && (clearcoat_variant == CLEARCOAT_NO_SOLID_ANGLE_COMPRESSION)) ||
-               (!m_refractive_clearcoat && (clearcoat_variant == CLEARCOAT_DEFAULT)));
+        // refractive clearcoat should never have the correct eta scaling,
+        // Dassault mode should not occur
+        assert(
+            (m_refractive_clearcoat && (clearcoat_variant == CLEARCOAT_NO_SOLID_ANGLE_COMPRESSION))
+         || (!m_refractive_clearcoat && (clearcoat_variant == CLEARCOAT_DEFAULT))
+        );
         get_property(
             &m_ior, sizeof(m_ior),
             tex_decoder, AXF::TYPE_FLOAT,
@@ -890,7 +899,8 @@ bool Axf_reader::handle_carpaint_representation(
     for (int i=0, cnt=tex_decoder->getNumTextures(); i<cnt; ++i) {
         char tex_name[AXF::AXF_MAX_KEY_SIZE];
         if (!tex_decoder->getTextureName(i, tex_name, AXF::AXF_MAX_KEY_SIZE)) {
-            string msg = string("Cannot retrieve texture name from AxF material ") + m_material_name;
+            string msg = string("Cannot retrieve texture name from AxF material ") +
+                m_material_name;
             Axf_importer::report_message(6011, mi::base::MESSAGE_SEVERITY_ERROR,
                 msg, impexp_state);
             return false;
@@ -915,7 +925,8 @@ bool Axf_reader::handle_carpaint_representation(
         if (is_normal)
             expected_type = INPUT_TEXTURE_NORMAL;
         else if (is_flake_btf)
-            expected_type = INPUT_TEXTURE_RGB; // flake BTF should always be RGB, even for spectral data
+            // flake BTF should always be RGB, even for spectral data
+            expected_type = INPUT_TEXTURE_RGB;
         else
             expected_type = INPUT_TEXTURE_COLOR;
 
@@ -1075,7 +1086,8 @@ bool Axf_reader::handle_volumetric_representation(
     for (int i=0, cnt=tex_decoder->getNumTextures(); i<cnt; ++i) {
         char tex_name[AXF::AXF_MAX_KEY_SIZE];
         if (!tex_decoder->getTextureName(i, tex_name, AXF::AXF_MAX_KEY_SIZE)) {
-            string msg = string("Cannot retrieve texture name from AxF material ") + m_material_name;
+            string msg = string("Cannot retrieve texture name from AxF material ") +
+                m_material_name;
             Axf_importer::report_message(6051, mi::base::MESSAGE_SEVERITY_ERROR,
                 msg, impexp_state);
             return false;
@@ -1101,7 +1113,10 @@ bool Axf_reader::handle_volumetric_representation(
         }
         else {
             assert(channels == col_size);
-            memcpy(is_sigma_a ? m_sigma_a.data() : m_sigma_s.data(), tex_buffer.data(), col_size * sizeof(float));
+            memcpy(
+                is_sigma_a ? m_sigma_a.data() : m_sigma_s.data(),
+                tex_buffer.data(),
+                col_size * sizeof(float));
         }
     }
 
@@ -1134,7 +1149,8 @@ bool Axf_reader::handle_representation(
 {
     char typekey[AXF::AXF_MAX_KEY_SIZE];
     if (!AXF::axfGetRepresentationClass(rep_h, typekey, AXF::AXF_MAX_KEY_SIZE)) {
-        const string msg = string("No representation type key found for AxF material ") + m_material_name;
+        const string msg = string("No representation type key found for AxF material ") +
+            m_material_name;
         Axf_importer::report_message(6006, mi::base::MESSAGE_SEVERITY_ERROR,
             msg, impexp_state);
         return false;
@@ -1189,7 +1205,8 @@ bool Axf_reader::handle_representation(
             }
 
             m_wavelengths.resize(num_lambda);
-            const float lambda_step = (num_lambda > 1) ? ((lambda_max - lambda_min) / float(num_lambda - 1)) : 0.0f;
+            const float lambda_step =
+                (num_lambda > 1) ? ((lambda_max - lambda_min) / float(num_lambda - 1)) : 0.0f;
             for (int j = 0; j < num_lambda; ++j)
                 m_wavelengths[j] = lambda_min + j * lambda_step;
 
@@ -1198,14 +1215,16 @@ bool Axf_reader::handle_representation(
         }
 
         Scope_handler<AXF::TextureDecoder> tex_decoder(
-            (i == 1) ?
-            AXF::TextureDecoder::createSpectral(
-                rep_h, m_wavelengths.data(), m_wavelengths.size(), AXF::ORIGIN_TOPLEFT, conversion_flags) :
-            AXF::TextureDecoder::create(
+            (i == 1)
+            ? AXF::TextureDecoder::createSpectral(
+                rep_h, m_wavelengths.data(), m_wavelengths.size(),
+                AXF::ORIGIN_TOPLEFT, conversion_flags)
+            : AXF::TextureDecoder::create(
                 rep_h, m_target_color_space, AXF::ORIGIN_TOPLEFT, conversion_flags));
 
         if (!tex_decoder) {
-            const string msg = string("Cannot create texture decoder for AxF material ") + m_material_name;
+            const string msg = string("Cannot create texture decoder for AxF material ") +
+                m_material_name;
             Axf_importer::report_message(
                 6010, mi::base::MESSAGE_SEVERITY_ERROR, msg, impexp_state);
             return false;
@@ -1246,7 +1265,8 @@ bool Axf_reader::handle_svbrdf_representation(
             AXF::axfGetSvbrdfDiffuseModelRepresentation(rep_h);
 
     if (!spec_model_h && !diff_model_h) {
-        const string msg = string("Failed to retrieve SVBRDF model for AxF material ") + m_material_name;
+        const string msg = string("Failed to retrieve SVBRDF model for AxF material ") +
+            m_material_name;
         Axf_importer::report_message(6007, mi::base::MESSAGE_SEVERITY_ERROR,
             msg, impexp_state);
         return false;
@@ -1259,7 +1279,8 @@ bool Axf_reader::handle_svbrdf_representation(
         char typekey[AXF::AXF_MAX_KEY_SIZE];
         if (!AXF::axfGetRepresentationTypeKey(spec_model_h, typekey, AXF::AXF_MAX_KEY_SIZE)) {
             ostringstream str;
-            str << "No specular SVBRDF representation type key found for AxF material " << m_material_name;
+            str << "No specular SVBRDF representation type key found for AxF material "
+                << m_material_name;
             Axf_importer::report_message(6008, mi::base::MESSAGE_SEVERITY_ERROR,
                                          str.str(), impexp_state);
             return false;
@@ -1273,7 +1294,8 @@ bool Axf_reader::handle_svbrdf_representation(
         if (!AXF::axfGetSvbrdfSpecularModelVariant(
                 spec_model_h,variant,AXF::AXF_MAX_KEY_SIZE,is_anisotropic,has_fresnel)) {
             ostringstream str;
-            str << "Failed to retrieve specular model variant for AxF material " << m_material_name;
+            str << "Failed to retrieve specular model variant for AxF material "
+                << m_material_name;
             Axf_importer::report_message(6016,mi::base::MESSAGE_SEVERITY_ERROR,
                                          str.str(),impexp_state);
             return false;
@@ -1323,7 +1345,8 @@ bool Axf_reader::handle_svbrdf_representation(
                     spec_model_h, fresnel_type, AXF::AXF_MAX_KEY_SIZE))
             {
                 ostringstream str;
-                str << "Failed to retrieve Fresnel type " << " for AxF material " << m_material_name;
+                str << "Failed to retrieve Fresnel type " << " for AxF material " 
+                    << m_material_name;
                 Axf_importer::report_message(6022,
                                              mi::base::MESSAGE_SEVERITY_WARNING,
                                              str.str(),impexp_state);
@@ -1332,7 +1355,8 @@ bool Axf_reader::handle_svbrdf_representation(
             if (strcmp(fresnel_type, AXF_SVBRDF_FRESNEL_VARIANT_SCHLICK) == 0)
                 m_fresnel_type = FRESNEL_SCHLICK;
             else if (strcmp(fresnel_type, AXF_SVBRDF_FRESNEL_VARIANT_SCHLICK_COLORED) == 0) {
-                // should only appear for EPSVBRDF and then be converted to non-colored SVBRDF Schlick
+                // should only appear for EPSVBRDF 
+                // and then be converted to non-colored SVBRDF Schlick
                 assert((conversion_flags & AXF::CONVERT_EPSVBRDF_TO_SVBRDF) != 0);
                 m_fresnel_type = FRESNEL_SCHLICK;
             }
@@ -1392,7 +1416,8 @@ bool Axf_reader::handle_svbrdf_representation(
     for (int i=0, cnt=tex_decoder->getNumTextures(); i<cnt; ++i) {
         char tex_name[AXF::AXF_MAX_KEY_SIZE];
         if (!tex_decoder->getTextureName(i, tex_name, AXF::AXF_MAX_KEY_SIZE)) {
-            string msg = string("Cannot retrieve texture name from AxF material ") + m_material_name;
+            string msg = string("Cannot retrieve texture name from AxF material ") +
+                m_material_name;
             Axf_importer::report_message(6011, mi::base::MESSAGE_SEVERITY_ERROR,
                 msg, impexp_state);
             return false;
@@ -1496,8 +1521,9 @@ bool Axf_reader::handle_svbrdf_representation(
             if (is_aniso_rotation) {
                 // source values are in [-pi/2,pi/2], we want [0,1].
                 for (size_t i = 0; i < tex_buffer.size(); ++i) {
-                    const float angle =
-                        tex_buffer[i] >= 0.0f ? tex_buffer[i] : (float)(2.0 * M_PI) + tex_buffer[i];
+                    const float angle = tex_buffer[i] >= 0.0f 
+                        ? tex_buffer[i] 
+                        : (float)(2.0 * M_PI) + tex_buffer[i];
                     tex_buffer[i] = angle * (float)(0.5 / M_PI);
                 }
             }
@@ -1624,9 +1650,11 @@ bool Axf_reader::handle_svbrdf_representation(
 
     // preprocessing below needs to ensure that we operate on the same resolution
     const unsigned int max_rx = std::max(
-        std::max(fresnel_tex_rx, trans_color_tex_rx), std::max(diffuse_tex_rx, specular_color_tex_rx));
+        std::max(fresnel_tex_rx, trans_color_tex_rx),
+        std::max(diffuse_tex_rx, specular_color_tex_rx));
     const unsigned int max_ry = std::max(
-        std::max(fresnel_tex_ry, trans_color_tex_ry), std::max(diffuse_tex_ry, specular_color_tex_ry));
+        std::max(fresnel_tex_ry, trans_color_tex_ry),
+        std::max(diffuse_tex_ry, specular_color_tex_ry));
 
     const size_t num_color_channels = m_wavelengths.empty() ? 3 : m_wavelengths.size();
     const size_t num_pixels = max_rx * max_ry;
@@ -1637,7 +1665,8 @@ bool Axf_reader::handle_svbrdf_representation(
         upscale_tex_buffer(
             diffuse_tex, diffuse_tex_rx, diffuse_tex_ry, max_rx, max_ry, num_color_channels);
         upscale_tex_buffer(
-            specular_color_tex, specular_color_tex_rx, specular_color_tex_ry, max_rx, max_ry, num_color_channels);
+            specular_color_tex, specular_color_tex_rx, specular_color_tex_ry, max_rx, max_ry,
+            num_color_channels);
 
         // check for energy violation, re-scale glossy if necessary
         bool energy_violation = false;
@@ -1743,7 +1772,10 @@ bool Axf_reader::handle_svbrdf_representation(
 
             transmission_s[i] = std::min(max_rho_s, (1.0f - max_rho_t0) / F0);
             for (size_t c = 0; c < num_color_channels; ++c)
-                transmission_rho[idx + c] = trans_color_tex[idx + c] / (1.0f - transmission_s[i] * F0);
+            {
+                transmission_rho[idx + c] =
+                    trans_color_tex[idx + c] / (1.0f - transmission_s[i] * F0);
+            }
         }
 
         const std::string texture_name_s = write_texture(
@@ -1835,11 +1867,13 @@ string Axf_reader::write_texture(
         layers = channels;
         size_t spectral_offset0;
         meta_layers = compute_num_spectral_meta_layers(
-            spectral_offset0, width * height * sizeof(float), channels, m_spectral_tex_meta_data.size());
-        assert(spectral_offset0 == 0); //!! TODO: would need to be handled if pixel type wouldn't be float
+            spectral_offset0, width * height * sizeof(float), channels, 
+            m_spectral_tex_meta_data.size());
+        //!! TODO: would need to be handled if pixel type wouldn't be float
+        assert(spectral_offset0 == 0); 
     } else if (type == TEXTURE_NORMAL) {
-        // use Rgb_16 for normal maps, because that will typically yield best precision through the
-        // usage of the RGBAD type in iray core
+        // use Rgb_16 for normal maps, because that will typically yield best precision through
+        // the usage of the RGBAD type in iray core
         pixel_type = "Rgb_16";
     } else {
         // use RGBE for color and Float32 for scalar
@@ -1891,7 +1925,8 @@ string Axf_reader::write_texture(
         size_t uncopied = m_spectral_tex_meta_data.size();
         for (size_t l = layers; l < layers + meta_layers; ++l) {
             mi::base::Handle<mi::neuraylib::ITile> tile(canvas->get_tile(l));
-            const size_t to_copy = std::min(uncopied, (size_t)width * (size_t)height * sizeof(float));
+            const size_t to_copy =
+                std::min(uncopied, (size_t)width * (size_t)height * sizeof(float));
             memcpy(tile->get_data(), m_spectral_tex_meta_data.data() + copied, to_copy);
             copied += to_copy;
             uncopied -= to_copy;
@@ -1950,7 +1985,8 @@ static bool get_int_expr(
         return false;
 
     mi::base::Handle<const mi::neuraylib::IValue> value(exprc->get_value());
-    mi::base::Handle<const mi::neuraylib::IValue_int> value_int(value->get_interface<const mi::neuraylib::IValue_int>());
+    mi::base::Handle<const mi::neuraylib::IValue_int> value_int(
+        value->get_interface<const mi::neuraylib::IValue_int>());
     if (!value_int)
         return false;
 
@@ -1983,16 +2019,21 @@ bool Axf_reader::access_mdl_material_definitions(
     int major = -1, minor = -1, patch = -1;
     if (mdl_module) {
         assert(mdl_module);
-        mi::base::Handle<const mi::neuraylib::IAnnotation_block> annotation_block(mdl_module->get_annotations());
+        mi::base::Handle<const mi::neuraylib::IAnnotation_block> annotation_block(
+            mdl_module->get_annotations());
 
         if (annotation_block) {
             for (mi::Size i = 0; i < annotation_block->get_size(); ++i) {
 
-                mi::base::Handle<const mi::neuraylib::IAnnotation> annotation(annotation_block->get_annotation(i));
+                mi::base::Handle<const mi::neuraylib::IAnnotation> annotation(
+                    annotation_block->get_annotation(i));
                 if (annotation) {
-                    mi::base::Handle<const mi::neuraylib::IAnnotation_definition> def(annotation->get_definition());
-                    if (def && def->get_semantic() == mi::neuraylib::IAnnotation_definition::AS_VERSION_ANNOTATION) {
-                        mi::base::Handle<const mi::neuraylib::IExpression_list> expr_list(annotation->get_arguments());
+                    mi::base::Handle<const mi::neuraylib::IAnnotation_definition> def(
+                        annotation->get_definition());
+                    if (def && def->get_semantic() == 
+                        mi::neuraylib::IAnnotation_definition::AS_VERSION_ANNOTATION) {
+                        mi::base::Handle<const mi::neuraylib::IExpression_list> expr_list(
+                            annotation->get_arguments());
                         if (expr_list) {
                             got_version = get_int_expr(major, expr_list.get(), "major");
                             got_version |= get_int_expr(minor, expr_list.get(), "minor");
@@ -2007,13 +2048,15 @@ bool Axf_reader::access_mdl_material_definitions(
     if (!got_version) {
         Axf_importer::report_message(
             6031, mi::base::MESSAGE_SEVERITY_ERROR,
-            "Failed to retrieve version of nvidia::axf_importer::axf_importer, the installed version may be out of date",
+            "Failed to retrieve version of nvidia::axf_importer::axf_importer, "
+            "the installed version may be out of date",
             impexp_state);
         return false;
     }
     if (major < 1 || (major == 1 && minor < 7) || (major == 1 && minor == 7 && patch < 100)) {
         ostringstream str;
-        str << "Insufficient version (" << major << '.' << minor << '.' << patch << ") of nvidia::axf_importer::axf_importer, required version is (1.7.99)";
+        str << "Insufficient version (" << major << '.' << minor << '.' << patch << ") of "
+            "nvidia::axf_importer::axf_importer, required version is (1.7.99)";
         Axf_importer::report_message(
             6031, mi::base::MESSAGE_SEVERITY_ERROR,
             str.str(), impexp_state);
@@ -2489,7 +2532,8 @@ void set_spectral_param(
         const float *f = (i == 0) ? wavelengths.data() : values.data();
 
         // create and fill the array
-        mi::base::Handle<mi::neuraylib::IValue_array> ar(val_factory->create_array(array_type.get()));
+        mi::base::Handle<mi::neuraylib::IValue_array> ar(
+            val_factory->create_array(array_type.get()));
         for (mi::Size j = 0; j < num_wavelengths; ++j)
         {
             mi::base::Handle<mi::neuraylib::IValue> val(
@@ -2497,7 +2541,8 @@ void set_spectral_param(
             ar->set_value(j, val.get());
         }
 
-        mi::base::Handle<mi::neuraylib::IExpression> array_expr(expr_factory->create_constant(ar.get()));
+        mi::base::Handle<mi::neuraylib::IExpression> array_expr(
+            expr_factory->create_constant(ar.get()));
         arguments->add_expression(array_name, array_expr.get());
     }
 
@@ -2515,7 +2560,8 @@ void set_spectral_param(
     // attach call to parameter
     //
 
-    mi::base::Handle<mi::neuraylib::IExpression_call> call(expr_factory->create_call(color_constructor_name.c_str()));
+    mi::base::Handle<mi::neuraylib::IExpression_call> call(
+        expr_factory->create_call(color_constructor_name.c_str()));
     default_parameters->add_expression(param_name, call.get());
 }
 
@@ -2567,7 +2613,8 @@ string make_valid_mdl_module_path(
     for (size_t pos = start; pos < path.size(); ++pos) {
         bool colon = (path[pos] == ':');
         if (colon && prev_colon) {
-            result += "::" + make_valid_mdl_id(mdl_factory, path.substr(start, pos - start - 1));
+            result += "::" + make_valid_mdl_id(
+                mdl_factory, path.substr(start, pos - start - 1));
 
             for (start = pos + 1; start < path.size(); ++start) {
                 if (path[start] != ':') {
@@ -2727,13 +2774,15 @@ void Axf_reader::create_variant(
             param_name = "sigma_s";
             set_spectral_param(
                 impexp_state,
-                default_parameters.get(), type_factory.get(), val_factory.get(), expr_factory.get(),
-                m_volumetric_material.get(), material_name.c_str(), m_transaction, param_name, m_wavelengths, m_sigma_s);
+                default_parameters.get(), type_factory.get(), val_factory.get(), 
+                expr_factory.get(), m_volumetric_material.get(), material_name.c_str(),
+                m_transaction, param_name, m_wavelengths, m_sigma_s);
             param_name = "sigma_a";
             set_spectral_param(
                 impexp_state,
-                default_parameters.get(), type_factory.get(), val_factory.get(), expr_factory.get(),
-                m_volumetric_material.get(), material_name.c_str(), m_transaction, param_name, m_wavelengths, m_sigma_a);
+                default_parameters.get(), type_factory.get(), val_factory.get(), 
+                expr_factory.get(), m_volumetric_material.get(), material_name.c_str(),
+                m_transaction, param_name, m_wavelengths, m_sigma_a);
         }
 
         m_variants.push_back(
@@ -2756,7 +2805,8 @@ void Axf_reader::create_variant(
 
             mi::base::Handle<mi::neuraylib::Bsdf_isotropic_data> bsdf_data(
                 new mi::neuraylib::Bsdf_isotropic_data(
-                    res_theta, res_phi, bake_brdf_colors ? mi::neuraylib::BSDF_RGB : mi::neuraylib::BSDF_SCALAR));
+                    res_theta, res_phi,
+                    bake_brdf_colors ? mi::neuraylib::BSDF_RGB : mi::neuraylib::BSDF_SCALAR));
 
             mi::base::Handle<mi::neuraylib::Bsdf_buffer> bsdf_data_buffer(
                 static_cast<mi::neuraylib::Bsdf_buffer *>(bsdf_data->get_bsdf_buffer()));
@@ -2911,7 +2961,8 @@ void Axf_reader::handle_preview_images(
         float widthMM, heightMM;
         if (!AXF::axfGetPreviewImageInfo(rep_h, i, width, height, channels, widthMM, heightMM)) {
             const string msg =
-                string("Failed to retrieve preview image info for material \"") + m_material_name + '\"';
+                string("Failed to retrieve preview image info for material \"") +
+                m_material_name + '\"';
             Axf_importer::report_message(6016, mi::base::MESSAGE_SEVERITY_WARNING,
                 msg, impexp_state);
             continue;
@@ -2926,9 +2977,12 @@ void Axf_reader::handle_preview_images(
             continue;
 
         vector<float> img(width * height * channels);
-        if (!AXF::axfGetPreviewImage(rep_h,i,m_target_color_space,img.data(),width,height,channels)) {
+        if (!AXF::axfGetPreviewImage(
+            rep_h,i,m_target_color_space,img.data(),width,height,channels))
+        {
             const string msg =
-                string("Failed to retrieve preview image info for material \"") + m_material_name + '\"';
+                string("Failed to retrieve preview image info for material \"") +
+                m_material_name + '\"';
             Axf_importer::report_message(6017, mi::base::MESSAGE_SEVERITY_WARNING,
                 msg, impexp_state);
             continue;
@@ -2979,7 +3033,8 @@ void Axf_reader::handle_preview_images(
         mi::base::Handle<mi::neuraylib::IImage> image(
             m_transaction->create<mi::neuraylib::IImage>("Image"));
         image->set_from_canvas(canvas.get());
-        m_transaction->store(image.get(),img_name.c_str(),mi::neuraylib::ITransaction::LOCAL_SCOPE);
+        m_transaction->store(
+            image.get(), img_name.c_str(), mi::neuraylib::ITransaction::LOCAL_SCOPE);
     }
 }
 
@@ -2990,7 +3045,8 @@ static const mi::neuraylib::IAnnotation_block* copy_annotations(
     const char* prototype_name,
     const char* display_name)
 {
-    auto mat_def = mi::base::make_handle(trans->access<mi::neuraylib::IFunction_definition>(prototype_name));
+    auto mat_def = mi::base::make_handle(
+        trans->access<mi::neuraylib::IFunction_definition>(prototype_name));
     auto annos = mi::base::make_handle(mat_def->get_annotations());
     if (!annos) {
         return nullptr;
@@ -3002,26 +3058,34 @@ static const mi::neuraylib::IAnnotation_block* copy_annotations(
         auto anno = mi::base::make_handle(annos->get_annotation(i));
         auto anno_def = mi::base::make_handle(anno->get_definition());
         // don't hide materials
-        if (anno_def && (anno_def->get_semantic() == mi::neuraylib::IAnnotation_definition::AS_HIDDEN_ANNOTATION)) {
+        if (anno_def &&(anno_def->get_semantic() == 
+            mi::neuraylib::IAnnotation_definition::AS_HIDDEN_ANNOTATION)) 
+        {
              continue;
         }
 
         // set a meaningful display name
-        if (anno_def && (anno_def->get_semantic() == mi::neuraylib::IAnnotation_definition::AS_DISPLAY_NAME_ANNOTATION)) {
+        if (anno_def && (anno_def->get_semantic() == 
+            mi::neuraylib::IAnnotation_definition::AS_DISPLAY_NAME_ANNOTATION))
+        {
             auto name = mi::base::make_handle(value_factory->create_string(display_name));
-            auto new_expr_constant = mi::base::make_handle(expr_factory->create_constant(name.get()));
+            auto new_expr_constant = mi::base::make_handle(
+                expr_factory->create_constant(name.get()));
 
             auto new_expr_list = mi::base::make_handle(expr_factory->create_expression_list());
             new_expr_list->add_expression("name", new_expr_constant.get());
 
-            auto new_anno =  mi::base::make_handle(expr_factory->create_annotation(anno->get_name(), new_expr_list.get()));
+            auto new_anno =  mi::base::make_handle(
+                expr_factory->create_annotation(anno->get_name(), new_expr_list.get()));
             new_annos->add_annotation(new_anno.get());
             continue;
         }
 
         auto anno_args = mi::base::make_handle(anno->get_arguments());
-        auto new_anno_args =  mi::base::make_handle(anno_args ? expr_factory->clone(anno_args.get()) : nullptr);
-        auto new_anno =  mi::base::make_handle(expr_factory->create_annotation(anno->get_name(), new_anno_args.get()));
+        auto new_anno_args =  mi::base::make_handle(
+            anno_args ? expr_factory->clone(anno_args.get()) : nullptr);
+        auto new_anno =  mi::base::make_handle(
+            expr_factory->create_annotation(anno->get_name(), new_anno_args.get()));
 
         new_annos->add_annotation(new_anno.get());
     }
@@ -3083,7 +3147,8 @@ unsigned int Axf_reader::handle_collected_variants(
         }
 
         mi::base::Handle<const mi::neuraylib::IAnnotation_block> annos(
-            copy_annotations(m_transaction, expr_factory.get(), value_factory.get(), prototype_name, m_variants[i].m_display_name.c_str()));
+            copy_annotations(m_transaction, expr_factory.get(), value_factory.get(),
+                prototype_name, m_variants[i].m_display_name.c_str()));
 
         mi::Sint32 result = module_builder->add_variant(
              m_variants[i].m_material_name.c_str(),
@@ -3095,7 +3160,8 @@ unsigned int Axf_reader::handle_collected_variants(
              context.get());
         if (result < 0) {
             Axf_importer::report_message(6019, mi::base::MESSAGE_SEVERITY_ERROR,
-                "Failed to create variant \"" + m_variants[i].m_material_name + "\" for \"" + module_name + "\".",
+                "Failed to create variant \"" + m_variants[i].m_material_name + "\" for \"" +
+                module_name + "\".",
                 impexp_state);
             for (mi::Size i = 0; i < context->get_messages_count(); ++i) {
                 mi::base::Handle<const mi::neuraylib::IMessage> msg(context->get_message(i));

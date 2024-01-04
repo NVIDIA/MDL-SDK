@@ -31,140 +31,138 @@ Coco/R itself) does not fall under the GNU General Public License.
 
 namespace Coco {
 
-	Generator::Generator(Tab *tab, Errors *errors) {
-		this->errors = errors;
-		this->tab = tab;
-		fram = NULL;
-		gen = NULL;
-		frameFile = NULL;
+Generator::Generator(Tab &tab, Errors &errors)
+: tab(tab)
+, errors(errors)
+, fram(NULL)
+, gen(NULL)
+, frameFile()
+{
+}
+
+FILE* Generator::OpenFrame(const char* frame) {
+	if (!tab.frameDir.empty()) {
+		frameFile = tab.frameDir + "/" + frame;
+		fram = fopen(frameFile.c_str(), "r");
+	}
+	if (fram == NULL) {
+		frameFile = tab.srcDir +  frame;  /* pdt */
+		fram = fopen(frameFile.c_str(), "r");
+	}
+	if (fram == NULL) {
+		std::string message = std::string("-- Cannot find : ") + frame;
+		errors.Exception(message.c_str());
 	}
 
-	FILE* Generator::OpenFrame(const char* frame) {
-		if (coco_string_length(tab->frameDir) != 0) {
-			frameFile = coco_string_create_append(tab->frameDir, "/");
-			coco_string_merge(frameFile, frame);
-			fram = fopen(frameFile, "r");
-		}
-		if (fram == NULL) {
-			delete [] frameFile;
-			frameFile = coco_string_create_append(tab->srcDir, frame);  /* pdt */
-			fram = fopen(frameFile, "r");
-		}
-		if (fram == NULL) {
-			char *message = coco_string_create_append("-- Cannot find : ", frame);
-			errors->Exception(message);
-			delete [] message;
-		}
+	return fram;
+}
 
-		return fram;
+
+FILE* Generator::OpenGen(const char *genName) { /* pdt */
+	std::string fn = tab.outDir + genName; /* pdt */
+
+	if ((gen = fopen(fn.c_str(), "r")) != NULL) {
+		fclose(gen);
+		std::string oldName = fn +  ".old";
+		remove(oldName.c_str());
+		rename(fn.c_str(), oldName.c_str()); // copy with overwrite
+	}
+	if ((gen = fopen(fn.c_str(), "w")) == NULL) {
+		std::string message = std::string("-- Cannot generate : ") + genName;
+		errors.Exception(message.c_str());
 	}
 
+	return gen;
+}
 
-	FILE* Generator::OpenGen(const char *genName) { /* pdt */
-		char *fn = coco_string_create_append(tab->outDir, genName); /* pdt */
 
-		if ((gen = fopen(fn, "r")) != NULL) {
-			fclose(gen);
-			char *oldName = coco_string_create_append(fn, ".old");
-			remove(oldName); rename(fn, oldName); // copy with overwrite
-			coco_string_delete(oldName);
-		}
-		if ((gen = fopen(fn, "w")) == NULL) {
-			char *message = coco_string_create_append("-- Cannot generate : ", genName);
-			errors->Exception(message);
-			delete [] message;
-		}
-		coco_string_delete(fn);
+void Generator::GenCopyright() {
+	FILE *file = NULL;
 
-		return gen;
+	if (!tab.frameDir.empty()) {
+		std::string copyFr = tab.frameDir + "/Copyright.frame";
+		file = fopen(copyFr.c_str(), "r");
+	}
+	if (file == NULL) {
+		std::string copyFr = tab.srcDir + "Copyright.frame";
+		file = fopen(copyFr.c_str(), "r");
+	}
+	if (file == NULL) {
+		return;
 	}
 
+	FILE *scannerFram = fram;
+	fram = file;
 
-	void Generator::GenCopyright() {
-		FILE *file = NULL;
+	CopyFramePart(NULL);
+	fram = scannerFram;
 
-		if (coco_string_length(tab->frameDir) != 0) {
-			char *copyFr = coco_string_create_append(tab->frameDir, "/Copyright.frame");
-			file = fopen(copyFr, "r");
-			delete [] copyFr;
+	fclose(file);
+}
+
+void Generator::GenPrefixFromNamespace() {
+	if (tab.nsName.empty()) {
+		return;
+	}
+	std::string nsName = tab.nsName;
+	size_t const len = nsName.size();
+	size_t startPos = 0;
+	do {
+		size_t curLen = nsName.find(COCO_CPP_NAMESPACE_SEPARATOR, startPos);
+		if (curLen == std::string::npos) {
+			curLen = len;
 		}
-		if (file == NULL) {
-			char *copyFr = coco_string_create_append(tab->srcDir, "Copyright.frame");
-			file = fopen(copyFr, "r");
-			delete [] copyFr;
+		curLen -= startPos;
+		std::string curNs = nsName.substr(startPos, curLen);
+		fprintf(gen, "%s_", curNs.c_str());
+		startPos = startPos + curLen + 1;
+		if (startPos < len && nsName[startPos] == COCO_CPP_NAMESPACE_SEPARATOR) {
+			++startPos;
 		}
-		if (file == NULL) {
-			return;
-		}
+	} while (startPos < len);
+}
 
-		FILE *scannerFram = fram;
-		fram = file;
+void Generator::SkipFramePart(char const *stop) {
+	CopyFramePart(stop, false);
+}
 
-		CopyFramePart(NULL);
-		fram = scannerFram;
+void Generator::CopyFramePart(char const *stop) {
+	CopyFramePart(stop, true);
+}
 
-		fclose(file);
+void Generator::CopyFramePart(char const *stop, bool generateOutput) {
+	char startCh = 0;
+	int endOfStopString = 0;
+	char ch = 0;
+
+	if (stop != NULL) {
+		startCh = stop[0];
+		endOfStopString = coco_string_length(stop)-1;
 	}
 
-	void Generator::GenPrefixFromNamespace() {
-		const char *nsName = tab->nsName;
-		if (nsName == NULL || coco_string_length(nsName) == 0) {
-			return;
-		}
-		const int len = coco_string_length(nsName);
-		int startPos = 0;
-		do {
-			int curLen = coco_string_indexof(nsName + startPos, COCO_CPP_NAMESPACE_SEPARATOR);
-			if (curLen == -1) { curLen = len - startPos; }
-			char *curNs = coco_string_create(nsName, startPos, curLen);
-			fprintf(gen, "%s_", curNs);
-			coco_string_delete(curNs);
-			startPos = startPos + curLen + 1;
-		} while (startPos < len);
-	}
-
-	void Generator::SkipFramePart(char const *stop) {
-		CopyFramePart(stop, false);
-	}
-
-	void Generator::CopyFramePart(char const *stop) {
-		CopyFramePart(stop, true);
-	}
-
-	void Generator::CopyFramePart(char const *stop, bool generateOutput) {
-		char startCh = 0;
-		int endOfStopString = 0;
-		char ch = 0;
-
-		if (stop != NULL) {
-			startCh = stop[0];
-			endOfStopString = coco_string_length(stop)-1;
-		}
-
-		fscanf(fram, "%c", &ch); //	fram.ReadByte();
-		while (!feof(fram)) { // ch != EOF
-			if (stop != NULL && ch == startCh) {
-				int i = 0;
-				do {
-					if (i == endOfStopString) return; // stop[0..i] found
-					fscanf(fram, "%c", &ch); i++;
-				} while (ch == stop[i]);
-				// stop[0..i-1] found; continue with last read character
-				if (generateOutput) {
-					char *subStop = coco_string_create(stop, 0, i);
-					fprintf(gen, "%s", subStop);
-					coco_string_delete(subStop);
-				}
-			} else {
-				if (generateOutput) { fprintf(gen, "%c", ch); }
-				fscanf(fram, "%c", &ch);
+	fscanf(fram, "%c", &ch); //	fram.ReadByte();
+	while (!feof(fram)) { // ch != EOF
+		if (stop != NULL && ch == startCh) {
+			int i = 0;
+			do {
+				if (i == endOfStopString) return; // stop[0..i] found
+				fscanf(fram, "%c", &ch); i++;
+			} while (ch == stop[i]);
+			// stop[0..i-1] found; continue with last read character
+			if (generateOutput) {
+				char *subStop = coco_string_create(stop, 0, i);
+				fprintf(gen, "%s", subStop);
+				coco_string_delete(subStop);
 			}
-		}
-		if (stop != NULL) {
-			char *message = coco_string_create_append(" -- Incomplete or corrupt frame file: ", frameFile);
-			errors->Exception(message);
-			delete [] message;
+		} else {
+			if (generateOutput) { fprintf(gen, "%c", ch); }
+			fscanf(fram, "%c", &ch);
 		}
 	}
+	if (stop != NULL) {
+		std::string message = " -- Incomplete or corrupt frame file: " + frameFile;
+		errors.Exception(message.c_str());
+	}
+}
 
 }

@@ -30,8 +30,8 @@
  ** \brief Header for the IPlugin implementation.
  **/
 
-#ifndef API_API_NEURAY_NEURAY_PLUGIN_IMPL_H
-#define API_API_NEURAY_NEURAY_PLUGIN_IMPL_H
+#ifndef API_API_NEURAY_NEURAY_PLUGIN_API_IMPL_H
+#define API_API_NEURAY_NEURAY_PLUGIN_API_IMPL_H
 
 #include <mi/base/handle.h>
 #include <mi/base/interface_implement.h>
@@ -133,4 +133,4 @@ private:
 
 } // namespace MI
 
-#endif // API_API_NEURAY_NEURAY_PLUGIN_IMPL_H
+#endif // API_API_NEURAY_NEURAY_PLUGIN_API_IMPL_H

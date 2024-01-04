@@ -294,7 +294,7 @@ def load_module(neuray, transaction, module_mdl_name):
             context = mdl_factory.create_execution_context()
 
         res = imp_exp.load_module(transaction, module_mdl_name, context)
-    context.release() # same as: context = None
+    context.release()  # same as: context = None
     return res >= 0
 
 #--------------------------------------------------------------------------------------------------

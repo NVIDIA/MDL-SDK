@@ -2,6 +2,7 @@
 var max_box_width_without_scaling = 400;
 var max_box_width_proportional_to_code = 2.2;
 
+/*
 function describe(element, comment) {
     console.log("child: " + $(element).prop("tagName") +
 		", id: " + $(element).attr("id") + ", " + comment +
@@ -16,7 +17,8 @@ function annotate_debug() {
     annotate.find(".uncommented")
 	.css("background-color", "rgb(95%,100%,90%)");
 }
-
+*/
+/*
 function right_pos(element) {
     return $(element).offset().left + $(element).outerWidth();
     //    - $(".annotatebox").offset().left;
@@ -26,66 +28,66 @@ function right_pos(element) {
 function code_width(box) {
     var result = 0;
     $(box).find(".codeblock").each( function(index) {
-	//result = Math.max(result, $(this).outerWidth());
-	result = Math.max(result, right_pos($(this)));
+	    //result = Math.max(result, $(this).outerWidth());
+	    result = Math.max(result, right_pos($(this)));
     });
     $(box).find(".uncommented").each( function(index) {
-	result = Math.max(result, $(this).outerWidth());
-	//?result = Math.max(result, right_pos($(this)));
+	    result = Math.max(result, $(this).outerWidth());
+	    //?result = Math.max(result, right_pos($(this)));
     });
-    
+    $(box).find(".codecaption").each( function(index) {
+	    //result = Math.max(result, $(this).outerWidth());
+        result = Math.max(result, right_pos$(this));
+    });
     return result;
 }
+*/
 
 function set_annotate_max_width() {
+    return;
+    console.log("set_annotate_max_width");
     $(".annotatebox").each(function(index) {
-	var max_x = 200;
-	var box = $(this);
-	$(box).width(2000);
-	$(box).find(".annotatedcode").each(function(index) {
-	    var code = $(this);
-	    var width = 0;
-	    $(code).children().each( function() {
-		width += $(this).outerWidth();
-		//width += $(this).innerWidth();		
+	    var max_x = 200;
+	    var box = $(this);
+	    $(box).width(2000);
+	    $(box).find(".annotatedcode").each(function(index) {
+	        var code = $(this);
+	        var width = 0;
+	        $(code).children().each( function() {
+		        width += $(this).outerWidth();
+		        //width += $(this).innerWidth();		
+	        });
+	        max_x = Math.max(max_x, width);
+	        max_x += 2;
 	    });
-	    max_x = Math.max(max_x, width);
-	    max_x += 2;
-	});
-	$(box).find(".uncommented").each(function(index) {
-	    max_x = Math.max(max_x, $(this).outerWidth());
-	    max_x += 2;
-	});
-	//console.log("max_x: " + max_x);
+	    $(box).find(".uncommented").each(function(index) {
+	        max_x = Math.max(max_x, $(this).outerWidth());
+	        max_x += 2;
+	    });
+        
+        max_x = Math.max(max_x, $(this).find(".codecaption").outerWidth());
 
-	max_x += 20; // annotate box padding
+	    console.log("max_x: " + max_x);
 
-	var scale = parseFloat($(this).attr("data-scale"));
-	max_x *= scale;
-	//console.log("data-scale: " + scale);
-	/*
-	  if (1 && max_x > max_box_width_without_scaling) {
-	  //console.log("max_x: " + max_x);
-	  //console.log("proportional: " + code_width(box) 
-	  //	     * max_box_width_proportional_to_code);
-	  max_x = Math.min(max_x, 
-	  code_width(box) * max_box_width_proportional_to_code);
-	  }
-	*/
-	var current_max_width = $(box).attr("data-maxwidth");
-	if (typeof current_max_width === "undefined") {
-	    $(box).attr("data-maxwidth", max_x);
-	} else if (current_max_width > max_x) {
-	    max_x = current_max_width;
-	    $(box).attr("data-maxwidth", max_x);
-	}
-	$(box).innerWidth(max_x);
+	    max_x += 20; // annotate box padding
+
+	    var scale = parseFloat($(this).attr("data-scale"));
+	    max_x *= scale;
+	    var current_max_width = $(box).attr("data-maxwidth");
+	    if (typeof current_max_width === "undefined") {
+	        $(box).attr("data-maxwidth", max_x);
+	    } else if (current_max_width > max_x) {
+	        max_x = current_max_width;
+	        $(box).attr("data-maxwidth", max_x);
+	    }
+	    $(box).innerWidth(max_x);
 
     });
-
 }
 
 function set_code_caption_width() {
+    return;
+    console.log("set_code_caption_width");
     $(".annotatebox").each(function(index) {
 	    var box = $(this);
         $(box).find(".codecaption").innerWidth(
@@ -95,6 +97,7 @@ function set_code_caption_width() {
 
 
 function find_parent_inner_width(element) {
+    console.log("find_parent_inner_width");
     var result = element;
     var in_table = false;
     var width;
@@ -142,50 +145,91 @@ function find_parent_inner_width(element) {
 
 
 function set_code_comment_width() {
+    console.log("set_code_comment_width");
     $(".codecomment").each( function(index) {
         var box = $(this).closest(".annotatebox");
-	if (box.attr("data-fixed") === "true") {
-	    $(this).css("display", "inline").css("float", "none");
-	} else {
-	    var scale = parseFloat($(box).attr("data-scale"));
-	    var parent_inner_width = find_parent_inner_width($(box));
-	    var new_box_width = 
-		Math.min(parseFloat($(box).attr("data-maxwidth")), 
-			 parent_inner_width);
-	    //console.log("parent inner: " + parent_inner_width + " max: " + $(box).attr("data-maxwidth"));
-	    $(box).width(new_box_width);
-	    var available_width = $(box).innerWidth();
-	    var indent_width = $(this).siblings(".codeindent").outerWidth();
-	    var code_width = $(this).siblings(".codeblock").outerWidth() + 1;
-	    var box_pad = 2 * parseFloat(
-		$(this).closest(".annotatepad").css("padding-left"));
-
-	    /*
-            var fudge = 1;
-	    box_pad += fudge;
-	    */
-
-	    var comment_width = 
-		available_width - indent_width - code_width - box_pad;
-	    
-	    comment_width = Math.trunc(comment_width);
-
-	    comment_width -= 2;
-
-	    if (comment_width < 8) { // Extremely narrow browser.
-		$(this).hide();
-		$(this).siblings(".codeindent").hide();
+	    if (box.attr("data-fixed") === "true") {
+	        $(this).css("display", "inline").css("float", "none");
 	    } else {
-		$(this).siblings(".codeindent").show();
-		//$(this).show().outerWidth(comment_width);
-		//$(this).show().innerWidth(comment_width);
-		$(this).show();
-		$(this).innerWidth(comment_width);		
+	        var scale = parseFloat($(box).attr("data-scale"));
+	        var parent_inner_width = find_parent_inner_width($(box));
+	        var new_box_width = 
+		        Math.min(parseFloat($(box).attr("data-maxwidth")), 
+			             parent_inner_width);
+	        //console.log("parent inner: " + parent_inner_width + " max: " + $(box).attr("data-maxwidth"));
+	        $(box).width(new_box_width);
+	        var available_width = $(box).innerWidth();
+	        var indent_width = $(this).siblings(".codeindent").outerWidth();
+	        var code_width = $(this).siblings(".codeblock").outerWidth() + 1;
+	        // code_width = Math.max(code_width, $(this).siblings(".codecaption").outerWidth() + 1);
+	        var box_pad = 2 * parseFloat(
+		        $(this).closest(".annotatepad").css("padding-left"));
 
+	        /*
+              var fudge = 1;
+	          box_pad += fudge;
+	        */
+
+	        var comment_width = 
+		        available_width - indent_width - code_width - box_pad;
+	        
+	        comment_width = Math.trunc(comment_width);
+
+	        comment_width -= 30;
+
+	        if (comment_width < 8) { // Extremely narrow browser.
+		        $(this).hide();
+		        $(this).siblings(".codeindent").hide();
+	        } else {
+		        $(this).siblings(".codeindent").show();
+		        //$(this).show().outerWidth(comment_width);
+		        //$(this).show().innerWidth(comment_width);
+		        $(this).show();
+		        $(this).innerWidth(comment_width);		
+
+	        }
 	    }
-	}
     });
 }
+
+function set_annotate_widths() {
+    console.log("set_annotate_widths");
+    $(".annotatebox").each( function(index) {
+        /*
+        var annotate_left = $(".annotateline").offset().left - 
+            $("#content").offset().left;
+            */
+        var annotate_left = $(".annotateline").position().left;
+        var content_width = $("#content").outerWidth();
+        var width = content_width - annotate_left - 20;
+
+
+        /*
+        var code_width = $(this).find(".annotateline").outerWidth();
+        var caption_width = $(this).find(".codecaption").outerWidth();
+
+        var width = Math.max(code_width, caption_width) + 4;
+
+        if (width  > $("#content").outerWidth()) {
+            width = $("#content").outerWidth() - $("#content").position().left;
+        }
+        */
+        //var max_width = $("#content").innerWidth() - 100;
+
+        //width = Math.min(width, max_width);
+
+        /*
+        var width = $("#content").outerWidth();
+        var left = $(this).position().left - $("#content").position().left;
+        width = width - left;
+        console.log("WIDTHS: " + code_width + " " + caption_width + " " + width);
+        */
+
+        $(this).find(".annotateline").outerWidth(width);
+        $(this).find(".codecaption").outerWidth(width);
+    });
+}
+
 
 //DBG
 function show_width() {

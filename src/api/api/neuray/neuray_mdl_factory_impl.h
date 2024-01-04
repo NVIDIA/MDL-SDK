@@ -30,8 +30,8 @@
  ** \brief Header for the IMdl_factory implementation.
  **/
 
-#ifndef API_API_NEURAY_MDL_FACTORY_IMPL_H
-#define API_API_NEURAY_MDL_FACTORY_IMPL_H
+#ifndef API_API_NEURAY_NEURAY_MDL_FACTORY_IMPL_H
+#define API_API_NEURAY_NEURAY_MDL_FACTORY_IMPL_H
 
 #include <mi/base/handle.h>
 #include <mi/base/interface_implement.h>
@@ -165,4 +165,4 @@ private:
 
 } // namespace MI
 
-#endif // API_API_NEURAY_MDL_FACTORY_IMPL_H
+#endif // API_API_NEURAY_NEURAY_MDL_FACTORY_IMPL_H

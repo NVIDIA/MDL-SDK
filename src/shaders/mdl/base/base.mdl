@@ -1,5 +1,29 @@
 /***************************************************************************************************
- * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ * Copyright (c) 2012-2023, NVIDIA CORPORATION. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *  * Neither the name of NVIDIA CORPORATION nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+ * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -369,6 +393,8 @@ export struct texture_coordinate_info
         [[ anno::description("Tangent in u direction") ]];
     float3 tangent_v = state::texture_tangent_v(0)
         [[ anno::description("Tangent in v direction") ]];
+    int source_flags = int(texture_coordinate_uvw)
+        [[ anno::description("Internal info to track source space type (first two bits).") ]];
 };
 
 export struct color_layer
@@ -567,34 +593,6 @@ uniform float4x4 compute_cubic_transform(
     return projection_transform;
 }
 
-texture_coordinate_info compute_tangents(state::coordinate_space space)
-{
-        texture_coordinate_info tangents;
-        float3 u_dir = math::normalize(state::transform_vector(space,state::coordinate_internal,float3(1.,0.,0)));
-        float3 v_dir = math::normalize(state::transform_vector(space,state::coordinate_internal,float3(0.,1.,0)));
-        if(math::abs(math::dot(state::normal(),v_dir)) > .999 || math::abs(math::dot(state::normal(),u_dir)) > .999)
-
-        {
-            float3 shading_normal = state::transform_vector(state::coordinate_internal,space,state::normal());
-            float yz = -shading_normal.y * shading_normal.z;
-            tangents.tangent_v = ((math::abs(shading_normal.z) > 0.99999f) ?
-                    math::normalize(float3(-shading_normal.x*shading_normal.y, 1.0f - shading_normal.y*shading_normal.y, yz)) :
-                    math::normalize(float3(-shading_normal.x*shading_normal.z, yz, 1.0f - shading_normal.z*shading_normal.z)) );
-            tangents.tangent_u = math::normalize(math::cross(tangents.tangent_v,shading_normal));
-            tangents.tangent_v = math::normalize(state::transform_vector(space,state::coordinate_internal,tangents.tangent_v ));
-            tangents.tangent_u = math::normalize(state::transform_vector(space,state::coordinate_internal,tangents.tangent_u ));
-
-        }
-        else
-        {
-            tangents.tangent_u = math::normalize(math::cross(v_dir,state::normal()));
-            tangents.tangent_v = math::normalize(math::cross(state::normal(),tangents.tangent_u));
-            if(math::dot(tangents.tangent_u,u_dir) < 0.) //make sure u and u' point into the same dir
-                tangents.tangent_u = - tangents.tangent_u;
-        }
-        return tangents;
-}
-
 texture_coordinate_info compute_tangents(uniform texture_coordinate_system coordinate_system, float3x3 transform)
 {
         texture_coordinate_info tangents;
@@ -604,14 +602,12 @@ texture_coordinate_info compute_tangents(uniform texture_coordinate_system coord
             u_dir = math::normalize(state::transform_vector(state::coordinate_world,state::coordinate_internal,transform*float3(1.,0.,0)));
             v_dir = math::normalize(state::transform_vector(state::coordinate_world,state::coordinate_internal,transform*float3(0.,1.,0)));
         }
-
         else
         {
             u_dir = math::normalize(state::transform_vector(state::coordinate_object,state::coordinate_internal,transform*float3(1.,0.,0)));
             v_dir = math::normalize(state::transform_vector(state::coordinate_object,state::coordinate_internal,transform*float3(0.,1.,0)));
         }
         if(math::abs(math::dot(state::normal(),v_dir)) > .999 || math::abs(math::dot(state::normal(),u_dir)) > .999)
-
         {
             state::coordinate_space space = (coordinate_system == texture_coordinate_world)?
                 state::coordinate_world:state::coordinate_object;
@@ -713,6 +709,7 @@ export texture_coordinate_info coordinate_projection(
                                        finaltransform[0][2],finaltransform[1][2],finaltransform[2][2]);
     texture_coordinate_info tangents = compute_tangents(coordinate_system,finaltransform2);
     tangents.position = float3(r_pos.x,r_pos.y,0.);
+    tangents.source_flags = int(texture_coordinate_uvw);
     return tangents;
 }
 
@@ -731,22 +728,18 @@ export texture_coordinate_info coordinate_source(
 ]]
 {
     texture_coordinate_info tangents;
+    tangents.source_flags = int(coordinate_system);
 
-    switch (coordinate_system) {
-    case texture_coordinate_object:
-        tangents = compute_tangents(state::coordinate_object);
-        tangents.position = state::transform_point(state::coordinate_internal,state::coordinate_object,state::position());
-        break;
-    case texture_coordinate_world:
-        tangents = compute_tangents(state::coordinate_world);
-        tangents.position = state::transform_point(state::coordinate_internal,state::coordinate_world,state::position());
-        break;
-    case texture_coordinate_uvw:
-    default:
+    if (coordinate_system == texture_coordinate_uvw) {
+        tangents.position = state::texture_coordinate(texture_space);
         tangents.tangent_u = state::texture_tangent_u(texture_space);
         tangents.tangent_v = state::texture_tangent_v(texture_space);
-        tangents.position = state::texture_coordinate(texture_space);
-        break;
+    } else {
+        state::coordinate_space space = (coordinate_system == texture_coordinate_world) ? state::coordinate_world : state::coordinate_object;
+        tangents.position = state::transform_point(state::coordinate_internal, space, state::position());
+        // for world/object space sources we can use any tangents (but need to track them in the respective space)
+        tangents.tangent_u = math::normalize(state::transform_vector(state::coordinate_internal, space, state::texture_tangent_u(0)));
+        tangents.tangent_v = math::normalize(state::transform_vector(state::coordinate_internal, space, state::texture_tangent_v(0)));
     }
     return tangents;
 }
@@ -762,58 +755,63 @@ export texture_coordinate_info transform_coordinate(
     anno::noinline()
 ]]
 {
+    /*
     float4 r_position = transform * float4(coordinate.position.x,coordinate.position.y,coordinate.position.z,1);
+    coordinate.position = float3(r_position.x, r_position.y, r_position.z);
+    */
+    coordinate.position =
+        float3(transform[0].x, transform[0].y, transform[0].z) * coordinate.position.x +
+        float3(transform[1].x, transform[1].y, transform[1].z) * coordinate.position.y +
+        float3(transform[2].x, transform[2].y, transform[2].z) * coordinate.position.z +
+        float3(transform[3].x, transform[3].y, transform[3].z);
 
+    int source = (coordinate.source_flags & 3);
+    if (source == int(texture_coordinate_uvw)) {
 
+        // tangents in transformed space are canonical directions, we can bring them
+        // to untransformed space by applying the inverse transform
+        // (simplified to using transpose instead of inverse here, assuming orthogonal transform)
+        /*
+        float4 tmp_u4 = float4(1.0f, 0.0f, 0.0f, 0.0f) * transform;
+        float4 tmp_v4 = float4(0.0f, 1.0f, 0.0f, 0.0f) * transform;
+        float3 tangent_u = float3(tmp_u4.x, tmp_u4.y, tmp_u4.z);
+        float3 tangent_v = float3(tmp_v4.x, tmp_v4.y, tmp_v4.z);
+        */
+        float3 tangent_u = float3(transform[0].x, transform[1].x, transform[2].x);
+        float3 tangent_v = float3(transform[0].y, transform[1].y, transform[2].y);
 
-    //we do not have enough info to compute result tangent based on original tangent and uv transform alone.
-    //-for spaces where we have the full  transformation into internal space available (object/world space based transforms) we could track the full transform (rotation) in texture_coordinate_info
-    // and compute tangents out of the final transformation
-    //-for uv spaces where we only have per vertex tangents and coordinates, there is no way to exactly compute the effect of concatenated transforms.
-    // We would need access to all 3 vertices of the triangle to approximate tangents
-    // worst is that we don't have info on the handedness of the source transformation
+        // ortho-normalize
+        /*
+        float3 tmp_u = tangent_u;
+        float3 tangent_u_n = math::normalize(math::cross(tangent_v, float3(0.0f, 0.0f, 1.0f)));
+        float3 tangent_v_n = math::normalize(math::cross(float3(0.0f, 0.0f, 1.0f), tangent_u_n));
+        if (math::dot(tangent_u, tangent_u_n) < 0.0f)
+            tangent_u_n = -tangent_u_n;
+        */
+        float2 tangent_u_n = math::normalize(float2(tangent_v.y, -tangent_v.x));
+        float2 tangent_v_n = float2(-tangent_u_n.y, tangent_u_n.x);
+        if ((tangent_u.x * tangent_u_n.x + tangent_u.y * tangent_u_n.y) < 0.0f)
+            tangent_u_n = -tangent_u_n;
 
-    // TODO: Approximation1 disabled, requires improved texture result slot scheduling
-    return texture_coordinate_info(
-            float3(r_position.x,r_position.y,r_position.z),
-            coordinate.tangent_u,
-            coordinate.tangent_v);
+        // transform to internal space
+        float3 tu = coordinate.tangent_u;
+        float3 tv = coordinate.tangent_v;
+        coordinate.tangent_u = tangent_u_n.x * tu + tangent_u_n.y * tv;
+        coordinate.tangent_v = tangent_v_n.x * tu + tangent_v_n.y * tv;
 
-    //Approximation1: try approximating it for the case that the rotation is only around z and assuming the texture layout is nice and z is ~constant.
-    //just pretend there is no other rotation happening
-    //get rid of scaling and translation. Then extract fields where sin and cos would be in a simple 2d transform around z.
-    /*float4 u = transform[0];
-    float3 ru = math::normalize(float3(u.x,u.y,u.z));
-    float cos =  ru.x;
-    float sin =  ru.y;
-    if((math::abs(sin)+math::abs(cos)) > 0.01) //make sure there is a valid tangent after transform
-        return texture_coordinate_info(
-            float3(r_position.x,r_position.y,r_position.z),
-            math::normalize(cos * coordinate.tangent_u - sin * coordinate.tangent_v),
-            math::normalize(cos * coordinate.tangent_v + sin * coordinate.tangent_u));
-    else
-        return texture_coordinate_info(
-            float3(r_position.x,r_position.y,r_position.z),
-            coordinate.tangent_u,
-            coordinate.tangent_v);*/
+    } else {
+        // 3d source, track transformed tangents to compute deriviative in apply_bump()
+        coordinate.tangent_u = math::normalize(
+            float3(transform[0].x, transform[0].y, transform[0].z) * coordinate.tangent_u.x +
+            float3(transform[1].x, transform[1].y, transform[1].z) * coordinate.tangent_u.y +
+            float3(transform[2].x, transform[2].y, transform[2].z) * coordinate.tangent_u.z);
+        coordinate.tangent_v = math::normalize(
+            float3(transform[0].x, transform[0].y, transform[0].z) * coordinate.tangent_v.x +
+            float3(transform[1].x, transform[1].y, transform[1].z) * coordinate.tangent_v.y +
+            float3(transform[2].x, transform[2].y, transform[2].z) * coordinate.tangent_v.z);
+    }
 
-    //Approximation2: transform multiple points. and estimate based on difference. More expensive, maybe less issues if transform is really 3d?
-    /*float3 position_du = coordinate.position+coordinate.tangent_u;
-    float4 r_position_du = transform * float4(position_du.x,position_du.y,position_du.z,1);
-    float4 diff = r_position_du-r_position;
-    float3 new_tangent_u = math::normalize(float3(diff.x,diff.y,diff.z));
-    //orthonormalize and construct tangentv
-    float handedness =  math::dot(math::cross(coordinate.tangent_u,coordinate.tangent_v),state::normal());
-    float3 new_tangent_v = math::cross( new_tangent_u,state::normal());
-    new_tangent_u = math::cross(state::normal(), new_tangent_v );
-    if(handedness <0)
-        new_tangent_v = -new_tangent_v;
-
-
-    return texture_coordinate_info(
-        float3(r_position.x,r_position.y,r_position.z),
-        new_tangent_u,
-        new_tangent_v);*/
+    return coordinate;
 }
 
 export float4x4 rotation_translation_scale(
@@ -2280,6 +2278,33 @@ export color perez_sun_and_sky(
     return color(skycolor);
 }
 
+// compute bumped normal from 3d gradient and texture space info
+float3 apply_bump(float3 grad, texture_coordinate_info info, float bump_factor, float3 normal, float normal_factor = 1.0f)
+{
+    float du, dv;
+    int source = (info.source_flags & 3);
+    float3 bump_tangent_u, bump_tangent_v;
+    if (source == int(texture_coordinate_uvw)) {
+        du = grad.x;
+        dv = grad.y;
+        bump_tangent_u = info.tangent_u;
+        bump_tangent_v = info.tangent_v;
+    } else {
+        // compute derivative in transformed 3d space
+        du = math::dot(info.tangent_u, grad);
+        dv = math::dot(info.tangent_v, grad);
+        // use same tangents as in coordinate_source()
+        bump_tangent_u = state::texture_tangent_u(0);
+        bump_tangent_v = state::texture_tangent_v(0);
+    }
+
+    return math::normalize(
+        bump_tangent_u * (du * bump_factor) +
+        bump_tangent_v * (dv * bump_factor) +
+        normal * normal_factor);
+}
+
+
 int texremapu( int texres, int crop_ofs, int texi_in, tex::wrap_mode wrap )
 {
     int texi = texi_in;
@@ -2294,7 +2319,7 @@ int texremapu( int texres, int crop_ofs, int texi_in, tex::wrap_mode wrap )
     else {
         int s = texi < 0 ? 1 : 0; // extract sign to handle all < 0 magic below
         int d = texi / texres;
-        texi = texi % texres;  // texi -= d * texres;
+        texi -= d * texres;
         int alternate = wrap == tex::wrap_mirrored_repeat?1:0;
         int a = alternate & (d ^ s) & 1;
         bool altu = (a != 0);
@@ -2500,9 +2525,9 @@ export float3 file_bump_texture(
         float4 st(u*v, u*(1.0f-v), (1.0f-u)*(1.0f-v), (1.0f-u)*v);
         bump_texspace = float2(
             (interpolate_texspace_l(texture, st, int4(texi2.x,texi1.y,texi3.x,texi2.y),bump_source, frame)
-           - interpolate_texspace_l(texture, st, int4(texi0.x,texi1.y,texi1.x,texi2.y),bump_source, frame)) * (-factor),
+           - interpolate_texspace_l(texture, st, int4(texi0.x,texi1.y,texi1.x,texi2.y),bump_source, frame)),
             (interpolate_texspace_l(texture, st, int4(texi1.x,texi2.y,texi2.x,texi3.y),bump_source, frame)
-           - interpolate_texspace_l(texture, st, int4(texi1.x,texi0.y,texi2.x,texi1.y),bump_source, frame)) * (-factor));
+           - interpolate_texspace_l(texture, st, int4(texi1.x,texi0.y,texi2.x,texi1.y),bump_source, frame)));
     }
     else
     {
@@ -2526,11 +2551,10 @@ export float3 file_bump_texture(
             (texels0.z * w_v.deriv.x + texels1.z * w_v.deriv.y + texels2.z * w_v.deriv.z + texels3.z * w_v.deriv.w) * w_u.value.z +
             (texels0.w * w_v.deriv.x + texels1.w * w_v.deriv.y + texels2.w * w_v.deriv.z + texels3.w * w_v.deriv.w) * w_u.value.w;
 
-        bump_texspace *= (-2.0f * factor);
+        bump_texspace *= 2.0f;
     }
 
-    float3 result = normal + uvw.tangent_u * bump_texspace.x + uvw.tangent_v * bump_texspace.y;
-    return math::normalize(result);
+    return apply_bump(float3(bump_texspace.x, bump_texspace.y, 0.0f), uvw, -factor, normal);
 }
 
 
@@ -2634,33 +2658,27 @@ export float3 tangent_space_normal_texture(
     bool pixel_flip_v = flip_tangent_v;
     //if we mirror repeat a tangent space texture, tangent space needs to be flipped for every other tile
     if (wrap_u == tex::wrap_mirrored_repeat) {
-        if( uvw.position.x > 0. && int(uvw.position.x) % 2 == 1)
+        if( uvw.position.x > 0. && (int(uvw.position.x) & 1) == 1)
             pixel_flip_u = ! pixel_flip_u;
-        else if( uvw.position.x < 0. && int(uvw.position.x) % 2 == 0)
+        else if( uvw.position.x < 0. && (int(uvw.position.x) & 1) == 0)
             pixel_flip_u = ! pixel_flip_u;
     }
     if (wrap_v == tex::wrap_mirrored_repeat) {
-        if( uvw.position.y > 0. && int(uvw.position.y) % 2 == 1)
+        if( uvw.position.y > 0. && (int(uvw.position.y) & 1) == 1)
             pixel_flip_v = ! pixel_flip_v;
-        else if( uvw.position.y < 0. && int(uvw.position.y) % 2 == 0)
+        else if( uvw.position.y < 0. && (int(uvw.position.y) & 1) == 0)
             pixel_flip_v = ! pixel_flip_v;
     }
 
-    float3 transformed_tangent_u = uvw.tangent_u;
-    float3 transformed_tangent_v = uvw.tangent_v;
-
-    if (pixel_flip_u)
-        transformed_tangent_u=-transformed_tangent_u;
-    if (pixel_flip_v)
-        transformed_tangent_v=-transformed_tangent_v;
-
     float3 tangent_space_normal =
         (tex::lookup_float3(texture,float2(uvw.position.x,uvw.position.y), wrap_u, wrap_v, crop_u, crop_v, frame) - float3(0.5)) * (2.0 * factor);
+    if (pixel_flip_u)
+        tangent_space_normal.x = -tangent_space_normal.x;
+    if (pixel_flip_v)
+        tangent_space_normal.y = -tangent_space_normal.y;
 
-    return math::normalize(
-        transformed_tangent_u * tangent_space_normal.x +
-        transformed_tangent_v * tangent_space_normal.y +
-        state::normal() * (tangent_space_normal.z + (1.0 - factor)));
+    float3 grad = float3(tangent_space_normal.x, tangent_space_normal.y, 0.0f);
+    return apply_bump(grad, uvw, 1.0f, state::normal(), math::abs(tangent_space_normal.z) + 1.0f - factor);
 }
 
 float saturation(color rgb)
@@ -3186,10 +3204,9 @@ export float3 gradient3_bump_texture(
             gradient_colors,
             gradient_positions);
     }
-    return math::normalize(
-        normal  +
-        uvw.tangent_v * math::average(results[2] - results[0])   * scale/delta     +
-        uvw.tangent_u * math::average(results[1] - results[0])   * scale/delta   );
+
+    float3 diff = float3(math::average(results[1] - results[0]), math::average(results[2] - results[0]), 0.0f);
+    return apply_bump(diff, uvw, scale / delta, normal);
 }
 
 
@@ -3335,10 +3352,9 @@ export float3 checker_bump_texture(
     for(int i = 0; i < 4; ++i) {
         results[i] = eval_checker(uvw.position+ offsets[i], checker_position,blur );
     }
-    return math::normalize(
-        normal    * (math::abs(results[3]-results[0])  * factor +1.) +
-        uvw.tangent_u * (results[1]-results[0])        * factor  +
-        uvw.tangent_v * (results[2]-results[0])        * factor);
+
+    float3 diff = float3(results[1] - results[0], results[2] - results[0], results[3] - results[0]);
+    return apply_bump(diff, uvw, factor, normal);
 }
 
 struct noise_return
@@ -4237,10 +4253,7 @@ export float3 perlin_noise_bump_texture(
 
     float bump_factor = -0.1f * factor; // original code used 0.1 as magic constant for delta, obtain same magnitude
 
-    return math::normalize(
-        normal * (math::abs(deriv.z * bump_factor) + 1.0f) +
-        uvw.tangent_u * (deriv.x * bump_factor)  +
-        uvw.tangent_v * (deriv.y * bump_factor));
+    return apply_bump(deriv, uvw, bump_factor, normal);
 }
 
 float  sqrlength(float3 a)                   { return a.x * a.x + a.y * a.y + a.z * a.z; }
@@ -4753,16 +4766,13 @@ export float3 worley_noise_bump_texture(
 
     float bump_factor = -0.1f * factor; // original code used 0.1 as magic constant for delta, obtain same magnitude
 
-    return math::normalize(
-        normal * (math::abs(deriv.z * bump_factor) + 1.0f) +
-        uvw.tangent_u * (deriv.x * bump_factor)  +
-        uvw.tangent_v * (deriv.y * bump_factor));
+    return apply_bump(deriv, uvw, bump_factor, normal);
 }
 
 int permute_flow2(int x)
 {
     //x %= 289; // correct, but doesn't matter in practice
-    return (x*x*34 + x) % 289;
+    return (x*x*34 + x) - ((x*x*34 + x) / 289) * 289;
 }
 
 // gradient mapping + extra rotation
@@ -5067,10 +5077,7 @@ export float3 flow_noise_bump_texture(
 
     float bump_factor = factor * 0.1f; // original code used 0.1 as magic constant for delta, obtain same magnitude
 
-    return math::normalize(
-        normal +
-        uvw.tangent_u * (deriv.x * bump_factor)  +
-        uvw.tangent_v * (deriv.y * bump_factor));
+    return apply_bump(float3(deriv.x, deriv.y, 0.0f), uvw, bump_factor, normal);
 }
 
 export texture_return flake_noise_texture(
@@ -5210,10 +5217,7 @@ export float3 flake_noise_bump_texture(
         ret2.grad = float3(0.0f);
     }
 
-    return math::normalize(
-        normal * (math::abs(ret2.grad.z)  + 1.0f / strength) +
-        uvw.tangent_u * ret2.grad.x +
-        uvw.tangent_v * ret2.grad.y);
+    return apply_bump(ret2.grad, uvw, 1.0f, normal, (math::abs(ret2.grad.z) + 1.0f / strength));
 }
 
 struct Tiledata
@@ -5256,8 +5260,9 @@ Tiledata eval_tile_function(
     {
         int col_index = int(math::floor(xy.x));
         // We add a +1 to do more like base-1 indexing, makes more sense for user
-        if((((row_index+1) % special_row_index) == 0)
-            && (((col_index+1) % special_column_index) == 0))
+        // Note: when checking for == 0, the semantics of % doesn't matter
+        if ( (((row_index+1) %    special_row_index) == 0) &&
+             (((col_index+1) % special_column_index) == 0) )
         {
             num_columns *= special_column_height_factor;
             xy.x *= special_column_height_factor;
@@ -5600,12 +5605,9 @@ export float3 tile_bump_texture(
         // (allowing this feature to be a "depth variation" for bricks of different depths)
         float contrast_factor = factor * math::abs(math::luminance(color_result));
 
-        return math::normalize(
-            normal  +
-            uvw.tangent_v * (results[2] - results[0])   * contrast_factor     +
-            uvw.tangent_u * (results[1] - results[0])   * contrast_factor   );
+        float3 diff = float3(results[1] - results[0], results[2] - results[0], 0.0f);
+        return apply_bump(diff, uvw, contrast_factor, normal);
    }
-
 }
 
 export anisotropy_return anisotropy_conversion(

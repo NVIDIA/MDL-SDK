@@ -598,6 +598,7 @@ bool Raytracing_acceleration_structure::build_bottom_level_structure(
         blas.m_scratch_resource->GetDesc().Width < prebuild_info.ScratchDataSizeInBytes)
     {
         if (!allocate_resource(
+            command_list,
             &blas.m_scratch_resource,
             prebuild_info.ScratchDataSizeInBytes,
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
@@ -606,6 +607,7 @@ bool Raytracing_acceleration_structure::build_bottom_level_structure(
     }
 
     if (!allocate_resource(
+        command_list,
         &blas.m_blas_resource,
         prebuild_info.ResultDataMaxSizeInBytes,
         D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
@@ -769,6 +771,7 @@ bool Raytracing_acceleration_structure::build_top_level_structure(
         m_scratch_resource->GetDesc().Width < prebuild_info.ScratchDataSizeInBytes)
     {
         if (!allocate_resource(
+            command_list,
             &m_scratch_resource,
             prebuild_info.ScratchDataSizeInBytes,
             D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
@@ -776,6 +779,7 @@ bool Raytracing_acceleration_structure::build_top_level_structure(
             return false;
     }
     if (!update && !allocate_resource(
+        command_list,
         &m_top_level_structure,
         prebuild_info.ResultDataMaxSizeInBytes,
         D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
@@ -918,6 +922,7 @@ bool Raytracing_acceleration_structure::get_shader_resource_view_description(
 // ------------------------------------------------------------------------------------------------
 
 bool Raytracing_acceleration_structure::allocate_resource(
+    D3DCommandList* command_list,
     ID3D12Resource** resource,
     UINT64 size_in_byte,
     D3D12_RESOURCE_STATES initial_state,
@@ -930,13 +935,23 @@ bool Raytracing_acceleration_structure::allocate_resource(
         &upload_heap_properties,
         D3D12_HEAP_FLAG_NONE,
         &bufferDesc,
-        initial_state,
+        initial_state == D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE
+            ? D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE
+            : D3D12_RESOURCE_STATE_COMMON,
         nullptr,
         IID_PPV_ARGS(resource)),
         "Failed to allocate memory for: " + m_debug_name + debug_name_suffix, SRC))
         return false;
 
     set_debug_name((*resource), m_debug_name + debug_name_suffix);
+
+    if (initial_state != D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE)
+    {
+        auto resource_barrier = CD3DX12_RESOURCE_BARRIER::Transition(*resource,
+            D3D12_RESOURCE_STATE_COMMON, initial_state);
+        command_list->ResourceBarrier(1, &resource_barrier);
+    }
+
     return true;
 }
 

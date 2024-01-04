@@ -73,7 +73,7 @@ public:
 	Token *t;			// last recognized token
 	Token *la;			// lookahead token
 
-int id;
+	int id;
 	int str;
 
 	FILE* trace;		// other Coco objects referenced in this ATG

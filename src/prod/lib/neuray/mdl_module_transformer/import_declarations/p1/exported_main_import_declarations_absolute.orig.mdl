@@ -1,0 +1,207 @@
+mdl 1.3;
+
+import ::up1::up1_f;
+import ::p1::same1::same1_f;
+import ::p1::p2::down1::down1_f;
+import ::limits::FLOAT_MIN;
+import ::std::FLOAT_MIN;
+import ::base::mono_mode;
+import ::up2::up2_f;
+import ::p1::same2::same2_f;
+import ::p1::p2::down2::down2_f;
+import ::up3::up3_f;
+import ::p1::same3::same3_f;
+import ::p1::p2::down3::down3_f;
+import ::limits::FLOAT_MAX;
+import ::std::FLOAT_MAX;
+import ::base::gradient_mode;
+import ::p1::same4::same4_f;
+import ::p1::p2::down4::down4_f;
+using ::up5 import up5_f;
+using ::p1::same5 import same5_f;
+using ::p1::p2::down5 import down5_f;
+using ::limits import DOUBLE_MIN;
+using ::std import INT_MIN;
+using ::base import projection_mode;
+using ::up6 import up6_f;
+using ::p1::same6 import same6_f;
+using ::p1::p2::down6 import down6_f;
+using ::up7 import up7_f;
+using ::p1::same7 import same7_f;
+using ::p1::p2::down7 import down7_f;
+using ::limits import DOUBLE_MAX;
+using ::limits import INT_MAX;
+using ::base import color_layer_mode;
+using ::p1::same8 import same8_f;
+using ::p1::p2::down8 import down8_f;
+import ::state::normal;
+
+export int use_up1_f() uniform
+{
+    return up1::up1_f();
+}
+
+export int use_same1_f() uniform
+{
+    return p1::same1::same1_f();
+}
+
+export int use_down1_f() uniform
+{
+    return p1::p2::down1::down1_f();
+}
+
+export int use_up2_f() uniform
+{
+    return up2::up2_f();
+}
+
+export int use_same2_f() uniform
+{
+    return p1::same2::same2_f();
+}
+
+export int use_down2_f() uniform
+{
+    return p1::p2::down2::down2_f();
+}
+
+export int use_up3_f() uniform
+{
+    return up3::up3_f();
+}
+
+export int use_same3_f() uniform
+{
+    return p1::same3::same3_f();
+}
+
+export int use_down3_f() uniform
+{
+    return p1::p2::down3::down3_f();
+}
+
+export int use_same4_f() uniform
+{
+    return p1::same4::same4_f();
+}
+
+export int use_down4_f() uniform
+{
+    return p1::p2::down4::down4_f();
+}
+
+export int use_up5_f() uniform
+{
+    return ::up5_f();
+}
+
+export int use_same5_2() uniform
+{
+    return ::same5_f();
+}
+
+export int use_down5_f() uniform
+{
+    return ::down5_f();
+}
+
+export int use_up6_f() uniform
+{
+    return ::up6_f();
+}
+
+export int use_same6_2() uniform
+{
+    return ::same6_f();
+}
+
+export int use_down6_f() uniform
+{
+    return ::down6_f();
+}
+
+export int use_up7_f() uniform
+{
+    return ::up7_f();
+}
+
+export int use_same7_2() uniform
+{
+    return ::same7_f();
+}
+
+export int use_down7_f() uniform
+{
+    return ::down7_f();
+}
+
+export int use_same8_f() uniform
+{
+    return ::same8_f();
+}
+
+export int use_down8_f() uniform
+{
+    return ::down8_f();
+}
+
+export float use_float_min() uniform
+{
+    return limits::FLOAT_MIN;
+}
+
+export float use_std_float_min() uniform
+{
+    return std::FLOAT_MIN;
+}
+
+export base::mono_mode use_mono_mode() uniform
+{
+    return base::mono_alpha;
+}
+
+export float use_float_max() uniform
+{
+    return limits::FLOAT_MAX;
+}
+
+export float use_std_float_max() uniform
+{
+    return std::FLOAT_MAX;
+}
+
+export base::gradient_mode use_gradient_mode() uniform
+{
+    return base::gradient_linear;
+}
+
+export double use_double_min() uniform
+{
+    return ::DOUBLE_MIN;
+}
+
+export int use_std_int_min() uniform
+{
+    return ::INT_MIN;
+}
+
+export ::projection_mode use_projection_mode() uniform
+{
+    return ::projection_cubic;
+}
+
+export double use_double_max() uniform
+{
+    return ::DOUBLE_MAX;
+}
+
+export int use_std_int_max() uniform
+{
+    return ::INT_MAX;
+}
+
+export ::color_layer_mode use_color_layer_mode() uniform
+{
+    return ::color_layer_blend;
+}

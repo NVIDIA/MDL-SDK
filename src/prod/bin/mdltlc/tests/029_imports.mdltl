@@ -1,0 +1,24 @@
+/******************************************************************************
+ * Copyright 2023 NVIDIA Corporation. All rights reserved.
+ *****************************************************************************/
+
+rules Imports topdown {
+
+   import ::Custom_material;
+
+   material(thin_walled,
+            surface,
+            backface,
+            ior,
+            volume,
+            geometry,
+            hair)
+   -->
+     material(thin_walled,
+              surface,
+              backface,
+              ior,
+              volume,
+              geometry,
+              hair);
+}

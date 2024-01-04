@@ -164,6 +164,7 @@ INPUT                  = . \
                          ../../include/mi/neuraylib/iimage_plugin.h \
                          ../../include/mi/neuraylib/iimpexp_base.h \
                          ../../include/mi/neuraylib/ilightprofile.h \
+                         ../../include/mi/neuraylib/ilogging_configuration.h \
                          ../../include/mi/neuraylib/imap.h \
                          ../../include/mi/neuraylib/imaterial_instance.h \
                          ../../include/mi/neuraylib/imatrix.h \

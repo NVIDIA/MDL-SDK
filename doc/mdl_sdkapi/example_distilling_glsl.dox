@@ -101,9 +101,7 @@ to a predefined GLSL PBR shader to render a sphere in an OpenGL window.
 
 \section example_distilling_glsl Example Source
 
-To compile the source code, you need GLEW available at
-<a href="http://glew.sourceforge.net/">http://glew.sourceforge.net/</a> and GLFW available at
-<a href="http://www.glfw.org/download.html">http://www.glfw.org/download.html</a>. Please refer to the 
+To compile the source code, you need GLEW and GLFW. Please refer to the 
 \link mi_neuray_getting_started Getting Started \endlink section for details.
 
 <b>Source Code Location:</b>

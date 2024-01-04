@@ -79,7 +79,6 @@ framework](https://ssw.jku.at/Research/Projects/Coco/
     SKIP_RECURSION = "skip_recursion" .
 
     RULES = "rules" .
-    RULE = "rule" .
     DEADRULE = "deadrule" .
     POSTCOND = "postcond" .
     IF_KW = "if" .
@@ -89,6 +88,9 @@ framework](https://ssw.jku.at/Research/Projects/Coco/
 
     NONODE = "nonode" .
     MATCH = "match" .
+
+    DEBUG_NAME = "debug_name" .
+    DEBUG_PRINT = "debug_print" .
 
   COMMENTS FROM "/*" TO "*/" NESTED
   COMMENTS FROM "//" TO '\\n'
@@ -131,6 +133,13 @@ framework](https://ssw.jku.at/Research/Projects/Coco/
         [ result_code<res_code> ]
         [ guard<expr_guard> ]
         [ where<bindings> ]
+        [
+          DEBUG_NAME
+          STRING_LITERAL
+        ]
+        {
+          debug_print<deb_outs>
+        }
         [ DEADRULE ]
         ';' .
 
@@ -187,6 +196,11 @@ framework](https://ssw.jku.at/Research/Projects/Coco/
   guard<Expr *&guard_expr>
       = IF_KW expression<expr>
       | MAYBE expression<expr> .
+
+  debug_print<Debug_out_list &deb_outs> = DEBUG_PRINT '(' debug_variable_list<deb_outs> ')' .
+
+  debug_variable_list<Debug_out_list &deb_outs> =
+    [ identifier<sym> { ',' identifier<sym> } ] .
 
   where<Argument_list &bindings>
       = WHERE binding_list<bindings> .

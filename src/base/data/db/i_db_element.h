@@ -26,238 +26,171 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  **************************************************************************************************/
 
-/** \file i_db_element.h
- ** \brief This declares the database element classes.
- **
- ** This file contains the pure virtual base class for any database element as well as templates
- ** which can be used to simplify the implementation of a database element.
- **/
-
 #ifndef BASE_DATA_DB_I_DB_ELEMENT_H
 #define BASE_DATA_DB_I_DB_ELEMENT_H
+
+#include <string>
 
 #include "i_db_tag.h"
 #include "i_db_journal_type.h"
 
+#include <mi/base/types.h>
+
 #include <base/data/serial/i_serial_serializable.h>
-#include <string>
 
-namespace MI
-{
+namespace MI {
 
-namespace DB
-{
+namespace DB {
 
 class Transaction;
 
-/// Each database element is derived from the class Element. An element provides a common interface
-/// for the access to certain functionality.
-/// Attributes may be attached to elements, but the API is not clear, yet.
+/// Base class for all database elements.
+///
+/// Database elements are not reference-counted. Storing them in the database passes ownership from
+/// the creator to the corresponding Info.
 class Element_base : public SERIAL::Serializable
 {
-  public:
+public:
+    /// The class ID for this base class.
+    static const SERIAL::Class_id id = 0;
+
     /// Destructor.
     virtual ~Element_base() { }
 
-    /// Return the approximate size in bytes of the element including all its substructures. This is
-    /// used to make decisions about garbage collection.
+    /// Indicates whether this object is an instance of the given class.
     ///
-    /// \return                         The size of the element
-    virtual size_t get_size() const;
+    /// \param arg_id   The class given by its class ID.
+    /// \return         \c true if this object is directly or indirectly derived from the given
+    ///                 class.
+    virtual bool is_type_of( SERIAL::Class_id arg_id) const { return arg_id == 0; }
 
-    /// This is used by the database when it needs to create a new version of a tag. It will create
-    /// and return a full copy of the element.
+    /// Returns a deep copy of the element.
     ///
-    /// \return                         The new copy of the element
+    /// This method is invoked when the database needs to create a new version of a tag, e.g., when
+    /// an edit operation is started.
+    ///
+    /// \return   The new copy of the element. RCS:TRO
     virtual Element_base* copy() const = 0;
 
-    /// Check, if this object is of the given type. This is true, if either the class id of this
-    /// object equals the given class id, or the class is derived from another class which has the
-    /// given class id.
-    ///
-    /// \param id                       The class id to check
-    /// \return                         True, if the class is derived from the class with the id
-    virtual bool is_type_of(
-        SERIAL::Class_id id) const
-    {
-        return id == 0 ? true : false;
-    }
-
-    /// Return which journal flags could be changed in the database element. This is anded later
-    /// with the Edits' journal flags to reduce the size of the journals.
-    ///
-    /// \return                         The journal flags
-    virtual Journal_type get_journal_flags() const
-    {
-        return Journal_type();
-    }
-
-    /// The class id for the base class
-    static const SERIAL::Class_id id = 0;
-
-    /// The bundle function is used to query which tags will be most probably needed on a host
-    /// needing this element. It accepts an array of tags and the size of the array as input. It
-    /// should store as many tags as necessary and possible into the array. Note that the tags
-    /// should be put into the array sorted by importance.
-    /// The return value gives back how many tags have actually been put into the array.
-    /// This function may not be helpful for many element classes and thus a default implementation
-    /// which does nothing is provided.
-    /// Important note: From within the bundle call no accesses to database elements may be done!
-    ///
-    /// \param results                  A place to store the tags to be bundled
-    /// \param size                     The size of the array and as such the limit for the number
-    ///                                 of elements which can be bundled
-    /// \return                         The actual number of bundled elements.
-    virtual Uint bundle(
-        Tag* results,
-        Uint size) const
-    {
-        return 0;
-    }
-
-    /// Create a list of references this element has stored. The default implementation is supplied
-    /// because most elements don't need this.
-    ///
-    /// \param result                   Store the referenced tags here
-    virtual void get_references(
-        Tag_set*   result) const
-    { }
-
-    /// This function will be called by the database before a new version of a
-    /// database element is stored in the database. This function can be used
-    /// to check if the members of the database element are consistent and to
-    /// fix them if necessary. It is also possible to create new jobs and pass
-    /// to them the tag that is used to store this element.
-    /// \param trans The current transaction.
-    /// \param own_tag The tag that will be used to store this object.
-    virtual void prepare_store(
-        Transaction* trans,
-        Tag own_tag)
-    { }
-
-    /// This function specifies whether a data-store element should be distributed
-    /// to all nodes via multicasting
-    /// \return true if multicast distribution should be enabled.
-    virtual bool get_send_to_all_nodes()
-    {
-        return true;
-    }
-
-    /// Indicates how the database element is stored on other nodes in the cluster.
-    ///
-    /// If disabled, all nodes that receive the database element will keep it in main memory. If
-    /// enabled, the owners, i.e., a subset of the nodes that keep a copy of the database element to
-    /// fulfil the configured redundancy, will keep a copy of the database element on disk. All 
-    /// other nodes will discard the database element. Note that the database element will always
-    /// be kept in memory on the host that created or edited it, and on hosts that explicitly
-    /// accessed it.
-    virtual bool get_offload_to_disk()
-    {
-        return false;
-    }
-
-    /// Return a human readable version of the class id. While the id is enough to identify each
-    /// Serializable's type, is it not exactly human readable to read 0x5f43616d for Camera.
-    ///
-    /// \return                         The name of the class
+    /// Returns a human readable version of the class ID.
     virtual std::string get_class_name() const = 0;
+
+    /// Returns all references to other DB elements (or jobs).
+    ///
+    /// \param result    Adds all references to this tag set. RCS:NEU
+    virtual void get_references( Tag_set* result) const { }
+
+    /// Returns a filter for the type of changes to be tracked for elements of this type.
+    ///
+    /// To avoid unnecessary tracking overhead this filter should contain only those changes you
+    /// are actually interested in. The default implementation will cause no changes to be
+    //// tracked at all.
+    virtual Journal_type get_journal_flags() const { return JOURNAL_NONE; }
+
+    /// Returns the approximate size in bytes of the element including all its substructures.
+    ///
+    /// Used to make decisions about garbage collection, offloading, etc.
+    virtual size_t get_size() const { return sizeof( *this); }
+
+    /// Indicates how the database element should be distributed in the cluster.
+    ///
+    /// If the method returns \c true the stored or edited database element is distributed to all
+    /// nodes in the cluster. If the method returns \c false the database element is only
+    /// distributed to the owners, i.e., a subset of the nodes as required to fulfill the
+    /// configured redundancy. (Of course, it is later also distributed to those nodes that
+    /// explicitly access the database element.)
+    virtual bool get_send_to_all_nodes() { return true; }
+
+    /// Indicates how the database element is handled when received via the network without being
+    /// explicitly requested.
+    ///
+    /// If the method returns \c false, a host that receives such a database element will make no
+    /// difference between an explicit request or an accidental reception, e.g., because the
+    /// element was multicasted. If the method returns \c true, the database will be more
+    /// conservative w.r.t. memory usage for elements that it received by accident. The element
+    /// will be discarded if the host is not required to keep it for redundancy reasons or if the
+    /// element represents the result of a database job. Next, if the disk cache is operational,
+    /// the element will be offloaded to disk. Finally, in all other cases, the element will be
+    /// kept in memory, as if the element was explicitly requested.
+    virtual bool get_offload_to_disk() { return false; }
+
+    /// Indicates which database elements are likely to be requested together with this element.
+    ///
+    /// This is usually a subset of the elements returned by #get_references(), sorted by
+    /// decreasing importance.
+    ///
+    /// \param results   A place to store the tags to be bundled. RCS:NEU
+    /// \param size      The size of \p results.
+    /// \return          The number of elements (up to \p size) written to \p results.
+    ///
+    /// \note No database operations may be performed from within the callback.
+    virtual mi::Uint32 bundle( Tag* results, mi::Uint32 size) const { return 0; }
+
+    /// Callback for cleanup before an element is stored or editing finished.
+    ///
+    /// This callback is invoked by the database from DB::Transaction::store(),
+    /// DB::Transaction::store_for_reference_counting(), and DB::Transaction::finish_edit(). It
+    /// allows to perform some simple(!) and fast(!) sanity checks and/or pre-computations.
+    ///
+    /// \param transaction   The corresponding transaction. RCS:NEU
+    /// \param own_tag       The tag that will be used to store this object.
+    virtual void prepare_store( Transaction* transaction, Tag own_tag) { }
 };
 
-/// This template defines some functions for derived classes. This makes it easier to define a new
-/// Element class:
-/// If the class shall directly derived from from Element_base just do it like this:
-///     class Test_element : public Element<Test_element, 1000>
-///         ...
-/// If it is derived from some other class which is derived from Element_base, then do it like this:
-///     class Test_element : public Element<Test_element, 1000, Object>
-///         ...
-/// Note that abstract base classes do not have to be derived from Element but may be derived from
-/// Element_base. This is because they will not be instantiated directly.
+/// Helper template that defines some functions for derived classes.
+///
+/// Examples:
+///
+/// - If the class shall be directly derived from Element_base:
+///     class My_class : public Element<My_class, 1000> { ... }
+///
+/// - If the class shall be derived from some other class which is derived from Element_base:
+///     class My_derived_class : public Element<My_derived_class, 1001, My_class> { ... }
+///
 template <class T, SERIAL::Class_id ID = 0, class P = Element_base>
 class Element : public P
 {
-  public:
-    typedef Element<T,ID,P> Element_t;
+public:
+    using Element_t = Element<T,ID,P>;
 
-    /// Class id for this class
+    /// Class ID of this class
     static const SERIAL::Class_id id = ID;
 
-    /// construct an instance of this class
-    static SERIAL::Serializable* factory()
+    /// Factory function.
+    static SERIAL::Serializable* factory() { return new T; }
+
+    /// Default constructor.
+    Element() : P() { }
+
+    /// Copy constructor.
+    Element( const Element& other) : P( other) { }
+
+    /// Returns the class ID of this class.
+    SERIAL::Class_id get_class_id() const { return id; }
+
+    /// Returns a deep copy of the element.
+    ///
+    /// This method is invoked when the database needs to create a new version of a tag, e.g., when
+    /// an edit operation is started.
+    ///
+    /// \return   The new copy of the element. RCS:TRO
+    Element_base* copy() const { return new T( * reinterpret_cast<const T*>( this)); }
+
+    /// Returns the approximate size in bytes of the element including all its substructures.
+    ///
+    /// Used to make decisions about garbage collection, offloading, etc.
+    size_t get_size() const { return sizeof( *this) + P::get_size() - sizeof( P); }
+
+    /// Indicates whether this object is an instance of the given class.
+    ///
+    /// \param arg_id   The class given by its class ID.
+    /// \return         \c true if this object is directly or indirectly derived from the given
+    ///                 class.
+    bool is_type_of( SERIAL::Class_id arg_id) const
     {
-        return new T;
-    }
-
-    /// default constructor needed because of the copy constructor
-    Element();
-
-    /// copy constructor which will call the copy constructor of the base class
-    ///
-    /// \param source                   The source to copy
-    Element(const Element& source);
-
-    /// get the class id of an instance of our class
-    ///
-    /// \return                         The class id of this class
-    SERIAL::Class_id get_class_id() const;
-
-    /// make a copy of this instance
-    ///
-    /// \return                         The new copy
-    Element_base* copy() const;
-
-    /// Return the approximate size in bytes of the element including all its substructures. This is
-    /// used to make decisions about garbage collection.
-    ///
-    /// \return                         The size of the element
-    size_t get_size() const
-    {
-        return sizeof(*this)
-            + P::get_size() - sizeof(P);
-    }
-
-    /// Check, if this object is of the given type. This is true, if either the class id of this
-    /// object equals the given class id, or the class is derived from another class which has the
-    /// given class id.
-    ///
-    /// \param id                       The class id to check
-    /// \return                         True, if the class is derived from the class with the id
-    bool is_type_of(
-        SERIAL::Class_id id) const
-    {
-        return ID == id ? true : P::is_type_of(id);
+        return arg_id == ID ? true : P::is_type_of( arg_id);
     }
 };
-
-template <class T, SERIAL::Class_id C, class P>
-inline Element<T, C, P>::Element()
-{
-}
-
-template <class T, SERIAL::Class_id C, class P>
-inline Element<T, C, P>::Element(
-    const Element& source) :
-    P(source)
-{
-}
-
-template <class T, SERIAL::Class_id C, class P>
-inline SERIAL::Class_id Element<T, C, P>::get_class_id() const
-{
-    return id;
-}
-
-template <class T, SERIAL::Class_id C, class P>
-inline Element_base* Element<T, C, P>::copy() const
-{
-    T* element = new T(*(T*)this);
-    return element;
-}
-
-inline size_t Element_base::get_size() const
-{
-    return sizeof(*this);
-}
 
 } // namespace DB
 

@@ -547,6 +547,18 @@ void GLSLWriterBasePass::add_array_specifiers(
     }
 }
 
+// Add parameter qualifier from a function type parameter at index.
+void GLSLWriterBasePass::add_param_qualifier(
+    glsl::Type_name     *param_type_name,
+    glsl::Type_function *func_type,
+    size_t              index)
+{
+    glsl::Type_function::Parameter *param = func_type->get_parameter(index);
+
+    glsl::Parameter_qualifier param_qualifier = convert_type_modifier_to_param_qualifier(param);
+    param_type_name->get_qualifier().set_parameter_qualifier(param_qualifier);
+}
+
 // Add a field to a struct declaration.
 glsl::Type_struct::Field GLSLWriterBasePass::add_struct_field(
     glsl::Declaration_struct *decl_struct,

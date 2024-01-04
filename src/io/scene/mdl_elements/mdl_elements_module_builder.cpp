@@ -2084,6 +2084,10 @@ void Mdl_module_builder::analyze_module( Execution_context* context)
 
     ASSERT( M_SCENE, mi::mdl::Tree_checker::check( m_mdl.get(), m_module.get(), /*verbose*/ false));
 
+    // replace all user defined constants
+    User_constant_remover uc_remover(m_module.get());
+    uc_remover.process();
+
     // analyze module
     SYSTEM::Access_module<MDLC::Mdlc_module> mdlc_module( false);
     Module_cache module_cache( m_transaction, mdlc_module->get_module_wait_queue(), {});

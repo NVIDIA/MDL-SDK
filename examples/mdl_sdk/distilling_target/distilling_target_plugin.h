@@ -1,4 +1,4 @@
-/**************************************************************************************************
+/******************************************************************************
  * Copyright (c) 2022-2023, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -24,7 +24,7 @@
  * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *************************************************************************************************/
+ *****************************************************************************/
 
 #ifndef MDL_DISTILLER_DISTILLING_TARGET_PLUGIN_H
 #define MDL_DISTILLER_DISTILLING_TARGET_PLUGIN_H

@@ -175,18 +175,6 @@ void coco_string_merge(char *&target, const char* appendix) {
 	target = data;
 }
 
-bool coco_string_equal(const char *data1, const char *data2) {
-	return strcmp( data1, data2 ) == 0;
-}
-
-bool coco_string_equal(const char *data1, const char *data2, int len) {
-	return strncmp(data1, data2, len) == 0;
-}
-
-int coco_string_compareto(const char *data1, const char *data2) {
-	return strcmp(data1, data2);
-}
-
 unsigned coco_string_hash(char const *data) {
 	unsigned h = 0;
 	if (!data) { return 0; }

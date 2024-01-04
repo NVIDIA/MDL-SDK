@@ -1,0 +1,16 @@
+Count of all transactions: 1
+Count of open transactions: 1
+ID 0: pin count = 4, state = OPEN, next sequence number = 2, visibility ID = 4294967295
+
+Count of infos by distinct names: 2
+Index 0: name = "bar", count = 1
+    Index 0: transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, removal = 0, references = { }
+Index 1: name = "foo", count = 1
+    Index 0: transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, removal = 0, references = { }
+
+Count of infos by distinct tags: 1
+Index 0: tag = 1, count = 2, pin count = 1, removed = 0
+    Index 0: transaction ID = 0 (set), version = 0, pin count = 0, tag = 1, removal = 0, name = "foo", references = { }
+    Index 1: transaction ID = 0 (set), version = 1, pin count = 0, tag = 1, removal = 0, name = "bar", references = { }
+
+

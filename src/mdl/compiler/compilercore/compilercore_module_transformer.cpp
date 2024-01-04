@@ -102,8 +102,10 @@ IExpression_reference const *Module_inliner::promote_call_reference(
         return ref;
     }
 
-    IDefinition const      *def = ref->get_definition();
-    IDefinition::Semantics sema = def->get_semantics();
+    IDefinition const* def = ref->get_definition();
+    // TODO: The call reference expression does not yet have a definition after the expression has been transformed.
+    MDL_ASSERT( def );
+    IDefinition::Semantics sema = def ? def->get_semantics() : IDefinition::DS_UNKNOWN;
 
     IQualified_name const *qn = tn->get_qualified_name();
     int                   n_components = qn->get_component_count();

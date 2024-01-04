@@ -43,6 +43,7 @@
 
 #include <base/system/main/module_registration.h>
 #include <base/system/main/access_module.h>
+#include <base/lib/log/i_log_assert.h>
 #include <base/lib/log/i_log_logger.h>
 #include <base/lib/plug/i_plug.h>
 #include <base/util/string_utils/i_string_utils.h>
@@ -929,8 +930,7 @@ bool Image_module_impl::export_canvas(
     mi::base::Handle<const mi::neuraylib::ICanvas> canvas( canvas_ptr, mi::base::DUP_INTERFACE);
     canvas_ptr = nullptr;
 
-    std::string root, extension;
-    HAL::Ospath::splitext( output_filename, root, extension);
+    std::string extension = HAL::Ospath::get_ext( output_filename);
     if( !extension.empty() && extension[0] == '.' )
         extension = extension.substr( 1);
 
@@ -1025,8 +1025,7 @@ bool Image_module_impl::export_mipmap(
     mi::Uint32 quality,
     bool force_default_gamma) const
 {
-    std::string root, extension;
-    HAL::Ospath::splitext( output_filename, root, extension);
+    std::string extension = HAL::Ospath::get_ext( output_filename);
     if( !extension.empty() && extension[0] == '.' )
         extension = extension.substr( 1);
 
@@ -1331,6 +1330,11 @@ void Image_module_impl::dump() const
             line << (j>0 ? ", ": "") << "\"." << file_extension << '\"';
             file_extension = plugin->get_file_extension( ++j);
         }
+        // If j is still zero, then this plugin does not support imports, only (possibly) exports.
+        // We do not have such plugins. But it occurs if e.g. the OIIO library is incorrectly
+        // installed and lacks support for some optional dependencies that we consider required.
+        // This method is called by the unit test, so let that one fail in such cases.
+        ASSERT( M_IMAGE, j > 0);
 
         line << ", supported pixel types (export): ";
         mi::Uint32 k = 0;

@@ -56,15 +56,20 @@ Gui_section_rendering::Gui_section_rendering(
     , m_app(app)
     , m_scene_data(scene_data)
     , m_options(options)
+    , m_dynamic_options(app->get_dynamic_options())
     , m_enable_firefly_clamping(scene_data->firefly_clamp_threshold > 0.0f)
     , m_enable_animation(false)
 {
-    if (m_options->lpe == "albedo")
-        m_default_output_buffer_index = static_cast<uint32_t>(Display_buffer_options::Albedo);
-    else if (m_options->lpe == "normal")
+    const std::string& active_lpe = m_dynamic_options->get_active_lpe();
+    if (active_lpe == "albedo_diffuse")
+        m_default_output_buffer_index = static_cast<uint32_t>(Display_buffer_options::Albedo_Diffuse);
+    else if (active_lpe == "albedo_glossy")
+        m_default_output_buffer_index = static_cast<uint32_t>(Display_buffer_options::Albedo_Glossy);
+    else if (active_lpe == "normal")
         m_default_output_buffer_index = static_cast<uint32_t>(Display_buffer_options::Normal);
     else
         m_default_output_buffer_index = static_cast<uint32_t>(Display_buffer_options::Beauty);
+    m_current_output_buffer_index = m_default_output_buffer_index;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -96,21 +101,26 @@ void Gui_section_rendering::update(mi::neuraylib::ITransaction* /*transaction*/)
         &m_scene_data->burn_out, &m_options->tone_mapping_burn_out,
         Gui_control::Flags::None, 0.0f, 1.0f);
 
+    // supported expressions (not really LPE here, but auxiliary output)
+    static std::vector<std::pair<std::string, std::string>> supported_lpes =
+    {
+        // epression, display name
+        { "beauty", "Beauty" },
+        { "albedo", "Albedo (Diffuse + Glossy)" },
+        { "albedo_diffuse", "Albedo (Diffuse)" },
+        { "albedo_glossy", "Albedo (Glossy)" },
+        { "normal", "Normal"},
+        { "roughness", "Roughness"}
+    };
+
     if (Gui_control::selection<uint32_t>(
         "Output Buffer", "Rendering result, albedo, or normal buffer.",
-        &m_scene_data->display_buffer_index, &m_default_output_buffer_index,
-        Gui_control::Flags::None, [](uint32_t i)
-        {
-            switch (i)
-            {
-            case 0: return "Beauty";
-            case 1: return "Albedo";
-            case 2: return "Normal";
-            default: return (const char*) nullptr;
-            }
+        &m_current_output_buffer_index, &m_default_output_buffer_index,
+        Gui_control::Flags::None, [](uint32_t i) -> const char* {
+            return i < supported_lpes.size() ? supported_lpes[i].second.c_str() : nullptr;
         }))
     {
-        m_scene_data->restart_progressive_rendering();
+        m_dynamic_options->set_active_lpe(supported_lpes[m_current_output_buffer_index].first);
     }
 
     if (Gui_control::checkbox(
@@ -298,7 +308,12 @@ Gui_section_mdl_options::Gui_section_mdl_options(
     {
         mi::Size n = m_app->get_mdl_sdk().get_distiller().get_target_count();
         for (mi::Size i = 0; i < n; ++i)
-            distilling_targets.push_back(m_app->get_mdl_sdk().get_distiller().get_target_name(i));
+        {
+            std::string target = m_app->get_mdl_sdk().get_distiller().get_target_name(i);
+            distilling_targets.push_back(target);
+            if (mdl_options.distilling_target == target)
+                distilling_target_selected = i;
+        }
     }
 }
 

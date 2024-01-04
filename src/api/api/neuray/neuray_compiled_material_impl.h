@@ -30,8 +30,8 @@
  ** \brief Header for the ICompiled_material implementation.
  **/
 
-#ifndef API_API_NEURAY_COMPILED_MATERIAL_IMPL_H
-#define API_API_NEURAY_COMPILED_MATERIAL_IMPL_H
+#ifndef API_API_NEURAY_NEURAY_COMPILED_MATERIAL_IMPL_H
+#define API_API_NEURAY_NEURAY_COMPILED_MATERIAL_IMPL_H
 
 #include <mi/neuraylib/icompiled_material.h>
 
@@ -127,4 +127,4 @@ public:
 
 } // namespace MI
 
-#endif // API_API_NEURAY_COMPILED_MATERIAL_IMPL_H
+#endif // API_API_NEURAY_NEURAY_COMPILED_MATERIAL_IMPL_H

@@ -1087,54 +1087,6 @@ BSDF_INLINE float2 roughness_to_exponent(const float roughness_u, const float ro
     return make_float2(2.0f / (roughness_u * roughness_u), 2.0f / (roughness_v * roughness_v));
 }
 
-
-// compute intensity of two superimposed waves at same frequency
-// fake spectral color version of the baove
-BSDF_INLINE float3 compute_interference_factor(
-    const float i0, // intensity of unshifted wave
-    const float i1, // intensity of shifted wave
-    const float phase_shift_dist) // phase shift (in nm)
-{
-    const float aabb = i0 * i0 + i1 * i1;
-    const float ab2 = 2.0f * i0 * i1;
-
-    float3 xyz = make_float3(0.0f, 0.0f, 0.0f);
-
-
-    //!! using low res color matching functions here
-    const float lambda_min = 400.0f;
-    const float lambda_step = (float)((700.0 - 400.0) / 16.0);
-    const float3 cie_xyz[16] = {
-        {0.02986f, 0.00310f, 0.13609f}, {0.20715f, 0.02304f, 0.99584f},
-        {0.36717f, 0.06469f, 1.89550f}, {0.28549f, 0.13661f, 1.67236f},
-        {0.08233f, 0.26856f, 0.76653f}, {0.01723f, 0.48621f, 0.21889f},
-        {0.14400f, 0.77341f, 0.05886f}, {0.40957f, 0.95850f, 0.01280f},
-        {0.74201f, 0.97967f, 0.00060f}, {1.03325f, 0.84591f, 0.00000f},
-        {1.08385f, 0.62242f, 0.00000f}, {0.79203f, 0.36749f, 0.00000f},
-        {0.38751f, 0.16135f, 0.00000f}, {0.13401f, 0.05298f, 0.00000f},
-        {0.03531f, 0.01375f, 0.00000f}, {0.00817f, 0.00317f, 0.00000f}};
-
-    for (unsigned int i = 0; i < 16; ++i) {
-        const float lambda = lambda_min + (float)(i) * lambda_step;
-        const float angle = float(2.0 * M_PI) * phase_shift_dist / lambda;
-
-        const float intensity = aabb + ab2 * math::cos(angle);
-
-        xyz += cie_xyz[i] * intensity;
-    }
-
-    xyz *= float(1.0 / 16.0);
-
-    // ("normalized" such that the loop for no shifted wave gives reflectivity (1,1,1))
-    return make_float3(
-        xyz.x * (float)( 3.240600 / 0.433509) + xyz.y * (float)(-1.537200 / 0.433509)
-                                              + xyz.z * (float)(-0.498600 / 0.433509),
-        xyz.x * (float)(-0.968900 / 0.341582) + xyz.y * (float)( 1.875800 / 0.341582)
-                                              + xyz.z * (float)( 0.041500 / 0.341582),
-        xyz.x * (float)( 0.055700 / 0.326950) + xyz.y * (float)(-0.204000 / 0.326950)
-                                              + xyz.z * (float)( 1.057000 / 0.326950));
-}
-
 // compute cosine of refracted direction
 BSDF_INLINE float refraction_cosine(
     const float nk1,
@@ -1452,13 +1404,13 @@ BSDF_INLINE float3 thin_film_factor(
     xyz *= float(1.0 / 16.0);
 
     // ("normalized" such that the loop for no shifted wave gives reflectivity (1,1,1))
-    return make_float3(
+    return math::saturate(make_float3(
         xyz.x * (float)( 3.240600 / 0.433509) + xyz.y * (float)(-1.537200 / 0.433509)
                                               + xyz.z * (float)(-0.498600 / 0.433509),
         xyz.x * (float)(-0.968900 / 0.341582) + xyz.y * (float)( 1.875800 / 0.341582)
                                               + xyz.z * (float)( 0.041500 / 0.341582),
         xyz.x * (float)( 0.055700 / 0.326950) + xyz.y * (float)(-0.204000 / 0.326950)
-                                              + xyz.z * (float)( 1.057000 / 0.326950));
+                                              + xyz.z * (float)( 1.057000 / 0.326950)));
 }
 
 

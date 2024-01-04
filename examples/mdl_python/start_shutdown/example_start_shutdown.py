@@ -49,10 +49,11 @@ print("Loaded the MDL Python Bindings")
 def main():
 
     # Get the INeuray interface in a suitable smart pointer.
-    neuray = pymdlsdk.load_and_get_ineuray('')
+    neuray: pymdlsdk.INeuray = pymdlsdk.load_and_get_ineuray('')
     if not neuray.is_valid_interface():
         raise Exception('Failed to load the MDL SDK.')
     print('Loaded the MDL SDK.')
+    print(f"refcount neuray: {neuray.__iinterface_refs__()}")
 
     # configuration settings go here, none in this example
 
@@ -92,21 +93,20 @@ def main():
     print('Unloaded the MDL SDK.')
 
 
-
 if __name__ == "__main__":
-
+    print(f"Running example in {__file__} in process with id: {os.getpid()}")
     try:
         # optional binding debugging:
         # some more simple memory debugging output
-        # pymdlsdk._enable_print_ref_counts(False)
+        pymdlsdk._enable_print_ref_counts(False)
 
         main()
 
         # optional binding debugging:
         # some more simple memory debugging output
-        # unreachable = gc.collect()
-        # print("\n%d unreachable objects detected during garbage collection.\n" % unreachable)
-        # pymdlsdk._print_open_handle_statistic()
+        unreachable = gc.collect()
+        print("\n%d unreachable objects detected during garbage collection.\n" % unreachable)
+        pymdlsdk._print_open_handle_statistic()
 
         # sleep to be able to read the output when starting from VS
         time.sleep(2.0)

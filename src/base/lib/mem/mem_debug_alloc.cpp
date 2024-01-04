@@ -472,7 +472,7 @@ DebugMallocAllocator::DebugMallocAllocator()
 : m_lock()
 , m_first(NULL)
 , m_last(NULL)
-, m_errors(NULL) 
+, m_errors(NULL)
 , m_next_block_num(0)
 , m_num_captures_frames(10)
 , m_num_skip_frames(4)
@@ -1303,7 +1303,7 @@ static void os_break_point()
 int os_printf(char const *fmt, ...)
 {
     va_list va;
-    
+
     va_start(va, fmt);
     int res = vfprintf(stderr, fmt, va);
     va_end(va);

@@ -1367,7 +1367,8 @@ public:
         bool enable_auxiliary,
         bool enable_pdf,
         bool use_adapt_normal,
-        const std::string& df_handle_mode);
+        const std::string& df_handle_mode,
+        const std::string& lambda_return_mode);
 
     // Loads an MDL module and returns the module DB.
     std::string load_module(const std::string& mdl_module_name);
@@ -1480,7 +1481,8 @@ Material_compiler::Material_compiler(
         bool enable_auxiliary,
         bool enable_pdf,
         bool use_adapt_normal,
-        const std::string& df_handle_mode)
+        const std::string& df_handle_mode,
+        const std::string& lambda_return_mode)
     : m_mdl_impexp_api(mdl_impexp_api, mi::base::DUP_INTERFACE)
     , m_be_cuda_ptx(mdl_backend_api->get_backend(mi::neuraylib::IMdl_backend_api::MB_CUDA_PTX))
     , m_mdl_factory(mdl_factory, mi::base::DUP_INTERFACE)
@@ -1531,6 +1533,13 @@ Material_compiler::Material_compiler(
     // The CUDA backend supports pointers, which means an externally managed buffer of arbitrary
     // size is used to transport the contributions of each part.
     check_success(m_be_cuda_ptx->set_option("df_handle_slot_mode", df_handle_mode.c_str()) == 0);
+
+    // Option "lambda_return_mode": Default is "default".
+    // Selects how generated lambda functions return their results. For PTX, the default
+    // is equivalent to "sret" mode, where all values are returned in a buffer provided as
+    // first argument. In "value" mode, base types and vector types are directly returned
+    // by the functions, other types are returned as for the "sret" mode.
+    check_success(m_be_cuda_ptx->set_option("lambda_return_mode", lambda_return_mode.c_str()) == 0);
 
     // Option "scene_data_names": Default is "".
     // Uncomment the line below to enable calling the scene data runtime functions

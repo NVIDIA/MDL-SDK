@@ -37,7 +37,7 @@ set(PROJECT_HEADERS
     "time_stopwatch_inline.h"
     )
 
-set(PROJECT_SOURCES 
+set(PROJECT_SOURCES
     "time.cpp"
     ${PROJECT_HEADERS}
     )
@@ -49,7 +49,10 @@ create_from_base_preset(
     )
 
 # add dependencies
-target_add_dependencies(TARGET ${PROJECT_NAME} 
-    DEPENDS 
+target_add_dependencies(TARGET ${PROJECT_NAME}
+    DEPENDS
         boost
     )
+
+# add unit tests
+add_unit_tests(POST)
