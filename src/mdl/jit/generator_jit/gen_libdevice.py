@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #*****************************************************************************
-# Copyright (c) 2014-2023, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2014-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
