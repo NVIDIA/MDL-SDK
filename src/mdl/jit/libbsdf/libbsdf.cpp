@@ -106,14 +106,16 @@ BSDF_INLINE void add_elemental_bsdf_auxiliary_contribution(
     const float3 &albedo_diffuse,
     const float3 &albedo_glossy,
     const float3 &normal,
-    const float glossy_roughness_u, // -1 if roughness does not apply
+    const float glossy_roughness_u,
     const float glossy_roughness_v)
 {
     // compute the roughness for the auxiliary buffer
-    // the output is non-squared roughness, and sqrt of the product of u and v in case of anistropy
-    const float avg_weight = math::average(inherited_weight);
-    const float3 weighted_roughness = 
-        make<float3>(avg_weight * glossy_roughness_u, avg_weight * glossy_roughness_v, avg_weight);
+    // the output is non-squared roughness
+    const float avg_weight = math::luminance(inherited_weight);
+    const float3 weighted_roughness = make<float3>(
+            avg_weight * glossy_roughness_u,
+            avg_weight * glossy_roughness_v,
+            avg_weight);
     // the z component sums the weights, the caller will divide by z if not zero
 
     #if MDL_DF_HANDLE_SLOT_MODE == BSDF_HSMN
@@ -374,7 +376,7 @@ BSDF_API void black_bsdf_auxiliary(
     const int handle)
 {
     elemental_bsdf_auxiliary(
-        data, state, inherited_normal, inherited_weight, make<float3>(0.0f), make<float3>(0.0f), 1.0f, 1.0f, handle);
+        data, state, inherited_normal, inherited_weight, make<float3>(0.0f), make<float3>(0.0f), 0.0f, 0.0f, handle);
 }
 
 
@@ -437,9 +439,16 @@ BSDF_API void diffuse_reflection_bsdf_auxiliary(
     const float roughness,
     const int handle)
 {
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, make<float3>(0.0f), 
-        1.0f, 1.0f, // for the auxiliary functions we are interested only in glossy roughness.
-        handle);    // returning roughness 1.0 is the most consistent option here.
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight,
+        tint, make<float3>(0.0f),
+        0.0f, 0.0f, // for the auxiliary functions we are interested only in glossy roughness.
+        handle);    // returning zero hero here since it's more valuable to denoisers to only 
+                    // have glossy roughness.
+                    // In case the renderer needs to account for diffuse contributions in the
+                    // roughness, weighting by albedo should provide plausible results:
+                    // e.g. roughness_mod = 
+                    //          (lumiance(albedo_diffuse) + roughness * lumiance(albedo_glossy)) /
+                    //          (lumiance(albedo_diffuse) + lumiance(albedo_glossy))
 }
 
 
@@ -497,7 +506,7 @@ BSDF_API void dusty_diffuse_reflection_bsdf_auxiliary(
     const float3 &tint,
     const int handle)
 {
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, make<float3>(0.0f), 1.0f, 1.0f, handle);
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, make<float3>(0.0f), 0.0f, 0.0f, handle);
 }
 
 
@@ -555,7 +564,7 @@ BSDF_API void diffuse_transmission_bsdf_auxiliary(
     const float3 &tint,
     const int handle)
 {
-    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, make<float3>(0.0f), 1.0f, 1.0f, handle);
+    elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, tint, make<float3>(0.0f), 0.0f, 0.0f, handle);
 }
 
 
@@ -1862,7 +1871,7 @@ BSDF_API void sheen_bsdf_auxiliary(
     }
 
     elemental_bsdf_auxiliary(data, state, inherited_normal, inherited_weight, multiscatter_tint * (1.0f - rho1), tint * rho1, 
-        1.0f, 1.0f, // let sheen behave like diffuse
+        0.0f, 0.0f, // let sheen behave like diffuse
         handle);
 }
 
@@ -4037,7 +4046,10 @@ BSDF_API void measured_bsdf_auxiliary(
     w_reflection *= math::min(scale, 1.0f / max_albedos.y);
     w_transmission *= math::min(scale, 1.0f / max_albedos.w);
 
-    // TODO evaluate to color RGB albedo
+    // TODO:
+    // - evaluate to color RGB albedo
+    // - slit diffuse and glossy albedo
+    // - fit roughness
     add_elemental_bsdf_auxiliary_contribution(
         data,
         handle,
@@ -4045,8 +4057,8 @@ BSDF_API void measured_bsdf_auxiliary(
         make<float3>(0.0f), // diffuse albedo, we can't tell, so better glossy
         make<float3>(w_reflection * max_albedos.x + w_transmission * max_albedos.w), // glossy albedo
         n.shading_normal,
-        -1.0f,   // unknown
-        -1.0f);  // unknown
+        0.0f,   // unknown
+        0.0f);  // unknown
 }
 
 

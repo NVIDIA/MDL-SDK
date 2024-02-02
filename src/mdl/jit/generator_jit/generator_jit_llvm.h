@@ -413,10 +413,11 @@ public:
         llvm::Type       *var_type,
         char const       *var_name)
     {
-        u.v.m_ctx       = ctx;
-        u.v.m_var_type  = var_type;
-        u.v.m_var_adr   = ctx->create_local(var_type, var_name);
-        u.v.m_var_value = NULL;
+        u.v.m_ctx             = ctx;
+        u.v.m_var_type        = var_type;
+        u.v.m_var_storage_mod = SM_NORMAL;
+        u.v.m_var_adr         = ctx->create_local(var_type, var_name);
+        u.v.m_var_value       = NULL;
     }
 
     /// Constructor for a variable/parameter.
@@ -425,14 +426,17 @@ public:
     /// \param value         the initial value of the variable
     /// \param name          the name of the variable/parameter
     /// \param by_reference  if true, value is the address of the variable, else its value
+    /// \param storage_mod   the storage modifier of the variable
     LLVM_context_data(
         Function_context *ctx,
         llvm::Value      *value,
         char const       *name,
-        bool             by_reference)
+        bool             by_reference,
+        Storage_modifier storage_mod)
     {
-        u.v.m_ctx      = ctx;
-        u.v.m_var_type = value->getType();
+        u.v.m_ctx             = ctx;
+        u.v.m_var_type        = value->getType();
+        u.v.m_var_storage_mod = storage_mod;
         if (by_reference) {
             u.v.m_var_adr   = value;
             u.v.m_var_value = NULL;
@@ -498,6 +502,9 @@ public:
         return l;
     }
 
+    /// Get the storage modifier of a variable.
+    Storage_modifier get_var_storage_modifier() const { return u.v.m_var_storage_mod; }
+
     /// Set the value of a variable.
     ///
     /// \param data  the new value of the variable
@@ -541,11 +548,14 @@ private:
             /// The LLVM type of the variable.
             llvm::Type *m_var_type;
 
-            /// The address of a variable if exist.
+            /// The address of a variable if it exists.
             llvm::Value *m_var_adr;
 
             /// The value of a variable if no address exists so far.
             llvm::Value *m_var_value;
+
+            /// The storage modifier of a variable if it has an address.
+            Storage_modifier m_var_storage_mod;
         } v;
     } u;
 };
@@ -702,6 +712,18 @@ public:
     /// Return true if this expression result represents an offset.
     bool is_offset() const { return m_res_kind == RK_OFFSET; }
 
+    /// Get the storage modifier for the expression result.
+    Storage_modifier get_storage_modifier() const {
+        if (is_offset()) {
+            if (get_offset_kind() == Expression_result::OK_RO_DATA_SEGMENT) {
+                return SM_RODATA;
+            } else {
+                return SM_PARAMETER;
+            }
+        }
+        return SM_NORMAL;
+    }
+
     /// Return the type of the value.
     llvm::Type *get_value_type() const {
         if (m_res_kind == RK_VALUE)
@@ -778,7 +800,7 @@ public:
     /// Return the semantics of a the called function.
     virtual mi::mdl::IDefinition::Semantics get_semantics() const = 0;
 
-    /// Get the callee definition of one exists.
+    /// Get the callee definition if one exists.
     ///
     /// \param code_gen  the LLVM code generator
     virtual mi::mdl::IDefinition const *get_callee_definition(
@@ -817,12 +839,10 @@ public:
     /// Get the LLVM context data of the callee.
     ///
     /// \param code_gen       the LLVM code generator
-    /// \param args           the argument mappings for this function call
-    /// \param return_derivs  if true, the function returns derivatives
+    /// \param inst           the function instance for this function call
     virtual LLVM_context_data *get_callee_context(
-        LLVM_code_generator                      &code_gen,
-        Function_instance::Array_instances const &arg,
-        bool                                     return_derivs) const = 0;
+        LLVM_code_generator     &code_gen,
+        Function_instance const &inst) const = 0;
 
     /// Get the result type of the call.
     virtual mi::mdl::IType const *get_type() const = 0;
@@ -830,8 +850,15 @@ public:
     /// Get the type of the i'th call argument.
     ///
     /// \param i    the argument index
-    virtual mi::mdl::IType const *get_argument_type(
-        size_t i) const = 0;
+    virtual mi::mdl::IType const *get_argument_type(size_t i) const = 0;
+
+    /// Get the storage modifier of the i'th call argument.
+    ///
+    /// \param ctx  the current function context
+    /// \param i    the argument index
+    virtual Storage_modifier get_argument_storage_modifier(
+        Function_context &ctx,
+        size_t           i) const = 0;
 
     /// Get the source position of the i'th call argument.
     ///
@@ -1695,46 +1722,56 @@ public:
         Function_context             &ctx,
         mi::mdl::DAG_parameter const *param_node);
 
-    /// Translate a part of a DAG parameter for GLSL/HLSL into LLVM IR.
+    /// Get the read function for a value of the given kind in the given storage space.
     ///
-    /// \param ctx         the current function context
-    /// \param param_type  the type of the part to translate
-    /// \param cur_offs    the current offset, will be updated
-    llvm::Value *translate_parameter_sl_value(
-        Function_context             &ctx,
-        mi::mdl::IType const         *param_type,
-        int                          &cur_offs);
+    /// \param storage_space   the storage space where the value is stored (may not be normal)
+    /// \param kind            the kind of the data to read
+    llvm::Function *get_sl_value_read_function(
+        Storage_modifier     storage_space,
+        mi::mdl::IType::Kind kind);
 
-    /// Translate a parameter offset into LLVM IR by adding the argument block offset of the state.
+    /// Translate a parameter or RO-data-segment offset into LLVM IR by adding
+    /// the corresponding base offset of the state.
     ///
-    /// \param ctx       the current function context
-    /// \param cur_offs  the current offset
-    llvm::Value *translate_parameter_sl_offset(
-        Function_context &ctx,
-        int               cur_offs);
-
-    /// Translate a part of the RO-data-segment for GLSL/HLSL into LLVM IR.
-    ///
-    /// \param ctx         the current function context
-    /// \param param_type  the type of the part to translate
-    /// \param cur_offs    the current offset, will be updated
-    /// \param add_val     additional value added to the offset, if non-NULL
-    llvm::Value *translate_ro_data_segment_sl_value(
-        Function_context             &ctx,
-        mi::mdl::IType const         *param_type,
-        int                          &cur_offs,
-        llvm::Value                  *add_val);
-
-    /// Translate a RO-data-segment offset into LLVM IR by adding the RO-data-segment offset
-    /// of the state.
-    ///
-    /// \param ctx       the current function context
-    /// \param cur_offs  the current offset
-    /// \param add_val   additional value added to the offset, if non-NULL
-    llvm::Value *translate_ro_data_segment_hlsl_offset(
+    /// \param ctx             the current function context
+    /// \param cur_offs        the current offset
+    /// \param add_val         additional value added to the offset, if non-NULL
+    llvm::Value *translate_sl_value_offset(
         Function_context &ctx,
         int               cur_offs,
         llvm::Value      *add_val);
+
+    /// Translate a part of a DAG parameter or the RO-data-segment for GLSL/HLSL into LLVM IR.
+    ///
+    /// \param ctx             the current function context
+    /// \param storage_space   the storage space where the value is stored (may not be normal)
+    /// \param param_type      the type of the part to translate
+    /// \param cur_offs        the current offset, will be updated
+    /// \param add_val         additional value added to the offset, if non-NULL
+    /// \param force_as_value  if true, the returned result will always be a value
+    Expression_result translate_sl_value_impl(
+        Function_context             &ctx,
+        Storage_modifier              storage_space,
+        mi::mdl::IType const         *param_type,
+        int                          &cur_offs,
+        llvm::Value                  *add_val,
+        bool                          force_as_value = false);
+
+    /// Translate a part of a DAG parameter or the RO-data-segment for GLSL/HLSL into LLVM IR.
+    ///
+    /// \param ctx             the current function context
+    /// \param storage_space   the storage space where the value is stored (may not be normal)
+    /// \param param_type      the type of the part to translate
+    /// \param cur_offs        the current offset, will be updated
+    /// \param add_val         additional value added to the offset, if non-NULL
+    /// \param force_as_value  if true, the returned result will always be a value
+    Expression_result translate_sl_value(
+        Function_context             &ctx,
+        Storage_modifier              storage_space,
+        mi::mdl::IType const         *param_type,
+        int                          &cur_offs,
+        llvm::Value                  *add_val,
+        bool                          force_as_value = false);
 
     /// Retrieve the LLVM context data for a MDL function instance, create it if not available.
     ///
@@ -2094,6 +2131,12 @@ public:
         return m_texruntime_with_derivs;
     }
 
+    /// Returns true, if a value with the given type and size will be stored in the RO data segment.
+    bool is_stored_in_ro_data_segment(mi::mdl::IType const *type, uint64_t size);
+
+    /// Returns true, if the given value will be stored in the RO data segment.
+    bool is_stored_in_ro_data_segment(mi::mdl::IValue const *v);
+
     /// Drop an LLVM module and clear the layout cache.
     void drop_llvm_module(llvm::Module *module);
 
@@ -2213,17 +2256,22 @@ private:
     /// Check if a given type needs reference return calling convention.
     ///
     /// \param type  the type to check
-    bool need_reference_return(mi::mdl::IType const *type) const;
+    /// \param arr_size  if >= 0, the instantiated array size of type
+    bool need_reference_return(mi::mdl::IType const *type, int arr_size) const;
 
     /// Check if the given parameter type must be passed by reference.
     ///
-    /// \param type   the type of the parameter
-    bool is_passed_by_reference(mi::mdl::IType const *type) const;
+    /// \param type      the type of the parameter
+    /// \param arr_size  if >= 0, the instantiated array size of type
+    bool is_passed_by_reference(mi::mdl::IType const *type, int arr_size) const;
 
     /// Determine the function context flags for a function definition.
     ///
+    /// \param inst   the function instance
     /// \param def    the function definition
-    LLVM_context_data::Flags get_function_flags(IDefinition const *def);
+    LLVM_context_data::Flags get_function_flags(
+        Function_instance const &inst,
+        IDefinition const       *def);
 
 
     /// Declares an LLVM function from a MDL function instance.
@@ -3025,8 +3073,8 @@ private:
     /// Get the argument type instances for a given call.
     ///
     /// \param ctx        the function context
-    /// \param call   the call.
-    Function_instance::Array_instances get_call_instance(
+    /// \param call       the call.
+    Function_instance get_call_instance(
         Function_context &ctx,
         ICall_expr const *call);
 
@@ -3042,9 +3090,7 @@ private:
     ///
     /// \param ctx        the function context
     /// \param call_expr  the call expression to translate
-    ///
-    /// \return NULL if the call could not be translated
-    llvm::Value *translate_call_user_defined_function(
+    Expression_result translate_call_user_defined_function(
         Function_context &ctx,
         ICall_expr const *call_expr);
 
@@ -3076,9 +3122,7 @@ private:
     ///
     /// \param ctx        the function context
     /// \param call_expr  the call expression to translate
-    ///
-    /// \return NULL if the call could not be translated
-    llvm::Value *translate_call_intrinsic_function(
+    Expression_result translate_call_intrinsic_function(
         Function_context          &ctx,
         mi::mdl::ICall_expr const *call_expr);
 
@@ -3439,6 +3483,7 @@ private:
         char const *fname,
         int        line);
 
+public:
     /// Specifies, whether an resource data parameter should be provided to subfunctions
     /// which use resources.
     bool target_uses_resource_data_parameter() const {
@@ -3533,6 +3578,12 @@ private:
         return false;
     }
 
+    /// Returns true if the target supports access to argblock and ro-data segment through
+    /// storage spaces.
+    bool target_supports_storage_spaces() const {
+        return target_is_structured_language();
+    }
+
     /// Returns true if the target uses the renderer normal adaption.
     bool target_uses_renderer_adapt_normal() const {
         switch (m_target_lang) {
@@ -3573,6 +3624,7 @@ private:
         return m_target_lang == ICode_generator::TL_PTX;
     }
 
+private:
     /// Mark a function as AlwaysInline if it has pointer typed parameters and the current
     /// target does not support pointer.
     ///

@@ -533,8 +533,13 @@ llvm::Value *Expression_result::as_value(Function_context &context) {
     // turn offset result into value
     if (m_res_kind == RK_OFFSET) {
         int cur_offs = 0;
-        m_content = context.get_code_gen().translate_ro_data_segment_sl_value(
-            context, m_offset_res_mdl_type, cur_offs, m_content);
+        m_content = context.get_code_gen().translate_sl_value(
+            context,
+            m_offs_kind == OK_RO_DATA_SEGMENT ? SM_RODATA : SM_PARAMETER,
+            m_offset_res_mdl_type,
+            cur_offs,
+            m_content,
+            /*force_as_value=*/ true).as_value(context);
         m_res_kind = RK_VALUE;
     }
 
@@ -581,11 +586,13 @@ public:
         return def->get_semantics();
     }
 
-    /// Get the callee definition of one exists.
+    /// Get the callee definition if one exists and its owner module.
     ///
-    /// \param code_gen  the LLVM code generator
-    mi::mdl::IDefinition const *get_callee_definition(
-        LLVM_code_generator &code_gen) const MDL_FINAL
+    /// \param      code_gen   the LLVM code generator
+    /// \param[out] owner_mod  out parameter for the owner module of the definition
+    mi::mdl::IDefinition const *get_callee_definition_and_owner(
+        LLVM_code_generator &code_gen,
+        mi::base::Handle<mi::mdl::IModule const> &owner) const
     {
         mi::mdl::IExpression_reference const *ref =
             cast<mi::mdl::IExpression_reference>(m_call->get_reference());
@@ -594,7 +601,24 @@ public:
         }
         mi::mdl::IDefinition const *ref_def = ref->get_definition();
         mi::mdl::IModule const *mod = code_gen.tos_module();
-        return mod->get_original_definition(ref_def);
+        mi::mdl::IDefinition const *def = mod->get_original_definition(ref_def);
+
+        owner = mod->get_owner_module(ref_def);
+
+        // a preset might point to another module
+        def = skip_presets(def, owner);
+
+        return def;
+    }
+
+    /// Get the callee definition of one exists.
+    ///
+    /// \param code_gen             the LLVM code generator
+    mi::mdl::IDefinition const *get_callee_definition(
+        LLVM_code_generator &code_gen) const MDL_FINAL
+    {
+        mi::base::Handle<mi::mdl::IModule const> owner;
+        return get_callee_definition_and_owner(code_gen, owner);
     }
 
     /// Get the number of arguments.
@@ -620,29 +644,16 @@ public:
     /// Get the LLVM context data of the callee.
     ///
     /// \param code_gen       the LLVM code generator
-    /// \param args           the argument mappings for this function call
+    /// \param inst           the function instance for this function call
     /// \param return_derivs  if true, the function returns derivatives
     LLVM_context_data *get_callee_context(
-        LLVM_code_generator                      &code_gen,
-        Function_instance::Array_instances const &args,
-        bool                                     return_derivs) const MDL_FINAL
+        LLVM_code_generator     &code_gen,
+        Function_instance const &inst) const MDL_FINAL
     {
-        mi::mdl::IExpression_reference const *ref     =
-            cast<mi::mdl::IExpression_reference>(m_call->get_reference());
-        mi::mdl::IDefinition const           *ref_def = ref->get_definition();
+        mi::base::Handle<mi::mdl::IModule const> owner;
+        get_callee_definition_and_owner(code_gen, owner);
 
-        // might be from another module, so look it up
-        mi::mdl::IModule const *mod = code_gen.tos_module();
-        mi::base::Handle<mi::mdl::IModule const> owner(mod->get_owner_module(ref_def));
-        {
-            mi::mdl::IDefinition const *def = mod->get_original_definition(ref_def);
-
-            // skip presets, so always get the original function
-            def = skip_presets(def, owner);
-
-            Function_instance inst(def, args, return_derivs);
-            return code_gen.get_or_create_context_data(owner.get(), inst);
-        }
+        return code_gen.get_or_create_context_data(owner.get(), inst);
     }
 
     /// Get the result type of the call.
@@ -650,12 +661,41 @@ public:
 
     /// Get the type of the i'th call argument.
     ///
-    /// \param ctx  the current function context
     /// \param i  the argument index
     mi::mdl::IType const *get_argument_type(size_t i) const MDL_FINAL {
         mi::mdl::IExpression const *arg = m_call->get_argument(int(i))->get_argument_expr();
 
         return arg->get_type();
+    }
+
+    /// Get the storage modifier of the i'th call argument.
+    ///
+    /// \param ctx  the current function context
+    /// \param i  the argument index
+    Storage_modifier get_argument_storage_modifier(
+        Function_context &ctx,
+        size_t           i) const MDL_FINAL
+    {
+        if (!ctx.get_code_gen().target_supports_storage_spaces())
+            return SM_NORMAL;
+
+        mi::mdl::IExpression const *arg = m_call->get_argument(int(i))->get_argument_expr();
+
+        if (mi::mdl::IExpression_reference const *ref = as<mi::mdl::IExpression_reference>(arg)) {
+            mi::mdl::IDefinition const           *def = ref->get_definition();
+
+            MDL_ASSERT(def != NULL && "Array constructor unexpected here");
+
+            if (def->get_kind() == mi::mdl::IDefinition::DK_PARAMETER ||
+                def->get_kind() == mi::mdl::IDefinition::DK_VARIABLE)
+            {
+                if (LLVM_context_data *data = ctx.lookup_context_data(def)) {
+                    return data->get_var_storage_modifier();
+                }
+            }
+        }
+
+        return SM_NORMAL;
     }
 
     /// Get the source position of the i'th call argument.
@@ -763,23 +803,39 @@ public:
         return m_call->get_semantic();
     }
 
-    /// Get the callee definition of one exists.
+    /// Get the callee definition if one exists and its owner module.
     ///
-    /// \param code_gen  the LLVM code generator
-    mi::mdl::IDefinition const *get_callee_definition(
-        LLVM_code_generator &) const MDL_FINAL
+    /// \param[out] owner_mod  out parameter for the owner module of the definition
+    mi::mdl::IDefinition const *get_callee_definition_and_owner(
+        mi::base::Handle<mi::mdl::IModule const> &owner) const
     {
         char const *signature = m_call->get_name();
         if (signature[0] == '#') {
             // skip prefix for derivative variants
             ++signature;
         }
-        mi::base::Handle<mi::mdl::IModule const> mod(m_resolver->get_owner_module(signature));
-        if (! mod.is_valid_interface()) {
+
+        owner = m_resolver->get_owner_module(signature);
+        if (!owner.is_valid_interface()) {
             return NULL;
         }
-        mi::mdl::Module const *module = impl_cast<mi::mdl::Module>(mod.get());
-        return module->find_signature(signature, /*only_exported=*/false);
+        mi::mdl::Module const *module = impl_cast<mi::mdl::Module>(owner.get());
+
+        IDefinition const *def = module->find_signature(signature, /*only_exported=*/false);
+        if (def != NULL) {
+            def = skip_presets(def, owner);
+        }
+        return def;
+    }
+
+    /// Get the callee definition if one exists.
+    ///
+    /// \param code_gen  the LLVM code generator
+    mi::mdl::IDefinition const *get_callee_definition(
+        LLVM_code_generator &) const MDL_FINAL
+    {
+        mi::base::Handle<mi::mdl::IModule const> owner;
+        return get_callee_definition_and_owner(owner);
     }
 
     /// Get the number of arguments.
@@ -809,37 +865,19 @@ public:
     /// Get the LLVM context data of the callee.
     ///
     /// \param code_gen       the LLVM code generator
-    /// \param args           the argument mappings for this function call
-    /// \param return_derivs  if true, the function returns derivatives
+    /// \param inst           the function instance for this function call
     LLVM_context_data *get_callee_context(
-        LLVM_code_generator                      &code_gen,
-        Function_instance::Array_instances const &args,
-        bool                                     return_derivs) const MDL_FINAL
+        LLVM_code_generator     &code_gen,
+        Function_instance const &inst) const MDL_FINAL
     {
-        char const *signature = m_call->get_name();
-        if (signature[0] == '#') {
-            // skip prefix for derivative variants
-            ++signature;
-        }
-        mi::base::Handle<mi::mdl::IModule const> mod(m_resolver->get_owner_module(signature));
-        if (! mod.is_valid_interface()) {
+        mi::base::Handle<mi::mdl::IModule const> owner;
+        if (get_callee_definition_and_owner(owner) == NULL) {
             return NULL;
         }
-        mi::mdl::Module const *module = impl_cast<mi::mdl::Module>(mod.get());
 
-        mi::mdl::IDefinition const *def =
-            module->find_signature(signature, /*only_exported=*/false);
-        if (def != NULL) {
-            // skip presets
-            def    = skip_presets(def, mod);
-            module = impl_cast<mi::mdl::Module>(mod.get());
-
-            // enter this module, so we gen create the context data if it does not exists yet
-            LLVM_code_generator::MDL_module_scope scope(code_gen, module);
-            Function_instance inst(def, args, return_derivs);
-            return code_gen.get_or_create_context_data(module, inst);
-        }
-        return NULL;
+        // enter this module, so we gen create the context data if it does not exists yet
+        LLVM_code_generator::MDL_module_scope scope(code_gen, owner.get());
+        return code_gen.get_or_create_context_data(owner.get(), inst);
     }
 
     /// Get the result type of the call.
@@ -852,6 +890,38 @@ public:
         mi::mdl::DAG_node const *arg = m_call->get_argument(int(i));
 
         return arg->get_type();
+    }
+
+    /// Get the storage modifier of the i'th call argument.
+    ///
+    /// \param ctx  the current function context
+    /// \param i  the argument index
+    Storage_modifier get_argument_storage_modifier(
+        Function_context &ctx,
+        size_t           i) const MDL_FINAL
+    {
+        if (!ctx.get_code_gen().target_supports_storage_spaces())
+            return SM_NORMAL;
+
+        mi::mdl::DAG_node const *arg = m_call->get_argument(int(i));
+
+        arg = skip_temporaries(arg);
+
+        if (is<DAG_parameter>(arg)) {
+            mi::mdl::IType const *type = arg->get_type()->skip_type_alias();
+            if (is<mi::mdl::IType_array>(type) || is<mi::mdl::IType_struct>(type)) {
+                return SM_PARAMETER;
+            }
+        }
+
+        if (DAG_constant const *c = as<DAG_constant>(arg)) {
+            mi::mdl::IValue const *v = c->get_value();
+            if (ctx.get_code_gen().is_stored_in_ro_data_segment(v)) {
+                return SM_RODATA;
+            }
+        }
+
+        return SM_NORMAL;
     }
 
     /// Get the source position of the i'th call argument.
@@ -2005,7 +2075,7 @@ bool LLVM_code_generator::is_deriv_var(mi::mdl::IDefinition const *def) const
 }
 
 // Check if a given type needs reference return calling convention.
-bool LLVM_code_generator::need_reference_return(mi::mdl::IType const *type) const
+bool LLVM_code_generator::need_reference_return(mi::mdl::IType const *type, int arr_size) const
 {
     if ((type->skip_type_alias()->get_kind() == mi::mdl::IType::TK_BSDF ||
             type->skip_type_alias()->get_kind() == mi::mdl::IType::TK_HAIR_BSDF ||
@@ -2021,11 +2091,11 @@ bool LLVM_code_generator::need_reference_return(mi::mdl::IType const *type) cons
         return true;
     }
 
-    return m_type_mapper.need_reference_return(type);
+    return m_type_mapper.need_reference_return(type, arr_size);
 }
 
 // Check if the given parameter type must be passed by reference.
-bool LLVM_code_generator::is_passed_by_reference(mi::mdl::IType const *type) const
+bool LLVM_code_generator::is_passed_by_reference(mi::mdl::IType const *type, int arr_size) const
 {
     if ((type->skip_type_alias()->get_kind() == mi::mdl::IType::TK_BSDF ||
             type->skip_type_alias()->get_kind() == mi::mdl::IType::TK_HAIR_BSDF ||
@@ -2040,7 +2110,7 @@ bool LLVM_code_generator::is_passed_by_reference(mi::mdl::IType const *type) con
         return true;
     }
 
-    return m_type_mapper.is_passed_by_reference(type);
+    return m_type_mapper.is_passed_by_reference(type, arr_size);
 }
 
 // Drop an LLVM module and clear the layout cache.
@@ -2262,7 +2332,13 @@ llvm::Module *LLVM_code_generator::compile_module(
 
                 // this compiles WITHOUT instantiation ...
                 Function_instance::Array_instances args(get_allocator());
-                Function_instance inst(def, args, /*return_derivs=*/ false);
+                Function_instance::Parameter_storage_modifiers param_mods(get_allocator());
+                Function_instance inst(
+                    def,
+                    args,
+                    param_mods,
+                    /*return_derivs=*/ false,
+                    target_supports_storage_spaces());
 
                 compile_function_instance(inst, func_decl);
             }
@@ -2324,7 +2400,7 @@ llvm::Function  *LLVM_code_generator::compile_const_lambda(
     // ensure the function is finished by putting it into a block
     {
         // environment functions return color
-        Function_instance inst(alloc, &lambda);
+        Function_instance inst(alloc, &lambda, target_supports_storage_spaces());
         Function_context context(alloc, *this, inst, func, flags);
 
         llvm::Function::arg_iterator arg_it = get_first_parameter(func, ctx_data);
@@ -2398,6 +2474,7 @@ llvm::Function *LLVM_code_generator::declare_sl_read_func(
 
     // let LLVM treat the function as a scalar to avoid duplicate calls
     func->setDoesNotThrow();
+    func->setWillReturn();
     func->setDoesNotAccessMemory();
 
     return func;
@@ -2531,7 +2608,7 @@ llvm::Function *LLVM_code_generator::compile_switch_lambda(
     {
         // switch functions return bool
         IAllocator *alloc = m_arena.get_allocator();
-        Function_instance inst(alloc, &lambda);
+        Function_instance inst(alloc, &lambda, target_supports_storage_spaces());
         Function_context ctx(alloc, *this, inst, func, flags);
 
         llvm::Function::arg_iterator arg_it = get_first_parameter(func, ctx_data);
@@ -2734,7 +2811,7 @@ llvm::Function *LLVM_code_generator::compile_lambda(
 
     // ensure the function is finished by putting it into a block
     {
-        Function_instance inst(alloc, &lambda);
+        Function_instance inst(alloc, &lambda, target_supports_storage_spaces());
         Function_context context(alloc, *this, inst, func, flags);
 
         llvm::Function::arg_iterator arg_it = get_first_parameter(func, ctx_data);
@@ -2780,14 +2857,17 @@ llvm::Function *LLVM_code_generator::compile_lambda(
 }
 
 // Determine the function context flags for a function definition.
-LLVM_context_data::Flags LLVM_code_generator::get_function_flags(IDefinition const *def)
+LLVM_context_data::Flags LLVM_code_generator::get_function_flags(
+    Function_instance const &inst,
+    IDefinition const *def)
 {
     MDL_ASSERT(def->get_kind() == mi::mdl::IDefinition::DK_FUNCTION);
 
     IType_function const     *func_type = cast<mi::mdl::IType_function>(def->get_type());
+    IType const              *ret_type  = func_type->get_return_type();
     LLVM_context_data::Flags flags      = LLVM_context_data::FL_NONE;
 
-    bool is_sret_func = need_reference_return(func_type->get_return_type());
+    bool is_sret_func = need_reference_return(ret_type, inst.instantiate_type_size(ret_type));
     if (is_sret_func) {
         flags |= LLVM_context_data::FL_SRET;
     }
@@ -2915,7 +2995,7 @@ LLVM_context_data *LLVM_code_generator::declare_function(
 
     mi::mdl::vector<llvm::Type *>::Type arg_types(get_allocator());
 
-    bool is_sret_func = need_reference_return(func_type->get_return_type());
+    bool is_sret_func = need_reference_return(func_type->get_return_type(), arr_size);
     if (is_sret_func) {
         // add a hidden parameter for the struct return
         arg_types.push_back(Type_mapper::get_ptr(ret_tp));
@@ -3039,6 +3119,12 @@ LLVM_context_data *LLVM_code_generator::declare_function(
         func_type->get_parameter(i, p_type, p_sym);
 
         // instantiate parameter types
+        Storage_modifier mod = inst.get_parameter_storage_modifier(i);
+        if (mod != SM_NORMAL) {
+            arg_types.push_back(m_type_mapper.get_int_type());  // offset parameter
+            continue;
+        }
+
         int arr_size = inst.instantiate_type_size(p_type);
         llvm::Type *tp;
         if (func_deriv_info != nullptr && func_deriv_info->args_want_derivatives.test_bit(i + 1)) {
@@ -3053,7 +3139,7 @@ LLVM_context_data *LLVM_code_generator::declare_function(
         } else {
             tp = lookup_type(p_type, arr_size);
 
-            if (is_passed_by_reference(p_type)) {
+            if (is_passed_by_reference(p_type, arr_size)) {
                 arg_types.push_back(Type_mapper::get_ptr(tp));
             } else {
                 arg_types.push_back(tp);
@@ -3194,7 +3280,7 @@ LLVM_context_data *LLVM_code_generator::declare_lambda(
     mi::mdl::vector<llvm::Type *>::Type arg_types(get_allocator());
 
     bool is_sret_func = m_dist_func_state != DFSTATE_INIT &&
-        (m_lambda_force_sret || need_reference_return(lambda->get_return_type()));
+        (m_lambda_force_sret || need_reference_return(lambda->get_return_type(), -1));
 
     if (is_sret_func) {
         // add a hidden parameter for the struct return
@@ -3434,9 +3520,10 @@ LLVM_context_data *LLVM_code_generator::declare_internal_function(
         IType const *p_type = int_func->get_parameter_type(i);
 
         // instantiate parameter types
-        llvm::Type *tp = lookup_type(p_type, inst.instantiate_type_size(p_type));
+        int arr_size = inst.instantiate_type_size(p_type);
+        llvm::Type *tp = lookup_type(p_type, arr_size);
 
-        if (is_passed_by_reference(p_type)) {
+        if (is_passed_by_reference(p_type, arr_size)) {
             arg_types.push_back(Type_mapper::get_ptr(tp));
         } else {
             arg_types.push_back(tp);
@@ -3602,7 +3689,7 @@ LLVM_context_data *LLVM_code_generator::get_or_create_context_data(
     mi::mdl::Lambda_function const *lambda)
 {
     // For now, lambda function will be NEVER instantiated.
-    Function_instance inst(get_allocator(), lambda);
+    Function_instance inst(get_allocator(), lambda, target_supports_storage_spaces());
 
     Context_data_map::const_iterator it(m_context_data.find(inst));
     if (it != m_context_data.end()) {
@@ -3623,9 +3710,13 @@ LLVM_context_data *LLVM_code_generator::create_context_data(
     llvm::Function    *func)
 {
     MDL_ASSERT(def != NULL && def->get_kind() == mi::mdl::IDefinition::DK_FUNCTION);
-    Function_instance inst(get_allocator(), def, return_derivs);
+    Function_instance inst(
+        get_allocator(),
+        def,
+        return_derivs,
+        target_supports_storage_spaces());
 
-    LLVM_context_data::Flags flags = get_function_flags(def);
+    LLVM_context_data::Flags flags = get_function_flags(inst, def);
     llvm::Type *real_ret_tp = (flags & LLVM_context_data::FL_SRET) != 0
         ? func->getFunctionType()->getParamType(0)
         : func->getReturnType();
@@ -3639,9 +3730,12 @@ LLVM_context_data *LLVM_code_generator::create_context_data(
 // Create an LLVM context data for an existing LLVM function.
 LLVM_context_data *LLVM_code_generator::create_context_data(
     Internal_function const *int_func,
-    llvm::Function *func)
+    llvm::Function          *func)
 {
-    Function_instance inst(get_allocator(), reinterpret_cast<size_t>(int_func));
+    Function_instance inst(
+        get_allocator(),
+        reinterpret_cast<size_t>(int_func),
+        target_supports_storage_spaces());
 
     LLVM_context_data::Flags flags = int_func->get_flags();
     llvm::Type *real_ret_tp = (flags & LLVM_context_data::FL_SRET) != 0
@@ -3687,10 +3781,11 @@ void LLVM_code_generator::compile_function_instance(
     llvm::Function::arg_iterator arg_it = get_first_parameter(func, ctx_data);
 
     for (size_t i = 0, n = func_decl->get_parameter_count(); i < n; ++i, ++arg_it) {
-        mi::mdl::IParameter const  *param  = func_decl->get_parameter(i);
-        mi::mdl::IDefinition const *p_def  = param->get_name()->get_definition();
-        mi::mdl::IType const       *p_type = p_def->get_type();
-        bool                       by_ref  = is_passed_by_reference(p_type) ||
+        mi::mdl::IParameter const  *param   = func_decl->get_parameter(i);
+        mi::mdl::IDefinition const *p_def   = param->get_name()->get_definition();
+        mi::mdl::IType const       *p_type  = p_def->get_type();
+        int                        arr_size = inst.instantiate_type_size(p_type);
+        bool                       by_ref   = is_passed_by_reference(p_type, arr_size) ||
             (target_supports_pointers() &&
                 m_cur_func_deriv_info != NULL &&
                 m_cur_func_deriv_info->args_want_derivatives.test_bit(i + 1));
@@ -3701,14 +3796,34 @@ void LLVM_code_generator::compile_function_instance(
             // or debug mode is active
             p_data = context.get_context_data(p_def);
 
-            // copy value into shadow copy
-            llvm::Value *init = by_ref ?
-                llvm::cast<llvm::Value>(context->CreateLoad(arg_it)) :
-                llvm::cast<llvm::Value>(arg_it);
+            llvm::Value *init = NULL;
+            switch (inst.get_parameter_storage_modifier(i)) {
+            case SM_NORMAL:
+                // copy value into shadow copy
+                init = by_ref ?
+                    llvm::cast<llvm::Value>(context->CreateLoad(arg_it)) :
+                    llvm::cast<llvm::Value>(arg_it);
+                break;
+            case SM_PARAMETER:
+                init = Expression_result::offset(
+                    arg_it,
+                    Expression_result::OK_RO_DATA_SEGMENT,
+                    lookup_type(p_type, arr_size),
+                    p_type).as_value(context);
+                break;
+            case SM_RODATA:
+                init = Expression_result::offset(
+                    arg_it,
+                    Expression_result::OK_ARG_BLOCK,
+                    lookup_type(p_type, arr_size),
+                    p_type).as_value(context);
+                break;
+            }
             p_data->set_var_value(init);
         } else {
             // this parameter will never be written
-            p_data = context.create_context_data(p_def, arg_it, by_ref);
+            p_data = context.create_context_data(
+                p_def, arg_it, by_ref, inst.get_parameter_storage_modifier(i));
         }
         context.make_accessible(param);
     }
@@ -3951,14 +4066,25 @@ void LLVM_code_generator::translate_var_declaration(
                         llvm::GlobalValue::InternalLinkage,
                         llvm::cast<llvm::Constant>(init.as_value(ctx)),
                         init_name.c_str());
-                    ctx.create_context_data(var_def, cv, /*by_reference=*/true);
+                    ctx.create_context_data(var_def, cv, /*by_reference=*/true, SM_NORMAL);
+                } else if (init.is_offset()) {
+                    ctx.create_context_data(
+                        var_def,
+                        init.get_offset(),
+                        /*by_reference=*/true,
+                        init.get_storage_modifier());
                 } else {
                     // is already a global constant
-                    ctx.create_context_data(var_def, init.as_ptr(ctx), /*by_reference=*/true);
+                    ctx.create_context_data(
+                        var_def,
+                        init.as_ptr(ctx),
+                        /*by_reference=*/true,
+                        SM_NORMAL);
                 }
             } else {
                 // handle as a real value
-                ctx.create_context_data(var_def, init.as_value(ctx), /*by_reference=*/false);
+                ctx.create_context_data(
+                    var_def, init.as_value(ctx), /*by_reference=*/false, SM_NORMAL);
             }
         }
     }
@@ -4604,12 +4730,14 @@ Expression_result LLVM_code_generator::translate_index_expression(
                     comp.get_offset(),
                     ctx->CreateMul(index, ctx.get_constant(size)));
 
-                MDL_ASSERT(comp.get_offset_kind() == Expression_result::OK_RO_DATA_SEGMENT &&
-                    "ARG BLOCK not supported yet");
                 int cur_offs = 0;
-                llvm::Value *res = translate_ro_data_segment_sl_value(
-                    ctx, a_type->get_element_type(), cur_offs, offs);
-                return Expression_result::value(res);
+                return translate_sl_value(
+                    ctx,
+                    comp.get_offset_kind() == Expression_result::OK_RO_DATA_SEGMENT
+                    ? SM_RODATA : SM_PARAMETER,
+                    a_type->get_element_type(),
+                    cur_offs,
+                    offs);
             }
 
             elem_ptr = ctx.create_simple_gep_in_bounds(comp.as_ptr(ctx), index);
@@ -4669,9 +4797,7 @@ llvm::Value *LLVM_code_generator::translate_lval_expression(
             switch (def->get_kind()) {
             case mi::mdl::IDefinition::DK_PARAMETER:
             case mi::mdl::IDefinition::DK_VARIABLE:
-                {
-                    LLVM_context_data *data = ctx.get_context_data(def);
-
+                if (LLVM_context_data *data = ctx.lookup_context_data(def)) {
                     return data->get_var_address();
                 }
                 break;
@@ -4723,7 +4849,9 @@ llvm::Value *LLVM_code_generator::translate_lval_expression(
     default:
         break;
     }
-    MDL_ASSERT(!"unsupported lvalue expression kind");
+
+    error(INTERNAL_JIT_BACKEND_ERROR, "Unsupported lvalue expression");
+    MDL_ASSERT(!"unsupported lvalue expression");
     return llvm::UndefValue::get(lookup_type(expr->get_type()));
 }
 
@@ -4746,9 +4874,7 @@ void LLVM_code_generator::translate_lval_expression_dual(
             switch (def->get_kind()) {
             case mi::mdl::IDefinition::DK_PARAMETER:
             case mi::mdl::IDefinition::DK_VARIABLE:
-                {
-                    LLVM_context_data *data = ctx.get_context_data(def);
-
+                if (LLVM_context_data *data = ctx.lookup_context_data(def)) {
                     llvm::Value *var_addr = data->get_var_address();
                     adr_val = ctx.create_simple_gep_in_bounds(var_addr, 0u);
                     adr_dx  = ctx.create_simple_gep_in_bounds(var_addr, 1u);
@@ -4810,7 +4936,9 @@ void LLVM_code_generator::translate_lval_expression_dual(
     default:
         break;
     }
-    MDL_ASSERT(!"unsupported lvalue expression kind");
+
+    error(INTERNAL_JIT_BACKEND_ERROR, "Unsupported lvalue expression");
+    MDL_ASSERT(!"unsupported lvalue expression");
     adr_val = adr_dx = adr_dy = llvm::UndefValue::get(lookup_type(expr->get_type()));
 }
 
@@ -4852,11 +4980,29 @@ Expression_result LLVM_code_generator::translate_expression(
             switch (def->get_kind()) {
             case mi::mdl::IDefinition::DK_PARAMETER:
             case mi::mdl::IDefinition::DK_VARIABLE:
-                {
-                    LLVM_context_data *data = ctx.get_context_data(def);
-
+                if (LLVM_context_data *data = ctx.lookup_context_data(def)) {
                     if (llvm::Value *v = data->get_var_address()) {
-                        res = Expression_result::ptr(v);
+                        switch (data->get_var_storage_modifier()) {
+                        case SM_NORMAL:
+                            res = Expression_result::ptr(v);
+                            break;
+                        case SM_PARAMETER:
+                        case SM_RODATA:
+                            {
+                                IType const *mdl_type = def->get_type();
+                                llvm::Type *llvm_type =
+                                    lookup_type(mdl_type, ctx.instantiate_type_size(mdl_type));
+
+                                res = Expression_result::offset(
+                                    v,
+                                    data->get_var_storage_modifier() == SM_PARAMETER
+                                        ? Expression_result::OK_ARG_BLOCK
+                                        : Expression_result::OK_RO_DATA_SEGMENT,
+                                    llvm_type,
+                                    mdl_type);
+                            }
+                            break;
+                        }
                     } else {
                         // variable is never changed, only a value
 
@@ -4905,9 +5051,8 @@ Expression_result LLVM_code_generator::translate_expression(
                         llvm::Value *array_size = ctx.get_constant(size);
 
                         res = Expression_result::value(array_size);
-                    } else {
+                    } else if (LLVM_context_data *p_data = ctx.lookup_context_data(param_def)) {
                         // still deferred size, retrieve it from the descriptor
-                        LLVM_context_data *p_data = ctx.get_context_data(param_def);
                         llvm::Value *arr_desc_ptr = p_data->get_var_address();
                         llvm::Value *array_size   = ctx.get_deferred_size_from_ptr(arr_desc_ptr);
 
@@ -4953,7 +5098,8 @@ Expression_result LLVM_code_generator::translate_expression(
     }
 
     if (res.is_unset()) {
-        MDL_ASSERT(!"unsupported expression kind");
+        error(INTERNAL_JIT_BACKEND_ERROR, "Unsupported expression");
+        MDL_ASSERT(!"unsupported expression");
         res = Expression_result::undef(lookup_type(expr->get_type()));
     }
 
@@ -5085,6 +5231,29 @@ int LLVM_code_generator::find_resource_tag(IValue_resource const *res) const
     return 0;
 }
 
+// Returns true, if a value with the given type and size will be stored in the RO data segment.
+bool LLVM_code_generator::is_stored_in_ro_data_segment(mi::mdl::IType const *type, uint64_t size)
+{
+    // Big data arrays slow down PTXAS and the JIT linker. Move them into a read-only
+    // segment that we manage ourself.
+    return size > 1024 && can_be_stored_in_ro_segment(type);
+}
+
+// Returns true, if the given value will be stored in the RO data segment.
+bool LLVM_code_generator::is_stored_in_ro_data_segment(mi::mdl::IValue const *v)
+{
+    if (!m_use_ro_data_segment || !is<mi::mdl::IValue_compound>(v))
+        return false;
+
+    mi::mdl::IType const *v_type = v->get_type();
+    llvm::Type *tp  = m_type_mapper.lookup_type(m_llvm_context, v_type);
+
+    llvm::DataLayout const *dl = get_target_layout_data();
+
+    uint64_t size = dl->getTypeAllocSize(tp);
+    return is_stored_in_ro_data_segment(v_type, size);
+}
+
 // Creates a global constant for a value in the LLVM IR.
 llvm::Value *LLVM_code_generator::create_global_const(
     Function_context               &ctx,
@@ -5103,7 +5272,7 @@ llvm::Value *LLVM_code_generator::create_global_const(
 
         // Big data arrays slow down PTXAS and the JIT linker. Move them into an read-only
         // segment that we manage ourself.
-        if (size > 1024 && can_be_stored_in_ro_segment(v->get_type())) {
+        if (is_stored_in_ro_data_segment(v_type, size)) {
             size_t curr_ofs = add_to_ro_data_segment(v, size);
             is_ro_segment_ofs = true;
 
@@ -5119,115 +5288,6 @@ llvm::Value *LLVM_code_generator::create_global_const(
         llvm::cast<llvm::Constant>(ctx.get_constant(v)),
         "_global_const");
     return cv;
-}
-
-// Translate a RO-data-segment offset into LLVM IR by adding the RO-data-segment offset
-// of the state.
-llvm::Value *LLVM_code_generator::translate_ro_data_segment_hlsl_offset(
-    Function_context &ctx,
-    int               cur_offs,
-    llvm::Value      *add_val)
-{
-    llvm::Value *state = ctx.get_state_parameter();
-    llvm::Value *adr   = ctx.create_simple_gep_in_bounds(
-        state, ctx.get_constant(
-        m_type_mapper.get_state_index(Type_mapper::STATE_CORE_RO_DATA_SEG)));
-    llvm::Value *arg_block_offs = ctx->CreateLoad(adr);
-    if (add_val != NULL) {
-        arg_block_offs = ctx->CreateAdd(arg_block_offs, add_val);
-    }
-    return ctx->CreateAdd(arg_block_offs, ctx.get_constant(cur_offs));
-}
-
-// Translate a part of the RO-data-segment for GLSL/HLSL into LLVM IR.
-llvm::Value *LLVM_code_generator::translate_ro_data_segment_sl_value(
-    Function_context     &ctx,
-    mi::mdl::IType const *param_type,
-    int                  &cur_offs,
-    llvm::Value          *add_val)
-{
-    llvm::Value *res;
-    param_type = param_type->skip_type_alias();
-
-    switch (param_type->get_kind()) {
-    case mi::mdl::IType::TK_BOOL:
-        res = ctx->CreateCall(
-            m_sl_funcs.m_rodata_as_bool,
-            translate_ro_data_segment_hlsl_offset(ctx, cur_offs, add_val));
-        ++cur_offs;
-        break;
-
-    case mi::mdl::IType::TK_FLOAT:
-        cur_offs = (cur_offs + 3) & ~3;
-        res = ctx->CreateCall(
-            m_sl_funcs.m_rodata_as_float,
-            translate_ro_data_segment_hlsl_offset(ctx, cur_offs, add_val));
-        cur_offs += 4;
-        break;
-
-    case mi::mdl::IType::TK_INT:
-    case mi::mdl::IType::TK_ENUM:
-    case mi::mdl::IType::TK_STRING:
-        cur_offs = (cur_offs + 3) & ~3;
-        res = ctx->CreateCall(
-            m_sl_funcs.m_rodata_as_int,
-            translate_ro_data_segment_hlsl_offset(ctx, cur_offs, add_val));
-        cur_offs += 4;
-        break;
-
-    case mi::mdl::IType::TK_DOUBLE:
-        cur_offs = (cur_offs + 7) & ~7;
-        res = ctx->CreateCall(
-            m_sl_funcs.m_rodata_as_double,
-            translate_ro_data_segment_hlsl_offset(ctx, cur_offs, add_val));
-        cur_offs += 8;
-        break;
-
-    case mi::mdl::IType::TK_VECTOR:
-    case mi::mdl::IType::TK_MATRIX:
-    case mi::mdl::IType::TK_ARRAY:
-    case mi::mdl::IType::TK_COLOR:
-    case mi::mdl::IType::TK_STRUCT:
-        {
-            mi::mdl::IType_compound const *ct = cast<mi::mdl::IType_compound>(param_type);
-
-            llvm::Type *res_type = m_type_mapper.lookup_type(m_llvm_context, ct);
-            size_t size = size_t(m_data_layout.getTypeAllocSize(res_type));
-            int compound_start_offs = cur_offs;
-
-            res = llvm::UndefValue::get(res_type);
-            for (int i = 0, n = ct->get_compound_size(); i < n; ++i) {
-                mi::mdl::IType const *et = ct->get_compound_type(i);
-                res = ctx.create_insert(
-                    res,
-                    translate_ro_data_segment_sl_value(ctx, et, cur_offs, add_val),
-                    unsigned(i));
-            }
-
-            // compound values might have an higher alignment then the sum of its components
-            // TODO: this is probably wrong for { bool, { double, ... }, float }
-            //   as the alignment of the first compound element must be applied
-            cur_offs = compound_start_offs + size;
-        }
-        break;
-
-    case mi::mdl::IType::TK_TEXTURE:
-    case mi::mdl::IType::TK_LIGHT_PROFILE:
-    case mi::mdl::IType::TK_BSDF_MEASUREMENT:
-        // resources are mapped to integer in HLSL
-        cur_offs = (cur_offs + 3) & ~3;
-        res = ctx->CreateCall(
-            m_sl_funcs.m_rodata_as_int,
-            translate_ro_data_segment_hlsl_offset(ctx, cur_offs, add_val));
-        cur_offs += 4;
-        break;
-
-    default:
-        MDL_ASSERT(!"Unexpected parameter type");
-        res = llvm::UndefValue::get(m_type_mapper.lookup_type(m_llvm_context, param_type));
-        break;
-    }
-    return res;
 }
 
 // Translate a value to LLVM IR.
@@ -6954,7 +7014,10 @@ Expression_result LLVM_code_generator::translate_conditional(
         res_type = lookup_type_or_deriv_type(ctx, cond_expr);
     } else {
         // no, so just return the values without derivatives
-        res_type = m_type_mapper.lookup_type(m_llvm_context, cond_expr->get_type());
+        res_type = m_type_mapper.lookup_type(
+            m_llvm_context,
+            cond_expr->get_type(),
+            ctx.instantiate_type_size(cond_expr->get_type()));
     }
 
     llvm::Value *res_addr  = ctx.create_local(res_type, "?:_tmp");
@@ -7249,7 +7312,7 @@ Expression_result LLVM_code_generator::translate_call(
 
     switch (sema) {
     case mi::mdl::IDefinition::DS_UNKNOWN:
-        return Expression_result::value(translate_call_user_defined_function(ctx, call_expr));
+        return translate_call_user_defined_function(ctx, call_expr);
 
     case mi::mdl::IDefinition::DS_COPY_CONSTRUCTOR:
         // ignore all copy constructors
@@ -7425,25 +7488,25 @@ Expression_result LLVM_code_generator::translate_call(
         break;
     }
 
-    llvm::Value *res = translate_call_intrinsic_function(ctx, call_expr);
-    if (res != NULL) {
-        return Expression_result::value(res);
-    }
-
-    MDL_ASSERT(!"NYI");
-    return Expression_result::undef(lookup_type(call_expr->get_type()));
+    return translate_call_intrinsic_function(ctx, call_expr);
 }
 
 // Get the argument type instances for a given call.
-Function_instance::Array_instances LLVM_code_generator::get_call_instance(
+Function_instance LLVM_code_generator::get_call_instance(
     Function_context &ctx,
     ICall_expr const *call)
 {
     Function_instance::Array_instances res(get_allocator());
+    Function_instance::Parameter_storage_modifiers param_mods(get_allocator());
 
     if (!m_enable_instancing) {
         // instancing disabled
-        return res;
+        return Function_instance(
+            call->get_callee_definition(*this),
+            res,
+            param_mods,
+            call->returns_derivatives(*this),
+            target_supports_storage_spaces());
     }
 
     typedef ptr_hash_set<IType_array_size const>::Type Marker_set;
@@ -7477,7 +7540,21 @@ Function_instance::Array_instances LLVM_code_generator::get_call_instance(
     }
 
     // instantiate argument types
+    bool all_param_mods_normal = true;  // an empty param_mods means all normal
     for (size_t i = 0, n = call->get_argument_count(); i < n; ++i) {
+        Storage_modifier param_mod = call->get_argument_storage_modifier(ctx, i);
+        if (all_param_mods_normal && param_mod != SM_NORMAL) {
+            // initialize all previous parameter storage modifiers as normal
+            all_param_mods_normal = false;
+            param_mods.reserve(n);
+            for (size_t j = 0; j < i; ++j) {
+                param_mods.push_back(SM_NORMAL);
+            }
+        }
+        if (!all_param_mods_normal) {
+            param_mods.push_back(param_mod);
+        }
+
         IType_array const *a_arg_type = as<IType_array>(call->get_argument_type(i));
 
         if (a_arg_type == NULL) {
@@ -7513,7 +7590,13 @@ Function_instance::Array_instances LLVM_code_generator::get_call_instance(
             }
         }
     }
-    return res;
+
+    return Function_instance(
+        call->get_callee_definition(*this),
+        res,
+        param_mods,
+        call->returns_derivatives(*this),
+        target_supports_storage_spaces());
 }
 
 // Instantiate a type using array type instances.
@@ -7536,30 +7619,18 @@ int LLVM_code_generator::instantiate_call_param_type_size(
 }
 
 // Translate a call to an user defined function to LLVM IR.
-llvm::Value *LLVM_code_generator::translate_call_user_defined_function(
+Expression_result LLVM_code_generator::translate_call_user_defined_function(
     Function_context &ctx,
     ICall_expr const *call_expr)
 {
-    Function_instance::Array_instances arr_inst(get_call_instance(ctx, call_expr));
-    bool return_derivs = call_expr->returns_derivatives(*this);
-    LLVM_context_data *p_data = call_expr->get_callee_context(*this, arr_inst, return_derivs);
+    Function_instance inst(get_call_instance(ctx, call_expr));
+    LLVM_context_data *p_data = call_expr->get_callee_context(*this, inst);
 
     mi::mdl::IDefinition const    *def    = call_expr->get_callee_definition(*this);
     mi::mdl::IType_function const *f_type = cast<mi::mdl::IType_function>(def->get_type());
 
     Func_deriv_info const *func_deriv_info = NULL;
     if (m_deriv_infos != NULL) {
-        // skip presets, so always get the original function
-        mi::mdl::IModule const *mod = tos_module();
-        Module const *owner = impl_cast<Module>(mod);
-        if (def->get_property(IDefinition::DP_IS_IMPORTED)) {
-            def = owner->get_original_definition(def, owner);
-        }
-
-        mi::base::Handle<IModule const> i_owner(owner, mi::base::DUP_INTERFACE);
-        def = skip_presets(def, i_owner);
-
-        Function_instance inst(def, arr_inst, return_derivs);
         func_deriv_info = m_deriv_infos->get_function_derivative_infos(inst);
     }
 
@@ -7629,7 +7700,19 @@ llvm::Value *LLVM_code_generator::translate_call_user_defined_function(
 
         // instantiate the parameter type, we are calling an instance using the argument instances
         // of this call
-        int param_imm_size = instantiate_call_param_type_size(p_type, arr_inst);
+        Storage_modifier mod = inst.get_parameter_storage_modifier(i);
+        if (mod != SM_NORMAL) {
+            if (!expr_res.is_offset()) {
+                error(INTERNAL_JIT_BACKEND_ERROR, "Offset required for non-normal storage space");
+                MDL_ASSERT(!"Offset required for non-normal storage space");
+                args.push_back(llvm::UndefValue::get(lookup_type(arg_type)));
+            } else {
+                args.push_back(expr_res.get_offset());
+            }
+            continue;
+        }
+
+        int param_imm_size = instantiate_call_param_type_size(p_type, inst.get_array_instances());
 
         mi::mdl::IType_array const *a_p_type = mi::mdl::as<mi::mdl::IType_array>(p_type);
         if (a_p_type != NULL && !a_p_type->is_immediate_sized() && param_imm_size < 0) {
@@ -7652,7 +7735,7 @@ llvm::Value *LLVM_code_generator::translate_call_user_defined_function(
             }
         }
 
-        if (m_type_mapper.is_passed_by_reference(arg_type) ||
+        if (m_type_mapper.is_passed_by_reference(arg_type, param_imm_size) ||
             (target_supports_pointers() && m_type_mapper.is_deriv_type(expr_res.get_value_type())))
         {
             // pass by reference
@@ -7669,9 +7752,9 @@ llvm::Value *LLVM_code_generator::translate_call_user_defined_function(
 
     if (sret_res != NULL) {
         // the result was passed on the stack
-        res = ctx->CreateLoad(sret_res);
+        return Expression_result::ptr(sret_res);
     }
-    return res;
+    return Expression_result::value(res);
 }
 
 // Translate a DAG expression lambda call to LLVM IR.
@@ -9351,43 +9434,79 @@ Expression_result LLVM_code_generator::translate_node(
     return res;
 }
 
-// Translate a parameter offset into LLVM IR by adding the argument block offset of the state.
-llvm::Value *LLVM_code_generator::translate_parameter_sl_offset(
-    Function_context &ctx,
-    int               cur_offs)
+// Get the read function for a value of the given kind in the given storage space.
+llvm::Function *LLVM_code_generator::get_sl_value_read_function(
+    Storage_modifier     storage_space,
+    mi::mdl::IType::Kind kind)
 {
-    llvm::Value *state = ctx.get_state_parameter();
-    llvm::Value *adr   = ctx.create_simple_gep_in_bounds(
-        state,
-        ctx.get_constant(
-            m_type_mapper.get_state_index(Type_mapper::STATE_CORE_ARG_BLOCK_OFFSET)
-        ));
-    llvm::Value *arg_block_offs = ctx->CreateLoad(adr);
-    return ctx->CreateAdd(arg_block_offs, ctx.get_constant(cur_offs));
+    bool is_argblock = storage_space == SM_PARAMETER;
+    switch (kind) {
+    case mi::mdl::IType::TK_BOOL:
+        return is_argblock ? m_sl_funcs.m_argblock_as_bool : m_sl_funcs.m_rodata_as_bool;
+
+    case mi::mdl::IType::TK_FLOAT:
+        return is_argblock ? m_sl_funcs.m_argblock_as_float : m_sl_funcs.m_rodata_as_float;
+
+    case mi::mdl::IType::TK_INT:
+    case mi::mdl::IType::TK_ENUM:
+    case mi::mdl::IType::TK_STRING:
+    case mi::mdl::IType::TK_TEXTURE:
+    case mi::mdl::IType::TK_LIGHT_PROFILE:
+    case mi::mdl::IType::TK_BSDF_MEASUREMENT:
+        return is_argblock ? m_sl_funcs.m_argblock_as_int : m_sl_funcs.m_rodata_as_int;
+
+    case mi::mdl::IType::TK_DOUBLE:
+        return is_argblock ? m_sl_funcs.m_argblock_as_double : m_sl_funcs.m_rodata_as_double;
+
+    default:
+        break;
+    }
+
+    error(INTERNAL_JIT_BACKEND_ERROR, "Unexpected sl value data kind");
+    MDL_ASSERT(!"Unexpected sl value data kind");
+    return is_argblock ? m_sl_funcs.m_argblock_as_int : m_sl_funcs.m_rodata_as_int;
 }
 
-// Translate a part of a DAG parameter for GLSL/HLSL into LLVM IR.
-llvm::Value *LLVM_code_generator::translate_parameter_sl_value(
-    Function_context     &ctx,
-    mi::mdl::IType const *param_type,
-    int                  &cur_offs)
+// Translate a parameter or RO-data-segment offset into LLVM IR by adding
+// the corresponding base offset of the state.
+llvm::Value *LLVM_code_generator::translate_sl_value_offset(
+    Function_context &ctx,
+    int               cur_offs,
+    llvm::Value      *add_val)
 {
-    llvm::Value *res;
+    llvm::Value *result_offs = ctx.get_constant(cur_offs);
+    if (add_val != NULL) {
+        result_offs = ctx->CreateAdd(result_offs, add_val);
+    }
+    return result_offs;
+}
+
+// Translate a part of a DAG parameter or the RO-data-segment for GLSL/HLSL into LLVM IR.
+Expression_result LLVM_code_generator::translate_sl_value_impl(
+    Function_context     &ctx,
+    Storage_modifier      storage_space,
+    mi::mdl::IType const *param_type,
+    int                  &cur_offs,
+    llvm::Value          *add_val,
+    bool                  force_as_value)
+{
+    Expression_result res;
     param_type = param_type->skip_type_alias();
 
-    switch (param_type->get_kind()) {
+    mi::mdl::IType::Kind kind = param_type->get_kind();
+    switch (kind) {
     case mi::mdl::IType::TK_BOOL:
-        res = ctx->CreateCall(
-            m_sl_funcs.m_argblock_as_bool,
-            translate_parameter_sl_offset(ctx, cur_offs));
+        res = Expression_result::value(ctx->CreateCall(
+            get_sl_value_read_function(storage_space, kind),
+            translate_sl_value_offset(ctx, cur_offs, add_val)));
         ++cur_offs;
         break;
 
     case mi::mdl::IType::TK_FLOAT:
         cur_offs = (cur_offs + 3) & ~3;
-        res = ctx->CreateCall(
-            m_sl_funcs.m_argblock_as_float,
-            translate_parameter_sl_offset(ctx, cur_offs));
+        res = Expression_result::value(ctx->CreateCall(
+            get_sl_value_read_function(storage_space, kind),
+            translate_sl_value_offset(ctx, cur_offs, add_val)));
         cur_offs += 4;
         break;
 
@@ -9395,42 +9514,95 @@ llvm::Value *LLVM_code_generator::translate_parameter_sl_value(
     case mi::mdl::IType::TK_ENUM:
     case mi::mdl::IType::TK_STRING:
         cur_offs = (cur_offs + 3) & ~3;
-        res = ctx->CreateCall(
-            m_sl_funcs.m_argblock_as_int,
-            translate_parameter_sl_offset(ctx, cur_offs));
+        res = Expression_result::value(ctx->CreateCall(
+            get_sl_value_read_function(storage_space, kind),
+            translate_sl_value_offset(ctx, cur_offs, add_val)));
         cur_offs += 4;
         break;
 
     case mi::mdl::IType::TK_DOUBLE:
         // FIXME: check if double exists
         cur_offs = (cur_offs + 7) & ~7;
-        res = ctx->CreateCall(
-            m_sl_funcs.m_argblock_as_double,
-            translate_parameter_sl_offset(ctx, cur_offs));
+        res = Expression_result::value(ctx->CreateCall(
+            get_sl_value_read_function(storage_space, kind),
+            translate_sl_value_offset(ctx, cur_offs, add_val)));
         cur_offs += 8;
         break;
 
     case mi::mdl::IType::TK_VECTOR:
     case mi::mdl::IType::TK_MATRIX:
-    case mi::mdl::IType::TK_ARRAY:
     case mi::mdl::IType::TK_COLOR:
     case mi::mdl::IType::TK_STRUCT:
         {
             mi::mdl::IType_compound const *ct = cast<mi::mdl::IType_compound>(param_type);
-
             llvm::Type *res_type = m_type_mapper.lookup_type(m_llvm_context, ct);
             size_t size = size_t(m_data_layout.getTypeAllocSize(res_type));
             size_t align = size_t(m_data_layout.getABITypeAlignment(res_type));
             cur_offs = (cur_offs + align - 1) & ~(align - 1);
             int compound_start_offs = cur_offs;
 
-            res = llvm::UndefValue::get(res_type);
+            llvm::Value *res_value = llvm::UndefValue::get(res_type);
             for (int i = 0, n = ct->get_compound_size(); i < n; ++i) {
                 mi::mdl::IType const *et = ct->get_compound_type(i);
-                res = ctx.create_insert(
-                    res,
-                    translate_parameter_sl_value(ctx, et, cur_offs),
+                res_value = ctx.create_insert(
+                    res_value,
+                    translate_sl_value_impl(
+                        ctx, storage_space, et, cur_offs, add_val,
+                        /*force_as_value=*/ true).as_value(ctx),
                     unsigned(i));
+            }
+
+            res = Expression_result::value(res_value);
+
+            // compound values might have an higher alignment then the sum of its components
+            cur_offs = compound_start_offs + size;
+        }
+        break;
+
+    case mi::mdl::IType::TK_ARRAY:
+        {
+            mi::mdl::IType_array const *at = cast<mi::mdl::IType_array>(param_type);
+            mi::mdl::IType const *et = at->get_element_type();
+            int array_size = ctx.instantiate_type_size(at);
+            llvm::Type *res_type = m_type_mapper.lookup_type(m_llvm_context, at, array_size);
+
+            // array_size not set, yet?
+            if (at->is_immediate_sized()) {
+                array_size = at->get_size();
+            }
+
+            size_t size = size_t(m_data_layout.getTypeAllocSize(res_type));
+            size_t align = size_t(m_data_layout.getABITypeAlignment(res_type));
+            cur_offs = (cur_offs + align - 1) & ~(align - 1);
+            int compound_start_offs = cur_offs;
+
+            if (force_as_value) {
+                llvm::Value *res_value = llvm::UndefValue::get(res_type);
+                for (int i = 0, n = array_size; i < n; ++i) {
+                    res_value = ctx.create_insert(
+                        res_value,
+                        translate_sl_value_impl(
+                            ctx, storage_space, et, cur_offs, add_val,
+                            /*force_as_value=*/ true).as_value(ctx),
+                        unsigned(i));
+                }
+
+                res = Expression_result::value(res_value);
+            } else {
+                // LLVM arrays as values are usually pretty much useless and need to be
+                // converted to a pointer to an array when actually used. So directly
+                // store this in a local variable
+                llvm::Value *res_var = ctx.create_local(res_type, "array_value");
+                for (int i = 0, n = array_size; i < n; ++i) {
+                    llvm::Value *gep = ctx.create_simple_gep_in_bounds(res_var, i);
+                    ctx->CreateStore(
+                        translate_sl_value_impl(
+                            ctx, storage_space, et, cur_offs, add_val,
+                            /*force_as_value=*/ true).as_value(ctx),
+                        gep);
+                }
+
+                res = Expression_result::ptr(res_var);
             }
 
             // compound values might have an higher alignment then the sum of its components
@@ -9443,18 +9615,50 @@ llvm::Value *LLVM_code_generator::translate_parameter_sl_value(
     case mi::mdl::IType::TK_BSDF_MEASUREMENT:
         // resources are mapped to integer in GLSL/HLSL
         cur_offs = (cur_offs + 3) & ~3;
-        res = ctx->CreateCall(
-            m_sl_funcs.m_argblock_as_int,
-            translate_parameter_sl_offset(ctx, cur_offs));
+        res = Expression_result::value(ctx->CreateCall(
+            get_sl_value_read_function(storage_space, kind),
+            translate_sl_value_offset(ctx, cur_offs, add_val)));
         cur_offs += 4;
         break;
 
     default:
         MDL_ASSERT(!"Unexpected parameter type");
-        res = llvm::UndefValue::get(m_type_mapper.lookup_type(m_llvm_context, param_type));
+        res = Expression_result::value(
+            llvm::UndefValue::get(m_type_mapper.lookup_type(m_llvm_context, param_type)));
         break;
     }
     return res;
+}
+
+// Translate a part of a DAG parameter or the RO-data-segment for GLSL/HLSL into LLVM IR.
+Expression_result LLVM_code_generator::translate_sl_value(
+    Function_context     &ctx,
+    Storage_modifier      storage_space,
+    mi::mdl::IType const *param_type,
+    int                  &cur_offs,
+    llvm::Value          *add_val,
+    bool                  force_as_value)
+{
+    // add base offset of argument block or RO-data-segment to add_val
+
+    llvm::Value *state = ctx.get_state_parameter();
+    llvm::Value *adr   = ctx.create_simple_gep_in_bounds(
+        state,
+        ctx.get_constant(
+            m_type_mapper.get_state_index(
+                storage_space == SM_PARAMETER
+                ? Type_mapper::STATE_CORE_ARG_BLOCK_OFFSET
+                : Type_mapper::STATE_CORE_RO_DATA_SEG)
+        ));
+    llvm::Value *base_offs = ctx->CreateLoad(adr);
+    if (add_val != NULL) {
+        add_val = ctx->CreateAdd(base_offs, add_val);
+    } else {
+        add_val = base_offs;
+    }
+
+    return translate_sl_value_impl(
+        ctx, storage_space, param_type, cur_offs, add_val, force_as_value);
 }
 
 // Translate a DAG parameter into LLVM IR
@@ -9469,8 +9673,11 @@ Expression_result LLVM_code_generator::translate_parameter(
         int param_offs = int(sl->getElementOffset(param_node->get_index()));
 
         mi::mdl::IType const *param_type = param_node->get_type();
-        llvm::Value *res = translate_parameter_sl_value(ctx, param_type, param_offs);
-        return Expression_result::value(res);
+        return Expression_result::offset(
+            ctx.get_constant(param_offs),
+            Expression_result::OK_ARG_BLOCK,
+            lookup_type(param_type, ctx.instantiate_type_size(param_type)),
+            param_type);
     }
 
     llvm::Value *args = ctx->CreatePointerCast(
@@ -9876,6 +10083,9 @@ llvm::Module *LLVM_code_generator::finalize_module()
             std::unique_ptr<llvm::Module> libdevice(
                 load_libdevice(m_llvm_context, m_min_ptx_version));
             MDL_ASSERT(libdevice);
+
+            // clear target triple to avoid taking 32-bit triple from libdevice
+            libdevice->setTargetTriple("");
 
             // avoid LLVM warning on console about mixing different data layouts
             libdevice->setDataLayout(llvm_module->getDataLayout());

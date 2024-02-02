@@ -3078,8 +3078,12 @@ const mi::mdl::DAG_node* Mdl_dag_builder<T>::int_expr_call_to_mdl_dag_node_share
     } else if( is_array_constructor) {
         element_type = m_type_factory->import( element_type);
         return_type = m_type_factory->create_array( element_type, mdl_arguments.size());
-    } else if( is_cast_operator || is_ternary_operator || is_array_index_operator) {
+    } else if( is_cast_operator || is_array_index_operator) {
         return_type = m_type_factory->import( mdl_type);
+    } else if ( is_ternary_operator) {
+        return_type = m_type_factory->import(mdl_arguments[1].arg->get_type()->skip_type_alias());
+        ASSERT( M_SCENE,
+            return_type == m_type_factory->import(mdl_arguments[2].arg->get_type()->skip_type_alias()));
     } else {
         return_type = code_dag.get_return_type( definition_index);
         return_type = m_type_factory->import( return_type);

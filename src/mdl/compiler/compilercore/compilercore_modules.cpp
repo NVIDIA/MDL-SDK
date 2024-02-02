@@ -360,12 +360,6 @@ bool Module::analyze(
         Sema_hasher::run(get_allocator(), this, m_compiler);
     }
 
-    // drop the reference count of all imports, it was increased
-    // during load_module_to_import() inside NT_analysis::run().
-    // Note that this does NOT drop all imports, it just sets the count
-    // to one again.
-    drop_import_entries();
-
     return m_is_valid;
 }
 
@@ -899,7 +893,8 @@ bool Module::restore_import_entries(IModule_cache *cache) const
         Module const *import = entry.lock_module(weak_lock);
         if (import == NULL) {
             if (cache == NULL) {
-                return false;
+                result = false;
+                continue;
             }
 
             mi::base::Handle<IModule const> imod(cache->lookup(entry.get_absolute_name(), NULL));
@@ -912,7 +907,7 @@ bool Module::restore_import_entries(IModule_cache *cache) const
             }
         }
         if (import != NULL) {
-            result = result && import->restore_import_entries(cache);
+            result = import->restore_import_entries(cache) && result;
         }
     }
     return result;
@@ -1733,8 +1728,9 @@ Position *Module::import_position(Position const *pos)
 
 // Register a module to be imported into this module.
 size_t Module::register_import(
-    Module const *imp_mod,
-    bool         *first)
+    IModule_cache *cache,
+    Module const  *imp_mod,
+    bool          *first)
 {
     bool dummy;
     if (first == NULL) {
@@ -1754,12 +1750,10 @@ size_t Module::register_import(
         m_imported_modules.push_back(Import_entry(mod_id, imp_mod, f_name, abs_name));
         idx = m_imported_modules.size();
         *first = true;
+
+        imp_mod->restore_import_entries(cache);
+
     }
-
-    // increase the ref-count of this module here, because the analysis will decrease it by one
-    // at its end
-    m_imported_modules[idx - 1].lock_module(m_compiler->get_weak_module_lock());
-
     return idx;
 }
 
@@ -3795,7 +3789,10 @@ Module const *Module::deserialize(Module_deserializer &deserializer)
 
         if (t != Tag_t(0)) {
             Module const *imp_mod = deserializer.get_module(t);
-            mod->register_import(imp_mod);
+
+            // Note: it is expected that the imported module is either from the stdlib,
+            // or just deserialised and hence does not need a cache to restore
+            mod->register_import(NULL, imp_mod);
         } else {
             // cannot be a stdlib module if not always available
             mod->register_import(imp_absname.c_str(), imp_fname.c_str(), /*is_stdlib*/false);

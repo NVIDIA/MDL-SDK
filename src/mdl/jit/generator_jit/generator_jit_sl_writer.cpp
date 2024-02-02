@@ -53,7 +53,7 @@
 #include "generator_jit_hlsl_writer.h"
 #include "generator_jit_glsl_writer.h"
 
-#define NEW_OUT_OF_SSA 1
+#define NEW_OUT_OF_SSA 0
 #define DEBUG_NEW_OUT_OF_SSA 0
 
 #if !NEW_OUT_OF_SSA
@@ -792,25 +792,22 @@ public:
         }
     }
 };
-#endif
 
-namespace {
-
-    // Return true if the value phi is used in any terminating instruction,
-    // which requires special handling in the out-of-SSA transformation.
-    bool used_in_terminator(llvm::Value* phi)
-    {
-        for (llvm::Value* user : phi->users()) {
-            if (llvm::isa<llvm::Instruction>(user)) {
-                llvm::Instruction *inst = llvm::cast<llvm::Instruction>(user);
-                if (inst->isTerminator()) {
-                    return true;
-                }
+// Return true if the value phi is used in any terminating instruction,
+// which requires special handling in the out-of-SSA transformation.
+static bool used_in_terminator(llvm::Value* phi)
+{
+    for (llvm::Value* user : phi->users()) {
+        if (llvm::isa<llvm::Instruction>(user)) {
+            llvm::Instruction *inst = llvm::cast<llvm::Instruction>(user);
+            if (inst->isTerminator()) {
+                return true;
             }
         }
-        return false;
     }
+    return false;
 }
+#endif
 
 static bool has_non_const_index(llvm::InsertElementInst *inst)
 {
@@ -909,7 +906,8 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
         if (llvm::isa<llvm::StoreInst>(value)) {
             // generate a statement for every store
             gen_statement = true;
-        } else if (llvm::isa<llvm::ArrayType>(value.getType()) && !part_of_InsertValue_chain(value)) {
+        } else if (llvm::isa<llvm::ArrayType>(value.getType()) &&
+                !part_of_InsertValue_chain(value)) {
             // we need temporaries for every array typed return (except inner nodes of a
             // insertValue chain), because we do not have array typed literals in HLSL, only
             // compound expressions which can only be used in variable initializers
@@ -1154,7 +1152,9 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
         Rtg rtg;
 #endif // NEW_OUT_OF_SSA
         for (llvm::PHINode &phi : succ_bb->phis()) {
+#if NEW_OUT_OF_SSA
             bool used_in_branch = used_in_terminator(&phi);
+#endif
             for (unsigned i = 0, n = phi.getNumIncomingValues(); i < n; ++i) {
                 if (phi.getIncomingBlock(i) == bb) {
                     llvm::Value* incoming = phi.getIncomingValue(i);
@@ -1224,9 +1224,10 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
                 }
                 rtg.remove_edge(from, to);
             } else {
-                // Since we did not find a variable without an outgoing edge in, we choose an arbitrary
-                // edge and introduce a temporary variable. We move the source of the edge into the 
-                // temporary and add an edge from the temporary to the destination of the picked edge.
+                // Since we did not find a variable without an outgoing edge in, we choose an
+                // arbitrary edge and introduce a temporary variable. We move the source of
+                // the edge into the temporary and add an edge from the temporary to the
+                // destination of the picked edge.
 
                 auto picked_edge = rtg.pick_arbitrary();
 
@@ -1619,7 +1620,8 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::create_compound_e
                         llvm::isa<llvm::ConstantInt>(stack[i].field_index_val))) {
                 unsigned idx_imm;
                 if (stack[i].field_index_val) {
-                    llvm::ConstantInt *idx = llvm::cast<llvm::ConstantInt>(stack[i].field_index_val);
+                    llvm::ConstantInt *idx =
+                        llvm::cast<llvm::ConstantInt>(stack[i].field_index_val);
                     idx_imm = unsigned(idx->getZExtValue()) + stack[i].field_index_offs;
                 } else {
                     idx_imm = stack[i].field_index_offs;
@@ -1980,10 +1982,16 @@ typename SLWriterPass<BasePass>::Expr *SLWriterPass<BasePass>::bitcast_to(
     llvm::Type *src_type = val->getType();
 
     if ((src_type->isIntegerTy() && dest_type->isFloatingPointTy()) ||
-        (src_type->isFloatingPointTy() && dest_type->isIntegerTy())) {
+            (src_type->isFloatingPointTy() && dest_type->isIntegerTy())) {
         Expr *sl_val = translate_expr(val);
         Type *sl_dest_type = Base::convert_type(dest_type);
         return bitcast_to(sl_val, sl_dest_type);
+    }
+
+    // check whether src and dest type are mapped to the same SL type
+    if (Base::convert_type(src_type) == Base::convert_type(dest_type)) {
+        // directly return the value without any cast
+        return translate_expr(val);
     }
 
     return nullptr;

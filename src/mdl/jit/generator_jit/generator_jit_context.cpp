@@ -691,7 +691,7 @@ LLVM_context_data *Function_context::get_context_data(
     m_var_context_data[def] = ctx;
 
     // add debug info
-    add_debug_info(def);
+    add_debug_info(def, ctx);
 
     return ctx;
 }
@@ -711,11 +711,29 @@ LLVM_context_data *Function_context::get_context_data(
     return NULL;
 }
 
+// Lookup the LLVM context data for a MDL variable definition.
+LLVM_context_data *Function_context::lookup_context_data(
+    mi::mdl::IDefinition const *var_def)
+{
+    MDL_ASSERT(
+        var_def->get_kind() == mi::mdl::IDefinition::DK_VARIABLE ||
+        var_def->get_kind() == mi::mdl::IDefinition::DK_PARAMETER);
+
+    Var_context_data_map::const_iterator it(m_var_context_data.find(var_def));
+    if (it != m_var_context_data.end()) {
+        return it->second;
+    }
+
+    MDL_ASSERT(!"unknown variable");
+    return NULL;
+}
+
 // Create the LLVM context data for a MDL variable/parameter definition.
 LLVM_context_data *Function_context::create_context_data(
     mi::mdl::IDefinition const *def,
     llvm::Value                *value,
-    bool                       by_reference)
+    bool                       by_reference,
+    Storage_modifier           storage_mod)
 {
     MDL_ASSERT(
         def->get_kind() == mi::mdl::IDefinition::DK_VARIABLE ||
@@ -726,12 +744,12 @@ LLVM_context_data *Function_context::create_context_data(
 
     // not yet allocated, allocate a new one
     LLVM_context_data *ctx = m_arena_builder.create<LLVM_context_data>(
-        this, value, def->get_symbol()->get_name(), by_reference);
+        this, value, def->get_symbol()->get_name(), by_reference, storage_mod);
 
     m_var_context_data[def] = ctx;
 
     // add debug info
-    add_debug_info(def);
+    add_debug_info(def, ctx);
 
     return ctx;
 }
@@ -748,7 +766,7 @@ LLVM_context_data *Function_context::create_context_data(
 
     // not yet allocated, allocate a new nameless one
     LLVM_context_data *ctx = m_arena_builder.create<LLVM_context_data>(
-        this, value, "", by_reference);
+        this, value, "", by_reference, SM_NORMAL);
 
     m_var_context_data[key] = ctx;
 
@@ -2086,14 +2104,15 @@ void Function_context::set_curr_pos(mi::mdl::Position const &pos)
 }
 
 // Add debug info for a variable declaration.
-void Function_context::add_debug_info(mi::mdl::IDefinition const *var_def) {
+void Function_context::add_debug_info(
+    mi::mdl::IDefinition const *var_def,
+    LLVM_context_data *ctx_data)
+{
     if (m_di_builder == NULL) {
         return;
     }
 
-    LLVM_context_data *ctx_data = get_context_data(var_def);
-    llvm::Value       *var_adr  = ctx_data->get_var_address();
-
+    llvm::Value *var_adr  = ctx_data->get_var_address();
     if (var_adr == NULL) {
         return;
     }

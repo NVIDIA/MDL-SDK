@@ -59,7 +59,7 @@ extern IValue const *evaluate_intrinsic_function(
     size_t                 n_arguments);
 
 /// RAII-like helper class to simplify IModule_loaded_callback and IModule_cache_lookup_handle
-//7 handling.
+/// handling.
 class Module_callback {
 public:
     /// Constructor.

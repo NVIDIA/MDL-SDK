@@ -333,9 +333,11 @@ struct Bsdf_auxiliary_data {
     #endif
 
     #if (MDL_DF_HANDLE_SLOT_MODE == -1)
-        float3 roughness;                          ///< output: rougness_u, roughness_v, bsdf_weight
+        float3 roughness;                          ///< output: glossy rougness_u,
+                                                   ///  glossy roughness_v, bsdf_weight
     #else
-        float3 roughness[MDL_DF_HANDLE_SLOT_MODE]; ///< output: rougness_u, roughness_v, bsdf_weight
+        float3 roughness[MDL_DF_HANDLE_SLOT_MODE]; ///< output: glossy rougness_u, 
+                                                   ///  glossy roughness_v, bsdf_weight
     #endif
 };
 

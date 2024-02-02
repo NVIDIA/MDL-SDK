@@ -378,12 +378,14 @@ public:
     /// Checks if a given MDL type needs struct return calling convention.
     ///
     /// \param type  the type to check
-    bool need_reference_return(mi::mdl::IType const *type) const;
+    /// \param arr_size  if >= 0, the instantiated array size of type
+    bool need_reference_return(mi::mdl::IType const *type, int arr_size) const;
 
     /// Check if the given parameter type must be passed by reference.
     ///
-    /// \param type   the type of the parameter
-    bool is_passed_by_reference(mi::mdl::IType const *type) const;
+    /// \param type      the type of the parameter
+    /// \param arr_size  if >= 0, the instantiated array size of type
+    bool is_passed_by_reference(mi::mdl::IType const *type, int arr_size) const;
 
     /// Get a pointer type from a base type.
     ///

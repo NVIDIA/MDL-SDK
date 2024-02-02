@@ -109,7 +109,7 @@ of examples is of no interest to you.
     corresponding SDK 10.0.18362.0. Additionally the optional *Graphic Tools*
     feature has to be installed.
 
--   **DirectX Shader Compiler support** (June 2022) (Windows only) \n 
+-   **DirectX Shader Compiler support** (July 2022) (Windows only) \n 
     Building the DXR example requires an updated version of the DirectX Shader
     Compiler. \n
     Download and extract the pre-compiled x64 binaries from
@@ -147,7 +147,7 @@ features.
     Pre-compiled binaries can be found on
     [llvm.org](http://releases.llvm.org/download.html#12.0.1).
 
--   **MaterialX** (github repository, tag: v1.38.4, Windows only) \n
+-   **MaterialX** (github repository, tag: v1.38.7, Windows only) \n
     This dependency adds MaterialX support to the DXR example. \n
     Please download a release from
     [github](https://github.com/AcademySoftwareFoundation/MaterialX/releases). \n
@@ -160,7 +160,7 @@ features.
     The old version is available in the
     [CUDA Toolkit Archive](https://developer.nvidia.com/cuda-toolkit-archive).
 
--   **OptiX** (7.x) \n
+-   **OptiX** (7.0 to 7.5) \n
     This dependency is required to build the OptiX 7 example. \n
     Please follow the instructions on the [OptiX Website](https://developer.nvidia.com/designworks/optix/download).
 
@@ -202,7 +202,7 @@ features.
     example binaries.
 
     It is recommended that you build into a subdirectory, not into the example root.
-    C:/projects/mdl-sdk/examples/build/vs2017 for example is fine, assuming you extracted the mdl-sdk to:
+    C:/projects/mdl-sdk/examples/build/vs2022 for example is fine, assuming you extracted the mdl-sdk to:
 
         C:/projects/mdl-sdk
 
@@ -224,7 +224,7 @@ features.
     During this process, you may need to setup the following entries based on the selected components:
 
     -   **ARNOLD_SDK_DIR** in Ungrouped Entries, \n
-        for example: *C:/projects/thirdparty/Arnold-6.0.3.0-windows*
+        for example: *C:/projects/thirdparty/Arnold-6.2.0.1-windows*
 
     -   **clang_PATH** in Ungrouped Entries (only if not found in the PATH), \n
         for example: *C:/Program Files/LLVM-12/bin/clang.exe*

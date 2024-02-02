@@ -863,7 +863,7 @@ export float3 perlin_noise_bump_texture(
     ]]
 )
 [[
-    anno::display_name("Perlin noise texture -- bump mapping"),
+    anno::display_name("Perlin noise texture - bump mapping"),
     anno::description("Enable bump-map texturing with a random noise pattern"),
     anno::thumbnail(".thumbs/perlin_noise_bump_texture.png"),
     anno::in_group("Texturing, high level"),
@@ -1068,7 +1068,7 @@ export float3 worley_noise_bump_texture(
         anno::ui_order(6)
     ]])
 [[
-    anno::display_name("Cellular noise texture -- bump mapping"),
+    anno::display_name("Cellular noise texture - bump mapping"),
     anno::description("Allow texturing with a cell forming pattern"),
     anno::thumbnail(".thumbs/worley_noise_bump_texture.png"),
     anno::in_group("Texturing, high level"),
@@ -1332,7 +1332,7 @@ export float3 flow_noise_bump_texture(
         anno::ui_order(10)
     ]])
 [[
-    anno::display_name("Flow noise texture -- bump mapping"),
+    anno::display_name("Flow noise texture - bump mapping"),
     anno::description("Allow texturing with a 2D noise pattern suitable for waves"),
     anno::thumbnail(".thumbs/flow_noise_bump_texture.png"),
     anno::in_group("Texturing, high level"),
@@ -1500,7 +1500,7 @@ export float3 checker_bump_texture(
     ]]
 )
 [[
-    anno::display_name("3D checker texture -- bump mapping"),
+    anno::display_name("3D checker texture - bump mapping"),
     anno::description("Allows texturing a checkerboard pattern"),
     anno::thumbnail(".thumbs/checker_bump_texture.png"),
     anno::in_group("Texturing, high level"),

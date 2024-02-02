@@ -89,12 +89,12 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E echo "Compile libmdlrt bytecode using clang ..."
     COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
     COMMAND ${clang_PATH} 
-        -emit-llvm -c -O3 -ffast-math -fno-vectorize -target nvptx-pc-cuda-gnu ${CMAKE_CURRENT_SOURCE_DIR}/libmdlrt.cpp
+        -emit-llvm -c -O3 -ffast-math -fno-vectorize -target nvptx64-nvidia-cuda-gnu ${CMAKE_CURRENT_SOURCE_DIR}/libmdlrt.cpp
         -o ${_GENERATED_DIR}/libmdlrt.bc -MD -MT ${_GENERATED_DIR}/libmdlrt.bc -MP -MF ${_GENERATED_DIR}/libmdlrt.d.tmp
     COMMAND ${CMAKE_COMMAND} -E copy ${_GENERATED_DIR}/libmdlrt.d.tmp ${_GENERATED_DIR}/libmdlrt.d
     COMMAND ${CMAKE_COMMAND} -E remove ${_GENERATED_DIR}/libmdlrt.d.tmp
     COMMAND ${clang_PATH} 
-        -emit-llvm -S -O3 -ffast-math -fno-vectorize -target nvptx-pc-cuda-gnu ${CMAKE_CURRENT_SOURCE_DIR}/libmdlrt.cpp
+        -emit-llvm -S -O3 -ffast-math -fno-vectorize -target nvptx64-nvidia-cuda-gnu ${CMAKE_CURRENT_SOURCE_DIR}/libmdlrt.cpp
         -o ${_GENERATED_DIR}/libmdlrt.ll
     DEPENDS     
         ${PROJECT_SOURCES}

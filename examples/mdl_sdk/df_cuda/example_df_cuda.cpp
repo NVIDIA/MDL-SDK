@@ -2098,11 +2098,11 @@ static void usage(const char *name)
         << "                            (default: 2)\n"
         << "-e <exposure>               exposure for interactive display (default: 0.0)\n"
         << "-f <fov>                    the camera field of view in degree (default: 96.0)\n"
-        << "-p <x> <y> <z>              set the camera position (default 0 0 3).\n"
+        << "--cam <x> <y> <z>           set the camera position (default 0 0 3).\n"
         << "                            The camera will always look towards (0, 0, 0).\n"
         << "-l <x> <y> <z> <r> <g> <b>  add an isotropic point light with given coordinates and "
            "intensity (flux)\n"
-        << "--mdl_path <path>           MDL search path, can occur multiple times.\n"
+        << "-p|--mdl_path <path>        MDL search path, can occur multiple times.\n"
         << "--max_path_length <num>     maximum path length, default 4 (up to one total internal\n"
         << "                            reflection), clamped to 2..100\n"
         << "--noaa                      disable pixel oversampling\n"
@@ -2169,7 +2169,7 @@ int MAIN_UTF8(int argc, char* argv[])
                 options.exposure = static_cast<float>(atof(argv[++i]));
             } else if (strcmp(opt, "-f") == 0 && i < argc - 1) {
                 options.fov = static_cast<float>(atof(argv[++i]));
-            } else if (strcmp(opt, "-p") == 0 && i < argc - 3) {
+            } else if (strcmp(opt, "--cam") == 0 && i < argc - 3) {
                 options.cam_pos.x = static_cast<float>(atof(argv[++i]));
                 options.cam_pos.y = static_cast<float>(atof(argv[++i]));
                 options.cam_pos.z = static_cast<float>(atof(argv[++i]));
@@ -2180,7 +2180,7 @@ int MAIN_UTF8(int argc, char* argv[])
                 options.light_intensity.x = static_cast<float>(atof(argv[++i]));
                 options.light_intensity.y = static_cast<float>(atof(argv[++i]));
                 options.light_intensity.z = static_cast<float>(atof(argv[++i]));
-            } else if (strcmp(opt, "--mdl_path") == 0 && i < argc - 1) {
+            } else if ((strcmp(opt, "-p") == 0 || strcmp(opt, "--mdl_path") == 0) && i < argc - 1) {
                 configure_options.additional_mdl_paths.push_back(argv[++i]);
             } else if (strcmp(opt, "--max_path_length") == 0 && i < argc - 1) {
                 options.max_path_length = std::min(std::max(atoi(argv[++i]), 2), 100);

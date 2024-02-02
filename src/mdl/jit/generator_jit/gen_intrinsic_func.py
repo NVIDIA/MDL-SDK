@@ -1169,7 +1169,11 @@ class SignatureParser:
 		if params["mode"] == "::":
 			params["mode"] = "::<builtins>"
 		code = """
-		Function_instance inst(m_code_gen.get_allocator(), func_def, return_derivs);
+		Function_instance inst(
+			m_code_gen.get_allocator(),
+			func_def,
+			return_derivs,
+			m_code_gen.target_supports_storage_spaces());
 		LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "%(mode)s");
 		llvm::Function    *func     = ctx_data->get_function();
 		unsigned          flags     = ctx_data->get_function_flags();

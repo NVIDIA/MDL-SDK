@@ -1260,7 +1260,7 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
 
         // ensure the function is finished by putting it into a block
         {
-            Function_instance inst(alloc, &lambda);
+            Function_instance inst(alloc, &lambda, target_supports_storage_spaces());
             Function_context context(alloc, *this, inst, func, flags);
 
             // translate function body
@@ -1286,7 +1286,7 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
     // create init function
 
     {
-        Function_instance inst(get_allocator(), root_lambda);
+        Function_instance inst(get_allocator(), root_lambda, target_supports_storage_spaces());
 
         m_dist_func_state = Distribution_function_state(DFSTATE_INIT);
 
@@ -1376,7 +1376,7 @@ llvm::Module *LLVM_code_generator::compile_distribution_function(
         }
 
         llvm::Twine base_name(lambda.get_name());
-        Function_instance inst(get_allocator(), &lambda);
+        Function_instance inst(get_allocator(), &lambda, target_supports_storage_spaces());
 
         // Don't allow returning structs at ABI level, even in value mode
         m_lambda_force_sret = m_lambda_return_mode == Return_mode::RETMODE_SRET
@@ -1835,182 +1835,91 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
     llvm::Function *func = NULL;
     LLVM_context_data *p_data = NULL;
     unsigned ret_array_size = 0;
-    bool handled = false;
+    Internal_function *internal_func = NULL;
 
     if (demangled_name.compare(0, 9, "::state::") == 0) {
         // special case of an internal function not available in MDL?
         if (demangled_name == "::state::set_normal(float3)") {
-            func = get_internal_function(m_int_func_state_set_normal);
-
-            Function_instance inst(
-                get_allocator(), reinterpret_cast<size_t>(m_int_func_state_set_normal));
-            p_data = get_context_data(inst);
-            handled = true;
+            internal_func = m_int_func_state_set_normal;
         } else if (demangled_name == "::state::get_texture_results()") {
-            func = get_internal_function(m_int_func_state_get_texture_results);
-
-            Function_instance inst(
-                get_allocator(), reinterpret_cast<size_t>(m_int_func_state_get_texture_results));
-            p_data = get_context_data(inst);
-            handled = true;
+            internal_func = m_int_func_state_get_texture_results;
         } else if (demangled_name == "::state::get_arg_block()") {
-            func = get_internal_function(m_int_func_state_get_arg_block);
-
-            Function_instance inst(
-                get_allocator(), reinterpret_cast<size_t>(m_int_func_state_get_arg_block));
-            p_data = get_context_data(inst);
-            handled = true;
+            internal_func = m_int_func_state_get_arg_block;
         } else if (demangled_name == "::state::call_lambda_float(int)") {
-            func = get_internal_function(m_int_func_state_call_lambda_float);
-
-            Function_instance inst(
-                get_allocator(), reinterpret_cast<size_t>(m_int_func_state_call_lambda_float));
-            p_data = get_context_data(inst);
-            handled = true;
+            internal_func = m_int_func_state_call_lambda_float;
         } else if (demangled_name == "::state::call_lambda_float3(int)") {
-            func = get_internal_function(m_int_func_state_call_lambda_float3);
-
-            Function_instance inst(
-                get_allocator(), reinterpret_cast<size_t>(m_int_func_state_call_lambda_float3));
-            p_data = get_context_data(inst);
-            handled = true;
+            internal_func = m_int_func_state_call_lambda_float3;
         } else if (demangled_name == "::state::call_lambda_uint(int)") {
-            func = get_internal_function(m_int_func_state_call_lambda_uint);
-
-            Function_instance inst(
-                get_allocator(), reinterpret_cast<size_t>(m_int_func_state_call_lambda_uint));
-            p_data = get_context_data(inst);
-            handled = true;
+            internal_func = m_int_func_state_call_lambda_uint;
         } else if (demangled_name == "::state::get_arg_block_float(int)") {
-            func = get_internal_function(m_int_func_state_get_arg_block_float);
-
-            Function_instance inst(
-                get_allocator(), reinterpret_cast<size_t>(m_int_func_state_get_arg_block_float));
-            p_data = get_context_data(inst);
-            handled = true;
+            internal_func = m_int_func_state_get_arg_block_float;
         } else if (demangled_name == "::state::get_arg_block_float3(int)") {
-            func = get_internal_function(m_int_func_state_get_arg_block_float3);
-
-            Function_instance inst(
-                get_allocator(), reinterpret_cast<size_t>(m_int_func_state_get_arg_block_float3));
-            p_data = get_context_data(inst);
-            handled = true;
+            internal_func = m_int_func_state_get_arg_block_float3;
         } else if (demangled_name == "::state::get_arg_block_uint(int)") {
-            func = get_internal_function(m_int_func_state_get_arg_block_uint);
-
-            Function_instance inst(
-                get_allocator(), reinterpret_cast<size_t>(m_int_func_state_get_arg_block_uint));
-            p_data = get_context_data(inst);
-            handled = true;
+            internal_func = m_int_func_state_get_arg_block_uint;
         } else if (demangled_name == "::state::get_arg_block_bool(int)") {
-            func = get_internal_function(m_int_func_state_get_arg_block_bool);
-
-            Function_instance inst(
-                get_allocator(), reinterpret_cast<size_t>(m_int_func_state_get_arg_block_bool));
-            p_data = get_context_data(inst);
-            handled = true;
+            internal_func = m_int_func_state_get_arg_block_bool;
         } else if (demangled_name == "::state::get_measured_curve_value(int,int)") {
-            func = get_internal_function(m_int_func_state_get_measured_curve_value);
-
-            Function_instance inst(get_allocator(),
-                reinterpret_cast<size_t>(m_int_func_state_get_measured_curve_value));
-            p_data = get_context_data(inst);
-            handled = true;
+            internal_func = m_int_func_state_get_measured_curve_value;
         } else if (demangled_name == "::state::adapt_microfacet_roughness(float2)") {
-            func = get_internal_function(m_int_func_state_adapt_microfacet_roughness);
-
-            Function_instance inst(get_allocator(),
-                reinterpret_cast<size_t>(m_int_func_state_adapt_microfacet_roughness));
-            p_data = get_context_data(inst);
-            handled = true;
+            internal_func = m_int_func_state_adapt_microfacet_roughness;
         } else if (demangled_name == "::state::adapt_normal(float3)") {
-            func = get_internal_function(m_int_func_state_adapt_normal);
-
-            Function_instance inst(get_allocator(),
-                reinterpret_cast<size_t>(m_int_func_state_adapt_normal));
-            p_data = get_context_data(inst);
-            handled = true;
-        } else if (demangled_name == "::state::tex_resolution_2d(int)") {
-            demangled_name = "::tex::resolution(texture_2d)";
-        } else if (demangled_name == "::state::tex_is_valid_2d(int)") {
-            demangled_name = "::tex::is_valid(texture_2d)";
-        } else if (demangled_name ==
-            "::state::tex_lookup_float3_2d(int,float2,int,int,float2,float2,float)") {
-            demangled_name = "::tex::lookup_float3(texture_2d,float2,"
-                "::tex::wrap_mode,::tex::wrap_mode,float2,float2,float)";
-        } else if (demangled_name ==
-            "::state::tex_lookup_float_3d(int,float3,int,int,int,float2,float2,float2,float)") {
-            demangled_name = "::tex::lookup_float(texture_3d,float3,"
-                "::tex::wrap_mode,::tex::wrap_mode,::tex::wrap_mode,float2,float2,float2,float)";
-        } else if (demangled_name ==
-            "::state::tex_lookup_float3_3d(int,float3,int,int,int,float2,float2,float2,float)") {
-            demangled_name = "::tex::lookup_float3(texture_3d,float3,"
-                "::tex::wrap_mode,::tex::wrap_mode,::tex::wrap_mode,float2,float2,float2,float)";
+            internal_func = m_int_func_state_adapt_normal;
         } else if (demangled_name == "::state::bsdf_measurement_resolution(int,int)") {
-            func = get_internal_function(m_int_func_df_bsdf_measurement_resolution);
-
-            Function_instance inst(get_allocator(),
-                reinterpret_cast<size_t>(m_int_func_df_bsdf_measurement_resolution));
-            p_data = get_context_data(inst);
-            handled = true;
+            internal_func = m_int_func_df_bsdf_measurement_resolution;
         } else if (demangled_name == "::state::bsdf_measurement_evaluate(int,float2,float2,int)") {
-            func = get_internal_function(m_int_func_df_bsdf_measurement_evaluate);
-
-            Function_instance inst(get_allocator(),
-                reinterpret_cast<size_t>(m_int_func_df_bsdf_measurement_evaluate));
-            p_data = get_context_data(inst);
-            handled = true;
+            internal_func = m_int_func_df_bsdf_measurement_evaluate;
         } else if (demangled_name == "::state::bsdf_measurement_sample(int,float2,float3,int)") {
-            func = get_internal_function(m_int_func_df_bsdf_measurement_sample);
-
-            Function_instance inst(get_allocator(),
-                reinterpret_cast<size_t>(m_int_func_df_bsdf_measurement_sample));
-            p_data = get_context_data(inst);
-            handled = true;
+            internal_func = m_int_func_df_bsdf_measurement_sample;
         } else if (demangled_name == "::state::bsdf_measurement_pdf(int,float2,float2,int)") {
-            func = get_internal_function(m_int_func_df_bsdf_measurement_pdf);
-
-            Function_instance inst(get_allocator(),
-                reinterpret_cast<size_t>(m_int_func_df_bsdf_measurement_pdf));
-            p_data = get_context_data(inst);
-            handled = true;
+            internal_func = m_int_func_df_bsdf_measurement_pdf;
         } else if (demangled_name == "::state::bsdf_measurement_albedos(int,float2)") {
-            func = get_internal_function(m_int_func_df_bsdf_measurement_albedos);
-
-            Function_instance inst(get_allocator(),
-                reinterpret_cast<size_t>(m_int_func_df_bsdf_measurement_albedos));
-            p_data = get_context_data(inst);
-            handled = true;
+            internal_func = m_int_func_df_bsdf_measurement_albedos;
         } else if (demangled_name == "::state::light_profile_evaluate(int,float2)") {
-            func = get_internal_function(m_int_func_df_light_profile_evaluate);
-
-            Function_instance inst(get_allocator(),
-                reinterpret_cast<size_t>(m_int_func_df_light_profile_evaluate));
-            p_data = get_context_data(inst);
-            handled = true;
+            internal_func = m_int_func_df_light_profile_evaluate;
         } else if (demangled_name == "::state::light_profile_sample(int,float3)") {
-            func = get_internal_function(m_int_func_df_light_profile_sample);
-
-            Function_instance inst(get_allocator(),
-                reinterpret_cast<size_t>(m_int_func_df_light_profile_sample));
-            p_data = get_context_data(inst);
-            handled = true;
+            internal_func = m_int_func_df_light_profile_sample;
         } else if (demangled_name == "::state::light_profile_pdf(int,float2)") {
-            func = get_internal_function(m_int_func_df_light_profile_pdf);
-
-            Function_instance inst(get_allocator(),
-                reinterpret_cast<size_t>(m_int_func_df_light_profile_pdf));
-            p_data = get_context_data(inst);
-            handled = true;
-        } else if (demangled_name == "::state::get_bsdf_data_texture_id(Bsdf_data_kind)") {
-            // will be handled by finalize_module() when all resources of the link unit are known
-            return true;
+            internal_func = m_int_func_df_light_profile_pdf;
+        } else {
+            // remap to different functions
+            if (demangled_name == "::state::tex_resolution_2d(int)") {
+                demangled_name = "::tex::resolution(texture_2d)";
+            } else if (demangled_name == "::state::tex_is_valid_2d(int)") {
+                demangled_name = "::tex::is_valid(texture_2d)";
+            } else if (demangled_name ==
+                "::state::tex_lookup_float3_2d(int,float2,int,int,float2,float2,float)")
+            {
+                demangled_name = "::tex::lookup_float3(texture_2d,float2,"
+                    "::tex::wrap_mode,::tex::wrap_mode,float2,float2,float)";
+            } else if (demangled_name ==
+                "::state::tex_lookup_float_3d(int,float3,int,int,int,float2,float2,float2,float)")
+            {
+                demangled_name = "::tex::lookup_float(texture_3d,float3,::tex::wrap_mode,"
+                    "::tex::wrap_mode,::tex::wrap_mode,float2,float2,float2,float)";
+            } else if (demangled_name ==
+                "::state::tex_lookup_float3_3d(int,float3,int,int,int,float2,float2,float2,float)")
+            {
+                demangled_name = "::tex::lookup_float3(texture_3d,float3,::tex::wrap_mode,"
+                    "::tex::wrap_mode,::tex::wrap_mode,float2,float2,float2,float)";
+            } else if (demangled_name == "::state::get_bsdf_data_texture_id(Bsdf_data_kind)") {
+                // will be handled by finalize_module() when all resources of
+                // the link unit are known
+                return true;
+            }
         }
     }
 
     unsigned promote = PR_NONE;
 
-    if (!handled) {
+    if (internal_func != NULL) {
+        func = get_internal_function(internal_func);
+
+        Function_instance inst(get_allocator(),
+            reinterpret_cast<size_t>(internal_func),
+            target_supports_storage_spaces());
+        p_data = get_context_data(inst);
+    } else {
         // find last "::" before the parameters
         size_t parenpos = demangled_name.find('(');
         size_t colonpos = demangled_name.rfind("::", parenpos);
@@ -2049,7 +1958,8 @@ bool LLVM_code_generator::translate_libbsdf_runtime_call(
             ret_array_size = unsigned(mdl_array_type->get_size());
         }
 
-        Function_instance inst(get_allocator(), def, /*return_derivs=*/ false);
+        Function_instance inst(
+            get_allocator(), def, /*return_derivs=*/ false, target_supports_storage_spaces());
         p_data = get_context_data(inst);
     }
     if (func == NULL) {

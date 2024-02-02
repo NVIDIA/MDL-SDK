@@ -97,7 +97,7 @@ of examples is of no interest to you.
     corresponding SDK 10.0.18362.0. Additionally the optional *Graphic Tools*
     feature has to be installed.
 
--   **DirectX Shader Compiler support** *(June 2022)* *(Windows only)*  
+-   **DirectX Shader Compiler support** *(July 2022)* *(Windows only)*  
     Building the DXR example requires an updated version of the DirectX Shader
     Compiler.  
     Download and extract the pre-compiled x64 binaries from
@@ -180,12 +180,12 @@ features.
     binaries.
 
     It is recommended that you build into a subdirectory, not into the repository root.
-    *C:/projects/mdl-sdk/build/vs2017* for example is fine, assuming you cloned the repository to:
+    *C:/projects/mdl-sdk/build/vs2022* for example is fine, assuming you cloned the repository to:
 
         C:/projects/mdl-sdk
 
 3.  After clicking ``Configure``, CMake asks you to choose the Generator.
-    Select `Visual Studio 15 2017` (or higher), enter `host=x64` as toolset
+    Select `Visual Studio 17 2022` (or higher), enter `host=x64` as toolset
     and click `Finish`. CMake starts to configure the build and stops several
     times when user input is required to resolve dependencies.
 
@@ -203,7 +203,7 @@ features.
     During this process, you may need to setup the following entries based on the selected components:
 
     -   **ARNOLD_SDK_DIR** in Ungrouped Entries,  
-        for example: *C:/projects/thirdparty/Arnold-6.0.3.0-windows*
+        for example: *C:/projects/thirdparty/Arnold-6.2.0.1-windows*
 
     -   **clang_PATH** in Ungrouped Entries (only if not found in the PATH),  
         for example: *C:/Program Files/LLVM-12/bin/clang.exe*

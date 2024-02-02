@@ -818,11 +818,12 @@ struct Bsdf_evaluate_data : public Bsdf_evaluate_data_base
 
     tct_float3       k2;             ///< input: incoming direction
     tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of more then
-                                     ///  DF_HANDLE_SLOTS handles, calling 'evaluate' multiple times
+                                     ///<     DF_HANDLE_SLOTS handles, calling 'evaluate' multiple
+                                     ///<     times
     tct_float3       bsdf_diffuse[static_cast<size_t>(N)]; ///< output: (diffuse part of the)
-                                                           ///  bsdf * dot(normal, k2)
+                                                           ///<     bsdf * dot(normal, k2)
     tct_float3       bsdf_glossy[static_cast<size_t>(N)];  ///< output: (glossy part of the)
-                                                           ///  bsdf * dot(normal, k2)
+                                                           ///<     bsdf * dot(normal, k2)
     tct_float        pdf;            ///< output: pdf (non-projected hemisphere)
 };
 
@@ -835,7 +836,7 @@ struct Bsdf_evaluate_data<DF_HSM_POINTER> : public Bsdf_evaluate_data_base
 
     tct_float3       k2;             ///< input: incoming direction
     tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of many
-                                     ///  handles using in multiple steps
+                                     ///<     handles using in multiple steps
     tct_int          handle_count;   ///< input: number of elements of 'bsdf_diffuse', 'bsdf_glossy'
     tct_float3*      bsdf_diffuse;   ///< output: (diffuse part of the) bsdf * dot(normal, k2)
     tct_float3*      bsdf_glossy;    ///< output: (glossy part of the) bsdf * dot(normal, k2)
@@ -876,14 +877,14 @@ struct Bsdf_auxiliary_data : public Bsdf_auxiliary_data_base
     tct_float3       k1;             ///< mutual input: outgoing direction
 
     tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of more then
-                                     ///  DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple
-                                     ///  times
+                                     ///<     DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple
+                                     ///<     times
     tct_float3       albedo_diffuse[static_cast<size_t>(N)];///< output: (diffuse part of the)
-                                                            /// albedo
+                                                            ///<     albedo
     tct_float3       albedo_glossy[static_cast<size_t>(N)]; ///< output: (glossy part of the) albedo
     tct_float3       normal[static_cast<size_t>(N)];        ///< output: normal
-    tct_float3       roughness[static_cast<size_t>(N)];     ///< output: rougness_u, roughness_v,
-                                                            ///  bsdf_weight
+    tct_float3       roughness[static_cast<size_t>(N)];     ///< output: glossy roughness_u, 
+                                                            ///<     glossy roughness_v, bsdf_weight
 };
 
 template<>
@@ -894,14 +895,14 @@ struct Bsdf_auxiliary_data<DF_HSM_POINTER> : public Bsdf_auxiliary_data_base
     tct_float3       k1;             ///< mutual input: outgoing direction
 
     tct_int          handle_offset;  ///< input: handle offset to allow the evaluation of more then
-                                     ///  DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple
-                                     ///  times
+                                     ///<     DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple
+                                     ///<     times
     tct_int          handle_count;   ///< input: number of elements of 'albedo' and 'normal'
     tct_float3*      albedo_diffuse; ///< output: (diffuse part of the) albedo
     tct_float3*      albedo_glossy;  ///< output: (glossy part of the) albedo
     tct_float3*      normal;         ///< output: normal
-    tct_float3*      roughness;      ///< output: rougness_u, roughness_v, bsdf_weight
-
+    tct_float3*      roughness;      ///< output: glossy roughness_u, glossy roughness_v,
+                                     ///<     bsdf_weight
 };
 
 template<>
@@ -914,7 +915,8 @@ struct Bsdf_auxiliary_data<DF_HSM_NONE> : public Bsdf_auxiliary_data_base
     tct_float3       albedo_diffuse; ///< output: (diffuse part of the) albedo
     tct_float3       albedo_glossy;  ///< output: (glossy part of the) albedo
     tct_float3       normal;         ///< output: normal
-    tct_float3       roughness;      ///< output: rougness_u, roughness_v, bsdf_weight
+    tct_float3       roughness;      ///< output: glossy roughness_u, glossy roughness_v,
+                                     ///<     bsdf_weight
 };
 
 // Signatures for generated target code functions.
@@ -1181,7 +1183,8 @@ struct Edf_evaluate_data : public Edf_evaluate_data_base
 {
     tct_float3      k1;             ///< input: outgoing direction
     tct_int         handle_offset;  ///< input: handle offset to allow the evaluation of more then
-                                    ///  DF_HANDLE_SLOTS handles, calling 'evaluate' multiple times
+                                    ///<     DF_HANDLE_SLOTS handles, calling 'evaluate' multiple
+                                    ///<     times
     tct_float       cos;                            ///< output: dot(normal, k1)
     tct_float3      edf[static_cast<size_t>(N)];    ///< output: edf
     tct_float       pdf;                            ///< output: pdf (non-projected hemisphere)
@@ -1192,7 +1195,8 @@ struct Edf_evaluate_data<DF_HSM_POINTER> : public Edf_evaluate_data_base
 {
     tct_float3      k1;             ///< input: outgoing direction
     tct_int         handle_offset;  ///< input: handle offset to allow the evaluation of more then
-                                    ///  DF_HANDLE_SLOTS handles, calling 'evaluate' multiple times
+                                    ///<     DF_HANDLE_SLOTS handles, calling 'evaluate' multiple
+                                    ///<     times
     tct_int         handle_count;   ///< input: number of elements of 'edf'
     tct_float       cos;            ///< output: dot(normal, k1)
     tct_float3*     edf;            ///< output: edf
@@ -1223,7 +1227,9 @@ struct Edf_auxiliary_data : public Edf_auxiliary_data_base
 {
     tct_float3      k1;             ///< input: outgoing direction
     tct_int         handle_offset;  ///< input: handle offset to allow the evaluation of more then
-                                    ///  DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple times
+                                    ///<     DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple
+                                    ///<     times
+
     // reserved for future use
 };
 
@@ -1232,7 +1238,8 @@ struct Edf_auxiliary_data<DF_HSM_POINTER> : public Edf_auxiliary_data_base
 {
     tct_float3      k1;             ///< input: outgoing direction
     tct_int         handle_offset;  ///< input: handle offset to allow the evaluation of more then
-                                    ///  DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple times
+                                    ///<     DF_HANDLE_SLOTS handles, calling 'auxiliary' multiple
+                                    ///<     times
     tct_int         handle_count;   ///< input: number of elements of 'edf'
 
     // reserved for future use

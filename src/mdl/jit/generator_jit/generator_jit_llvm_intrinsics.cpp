@@ -1287,25 +1287,73 @@ typedef D2(*D2_D2D2)(D2, D2);
 typedef D2(*D3_D3D3)(D3, D3);
 typedef D2(*D4_D4D4)(D4, D4);
 
+static const int NO_MEMORY_ACCESS = -1;
+static const int WRITES_MEMORY = -2;
+
 template <typename Signature>
 struct Signature_trait {
-    enum V { NO_CAPTURE_ARG_IDX = -1 };
+    enum V { NO_CAPTURE_ARG_IDX = NO_MEMORY_ACCESS };
 };
 template <>
+struct Signature_trait<FA3_FF> {
+    enum V { NO_CAPTURE_ARG_IDX = 0 };  // writes first argument
+};
+template <>
+struct Signature_trait<VV_CSCSCSII> {
+    enum V { NO_CAPTURE_ARG_IDX = WRITES_MEMORY };
+};
+template <>
+struct Signature_trait<VV_lb> {
+    enum V { NO_CAPTURE_ARG_IDX = WRITES_MEMORY };
+};
+template <>
+struct Signature_trait<VV_lbBB> {
+    enum V { NO_CAPTURE_ARG_IDX = WRITES_MEMORY };
+};
+template <>
+struct Signature_trait<VV_lbII> {
+    enum V { NO_CAPTURE_ARG_IDX = WRITES_MEMORY };
+};
+template <>
+struct Signature_trait<VV_lbFF> {
+    enum V { NO_CAPTURE_ARG_IDX = WRITES_MEMORY };
+};
+template <>
+struct Signature_trait<VV_lbDD> {
+    enum V { NO_CAPTURE_ARG_IDX = WRITES_MEMORY };
+};
+template <>
+struct Signature_trait<VV_lbCS> {
+    enum V { NO_CAPTURE_ARG_IDX = WRITES_MEMORY };
+};
+template <>
+struct Signature_trait<VV_xsIIZZCSII> {
+    enum V { NO_CAPTURE_ARG_IDX = WRITES_MEMORY };
+};
+template <>
+struct Signature_trait<VV_xsCSII> {
+    enum V { NO_CAPTURE_ARG_IDX = WRITES_MEMORY };
+};
+template <>
+struct Signature_trait<vv_vvIIZZ> {
+    enum V { NO_CAPTURE_ARG_IDX = WRITES_MEMORY };
+};
+
+template <>
 struct Signature_trait<FF_FFff> {
-    enum V { NO_CAPTURE_ARG_IDX = 1 };
+    enum V { NO_CAPTURE_ARG_IDX = 1 };    // writes 2nd argument
 };
 template <>
 struct Signature_trait<DD_DDdd> {
-    enum V { NO_CAPTURE_ARG_IDX = 1 };
+    enum V { NO_CAPTURE_ARG_IDX = 1 };    // writes 2nd argument
 };
 template <>
 struct Signature_trait<VV_FFffff> {
-    enum V { NO_CAPTURE_ARG_IDX = 0x12 };  // 2nd AND 3nd argument
+    enum V { NO_CAPTURE_ARG_IDX = 0x12 };  // writes 2nd AND 3rd argument
 };
 template <>
 struct Signature_trait<VV_DDdddd> {
-    enum V { NO_CAPTURE_ARG_IDX = 0x12 };  // 2nd AND 3nd argument
+    enum V { NO_CAPTURE_ARG_IDX = 0x12 };  // writes 2nd AND 3rd argument
 };
 
 template<typename FUNC_PTR>
@@ -1318,7 +1366,8 @@ static void *check_sig(FUNC_PTR func) { return (void *)func; }
 static void add_attributes(llvm::Function *func, int nocapture_idx)
 {
     func->setDoesNotThrow();
-    if (nocapture_idx > 0) {
+    func->setWillReturn();
+    if (nocapture_idx >= 0) {
         if (nocapture_idx >= 0x10) {
             func->addParamAttr(unsigned(nocapture_idx) >> 4, llvm::Attribute::NoCapture);
             nocapture_idx = nocapture_idx & 0xF;
@@ -1327,8 +1376,8 @@ static void add_attributes(llvm::Function *func, int nocapture_idx)
         func->setOnlyAccessesArgMemory();
         func->setDoesNotReadMemory();
     }
-    else
-        func->setOnlyReadsMemory();
+    else if (nocapture_idx == NO_MEMORY_ACCESS)
+        func->setDoesNotAccessMemory();
 }
 
 /// Create the body of a vector compare wrapper function.
@@ -2469,15 +2518,21 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
     switch (code) {
     case RT_MDL_INT_BITS_TO_FLOATI:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setDoesNotAccessMemory();
         MARK_NATIVE(func);  // mdl_int_bits_to_floati
         return func;
     case RT_MDL_FLOAT_BITS_TO_INTF:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setDoesNotAccessMemory();
         MARK_NATIVE(func);  // mdl_float_bits_to_intf
         return func;
 
     case RT_MDL_TEX_RESOLUTION_2D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // uv_tile
@@ -2485,42 +2540,56 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_RESOLUTION_3D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_resolution_3d
         return func;
     case RT_MDL_TEX_WIDTH:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->setOnlyReadsMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_width
         return func;
     case RT_MDL_TEX_HEIGHT:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->setOnlyReadsMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_height
         return func;
     case RT_MDL_TEX_DEPTH:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->setOnlyReadsMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_depth
         return func;
     case RT_MDL_TEX_ISVALID:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->setOnlyReadsMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_isvalid
         return func;
     case RT_MDL_TEX_FRAME:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_frame
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT_2D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->setOnlyReadsMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(2, llvm::Attribute::NoCapture); // coord
@@ -2530,6 +2599,9 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_LOOKUP_DERIV_FLOAT_2D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
+        func->setOnlyReadsMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(2, llvm::Attribute::NoCapture); // coord
         func->addParamAttr(5, llvm::Attribute::NoCapture); // crop_u
@@ -2538,6 +2610,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT_3D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->setOnlyReadsMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(2, llvm::Attribute::NoCapture); // coord
@@ -2548,6 +2622,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT_CUBE:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->setOnlyReadsMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(2, llvm::Attribute::NoCapture); // coord
@@ -2555,6 +2631,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT_PTEX:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->setOnlyReadsMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_lookup_float_ptex
@@ -2562,6 +2640,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_TEX_LOOKUP_FLOAT2_2D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2571,6 +2651,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_LOOKUP_DERIV_FLOAT2_2D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2580,6 +2662,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT2_3D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2590,6 +2674,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT2_CUBE:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2597,6 +2683,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT2_PTEX:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_lookup_float2_ptex
@@ -2604,6 +2692,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_TEX_LOOKUP_FLOAT3_2D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2613,6 +2703,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_LOOKUP_DERIV_FLOAT3_2D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2622,6 +2714,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT3_3D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2632,6 +2726,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT3_CUBE:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2639,6 +2735,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT3_PTEX:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_lookup_float3_ptex
@@ -2646,6 +2744,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_TEX_LOOKUP_FLOAT4_2D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2655,6 +2755,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_LOOKUP_DERIV_FLOAT4_2D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2664,6 +2766,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT4_3D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2674,6 +2778,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT4_CUBE:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2681,6 +2787,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_LOOKUP_FLOAT4_PTEX:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_lookup_float4_ptex
@@ -2688,6 +2796,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_TEX_LOOKUP_COLOR_2D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2697,6 +2807,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_LOOKUP_DERIV_COLOR_2D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2706,6 +2818,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_LOOKUP_COLOR_3D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2716,6 +2830,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_LOOKUP_COLOR_CUBE:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2723,6 +2839,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_LOOKUP_COLOR_PTEX:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // tex_lookup_color_ptex
@@ -2730,6 +2848,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_TEX_TEXEL_FLOAT_2D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->setOnlyReadsMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(2, llvm::Attribute::NoCapture); // coord
@@ -2738,6 +2858,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_TEXEL_FLOAT2_2D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2746,6 +2868,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_TEXEL_FLOAT3_2D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2754,6 +2878,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_TEXEL_FLOAT4_2D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2762,6 +2888,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_TEXEL_COLOR_2D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2771,6 +2899,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_TEX_TEXEL_FLOAT_3D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->setOnlyReadsMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(2, llvm::Attribute::NoCapture); // coord
@@ -2778,6 +2908,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_TEXEL_FLOAT2_3D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2785,6 +2917,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_TEXEL_FLOAT3_3D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2792,6 +2926,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_TEXEL_FLOAT4_3D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2799,6 +2935,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_TEX_TEXEL_COLOR_3D:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // coord
@@ -2807,24 +2945,32 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_DF_LIGHT_PROFILE_POWER:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->setOnlyReadsMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // df_light_profile_power
         return func;
     case RT_MDL_DF_LIGHT_PROFILE_MAXIMUM:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->setOnlyReadsMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // df_light_profile_maximum
         return func;
     case RT_MDL_DF_LIGHT_PROFILE_ISVALID:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->setOnlyReadsMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // df_light_profile_isvalid
         return func;
     case RT_MDL_DF_BSDF_MEASUREMENT_ISVALID:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->setOnlyReadsMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // df_bsdf_measurement_isvalid
@@ -2832,6 +2978,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_DF_BSDF_MEASUREMENT_RESOLUTION:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         MARK_NATIVE(func);  // df_bsdf_measurement_resolution
@@ -2839,6 +2987,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_DF_BSDF_MEASUREMENT_EVALUATE:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // theta_phi_in
@@ -2848,6 +2998,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_DF_BSDF_MEASUREMENT_SAMPLE:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result theta phi pdf
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // theta_phi_out
@@ -2857,6 +3009,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_DF_BSDF_MEASUREMENT_PDF:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(2, llvm::Attribute::NoCapture); // theta_phi_in
         func->addParamAttr(3, llvm::Attribute::NoCapture); // theta_phi_out
@@ -2865,6 +3019,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_DF_BSDF_MEASUREMENT_ALBEDOS:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // theta_phi
@@ -2873,6 +3029,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_DF_LIGHT_PROFILE_EVALUATE:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(2, llvm::Attribute::NoCapture); // theta_phi
         MARK_NATIVE(func);  // df_light_profile_evaluate
@@ -2880,6 +3038,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_DF_LIGHT_PROFILE_SAMPLE:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result theta phi pdf
         func->addParamAttr(1, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(3, llvm::Attribute::NoCapture); // xi
@@ -2888,6 +3048,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_DF_LIGHT_PROFILE_PDF:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // resource_data
         func->addParamAttr(2, llvm::Attribute::NoCapture); // theta_phi
         MARK_NATIVE(func);  // df_light_profile_pdf
@@ -2899,12 +3061,16 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_BLACKBODY:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // sRGB
         MARK_EXTERNAL(func);  // mi::mdl::spectral::mdl_blackbody in native, or libmdlrt
         return func;
 
     case RT_MDL_EMISSION_COLOR:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // wavelength
         func->addParamAttr(2, llvm::Attribute::NoCapture); // amplitudes
@@ -2913,6 +3079,8 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_REFLECTION_COLOR:
         func->setDoesNotThrow();
+        func->setWillReturn();
+        func->setOnlyAccessesArgMemory();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // result
         func->addParamAttr(1, llvm::Attribute::NoCapture); // wavelength
         func->addParamAttr(2, llvm::Attribute::NoCapture); // amplitudes
@@ -2921,6 +3089,7 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_DEBUGBREAK:
         func->setDoesNotThrow();
+        func->setWillReturn();
         MARK_NATIVE(func);  // debug::debugbreak
         return func;
     case RT_MDL_ASSERTFAIL:
@@ -2941,41 +3110,49 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
         return func;
     case RT_MDL_PRINT_BEGIN:
         func->setDoesNotThrow();
+        func->setWillReturn();
         MARK_NATIVE(func);  // debug::print_begin
         return func;
     case RT_MDL_PRINT_END:
         func->setDoesNotThrow();
+        func->setWillReturn();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // buffer
         MARK_NATIVE(func);  // debug::print_end
         return func;
     case RT_MDL_PRINT_BOOL:
         func->setDoesNotThrow();
+        func->setWillReturn();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // buffer
         MARK_NATIVE(func);  // debug::print_bool
         return func;
     case RT_MDL_PRINT_INT:
         func->setDoesNotThrow();
+        func->setWillReturn();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // buffer
         MARK_NATIVE(func);  // debug::print_int
         return func;
     case RT_MDL_PRINT_FLOAT:
         func->setDoesNotThrow();
+        func->setWillReturn();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // buffer
         MARK_NATIVE(func);  // debug::print_float
         return func;
     case RT_MDL_PRINT_DOUBLE:
         func->setDoesNotThrow();
+        func->setWillReturn();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // buffer
         MARK_NATIVE(func);  // debug::print_double
         return func;
     case RT_MDL_PRINT_STRING:
         func->setDoesNotThrow();
+        func->setWillReturn();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // buffer
         func->addParamAttr(1, llvm::Attribute::NoCapture); // value
         MARK_NATIVE(func);  // debug::print_string
         return func;
     case RT_VPRINTF:
         func->setDoesNotThrow();
+        func->setWillReturn();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // format
         func->addParamAttr(1, llvm::Attribute::NoCapture); // valist
 
@@ -2985,6 +3162,7 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_ENTER_FUNC:
         func->setDoesNotThrow();
+        func->setWillReturn();
         func->addParamAttr(0, llvm::Attribute::NoCapture); // funcname
 
         func->setLinkage(llvm::GlobalValue::ExternalLinkage);
@@ -2993,6 +3171,7 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
 
     case RT_MDL_TO_CSTRING:
         func->setDoesNotThrow();
+        func->setWillReturn();
         if (!m_code_gen.m_type_mapper.strings_mapped_to_ids()) {
             func->addParamAttr(0, llvm::Attribute::NoCapture); // string_or_id
         }
@@ -3032,7 +3211,10 @@ llvm::Function *MDL_runtime_creator::create_runtime_func(
     }
 
     Function_instance inst(
-        m_alloc, /*func_def=*/(mi::mdl::IDefinition const *)NULL, /*return_derivs=*/ false);
+        m_alloc,
+        /*func_def=*/ nullptr,
+        /*return_derivs=*/ false,
+        m_code_gen.target_supports_storage_spaces());
     Function_context ctx(m_alloc, m_code_gen, inst, func, flags);
 
     llvm::Function::arg_iterator arg_it = ctx.get_first_parameter();
@@ -3774,7 +3956,10 @@ void LLVM_code_generator::register_native_runtime_functions(Jitted_code *jitted_
 // Generate LLVM IR for state::set_normal(float3)
 llvm::Function *MDL_runtime_creator::create_state_set_normal(Internal_function const *int_func)
 {
-    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+    Function_instance inst(
+        m_code_gen.get_allocator(),
+        reinterpret_cast<size_t>(int_func),
+        m_code_gen.target_supports_storage_spaces());
     LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::state");
     llvm::Function    *func     = ctx_data->get_function();
     unsigned          flags     = ctx_data->get_function_flags();
@@ -3799,7 +3984,10 @@ llvm::Function *MDL_runtime_creator::create_state_set_normal(Internal_function c
 llvm::Function *MDL_runtime_creator::create_state_get_texture_results(
     Internal_function const *int_func)
 {
-    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+    Function_instance inst(
+        m_code_gen.get_allocator(),
+        reinterpret_cast<size_t>(int_func),
+        m_code_gen.target_supports_storage_spaces());
     LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::state");
     llvm::Function    *func     = ctx_data->get_function();
     unsigned          flags     = ctx_data->get_function_flags();
@@ -3829,7 +4017,10 @@ llvm::Function *MDL_runtime_creator::create_state_get_texture_results(
 llvm::Function *MDL_runtime_creator::create_state_get_arg_block(
     Internal_function const *int_func)
 {
-    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+    Function_instance inst(
+        m_code_gen.get_allocator(),
+        reinterpret_cast<size_t>(int_func),
+        m_code_gen.target_supports_storage_spaces());
     LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::state");
     llvm::Function    *func     = ctx_data->get_function();
     unsigned          flags     = ctx_data->get_function_flags();
@@ -3852,7 +4043,10 @@ llvm::Function *MDL_runtime_creator::create_state_get_arg_block(
 llvm::Function *MDL_runtime_creator::create_state_get_arg_block_value(
     Internal_function const *int_func)
 {
-    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+    Function_instance inst(
+        m_code_gen.get_allocator(),
+        reinterpret_cast<size_t>(int_func),
+        m_code_gen.target_supports_storage_spaces());
     LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::state");
     llvm::Function    *func     = ctx_data->get_function();
     unsigned          flags     = ctx_data->get_function_flags();
@@ -3913,7 +4107,10 @@ llvm::Function *MDL_runtime_creator::create_state_get_arg_block_value(
 llvm::Function *MDL_runtime_creator::create_state_get_ro_data_segment(
     Internal_function const *int_func)
 {
-    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+    Function_instance inst(
+        m_code_gen.get_allocator(),
+        reinterpret_cast<size_t>(int_func),
+        m_code_gen.target_supports_storage_spaces());
     LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::state");
     llvm::Function    *func     = ctx_data->get_function();
     unsigned          flags     = ctx_data->get_function_flags();
@@ -3938,7 +4135,10 @@ llvm::Function *MDL_runtime_creator::create_state_get_ro_data_segment(
 llvm::Function *MDL_runtime_creator::create_state_object_id(
     Internal_function const *int_func)
 {
-    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+    Function_instance inst(
+        m_code_gen.get_allocator(),
+        reinterpret_cast<size_t>(int_func),
+        m_code_gen.target_supports_storage_spaces());
     LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::state");
     llvm::Function    *func     = ctx_data->get_function();
     unsigned          flags     = ctx_data->get_function_flags();
@@ -3965,7 +4165,10 @@ llvm::Function *MDL_runtime_creator::create_state_object_id(
 llvm::Function *MDL_runtime_creator::create_state_adapt_microfacet_roughness(
     Internal_function const *int_func)
 {
-    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+    Function_instance inst(
+        m_code_gen.get_allocator(),
+        reinterpret_cast<size_t>(int_func),
+        m_code_gen.target_supports_storage_spaces());
     LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::state");
     llvm::Function    *func     = ctx_data->get_function();
     unsigned          flags     = ctx_data->get_function_flags();
@@ -3984,7 +4187,10 @@ llvm::Function *MDL_runtime_creator::create_state_adapt_microfacet_roughness(
 llvm::Function *MDL_runtime_creator::create_state_adapt_normal(
     Internal_function const *int_func)
 {
-    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+    Function_instance inst(
+        m_code_gen.get_allocator(),
+        reinterpret_cast<size_t>(int_func),
+        m_code_gen.target_supports_storage_spaces());
     LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::state");
     llvm::Function    *func     = ctx_data->get_function();
     unsigned          flags     = ctx_data->get_function_flags();
@@ -4032,7 +4238,10 @@ llvm::Function *MDL_runtime_creator::create_state_adapt_normal(
 llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_resolution(
     Internal_function const *int_func)
 {
-    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+    Function_instance inst(
+        m_code_gen.get_allocator(),
+        reinterpret_cast<size_t>(int_func),
+        m_code_gen.target_supports_storage_spaces());
     LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::df");
     llvm::Function    *func = ctx_data->get_function();
     unsigned          flags = ctx_data->get_function_flags();
@@ -4075,7 +4284,10 @@ llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_resolution(
 llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_evaluate(
     Internal_function const *int_func)
 {
-    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+    Function_instance inst(
+        m_code_gen.get_allocator(),
+        reinterpret_cast<size_t>(int_func),
+        m_code_gen.target_supports_storage_spaces());
     LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::df");
     llvm::Function    *func = ctx_data->get_function();
     unsigned          flags = ctx_data->get_function_flags();
@@ -4127,7 +4339,10 @@ llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_evaluate(
 llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_sample(
     Internal_function const *int_func)
 {
-    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+    Function_instance inst(
+        m_code_gen.get_allocator(),
+        reinterpret_cast<size_t>(int_func),
+        m_code_gen.target_supports_storage_spaces());
     LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::df");
     llvm::Function    *func = ctx_data->get_function();
     unsigned          flags = ctx_data->get_function_flags();
@@ -4181,7 +4396,10 @@ llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_sample(
 llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_pdf(
     Internal_function const *int_func)
 {
-    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+    Function_instance inst(
+        m_code_gen.get_allocator(),
+        reinterpret_cast<size_t>(int_func),
+        m_code_gen.target_supports_storage_spaces());
     LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::df");
     llvm::Function    *func = ctx_data->get_function();
     unsigned          flags = ctx_data->get_function_flags();
@@ -4228,7 +4446,10 @@ llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_pdf(
 llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_albedos(
     Internal_function const *int_func)
 {
-    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+    Function_instance inst(
+        m_code_gen.get_allocator(),
+        reinterpret_cast<size_t>(int_func),
+        m_code_gen.target_supports_storage_spaces());
     LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::df");
     llvm::Function    *func = ctx_data->get_function();
     unsigned          flags = ctx_data->get_function_flags();
@@ -4276,7 +4497,10 @@ llvm::Function *MDL_runtime_creator::create_df_bsdf_measurement_albedos(
 llvm::Function *MDL_runtime_creator::create_df_light_profile_evaluate(
     Internal_function const *int_func)
 {
-    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+    Function_instance inst(
+        m_code_gen.get_allocator(),
+        reinterpret_cast<size_t>(int_func),
+        m_code_gen.target_supports_storage_spaces());
     LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::df");
     llvm::Function    *func = ctx_data->get_function();
     unsigned          flags = ctx_data->get_function_flags();
@@ -4320,7 +4544,10 @@ llvm::Function *MDL_runtime_creator::create_df_light_profile_evaluate(
 llvm::Function *MDL_runtime_creator::create_df_light_profile_sample(
     Internal_function const *int_func)
 {
-    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+    Function_instance inst(
+        m_code_gen.get_allocator(),
+        reinterpret_cast<size_t>(int_func),
+        m_code_gen.target_supports_storage_spaces());
     LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::df");
     llvm::Function    *func = ctx_data->get_function();
     unsigned          flags = ctx_data->get_function_flags();
@@ -4365,7 +4592,10 @@ llvm::Function *MDL_runtime_creator::create_df_light_profile_sample(
 llvm::Function *MDL_runtime_creator::create_df_light_profile_pdf(
     Internal_function const *int_func)
 {
-    Function_instance inst(m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+    Function_instance inst(
+        m_code_gen.get_allocator(),
+        reinterpret_cast<size_t>(int_func),
+        m_code_gen.target_supports_storage_spaces());
     LLVM_context_data *ctx_data = m_code_gen.get_or_create_context_data(NULL, inst, "::df");
     llvm::Function    *func = ctx_data->get_function();
     unsigned          flags = ctx_data->get_function_flags();
@@ -4478,7 +4708,9 @@ llvm::Function *MDL_runtime_creator::get_internal_function(Internal_function con
             // the function body will be created later when all compiled module lambda
             // functions and measured curves are known
             Function_instance inst(
-                m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+                m_code_gen.get_allocator(),
+                reinterpret_cast<size_t>(int_func),
+                m_code_gen.target_supports_storage_spaces());
             LLVM_context_data *ctx_data =
                 m_code_gen.get_or_create_context_data(NULL, inst, "::state");
             m_internal_funcs[kind] = ctx_data->get_function();
@@ -4495,7 +4727,9 @@ llvm::Function *MDL_runtime_creator::get_internal_function(Internal_function con
         case Internal_function::KI_STATE_ADAPT_MICROFACET_ROUGHNESS:
             if (m_code_gen.m_use_renderer_adapt_microfacet_roughness) {
                 Function_instance inst(
-                    m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+                    m_code_gen.get_allocator(),
+                    reinterpret_cast<size_t>(int_func),
+                    m_code_gen.target_supports_storage_spaces());
                 LLVM_context_data *ctx_data =
                     m_code_gen.get_or_create_context_data(NULL, inst, "::state");
                 llvm::Function *func = ctx_data->get_function();
@@ -4514,7 +4748,9 @@ llvm::Function *MDL_runtime_creator::get_internal_function(Internal_function con
         case Internal_function::KI_STATE_ADAPT_NORMAL:
             if (m_code_gen.target_uses_renderer_adapt_normal()) {
                 Function_instance inst(
-                    m_code_gen.get_allocator(), reinterpret_cast<size_t>(int_func));
+                    m_code_gen.get_allocator(),
+                    reinterpret_cast<size_t>(int_func),
+                    m_code_gen.target_supports_storage_spaces());
                 LLVM_context_data* ctx_data =
                     m_code_gen.get_or_create_context_data(NULL, inst, "::state");
                 llvm::Function* func = ctx_data->get_function();
@@ -4591,7 +4827,7 @@ int LLVM_code_generator::is_index_argument(mi::mdl::IDefinition::Semantics sema,
 }
 
 // Translate a call to a compiler known function to LLVM IR.
-llvm::Value *LLVM_code_generator::translate_call_intrinsic_function(
+Expression_result LLVM_code_generator::translate_call_intrinsic_function(
     Function_context          &ctx,
     mi::mdl::ICall_expr const *call_expr)
 {
@@ -4679,7 +4915,8 @@ llvm::Value *LLVM_code_generator::translate_call_intrinsic_function(
     }
 
     // Intrinsic functions are NEVER instantiated!
-    Function_instance inst(get_allocator(), callee_def, return_derivs);
+    Function_instance inst(
+        get_allocator(), callee_def, return_derivs, target_supports_storage_spaces());
     LLVM_context_data *p_data = get_context_data(inst);
 
     Func_deriv_info const *func_deriv_info = NULL;
@@ -4775,7 +5012,7 @@ llvm::Value *LLVM_code_generator::translate_call_intrinsic_function(
             }
         }
 
-        if (m_type_mapper.is_passed_by_reference(arg_type) ||
+        if (m_type_mapper.is_passed_by_reference(p_type, ctx.instantiate_type_size(p_type)) ||
                 (target_supports_pointers() &&
                     m_type_mapper.is_deriv_type(expr_res.get_value_type()))) {
             // pass by reference
@@ -4823,7 +5060,7 @@ llvm::Value *LLVM_code_generator::translate_call_intrinsic_function(
                 // index is valid, do nothing
             } else {
                 // return zero if out of bounds, do not call the function
-                return llvm::Constant::getNullValue(res_type);
+                return Expression_result::value(llvm::Constant::getNullValue(res_type));
             }
         } else {
             // handle at runtime
@@ -4875,10 +5112,10 @@ llvm::Value *LLVM_code_generator::translate_call_intrinsic_function(
         ctx->CreateBr(end_bb);
         ctx->SetInsertPoint(end_bb);
 
-        res = ctx->CreateLoad(tmp);
+        return Expression_result::ptr(tmp);
     }
 
-    return res;
+    return Expression_result::value(res);
 }
 
 // Create a runtime.
@@ -5448,7 +5685,7 @@ Expression_result LLVM_code_generator::translate_jit_intrinsic(
             llvm::Type *res_type = lookup_type(ret_type);
 
             llvm::Value *sret_res = NULL;
-            if (need_reference_return(ret_type)) {
+            if (need_reference_return(ret_type, -1)) {
                 // create a temporary for the function result and pass it
                 sret_res = ctx.create_local(res_type, "call_result");
                 args.push_back(sret_res);
@@ -5542,7 +5779,10 @@ llvm::Function *LLVM_code_generator::get_internal_function(Internal_function con
         }
 
         if (sl_name != NULL) {
-            Function_instance inst(get_allocator(), reinterpret_cast<size_t>(int_func));
+            Function_instance inst(
+                get_allocator(),
+                reinterpret_cast<size_t>(int_func),
+                target_supports_storage_spaces());
             if (llvm::Function *func = get_function(inst)) {
                 return func;
             }

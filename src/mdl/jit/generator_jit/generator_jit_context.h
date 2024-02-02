@@ -242,15 +242,25 @@ public:
 
     /// Retrieve the LLVM context data for a MDL variable definition.
     ///
-    /// \param var_def    the definition
+    /// \param var_def      the definition
+    /// \param storage_mod  the storage modifier for the variable
     LLVM_context_data *get_context_data(
         mi::mdl::IDefinition const *var_def);
+
 
     /// Retrieve the LLVM context data for a lambda parameter.
     ///
     /// \param idx  the parameter index
     LLVM_context_data *get_context_data(
         size_t idx);
+
+    /// Lookup the LLVM context data for a MDL variable definition.
+    ///
+    /// \param var_def      the definition
+    ///
+    /// \returns NULL if there is no variable for the definition
+    LLVM_context_data *lookup_context_data(
+        mi::mdl::IDefinition const *var_def);
 
     /// Create the LLVM context data for a MDL variable/parameter definition.
     ///
@@ -260,7 +270,8 @@ public:
     LLVM_context_data *create_context_data(
         mi::mdl::IDefinition const *def,
         llvm::Value                *value,
-        bool                       by_reference);
+        bool                       by_reference,
+        Storage_modifier           storage_mod);
 
     /// Create the LLVM context data for a lambda function parameter.
     ///
@@ -658,8 +669,11 @@ public:
 
     /// Add debug info for a variable declaration.
     ///
-    /// \param var_def  the definition of the variable
-    void add_debug_info(mi::mdl::IDefinition const *var_def);
+    /// \param var_def   the definition of the variable
+    /// \param ctx_data  the context data of the variable
+    void add_debug_info(
+        mi::mdl::IDefinition const *var_def,
+        LLVM_context_data *ctx_data);
 
     /// Make the given function parameter accessible.
     ///

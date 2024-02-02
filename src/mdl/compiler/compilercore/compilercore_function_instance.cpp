@@ -36,12 +36,16 @@ namespace mdl {
 
 // Constructor from a function definition.
 Function_instance::Function_instance(
-    IDefinition const     *def,
-    Array_instances const &arg_instances,
-    bool                   return_derivs)
+    IDefinition const                 *def,
+    Array_instances const             &arg_instances,
+    Parameter_storage_modifiers const &param_mods,
+    bool                              return_derivs,
+    bool                              has_storage_spaces)
 : m_key(def)
 , m_array_instances(arg_instances)
+, m_parameter_storage_mods(param_mods)
 , m_return_derivs(return_derivs)
+, m_has_storage_spaces(has_storage_spaces)
 , m_kind(KI_DEFINITION)
 {
     MDL_ASSERT(def->get_kind() == IDefinition::DK_FUNCTION);
@@ -51,12 +55,15 @@ Function_instance::Function_instance(
 Function_instance::Function_instance(
     IAllocator        *alloc,
     IDefinition const *def,
-    bool               return_derivs)
+    bool               return_derivs,
+    bool               has_storage_spaces)
 : m_key(def)
 , m_array_instances(alloc)
+, m_parameter_storage_mods(alloc)
 , m_return_derivs(
     return_derivs ||
     (def != NULL ? impl_cast<Definition>(def)->has_flag(Definition::DEF_IS_DERIVABLE) : false))
+, m_has_storage_spaces(has_storage_spaces)
 , m_kind(KI_DEFINITION)
 {
     // def might be NULL for intrinsic functions
@@ -69,21 +76,27 @@ Function_instance::Function_instance(
 // Constructor from a lambda function.
 Function_instance::Function_instance(
     IAllocator             *alloc,
-    ILambda_function const *lambda)
+    ILambda_function const *lambda,
+    bool                    has_storage_spaces)
 : m_key(lambda)
 , m_array_instances(alloc)
+, m_parameter_storage_mods(alloc)
 , m_return_derivs(false)
+, m_has_storage_spaces(has_storage_spaces)
 , m_kind(KI_LAMBDA)
 {
 }
 
 // Constructor from a common prototype code.
 Function_instance::Function_instance(
-    IAllocator        *alloc,
-    size_t           code)
+    IAllocator *alloc,
+    size_t     code,
+    bool       has_storage_spaces)
 : m_key(Key_t(code))
 , m_array_instances(alloc)
+, m_parameter_storage_mods(alloc)
 , m_return_derivs(false)
+, m_has_storage_spaces(has_storage_spaces)
 , m_kind(KI_PROTOTYPE_CODE)
 {
     // zero is reserved

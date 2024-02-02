@@ -617,14 +617,16 @@ public:
 
     /// Register a module to be imported into this module.
     ///
+    /// \param[in]  cache    the module cache
     /// \param[in]  imp_mod  the module to import
     /// \param[out] first    if non-NULL, will be set to TRUE if this is the first time imp_mod
     ///                      was registered
     ///
     /// \return the import index of imp_mod
     size_t register_import(
-        Module const *imp_mod,
-        bool         *first = NULL);
+        IModule_cache *cache,
+        Module const  *imp_mod,
+        bool          *first = NULL);
 
     /// Register a module to be imported into this module lazy.
     ///
@@ -1066,13 +1068,15 @@ private:
         /// \note Does NOT increase the reference count of the returned
         ///       module, do NOT decrease it just because of this call.
         Module const *lock_module(mi::base::Lock &lock) const {
-            if (is_stdlib)
+            if (is_stdlib) {
                 return h_mod.get();
+            }
             mi::base::Lock::Block block(&lock);
 
             Module const *mod = h_mod.get();
-            if (mod != NULL)
+            if (mod != NULL) {
                 ++m_refcnt;
+            }
             return mod;
         }
 

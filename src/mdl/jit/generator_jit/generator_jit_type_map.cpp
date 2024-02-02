@@ -657,9 +657,12 @@ llvm::Type *Type_mapper::skip_deriv_type(llvm::Type *type) const
 }
 
 // Checks if a given type needs reference return calling convention.
-bool Type_mapper::need_reference_return(mi::mdl::IType const *type) const
+bool Type_mapper::need_reference_return(mi::mdl::IType const *type, int arr_size) const
 {
-    if (m_tm_mode & TM_NO_REFERENCE)
+    type = type->skip_type_alias();
+
+    // arrays must always be passed by reference (except for uninstantiated deferred size arrays)
+    if ((m_tm_mode & TM_NO_REFERENCE) && type->get_kind() != mi::mdl::IType::TK_ARRAY)
         return false;
 
     type = type->skip_type_alias();
@@ -704,8 +707,16 @@ bool Type_mapper::need_reference_return(mi::mdl::IType const *type) const
         // vectors, needs reference
         return true;
     case mi::mdl::IType::TK_ARRAY:
-        // use reference for arrays
-        return true;
+    {
+        // try by reference to save memory and CPU cycles
+        mdl::IType_array const *a_type = cast<mdl::IType_array>(type);
+        if (a_type->is_immediate_sized() || arr_size >= 0)
+            return true;
+
+        // uninstantiated deferred size arrays use an array_desc<T> struct
+        // only return by reference if supported
+        return (m_tm_mode & TM_NO_REFERENCE) == 0;
+    }
     case mi::mdl::IType::TK_FUNCTION:
         // should not happen
         break;
@@ -726,18 +737,15 @@ bool Type_mapper::need_reference_return(mi::mdl::IType const *type) const
 }
 
 // Check if the given parameter type must be passed by reference.
-bool Type_mapper::is_passed_by_reference(mi::mdl::IType const *type) const
+bool Type_mapper::is_passed_by_reference(mi::mdl::IType const *type, int arr_size) const
 {
-    if (m_tm_mode & TM_NO_REFERENCE)
+    type = type->skip_type_alias();
+
+    // arrays must always be passed by reference (except for uninstantiated deferred size arrays)
+    if ((m_tm_mode & TM_NO_REFERENCE) && type->get_kind() != mi::mdl::IType::TK_ARRAY)
         return false;
-restart:
+
     switch (type->get_kind()) {
-    case mi::mdl::IType::TK_ALIAS:
-        {
-            mi::mdl::IType_alias const *a_type = cast<mi::mdl::IType_alias>(type);
-            type = a_type->get_aliased_type();
-            goto restart;
-        }
     case mi::mdl::IType::TK_BOOL:
     case mi::mdl::IType::TK_INT:
     case mi::mdl::IType::TK_ENUM:
@@ -771,8 +779,16 @@ restart:
         // else represented by LLVM array types, pass by reference
         return true;
     case mi::mdl::IType::TK_ARRAY:
-        // try by reference to safe memory and CPU cycles
-        return true;
+        {
+            // try by reference to save memory and CPU cycles
+            mdl::IType_array const *a_type = cast<mdl::IType_array>(type);
+            if (a_type->is_immediate_sized() || arr_size >= 0)
+                return true;
+
+            // uninstantiated deferred size arrays use an array_desc<T> struct
+            // only return by reference if supported
+            return (m_tm_mode & TM_NO_REFERENCE) == 0;
+        }
     case mi::mdl::IType::TK_FUNCTION:
         MDL_ASSERT(!"unhandled function type");
         return false;
@@ -784,10 +800,13 @@ restart:
         // pass tags by value
         return false;
     case mi::mdl::IType::TK_AUTO:
-        MDL_ASSERT(!"auto type occured");
+        MDL_ASSERT(!"auto type occurred");
         return false;
     case mi::mdl::IType::TK_ERROR:
-        MDL_ASSERT(!"error type occured");
+        MDL_ASSERT(!"error type occurred");
+        return false;
+    case mi::mdl::IType::TK_ALIAS:
+        MDL_ASSERT(!"alias type occurred after skipping");
         return false;
     }
     MDL_ASSERT(!"unsupported type kind");

@@ -745,10 +745,9 @@ public:
     ///
     /// \param element_type The type of the matrix elements.
     /// \param columns      The number of columns.
-    /// \param rows         The number of rows.
     IType_matrix const *create_matrix(
         IType_vector const *element_type,
-        int columns) MDL_FINAL;
+        int                columns) MDL_FINAL;
 
     /// Create a new type abstract array instance.
     ///

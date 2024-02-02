@@ -195,7 +195,8 @@ bool LLVM_code_generator::translate_libmdlrt_runtime_call(
         ret_array_size = unsigned(mdl_array_type->get_size());
     }
 
-    Function_instance inst(get_allocator(), def, /*return_derivs=*/ false);
+    Function_instance inst(
+        get_allocator(), def, /*return_derivs=*/ false, target_supports_storage_spaces());
     p_data = get_context_data(inst);
 
     if (func == NULL) {

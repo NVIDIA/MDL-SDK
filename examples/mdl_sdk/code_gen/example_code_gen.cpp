@@ -65,6 +65,9 @@ public:
     bool m_fold_all_enum_parameters = false;
     bool m_single_init = false;
     bool m_ignore_noinline = true;
+    bool m_disable_pdf = false;
+    bool m_enable_aux = false;
+    std::string m_lambda_return_mode;
     bool m_warn_spectrum_conv = false;
     std::string m_backend = "hlsl";
     bool m_use_derivatives = false;
@@ -374,7 +377,16 @@ void code_gen(mi::neuraylib::INeuray* neuray, Options& options)
                 options.m_adapt_normal ? "on" : "off");
             backend->set_option("use_renderer_adapt_microfacet_roughness",
                 options.m_adapt_microfacet_roughness ? "on" : "off");
-
+            backend->set_option("enable_pdf",
+                !options.m_disable_pdf ? "on" : "off");
+            backend->set_option("enable_auxiliary",
+                options.m_enable_aux ? "on" : "off");
+            if (!options.m_lambda_return_mode.empty()) {
+                if (backend->set_option(
+                       "lambda_return_mode", options.m_lambda_return_mode.c_str()) != 0) {
+                    exit_failure("Setting 'lambda_return_mode' option failed.");
+                }
+            }
 
             // ----------------------------------------------------------------------------------------
 
@@ -583,6 +595,10 @@ options:
   --fe                          Fold enum parameters.
   --single-init                 Compile in single init mode.
   --dian                        Disable ignoring anno::noinline() annotations.
+  --disable_pdf                 Disable generation of separate PDF function.
+  --enable_aux                  Enable generation of auxiliary function.
+  --lambda_return_mode <mode>   Set how base types and vector types are returned for PTX and LLVM
+                                backends. One of {default, sret, value}.
   --adapt_normal                Enable renderer callback to adapt the normal.
   --adapt_microfacet_roughness  Enable renderer callback to adapt the roughness for
                                 microfacet BSDFs.
@@ -621,6 +637,18 @@ bool Options::parse(int argc, char* argv[])
                 m_single_init = true;
             else if (arg == "--dian")
                 m_ignore_noinline = false;
+            else if (arg == "--disable_pdf")
+                m_disable_pdf = true;
+            else if (arg == "--enable_aux")
+                m_enable_aux = true;
+            else if (arg == "--lambda_return_mode") {
+                if (i == argc - 1)
+                {
+                    std::cerr << "error: Argument for --lambda_return_mode missing." << std::endl;
+                    return false;
+                }
+                m_lambda_return_mode = argv[++i];
+            }
             else if (arg == "--adapt_normal")
                 m_adapt_normal = true;
             else if (arg == "--adapt_microfacet_roughness")

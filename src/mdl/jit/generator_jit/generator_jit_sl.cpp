@@ -255,7 +255,7 @@ llvm::Function *LLVM_code_generator::get_sl_intrinsic_function(
         return NULL;
     }
 
-    Function_instance inst(get_allocator(), def, return_derivs);
+    Function_instance inst(get_allocator(), def, return_derivs, target_supports_storage_spaces());
     llvm::Function *func = get_function(inst);
     if (func != NULL) {
         return func;
@@ -478,6 +478,7 @@ llvm::Function *LLVM_code_generator::get_sl_intrinsic_function(
 
                 // let LLVM treat the function as a scalar to avoid duplicate calls
                 (*runtime_func)->setDoesNotThrow();
+                (*runtime_func)->setWillReturn();
                 (*runtime_func)->setDoesNotAccessMemory();
             }
 
@@ -501,6 +502,7 @@ llvm::Function *LLVM_code_generator::get_sl_intrinsic_function(
 
     // let LLVM treat the function as a scalar to avoid duplicate calls
     func->setDoesNotThrow();
+    func->setWillReturn();
     func->setDoesNotAccessMemory();
 
     return func;

@@ -1,8 +1,49 @@
 Change Log
 ==========
-MDL SDK 2023.1.0 (373000.1077): 14 Dec 2023
+MDL SDK 2023.1.2 (373000.1755): 23 Jan 2024
 -----------------------------------------------
 
+
+ABI compatible with the MDL SDK 2023.1.2 (373000.1755) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+    - libbsdf: 
+        - The roughness values computed by the generated auxiliary functions changed to contain
+          only glossy contributions.
+        - The color weights for normals and roughness in the generated auxiliary functions
+          are now reduced by luminance instead of average.
+
+- MDL Compiler and Backends
+    - Allow more direct assignments of vectors instead of element-wise assignments for HLSL.
+    - Avoid unnecessary calls to functions whose values are not actually used.
+    - Avoid reading whole arrays from argument blocks or read-only data segments when
+      providing those arrays as function parameters. This especially improves rendering
+      performance of `axf_importer` materials.
+    - Avoid array copies when accessing arrays provided as function parameters for HLSL/GLSL.
+    
+- MDL SDK examples
+    - Add options to configure the lambda return mode and the generation of PDF and auxiliary
+      functions to code_gen example.
+    - Rename "`-p`" parameter of `df_cuda` example to "`--cam`" and use "`-p`" as short form
+      for "`--mdl_path`" as in other examples.
+
+**Fixed Bugs**
+
+- General
+    - `nvidia::core_definitions`: Fixed `'--'` in display names.
+    - Fixed type computation of ternary operator in MDL SDK/neuray.
+    
+- MDL Compiler and Backends    
+    - Fixed a rare crash that could happen in an MDL module imports other modules and
+      import the same module (diamond pattern).
+    - Fixed default constructor of enum values which sometimes did not choose
+      the first enumerator as default value.
+
+MDL SDK 2023.1.0 (373000.1077): 14 Dec 2023
+-----------------------------------------------
 
 ABI compatible with the MDL SDK 2023.1.0 (373000.1077) binary release
 (see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))

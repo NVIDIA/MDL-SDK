@@ -1102,7 +1102,8 @@ void Sema_hasher::compute_hashes()
         // However, at the time when the material converter does the swap, base might not be
         // loaded. Hence, if a module references base using hashes, add an import dependency,
         // so base will be loaded.
-        m_mod.register_import(base_mod);
+        // Note: base uses only stdlib and does not need a cache
+        m_mod.register_import(/*cache=*/NULL, base_mod);
     }
 }
 

@@ -210,7 +210,8 @@ public:
 
                 // get derivative information for called function
                 Function_instance::Array_instances array_insts(m_alloc);
-                Function_instance func_inst(def, array_insts, workitem.second);
+                Function_instance::Parameter_storage_modifiers param_mods(m_alloc);
+                Function_instance func_inst(def, array_insts, param_mods, workitem.second, false);
                 Func_deriv_info *infos = m_deriv_infos.get_or_calc_function_derivative_infos(
                     impl_cast<Module>(i_owner.get()), func_inst);
 
@@ -859,7 +860,8 @@ Bitset Derivative_infos::call_wants_arg_derivatives(DAG_call const *call, bool w
     if (def->get_kind() == IDefinition::DK_FUNCTION) {
         // handle function calls
         Function_instance::Array_instances arr_inst(m_alloc);
-        Function_instance func_inst(def, arr_inst, want_derivatives);
+        Function_instance::Parameter_storage_modifiers param_mods(m_alloc);
+        Function_instance func_inst(def, arr_inst, param_mods, want_derivatives, false);
         Func_deriv_info *infos = get_or_calc_function_derivative_infos(module, func_inst);
         arg_derivs.copy_data(infos->args_want_derivatives);
         return arg_derivs;

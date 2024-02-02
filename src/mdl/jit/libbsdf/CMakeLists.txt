@@ -104,12 +104,12 @@ foreach(HS ${DF_HANDLE_SLOT_MODES})
         COMMAND ${CMAKE_COMMAND} -E echo "Compile libbsdf_${HS} bytecode using clang ..."
         COMMAND ${CMAKE_COMMAND} -E make_directory ${_GENERATED_DIR}
         COMMAND ${clang_PATH} 
-            -emit-llvm -c -O3 -ffast-math -fno-vectorize -Wuninitialized -Wconditional-uninitialized -target nvptx-pc-cuda-gnu ${CLANG_FLAGS_EX} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
+            -emit-llvm -c -O3 -ffast-math -fno-vectorize -Wuninitialized -Wconditional-uninitialized -target nvptx64-nvidia-cuda-gnu ${CLANG_FLAGS_EX} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
             -o ${_GENERATED_DIR}/libbsdf_${HS}.bc -MD -MT ${_GENERATED_DIR}/libbsdf_${HS}.bc -MP -MF ${_GENERATED_DIR}/libbsdf_${HS}.d.tmp
         COMMAND ${CMAKE_COMMAND} -E copy ${_GENERATED_DIR}/libbsdf_${HS}.d.tmp ${_GENERATED_DIR}/libbsdf_${HS}.d
         COMMAND ${CMAKE_COMMAND} -E remove ${_GENERATED_DIR}/libbsdf_${HS}.d.tmp
         COMMAND ${clang_PATH} 
-            -emit-llvm -S -O3 -ffast-math -fno-vectorize -Wuninitialized -Wconditional-uninitialized -target nvptx-pc-cuda-gnu ${CLANG_FLAGS_EX} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
+            -emit-llvm -S -O3 -ffast-math -fno-vectorize -Wuninitialized -Wconditional-uninitialized -target nvptx64-nvidia-cuda-gnu ${CLANG_FLAGS_EX} ${CMAKE_CURRENT_SOURCE_DIR}/libbsdf.cpp
             -o ${_GENERATED_DIR}/libbsdf_${HS}.ll
         DEPENDS
             ${PROJECT_SOURCES}

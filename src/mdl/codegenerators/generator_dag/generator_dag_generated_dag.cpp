@@ -7519,12 +7519,8 @@ IValue_enum const *Generated_code_dag::create_default_enum(
     IValue_factory   &value_factory,
     IType_enum const *type)
 {
-    ISymbol const *symbol;
-    int code;
-
-    // retrieve the first enum value
-    type->get_value(0, symbol, code);
-    return value_factory.create_enum(type, code);
+    // use the first enum value
+    return value_factory.create_enum(type, 0);
 }
 
 // Create a default bsdf.

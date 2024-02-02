@@ -3618,13 +3618,17 @@ Module const *NT_analysis::load_module_to_import(
         // reference count is not increased by find_imported_mode(), do it here
         imp_mod->retain();
         if (!direct) {
-            // increase the import entry count here, it will be dropped at and of compilation
-            imp_mod->restore_import_entries(NULL);
-
             bool first_import = false;
-            m_module.register_import(imp_mod, &first_import);
 
+            Imported_module_cache cache(m_module, m_module_cache);
+
+            m_module.register_import(&cache, imp_mod, &first_import);
+
+            MDL_ASSERT(first_import && "non-direct import is not the first?");
             if (first_import) {
+                // increase the import entry count here, it will be dropped at and of compilation
+                imp_mod->restore_import_entries(NULL);
+
                 check_imported_module_dependencies(imp_mod, rel_name->access_position());
             }
         }
@@ -3675,7 +3679,7 @@ Module const *NT_analysis::load_module_to_import(
     }
 
     // Register this module.
-    m_module.register_import(imp_mod);
+    m_module.register_import(&cache, imp_mod);
 
     // might contain errors so copy the error messages if any
     Messages const &imp_msg = imp_mod->access_messages();
@@ -3719,7 +3723,9 @@ size_t NT_analysis::handle_reexported_entity(
     } else {
         // definition "imported" was imported itself
         Module::Import_entry const *from_entry = from->get_import_entry(import_idx);
-        return m_module.register_import(from_entry->get_module());
+
+        Imported_module_cache cache(m_module, m_module_cache);
+        return m_module.register_import(&cache, from_entry->get_module());
     }
 }
 
@@ -3889,8 +3895,10 @@ void NT_analysis::import_all_definitions(
     int                   prefix_skip,
     Position const        &err_pos)
 {
+    Imported_module_cache cache(m_module, m_module_cache);
+
     Definition_table const &def_tab   = from->get_definition_table();
-    size_t                 from_idx   = m_module.register_import(from);
+    size_t                 from_idx   = m_module.register_import(&cache, from);
 
     MDL_ASSERT(prefix_skip < name_space->get_component_count() && "prefix skip to long in import");
     {
@@ -16211,6 +16219,8 @@ void NT_analysis::fix_auto_imports()
         return;
     }
 
+    Imported_module_cache cache(m_module, m_module_cache);
+
     // first step: do the imports
     for (size_t i = 0, n = m_auto_imports.size(); i < n; ++i) {
         Auto_imports::Entry &entry = m_auto_imports[i];
@@ -16273,7 +16283,7 @@ void NT_analysis::fix_auto_imports()
             imp_mod = m_module.find_imported_module(original_id, already_imported);
             if (imp_mod != NULL) {
                 if (!already_imported) {
-                    m_module.register_import(imp_mod);
+                    m_module.register_import(&cache, imp_mod);
                 }
 
                 ISymbol const *symbol_to_import = def->get_sym();
@@ -16665,8 +16675,9 @@ void NT_analysis::run()
     } else {
         // every NON-stdlib module hidden imports the ::<builtins> module
         // because this contains all the builtin-entities, see above
-        m_module.register_import(m_compiler->find_builtin_module(
-            string("::<builtins>", get_allocator())));
+        m_module.register_import(
+            /*cache=*/NULL,
+            m_compiler->find_builtin_module(string("::<builtins>", get_allocator())));
 
         visit_material_default(*this);
     }

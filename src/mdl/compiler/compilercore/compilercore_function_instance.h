@@ -41,6 +41,13 @@ namespace mdl {
 
 class ILambda_function;
 
+/// The storage modifier for a variable or parameter.
+enum Storage_modifier {
+    SM_NORMAL,      ///< Stored in normal memory
+    SM_PARAMETER,   ///< Stored in the argument block
+    SM_RODATA       ///< Stored in the read-only data segment
+};
+
 ///
 /// Helper class to map deferred array types to immediate array types.
 ///
@@ -75,8 +82,9 @@ private:
 class Function_instance
 {
 public:
-    typedef void const                            *Key_t;
-    typedef mi::mdl::vector<Array_instance>::Type Array_instances;
+    typedef void const                              *Key_t;
+    typedef mi::mdl::vector<Array_instance>::Type   Array_instances;
+    typedef mi::mdl::vector<Storage_modifier>::Type Parameter_storage_modifiers;
 
     /// The kind object which was used to construct the function instance.
     enum Kind {
@@ -87,42 +95,52 @@ public:
 
     /// Constructor from a function definition and a set of array instance.
     ///
-    /// \param def                the function definition
-    /// \param arr_instances      type instance for this function instance
-    /// \param return_derivs      if true, derivatives will be generated for the return value
+    /// \param def                 the function definition
+    /// \param arr_instances       type instance for this function instance
+    /// \param param_mods          the parameter storage modifiers for this function instance
+    /// \param return_derivs       if true, derivatives will be generated for the return value
+    /// \param has_storage_spaces  if true, target supports storage spaces
     ///
     /// \note only this constructor creates a real (template) instance
     explicit Function_instance(
-        IDefinition const     *def,
-        Array_instances const &arr_instances,
-        bool                   return_derivs);
+        IDefinition const                 *def,
+        Array_instances const             &arr_instances,
+        Parameter_storage_modifiers const &param_mods,
+        bool                              return_derivs,
+        bool                              has_storage_spaces);
 
     /// Constructor from a function definition.
     ///
-    /// \param alloc              the allocator
-    /// \param def                the function definition
-    /// \param return_derivs      if true, derivatives will be generated for the return value
-    ///                           regardless of what the derivable flag of the definition states
+    /// \param alloc               the allocator
+    /// \param def                 the function definition
+    /// \param return_derivs       if true, derivatives will be generated for the return value
+    ///                            regardless of what the derivable flag of the definition states
+    /// \param has_storage_spaces  if true, target supports storage spaces
     explicit Function_instance(
         IAllocator        *alloc,
         IDefinition const *def,
-        bool               return_derivs);
+        bool               return_derivs,
+        bool               has_storage_spaces);
 
     /// Constructor from a lambda function.
     ///
-    /// \param alloc   the allocator
-    /// \param lambda  the lambda function
+    /// \param alloc               the allocator
+    /// \param lambda              the lambda function
+    /// \param has_storage_spaces  if true, target supports storage spaces
     explicit Function_instance(
         IAllocator             *alloc,
-        ILambda_function const *lambda);
+        ILambda_function const *lambda,
+        bool                    has_storage_spaces);
 
     /// Constructor from a common prototype code.
     ///
-    /// \param alloc   the allocator
-    /// \param code    the common prototype code
+    /// \param alloc               the allocator
+    /// \param code                the common prototype code
+    /// \param has_storage_spaces  if true, target supports storage spaces
     explicit Function_instance(
-        IAllocator        *alloc,
-        size_t            code);
+        IAllocator *alloc,
+        size_t     code,
+        bool       has_storage_spaces);
 
     /// Get the key.
     Key_t get_key() const { return m_key; }
@@ -151,6 +169,16 @@ public:
     /// Get the array instances.
     Array_instances const &get_array_instances() const { return m_array_instances; }
 
+    /// Get the storage modifiers of the parameters.
+    Parameter_storage_modifiers const &get_parameter_storage_modifiers() const {
+        return m_parameter_storage_mods;
+    }
+
+    /// Get the storage modifiers of the parameters.
+    Parameter_storage_modifiers &get_parameter_storage_modifiers() {
+        return m_parameter_storage_mods;
+    }
+
     /// Get whether derivatives for the return value will be generated.
     bool get_return_derivs() const { return m_return_derivs; }
 
@@ -161,6 +189,22 @@ public:
     /// \return if type is a deferred size array type and instancing is enabled, the immediate
     /// size instance of this type, else -1
     int instantiate_type_size(IType const *type) const MDL_WARN_UNUSED_RESULT;
+
+    /// Get the storage modifier of the i'th parameter.
+    Storage_modifier get_parameter_storage_modifier(size_t i) const {
+        if (!m_has_storage_spaces) {
+            return SM_NORMAL;
+        }
+        if (m_kind == KI_LAMBDA) {
+            // all arguments of a lambda function are in parameter space
+            return SM_PARAMETER;
+        }
+        if (i >= m_parameter_storage_mods.size()) {
+            MDL_ASSERT(m_parameter_storage_mods.empty() && "Invalid parameter index");
+            return SM_NORMAL;
+        }
+        return m_parameter_storage_mods[i];
+    }
 
     /// Check if this is an instantiated function (in the sense of a instantiated template).
     bool is_instantiated() const { return !m_array_instances.empty(); }
@@ -197,6 +241,18 @@ public:
                         return false;
                     }
                 }
+
+                Parameter_storage_modifiers const &a_mods = a.get_parameter_storage_modifiers();
+                Parameter_storage_modifiers const &b_mods = b.get_parameter_storage_modifiers();
+
+                size_t mods_n = a_mods.size();
+                if (mods_n != b_mods.size())
+                    return false;
+
+                for (size_t i = 0; i < mods_n; ++i) {
+                    if (a_mods[i] != b_mods[i])
+                        return false;
+                }
             }
 
             return true;
@@ -219,6 +275,11 @@ public:
                     Array_instance const &ai = ais[i];
                     res = res * 33 + 3 * type_size_hasher(ai.get_deferred_size())
                         + 7u * ai.get_immediate_size();
+                }
+
+                Parameter_storage_modifiers const &mods = a.get_parameter_storage_modifiers();
+                for (size_t i = 0, n = mods.size(); i < n; ++i) {
+                    res = res * 33 + 19 * size_t(mods[i]);
                 }
             }
 
@@ -245,11 +306,18 @@ private:
     /// The (array) type instances for the return type and the argument types.
     Array_instances m_array_instances;
 
+    /// The storage modifiers of the parameters.
+    Parameter_storage_modifiers m_parameter_storage_mods;
+
     /// If true, derivatives will be generated for the return value.
     bool m_return_derivs;
 
+    /// If true, storage spaces are supported by the target.
+    bool m_has_storage_spaces;
+
     /// The kind of this function instance.
     Kind m_kind;
+
 };
 
 }  // mdl

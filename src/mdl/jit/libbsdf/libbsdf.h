@@ -186,7 +186,7 @@ struct __align__(16) BSDF_auxiliary_data
 
     // output: roughness (float3)
     // The components x and y contain roughness values corresponding to roughness_u and roughness_v
-    // as specified by glossy BSDFs. Diffuse BSDFs are considered to have a roughness of 1.0 in this
+    // as specified by glossy BSDFs. Diffuse BSDFs are considered to have a roughness of 0.0 in this
     // context. Specular BSDFs have a roughness of 0.0. The invalid black BSDF as well as BSDF
     // measurements also report a roughness of 0.0.
     // The z component carries the cumulated weight of the BSDFs in the layering tree.
