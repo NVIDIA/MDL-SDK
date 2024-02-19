@@ -148,6 +148,18 @@ bool Image_plugin_impl::init( mi::neuraylib::IPlugin_api* plugin_api)
     assert( result);
     (void) result;
 
+    // Explicitly request the C++ API from OpenEXR. The C API lacks support for luminance-chroma
+    // images. (The default depends on the OpenEXR version and build time flags for OIIO.)
+    result = OIIO::attribute( "openexr:core", 0);
+    assert( result);
+    (void) result;
+
+#ifndef NDEBUG
+    // Disable printing of uncaught errors in release builds.
+    OIIO::attribute( "oiio:print_uncaught_errors", 0);
+    OIIO::attribute( "imagebuf:print_uncaught_errors", 0);
+#endif
+
     return true;
 }
 
@@ -204,8 +216,11 @@ bool Image_plugin_impl::test( mi::neuraylib::IReader* reader) const
 
     auto image_input = std::unique_ptr<OIIO::ImageInput>(
         OIIO::ImageInput::open( ext, &config, io_proxy.get()));
-    if( !image_input)
+    if( !image_input) {
+        // Consume any error messages.
+        OIIO::geterror();
         return false;
+    }
 
     return true;
 }

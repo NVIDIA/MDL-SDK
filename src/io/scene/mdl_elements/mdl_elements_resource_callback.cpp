@@ -584,10 +584,13 @@ std::string Resource_callback::export_texture_image(
     Buffer_callback* buffer_callback)
 {
     // Use pixel type of first frame/uvtile to derive the extension.
-    mi::base::Handle<const IMAGE::IMipmap> mipmap(
-        image->get_mipmap( m_transaction, /*frame_id*/ 0, /*uvtile_id*/ 0));
-    mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( 0));
-    const char* new_extension = get_extension( canvas->get_type());
+    const char* new_extension = nullptr;
+    {
+        mi::base::Handle<const IMAGE::IMipmap> mipmap(
+            image->get_mipmap( m_transaction, /*frame_id*/ 0, /*uvtile_id*/ 0));
+        mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( 0));
+        new_extension = get_extension( canvas->get_type());
+    }
 
     bool add_sequence_marker = image->is_animated();
     bool add_uvtile_marker   = image->is_uvtile();
@@ -664,6 +667,9 @@ std::string Resource_callback::export_texture_image(
             } else {
                 // export to file
                 assert( !copy_all);
+                mi::base::Handle<const IMAGE::IMipmap> mipmap(
+                    image->get_mipmap( m_transaction, i, j));
+                mi::base::Handle<const mi::neuraylib::ICanvas> canvas( mipmap->get_level( 0));
                 success &= m_image_module->export_canvas( canvas.get(), new_filename_fuv.c_str());
             }
         }

@@ -1369,7 +1369,6 @@ Image_set* Image::resolve_filename( const std::string& filename, const char* sel
     }
     dirname.clear();
 
-    // Strip directories from regular expression for file name
     std::wstring filename_wregex( STRING::utf8_to_wchar( filename_regex.c_str()));
     std::wregex regex( filename_wregex);
 
@@ -1388,7 +1387,7 @@ Image_set* Image::resolve_filename( const std::string& filename, const char* sel
 
             std::wstring filename( STRING::utf8_to_wchar( fn.c_str()));
             std::wsmatch matches;
-            if( !std::regex_search( filename, matches, regex)) {
+            if( !std::regex_match( filename, matches, regex)) {
                 fn = dir.read();
                 continue;
             }

@@ -206,6 +206,12 @@ bool operator>=( const Info_impl& lhs, const Info_impl& rhs)
     return (lhs > rhs) || (lhs == rhs);
 }
 
+/// Indicates whether the transaction has been committed.
+bool is_committed( const Transaction_impl_ptr& transaction)
+{
+    return transaction && (transaction->get_state() == Transaction_impl::COMMITTED);
+}
+
 /// Non-trivial code shared between Infos_per_name and Infos_per_tag.
 namespace IMPL {
 
@@ -284,7 +290,6 @@ Info_impl* lookup_info(
         --it;
     }
 
-    MI_ASSERT( false);
     return nullptr;
 }
 
@@ -977,12 +982,6 @@ bool is_aborted( const Transaction_impl_ptr& transaction)
     return transaction && (transaction->get_state() == Transaction_impl::ABORTED);
 }
 
-/// Indicates whether the creator transaction is visible for the given transaction ID.
-bool is_visible_for( const Transaction_impl_ptr& transaction, DB::Transaction_id id)
-{
-    return !transaction || (transaction->is_visible_for( id));
-}
-
 /// Indicates whether two transactions definitely have the same visibility.
 ///
 /// Assumes that both transactions are from the same scope, and that globally visible transactions
@@ -1042,7 +1041,8 @@ void Info_manager::cleanup_tag_general( DB::Tag tag, DB::Transaction_id lowest_o
 
         // Clear creator transaction for infos that are globally visible. This is required to
         // eventually release the transaction, but does not count as GC progress w.r.t. the infos.
-        bool globally_visible = is_visible_for( transaction, lowest_open);
+        bool globally_visible = !transaction
+            || (is_committed( transaction) && transaction->is_visible_for( lowest_open));
         if( transaction) {
             if( globally_visible) {
                 current->clear_transaction();

@@ -11215,6 +11215,8 @@ void check_db_names( mi::neuraylib::IMdl_factory* mdl_factory)
 
     db_name = mdl_factory->get_db_definition_name( nullptr);
     MI_CHECK( !db_name);
+    db_name = mdl_factory->get_db_definition_name( "operator+(float,float)");
+    MI_CHECK_EQUAL_CSTR( db_name->get_c_str(), "mdl::operator+(float,float)");
     db_name = mdl_factory->get_db_definition_name( "state::normal()");
     MI_CHECK( !db_name);
     db_name = mdl_factory->get_db_definition_name( "::state::normal()");

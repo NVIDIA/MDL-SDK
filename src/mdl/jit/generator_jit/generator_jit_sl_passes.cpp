@@ -330,11 +330,13 @@ private:
     /// Check, whether all members of the given PHI equivalence class represent the same address,
     /// and whether a chain of GEP instructions is involved.
     ///
+    /// \param cur_phi_class_leader      the member iterator of the leader of the equivalence class
+    /// \param out_need_clone_gep_chain  set to true, if a gep chain needs to be cloned
+    ///
     /// \return The one address or nullptr, if the PHIs point to different addresses
     static llvm::Value *get_unique_phi_value(
-        llvm::EquivalenceClasses<llvm::PHINode *> const     &phi_classes,
-        llvm::EquivalenceClasses<llvm::PHINode *>::iterator cur_phi_class,
-        bool                                                *out_need_clone_gep_chain);
+        llvm::EquivalenceClasses<llvm::PHINode *>::member_iterator cur_phi_class_leader,
+        bool                                                       *out_need_clone_gep_chain);
 
     /// Clone a chain of GEP instructions.
     ///
@@ -420,14 +422,14 @@ RemovePointerPHIs::ValueCompareResult RemovePointerPHIs::compare_values(
 // Check, whether all members of the given PHI equivalence class represent the same address,
 // and whether a chain of GEP instructions is involved.
 llvm::Value *RemovePointerPHIs::get_unique_phi_value(
-    llvm::EquivalenceClasses<llvm::PHINode *> const &phi_classes,
-    llvm::EquivalenceClasses<llvm::PHINode *>::iterator cur_phi_class,
+    llvm::EquivalenceClasses<llvm::PHINode *>::member_iterator cur_phi_class_leader,
     bool *out_need_clone_gep_chain)
 {
     llvm::Value *phi_value = nullptr;
     *out_need_clone_gep_chain = false;
 
-    for (auto MI = phi_classes.member_begin(cur_phi_class), ME = phi_classes.member_end();
+    for (auto MI = cur_phi_class_leader,
+            ME = llvm::EquivalenceClasses<llvm::PHINode *>::member_iterator(nullptr);
             MI != ME; ++MI)
     {
         llvm::PHINode *phi = *MI;
@@ -459,7 +461,7 @@ llvm::Value *RemovePointerPHIs::get_unique_phi_value(
 
     // if no value found, all incoming values must be undef -> take the first undef
     if (phi_value == nullptr) {
-        phi_value = cur_phi_class->getData()->getIncomingValue(0);
+        phi_value = (*cur_phi_class_leader)->getIncomingValue(0);
     }
     return phi_value;
 }
@@ -736,18 +738,25 @@ bool RemovePointerPHIs::runOnFunction(llvm::Function &function)
         }
 
         llvm::SmallVector<llvm::Instruction *, 8> to_remove;
-        for (auto I = phi_classes.begin(), E = phi_classes.end(); I != E; ++I) {
-            if (!I->isLeader()) {
+        // We may not loop over phi_classes directly, because it uses an std::set which uses
+        // the indeterministic order of the PHINode pointers. Thus we iterate over the
+        // SmallSetVector. The order of the members of the equivalence classes only depends
+        // on the order of calls to unionSets.
+        for (llvm::PHINode *cur_phi : ptr_phis) {
+            auto cur_phi_leader = phi_classes.findLeader(cur_phi);
+
+            // Skip non-leaders
+            if (*cur_phi_leader != cur_phi) {
                 continue;
             }
 
             // check whether all members of the current equivalence class point
             // to the same address and whether we need to clone a whole chain of GEPs
             bool need_clone_gep_chain = false;
-            llvm::Value *phi_value = get_unique_phi_value(phi_classes, I, &need_clone_gep_chain);
+            llvm::Value *phi_value = get_unique_phi_value(cur_phi_leader, &need_clone_gep_chain);
             if (phi_value != nullptr) {
                 // all pointing to same address, replace each PHI of the current equivalence class
-                for (auto MI = phi_classes.member_begin(I), ME = phi_classes.member_end();
+                for (auto MI = cur_phi_leader, ME = phi_classes.member_end();
                         MI != ME; ++MI)
                 {
                     llvm::PHINode *phi = *MI;
@@ -764,7 +773,7 @@ bool RemovePointerPHIs::runOnFunction(llvm::Function &function)
             // For calls, load the value into a new local in the predecessor blocks and use the
             // new local as argument
             llvm::SetVector<llvm::PHINode *> worklist;
-            worklist.insert(phi_classes.member_begin(I), phi_classes.member_end());
+            worklist.insert(cur_phi_leader, phi_classes.member_end());
             while (!worklist.empty()) {
                 llvm::PHINode *phi = worklist.pop_back_val();
                 for (auto phi_user : phi->users()) {

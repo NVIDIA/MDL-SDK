@@ -129,6 +129,8 @@ if(NOT __TARGET_ADD_DEPENDENCY_NO_LINKING)
             ${LINKER_START_GROUP}
             ${_STATIC_LIB_FILE_LIST}
             ${LINKER_END_GROUP}
+            # LLVMSupport uses dlopen()
+            ${CMAKE_DL_LIBS}
         )
 
     add_dependencies(${__TARGET_ADD_DEPENDENCY_TARGET} mdl-jit-llvm) # add dependency manually

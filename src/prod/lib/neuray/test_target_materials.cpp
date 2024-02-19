@@ -59,13 +59,14 @@
 #include <mi/neuraylib/iscope.h>
 #include <mi/neuraylib/istring.h>
 
-#include <boost/filesystem.hpp>
-#include <boost/filesystem/fstream.hpp>
+#include <filesystem>
+#include <fstream>
 
 #include "test_shared.h"
 
+namespace fs = std::filesystem;
 
-#define MI_CHECK_CTX( context) \
+#define MI_CHECK_CTX( context)                     \
     if( context->get_error_messages_count() > 0) { \
         for( mi::Size i = 0, n = context->get_messages_count(); i < n; ++i) { \
             mi::base::Handle<const mi::neuraylib::IMessage> message( context->get_message( i)); \
@@ -226,8 +227,8 @@ void check_icompiled_material_tmm(
 
 void run_tests(mi::neuraylib::INeuray* neuray)
 {
-    boost::filesystem::remove_all(DIR_PREFIX);
-    boost::filesystem::create_directory(DIR_PREFIX);
+    fs::remove_all( fs::u8path(DIR_PREFIX));
+    fs::create_directory( fs::u8path(DIR_PREFIX));
 
     MI_CHECK_EQUAL(0, neuray->start());
 

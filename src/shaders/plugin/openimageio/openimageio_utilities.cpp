@@ -48,8 +48,14 @@ mi::base::Handle<mi::base::ILogger> g_logger;
 
 void log( mi::base::Message_severity severity, const char* message)
 {
-    if( !g_logger.is_valid_interface())
+    if( !g_logger.is_valid_interface()) {
+        // Missing the info message in init() is not problematic, but flag warnings, errors, and
+        // fatals if there is no logger present (should happen only in unit tests).
+        assert(    severity != mi::base::MESSAGE_SEVERITY_FATAL
+                && severity != mi::base::MESSAGE_SEVERITY_ERROR
+                && severity != mi::base::MESSAGE_SEVERITY_WARNING);
         return;
+    }
 
     g_logger->message( severity, "OIIO:IMAGE", message);
 }

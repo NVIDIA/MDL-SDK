@@ -86,7 +86,7 @@ dependencies are required:
 
 -   **SWIG** *(4.0.2)*  
     Follow the instructions for downloading or building on
-    [python.org](http://www.swig.org/download.html).
+    [swig.org](http://www.swig.org/download.html).
 
 The following third-party dependencies are used by several and/or major
 examples. Installation is strongly recommended unless the corresponding group

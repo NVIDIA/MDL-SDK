@@ -259,8 +259,11 @@ bool Image_file_reader_impl::setup_image_input( bool from_constructor) const
     config.attribute( "oiio:ioproxy", OIIO::TypeDesc::PTR, &io_proxy_ptr);
 
     m_image_input = OIIO::ImageInput::open( ext, &config, m_io_proxy.get());
-    if( !m_image_input)
+    if( !m_image_input) {
+        std::string message = OIIO::geterror();
+        log( mi::base::MESSAGE_SEVERITY_ERROR, message.c_str());
         return false;
+    }
 
     return true;
 }

@@ -739,7 +739,7 @@ void check_animated_uvtiles( DB::Transaction* transaction)
     // UVTILE0
     {
         std::string file_path
-            = TEST::mi_src_path( "io/image/image/tests/test_frame_<#>_uvtile_<UVTILE0>.png");
+            = TEST::mi_src_path( "io/image/image/tests/test_frame_<#>_uvtile<UVTILE0>.png");
         DBIMAGE::Image* image = new DBIMAGE::Image();
         image->reset_file( transaction, file_path, /*selector*/ nullptr, unknown_hash);
         image->dump();
@@ -758,15 +758,15 @@ void check_animated_uvtiles( DB::Transaction* transaction)
         check_uvtile( image2.get_ptr(), 0, expected_tiles0);
 
         std::map<std::string, std::pair<mi::Sint32, mi::Sint32>> expected_tiles1;
-        expected_tiles1["test_frame_0_uvtile_u0_v0.png"] = std::make_pair( 0, 0);
-        expected_tiles1["test_frame_0_uvtile_u0_v1.png"] = std::make_pair( 0, 1);
+        expected_tiles1["test_frame_1_uvtile_u0_v0.png"] = std::make_pair( 0, 0);
+        expected_tiles1["test_frame_1_uvtile_u0_v1.png"] = std::make_pair( 0, 1);
         check_uvtile( image2.get_ptr(), 1, expected_tiles1);
     }
 
     // UVTILE1
     {
         std::string file_path
-            = TEST::mi_src_path( "io/image/image/tests/test_frame_<#>_uvtile_<UVTILE1>.png");
+            = TEST::mi_src_path( "io/image/image/tests/test_frame_<#>_uvtile<UVTILE1>.png");
         DBIMAGE::Image* image = new DBIMAGE::Image();
         image->reset_file( transaction, file_path, /*selector*/ nullptr, unknown_hash);
         image->dump();
@@ -781,12 +781,12 @@ void check_animated_uvtiles( DB::Transaction* transaction)
 
         std::map<std::string, std::pair<mi::Sint32, mi::Sint32>> expected_tiles0;
         expected_tiles0["test_frame_0_uvtile_u0_v0.png"] = std::make_pair( -1, -1);
-        expected_tiles0["test_frame_0_uvtile_u1_v0.png"] = std::make_pair(  0,  -1);
+        expected_tiles0["test_frame_0_uvtile_u1_v0.png"] = std::make_pair(  0, -1);
         check_uvtile( image2.get_ptr(), 0, expected_tiles0);
 
         std::map<std::string, std::pair<mi::Sint32, mi::Sint32>> expected_tiles1;
-        expected_tiles1["test_frame_0_uvtile_u0_v0.png"] = std::make_pair( -1, -1);
-        expected_tiles1["test_frame_0_uvtile_u0_v1.png"] = std::make_pair( -1,  0);
+        expected_tiles1["test_frame_1_uvtile_u0_v0.png"] = std::make_pair( -1, -1);
+        expected_tiles1["test_frame_1_uvtile_u0_v1.png"] = std::make_pair( -1,  0);
         check_uvtile( image2.get_ptr(), 1, expected_tiles1);
     }
 }
@@ -930,7 +930,7 @@ MI_TEST_AUTO_FUNCTION( test_dbimage )
     check_simple_creation( transaction);
     check_animated_textures( transaction);
     check_uvtiles( transaction);
-    check_animated_textures( transaction);
+    check_animated_uvtiles( transaction);
     check_mdle( transaction);
     check_sharing( transaction, "test_simple.png");
 

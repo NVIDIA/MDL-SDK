@@ -50,4 +50,5 @@ create_from_base_preset(
 target_add_dependencies(TARGET ${PROJECT_NAME} 
     DEPENDS 
         boost
+        system
     )

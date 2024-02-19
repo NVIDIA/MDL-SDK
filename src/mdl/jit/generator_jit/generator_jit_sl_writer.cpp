@@ -1146,24 +1146,25 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
     Def_variable *swap_tmp_v  = nullptr;
 #endif // NEW_OUT_OF_SSA
 
+#if NEW_OUT_OF_SSA
+    Rtg rtg;
+#endif // NEW_OUT_OF_SSA
+
     // check for phis in successor blocks and assign to their in-variables at the end of this block
     for (llvm::BasicBlock *succ_bb : successors(bb->getTerminator())) {
-#if NEW_OUT_OF_SSA
-        Rtg rtg;
-#endif // NEW_OUT_OF_SSA
         for (llvm::PHINode &phi : succ_bb->phis()) {
 #if NEW_OUT_OF_SSA
             bool used_in_branch = used_in_terminator(&phi);
 #endif
             for (unsigned i = 0, n = phi.getNumIncomingValues(); i < n; ++i) {
                 if (phi.getIncomingBlock(i) == bb) {
-                    llvm::Value* incoming = phi.getIncomingValue(i);
+                    llvm::Value *incoming = phi.getIncomingValue(i);
 #if NEW_OUT_OF_SSA
                     if (used_in_branch) {
                         // This is a variable used in a terminating instruction: copy it's value
                         // into the temporary that holds it's value for the sucessor block.
-                        Def_variable* phi_in_var = get_phi_in_var(&phi, true);
-                        Expr* res = translate_expr(incoming);
+                        Def_variable *phi_in_var = get_phi_in_var(&phi, true);
+                        Expr *res = translate_expr(incoming);
                         stmts.push_back(create_assign_stmt(phi_in_var, res));
                     } else {
                         // Variables not used in terminating instruction go into the register 
@@ -1172,15 +1173,15 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
                     }
 #else // !NEW_OUT_OF_SSA
                     Def_variable *phi_in_var = get_phi_in_var(&phi);
-                    Expr         *res        = translate_expr(incoming);
+                    Expr *res = translate_expr(incoming);
                     stmts.push_back(create_assign_stmt(phi_in_var, res));
 #endif // !NEW_OUT_OF_SSA
                 }
             }
-            
         }
+    }
 #if NEW_OUT_OF_SSA
-      
+
         while (rtg.edge_count() > 0) {
 #if DEBUG_NEW_OUT_OF_SSA
             rtg.dump();
@@ -1279,7 +1280,6 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
             }
         }
 #endif // NEW_OUT_OF_SSA
-    }
 
     size_t n_stmts = stmts.size();
     if (n_stmts > 1) {

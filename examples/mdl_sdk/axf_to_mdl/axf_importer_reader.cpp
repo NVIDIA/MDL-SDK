@@ -2487,8 +2487,7 @@ bool set_bsdf_param(
 void set_spectral_param(
     Axf_impexp_state* impexp_state,
     mi::neuraylib::IExpression_list* default_parameters,
-    mi::neuraylib::IType_factory* type_factory,
-    mi::neuraylib::IValue_factory* val_factory,
+    mi::neuraylib::IMdl_factory* mdl_factory,
     mi::neuraylib::IExpression_factory* expr_factory,
     const mi::neuraylib::IFunction_definition* material,
     const char* material_name,
@@ -2508,54 +2507,32 @@ void set_spectral_param(
         return;
     }
 
-    assert(wavelengths.size() == values.size());
-    const size_t num_wavelengths = wavelengths.size();
-
     //
     // create a spectral color constructor call
     //
 
-    mi::base::Handle<const mi::neuraylib::IFunction_definition> function_definition(
-        transaction->access<mi::neuraylib::IFunction_definition>(
-            "mdl::color(float[N],float[N])"));
-    mi::base::Handle<mi::neuraylib::IExpression_list> arguments(
-        expr_factory->create_expression_list());
-    mi::base::Handle<const mi::neuraylib::IType> elem_type(type_factory->create_float());
-    mi::base::Handle<const mi::neuraylib::IType_array> array_type(
-        type_factory->create_immediate_sized_array(elem_type.get(), num_wavelengths));
+    assert(wavelengths.size() == values.size());
+    
+    mi::neuraylib::Definition_wrapper dw(transaction, "mdl::color(float[N],float[N])", mdl_factory);
+    assert(dw.is_valid());
 
-    // attach wavelengths and values arrays
-    for (unsigned int i = 0; i < 2; ++i)
-    {
-        const char *array_name = function_definition->get_parameter_name(i);
+    mi::Sint32 result = 0;
+    mi::base::Handle<mi::neuraylib::IFunction_call> fc(dw.create_instance(nullptr, &result));
+    assert(result == 0);
 
-        const float *f = (i == 0) ? wavelengths.data() : values.data();
+    string color_constructor_name
+        = get_axf_spectrum_prefix() 
+        + impexp_state->get_module_prefix() + string("_")
+        + material_name + string("_")
+        + param_name;
+    transaction->store(fc.get(), color_constructor_name.c_str());
 
-        // create and fill the array
-        mi::base::Handle<mi::neuraylib::IValue_array> ar(
-            val_factory->create_array(array_type.get()));
-        for (mi::Size j = 0; j < num_wavelengths; ++j)
-        {
-            mi::base::Handle<mi::neuraylib::IValue> val(
-                val_factory->create_float(f[j]));
-            ar->set_value(j, val.get());
-        }
-
-        mi::base::Handle<mi::neuraylib::IExpression> array_expr(
-            expr_factory->create_constant(ar.get()));
-        arguments->add_expression(array_name, array_expr.get());
-    }
-
-    mi::Sint32 res;
-    mi::base::Handle<mi::neuraylib::IFunction_call> function_call(
-        function_definition->create_function_call(arguments.get(), &res));
-    const string color_constructor_name =
-        get_axf_spectrum_prefix() +
-        impexp_state->get_module_prefix() + string("_") +
-        material_name + string("_") + param_name;
-    transaction->store(function_call.get(), color_constructor_name.c_str());
-
-
+    mi::neuraylib::Argument_editor ae(transaction, color_constructor_name.c_str(), mdl_factory, true);
+    result = ae.set_value("wavelengths", wavelengths.data(), wavelengths.size());
+    assert(result == 0);
+    result = ae.set_value("amplitudes", values.data(), values.size());
+    assert(result == 0);
+    
     //
     // attach call to parameter
     //
@@ -2774,13 +2751,13 @@ void Axf_reader::create_variant(
             param_name = "sigma_s";
             set_spectral_param(
                 impexp_state,
-                default_parameters.get(), type_factory.get(), val_factory.get(), 
+                default_parameters.get(), mdl_factory.get(),
                 expr_factory.get(), m_volumetric_material.get(), material_name.c_str(),
                 m_transaction, param_name, m_wavelengths, m_sigma_s);
             param_name = "sigma_a";
             set_spectral_param(
                 impexp_state,
-                default_parameters.get(), type_factory.get(), val_factory.get(), 
+                default_parameters.get(), mdl_factory.get(), 
                 expr_factory.get(), m_volumetric_material.get(), material_name.c_str(),
                 m_transaction, param_name, m_wavelengths, m_sigma_a);
         }

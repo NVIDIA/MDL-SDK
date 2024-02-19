@@ -124,6 +124,15 @@ target_add_dependencies(TARGET ${PLUGIN_PROJECT_NAME}
         ${LINKER_NO_WHOLE_ARCHIVE}
     )
 
+# extend to project names
+get_target_property(_PROJECT_LABEL ${PROJECT_NAME} PROJECT_LABEL)
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    PROJECT_LABEL   "${_PROJECT_LABEL} (main)"      # project name
+    )
+set_target_properties(${PLUGIN_PROJECT_NAME} PROPERTIES
+    PROJECT_LABEL   "${_PROJECT_LABEL} (plugin)"    # project name
+    )
+
 # -------------------------------------------------------------------------------------------------
 # Code Generation Step
 # -------------------------------------------------------------------------------------------------

@@ -1,8 +1,43 @@
 Change Log
 ==========
-MDL SDK 2023.1.2 (373000.1755): 23 Jan 2024
+MDL SDK 2023.1.3 (373000.2208): 14 Feb 2024
 -----------------------------------------------
 
+ABI compatible with the MDL SDK 2023.1.3 (373000.2208) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+    - Update to zlib 1.3.1.
+
+- MDL SDK examples
+    - Example AXF to MDL
+        - Simplified the code that constructs an instance of the spectral color constructor. This
+          also demonstrates how to use the `Argument_editor` to set array arguments.
+
+**Fixed Bugs**
+
+- General
+    - Fixed `IMdl_factory_impl::get_db_definition_name()` for entities from the `::<builtins>`
+      module.
+    - Fixed export of MDL modules with uvtile and/or animated textures, where under certain
+      conditions the first tile/frame was repeated for all tiles/frames of a particular resource
+      set.
+    - Fixed a bug that caused DB changes to become visible in concurrent transactions.
+    - Fixed missing dependencies on `libdl` on Linux that triggered the recently added undefined
+      symbol check on Ubuntu 20.04.
+
+- MDL Compiler and Backends
+    - Fixed indeterministic generation of `rmem*` variables for HLSL/GLSL.
+    - Fixed invalid HLSL/GLSL code generation.
+
+- MDL SDK examples
+    - Example Distilling Target
+        - Visual Studio project names for the executable and library use now different names.
+
+MDL SDK 2023.1.2 (373000.1755): 23 Jan 2024
+-----------------------------------------------
 
 ABI compatible with the MDL SDK 2023.1.2 (373000.1755) binary release
 (see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))

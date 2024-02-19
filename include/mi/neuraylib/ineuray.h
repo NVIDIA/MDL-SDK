@@ -1,4 +1,4 @@
-/***************************************************************************************************
+/**************************************************************************************************
  * Copyright (c) 2008-2024, NVIDIA CORPORATION. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -105,7 +105,7 @@ public:
     ///                    - -2: Authentication failure (challenge-response).
     ///                    - -4: Provided license expired.
     ///                    - -5: No professional GPU as required by the license in use was found.
-    ///                    - -6: Authentication failure (FLEXlm).
+    ///                    (historical - -6: Authentication failure (FLEXlm).)
     ///                    - -7: No NVIDIA VCA as required by the license in use was found.
     virtual Sint32 start( bool blocking = true) = 0;
 

@@ -351,6 +351,7 @@ MI_TEST_AUTO_FUNCTION( test_import_export )
     test_export( "test_gamma.exr", "png");
 
 
+
     // Test images with a gray and alpha channel.
     test_import( "test_gray_alpha_bpc_2.png", "png");
 

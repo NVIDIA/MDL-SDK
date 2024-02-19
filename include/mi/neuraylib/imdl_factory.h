@@ -328,7 +328,7 @@ public:
     /// For example, given \c "::state", the method returns \c "mdl::state".
     ///
     /// \note This method does not check for existence of the corresponding DB element, nor does it
-    ///       check that the input is a valid module name.
+    ///       necessarily reject an invalid module name.
     ///
     /// \note Usage of this method is strongly recommended instead of manually prepending \c "mdl",
     ///       since (a) the mapping is more complicated than that, e.g., for MDLE modules, and (b)
@@ -336,7 +336,8 @@ public:
     ///
     /// \param mdl_name      The MDL name of the module (non-MDLE and MDLE module), or the file path
     ///                      of an MDLE module.
-    /// \return              The DB name of that module, or \c NULL if \p mdl_name is invalid.
+    /// \return              The DB name of that module, or \c NULL if \p mdl_name was detected as
+    ///                      invalid.
     virtual const IString* get_db_module_name( const char* mdl_name) = 0;
 
     /// Returns the DB name for the MDL name of an material or function definition.
@@ -344,15 +345,16 @@ public:
     /// For example, given \c "::state::normal()", the method returns \c "mdl::state::normal()".
     ///
     /// \note This method does not check for existence of the corresponding DB element, nor does it
-    ///       check that the input is a valid material or definition name.
+    ///       necessarily reject an invalid material or function definition name.
     ///
     /// \note Usage of this method is strongly recommended instead of manually prepending \c "mdl",
-    ///       since (a) the mapping is more complicated than that, e.g., for MDLE modules, and (b)
-    ///       the mapping might change in the future.
+    ///       since (a) the mapping is more complicated than that, e.g., for definitions from the
+    ///       \c ::&lt;builtins&gt; module or MDLE modules, and (b) the mapping might change in the
+    ///       future.
     ///
     /// \param mdl_name      The MDL name of the material or function definition.
     /// \return              The DB name of that material or function definition, or \c NULL if
-    ///                      \p mdl_name is invalid.
+    ///                      \p mdl_name was detected as invalid.
     virtual const IString* get_db_definition_name( const char* mdl_name) = 0;
 
     /// Analyzes whether an expression graph violates the uniform constraints.

@@ -84,8 +84,8 @@ Image_file_writer_impl::Image_file_writer_impl(
     std::string ext = std::string( "dummy.") + plugin_name.substr( 5);
     m_image_output = OIIO::ImageOutput::create( ext, m_io_proxy.get());
     if( !m_image_output) {
-        // Can this happen at all?
-        assert( false);
+        std::string message = OIIO::geterror();
+        log( mi::base::MESSAGE_SEVERITY_ERROR, message.c_str());
         return;
     }
 

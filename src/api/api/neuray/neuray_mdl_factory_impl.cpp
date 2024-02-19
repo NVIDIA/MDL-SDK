@@ -269,9 +269,18 @@ const mi::IString* Mdl_factory_impl::get_db_definition_name( const char* mdl_nam
     if( !mdl_name)
         return nullptr;
 
+    // Reject invalid names that trigger an assertion in MDL::get_db_name()
+    bool mdle = MDL::is_mdle( mdl_name);
     std::string mdl_name_str = mdl_name;
-    if( !MDL::starts_with_scope( mdl_name_str))
-        return nullptr;
+    if( !mdle && !MDL::starts_with_scope( mdl_name_str)) {
+        // The name is the builtins module (or an entity from the builtins module). Check this by
+        // verifying that there is no scope at all (excluding the signature).
+        size_t left_paren = mdl_name_str.find( '(');
+        size_t scope      = mdl_name_str.find( "::");
+        if( (scope != std::string::npos)
+             && ((left_paren == std::string::npos) || (scope < left_paren)))
+             return nullptr;
+    }
 
     std::string result = MDL::get_db_name( mdl_name);
     return new String_impl( result.c_str());
