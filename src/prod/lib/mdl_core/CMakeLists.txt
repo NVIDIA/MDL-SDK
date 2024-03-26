@@ -41,6 +41,7 @@ create_from_base_preset(
     SOURCES ${PROJECT_SOURCES}
     EMBED_RC "mdl_core.rc"
     OUTPUT_NAME "mdl_core"
+    EXPORTED_SYMBOLS mi_mdl_factory
     )
 
 # expose public header to installed target

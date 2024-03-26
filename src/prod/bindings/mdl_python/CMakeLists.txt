@@ -71,6 +71,7 @@ create_from_base_preset(
         ${PROJECT_SOURCES}
         ${_GENERATED_SOURCES}
         ${_GENERATOR_FILES}
+    EXPORTED_SYMBOLS "PyInit*"
     )
 
 # customize name

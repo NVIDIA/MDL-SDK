@@ -72,8 +72,9 @@ create_from_base_preset(
     TARGET ${PROJECT_NAME}
     TYPE SHARED
     SOURCES ${PROJECT_SOURCES}
-    OUTPUT_NAME "mdl_distiller"
     EMBED_RC "mdl_distiller.rc"
+    OUTPUT_NAME "mdl_distiller"
+    EXPORTED_SYMBOLS mi_plugin_factory
     ADDITIONAL_INCLUDE_DIRS ${_GENERATED_DIR}
     )
 

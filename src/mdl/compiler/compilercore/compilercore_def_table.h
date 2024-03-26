@@ -947,7 +947,17 @@ public:
     ///
     /// \param printer  the printer
     /// \param name     the module name
-    void dump(Printer *printer, char const *name) const;
+    void dump(
+        Printer    *printer,
+        char const *name) const;
+
+    /// Debug helper: Prints the given scope to the given printer.
+    ///
+    /// \param printer  the printer
+    /// \param scope    the scope
+    void dump_scope(
+        Printer     *printer,
+        Scope const *scope) const;
 
 private:
     /// Create a new definition table.

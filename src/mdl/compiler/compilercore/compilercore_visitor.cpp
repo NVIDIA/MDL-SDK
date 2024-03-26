@@ -34,11 +34,27 @@
 #include <mi/mdl/mdl_names.h>
 #include <mi/mdl/mdl_statements.h>
 
+#include "compilercore_serializer.h"
 #include "compilercore_visitor.h"
 #include "compilercore_tools.h"
 
 namespace mi {
 namespace mdl {
+
+#undef DOUT
+#undef INC_SCOPE
+#undef DEC_SCOPE
+
+#if 0
+#define DOUT(x)     dprintf x
+#define INC_SCOPE() dprintf_incscope()
+#define DEC_SCOPE() dprintf_decscope()
+#else
+#define DOUT(x)
+#define INC_SCOPE()
+#define DEC_SCOPE()
+
+#endif
 
 Module_visitor::Module_visitor()
 {
@@ -47,11 +63,15 @@ Module_visitor::Module_visitor()
 void Module_visitor::visit(
     IModule const *module)
 {
+    DOUT(("START walker %s on module\n", typeid(*this).name()));
+    INC_SCOPE();
     for (size_t i = 0, n = module->get_declaration_count(); i < n; ++i) {
         IDeclaration const *decl = module->get_declaration(i);
 
         do_declaration(decl);
     }
+    DEC_SCOPE();
+    DOUT(("END module\n"));
 }
 
 void Module_visitor::visit(
@@ -354,13 +374,19 @@ void Module_visitor::do_simple_name(ISimple_name const *name)
 {
     ISimple_name *d = const_cast<ISimple_name *>(name);
 
+    DOUT(("START simple_name (%s)\n", d->get_symbol()->get_name()));
+    INC_SCOPE();
     pre_visit(d);
     post_visit(d);
+    DEC_SCOPE();
+    DOUT(("END simple_name\n"));
 }
 
 void Module_visitor::do_qualified_name(IQualified_name const *name) {
     IQualified_name *d = const_cast<IQualified_name *>(name);
 
+    DOUT(("START qualified_name\n"));
+    INC_SCOPE();
     if (pre_visit(d)) {
         for (size_t i = 0, n = d->get_component_count(); i < n; ++i) {
             ISimple_name const *c_name = d->get_component(i);
@@ -369,6 +395,8 @@ void Module_visitor::do_qualified_name(IQualified_name const *name) {
         }
     }
     post_visit(d);
+    DEC_SCOPE();
+    DOUT(("END qualified_name\n"));
 }
 
 IExpression const *Module_visitor::do_invalid_expression(
@@ -376,8 +404,11 @@ IExpression const *Module_visitor::do_invalid_expression(
 {
     IExpression_invalid *e = const_cast<IExpression_invalid *>(expr);
 
+    DOUT(("START invalid_expression\n"));
     pre_visit(e);
-    return post_visit(e);
+    IExpression const *ret = post_visit(e);
+    DOUT(("END invalid_expression\n"));
+    return ret;
 }
 
 IExpression const *Module_visitor::do_literal_expression(
@@ -385,8 +416,11 @@ IExpression const *Module_visitor::do_literal_expression(
 {
     IExpression_literal *e = const_cast<IExpression_literal *>(expr);
 
+    DOUT(("START literal_expression\n"));
     pre_visit(e);
-    return post_visit(e);
+    IExpression const *ret = post_visit(e);
+    DOUT(("END literal_expression\n"));
+    return ret;
 }
 
 IExpression const *Module_visitor::do_reference_expression(
@@ -394,12 +428,17 @@ IExpression const *Module_visitor::do_reference_expression(
 {
     IExpression_reference *e = const_cast<IExpression_reference *>(expr);
 
+    DOUT(("START reference_expression\n"));
+    INC_SCOPE();
     if (pre_visit(e)) {
         // visit the referenced object
         IType_name const *rname = e->get_name();
         do_type_name(rname);
     }
-    return post_visit(e);
+    IExpression const *ret = post_visit(e);
+    DEC_SCOPE();
+    DOUT(("END reference_expression\n"));
+    return ret;
 }
 
 IExpression const *Module_visitor::do_unary_expression(
@@ -407,6 +446,8 @@ IExpression const *Module_visitor::do_unary_expression(
 {
     IExpression_unary *e = const_cast<IExpression_unary *>(expr);
 
+    DOUT(("START unary_expression\n"));
+    INC_SCOPE();
     if (pre_visit(e)) {
         IExpression const *op   = e->get_argument();
         IExpression const *n_op = do_expression(op);
@@ -418,7 +459,10 @@ IExpression const *Module_visitor::do_unary_expression(
             do_type_name(tn);
         }
     }
-    return post_visit(e);
+    IExpression const *ret = post_visit(e);
+    DEC_SCOPE();
+    DOUT(("END unary_expression\n"));
+    return ret;
 }
 
 IExpression const *Module_visitor::do_binary_expression(
@@ -426,6 +470,8 @@ IExpression const *Module_visitor::do_binary_expression(
 {
     IExpression_binary *e = const_cast<IExpression_binary *>(expr);
 
+    DOUT(("START binary_expression\n"));
+    INC_SCOPE();
     if (pre_visit(e)) {
         IExpression const *l   = e->get_left_argument();
         IExpression const *n_l = do_expression(l);
@@ -439,7 +485,10 @@ IExpression const *Module_visitor::do_binary_expression(
             e->set_right_argument(n_r);
         }
     }
-    return post_visit(e);
+    IExpression const *ret = post_visit(e);
+    DEC_SCOPE();
+    DOUT(("END binary_expression\n"));
+    return ret;
 }
 
 IExpression const *Module_visitor::do_conditional_expression(
@@ -447,6 +496,8 @@ IExpression const *Module_visitor::do_conditional_expression(
 {
     IExpression_conditional *e = const_cast<IExpression_conditional *>(expr);
 
+    DOUT(("START conditional_expression\n"));
+    INC_SCOPE();
     if (pre_visit(e)) {
         IExpression const *c   = e->get_condition();
         IExpression const *n_c = do_expression(c);
@@ -466,7 +517,10 @@ IExpression const *Module_visitor::do_conditional_expression(
             e->set_false(n_f);
         }
     }
-    return post_visit(e);
+    IExpression const *ret = post_visit(e);
+    DEC_SCOPE();
+    DOUT(("END conditional_expression\n"));
+    return ret;
 }
 
 IExpression const *Module_visitor::do_call_expression(
@@ -474,6 +528,8 @@ IExpression const *Module_visitor::do_call_expression(
 {
     IExpression_call *e = const_cast<IExpression_call *>(expr);
 
+    DOUT(("START call_expression\n"));
+    INC_SCOPE();
     if (pre_visit(e)) {
         IExpression const *ref   = e->get_reference();
         IExpression const *n_ref = do_expression(ref);
@@ -486,7 +542,10 @@ IExpression const *Module_visitor::do_call_expression(
             do_argument(arg);
         }
     }
-    return post_visit(e);
+    IExpression const *ret = post_visit(e);
+    DEC_SCOPE();
+    DOUT(("END call_expression\n"));
+    return ret;
 }
 
 IExpression const *Module_visitor::do_let_expression(
@@ -494,6 +553,8 @@ IExpression const *Module_visitor::do_let_expression(
 {
     IExpression_let *e = const_cast<IExpression_let *>(expr);
 
+    DOUT(("START let_expression\n"));
+    INC_SCOPE();
     if (pre_visit(e)) {
         for (size_t i = 0, n = e->get_declaration_count(); i < n; ++i) {
             IDeclaration const *decl = e->get_declaration(i);
@@ -506,7 +567,10 @@ IExpression const *Module_visitor::do_let_expression(
             e->set_expression(n_ex);
         }
     }
-    return post_visit(e);
+    IExpression const *ret = post_visit(e);
+    DEC_SCOPE();
+    DOUT(("END let_expression\n"));
+    return ret;
 }
 
 IExpression const *Module_visitor::do_expression(
@@ -562,8 +626,12 @@ void Module_visitor::do_invalid_statement(IStatement_invalid const *stmt)
 {
     IStatement_invalid *s = const_cast<IStatement_invalid *>(stmt);
 
+    DOUT(("START invalid_statement\n"));
+    INC_SCOPE();
     pre_visit(s);
     post_visit(s);
+    DEC_SCOPE();
+    DOUT(("END invalid_statement\n"));
 }
 
 void Module_visitor::do_compound_statement(
@@ -571,6 +639,8 @@ void Module_visitor::do_compound_statement(
 {
     IStatement_compound *s = const_cast<IStatement_compound *>(stmt);
 
+    DOUT(("START compound_statement\n"));
+    INC_SCOPE();
     if (pre_visit(s)) {
         for (size_t i = 0, n = s->get_statement_count(); i < n; ++i) {
             IStatement const *st = s->get_statement(i);
@@ -578,6 +648,8 @@ void Module_visitor::do_compound_statement(
         }
     }
     post_visit(s);
+    DEC_SCOPE();
+    DOUT(("END compound_statement\n"));
 }
 
 void Module_visitor::do_declaration_statement(
@@ -585,11 +657,15 @@ void Module_visitor::do_declaration_statement(
 {
     IStatement_declaration *s = const_cast<IStatement_declaration *>(stmt);
 
+    DOUT(("START declaration_statement\n"));
+    INC_SCOPE();
     if (pre_visit(s)) {
         IDeclaration const *decl = s->get_declaration();
         do_declaration(decl);
     }
     post_visit(s);
+    DEC_SCOPE();
+    DOUT(("END declaration_statement\n"));
 }
 
 void Module_visitor::do_expression_statement(
@@ -597,6 +673,8 @@ void Module_visitor::do_expression_statement(
 {
     IStatement_expression *s = const_cast<IStatement_expression *>(stmt);
 
+    DOUT(("START expression_statement\n"));
+    INC_SCOPE();
     if (pre_visit(s)) {
         if (IExpression const *expr = s->get_expression()) {
             IExpression const *n_expr = do_expression(expr);
@@ -606,6 +684,8 @@ void Module_visitor::do_expression_statement(
         }
     }
     post_visit(s);
+    DEC_SCOPE();
+    DOUT(("END expression_statement\n"));
 }
 
 void Module_visitor::do_if_statement(
@@ -613,6 +693,8 @@ void Module_visitor::do_if_statement(
 {
     IStatement_if *s = const_cast<IStatement_if *>(stmt);
 
+    DOUT(("START if_statement\n"));
+    INC_SCOPE();
     if (pre_visit(s)) {
         IExpression const *cond   = s->get_condition();
         IExpression const *n_cond = do_expression(cond);
@@ -628,6 +710,8 @@ void Module_visitor::do_if_statement(
         }
     }
     post_visit(s);
+    DEC_SCOPE();
+    DOUT(("END if_statement\n"));
 }
 
 void Module_visitor::do_case_statement(
@@ -635,6 +719,8 @@ void Module_visitor::do_case_statement(
 {
     IStatement_case *s = const_cast<IStatement_case *>(stmt);
 
+    DOUT(("START case_statement\n"));
+    INC_SCOPE();
     if (pre_visit(s)) {
         if (IExpression const *label = s->get_label()) {
             IExpression const *n_label = do_expression(label);
@@ -649,6 +735,8 @@ void Module_visitor::do_case_statement(
         }
     }
     post_visit(s);
+    DEC_SCOPE();
+    DOUT(("END case_statement\n"));
 }
 
 void Module_visitor::do_switch_statement(
@@ -656,6 +744,8 @@ void Module_visitor::do_switch_statement(
 {
     IStatement_switch *s = const_cast<IStatement_switch *>(stmt);
 
+    DOUT(("START switch_statement\n"));
+    INC_SCOPE();
     if (pre_visit(s)) {
         IExpression const *cond   = s->get_condition();
         IExpression const *n_cond = do_expression(cond);
@@ -669,6 +759,8 @@ void Module_visitor::do_switch_statement(
         }
     }
     post_visit(s);
+    DEC_SCOPE();
+    DOUT(("END switch_statement\n"));
 }
 
 void Module_visitor::do_while_statement(
@@ -676,6 +768,8 @@ void Module_visitor::do_while_statement(
 {
     IStatement_while *s = const_cast<IStatement_while *>(stmt);
 
+    DOUT(("START while_statement\n"));
+    INC_SCOPE();
     if (pre_visit(s)) {
         IExpression const *cond   = s->get_condition();
         IExpression const *n_cond = do_expression(cond);
@@ -687,6 +781,8 @@ void Module_visitor::do_while_statement(
         do_statement(body);
     }
     post_visit(s);
+    DEC_SCOPE();
+    DOUT(("END while_statement\n"));
 }
 
 void Module_visitor::do_do_while_statement(
@@ -694,6 +790,8 @@ void Module_visitor::do_do_while_statement(
 {
     IStatement_do_while *s = const_cast<IStatement_do_while *>(stmt);
 
+    DOUT(("START do_while_statement\n"));
+    INC_SCOPE();
     if (pre_visit(s)) {
         IStatement const *body = s->get_body();
         do_statement(body);
@@ -705,6 +803,8 @@ void Module_visitor::do_do_while_statement(
         }
     }
     post_visit(s);
+    DEC_SCOPE();
+    DOUT(("END do_while_statement\n"));
 }
 
 void Module_visitor::do_for_statement(
@@ -712,6 +812,8 @@ void Module_visitor::do_for_statement(
 {
     IStatement_for *s = const_cast<IStatement_for *>(stmt);
 
+    DOUT(("START for_statement\n"));
+    INC_SCOPE();
     if (pre_visit(s)) {
         if (IStatement const *init = s->get_init()) {
             do_statement(init);
@@ -735,6 +837,8 @@ void Module_visitor::do_for_statement(
         do_statement(body);
     }
     post_visit(s);
+    DEC_SCOPE();
+    DOUT(("END for_statement\n"));
 }
 
 void Module_visitor::do_break_statement(
@@ -742,8 +846,10 @@ void Module_visitor::do_break_statement(
 {
     IStatement_break *s = const_cast<IStatement_break *>(stmt);
 
+    DOUT(("START break_statement\n"));
     pre_visit(s);
     post_visit(s);
+    DOUT(("END break_statement\n"));
 }
 
 void Module_visitor::do_continue_statement(
@@ -751,8 +857,10 @@ void Module_visitor::do_continue_statement(
 {
     IStatement_continue *s = const_cast<IStatement_continue *>(stmt);
 
+    DOUT(("START continue_statement\n"));
     pre_visit(s);
     post_visit(s);
+    DOUT(("END continue_statement\n"));
 }
 
 void Module_visitor::do_return_statement(
@@ -760,6 +868,8 @@ void Module_visitor::do_return_statement(
 {
     IStatement_return *s = const_cast<IStatement_return *>(stmt);
 
+    DOUT(("START return_statement\n"));
+    INC_SCOPE();
     if (pre_visit(s)) {
         if (IExpression const *expr = s->get_expression()) {
             IExpression const *n_expr = do_expression(expr);
@@ -769,6 +879,8 @@ void Module_visitor::do_return_statement(
         }
     }
     post_visit(s);
+    DEC_SCOPE();
+    DOUT(("END return_statement\n"));
 }
 
 void Module_visitor::do_statement(
@@ -860,14 +972,18 @@ void Module_visitor::do_invalid_import(IDeclaration_invalid const *import)
 {
     IDeclaration_invalid *d = const_cast<IDeclaration_invalid *>(import);
 
+    DOUT(("START invalid_import\n"));
     pre_visit(d);
     post_visit(d);
+    DOUT(("END invalid_import\n"));
 }
 
 void Module_visitor::do_declaration_import(IDeclaration_import const *import)
 {
     IDeclaration_import *d = const_cast<IDeclaration_import *>(import);
 
+    DOUT(("START declaration_import\n"));
+    INC_SCOPE();
     if (pre_visit(d)) {
         if (IQualified_name const *using_mod = d->get_module_name())
             do_qualified_name(using_mod);
@@ -878,6 +994,8 @@ void Module_visitor::do_declaration_import(IDeclaration_import const *import)
         }
     }
     post_visit(d);
+    DEC_SCOPE();
+    DOUT(("END declaration_import\n"));
 }
 
 void Module_visitor::do_named_argument(
@@ -885,6 +1003,8 @@ void Module_visitor::do_named_argument(
 {
     IArgument_named *a = const_cast<IArgument_named *>(arg);
 
+    DOUT(("START named_argument\n"));
+    INC_SCOPE();
     if (pre_visit(a)) {
         ISimple_name const *sname = a->get_parameter_name();
         do_simple_name(sname);
@@ -896,6 +1016,8 @@ void Module_visitor::do_named_argument(
         }
     }
     post_visit(a);
+    DEC_SCOPE();
+    DOUT(("END named_argument\n"));
 }
 
 void Module_visitor::do_positional_argument(
@@ -903,6 +1025,8 @@ void Module_visitor::do_positional_argument(
 {
     IArgument_positional *a = const_cast<IArgument_positional *>(arg);
 
+    DOUT(("START positional_argument\n"));
+    INC_SCOPE();
     if (pre_visit(a)) {
         IExpression const *expr   = a->get_argument_expr();
         IExpression const *n_expr = do_expression(expr);
@@ -911,6 +1035,8 @@ void Module_visitor::do_positional_argument(
         }
     }
     post_visit(a);
+    DEC_SCOPE();
+    DOUT(("END positional_argument\n"));
 }
 
 void Module_visitor::do_argument(
@@ -931,6 +1057,8 @@ void Module_visitor::do_annotation(
 {
     IAnnotation *a = const_cast<IAnnotation *>(anno);
 
+    DOUT(("START annotation\n"));
+    INC_SCOPE();
     if (pre_visit(a)) {
         IQualified_name const *qname = a->get_name();
         do_qualified_name(qname);
@@ -953,6 +1081,8 @@ void Module_visitor::do_annotation(
         }
     }
     post_visit(a);
+    DEC_SCOPE();
+    DOUT(("END annotation\n"));
 }
 
 void Module_visitor::do_annotations(
@@ -960,6 +1090,8 @@ void Module_visitor::do_annotations(
 {
     IAnnotation_block *b = const_cast<IAnnotation_block *>(block);
 
+    DOUT(("START annotation_block\n"));
+    INC_SCOPE();
     if (pre_visit(b)) {
         for (size_t i = 0, n = b->get_annotation_count(); i < n; ++i) {
             IAnnotation const *a = b->get_annotation(i);
@@ -967,6 +1099,8 @@ void Module_visitor::do_annotations(
         }
     }
     post_visit(b);
+    DEC_SCOPE();
+    DOUT(("END annotation_block\n"));
 }
 
 void Module_visitor::do_type_name(
@@ -974,6 +1108,8 @@ void Module_visitor::do_type_name(
 {
     IType_name *t = const_cast<IType_name *>(tn);
 
+    DOUT(("START type_name\n"));
+    INC_SCOPE();
     if (pre_visit(t)) {
         IQualified_name *qname = t->get_qualified_name();
         do_qualified_name(qname);
@@ -986,6 +1122,8 @@ void Module_visitor::do_type_name(
         }
     }
     post_visit(t);
+    DEC_SCOPE();
+    DOUT(("END type_name\n"));
 }
 
 void Module_visitor::do_parameter(
@@ -993,6 +1131,8 @@ void Module_visitor::do_parameter(
 {
     IParameter *p = const_cast<IParameter *>(param);
 
+    DOUT(("START parameter\n"));
+    INC_SCOPE();
     if (pre_visit(p)) {
         IType_name const *tn = p->get_type_name();
         do_type_name(tn);
@@ -1014,6 +1154,8 @@ void Module_visitor::do_parameter(
         }
     }
     post_visit(p);
+    DEC_SCOPE();
+    DOUT(("END parameter\n"));
 }
 
 void Module_visitor::do_declaration_annotation(
@@ -1021,6 +1163,8 @@ void Module_visitor::do_declaration_annotation(
 {
     IDeclaration_annotation *d = const_cast<IDeclaration_annotation *>(anno);
 
+    DOUT(("START declaration_annotation\n"));
+    INC_SCOPE();
     if (pre_visit(d)) {
         do_simple_name(d->get_name());
         for (size_t i = 0, n = d->get_parameter_count(); i < n; ++i) {
@@ -1032,6 +1176,8 @@ void Module_visitor::do_declaration_annotation(
         }
     }
     post_visit(d);
+    DEC_SCOPE();
+    DOUT(("END declaration_annotation\n"));
 }
 
 void Module_visitor::do_declaration_constant(
@@ -1039,6 +1185,8 @@ void Module_visitor::do_declaration_constant(
 {
     IDeclaration_constant *d = const_cast<IDeclaration_constant *>(con);
 
+    DOUT(("START declaration_constant\n"));
+    INC_SCOPE();
     if (pre_visit(d)) {
         do_type_name(d->get_type_name());
         for (size_t i = 0, n = d->get_constant_count(); i < n; ++i) {
@@ -1057,6 +1205,8 @@ void Module_visitor::do_declaration_constant(
         }
     }
     post_visit(d);
+    DEC_SCOPE();
+    DOUT(("END declaration_constant\n"));
 }
 
 void Module_visitor::do_type_alias(
@@ -1064,6 +1214,8 @@ void Module_visitor::do_type_alias(
 {
     IDeclaration_type_alias *t = const_cast<IDeclaration_type_alias *>(ta);
 
+    DOUT(("START type_alias\n"));
+    INC_SCOPE();
     if (pre_visit(t)) {
         IType_name const *tn = t->get_type_name();
         do_type_name(tn);
@@ -1072,6 +1224,8 @@ void Module_visitor::do_type_alias(
         do_simple_name(sname);
     }
     post_visit(t);
+    DEC_SCOPE();
+    DOUT(("END type_alias\n"));
 }
 
 void Module_visitor::do_type_struct(
@@ -1079,6 +1233,8 @@ void Module_visitor::do_type_struct(
 {
     IDeclaration_type_struct *t = const_cast<IDeclaration_type_struct *>(ts);
 
+    DOUT(("START type_struct\n"));
+    INC_SCOPE();
     if (pre_visit(t)) {
         ISimple_name const *sname = t->get_name();
         do_simple_name(sname);
@@ -1107,6 +1263,8 @@ void Module_visitor::do_type_struct(
         }
     }
     post_visit(t);
+    DEC_SCOPE();
+    DOUT(("END type_struct\n"));
 }
 
 void Module_visitor::do_type_enum(
@@ -1114,6 +1272,8 @@ void Module_visitor::do_type_enum(
 {
     IDeclaration_type_enum *t = const_cast<IDeclaration_type_enum *>(te);
 
+    DOUT(("START type_enum\n"));
+    INC_SCOPE();
     if (pre_visit(t)) {
         ISimple_name const *sname = t->get_name();
         do_simple_name(sname);
@@ -1139,6 +1299,8 @@ void Module_visitor::do_type_enum(
         }
     }
     post_visit(t);
+    DEC_SCOPE();
+    DOUT(("END type_enum\n"));
 }
 
 void Module_visitor::do_variable_decl(
@@ -1146,6 +1308,8 @@ void Module_visitor::do_variable_decl(
 {
     IDeclaration_variable *d = const_cast<IDeclaration_variable *>(var_decl);
 
+    DOUT(("START variable_decl\n"));
+    INC_SCOPE();
     if (pre_visit(d)) {
         IType_name const *tname = d->get_type_name();
         do_type_name(tname);
@@ -1167,6 +1331,8 @@ void Module_visitor::do_variable_decl(
         }
     }
     post_visit(d);
+    DEC_SCOPE();
+    DOUT(("END variable_decl\n"));
 }
 
 void Module_visitor::do_function_decl(
@@ -1174,6 +1340,8 @@ void Module_visitor::do_function_decl(
 {
     IDeclaration_function *d = const_cast<IDeclaration_function *>(fkt);
 
+    DOUT(("START function_decl\n"));
+    INC_SCOPE();
     if (pre_visit(d)) {
         IType_name const *rname = d->get_return_type_name();
         do_type_name(rname);
@@ -1198,6 +1366,8 @@ void Module_visitor::do_function_decl(
         }
     }
     post_visit(d);
+    DEC_SCOPE();
+    DOUT(("END function_decl\n"));
 }
 
 void Module_visitor::do_module_decl(
@@ -1205,12 +1375,16 @@ void Module_visitor::do_module_decl(
 {
     IDeclaration_module *d = const_cast<IDeclaration_module *>(mod);
 
+    DOUT(("START module_decl\n"));
+    INC_SCOPE();
     if (pre_visit(d)) {
         if (IAnnotation_block const *anno = d->get_annotations()) {
             do_annotations(anno);
         }
     }
     post_visit(d);
+    DEC_SCOPE();
+    DOUT(("END module_decl\n"));
 }
 
 void Module_visitor::do_namespace_alias(
@@ -1218,11 +1392,15 @@ void Module_visitor::do_namespace_alias(
 {
     IDeclaration_namespace_alias *d = const_cast<IDeclaration_namespace_alias *>(alias_decl);
 
+    DOUT(("START namespace_alias\n"));
+    INC_SCOPE();
     if (pre_visit(d)) {
         do_simple_name(d->get_alias());
         do_qualified_name(d->get_namespace());
     }
     post_visit(d);
+    DEC_SCOPE();
+    DOUT(("END namespace_alias\n"));
 }
 
 void Module_visitor::do_declaration(

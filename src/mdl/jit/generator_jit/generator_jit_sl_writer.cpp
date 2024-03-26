@@ -1079,8 +1079,17 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
             }
         }
 
+        bool move_decl_to_prolog = false;
+        for (auto user : value->users()) {
+            // is inst a live-out?
+            if (llvm::cast<llvm::Instruction>(user)->getParent() != bb) {
+                move_decl_to_prolog = true;
+                break;
+            }
+        }
+
         Def_variable *var_def = create_local_var(
-            value, /*do_not_register=*/ true, /*add_decl_statement=*/ false);
+            value, /*do_not_register=*/ true, move_decl_to_prolog);
 
         if (llvm::InsertElementInst *insert = llvm::dyn_cast<llvm::InsertElementInst>(value)) {
             if (has_non_const_index(insert)) {
@@ -1088,14 +1097,19 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
                 // as in translate_expr_insertelement().
                 // First initialize the new local variable with the input vector.
                 Expr *input_vector = translate_expr(insert->getOperand(0));
-                Declaration_variable *decl_var = var_def->get_declaration();
-                for (Init_declarator &init_decl : *decl_var) {
-                    if (init_decl.get_name()->get_symbol() == var_def->get_symbol()) {
-                        init_decl.set_initializer(input_vector);
+
+                if (!move_decl_to_prolog) {
+                    Declaration_variable *decl_var = var_def->get_declaration();
+                    for (Init_declarator &init_decl : *decl_var) {
+                        if (init_decl.get_name()->get_symbol() == var_def->get_symbol()) {
+                            init_decl.set_initializer(input_vector);
+                        }
                     }
+                    // insert variable declaration here
+                    stmts.push_back(Base::m_stmt_factory.create_declaration(decl_var));
+                } else {
+                    stmts.push_back(create_assign_stmt(var_def, input_vector));
                 }
-                // insert variable declaration here
-                stmts.push_back(Base::m_stmt_factory.create_declaration(decl_var));
 
                 // then assign the new value to the dynamic index in a second statement.
                 Expr *elem_index = translate_expr(insert->getOperand(2));
@@ -1115,16 +1129,20 @@ typename SLWriterPass<BasePass>::Stmt *SLWriterPass<BasePass>::translate_block(
         if (var_def != nullptr) {
             // don't initialize with itself
             if (!is_ref_to_def(res, var_def)) {
-                // set variable initializer
-                Declaration_variable *decl_var = var_def->get_declaration();
-                for (Init_declarator &init_decl : *decl_var) {
-                    if (init_decl.get_name()->get_symbol() == var_def->get_symbol()) {
-                        init_decl.set_initializer(res);
+                if (!move_decl_to_prolog) {
+                    // set variable initializer
+                    Declaration_variable *decl_var = var_def->get_declaration();
+                    for (Init_declarator &init_decl : *decl_var) {
+                        if (init_decl.get_name()->get_symbol() == var_def->get_symbol()) {
+                            init_decl.set_initializer(res);
+                        }
                     }
-                }
 
-                // insert variable declaration here
-                stmts.push_back(Base::m_stmt_factory.create_declaration(decl_var));
+                    // insert variable declaration here
+                    stmts.push_back(Base::m_stmt_factory.create_declaration(decl_var));
+                } else {
+                    stmts.push_back(create_assign_stmt(var_def, res));
+                }
             }
 
             // register now

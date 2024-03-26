@@ -678,7 +678,7 @@ function(CREATE_FROM_BASE_PRESET)
     # general option MDL_MSVC_DYNAMIC_RUNTIME_EXAMPLES
     set(options WIN32 WINDOWS_UNICODE EXAMPLE DYNAMIC_MSVC_RUNTIME STATIC_MSVC_RUNTIME SKIP_UNDEFINED_SYMBOL_CHECK)
     set(oneValueArgs TARGET VERSION TYPE NAMESPACE EXPORT_NAME OUTPUT_NAME VS_PROJECT_NAME EMBED_RC)
-    set(multiValueArgs SOURCES ADDITIONAL_INCLUDE_DIRS)
+    set(multiValueArgs SOURCES ADDITIONAL_INCLUDE_DIRS EXPORTED_SYMBOLS)
     cmake_parse_arguments(CREATE_FROM_BASE_PRESET "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN} )
 
     # sanity check
@@ -823,6 +823,25 @@ function(CREATE_FROM_BASE_PRESET)
                 POST_BUILD
                 COMMAND ! ldd -r $<TARGET_FILE:${CREATE_FROM_BASE_PRESET_TARGET}> | grep "undefined symbol:"
                 )
+        endif()
+    endif()
+
+    # exported symbols
+    if(CREATE_FROM_BASE_PRESET_EXPORTED_SYMBOLS)
+        if(LINUX)
+            set(_GLOBAL "")
+            foreach(_SYMBOL ${CREATE_FROM_BASE_PRESET_EXPORTED_SYMBOLS})
+                set(_GLOBAL "${_GLOBAL}${_SYMBOL};\n")
+            endforeach()
+            configure_file(
+                "${MDL_BASE_FOLDER}/cmake/linkerscript.txt.in"
+                "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}/linkerscript.txt"
+                @ONLY
+            )
+            target_link_libraries(${CREATE_FROM_BASE_PRESET_TARGET}
+                PRIVATE
+                    -Wl,--version-script,${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_BUILD_TYPE}/linkerscript.txt
+            )
         endif()
     endif()
 

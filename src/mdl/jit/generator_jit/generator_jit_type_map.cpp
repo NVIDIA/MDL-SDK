@@ -247,28 +247,6 @@ Type_mapper::Type_mapper(
         m_type_double3x4 = llvm::ArrayType::get(m_type_double4, 3);
         m_type_double4x4 = llvm::ArrayType::get(m_type_double4, 4);
         break;
-    case TM_BIG_VECTORS:
-        // matrix types are big vectors ...
-        m_type_float2x2  = llvm::FixedVectorType::get(m_type_float,  2 * 2);
-        m_type_float3x2  = llvm::FixedVectorType::get(m_type_float,  3 * 2);
-        m_type_float4x2  = llvm::FixedVectorType::get(m_type_float,  4 * 2);
-        m_type_float2x3  = llvm::FixedVectorType::get(m_type_float,  2 * 3);
-        m_type_float3x3  = llvm::FixedVectorType::get(m_type_float,  3 * 3);
-        m_type_float4x3  = llvm::FixedVectorType::get(m_type_float,  4 * 3);
-        m_type_float2x4  = llvm::FixedVectorType::get(m_type_float,  2 * 4);
-        m_type_float3x4  = llvm::FixedVectorType::get(m_type_float,  3 * 4);
-        m_type_float4x4  = llvm::FixedVectorType::get(m_type_float,  4 * 4);
-
-        m_type_double2x2 = llvm::FixedVectorType::get(m_type_double, 2 * 2);
-        m_type_double3x2 = llvm::FixedVectorType::get(m_type_double, 3 * 2);
-        m_type_double4x2 = llvm::FixedVectorType::get(m_type_double, 4 * 2);
-        m_type_double2x3 = llvm::FixedVectorType::get(m_type_double, 2 * 3);
-        m_type_double3x3 = llvm::FixedVectorType::get(m_type_double, 3 * 3);
-        m_type_double4x3 = llvm::FixedVectorType::get(m_type_double, 4 * 3);
-        m_type_double2x4 = llvm::FixedVectorType::get(m_type_double, 2 * 4);
-        m_type_double3x4 = llvm::FixedVectorType::get(m_type_double, 3 * 4);
-        m_type_double4x4 = llvm::FixedVectorType::get(m_type_double, 4 * 4);
-        break;
     }
 
 #define ENTRY(ty, col, row) m_##ty##_matrix[get_matric_index(col, row)] = m_type_##ty##col##x##row
@@ -697,14 +675,7 @@ bool Type_mapper::need_reference_return(mi::mdl::IType const *type, int arr_size
         // else returned as a LLVM vector type
         return false;
     case mi::mdl::IType::TK_MATRIX:
-        if ((m_tm_mode & (TM_VECTOR_MASK|TM_BIG_VECTOR_RETURN)) ==
-            (TM_BIG_VECTORS|TM_BIG_VECTOR_RETURN))
-        {
-            // returned as a LLVM vector type
-            return false;
-        }
-        // else is either returned as an array, or the BE does not support returning big
-        // vectors, needs reference
+        // is returned as an array, needs reference
         return true;
     case mi::mdl::IType::TK_ARRAY:
     {
@@ -772,11 +743,7 @@ bool Type_mapper::is_passed_by_reference(mi::mdl::IType const *type, int arr_siz
         // else represented by LLVM vector types, pass by value
         return false;
     case mi::mdl::IType::TK_MATRIX:
-        if ((m_tm_mode & TM_VECTOR_MASK) == TM_BIG_VECTORS) {
-            // represented by LLVM vector types, pass by value
-            return false;
-        }
-        // else represented by LLVM array types, pass by reference
+        // represented by LLVM array types, pass by reference
         return true;
     case mi::mdl::IType::TK_ARRAY:
         {

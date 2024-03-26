@@ -43,6 +43,7 @@ create_from_base_preset(
     SOURCES ${PROJECT_SOURCES}
     EMBED_RC "mdl_sdk.rc"
     OUTPUT_NAME "mdl_sdk"
+    EXPORTED_SYMBOLS mi_factory mi_neuray_factory_deprecated
     )
 
 target_include_directories(${PROJECT_NAME}
@@ -60,11 +61,6 @@ endif()
 # target alias for the custom name
 add_library(mdl_sdk ALIAS ${PROJECT_NAME})
 add_library(mdl::mdl_sdk ALIAS ${PROJECT_NAME})
-
-# add mdl and other dependencies
-#set(_LINKER_DEPENDENCIES_BASE_LIST ${_LINKER_DEPENDENCIES_BASE})
-#separate_arguments(_LINKER_DEPENDENCIES_BASE_LIST)
-#list(TRANSFORM _LINKER_DEPENDENCIES_BASE_LIST STRIP)
 
 target_add_dependencies(TARGET ${PROJECT_NAME}
     DEPENDS

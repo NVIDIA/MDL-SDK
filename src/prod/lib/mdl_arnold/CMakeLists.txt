@@ -58,6 +58,7 @@ create_from_base_preset(
         ${PROJECT_SOURCES}
         ${PROJECT_ADDITIONAL_FILES}
         copied_files.d
+    EXPORTED_SYMBOLS NodeLoader
     SKIP_UNDEFINED_SYMBOL_CHECK
     )
 set_source_files_properties(${PROJECT_ADDITIONAL_FILES} PROPERTIES HEADER_FILE_ONLY TRUE)

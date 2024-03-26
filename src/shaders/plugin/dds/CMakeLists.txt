@@ -61,6 +61,7 @@ create_from_base_preset(
     SOURCES ${PROJECT_SOURCES}
     EMBED_RC "dds.rc"
     OUTPUT_NAME "dds"
+    EXPORTED_SYMBOLS mi_plugin_factory
 )
 
 # customize name

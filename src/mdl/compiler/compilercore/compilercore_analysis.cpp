@@ -366,7 +366,7 @@ IValue_resource const *retarget_resource_url(
 {
     // check if the URL is relative. If yes, update it
     char const *url = r->get_string_value();
-    if (url != NULL && url[0] != '/') {
+    if (url != NULL && url[0] != '/' && url[0] != '\0') {
         string abs_url(alloc);
 
         mi::base::Handle<IMDL_resource_set> res(resolver.resolve_resource(
@@ -3131,8 +3131,8 @@ void NT_analysis::create_default_members(
     {
         int n = s_type->get_field_count();
 
-        VLA<IType_factory::Function_parameter> params(get_allocator(), n);
-        VLA<IExpression const *>               inits(get_allocator(), n);
+        Small_VLA<IType_factory::Function_parameter, 8> params(get_allocator(), n);
+        Small_VLA<IExpression const *, 8>               inits(get_allocator(), n);
 
         Definition *c_def = get_error_definition();
 
@@ -3640,9 +3640,10 @@ Module const *NT_analysis::load_module_to_import(
     {
         // Create a new context here: we don't want the compilation errors to be appended
         // to the current context.
+        mi::base::Handle<const mi::base::IInterface> user_data(m_ctx.get_user_data());
         mi::base::Handle<Thread_context> ctx(
             m_compiler->create_thread_context(
-                *this, m_ctx.get_front_path(), m_ctx.get_user_data()));
+                *this, m_ctx.get_front_path(), user_data.get()));
 
         if (translator != NULL) {
             // compile this foreign module
@@ -5594,8 +5595,8 @@ void NT_analysis::declare_function(IDeclaration_function *fkt_decl)
     // handle parameters first, BEFORE the return type
     size_t n_params = fkt_decl->get_parameter_count();
 
-    VLA<IType_factory::Function_parameter> params(m_module.get_allocator(), n_params);
-    VLA<IExpression const *>               inits(m_module.get_allocator(), n_params);
+    Small_VLA<IType_factory::Function_parameter, 8> params(m_module.get_allocator(), n_params);
+    Small_VLA<IExpression const *, 8>               inits(m_module.get_allocator(), n_params);
 
     bool has_initializers = false;
 
@@ -6144,7 +6145,7 @@ error_found:
             params[i].p_sym  = p_sym;
         }
 
-        VLA<IExpression const *> new_defs(m_module.get_allocator(), n_params);
+        Small_VLA<IExpression const *, 8> new_defs(m_module.get_allocator(), n_params);
         memset(new_defs.data(), 0, sizeof(new_defs[0]) * n_params);
 
         has_error = !collect_preset_defaults(instance_def, call, new_defs);
@@ -6488,8 +6489,8 @@ void NT_analysis::declare_material(IDeclaration_function *mat_decl)
 
     int n_params = mat_decl->get_parameter_count();
 
-    VLA<IType_factory::Function_parameter> params(m_module.get_allocator(), n_params);
-    VLA<IExpression const *>               inits(m_module.get_allocator(), n_params);
+    Small_VLA<IType_factory::Function_parameter, 8> params(m_module.get_allocator(), n_params);
+    Small_VLA<IExpression const *, 8>               inits(m_module.get_allocator(), n_params);
 
     Scope                *con_scope = NULL;
     IType_function const *con_type  = NULL;
@@ -6739,9 +6740,9 @@ void NT_analysis::declare_material(IDeclaration_function *mat_decl)
 
 // Collect the new default values for a preset.
 bool NT_analysis::collect_preset_defaults(
-    Definition const         *def,
-    IExpression_call const   *call,
-    VLA<IExpression const *> &new_defaults)
+    Definition const                  *def,
+    IExpression_call const            *call,
+    Small_VLA<IExpression const *, 8> &new_defaults)
 {
     IType_function const *ftype   = cast<IType_function>(def->get_type());
     int                  n_params = ftype->get_parameter_count();
@@ -6970,7 +6971,7 @@ error_found:
             params[i].p_sym  = p_sym;
         }
 
-        VLA<IExpression const *> new_defs(m_module.get_allocator(), n_params);
+        Small_VLA<IExpression const *, 8> new_defs(m_module.get_allocator(), n_params);
         memset(new_defs.data(), 0, sizeof(new_defs[0]) * n_params);
 
         has_error = !collect_preset_defaults(instance_def, call, new_defs);
@@ -7216,7 +7217,7 @@ NT_analysis::Definition_list NT_analysis::resolve_operator_overload(
 
     int best_value = 0;
 
-    VLA<IType const *> signature(m_module.get_allocator(), num_args);
+    Small_VLA<IType const *, 8> signature(m_module.get_allocator(), num_args);
 
     unsigned matching_types = 0;
     for (Definition_list::iterator it(def_list.begin()), end(def_list.end());
@@ -8466,8 +8467,8 @@ NT_analysis::Definition_list NT_analysis::resolve_overload(
     Bitset used_names(m_module.get_allocator(), num_named_args);
     int best_value = 0;
 
-    VLA<IType const *> signature(m_module.get_allocator(), num_pos_args + num_named_args);
-    VLA<bool>          bounds(m_module.get_allocator(), num_pos_args + num_named_args);
+    Small_VLA<IType const *, 8> signature(m_module.get_allocator(), num_pos_args + num_named_args);
+    Small_VLA<bool, 8>          bounds(m_module.get_allocator(), num_pos_args + num_named_args);
 
     // because it is not possible to pass an argument by position AND by name
     // we must have at least this amount of arguments
@@ -8881,9 +8882,9 @@ Definition const *NT_analysis::find_overload(
 
     size_t arg_count = call->get_argument_count();
 
-    VLA<IType const *> arg_types(alloc, arg_count);
-    VLA<IType const *> mod_arg_types(alloc, arg_count);
-    VLA<IArgument const *> arguments(alloc, arg_count);
+    Small_VLA<IType const *, 8> arg_types(alloc, arg_count);
+    Small_VLA<IType const *, 8> mod_arg_types(alloc, arg_count);
+    Small_VLA<IArgument const *, 8> arguments(alloc, arg_count);
 
     Name_index_map name_arg_indexes(
         0, Name_index_map::hasher(), Name_index_map::key_equal(), alloc);
@@ -9084,8 +9085,8 @@ NT_analysis::Definition_list NT_analysis::resolve_annotation_overload(
     Bitset used_names(m_module.get_allocator(), num_named_args);
     int best_value = 0;
 
-    VLA<IType const *> signature(m_module.get_allocator(), num_pos_args + num_named_args);
-    VLA<bool>          bounds(m_module.get_allocator(), num_pos_args + num_named_args);
+    Small_VLA<IType const *, 8> signature(m_module.get_allocator(), num_pos_args + num_named_args);
+    Small_VLA<bool, 8>          bounds(m_module.get_allocator(), num_pos_args + num_named_args);
 
     // because it is not possible to pass an argument by position AND by name
     // we must have at least this amount of arguments
@@ -9435,9 +9436,9 @@ Definition const *NT_analysis::find_annotation_overload(
 
     size_t arg_count = anno->get_argument_count();
 
-    VLA<IType const *> arg_types(alloc, arg_count);
-    VLA<IType const *> mod_arg_types(alloc, arg_count);
-    VLA<IArgument const *> arguments(alloc, arg_count);
+    Small_VLA<IType const *, 8> arg_types(alloc, arg_count);
+    Small_VLA<IType const *, 8> mod_arg_types(alloc, arg_count);
+    Small_VLA<IArgument const *, 8> arguments(alloc, arg_count);
 
     Name_index_map name_arg_indexes(
         0, Name_index_map::hasher(), Name_index_map::key_equal(), alloc);
@@ -11008,70 +11009,75 @@ bool NT_analysis::pre_visit(IDeclaration_constant *con_decl)
                         }
                     }
 
-                    if (is_incomplete_arr) {
-                        // we do not allow array conversions
-                        if (is<IType_error>(init_type)) {
-                            // error already reported
-                        } else if (is<IType_array>(init_type)) {
-                            IType_array const *a_type = cast<IType_array>(init_type);
-                            if (!equal_types(type, a_type->get_element_type())) {
+                    if (is<IType_error>(type)) {
+                        // supress any other errors if the constant type is already error
+                        def_is_error = true;
+                    } else {
+                        if (is_incomplete_arr) {
+                            // we do not allow array conversions
+                            if (is<IType_error>(init_type)) {
+                                // error already reported
+                            } else if (is<IType_array>(init_type)) {
+                                IType_array const *a_type = cast<IType_array>(init_type);
+                                if (!equal_types(type, a_type->get_element_type())) {
+                                    error(
+                                        NO_ARRAY_CONVERSION,
+                                        init->access_position(),
+                                        Error_params(*this).add(init_type).add(type, -1));
+                                } else {
+                                    // element types are equal, fix the incomplete type
+                                    def->set_type(a_type);
+                                }
+                            } else {
                                 error(
                                     NO_ARRAY_CONVERSION,
                                     init->access_position(),
                                     Error_params(*this).add(init_type).add(type, -1));
+                            }
+                        } else if (IType_array const *a_type = as<IType_array>(type)) {
+                            // we do not allow array conversions
+                            if (is<IType_error>(init_type)) {
+                                // error already reported
+                            } else if (!equal_types(a_type, init_type)) {
+                                error(
+                                    NO_ARRAY_CONVERSION,
+                                    init->access_position(),
+                                    Error_params(*this).add(init_type).add(type));
+                            }
+                        } else {
+                            if (is<IType_array>(init_type)) {
+                                error(
+                                    NO_ARRAY_CONVERSION,
+                                    init->access_position(),
+                                    Error_params(*this).add(init_type).add(type));
                             } else {
-                                // element types are equal, fix the incomplete type
-                                def->set_type(a_type);
-                            }
-                        } else {
-                            error(
-                                NO_ARRAY_CONVERSION,
-                                init->access_position(),
-                                Error_params(*this).add(init_type).add(type, -1));
-                        }
-                    } else if (IType_array const *a_type = as<IType_array>(type)) {
-                        // we do not allow array conversions
-                        if (is<IType_error>(init_type)) {
-                            // error already reported
-                        } else if (!equal_types(a_type, init_type)) {
-                            error(
-                                NO_ARRAY_CONVERSION,
-                                init->access_position(),
-                                Error_params(*this).add(init_type).add(type));
-                        }
-                    } else {
-                        if (is<IType_array>(init_type)) {
-                            error(
-                                NO_ARRAY_CONVERSION,
-                                init->access_position(),
-                                Error_params(*this).add(init_type).add(type));
-                        } else {
-                            if (!is_auto_type) {
-                                // find the default constructor
-                                init = find_init_constructor(
-                                    type,
-                                    m_module.clone_name(t_name, /*modifier=*/NULL),
-                                    init,
-                                    init->access_position());
+                                if (!is_auto_type) {
+                                    // find the default constructor
+                                    init = find_init_constructor(
+                                        type,
+                                        m_module.clone_name(t_name, /*modifier=*/NULL),
+                                        init,
+                                        init->access_position());
+                                }
                             }
                         }
-                    }
 
-                    if (!is<IType_error>(init->get_type())) {
-                        // we have a valid init constructor
-                        m_exc_handler.clear_error_state();
-                        IValue const *val = init->fold(
-                            &m_module, m_module.get_value_factory(), &m_exc_handler);
-                        if (!m_exc_handler.has_error()) {
-                            MDL_ASSERT(
-                                !is<IValue_bad>(val) &&
-                                "const folding failed for constant expression");
+                        if (!is<IType_error>(init->get_type())) {
+                            // we have a valid init constructor
+                            m_exc_handler.clear_error_state();
+                            IValue const *val = init->fold(
+                                &m_module, m_module.get_value_factory(), &m_exc_handler);
+                            if (!m_exc_handler.has_error()) {
+                                MDL_ASSERT(
+                                    !is<IValue_bad>(val) &&
+                                    "const folding failed for constant expression");
 
-                            def->set_constant_value(val);
+                                def->set_constant_value(val);
 
-                            if (!is<IExpression_literal>(init)) {
-                                Position const *pos = &init->access_position();
-                                init = m_module.create_literal(val, pos);
+                                if (!is<IExpression_literal>(init)) {
+                                    Position const *pos = &init->access_position();
+                                    init = m_module.create_literal(val, pos);
+                                }
                             }
                         }
                     }
@@ -11143,8 +11149,8 @@ bool NT_analysis::pre_visit(IDeclaration_annotation *anno_decl)
     }
 
     size_t n_params = anno_decl->get_parameter_count();
-    VLA<IType_factory::Function_parameter> params(get_allocator(), n_params);
-    VLA<IExpression const *>               inits(get_allocator(), n_params);
+    Small_VLA<IType_factory::Function_parameter, 8> params(get_allocator(), n_params);
+    Small_VLA<IExpression const *, 8>               inits(get_allocator(), n_params);
 
     bool has_initializers = false;
 
@@ -11530,7 +11536,7 @@ bool NT_analysis::pre_visit(IDeclaration_type_struct *struct_decl)
     IType_struct *s_type = m_tc.create_struct(fq_sym);
 
     Definition *type_def = get_definition_at_scope(sym);
-    if (type_def) {
+    if (type_def != NULL) {
         err_redeclaration(
             Definition::DK_TYPE, type_def, struct_decl->access_position(), TYPE_REDECLARATION);
         type_def = get_error_definition();
@@ -16085,7 +16091,7 @@ public:
                 for (Scope const *s = scope; s != global; s = s->get_parent()) {
                     ++q_len;
                 }
-                VLA<ISymbol const *> syms(m_mod.get_allocator(), q_len);
+                Small_VLA<ISymbol const *, 8> syms(m_mod.get_allocator(), q_len);
 
                 size_t i = 1;
                 for (Scope const *s = scope; s != global; s = s->get_parent()) {

@@ -52,6 +52,7 @@ create_from_base_preset(
     SOURCES ${PROJECT_SOURCES}
     EMBED_RC "openimageio.rc"
     OUTPUT_NAME "nv_openimageio"
+    EXPORTED_SYMBOLS mi_plugin_factory
     # The undefined symbol check might fail w.r.t. __exp2_finite and __exp_finite if
     # vcpkg and the MDL SDK are built on different systems.
     SKIP_UNDEFINED_SYMBOL_CHECK

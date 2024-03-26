@@ -1,5 +1,57 @@
 Change Log
 ==========
+MDL SDK 2023.1.4 (373000.3036): 18 Mar 2024
+-----------------------------------------------
+
+ABI compatible with the MDL SDK 2023.1.4 (373000.3036) binary release
+(see [https://developer.nvidia.com/mdl-sdk](https://developer.nvidia.com/mdl-sdk))
+
+**Added and Changed Features**
+
+- General
+    - Added a linker script on Linux that hides all defined symbols except for the factory symbol(s).
+    
+- MDL SDK examples
+    - Updated OptiX 7 example to support up to OptiX SDK 8.0.0.
+    - Example AXF to MDL
+        - Added support for AxF 1.9 sheen for SVBRDF representation.
+        - Improved compatibility for refracting carpaint representation.
+        - Improved mapping of Cook-Torrance spreads (used for non-measured BRDF fallback
+          and flake orientation).
+    - Example Execution GLSL: 
+        - Added enable/disable SSBO and noise function remap by command line arguments.
+
+**Fixed Bugs**
+
+- General
+    - Fixed a crash if `IMdl_resolved_resource_element::create_reader()` returns `nullptr`. 
+      This might be due to an incorrect user implementation, or in legitimate cases, e.g.,
+      if the file disappeared between resolving and the query.
+    - Fixed a memory leak involving the interface pointer used with the context option
+      "user_data".
+      
+- MDL Compiler and Backends
+    - Fixed inconsistent storing and reading of matrix material parameters in target
+      argument blocks for the native backend.
+    - Avoid warnings about unsupported PTX features for native backend.
+    - Don't let LLVM abort at shutdown, when writing to stderr fails.
+    - mdltlc: Fixed error in pattern matching of material nodes.
+    - Fixed HLSL/GLSL code generation that sometimes placed temporaries into a
+      loop body that are used outside, causing invalid code.
+    - Fixed crash in the core compiler that might happen on heavily malformed MDL code.
+    - Prevent errors/warnings in the core compiler without line numbers
+      due to internal clone operations.
+    - Slightly speedup compilation in multithreaded operations.
+    - Do not try to resolve empty resource URLs; Note that this is still malformed MDL code.
+
+- MDL SDK examples
+    - Example df_vulkan
+        - Fixed command line options to match other examples for `--mdl_path` / `-p` option.
+    - Example AXF to MDL
+        - Fixed re-coding of BRDF colors table (used in non-measured BRDF fallback).
+    - Example Execution GLSL: 
+        - Fixed OpenGL 3.3 mode.
+
 MDL SDK 2023.1.3 (373000.2208): 14 Feb 2024
 -----------------------------------------------
 

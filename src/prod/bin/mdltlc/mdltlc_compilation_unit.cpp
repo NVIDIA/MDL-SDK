@@ -54,17 +54,9 @@
 // linking the distiller library and many other dependencies.
 #include <mdl/codegenerators/generator_dag/generator_dag_distiller_node_types.cpp>
 
-void dump_vars(Var_set const &vars) {
-    printf("vars:\n");
-    for (Var_set::const_iterator it(vars.begin()), end(vars.end());
-         it != end; ++it) {
-        printf("  %s\n", (*it)->get_name());
-    }
-}
-
 /// Return a pointer to the filename portion of the given path, or the
 /// path itself if it does not have a directory component.
-char const *basename(char const *filename) {
+static char const *file_basename(char const *filename) {
     char const *slash_ptr = strrchr(filename, '/');
     char const *backslash_ptr = strrchr(filename, '\\');
 
@@ -162,7 +154,7 @@ Compilation_unit::Compilation_unit(
     , m_arena_builder(m_arena)
     , m_imdl(imdl)
     , m_filename(Arena_strdup(m_arena, file_name))
-    , m_filename_only(Arena_strdup(m_arena, basename(m_filename)))
+    , m_filename_only(Arena_strdup(m_arena, file_basename(m_filename)))
     , m_comp_options(comp_options)
     , m_symbol_table(symbol_table)
     , m_type_factory(m_arena, *m_symbol_table)
@@ -649,11 +641,10 @@ Type *Compilation_unit::builtin_type_for(const char *type_name) {
     if (!strcmp(type_name, "material_geometry"))
         return m_type_factory.get_material_geometry();
     if (!strcmp(type_name, "material"))
-//        return m_type_factory.get_material_volume();
         return m_type_factory.get_material();
 
-    // if (!strcmp(type_name, "tex_gamma_mode"))
-    //     return m_type_factory.get_tex_gamma_mode();
+    if (!strcmp(type_name, "tex_gamma_mode"))
+        return m_type_factory.create_enum(m_symbol_table->get_symbol("::tex::gamma_mode"));
     if (!strcmp(type_name, "intensity_mode"))
         return m_type_factory.create_enum(m_symbol_table->get_symbol("::df::intensity_mode"));
     if (!strcmp(type_name, "::df::intensity_mode"))
@@ -719,7 +710,13 @@ void Compilation_unit::declare_builtins(Environment &env) {
                 }                                                       \
             }
 
+#define UARG(type, name, arr) \
+    ARG(type, name, arr)
+
 #define DEFARG(type, name, arr, expr) \
+    ARG(type, name, arr)
+
+#define UDEFARG(type, name, arr, expr) \
     ARG(type, name, arr)
 
 #define CONSTRUCTOR(kind, classname, args, sema, flags)                 \
@@ -802,7 +799,7 @@ void Compilation_unit::declare_stdlib(Environment &builtin_env) {
             }
 
             // Add the type of this overload to the builtin
-            // environmen.
+            // environment.
             add_binding(symbol, type, builtin_env);
 
             // In case of enums, add all variant names as global

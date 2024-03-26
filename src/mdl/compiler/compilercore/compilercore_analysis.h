@@ -776,16 +776,17 @@ class NT_analysis : public Analysis, ICallgraph_scc_visitor {
 
     /// A signature entry for function overload resolution.
     struct Signature_entry {
-        IType const *const *signature;
-        bool const *const  bounds;
-        size_t             sig_length;
-        Definition const   *def;
+        IType const *const *signature;   ///< List of Signature types.
+        bool const *const  bounds;       ///< List of bound flags. If true, the type was bound.
+        size_t             sig_length;   ///< Signature length, aka number of parameters.
+        Definition const   *def;         ///< The (function) definition of this signature.
 
+        /// Constructor.
         Signature_entry(
             IType const *const *signature,
             bool const *const  bounds,
             size_t             sig_length,
-            Definition const *def)
+            Definition const   *def)
         : signature(signature), bounds(bounds), sig_length(sig_length), def(def) {}
     };
 
@@ -838,6 +839,8 @@ class NT_analysis : public Analysis, ICallgraph_scc_visitor {
     class Function_entry {
     public:
         /// Constructor.
+        ///
+        /// \param def  the function definition
         /*implicit*/ Function_entry(
             Definition *def)
         : m_def(def)
@@ -889,11 +892,14 @@ public:
     /// Returns the definition of a symbol at the at a given scope.
     /// \param sym    the symbol
     /// \param scope  the scope
-    Definition *get_definition_at_scope(const ISymbol *sym, Scope *scope) const;
+    Definition *get_definition_at_scope(
+        ISymbol const *sym,
+        Scope         *scope) const;
 
     /// Returns the definition of a symbol at the current scope only.
     /// \param sym  the symbol
-    Definition *get_definition_at_scope(const ISymbol *sym) const;
+    Definition *get_definition_at_scope(
+        ISymbol const *sym) const;
 
     /// Get the call graph.
     ///
@@ -1272,9 +1278,9 @@ private:
     ///
     /// \returns true on success, false if errors were found
     bool collect_preset_defaults(
-        Definition const         *def,
-        IExpression_call const   *call,
-        VLA<IExpression const *> &new_defaults);
+        Definition const                  *def,
+        IExpression_call const            *call,
+        Small_VLA<IExpression const *, 8> &new_defaults);
 
     /// Declare a new material preset.
     ///

@@ -148,7 +148,7 @@ features.
     The old version is available in the
     [CUDA Toolkit Archive](https://developer.nvidia.com/cuda-toolkit-archive).
 
--   **OptiX** *(7.0 to 7.5)*  
+-   **OptiX** *(7.0.0 to 8.0.0)*  
     This dependency is required to build the OptiX 7 example.  
     Please follow the instructions on the [OptiX Website](https://developer.nvidia.com/designworks/optix/download).
 

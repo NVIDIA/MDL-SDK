@@ -2406,8 +2406,6 @@ static unsigned get_type_num_elements(llvm::Type const *type)
     return type->getStructNumElements();
 }
 
-#ifdef ENABLE_ASSERT   // the function is currently only used within an assertion
-
 // Get the type of the first element a struct, array or vector type.
 static llvm::Type *get_type_first_type(llvm::Type const *type)
 {
@@ -2420,8 +2418,6 @@ static llvm::Type *get_type_first_type(llvm::Type const *type)
     MDL_ASSERT(llvm::isa<llvm::StructType>(type));
     return type->getStructElementType(0);
 }
-
-#endif  // ENABLE_ASSERT
 
 // Load a value and convert the representation.
 llvm::Value *Function_context::load_and_convert(llvm::Type *dst_type, llvm::Value *ptr)
@@ -2460,6 +2456,31 @@ llvm::Value *Function_context::load_and_convert(llvm::Type *dst_type, llvm::Valu
                 llvm::Value *cur_elem = load_and_convert(
                     dst_type->getStructElementType(i), src_elem_ptr);
                 res = m_ir_builder.CreateInsertValue(res, cur_elem, idxs);
+            }
+            return res;
+        } else if (llvm::isa<llvm::ArrayType>(src_type) && llvm::isa<llvm::ArrayType>(dst_type) &&
+                get_type_first_type(src_type) != get_type_first_type(dst_type) &&
+                llvm::isa<llvm::VectorType>(get_type_first_type(dst_type))) {
+            // conversion from [(n x m) x type] -> [n x <m x type>]
+            // used for scene_data_lookup_float4x4
+            MDL_ASSERT(
+                get_type_num_elements(dst_type) * get_type_num_elements(get_type_first_type(dst_type))
+                    == get_type_num_elements(src_type) &&
+                get_type_first_type(get_type_first_type(dst_type)) == get_type_first_type(src_type)
+            );
+
+            llvm::Value *a        = m_ir_builder.CreateLoad(ptr);
+            llvm::Value *res      = llvm::UndefValue::get(dst_type);
+            llvm::Type  *col_type = get_type_first_type(dst_type);
+            unsigned n = get_type_num_elements(dst_type);
+            unsigned m = get_type_num_elements(col_type);
+            for (unsigned i = 0; i < n; ++i) {
+                llvm::Value *col = llvm::UndefValue::get(col_type);
+                for (unsigned j = 0; j < m; ++j) {
+                    llvm::Value *v = create_extract(a, i * m + j);
+                    col = create_insert(col, v, j);
+                }
+                res = create_insert(res, col, i);
             }
             return res;
         } else if (llvm::isa<llvm::ArrayType>(src_type) && llvm::isa<llvm::ArrayType>(dst_type)) {
@@ -2663,6 +2684,29 @@ llvm::StoreInst *Function_context::convert_and_store(llvm::Value *value, llvm::V
                 last_store = convert_and_store(src_elem, dst_elem_ptr);
             }
             return last_store;
+        } else if (llvm::isa<llvm::ArrayType>(src_type) && llvm::isa<llvm::ArrayType>(dst_type) &&
+                get_type_first_type(src_type) != get_type_first_type(dst_type) &&
+                llvm::isa<llvm::VectorType>(get_type_first_type(src_type))) {
+            // conversion from [n x <m x type>] -> [(n x m) x type]
+            // used for scene_data_lookup_float4x4
+            MDL_ASSERT(
+                get_type_num_elements(src_type) * get_type_num_elements(get_type_first_type(src_type))
+                    == get_type_num_elements(dst_type) &&
+                get_type_first_type(get_type_first_type(src_type)) == get_type_first_type(dst_type)
+            );
+
+            llvm::Value *a   = value;
+            llvm::Value *res = llvm::UndefValue::get(dst_type);
+            unsigned n = get_type_num_elements(src_type);
+            unsigned m = get_type_num_elements(get_type_first_type(src_type));
+            for (unsigned i = 0; i < n; ++i) {
+                llvm::Value *col = create_extract(a, i);
+                for (unsigned j = 0; j < m; ++j) {
+                    llvm::Value *v = create_extract(col, j);
+                    res = create_insert(res, v, i * m + j);
+                }
+            }
+            value = res;
         } else if (src_type->isAggregateType() && dst_type->isAggregateType()) {
             // as the types are different, one is a struct and one is an array.
             // The struct type could have any custom alignment, so load them by elements.

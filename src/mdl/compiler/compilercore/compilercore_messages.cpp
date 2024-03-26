@@ -53,8 +53,8 @@ template<typename A>
 static size_t insert_message(std::vector<Message *, A> &messages, Message *message)
 {
     Position const *pos = message->get_position();
-    size_t ID     = message->get_filename_id();
-    int    line   = pos->get_start_line();
+    size_t ID = message->get_filename_id();
+    int    line = pos->get_start_line();
     int    column = pos->get_start_column();
 
     typename std::vector<Message *, A>::iterator it = messages.begin();
@@ -63,14 +63,28 @@ static size_t insert_message(std::vector<Message *, A> &messages, Message *messa
         Message *msg = *it;
         Position const *pos = msg->get_position();
 
-        if (msg->get_filename_id() < ID)
+        if (msg->get_filename_id() < ID) {
             continue;
-        if ((msg->get_filename_id() == ID) && (pos->get_start_line() < line))
+        }
+        if ((msg->get_filename_id() == ID) && (pos->get_start_line() < line)) {
             continue;
+        }
         if ((msg->get_filename_id() == ID) &&
-            (pos->get_start_line() == line) &&
-            (pos->get_start_column() <= column))
-            continue;
+            (pos->get_start_line() == line)) {
+
+            if ((pos->get_start_column() == column) &&
+                (strcmp(msg->get_string(), message->get_string()) == 0))
+            {
+                // special case: we are inserting the same message a second time: this
+                // can happen if something erroneous is cloned. Just ignore the copy, it doesn't
+                // add any new information
+                return i;
+            }
+
+            if (pos->get_start_column() <= column) {
+                continue;
+            }
+        }
 
         // insert BEFORE the current one
         messages.insert(it, message);

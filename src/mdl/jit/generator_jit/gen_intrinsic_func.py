@@ -533,7 +533,7 @@ class SignatureParser:
 		ret_type, params = self.split_signature(signature)
 
 		if (name == "diffuse_reflection_bsdf" or
-                                name == "dusty_diffuse_reflection_bsdf" or
+				name == "dusty_diffuse_reflection_bsdf" or
 				name == "diffuse_transmission_bsdf" or
 				name == "specular_bsdf" or
 				name == "simple_glossy_bsdf" or
@@ -606,7 +606,7 @@ class SignatureParser:
 					return True
 			elif params[0] == "T3":
 				if len(params) == 2:
- 					# support width(), height(), depth() with frame parameter
+					# support width(), height(), depth() with frame parameter
 					self.intrinsic_modes[name + signature] = "tex::attr_lookup_frame"
 					return True
 		elif  name == "texture_isvalid":
@@ -2250,115 +2250,96 @@ class SignatureParser:
 
 			code = """
 				llvm::Type *ret_tp = ctx.get_non_deriv_return_type();
-				if (ret_tp->isArrayTy()) {
-					llvm::ArrayType *a_tp = llvm::cast<llvm::ArrayType>(ret_tp);
-					llvm::Type      *e_tp = a_tp->getElementType();
-					if (e_tp->isVectorTy()) {
-						// small vector mode
-						res = llvm::UndefValue::get(ret_tp);
+				llvm::ArrayType *a_tp = llvm::cast<llvm::ArrayType>(ret_tp);
+				llvm::Type      *e_tp = a_tp->getElementType();
+				if (e_tp->isVectorTy()) {
+					// small vector mode
+					res = llvm::UndefValue::get(ret_tp);
 
-						if (m_code_gen.m_type_mapper.is_deriv_type(a->getType())) {
-							llvm::Value *column_val[%(cols)d];
-							llvm::Value *column_dx[%(cols)d];
-							llvm::Value *column_dy[%(cols)d];
+					if (m_code_gen.m_type_mapper.is_deriv_type(a->getType())) {
+						llvm::Value *column_val[%(cols)d];
+						llvm::Value *column_dx[%(cols)d];
+						llvm::Value *column_dy[%(cols)d];
 
-							llvm::Value *a_val = ctx.get_dual_val(a);
-							llvm::Value *a_dx  = ctx.get_dual_dx(a);
-							llvm::Value *a_dy  = ctx.get_dual_dy(a);
+						llvm::Value *a_val = ctx.get_dual_val(a);
+						llvm::Value *a_dx  = ctx.get_dual_dx(a);
+						llvm::Value *a_dy  = ctx.get_dual_dy(a);
 
-							llvm::Value *res_val = res, *res_dx = res, *res_dy = res;
+						llvm::Value *res_val = res, *res_dx = res, *res_dy = res;
 
-							for (unsigned col = 0; col < %(cols)d; ++col) {
-								column_val[col] = ctx->CreateExtractValue(a_val, { col });
-								column_dx [col] = ctx->CreateExtractValue(a_dx , { col });
-								column_dy [col] = ctx->CreateExtractValue(a_dy , { col });
-							}
-							for (unsigned row = 0; row < %(rows)d; ++row) {
-								llvm::Value *tmp_val = llvm::UndefValue::get(e_tp);
-								llvm::Value *tmp_dx  = llvm::UndefValue::get(e_tp);
-								llvm::Value *tmp_dy  = llvm::UndefValue::get(e_tp);
-
-								for (unsigned col = 0; col < %(cols)d; ++col) {
-									llvm::Value *elem_val = ctx->CreateExtractElement(column_val[col], ctx.get_constant(int(row)));
-									llvm::Value *elem_dx  = ctx->CreateExtractElement(column_dx[col],  ctx.get_constant(int(row)));
-									llvm::Value *elem_dy  = ctx->CreateExtractElement(column_dy[col],  ctx.get_constant(int(row)));
-
-									tmp_val  = ctx->CreateInsertElement(tmp_val, elem_val, ctx.get_constant(int(col)));
-									tmp_dx   = ctx->CreateInsertElement(tmp_dx , elem_dx , ctx.get_constant(int(col)));
-									tmp_dy   = ctx->CreateInsertElement(tmp_dy , elem_dy , ctx.get_constant(int(col)));
-								}
-								res_val = ctx->CreateInsertValue(res_val, tmp_val, { row });
-								res_dx  = ctx->CreateInsertValue(res_dx,  tmp_dx,  { row });
-								res_dy  = ctx->CreateInsertValue(res_dy,  tmp_dy,  { row });
-							}
-							res = ctx.get_dual(res_val, res_dx, res_dy);
-						} else {
-							llvm::Value *column[%(cols)d];
-
-							for (unsigned col = 0; col < %(cols)d; ++col) {
-								column[col] = ctx->CreateExtractValue(a, { col });
-							}
-							for (unsigned row = 0; row < %(rows)d; ++row) {
-								llvm::Value *tmp = llvm::UndefValue::get(e_tp);
-								for (unsigned col = 0; col < %(cols)d; ++col) {
-									llvm::Value *elem = ctx->CreateExtractElement(column[col], ctx.get_constant(int(row)));
-									tmp  = ctx->CreateInsertElement(tmp, elem, ctx.get_constant(int(col)));
-								}
-								res = ctx->CreateInsertValue(res, tmp, { row });
-							}
+						for (unsigned col = 0; col < %(cols)d; ++col) {
+							column_val[col] = ctx->CreateExtractValue(a_val, { col });
+							column_dx [col] = ctx->CreateExtractValue(a_dx , { col });
+							column_dy [col] = ctx->CreateExtractValue(a_dy , { col });
 						}
+						for (unsigned row = 0; row < %(rows)d; ++row) {
+							llvm::Value *tmp_val = llvm::UndefValue::get(e_tp);
+							llvm::Value *tmp_dx  = llvm::UndefValue::get(e_tp);
+							llvm::Value *tmp_dy  = llvm::UndefValue::get(e_tp);
+
+							for (unsigned col = 0; col < %(cols)d; ++col) {
+								llvm::Value *elem_val = ctx->CreateExtractElement(column_val[col], ctx.get_constant(int(row)));
+								llvm::Value *elem_dx  = ctx->CreateExtractElement(column_dx[col],  ctx.get_constant(int(row)));
+								llvm::Value *elem_dy  = ctx->CreateExtractElement(column_dy[col],  ctx.get_constant(int(row)));
+
+								tmp_val  = ctx->CreateInsertElement(tmp_val, elem_val, ctx.get_constant(int(col)));
+								tmp_dx   = ctx->CreateInsertElement(tmp_dx , elem_dx , ctx.get_constant(int(col)));
+								tmp_dy   = ctx->CreateInsertElement(tmp_dy , elem_dy , ctx.get_constant(int(col)));
+							}
+							res_val = ctx->CreateInsertValue(res_val, tmp_val, { row });
+							res_dx  = ctx->CreateInsertValue(res_dx,  tmp_dx,  { row });
+							res_dy  = ctx->CreateInsertValue(res_dy,  tmp_dy,  { row });
+						}
+						res = ctx.get_dual(res_val, res_dx, res_dy);
 					} else {
-						// all scalar mode
-						res = llvm::UndefValue::get(ret_tp);
-						llvm::Value *tmp;
+						llvm::Value *column[%(cols)d];
 
-						if (m_code_gen.m_type_mapper.is_deriv_type(a->getType())) {
-							llvm::Value *a_val = ctx.get_dual_val(a);
-							llvm::Value *a_dx  = ctx.get_dual_dx(a);
-							llvm::Value *a_dy  = ctx.get_dual_dy(a);
-
-							llvm::Value *res_val = res, *res_dx = res, *res_dy = res;
-
+						for (unsigned col = 0; col < %(cols)d; ++col) {
+							column[col] = ctx->CreateExtractValue(a, { col });
+						}
+						for (unsigned row = 0; row < %(rows)d; ++row) {
+							llvm::Value *tmp = llvm::UndefValue::get(e_tp);
 							for (unsigned col = 0; col < %(cols)d; ++col) {
-								for (unsigned row = 0; row < %(rows)d; ++row) {
-									unsigned tgt_idxes[1] = { col * %(rows)d + row };
-									unsigned src_idxes[1] = { row * %(cols)d + col };
-									tmp = ctx->CreateExtractValue(a_val, src_idxes);
-									res_val = ctx->CreateInsertValue(res_val, tmp, tgt_idxes);
-									tmp = ctx->CreateExtractValue(a_dx, src_idxes);
-									res_dx = ctx->CreateInsertValue(res_dx, tmp, tgt_idxes);
-									tmp = ctx->CreateExtractValue(a_dy, src_idxes);
-									res_dy = ctx->CreateInsertValue(res_dy, tmp, tgt_idxes);
-								}
+								llvm::Value *elem = ctx->CreateExtractElement(column[col], ctx.get_constant(int(row)));
+								tmp  = ctx->CreateInsertElement(tmp, elem, ctx.get_constant(int(col)));
 							}
-							res = ctx.get_dual(res_val, res_dx, res_dy);
-						} else {
-							for (unsigned col = 0; col < %(cols)d; ++col) {
-								for (unsigned row = 0; row < %(rows)d; ++row) {
-									unsigned tgt_idxes[1] = { col * %(rows)d + row };
-									unsigned src_idxes[1] = { row * %(cols)d + col };
-									tmp = ctx->CreateExtractValue(a, src_idxes);
-									res = ctx->CreateInsertValue(res, tmp, tgt_idxes);
-								}
-							}
+							res = ctx->CreateInsertValue(res, tmp, { row });
 						}
 					}
 				} else {
-					// big vector mode
-					static const int idxes[] = { %(shuffle_idxes)s };
-					llvm::Value *shuffle = ctx.get_shuffle(idxes);
+					// all scalar mode
+					res = llvm::UndefValue::get(ret_tp);
+					llvm::Value *tmp;
 
 					if (m_code_gen.m_type_mapper.is_deriv_type(a->getType())) {
 						llvm::Value *a_val = ctx.get_dual_val(a);
 						llvm::Value *a_dx  = ctx.get_dual_dx(a);
 						llvm::Value *a_dy  = ctx.get_dual_dy(a);
 
-						res = ctx.get_dual(
-							ctx->CreateShuffleVector(a_val, a_val, shuffle),
-							ctx->CreateShuffleVector(a_dx , a_dx , shuffle),
-							ctx->CreateShuffleVector(a_dy , a_dy , shuffle));
+						llvm::Value *res_val = res, *res_dx = res, *res_dy = res;
+
+						for (unsigned col = 0; col < %(cols)d; ++col) {
+							for (unsigned row = 0; row < %(rows)d; ++row) {
+								unsigned tgt_idxes[1] = { col * %(rows)d + row };
+								unsigned src_idxes[1] = { row * %(cols)d + col };
+								tmp = ctx->CreateExtractValue(a_val, src_idxes);
+								res_val = ctx->CreateInsertValue(res_val, tmp, tgt_idxes);
+								tmp = ctx->CreateExtractValue(a_dx, src_idxes);
+								res_dx = ctx->CreateInsertValue(res_dx, tmp, tgt_idxes);
+								tmp = ctx->CreateExtractValue(a_dy, src_idxes);
+								res_dy = ctx->CreateInsertValue(res_dy, tmp, tgt_idxes);
+							}
+						}
+						res = ctx.get_dual(res_val, res_dx, res_dy);
 					} else {
-						res = ctx->CreateShuffleVector(a, a, shuffle);
+						for (unsigned col = 0; col < %(cols)d; ++col) {
+							for (unsigned row = 0; row < %(rows)d; ++row) {
+								unsigned tgt_idxes[1] = { col * %(rows)d + row };
+								unsigned src_idxes[1] = { row * %(cols)d + col };
+								tmp = ctx->CreateExtractValue(a, src_idxes);
+								res = ctx->CreateInsertValue(res, tmp, tgt_idxes);
+							}
+						}
 					}
 				}
 			"""
@@ -3530,25 +3511,25 @@ class SignatureParser:
 				llvm::BasicBlock *non_id_bb = ctx.create_bb("non_id");
 				llvm::BasicBlock *end_bb    = ctx.create_bb("end");
 
-				if (ret_tp->isVectorTy()) {
-					// BIG vector mode
+				llvm::ArrayType *arr_tp = llvm::cast<llvm::ArrayType>(ret_tp);
+				llvm::Type      *e_tp   = arr_tp->getElementType();
+
+				if (e_tp->isVectorTy()) {
+					// small vector mode
+					llvm::Value *col;
 
 					ctx->CreateCondBr(cond, id_bb, non_id_bb);
 					{
-						llvm::Value *idx;
-
 						// return the identity matrix
 						ctx->SetInsertPoint(id_bb);
 
 						llvm::Value *one = ctx.get_constant(1.0f);
-						idx  = ctx.get_constant(0 * 4 + 0);
-						ctx->CreateInsertElement(res, one, idx);
-						idx  = ctx.get_constant(1 * 4 + 1);
-						ctx->CreateInsertElement(res, one, idx);
-						idx  = ctx.get_constant(2 * 4 + 2);
-						ctx->CreateInsertElement(res, one, idx);
-						idx  = ctx.get_constant(3 * 4 + 3);
-						ctx->CreateInsertElement(res, one, idx);
+
+						for (unsigned i = 0; i < 4; ++i) {
+							col = ctx.create_extract(res, i);
+							col = ctx.create_insert(col, one, i);
+							ctx.create_insert(res, col, i);
+						}
 
 						ctx->CreateStore(res, result);
 						ctx->CreateBr(end_bb);
@@ -3560,7 +3541,77 @@ class SignatureParser:
 						llvm::Value *cond = ctx->CreateICmpEQ(from, worldToObject);
 
 						// convert w2o or o2w matrix from row-major to col-major
+						llvm::Value *matrix = ctx->CreateSelect(
+							cond, ctx.get_w2o_transform_value(), ctx.get_o2w_transform_value());
+						llvm::Value *m_ptr =
+							llvm::isa<llvm::PointerType>(matrix->getType()) ? matrix : NULL;
 
+						llvm::Value *res_cols[4] = {
+							llvm::Constant::getNullValue(e_tp),
+							llvm::Constant::getNullValue(e_tp),
+							llvm::Constant::getNullValue(e_tp),
+							llvm::Constant::getNullValue(e_tp)
+						};
+
+						res = llvm::Constant::getNullValue(ret_tp);
+						for (int i = 0; i < 3; ++i) {
+							llvm::Value *row;
+
+							if (m_ptr != NULL) {
+								// matrix is a pointer
+								llvm::Value *idx = ctx.get_constant(i);
+								llvm::Value *ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
+								row = ctx->CreateLoad(ptr);
+							} else {
+								// matrix is a value
+								row = ctx.create_extract(matrix, unsigned(i));
+							}
+
+							for (unsigned j = 0; j < 4; ++j) {
+								llvm::Value *elem = ctx.create_extract(row, j);
+								res_cols[j] = ctx.create_insert(res_cols[j], elem, unsigned(i));
+							}
+						}
+
+						// last row is always (0, 0, 0, 1), so insert the 1 into res_cols[3][3]
+						llvm::Value *one = ctx.get_constant(1.0f);
+						res_cols[3] = ctx.create_insert(res_cols[3], one, 3);
+
+						for (unsigned i = 0; i < 4; ++i) {
+							res = ctx.create_insert(res, res_cols[i], i);
+						}
+						ctx->CreateStore(res, result);
+						ctx->CreateBr(end_bb);
+					}
+					ctx->SetInsertPoint(end_bb);
+				} else {
+					// scalar mode
+
+					ctx->CreateCondBr(cond, id_bb, non_id_bb);
+					{
+						// return the identity matrix
+						ctx->SetInsertPoint(id_bb);
+
+						unsigned idxes[] = { 0 * 4 + 0 };
+						llvm::Value *one = ctx.get_constant(1.0f);
+						ctx->CreateInsertValue(res, one, idxes);
+						idxes[0] = 1 * 4 + 1;
+						ctx->CreateInsertValue(res, one, idxes);
+						idxes[0] = 2 * 4 + 2;
+						ctx->CreateInsertValue(res, one, idxes);
+						idxes[0] = 3 * 4 + 3;
+						ctx->CreateInsertValue(res, one, idxes);
+
+						ctx->CreateStore(res, result);
+						ctx->CreateBr(end_bb);
+					}
+					{
+						ctx->SetInsertPoint(non_id_bb);
+
+						llvm::Value *worldToObject = ctx.get_constant(LLVM_code_generator::coordinate_world);
+						llvm::Value *cond = ctx->CreateICmpEQ(from, worldToObject);
+
+						// convert w2o or o2w matrix from row-major to col-major
 						llvm::Value *m_ptr = ctx->CreateSelect(
 							cond, ctx.get_w2o_transform_value(), ctx.get_o2w_transform_value());
 
@@ -3569,158 +3620,25 @@ class SignatureParser:
 							llvm::Value *idx = ctx.get_constant(i);
 							llvm::Value *ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
 							llvm::Value *row = ctx->CreateLoad(ptr);
-							for (int j = 0; j < 4; ++j) {
-								unsigned idxes[] = { unsigned(j) };
+							for (unsigned j = 0; j < 4; ++j) {
+								unsigned idxes[] = { j };
 								llvm::Value *elem = ctx->CreateExtractValue(row, idxes);
-								llvm::Value *idx  = ctx.get_constant(i + j * 4);
-								res = ctx->CreateInsertElement(res, elem, idx);
+								idxes[0] = unsigned(i) + j * 4;
+								res = ctx->CreateInsertValue(res, elem, idxes);
 							}
 						}
 						{
 							// last row is always (0, 0, 0, 1)
-							for (int j = 0; j < 4; ++j) {
+							for (unsigned j = 0; j < 4; ++j) {
+								unsigned idxes[] = { 3 + j * 4 };
 								llvm::Value *elem = ctx.get_constant(j == 3 ? 1.0f : 0.0f);
-								llvm::Value *idx  = ctx.get_constant(3 + j * 4);
-								res = ctx->CreateInsertElement(res, elem, idx);
+								res = ctx->CreateInsertValue(res, elem, idxes);
 							}
 						}
 						ctx->CreateStore(res, result);
 						ctx->CreateBr(end_bb);
 					}
 					ctx->SetInsertPoint(end_bb);
-				} else if (ret_tp->isArrayTy()) {
-					llvm::ArrayType *arr_tp = llvm::cast<llvm::ArrayType>(ret_tp);
-					llvm::Type      *e_tp   = arr_tp->getElementType();
-
-					if (e_tp->isVectorTy()) {
-						// small vector mode
-						llvm::Value *col;
-
-						ctx->CreateCondBr(cond, id_bb, non_id_bb);
-						{
-							// return the identity matrix
-							ctx->SetInsertPoint(id_bb);
-
-							llvm::Value *one = ctx.get_constant(1.0f);
-
-							for (unsigned i = 0; i < 4; ++i) {
-								unsigned idxes[1] { i };
-								col = ctx->CreateExtractValue(res, idxes);
-								col = ctx->CreateInsertElement(col, one,  ctx.get_constant(int(i)));
-								ctx->CreateInsertValue(res, col, idxes);
-							}
-
-							ctx->CreateStore(res, result);
-							ctx->CreateBr(end_bb);
-						}
-						{
-							ctx->SetInsertPoint(non_id_bb);
-
-							llvm::Value *worldToObject = ctx.get_constant(LLVM_code_generator::coordinate_world);
-							llvm::Value *cond = ctx->CreateICmpEQ(from, worldToObject);
-
-							// convert w2o or o2w matrix from row-major to col-major
-							llvm::Value *matrix = ctx->CreateSelect(
-								cond, ctx.get_w2o_transform_value(), ctx.get_o2w_transform_value());
-							llvm::Value *m_ptr =
-								llvm::isa<llvm::PointerType>(matrix->getType()) ? matrix : NULL;
-
-							llvm::Value *res_cols[4] = {
-								llvm::Constant::getNullValue(e_tp),
-								llvm::Constant::getNullValue(e_tp),
-								llvm::Constant::getNullValue(e_tp),
-								llvm::Constant::getNullValue(e_tp)
-							};
-
-							res = llvm::Constant::getNullValue(ret_tp);
-							for (int i = 0; i < 3; ++i) {
-								llvm::Value *row;
-								unsigned idxes[] = { unsigned(i) };
-
-								if (m_ptr != NULL) {
-									// matrix is a pointer
-									llvm::Value *idx = ctx.get_constant(i);
-									llvm::Value *ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
-									row = ctx->CreateLoad(ptr);
-								} else {
-									// matrix is a value
-									row = ctx->CreateExtractValue(matrix, idxes);
-								}
-
-								for (int j = 0; j < 4; ++j) {
-									unsigned elem_idx = { unsigned(j) };
-									llvm::Value *elem = ctx->CreateExtractElement(row, elem_idx);
-									res_cols[j] = ctx->CreateInsertElement(res_cols[j], elem, unsigned(i));
-								}
-							}
-
-							// last row is always (0, 0, 0, 1), so insert the 1 into res_cols[3][3]
-							llvm::Value *one = ctx.get_constant(1.0f);
-							res_cols[3] = ctx->CreateInsertElement(res_cols[3], one, 3);
-
-							for (unsigned i = 0; i < 4; ++i) {
-								res = ctx->CreateInsertValue(res, res_cols[i], i);
-							}
-							ctx->CreateStore(res, result);
-							ctx->CreateBr(end_bb);
-						}
-						ctx->SetInsertPoint(end_bb);
-					} else {
-						// scalar mode
-
-						ctx->CreateCondBr(cond, id_bb, non_id_bb);
-						{
-							// return the identity matrix
-							ctx->SetInsertPoint(id_bb);
-
-							unsigned idxes[] = { 0 * 4 + 0 };
-							llvm::Value *one = ctx.get_constant(1.0f);
-							ctx->CreateInsertValue(res, one, idxes);
-							idxes[0] = 1 * 4 + 1;
-							ctx->CreateInsertValue(res, one, idxes);
-							idxes[0] = 2 * 4 + 2;
-							ctx->CreateInsertValue(res, one, idxes);
-							idxes[0] = 3 * 4 + 3;
-							ctx->CreateInsertValue(res, one, idxes);
-
-							ctx->CreateStore(res, result);
-							ctx->CreateBr(end_bb);
-						}
-						{
-							ctx->SetInsertPoint(non_id_bb);
-
-							llvm::Value *worldToObject = ctx.get_constant(LLVM_code_generator::coordinate_world);
-							llvm::Value *cond = ctx->CreateICmpEQ(from, worldToObject);
-
-							// convert w2o or o2w matrix from row-major to col-major
-							llvm::Value *m_ptr = ctx->CreateSelect(
-								cond, ctx.get_w2o_transform_value(), ctx.get_o2w_transform_value());
-
-							res = llvm::Constant::getNullValue(ret_tp);
-							for (int i = 0; i < 3; ++i) {
-								llvm::Value *idx = ctx.get_constant(i);
-								llvm::Value *ptr = ctx->CreateInBoundsGEP(m_ptr, idx);
-								llvm::Value *row = ctx->CreateLoad(ptr);
-								for (unsigned j = 0; j < 4; ++j) {
-									unsigned idxes[] = { j };
-									llvm::Value *elem = ctx->CreateExtractValue(row, idxes);
-									idxes[0] = unsigned(i) + j * 4;
-									res = ctx->CreateInsertValue(res, elem, idxes);
-								}
-							}
-							{
-								// last row is always (0, 0, 0, 1)
-								for (unsigned j = 0; j < 4; ++j) {
-									unsigned idxes[] = { 3 + j * 4 };
-									llvm::Value *elem = ctx.get_constant(j == 3 ? 1.0f : 0.0f);
-									res = ctx->CreateInsertValue(res, elem, idxes);
-								}
-							}
-							ctx->CreateStore(res, result);
-							ctx->CreateBr(end_bb);
-						}
-						ctx->SetInsertPoint(end_bb);
-					}
 				}
 			} else {
 				// zero in all other contexts

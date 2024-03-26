@@ -1184,7 +1184,7 @@ Dependence_node::Dependence_node(
         Parameter *params = reinterpret_cast<Parameter *>(
             arena->allocate(n_params * sizeof(Parameter)));
 
-        for (int i = 0; i < n_params; ++i) {
+        for (size_t i = 0; i < n_params; ++i) {
             Parameter &p = params[i];
 
             p = c_params[i];

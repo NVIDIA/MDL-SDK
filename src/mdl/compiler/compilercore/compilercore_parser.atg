@@ -2432,7 +2432,7 @@ let_expression<IExpression const *&exp>
     "let"                                   (.
                                                 IExpression_let *let_exp
                                                     = m_expression_factory->create_let(
-                                                                                0,
+                                                                                /*expr=*/NULL,
                                                                                 t->line,
                                                                                 t->col);
                                                 IDeclaration const *decl = ERR_DECL;

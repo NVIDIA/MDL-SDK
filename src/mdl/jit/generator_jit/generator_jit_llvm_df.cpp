@@ -2304,6 +2304,10 @@ bool LLVM_code_generator::load_and_link_libbsdf(mdl::Df_handle_slot_mode hsm)
 
     // iterate over all functions added from the libbsdf module
     for (llvm::Function *func : libbsdf_funcs) {
+        // remove "target-features" attribute to avoid warnings about unsupported PTX features
+        // for non-PTX backends
+        func->removeFnAttr("target-features");
+
         // make all functions from libbsdf internal to allow global dead code elimination
         func->setLinkage(llvm::GlobalValue::InternalLinkage);
 

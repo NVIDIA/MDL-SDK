@@ -38,8 +38,8 @@ import ::math::*;
 // the version of this module loosely follows the corresponding
 // version of the AxF SDK the axf importer uses / supports
 module [[
-	anno::version(1, 7, 100),
-	anno::display_name("Materials used by the AxF importer")
+        anno::version(1, 9, 0),
+        anno::display_name("Materials used by the AxF importer")
 ]];
 
 
@@ -224,6 +224,14 @@ export material svbrdf(
     uniform texture_2d specular_amount_texture = texture_2d()
     [[
         anno::hidden()
+    ]],
+    uniform texture_2d sheen_color_texture = texture_2d()
+    [[
+        anno::hidden()
+    ]],
+    uniform texture_2d sheen_roughness_texture = texture_2d()
+    [[
+        anno::hidden()
     ]]
 )
 [[
@@ -231,7 +239,7 @@ export material svbrdf(
     anno::hidden(),
     anno::description("MDL implementation of the SVBRDF model used in AxF files"),
     anno::author("NVIDIA Corporation"),
-    anno::copyright_notice("Copyright 2023 NVIDIA Corporation. All rights reserved."),
+    anno::copyright_notice("Copyright 2024 NVIDIA Corporation. All rights reserved."),
     anno::key_words(string[]("axf","svbrdf"))
 ]]
  = let {
@@ -384,6 +392,10 @@ export material svbrdf(
                 df::color_bsdf_component(diffuse.tint, df::diffuse_reflection_bsdf()))
             );
 
+    //
+    // clearcoat
+    //
+    
     float clearcoat_ior = has_clearcoat ? base::file_texture(
         texture:  clearcoat_ior_texture,
         uvw: coordinate,
@@ -410,11 +422,41 @@ export material svbrdf(
     bsdf coated = has_clearcoat ? 
         df::fresnel_layer(ior: clearcoat_ior, weight: 1.0, layer: df::specular_bsdf(tint: clearcoat_color), base: base, normal: clearcoat_normal) : 
         base;
-    
+
+    //
+    // sheen
+    //
+
+    base::texture_return sheen_color = base::file_texture(
+        texture: sheen_color_texture,
+        uvw: coordinate,
+        wrap_u: wrap,
+        wrap_v: wrap,
+        mono_source: base::mono_maximum
+        );
+
+    base::texture_return sheen_roughness = base::file_texture(
+        texture: sheen_roughness_texture,
+        uvw: coordinate,
+        wrap_u: wrap,
+        wrap_v: wrap,
+        mono_source: base::mono_maximum
+        );
+
+    bool has_sheen = tex::texture_isvalid(sheen_color_texture) && tex::texture_isvalid(sheen_roughness_texture);
+    bsdf coated_sheen = has_sheen ? df::weighted_layer(
+        weight: sheen_color.mono,
+        layer: df::sheen_bsdf(
+            roughness: sheen_roughness.mono,
+            tint: sheen_color.tint / sheen_color.mono,
+            multiscatter_tint: color(1.0f),
+            multiscatter: coated),
+        base: coated) : coated;
+
     bsdf surface = df::weighted_layer(
         weight: 1.0,
         normal: normal,
-        layer: coated
+        layer: coated_sheen
         );
 
     // height texture is in millimeters, respect that in the scale
@@ -875,7 +917,7 @@ export material carpaint(
     anno::hidden(),
     anno::description("MDL approximation of the AxF carpaint material"),
     anno::author("NVIDIA Corporation"),
-    anno::copyright_notice("Copyright 2023 NVIDIA Corporation. All rights reserved."),
+    anno::copyright_notice("Copyright 2024 NVIDIA Corporation. All rights reserved."),
     anno::key_words(string[]("axf","carpaint"))
 ]]
  = let {
@@ -1007,7 +1049,7 @@ export material volumetric(
     anno::hidden(),
     anno::description("MDL version of the AxF volumetric material"),
     anno::author("NVIDIA Corporation"),
-    anno::copyright_notice("Copyright 2023 NVIDIA Corporation. All rights reserved."),
+    anno::copyright_notice("Copyright 2024 NVIDIA Corporation. All rights reserved."),
     anno::key_words(string[]("axf","volumetric"))
 ]]
 = material(

@@ -1795,6 +1795,23 @@ void Module::allocate_initializers(Definition *def, size_t num)
     def->m_parameter_inits = init;
 }
 
+/// Copy the position from one AST element to another.
+/// \tparam IAst   type of the AST element
+/// \param dst     the destination
+/// \param src     the original element the position is copied
+template<typename IAst>
+static void copy_position(
+    IAst       *dst,
+    IAst const *src)
+{
+    Position const &s_pos = src->access_position();
+    Position       &d_pos = dst->access_position();
+    d_pos.set_start_line(s_pos.get_start_line());
+    d_pos.set_start_column(s_pos.get_start_column());
+    d_pos.set_end_line(s_pos.get_end_line());
+    d_pos.set_end_column(s_pos.get_end_column());
+}
+
 // Clone the given parameter.
 IParameter const *Module::clone_param(
     IParameter const *param,
@@ -1816,7 +1833,9 @@ IParameter const *Module::clone_param(
         new_annos = clone_annotation_block(param->get_annotations(), modifier);
     }
 
-    return m_decl_factory.create_parameter(tn, sn, new_init, new_annos);
+    IParameter const *n_param = m_decl_factory.create_parameter(tn, sn, new_init, new_annos);
+    copy_position(const_cast<IParameter *>(n_param), param);
+    return n_param;
 }
 
 // Clone the given variable declaration.
@@ -1836,6 +1855,7 @@ IDeclaration *Module::clone_decl(
         IAnnotation_block  *new_annos = clone_annotation_block(decl->get_annotations(i), modifier);
         new_decl->add_variable(new_name, new_init, new_annos);
     }
+    copy_position(new_decl, decl);
     return new_decl;
 }
 
@@ -1865,6 +1885,7 @@ IAnnotation_block *Module::clone_annotation_block(
         IAnnotation *new_anno = clone_annotation(anno_block->get_annotation(i), modifier);
         new_block->add_annotation(new_anno);
     }
+    copy_position(new_block, anno_block);
     return new_block;
 }
 
@@ -1880,6 +1901,7 @@ IAnnotation *Module::clone_annotation(
         IArgument const *new_arg = clone_arg(arg, modifier);
         new_anno->add_argument(new_arg);
     }
+    copy_position(new_anno, anno);
     return new_anno;
 }
 
@@ -1996,6 +2018,7 @@ IExpression *Module::clone_expr(
         // no literal
         res->set_type(new_type);
     }
+    copy_position(res, expr);
     return res;
 }
 
@@ -2004,23 +2027,29 @@ IArgument const *Module::clone_arg(
     IArgument const *arg,
     IClone_modifier *modifier)
 {
+    IArgument const *res = NULL;
     switch (arg->get_kind()) {
     case IArgument::AK_POSITIONAL:
         {
             IArgument_positional const *pos = cast<IArgument_positional>(arg);
             IExpression const *expr = clone_expr(pos->get_argument_expr(), modifier);
-            return m_expr_factory.create_positional_argument(expr);
+            res = m_expr_factory.create_positional_argument(expr);
         }
+        break;
     case IArgument::AK_NAMED:
         {
             IArgument_named const *named = cast<IArgument_named>(arg);
             ISimple_name const *sname = clone_name(named->get_parameter_name());
             IExpression const *expr = clone_expr(named->get_argument_expr(), modifier);
 
-            return m_expr_factory.create_named_argument(sname, expr);
+            res = m_expr_factory.create_named_argument(sname, expr);
         }
+        break;
     }
-    return NULL;
+    if (res != NULL) {
+        copy_position(const_cast<IArgument *>(res), arg);
+    }
+    return res;
 }
 
 // Clone the given type name.
@@ -2049,6 +2078,7 @@ IType_name *Module::clone_name(
     if (ISimple_name const *sname = type_name->get_size_name()) {
         res->set_size_name(clone_name(sname));
     }
+    copy_position(res, type_name);
     return res;
 }
 
@@ -2064,6 +2094,7 @@ ISimple_name const *Module::clone_name(ISimple_name const *sname)
 
     ISimple_name *res = const_cast<ISimple_name*>(m_name_factory.create_simple_name(sym));
     res->set_definition(sname->get_definition());
+    copy_position(res, sname);
     return res;
 }
 
@@ -2083,6 +2114,7 @@ IQualified_name *Module::clone_name(
         res->add_component(sname);
     }
     res->set_definition(qname->get_definition());
+    copy_position(res, qname);
     return res;
 }
 

@@ -846,7 +846,14 @@ void createContext(PathTracerState &state, int cuda_device_id)
 
     state.module_compile_options.maxRegisterCount = OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT;
     state.module_compile_options.optLevel         = OPTIX_COMPILE_OPTIMIZATION_DEFAULT;
+
+    // Note: To profile code with Nsight Compute, the debug level must be set
+    //    to at least OPTIX_COMPILE_DEBUG_LEVEL_MODERATE.
+#if (OPTIX_VERSION >= 70400)
+    state.module_compile_options.debugLevel       = OPTIX_COMPILE_DEBUG_LEVEL_MINIMAL;
+#else
     state.module_compile_options.debugLevel       = OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO;
+#endif
 
     state.pipeline_compile_options.usesMotionBlur = 0;
     state.pipeline_compile_options.traversableGraphFlags =
@@ -874,6 +881,18 @@ OptixProgramGroup createRadianceClosestHitProgramGroup(
     size_t sizeof_log = sizeof(log);
 
     OptixModule mat_module = nullptr;
+#if (OPTIX_VERSION >= 70700)
+    OPTIX_CHECK_LOG(optixModuleCreate(
+        state.context,
+        &state.module_compile_options,
+        &state.pipeline_compile_options,
+        module_code,
+        module_size,
+        log,
+        &sizeof_log,
+        &mat_module
+    ));
+#else
     OPTIX_CHECK_LOG(optixModuleCreateFromPTX(
         state.context,
         &state.module_compile_options,
@@ -884,6 +903,7 @@ OptixProgramGroup createRadianceClosestHitProgramGroup(
         &sizeof_log,
         &mat_module
     ));
+#endif
 
     OptixProgramGroupOptions program_group_options = {};
 
@@ -921,6 +941,17 @@ size_t createDirectCallables(
     char   log[2048];
     size_t sizeof_log = sizeof(log);
     OptixModule module;
+#if (OPTIX_VERSION >= 70700)
+    OPTIX_CHECK_LOG(optixModuleCreate(
+        state.context,
+        &state.module_compile_options,
+        &state.pipeline_compile_options,
+        module_code,
+        module_size,
+        log,
+        &sizeof_log,
+        &module));
+#else
     OPTIX_CHECK_LOG(optixModuleCreateFromPTX(
         state.context,
         &state.module_compile_options,
@@ -930,6 +961,7 @@ size_t createDirectCallables(
         log,
         &sizeof_log,
         &module));
+#endif
 
     // Create direct callable program group
     size_t callable_base_index = state.mdl_callable_groups.size();
@@ -1311,6 +1343,18 @@ void createProgramGroups(PathTracerState &state)
 
     char   log[2048];
     size_t sizeof_log = sizeof(log);
+#if (OPTIX_VERSION >= 70700)
+    OPTIX_CHECK_LOG(optixModuleCreate(
+        state.context,
+        &state.module_compile_options,
+        &state.pipeline_compile_options,
+        ptx.c_str(),
+        ptx.size(),
+        log,
+        &sizeof_log,
+        &state.ptx_module
+    ));
+#else
     OPTIX_CHECK_LOG(optixModuleCreateFromPTX(
         state.context,
         &state.module_compile_options,
@@ -1321,6 +1365,7 @@ void createProgramGroups(PathTracerState &state)
         &sizeof_log,
         &state.ptx_module
     ));
+#endif
 
     OptixProgramGroupOptions  program_group_options = {};
 
@@ -1403,7 +1448,13 @@ void createPipeline(PathTracerState &state)
 
     OptixPipelineLinkOptions pipeline_link_options = {};
     pipeline_link_options.maxTraceDepth = 2;
-    pipeline_link_options.debugLevel = OPTIX_COMPILE_DEBUG_LEVEL_FULL;
+#if (OPTIX_VERSION < 70700)
+#if (OPTIX_VERSION >= 70400)
+    pipeline_link_options.debugLevel = OPTIX_COMPILE_DEBUG_LEVEL_MINIMAL;
+#else
+    pipeline_link_options.debugLevel = OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO;
+#endif
+#endif
 
     char   log[2048];
     size_t sizeof_log = sizeof(log);
@@ -1421,7 +1472,11 @@ void createPipeline(PathTracerState &state)
     // Calculate the stack sizes, so we can specify all parameters to optixPipelineSetStackSize.
     OptixStackSizes stack_sizes = {};
     for (OptixProgramGroup &pg : program_groups) {
+#if (OPTIX_VERSION >= 70700)
+        OPTIX_CHECK(optixUtilAccumulateStackSizes(pg, &stack_sizes, state.pipeline));
+#else
         OPTIX_CHECK(optixUtilAccumulateStackSizes(pg, &stack_sizes));
+#endif
     }
 
     uint32_t max_trace_depth = 2;

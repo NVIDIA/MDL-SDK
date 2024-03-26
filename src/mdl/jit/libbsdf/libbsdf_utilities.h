@@ -1396,12 +1396,13 @@ BSDF_INLINE float3 thin_film_factor(
         const float tmp_p = 2.0f * r01r12_p * cos_phi_p;
         const float R_p = (R01.y + R12.y + tmp_p) / (1.0f + R01R12_p + tmp_p);
 
-        xyz += cie_xyz[i] * (0.5f * (R_s + R_p));
+        xyz += cie_xyz[i] * (R_s + R_p);
 
         lambda += lambda_step;
     }
 
-    xyz *= float(1.0 / 16.0);
+    // also includes the 0.5 factor for R_s + R_p
+    xyz *= float(1.0 / 32.0);
 
     // ("normalized" such that the loop for no shifted wave gives reflectivity (1,1,1))
     return math::saturate(make_float3(

@@ -1172,7 +1172,10 @@ bool AT_analysis::pre_visit(IDeclaration_variable *decl)
             visit(init);
         }
 
-        // ignore annotations completely
+        // visit annotations
+        if (IAnnotation_block const *anno = decl->get_annotations(i)) {
+            visit(anno);
+        }
     }
 
     // don't visit children anymore
@@ -1549,8 +1552,11 @@ bool AT_analysis::pre_visit(IExpression_call *expr)
         // propagate dependencies
         visit(expr->get_reference());
     } else {
+        // propagate dependencies
+        visit(ref);
+
         if (ref->is_array_constructor()) {
-            // array constructors are uniform calls 
+            // array constructors are uniform calls
         } else {
             def = impl_cast<Definition>(ref->get_definition());
 

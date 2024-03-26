@@ -109,7 +109,7 @@ of examples is of no interest to you.
     corresponding SDK 10.0.18362.0. Additionally the optional *Graphic Tools*
     feature has to be installed.
 
--   **DirectX Shader Compiler support** (July 2022) (Windows only) \n 
+-   **DirectX Shader Compiler support** (July 2022) (Windows only) \n
     Building the DXR example requires an updated version of the DirectX Shader
     Compiler. \n
     Download and extract the pre-compiled x64 binaries from
@@ -147,7 +147,7 @@ features.
     Pre-compiled binaries can be found on
     [llvm.org](http://releases.llvm.org/download.html#12.0.1).
 
--   **MaterialX** (github repository, tag: v1.38.7, Windows only) \n
+-   **MaterialX** (github repository, tag: v1.38.9, Windows only) \n
     This dependency adds MaterialX support to the DXR example. \n
     Please download a release from
     [github](https://github.com/AcademySoftwareFoundation/MaterialX/releases). \n
@@ -160,7 +160,7 @@ features.
     The old version is available in the
     [CUDA Toolkit Archive](https://developer.nvidia.com/cuda-toolkit-archive).
 
--   **OptiX** (7.0 to 7.5) \n
+-   **OptiX** (7.0.0 to 8.0.0) \n
     This dependency is required to build the OptiX 7 example. \n
     Please follow the instructions on the [OptiX Website](https://developer.nvidia.com/designworks/optix/download).
 

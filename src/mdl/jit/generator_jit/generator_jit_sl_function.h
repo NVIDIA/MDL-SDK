@@ -105,6 +105,10 @@ protected:
     }
 
     /// Constructor from a basic block.
+    ///
+    /// \param parent  the function owner of this region
+    /// \param id      the unique ID of this region
+    /// \param bb      the basic block
     Region(
         StructuredFunction *parent,
         size_t             id,
@@ -129,7 +133,7 @@ public:
     virtual Kind get_kind() const = 0;
 
     /// Get the parent.
-    /// Note: Must be called getParent(), otherwise the LLVM dominance builder will not work.
+    /// Note: Must be named getParent(), otherwise the LLVM dominance builder will not work.
     StructuredFunction *getParent() { return m_parent; }
 
     /// Set the parent.
@@ -156,7 +160,9 @@ public:
         m_preds.push_back(pred);
     }
 
-    /// Adds all predecessors of the given node as predecessors.
+    /// Adds all predecessors of the given region as predecessors of this region.
+    ///
+    /// \param node  the region we copy the predecessors from
     void add_all_preds(Region *node) {
         for (Region *pred : node->preds()) {
             add_pred(pred);
@@ -181,16 +187,18 @@ public:
     /// Get the only predecessor, or return \c nullptr if the node does not have exactly one
     /// predecessor.
     Region *get_unique_pred() const {
-        if (m_preds.size() != 1)
+        if (m_preds.size() != 1) {
             return nullptr;
+        }
         return m_preds[0];
     }
 
     /// Erase the given node from the predecessors, if present.
     void erase_pred(Region *pred) {
         auto it = std::find(m_preds.begin(), m_preds.end(), pred);
-        if (it != m_preds.end())
+        if (it != m_preds.end()) {
             m_preds.erase(it);
+        }
     }
 
 
@@ -216,16 +224,18 @@ public:
 
     /// Get the only successor, or return \c nullptr if the node does not have exactly one successor.
     Region *get_unique_succ() const {
-        if (m_succs.size() != 1)
+        if (m_succs.size() != 1) {
             return nullptr;
+        }
         return m_succs[0];
     }
 
     /// Erase the node from the successors, if present.
     void erase_succ(Region *succ) {
         auto it = std::find(m_succs.begin(), m_succs.end(), succ);
-        if (it != m_succs.end())
+        if (it != m_succs.end()) {
             m_succs.erase(it);
+        }
     }
 
 
@@ -233,8 +243,9 @@ public:
     /// Skip the given node, if found as predecessor.
     void replace_as_succ_of_preds(Region *node) {
         for (Region *pred : node->preds()) {
-            if (pred == node)
+            if (pred == node) {
                 continue;
+            }
             add_pred(pred);
             pred->erase_succ(node);
             pred->add_succ(this);
@@ -245,8 +256,9 @@ public:
     /// Skip the given node and the ignore_pred node, if found as predecessor.
     void replace_as_succ_of_preds_except(Region *node, Region *ignore_pred) {
         for (Region *pred : node->preds()) {
-            if (pred == node || pred == ignore_pred)
+            if (pred == node || pred == ignore_pred) {
                 continue;
+            }
             add_pred(pred);
             pred->erase_succ(node);
             pred->add_succ(this);
@@ -257,8 +269,9 @@ public:
     /// Skip the given node, if found as successor.
     void replace_as_pred_of_succs(Region *node) {
         for (Region *succ : node->succs()) {
-            if (succ == node)
+            if (succ == node) {
                 continue;
+            }
             add_succ(succ);
             succ->erase_pred(node);
             succ->add_pred(this);
@@ -269,8 +282,9 @@ public:
     /// Skip the given node and the ignore_succ node, if found as successor.
     void replace_as_pred_of_succs_except(Region *node, Region *ignore_succ) {
         for (Region *succ : node->succs()) {
-            if (succ == node || succ == ignore_succ)
+            if (succ == node || succ == ignore_succ) {
                 continue;
+            }
             add_succ(succ);
             succ->erase_pred(node);
             succ->add_pred(this);
@@ -309,8 +323,6 @@ public:
 
     /// Check if this node is a loop header.
     bool is_loop_head() const { return (m_flags & IS_HEADER) != 0; }
-
-    void printAsOperand(raw_ostream &OS, bool flag) {}
 
     /// Return the number of children in this node.
     virtual size_t getChildSize() const {
@@ -490,8 +502,9 @@ public:
 
     /// Returns the last region of this sequence.
     Region *getLastRegion() const {
-        if (m_tail.empty())
+        if (m_tail.empty()) {
             return getHead();
+        }
         return m_tail[m_tail.size() - 1];
     }
 
@@ -502,8 +515,9 @@ public:
 
     /// Get the i-th child in this node.
     Region *getChild(size_t i) const override {
-        if (i == 0)
+        if (i == 0) {
             return getHead();
+        }
         return m_tail[i - 1];
     }
 
@@ -725,16 +739,30 @@ class RegionSwitch : public RegionComplex {
     typedef RegionComplex Base;
     friend class StructuredFunction;
 
+public:
+    /// Descriptor for one case.
+    struct CaseDescriptor {
+        Region                  *case_region;
+        llvm::ConstantInt const *case_value;
+        bool                    fall_through;
+    };
 protected:
     /// Constructor.
     RegionSwitch(
-        StructuredFunction       *parent,
-        size_t                   id,
-        Region                   *head,
-        ArrayRef<Region *> const &cases,
-        Region                   *def_case)
+        StructuredFunction             *parent,
+        size_t                         id,
+        Region                         *head,
+        ArrayRef<CaseDescriptor> const &cases)
     : Base(parent, id, head)
+    , m_cases(cases.begin(), cases.end())
+    , m_has_default_case(false)
     {
+        for (CaseDescriptor const &desc : cases) {
+            if (desc.case_value == nullptr) {
+                m_has_default_case = true;
+                break;
+            }
+        }
     }
 
 public:
@@ -743,37 +771,77 @@ public:
 
     /// Get the kind of the region.
     Kind get_kind() const final { return s_kind; }
+
+    /// Get the number of cases.
+    size_t getCasesCount() const { return m_cases.size(); }
+
+    /// Get the i'th case descriptor.
+    CaseDescriptor const &getCase(size_t i) const { return m_cases[i]; }
+
+private:
+    /// The case descriptors.
+    std::vector<CaseDescriptor> m_cases;
+
+    /// True if has a default case.
+    bool m_has_default_case;
 };
 
 /// Cast to subtype or return NULL if types do not match.
 template<typename T>
-T *as(Region *region) {
+inline T *as(Region *region) {
     return region->get_kind() == T::s_kind ? static_cast<T *>(region) : NULL;
 }
 
 /// Cast to subtype or return NULL if types do not match.
+template<>
+inline RegionComplex *as<RegionComplex>(Region *region) {
+    switch (region->get_kind()) {
+    case Region::SK_INVALID:
+    case Region::SK_SEQUENCE:
+    case Region::SK_IF_THEN:
+    case Region::SK_IF_THEN_ELSE:
+    case Region::SK_NATURAL_LOOP:
+    case Region::SK_RETURN:
+    case Region::SK_SWITCH:
+        return static_cast<RegionComplex *>(region);
+    case Region::SK_BLOCK:
+    case Region::SK_BREAK:
+    case Region::SK_CONTINUE:
+        return nullptr;
+    }
+    MDL_ASSERT(!"unexpected Region kind");
+    return nullptr;
+}
+
+/// Cast to subtype or return NULL if types do not match.
 template<typename T>
-T const *as(Region const *region) {
+inline T const *as(Region const *region) {
     return region->get_kind() == T::s_kind ? static_cast<T const *>(region) : NULL;
+}
+
+/// Cast to subtype or return NULL if types do not match.
+template<>
+inline RegionComplex const *as<RegionComplex>(Region const *region) {
+    return as<RegionComplex>(const_cast<Region *>(region));
 }
 
 /// Check if a statement is of a certain type.
 template<typename T>
-bool is(Region const *region) {
-    return as<T const>(region) != NULL;
+inline bool is(Region const *region) {
+    return as<T>(region) != NULL;
 }
 
 /// A static_cast with check in debug mode.
 template <typename T>
 inline T *cast(Region *arg) {
-    HLSL_ASSERT(arg == NULL || is<T>(arg));
+    MDL_ASSERT(arg == NULL || is<T>(arg));
     return static_cast<T *>(arg);
 }
 
 /// A static_cast with check in debug mode.
 template <typename T>
 inline T const *cast(Region const *arg) {
-    HLSL_ASSERT(arg == NULL || is<T>(arg));
+    MDL_ASSERT(arg == NULL || is<T>(arg));
     return static_cast<T const *>(arg);
 }
 
@@ -809,26 +877,34 @@ public:
 
     size_t size() const { return m_region_list.size(); }
 
-    /// Get the LLVM function.
+    /// Get the associated LLVM function.
     Function &getFunction() const {
         return m_func;
     }
 
-    /// Get the LLVM loop information of the function.
+    /// Get the LLVM loop information of the associated LLVM function.
     LoopInfo &getLoopInfo() const {
         return m_loop_info;
     }
 
     /// Get the LLVM loop for a given basic block.
-    Loop *getLoopFor(BasicBlock const *BB) const;
+    ///
+    /// \param bb  the basic block
+    Loop *getLoopFor(
+        BasicBlock const *BB) const;
 
     /// Get the LLVM dominator tree of the function.
     DominatorTree &getDomTree() const {
         return m_domTree;
     }
 
-    /// Returns true iff A dominates B.
-    bool dominates(BasicBlock *A, BasicBlock *B) const;
+    /// Returns true iff a basic block A dominates a basic block B.
+    ///
+    /// \param A  basic block A
+    /// \param B  basic block B
+    bool dominates(
+        BasicBlock *A,
+        BasicBlock *B) const;
 
     /// Get the name of this function.
     StringRef getName() {
@@ -840,6 +916,9 @@ public:
         return m_body;
     }
 
+    /// Set the body of the function represented by the root region.
+    ///
+    /// \param body  the root region of the function
     void setBody(Region *body) {
         m_body = body;
     }
@@ -848,17 +927,30 @@ public:
     Region *getTopRegion(BasicBlock *bb);
 
     /// Create a new Basic region in the graph.
+    ///
+    /// \param bb  the basic block
     Region *createBasicRegion(BasicBlock *bb);
 
     /// Create a new Invalid region in the graph.
+    ///
+    /// \param head  the entry region
     Region *createInvalidRegion(Region *head);
 
     /// Create a new Sequence region in the graph.
+    ///
+    /// \param head   the entry region of this sequence
+    /// \param tail   an ordered list of the sequence tail(s)
     RegionSequence *createSequenceRegion(
         Region                   *head,
         ArrayRef<Region *> const &tail);
 
     /// Create a new IfThen region in the graph.
+    ///
+    /// \param head        the entry region
+    /// \param then        the then region
+    /// \param terminator  the llvm basic block terminator instruction
+    /// \param negated     if true, the jump condition in the llvm instruct must be negated to
+    ///                    have a non-empty then and an empty else
     RegionIfThen *createIfThenRegion(
         Region         *head,
         Region         *then,
@@ -866,6 +958,11 @@ public:
         bool           negated);
 
     /// Create a new IfThenElse region in the graph.
+    ///
+    /// \param head        the entry region
+    /// \param then_node   the then region
+    /// \param else_node   the else region
+    /// \param terminator  the llvm basic block terminator instruction
     RegionIfThenElse *createIfThenElseRegion(
         Region         *head,
         Region         *then_node,
@@ -873,24 +970,36 @@ public:
         Instruction    *terminator);
 
     /// Create a new natural loop region in the graph.
-    RegionNaturalLoop *createNaturalLoopRegion(Region *head);
+    ///
+    /// \param head  the entry (and loop)
+    RegionNaturalLoop *createNaturalLoopRegion(
+        Region *head);
 
     /// Create a new Break region in the graph.
+    ///
+    /// \note a Break region is a kind of "edge label" and hence does not have a basic block
     RegionBreak *createBreakRegion();
 
     /// Create a new Continue region in the graph.
+    ///
+    /// \note a Continue region is a kind of "edge label" and hence does not have a basic block
     RegionContinue *createContinueRegion();
 
     /// Create a new Return region in the graph.
+    ///
+    /// \param head                the entry region of the Region
+    /// \param return_instruction  the one and only return instruction inside this region
     RegionReturn *createReturnRegion(
         Region     *head,
         ReturnInst *return_inst);
 
     /// Create a new Switch region in the graph.
+    ///
+    /// \param head   the entry region of the Region
+    /// \param cases  the ordered list description of the cases
     RegionSwitch *createSwitchRegion(
-        Region                   *head,
-        ArrayRef<Region *> const &cases,
-        Region                   *def_case);
+        Region                                       *head,
+        ArrayRef<RegionSwitch::CaseDescriptor> const &cases);
 
     /// Delete a region.
     void dropRegion(Region *r);
@@ -928,7 +1037,7 @@ private:
 
     std::map<BasicBlock *, Region *> m_mapping;
 
-    /// The list of all statement nodes.
+    /// The list of all Region nodes.
     RegionList m_region_list;
 };
 

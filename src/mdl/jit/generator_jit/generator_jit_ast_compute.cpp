@@ -205,7 +205,6 @@ class RegionBuilder
     typedef std::set<BackEdge, EdgeLess> BackEdgeSet;
 
 public:
-    typedef std::list<Region *> WorkList;
     typedef std::set<Region *>  NodeSet;
 
 public:
@@ -224,23 +223,8 @@ public:
     /// Build regions for a function.
     StructuredFunction *buildRegions();
 
-    WorkList::iterator nodes_begin() {
-        return m_work_list.begin();
-    }
-
-    WorkList::iterator nodes_end() {
-        return m_work_list.end();
-    }
-
-    size_t nodes_size() const {
-        return m_work_list.size();
-    }
-
 private:
-    /// Build the initial region graph from a function.
-    void buildInitialFromFunction();
-
-    /// Discover the region started at entry,
+    /// Discover the region started at entry.
     ///
     /// \param[in]  ctx              current context
     /// \param[in]  processLoopBody  true if we process the body inside a loop
@@ -276,14 +260,62 @@ private:
         BasicBlock          *BB,
         Region              *&region);
 
+    /// Helper: dump a node to the graph.
+    ///
+    /// \param region          the region
+    /// \param with_subgraphs  if true, dump complex regions as subgraphs
+    /// \param file            the .gv file
+    void dump_node(
+        Region const *region,
+        bool         with_subgraphs,
+        FILE         *file);
+
+    /// Helper: dump all successor edges of a node to its successors to the graph.
+    ///
+    /// \param region          the region
+    /// \param file            the .gv file
+    ///
+    /// \ note: Only block regions have successors.
+    void dump_succ_edges(
+        Region const *region,
+        FILE         *file);
+
+    /// Helper: dump all child edges of a node to the graph.
+    ///
+    /// \param region          the region
+    /// \param file            the .gv file
+    ///
+    /// \ note: Only complex regions have childs
+    void dump_child_edges(
+        Region const *region,
+        FILE *file);
+
+    enum DumpMode {
+        DUMP_AS_SUBGRAPHS,  ///< Dump Complex regions as subgraphs.
+        DUMP_AS_CG,         ///< Dump Block regions as Control-Flow graph.
+        DUMP_AS_AST,        ///< Dump regions as AST.
+    };
+
     /// Dump the current graph.
-    void dumpRegionGraph(char const *suffix = nullptr, bool with_subgraphs = false);
+    ///
+    /// \param root            the root of the graph to dump
+    /// \param suffix          if non-NULL, add the suffix to file name
+    /// \param with_subgraphs  dump mode of the Region graph
+    void dumpRegionGraph(
+        Region const *root,
+        char const   *suffix = nullptr,
+        DumpMode     mode = DUMP_AS_CG);
 
     /// Creates a graph node.
     unsigned dumpRegion(FILE *file, Region const *region);
 
-    /// Dump a sub graph.
-    std::vector<unsigned> dumpSubGraph(FILE *file, Region const *region);
+    /// Dump a region as a sub graph.
+    ///
+    /// \param file    the .gv file
+    /// \param region  the region
+    std::vector<unsigned> dumpSubGraph(
+        FILE         *file,
+        Region const *region);
 
     /// Get the kind string for a region.
     static char const *getKindString(Region const *region)
@@ -308,15 +340,9 @@ private:
     /// The processed function.
     StructuredFunction &m_func;
 
-    /// The current work list.
-    WorkList m_work_list;
-
 #ifdef DUMP_REGIONGRAPHS
     /// ID used for dumping the limit graphs.
     size_t m_dump_id;
-
-    /// Base name used for dumping the limit graphs.
-    std::string m_dump_base_name;
 #endif
 };
 
@@ -678,15 +704,57 @@ struct GraphTraits<sl::StructuredFunction *> : public GraphTraits<sl::Region *> 
     }
 };
 
+// -----------------------------------------------------------------------------------------------
+
 namespace sl {
 
-// -----------------------------------------------------------------------------------------------
+class Region_walker {
+public:
+    /// Constructor.
+    ///
+    /// \param root  the root Region
+    Region_walker(Region *root)
+    : m_root(root)
+    {
+    }
+
+    /// Walk over the region graph.
+    void walk() {
+        return do_walk(m_root);
+    }
+
+    /// Pre-Visitor.
+    virtual void visit_pre(Region *region) {}
+
+    /// Post-Visitor.
+    virtual void visit_post(Region *region) {}
+
+private:
+    /// Walk over the given region and its children.
+    void do_walk(Region *node)
+    {
+        visit_pre(node);
+        if (is<RegionComplex>(node)) {
+            RegionComplex *c = cast<RegionComplex>(node);
+            for (size_t i = 0, n = c->getChildSize(); i < n; ++i) {
+                Region *child = c->getChild(i);
+
+                do_walk(child);
+            }
+        }
+        visit_post(node);
+    }
+
+private:
+    /// The root region.
+    Region *m_root;
+};
 
 // Get the entry region of this region.
 Region const *Region::getEntryRegionBlock() const {
     Region const *top_region = this;
-    while (top_region->get_kind() != Region::SK_BLOCK) {
-        top_region = static_cast<RegionComplex const *>(top_region)->getHead();
+    while (is<RegionComplex>(top_region)) {
+        top_region = cast<RegionComplex>(top_region)->getHead();
     }
     return top_region;
 }
@@ -883,9 +951,9 @@ RegionReturn *StructuredFunction::createReturnRegion(
 
 // Create a new Switch node in the graph.
 RegionSwitch *StructuredFunction::createSwitchRegion(
-    Region *head, ArrayRef<Region *> const &cases, Region *def_case)
+    Region *head, ArrayRef<RegionSwitch::CaseDescriptor> const &cases)
 {
-    RegionSwitch *n = new RegionSwitch(this, ++m_node_id, head, cases, def_case);
+    RegionSwitch *n = new RegionSwitch(this, ++m_node_id, head, cases);
     m_region_list.push_back(n);
 
     return n;
@@ -915,14 +983,6 @@ RegionBuilder::RegionBuilder(
 , m_dump_id(0)
 #endif
 {
-}
-
-// Build the limit graph from a function.
-void RegionBuilder::buildInitialFromFunction()
-{
-    for (Region *r : m_func) {
-        m_work_list.push_back(r);
-    }
 }
 
 // Process a basic block that form the head of a loop region.
@@ -1553,7 +1613,9 @@ unsigned RegionBuilder::dumpRegion(FILE *file, Region const *region)
     std::string kind_str = getKindString(region);
     fprintf(file, "n%u [label=\"%s %u %s\"];\n",
         unsigned(region->get_id()), kind_str.c_str(), unsigned(region->get_id()),
-        std::string(region->get_bb()->getName()).c_str());
+        region->get_bb() != nullptr ?
+            std::string(region->get_bb()->getName()).c_str() :
+            "");
     return unsigned(region->get_id());
 }
 
@@ -1583,7 +1645,7 @@ static void dumpEdgeToRegion(
     dumpEdge(file, sources, unsigned(target_region->getEntryRegionBlock()->get_id()), label);
 }
 
-// Dump a sub graph.
+// Dump a region as a sub graph.
 std::vector<unsigned> RegionBuilder::dumpSubGraph(
     FILE         *file,
     Region const *region)
@@ -1591,7 +1653,7 @@ std::vector<unsigned> RegionBuilder::dumpSubGraph(
     typedef std::vector<unsigned> ExitSet;
     ExitSet res;
 
-    if (region->get_kind() == Region::SK_BLOCK) {
+    if (!is<RegionComplex>(region)) {
         res.push_back(dumpRegion(file, region));
         return res;
     }
@@ -1600,25 +1662,28 @@ std::vector<unsigned> RegionBuilder::dumpSubGraph(
     Region const *top_region = region->getEntryRegionBlock();
     fprintf(file, "subgraph cluster_%u { label=\"%s %u %s\";\n",
         unsigned(region->get_id()), kind_str.c_str(), unsigned(region->get_id()),
-        std::string(top_region->get_bb()->getName()).c_str());
+        top_region->get_bb() != nullptr ?
+            std::string(top_region->get_bb()->getName()).c_str() :
+            "");
 
     switch (region->get_kind()) {
+    case Region::SK_BLOCK:
     case Region::SK_BREAK:
-        break;
-
     case Region::SK_CONTINUE:
+        // handles above
+        MDL_ASSERT(!"should not be reached");
         break;
 
     case Region::SK_RETURN:
         {
-            RegionReturn const *r = static_cast<RegionReturn const *>(region);
+            RegionReturn const *r = cast<RegionReturn>(region);
             res = dumpSubGraph(file, r->getHead());
         }
         break;
 
     case Region::SK_SEQUENCE:
         {
-            RegionSequence const *r = static_cast<RegionSequence const *>(region);
+            RegionSequence const *r = cast<RegionSequence>(region);
             ExitSet a = dumpSubGraph(file, r->getHead());
             for (Region *next : r->getTail()) {
                 ExitSet b = dumpSubGraph(file, next);
@@ -1632,7 +1697,7 @@ std::vector<unsigned> RegionBuilder::dumpSubGraph(
 
     case Region::SK_IF_THEN:
         {
-            RegionIfThen const *r = static_cast<RegionIfThen const *>(region);
+            RegionIfThen const *r = cast<RegionIfThen>(region);
             ExitSet a = dumpSubGraph(file, r->getHead());
             ExitSet b = dumpSubGraph(file, r->getThen());
             dumpEdgeToRegion(file, a, r->getThen(), "then");
@@ -1645,20 +1710,24 @@ std::vector<unsigned> RegionBuilder::dumpSubGraph(
 
     case Region::SK_IF_THEN_ELSE:
         {
-            RegionIfThenElse const *r = static_cast<RegionIfThenElse const *>(region);
+            RegionIfThenElse const *r = cast<RegionIfThenElse>(region);
             ExitSet a = dumpSubGraph(file, r->getHead());
             ExitSet b = dumpSubGraph(file, r->getThen());
             ExitSet c = dumpSubGraph(file, r->getElse());
             dumpEdgeToRegion(file, a, r->getThen(), "then");
             dumpEdgeToRegion(file, a, r->getElse(), "else");
-            res = b;
-            res.insert(res.end(), c.begin(), c.end());
+            if (!r->getThen()->is_jump()) {
+                res = b;
+            }
+            if (!r->getElse()->is_jump()) {
+                res.insert(res.end(), c.begin(), c.end());
+            }
         }
         break;
 
     case Region::SK_NATURAL_LOOP:
         {
-            RegionNaturalLoop const *r = static_cast<RegionNaturalLoop const *>(region);
+            RegionNaturalLoop const *r = cast<RegionNaturalLoop>(region);
             ExitSet a = dumpSubGraph(file, r->getHead());
             dumpEdgeToRegion(file, a, r->getHead(), "backedge");
             res = a;
@@ -1674,76 +1743,256 @@ std::vector<unsigned> RegionBuilder::dumpSubGraph(
     return res;
 }
 
-// Dump the current graph.
-void RegionBuilder::dumpRegionGraph(
-    char const *suffix,
-    bool       with_subgraphs)
+// Helper: dump a node to the graph.
+void RegionBuilder::dump_node(Region const *region, bool with_subgraphs, FILE *file)
 {
-#ifdef DUMP_REGIONGRAPHS
-    char buf[16];
-    snprintf(buf, sizeof(buf), "%.3u", unsigned(m_dump_id));
-    std::string filename = m_dump_base_name + "-" + buf;
-    if (suffix) filename += std::string("-") + suffix;
-    filename += ".gv";
-    FILE *file = fopen(filename.c_str(), "wt");
-
-    fprintf(file, "digraph \"%s-%u\" {\n", m_dump_base_name.c_str(), unsigned(m_dump_id));
-
-    for (Region const *region : m_work_list) {
 #ifdef DUMP_STMTKINDS
-        std::string kind_str = getKindString(region);
+    std::string kind_str = getKindString(region);
 
-        std::string head_block_name;
+    std::string head_block_name;
 
-        if (with_subgraphs && region->get_kind() != Region::SK_BLOCK) {
-            dumpSubGraph(file, region);
-        } else {
-            Region const *top_region = region->getEntryRegionBlock();
-            fprintf(file, "n%u [label=\"%s %u %s",
-                unsigned(region->get_id()), kind_str.c_str(), unsigned(region->get_id()),
-                std::string(top_region->get_bb()->getName()).c_str());
+    if (with_subgraphs && region->get_kind() != Region::SK_BLOCK) {
+        dumpSubGraph(file, region);
+    } else {
+        Region const *top_region = region->getEntryRegionBlock();
+        fprintf(file, "n%u [label=\"%s %u %s",
+            unsigned(region->get_id()), kind_str.c_str(), unsigned(region->get_id()),
+            top_region->get_bb() != nullptr ?
+                std::string(top_region->get_bb()->getName()).c_str() : "");
 
-            if (size_t copied_from = region->copied_from()) {
-                fprintf(file, " (%u)", unsigned(copied_from));
-            }
-            fprintf(file, "\"");
-            if (region->is_loop_head()) {
-                fprintf(file, " shape=box");
-            } else if (region->is_loop()) {
-                fprintf(file, " shape=diamond");
-            }
-            fprintf(file, " ]\n");
-        }
-#else
-#ifdef DUMP_BLOCKNAMES
-        fprintf(file, "n%u [label=\"%s",
-            unsigned(region->get_id()), std::string(region->blocks()[0]->getName()).c_str());
-#else
-        fprintf(file, "n%u [label=\"%u",
-            unsigned(region->get_id()), unsigned(region->get_id()));
-#endif
-#endif
-        /*if (size_t copied_from = region->copied_from())
+        if (size_t copied_from = region->copied_from()) {
             fprintf(file, " (%u)", unsigned(copied_from));
+        }
         fprintf(file, "\"");
         if (region->is_loop_head()) {
             fprintf(file, " shape=box");
         } else if (region->is_loop()) {
             fprintf(file, " shape=diamond");
         }
-        fprintf(file, " ]\n");*/
+        fprintf(file, " ]\n");
     }
+#else
+#ifdef DUMP_BLOCKNAMES
+    fprintf(file, "n%u [label=\"%s",
+        unsigned(region->get_id()), std::string(region->blocks()[0]->getName()).c_str());
+#else
+    fprintf(file, "n%u [label=\"%u",
+        unsigned(region->get_id()), unsigned(region->get_id()));
+#endif
+#endif
+    /*if (size_t copied_from = region->copied_from())
+        fprintf(file, " (%u)", unsigned(copied_from));
+    fprintf(file, "\"");
+    if (region->is_loop_head()) {
+        fprintf(file, " shape=box");
+    } else if (region->is_loop()) {
+        fprintf(file, " shape=diamond");
+    }
+    fprintf(file, " ]\n");*/
+}
 
-    for (Region const *region : m_work_list) {
-        unsigned node_id = unsigned(region->get_id());
+// Helper: dump all successor edges of a node to its successors to the graph.
+void RegionBuilder::dump_succ_edges(
+    Region const *region,
+    FILE         *file)
+{
+    unsigned node_id = unsigned(region->get_id());
 
-        for (Region const *succ : region->succs()) {
-            fprintf(file, "n%u -> n%u\n", node_id, unsigned(succ->get_id()));
+    for (Region const *succ : region->succs()) {
+        fprintf(file, "n%u -> n%u\n", node_id, unsigned(succ->get_id()));
+    }
+}
 
-            fprintf(file, "\n");
+// Helper: dump all child edges of a node to the graph.
+void RegionBuilder::dump_child_edges(
+    Region const *region,
+    FILE         *file)
+{
+    switch (region->get_kind()) {
+    case Region::SK_INVALID:          // Invalid region: used for sentinels only.
+    case Region::SK_BLOCK:            // the smallest unit: one (basic) block
+        break;
+    case Region::SK_SEQUENCE:         // a sequence of regions
+        {
+            RegionSequence const *seq = cast<RegionSequence>(region);
+
+            Region const *head = seq->getHead();
+            fprintf(file, "n%u -> n%u [label=\"%s\";]\n",
+                unsigned(seq->get_id()), unsigned(head->get_id()), "head");
+
+            unsigned last(head->get_id());
+            for (Region const *tail : seq->getTail()) {
+                fprintf(file, "n%u -> n%u [label=\"%s\";]\n",
+                    last, unsigned(tail->get_id()), "next");
+                last = tail->get_id();
+            }
         }
-    }
+        break;
+    case Region::SK_IF_THEN:          // an if-then region
+        {
+            RegionIfThen const *it = cast<RegionIfThen>(region);
 
+            Region const *head = it->getHead();
+            fprintf(file, "n%u -> n%u [label=\"%s\";]\n",
+                unsigned(it->get_id()), unsigned(head->get_id()), "head");
+
+            Region const *r_then = it->getThen();
+            fprintf(file, "n%u -> n%u [label=\"%s\";]\n",
+                unsigned(it->get_id()), unsigned(r_then->get_id()), "then");
+        }
+        break;
+    case Region::SK_IF_THEN_ELSE:     // an if-then-else region
+        {
+            RegionIfThenElse const *ite = cast<RegionIfThenElse>(region);
+
+            Region const *head = ite->getHead();
+            fprintf(file, "n%u -> n%u [label=\"%s\";]\n",
+                unsigned(ite->get_id()), unsigned(head->get_id()), "head");
+
+            Region const *r_then = ite->getThen();
+            fprintf(file, "n%u -> n%u [label=\"%s\";]\n",
+                unsigned(ite->get_id()), unsigned(r_then->get_id()), "then");
+
+            Region const *r_else = ite->getElse();
+            fprintf(file, "n%u -> n%u [label=\"%s\";]\n",
+                unsigned(ite->get_id()), unsigned(r_else->get_id()), "else");
+        }
+        break;
+    case Region::SK_NATURAL_LOOP:     // a natural loop
+        {
+            RegionNaturalLoop const *loop = cast<RegionNaturalLoop>(region);
+
+            Region const *head = loop->getHead();
+            fprintf(file, "n%u -> n%u [label=\"%s\";]\n",
+                unsigned(loop->get_id()), unsigned(head->get_id()), "head");
+        }
+        break;
+    case Region::SK_BREAK:            // a region ending with a break jump
+    case Region::SK_CONTINUE:         // a region ending with a continue jump
+        break;
+    case Region::SK_RETURN:           // a region ending with a return
+        {
+            RegionReturn const *ret = cast<RegionReturn>(region);
+
+            Region const *head = ret->getHead();
+            fprintf(file, "n%u -> n%u [label=\"%s\";]\n",
+                unsigned(ret->get_id()), unsigned(head->get_id()), "head");
+        }
+        break;
+    case Region::SK_SWITCH:           // a switch region
+        {
+            RegionSwitch const *s = cast<RegionSwitch>(region);
+
+            Region const *head = s->getHead();
+            fprintf(file, "n%u -> n%u [label=\"%s\";]\n",
+                unsigned(s->get_id()), unsigned(head->get_id()), "head");
+
+            for (size_t i = 0, n = s->getCasesCount(); i < n; ++i) {
+                RegionSwitch::CaseDescriptor const &desc = s->getCase(i);
+                llvm::ConstantInt const *cv = desc.case_value;
+
+                if (cv != nullptr) {
+                    int64_t v = cv->getSExtValue();
+                    fprintf(file, "n%u -> n%u [label=\"case %d\";]\n",
+                        unsigned(s->get_id()), unsigned(desc.case_region->get_id()), int(v));
+                } else {
+                    fprintf(file, "n%u -> n%u [label=\"default\";]\n",
+                        unsigned(s->get_id()), unsigned(desc.case_region->get_id()));
+                }
+            }
+        }
+        break;
+    }
+}
+
+// Dump the current graph.
+void RegionBuilder::dumpRegionGraph(
+    Region const *root,
+    char const   *suffix,
+    DumpMode     mode)
+{
+#ifdef DUMP_REGIONGRAPHS
+    std::string func_name = m_func.getFunction().getName().str();
+
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%.3u", unsigned(m_dump_id));
+
+    std::string filename = func_name + "-" + buf;
+    if (suffix != nullptr) {
+        filename += std::string("-") + suffix;
+    }
+    filename += ".gv";
+    FILE *file = fopen(filename.c_str(), "wt");
+
+    fprintf(file, "digraph \"%s-%u\" {\n", func_name.c_str(), unsigned(m_dump_id));
+
+    // use walker to iterate over all regions.
+    class Node_walker : public Region_walker {
+    public:
+        /// Constructor.
+        Node_walker(
+            RegionBuilder &builder,
+            DumpMode      mode,
+            Region const  *root,
+            FILE          *file)
+        : Region_walker(const_cast<Region *>(root))
+        , m_builder(builder)
+        , m_file(file)
+        , m_mode(mode)
+        {
+        }
+
+        // pre-visit
+        void visit_pre(Region *node) final {
+            if (m_mode == DUMP_AS_AST || is<RegionBlock>(node)) {
+                m_builder.dump_node(node, /*with_subgraphs=*/false, m_file);
+            }
+        }
+
+    private:
+        RegionBuilder &m_builder;
+        FILE          *m_file;
+        DumpMode      m_mode;
+    };
+
+    class Edge_walker : public Region_walker {
+    public:
+        /// Constructor.
+        Edge_walker(
+            RegionBuilder &builder,
+            DumpMode       mode,
+            Region const  *root,
+            FILE          *file)
+        : Region_walker(const_cast<Region *>(root))
+        , m_builder(builder)
+        , m_file(file)
+        , m_mode(mode)
+        {
+        }
+
+        // pre-visit
+        void visit_pre(Region *node) final {
+            if (m_mode == DUMP_AS_AST) {
+                m_builder.dump_child_edges(node, m_file);
+            } else {
+                if (is<RegionBlock>(node)) {
+                    m_builder.dump_succ_edges(node, m_file);
+                }
+            }
+        }
+
+    private:
+        RegionBuilder &m_builder;
+        FILE          *m_file;
+        DumpMode      m_mode;
+    };
+
+    if (mode == DUMP_AS_SUBGRAPHS) {
+        dumpSubGraph(file, root);
+    } else {
+        Node_walker(*this, mode, root, file).walk();
+        Edge_walker(*this, mode, root, file).walk();
+    }
     fprintf(file, "}\n");
 
     fclose(file);

@@ -85,28 +85,24 @@ public:
                                       ///  are translated to arrays of scalar type.
         TM_SMALL_VECTORS      =   1,  ///< Use LLVM vector types only for MDL vector types, MDL
                                       ///  matrices are translated into arrays of vectors.
-        TM_BIG_VECTORS        =   2,  ///< Use LLVM vector types for MDL vector and matrix types,
-                                      ///  creating vectors of up to 16 elements.
 
         TM_VECTOR_MASK        =   3,  ///< The mask for vector modes.
 
         TM_BOOL1_SUPPORTED    =   4,  ///< If set, backend supports automatic conversions from i1
 
-        TM_BIG_VECTOR_RETURN  =   8,  ///< If set, backend supports return of vectors > 4
+        TM_STRINGS_ARE_IDS    =   8,  ///< Map strings to IDs
 
-        TM_STRINGS_ARE_IDS    =  16,  ///< Map strings to IDs
+        TM_NO_REFERENCE       =  16,  ///< never pass-by-reference/reference return
 
-        TM_NO_REFERENCE       =  32,  ///< never pass-by-reference/reference return
+        TM_NO_POINTER_SUPPORT =  32,  ///< The target does not support pointers
 
-        TM_NO_POINTER_SUPPORT =  64,  ///< The target does not support pointers
-
-        TM_NO_DOUBLE          = 128,  ///< The target does not support double fp
+        TM_NO_DOUBLE          =  64,  ///< The target does not support double fp
 
         /// The mode for native x86 compilation.
-        TM_NATIVE_X86 = TM_BIG_VECTORS | TM_BIG_VECTOR_RETURN | TM_BOOL1_SUPPORTED,
+        TM_NATIVE_X86 = TM_SMALL_VECTORS | TM_BOOL1_SUPPORTED,
 
         /// The mode for PTX compilation.
-        TM_PTX        = TM_BIG_VECTORS,
+        TM_PTX        = TM_SMALL_VECTORS,
 
         /// The mode for HLSL compilation.
         TM_HLSL       = TM_SMALL_VECTORS | TM_NO_REFERENCE | TM_NO_POINTER_SUPPORT |

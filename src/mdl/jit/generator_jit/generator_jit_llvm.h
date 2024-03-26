@@ -1507,18 +1507,20 @@ public:
 
     /// Compile an constant lambda function into an LLVM Module and return the LLVM function.
     ///
-    /// \param lambda           the lambda function
-    /// \param resolver         the call resolver interface to be used
-    /// \param attr             an interface to retrieve resource attributes
-    /// \param world_to_object  the world-to-object transformation matrix for this function
-    /// \param object_to_world  the object-to-world transformation matrix for this function
-    /// \param object_id        the result of state::object_id() for this function
+    /// \param lambda             the lambda function
+    /// \param resolver           the call resolver interface to be used
+    /// \param attr               an interface to retrieve resource attributes
+    /// \param has_uniform_state  if true, uniform state is compiled into the code
+    /// \param world_to_object    the world-to-object transformation matrix for this function
+    /// \param object_to_world    the object-to-world transformation matrix for this function
+    /// \param object_id          the result of state::object_id() for this function
     ///
     /// \return the compiled function or NULL on compilation errors
     llvm::Function  *compile_const_lambda(
         Lambda_function const      &lambda,
         ICall_name_resolver const  *resolver,
         ILambda_resource_attribute *attr,
+        bool                       has_uniform_state,
         Float4_struct const        world_to_object[4],
         Float4_struct const        object_to_world[4],
         int                        object_id);

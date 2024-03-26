@@ -41,8 +41,8 @@
 #include <math.h>
 #include <cassert>
 
-// Enable this to dump the generated GLSL code to stdout.
-//#define DUMP_GLSL
+// Enable this to dump the generated GLSL code to files in the current directory.
+// #define DUMP_GLSL
 
 static const VkFormat g_accumulation_texture_format = VK_FORMAT_R32G32B32A32_SFLOAT;
 
@@ -2118,7 +2118,7 @@ void print_usage(char const* prog_name)
         << "  --spi <num>               samples per render loop iteration (default: 8)\n"
         << "  --max_path_length <num>   maximum path length (default: 4)\n"
         << "  -f|--fov <fov>            the camera field of view in degrees (default: 96.0)\n"
-        << "  -p|--pos <x> <y> <z>      set the camera position (default: 0 0 3).\n"
+        << "  --cam <x> <y> <z>         set the camera position (default: 0 0 3).\n"
         << "                            The camera will always look towards (0, 0, 0)\n"
         << "  -l|--light <x> <y> <z>    adds an omnidirectional light with the given position"
         << "             <r> <g> <b>    and intensity\n"
@@ -2126,7 +2126,7 @@ void print_usage(char const* prog_name)
         << "                            (default: nvidia/sdk_examples/resources/environment.hdr)\n"
         << "  --hdr_intensity <value>   intensity of the environment map (default: 1.0)\n"
         << "  --cc                      the material will be compiled using class compilation\n"
-        << "  --mdl_path <path>         additional MDL search path, can occur multiple times\n"
+        << "  -p|--mdl_path <path>      additional MDL search path, can occur multiple times\n"
         << "  --vkdebug                 enable the Vulkan validation layers"
         << std::endl;
 
@@ -2162,7 +2162,7 @@ void parse_command_line(int argc, char* argv[], Options& options,
                 options.max_path_length = std::atoi(argv[++i]);
             else if ((arg == "-f" || arg == "--fov") && i < argc - 1)
                 options.cam_fov = static_cast<float>(std::atof(argv[++i]));
-            else if ((arg == "-p" || arg == "--pos") && i < argc - 3)
+            else if (arg == "--cam" && i < argc - 3)
             {
                 options.cam_pos.x = static_cast<float>(std::atof(argv[++i]));
                 options.cam_pos.y = static_cast<float>(std::atof(argv[++i]));
@@ -2181,7 +2181,7 @@ void parse_command_line(int argc, char* argv[], Options& options,
                 options.hdr_file = argv[++i];
             else if (arg == "--hdr_intensity" && i < argc - 1)
                 options.hdr_intensity = static_cast<float>(std::atof(argv[++i]));
-            else if (arg == "--mdl_path" && i < argc - 1)
+            else if ((arg == "-p" || arg == "--mdl_path") && i < argc - 1)
                 mdl_configure_options.additional_mdl_paths.push_back(argv[++i]);
             else if (arg == "--cc")
                 options.use_class_compilation = true;
@@ -2281,7 +2281,13 @@ int MAIN_UTF8(int argc, char* argv[])
                     transaction.get(), context.get()));
 
         #ifdef DUMP_GLSL
-            std::cout << "Dumping GLSL target code:\n\n" << target_code->get_code() << "\n\n";
+            std::cout << "Dumping GLSL target code to target_code.glsl\n";
+            FILE *file = fopen("target_code.glsl", "wt");
+            if (file)
+            {
+                fwrite(target_code->get_code(), target_code->get_code_size(), 1, file);
+                fclose(file);
+            }
         #endif
 
             // Start application

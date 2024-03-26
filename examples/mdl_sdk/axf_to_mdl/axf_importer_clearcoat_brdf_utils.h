@@ -256,7 +256,8 @@ inline void recode_brdf_colors(
     const unsigned int rx,
     const unsigned int ry,
     const unsigned int num_channels,
-    const float ior)
+    const float ior,
+    const bool spectral)
 {
     std::vector<float> brdf_colors_nrefr(rx * ry * num_channels, 0.0f);
     std::vector<float> buf(num_channels * 2);
@@ -283,39 +284,46 @@ inline void recode_brdf_colors(
                 const float theta_kh = ((float)y + offsets[0]) * step_y;
                 const float theta_nh = ((float)x + offsets[1]) * step_x;
 
-                const float kh = cosf(theta_kh);
+                const float cos_theta_kh = cosf(theta_kh);
+                const float sin_theta_kh = sinf(theta_kh);
 
-                // wlog: h = [sin_theta_h, cos_theta, 0]
-                const float cos_theta_h = cosf(theta_nh);
-                const float sin_theta_h = sinf(theta_nh);
+                // wlog: h = [sin_theta_nh, cos_theta_nh, 0]
+                const float cos_theta_nh = cosf(theta_nh);
+                const float sin_theta_nh = sinf(theta_nh);
 
-                // create a set of differently oriented outgoing directions,
+                // create a set of differently oriented outgoing directions k1,
                 // average results from those valid (for for given half vector elevation)
                 constexpr unsigned int num_samples_k1 = 64;
-                constexpr float inv_num_samples_k1 = (float)(1.0 / (double)num_samples_k1);
+                // half circle is sufficient due to symmetry
+                constexpr float step_phi_k1 = (float)(M_PI / (double)num_samples_k1);
+
                 unsigned int valid_samples = 0;
                 float *avg_value = buf.data();
                 for (unsigned int c = 0; c < num_channels; ++c)
                     avg_value[c] = 0.0f;
                 for (unsigned int i = 0; i < num_samples_k1; ++i) {
 
-                    // outgoing direction: start with fixed x component, compute y from that (using kh = dot(k1, h))
-                    float k1[3];
-                    k1[0] = ((float)i + 0.5f) * inv_num_samples_k1; // positive x is sufficient, due to symmetry
-                    k1[1] = (kh - k1[0] * sin_theta_h) / cos_theta_h;
+                    const float phi = (float)i * step_phi_k1;
+                    const float cos_phi = cosf(phi);
+                    const float sin_phi = sinf(phi);
 
-                    if(k1[1] < 0.0f || k1[1] > 1.0f) // invalid y?
+                    // x_rot, h, z form the basis we create k1 in
+                    // x_rot = [cos_theta_nh, -sin_theta_nh, 0]
+                    // k1 = x_rot * cos(phi) * sin_theta_kh + h * cos_theta_kh + z * sin(phi) * sin_theta_kh
+                    const float k1[3] = {
+                        cos_theta_nh * cos_phi * sin_theta_kh + sin_theta_nh * cos_theta_kh,
+                        -sin_theta_nh * cos_phi * sin_theta_kh + cos_theta_nh * cos_theta_kh,
+                        sin_phi * sin_theta_kh
+                    };
+
+                    if (k1[1] < 0.0f) // below surface?
                         continue;
 
-                    const float f = 1.0f - k1[0] * k1[0] - k1[1] * k1[1];
-                    if (f < 0.0f) continue; // equation kh = dot(k1, h) not fulfillable with valid unit vector?
-                    k1[2] = sqrtf(f);
-
-                    // incoming direction
+                    // incoming direction by reflecting k1 on h
                     const float k2[3] = {
-                        2.0f * kh * sin_theta_h - k1[0],
-                        2.0f * kh * cos_theta_h - k1[1],
-                                                - k1[2]
+                        2.0f * cos_theta_kh * sin_theta_nh - k1[0],
+                        2.0f * cos_theta_kh * cos_theta_nh - k1[1],
+                                                           - k1[2]
                     };
                     if (k2[1] < 0.0f) // below surface?
                         continue;
@@ -347,12 +355,17 @@ inline void recode_brdf_colors(
                 }
                 
                 if (valid_samples > 1) {
-                    const float inv_valid_samples = 1.0f / (float)valid_samples;
+                    float scale = 1.0f / (float)valid_samples;
+                    if (!spectral) {
+                        // - for a non-spectral representation, the BRDFcolors data is only used
+                        //   for the fallback model (without measured BSDF)
+                        // - in that case we can heuristically darken the curve a bit to better
+                        //   match the albedo of the fallback for grazing angles
+                        scale *= 0.62f + 0.38f * cos_theta_kh * cos_theta_kh;
+                    }
                     for (unsigned int c = 0; c < num_channels; ++c)
-                        avg_value[c] *= inv_valid_samples;
+                        brdf_colors_nrefr[idx + c] += avg_value[c] * scale;
                 }
-                for (unsigned int c = 0; c < num_channels; ++c)
-                    brdf_colors_nrefr[idx + c] += avg_value[c];
             }
         }
     }

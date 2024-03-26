@@ -650,6 +650,8 @@ protected:
 
     /// The quote string.
     char m_string_quote[16];
+
+    bool m_in_module_name;
 };
 
 ///

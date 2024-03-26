@@ -110,7 +110,8 @@ static const char *s_prototype_names[3] = {
         "::nvidia::axf_importer::axf_importer::brdf_type,bool,"
         "::nvidia::axf_importer::axf_importer::fresnel_type,texture_2d,bool,texture_2d,texture_2d,"
         "texture_2d,::base::texture_coordinate_info,bool,float,float,float,float,float,float,"
-        "::tex::wrap_mode,float,float3,float,texture_2d,texture_2d,texture_2d,texture_2d)",
+        "::tex::wrap_mode,float,float3,float,texture_2d,texture_2d,texture_2d,texture_2d,"
+        "texture_2d,texture_2d)",
     "mdl::nvidia::axf_importer::axf_importer::carpaint(color[brdf_colors_size],float,float,float,"
         "float,float3,float3,float3,texture_2d,::base::texture_coordinate_info,bool,float,float,"
         "float,float,float,float,::tex::wrap_mode,float3,bool,float3,"
@@ -368,7 +369,8 @@ bool Axf_reader::read_material(
         {AXF_COMPAT_PROF_SVBRDF_WARD, 2},   // adds cutout and displacement
         {AXF_COMPAT_PROF_SVBRDF_WARD, 3},   // adds transmission color
         {AXF_COMPAT_PROF_SVBRDF_GGX, 1},
-        {AXF_COMPAT_PROF_SVBRDF_GGX, 2}     // adds transmission color
+        {AXF_COMPAT_PROF_SVBRDF_GGX, 2},    // adds transmission color
+        {AXF_COMPAT_PROF_SVBRDF_GGX, 3}     // adds sheen
     };
     const AXF::VersionedCompatibilityProfile supported_coating_profiles_svbrdf[] = {
         {AXF_COMPAT_PROF_CLEARCOAT_NO_REFRACT, 1}
@@ -999,7 +1001,7 @@ bool Axf_reader::handle_carpaint_representation(
 
             // for refractive clearcoat we need to change the domain to non-refracted directions
             if (m_refractive_clearcoat)
-                recode_brdf_colors(tex_buffer, width, height, channels, m_ior);
+                recode_brdf_colors(tex_buffer, width, height, channels, m_ior, !bake_brdf_colors);
 
             // AxF carpaint uses a 2d texture to tint the sub-clearcoat BRDF, parameterized by
             // x = acos(dot(normal, half)) * (2/pi)
@@ -1465,12 +1467,16 @@ bool Axf_reader::handle_svbrdf_representation(
         const bool is_diffuse_color = !strcmp(tex_name,AXF_SVBRDF_TEXTURE_NAME_DIFFUSE_COLOR);
         const bool is_aniso_rotation = !strcmp(tex_name,AXF_SVBRDF_TEXTURE_NAME_ANISO_ROTATION);
 
+        const bool is_sheen_color = !strcmp(tex_name, AXF_SVBRDF_TEXTURE_NAME_SHEEN_COLOR);
+        const bool is_sheen_roughness = !strcmp(tex_name, AXF_SVBRDF_TEXTURE_NAME_SHEEN_LOBE);
+
         Input_texture_type expected_type = INPUT_TEXTURE_FLOAT;
-        if (is_diffuse_color || is_specular_color || is_clearcoat_color || is_transmission_color)
+        if (is_diffuse_color || is_specular_color || is_clearcoat_color || is_transmission_color || is_sheen_color)
             expected_type = INPUT_TEXTURE_COLOR;
         else if (is_clearcoat_normal || is_normal)
             expected_type = INPUT_TEXTURE_NORMAL;
         else if (is_alpha || is_displacement || is_aniso_rotation || is_clearcoat_ior ||
+                 is_sheen_roughness ||
                  is_fresnel) // should not yet encounter color Fresnel
             expected_type = INPUT_TEXTURE_FLOAT;
         else if (is_specular_lobe)
@@ -1514,7 +1520,7 @@ bool Axf_reader::handle_svbrdf_representation(
         if (!needs_separation)
         {
             Texture_type texture_type = TEXTURE_SCALAR;
-            if (is_diffuse_color || is_specular_color || is_clearcoat_color) {
+            if (is_diffuse_color || is_specular_color || is_clearcoat_color || is_sheen_color) {
                 texture_type = m_wavelengths.empty() ? TEXTURE_RGB : TEXTURE_SPECTRAL;
             }
 
@@ -1574,6 +1580,10 @@ bool Axf_reader::handle_svbrdf_representation(
                 tex_to_param.insert(make_pair(texture_name, "height_texture"));
             else if (is_alpha)
                 tex_to_param.insert(make_pair(texture_name, "alpha_texture"));
+            else if (is_sheen_color)
+                tex_to_param.insert(make_pair(texture_name, "sheen_color_texture"));
+            else if (is_sheen_roughness)
+                tex_to_param.insert(make_pair(texture_name, "sheen_roughness_texture"));
             else {
                 ostringstream str;
                 str << "Ignoring unknown texture " << tex_name
@@ -1894,17 +1904,15 @@ string Axf_reader::write_texture(
 
     std::vector<float> tmp_layer_buffer;
     if (layers != 1)
-        tmp_layer_buffer.resize(width * height);
+        tmp_layer_buffer.resize((size_t)width * (size_t)height);
     for (unsigned int l = 0; l < layers; ++l) {
         if (layers != 1) {
             // for the multi-layer spectral target, we need to separate the channels
             // (interleaved -> single channel image)
-            for (size_t y = 0; y < (size_t)height; ++y) {
-                for (size_t x = 0; x < (size_t)width; ++x) {
-                    const size_t idx = y * width + x;
-                    tmp_layer_buffer[idx] = tex_buffer[idx * layers + l];
-                }
-            }
+            size_t o = 0;
+            for (int y = 0; y < height; ++y)
+                for (int x = 0; x < width; ++x,++o)
+                    tmp_layer_buffer[o] = tex_buffer[o * layers + l];
         }
         // copy the data into the canvas, the API takes care of required conversion
         image_api->write_raw_pixels(
@@ -2053,10 +2061,10 @@ bool Axf_reader::access_mdl_material_definitions(
             impexp_state);
         return false;
     }
-    if (major < 1 || (major == 1 && minor < 7) || (major == 1 && minor == 7 && patch < 100)) {
+    if (major < 1 || (major == 1 && minor < 9) || (major == 1 && minor == 9 && patch < 0)) {
         ostringstream str;
         str << "Insufficient version (" << major << '.' << minor << '.' << patch << ") of "
-            "nvidia::axf_importer::axf_importer, required version is (1.7.99)";
+            "nvidia::axf_importer::axf_importer, required version is (1.9.0)";
         Axf_importer::report_message(
             6031, mi::base::MESSAGE_SEVERITY_ERROR,
             str.str(), impexp_state);
@@ -2512,7 +2520,7 @@ void set_spectral_param(
     //
 
     assert(wavelengths.size() == values.size());
-    
+
     mi::neuraylib::Definition_wrapper dw(transaction, "mdl::color(float[N],float[N])", mdl_factory);
     assert(dw.is_valid());
 
@@ -2521,7 +2529,7 @@ void set_spectral_param(
     assert(result == 0);
 
     string color_constructor_name
-        = get_axf_spectrum_prefix() 
+        = get_axf_spectrum_prefix()
         + impexp_state->get_module_prefix() + string("_")
         + material_name + string("_")
         + param_name;
@@ -2532,7 +2540,7 @@ void set_spectral_param(
     assert(result == 0);
     result = ae.set_value("amplitudes", values.data(), values.size());
     assert(result == 0);
-    
+
     //
     // attach call to parameter
     //
@@ -2840,6 +2848,18 @@ void Axf_reader::create_variant(
                 Axf_importer::report_message(
                     6033, mi::base::MESSAGE_SEVERITY_ERROR,
                     msg, impexp_state);
+            }
+        }
+
+        if (m_refractive_clearcoat) {
+            // heuristically match non-refracted Cook-Torrance BRDFs with refracted ones
+            // (for the fallback model, i.e. in case the precise measured BRDF is not used)
+            // - scale roughness by IOR (gives good match around normal incidence)
+            // - compensate for resulting brightness change
+            const float tmp = m_ior * m_ior;
+            for (int i = 0; i < 3; ++i) {
+                m_ct_spreads[i] *= m_ior;
+                m_ct_coeffs[i] *= tmp;
             }
         }
 

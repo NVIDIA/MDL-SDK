@@ -475,6 +475,7 @@ Printer::Printer(IAllocator *alloc, IOutput_stream *ostr)
 , m_show_func_hashes(false)
 , m_c_ostr()
 , m_color_stack(Syntax_elements_stack::container_type(alloc))
+, m_in_module_name(false)
 {
     ::memset(m_string_quote, 0, sizeof(m_string_quote));
 
@@ -823,7 +824,7 @@ namespace {
 void Printer::print(ISymbol const *sym)
 {
     char const *name = sym->get_name();
-    bool quote_needed = must_quote(name, false) && !is_special_import_symbol(sym);
+    bool quote_needed = must_quote(name, m_in_module_name) && !is_special_import_symbol(sym);
     if (quote_needed)
         print('\'');
     print(name);
@@ -863,12 +864,14 @@ void Printer::print(IQualified_name const *name)
     if (name->is_absolute()) {
         print("::");
     }
-
-    for (size_t i = 0; i < n - 1; ++i) {
-        push_color(C_LITERAL);
-        print(name->get_component(i));
-        pop_color();
-        print("::");
+    {
+        Store<bool> in_module_name(m_in_module_name, true);
+        for (size_t i = 0; i < n - 1; ++i) {
+            push_color(C_LITERAL);
+            print(name->get_component(i));
+            pop_color();
+            print("::");
+        }
     }
     print(name->get_component(n - 1));
 }
@@ -1982,6 +1985,7 @@ void Printer::print(IDeclaration const *decl, bool is_toplevel)
                 keyword("using");
                 print(' ');
                 push_color(C_LITERAL);
+                Store<bool> in_module_name(m_in_module_name, true);
                 print(d->get_module_name());
                 pop_color();
                 print(' ');
@@ -3258,6 +3262,7 @@ void Sema_printer::print_resource(IValue_resource const *res)
 // Given a definition, prints its scope.
 bool Sema_printer::print_scope(IDefinition const *idef)
 {
+    Store<bool> in_module_name(m_in_module_name, true);
     Definition const *def   = impl_cast<Definition>(idef);
     Scope const      *scope = def->get_def_scope();
 
@@ -3298,15 +3303,7 @@ bool Sema_printer::print_scope(IDefinition const *idef)
             } else {
                 Base::print("::");
             }
-            char const *name = sym->get_name();
-            bool quote_needed = must_quote(name, true) && !is_special_import_symbol(sym);
-            if (quote_needed) {
-                Base::print('\'');
-            }
-            Base::print(name);
-            if (quote_needed) {
-                Base::print('\'');
-            }
+            Base::print(sym);
         }
         m_sym_stack.pop();
     }

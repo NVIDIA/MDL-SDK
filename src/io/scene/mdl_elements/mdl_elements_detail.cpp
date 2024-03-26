@@ -471,7 +471,7 @@ DB::Tag mdl_texture_to_tag(
 
     mi::Sint32 result = 0;
     DB::Tag tag = TEXTURE::load_mdl_texture( transaction, &image_set, hash, shared, gamma, result);
-    ASSERT( M_SCENE, result == 0 || result == -3 || result == -7 || result == -10);
+    ASSERT( M_SCENE, result == 0 || result == -3 || result == -5 || result == -7 || result == -10);
     ASSERT( M_SCENE, tag.is_valid() ^ (result != 0));
 
     if( result != 0) {
@@ -1367,7 +1367,7 @@ Local_mdl_resource_element::Local_mdl_resource_element( const mi::mdl::IMDL_reso
             e.m_filename = filename;
         other->get_udim_mapping(i, e.m_u, e.m_v);
         mi::base::Handle<mi::mdl::IMDL_resource_reader> reader(other->open_reader(i));
-        e.m_reader = new Local_mdl_resource_reader(reader.get());
+        e.m_reader = reader ? new Local_mdl_resource_reader(reader.get()) : nullptr;
         e.m_hash_valid = other->get_resource_hash(i, e.m_hash);
 
         m_entries.push_back(e);

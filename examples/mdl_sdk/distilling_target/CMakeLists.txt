@@ -104,6 +104,7 @@ create_from_base_preset(
     TYPE SHARED
     SOURCES ${PLUGIN_PROJECT_SOURCES}
     OUTPUT_NAME "distilling_target_plugin"
+    EXPORTED_SYMBOLS mi_plugin_factory
     ADDITIONAL_INCLUDE_DIRS ${_GENERATED_DIR}
     )
 

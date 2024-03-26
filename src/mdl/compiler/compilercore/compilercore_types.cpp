@@ -1792,6 +1792,11 @@ IType const *Type_factory::create_array(
         return element_type;
     }
 
+    if (sym->get_id() == ISymbol::SYM_ERROR) {
+        // do not create array types with the error symbol as length
+        return create_error();
+    }
+
     Type_array_size const *array_size = impl_cast<Type_array_size>(get_array_size(abs_name, sym));
 
     Type_cache_key key(element_type, array_size);
@@ -2044,6 +2049,11 @@ IType const *Type_factory::create_array(
     if (is<IType_error>(element_type)) {
         // cannot create an array of error type
         return element_type;
+    }
+
+    if (iarray_size->get_size_symbol()->get_id() == ISymbol::SYM_ERROR) {
+        // do not create array types with the error symbol as length
+        return create_error();
     }
 
     Type_array_size const *array_size = impl_cast<Type_array_size>(iarray_size);

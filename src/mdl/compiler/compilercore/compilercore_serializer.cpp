@@ -4482,8 +4482,9 @@ void dprintf(char const *fmt, ...)
     va_list ap;
 
     va_start(ap, fmt);
-    for (unsigned i = 0, n = indent; i < n; ++i)
+    for (unsigned i = 0, n = indent; i < n; ++i) {
         printf(" ");
+    }
 
     vprintf(fmt, ap);
     fflush(stdout);

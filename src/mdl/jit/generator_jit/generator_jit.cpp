@@ -846,6 +846,8 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_const_function
 
     mi::base::Handle<MDL> compiler(lambda->get_compiler());
 
+    unsigned state_mapping = get_state_mapping(options);
+
     // const function are evaluated on the CPU only
     LLVM_code_generator code_gen(
         m_jitted_code.get(),
@@ -862,12 +864,16 @@ IGenerated_code_lambda_function *Code_generator_jit::compile_into_const_function
         /*num_texture_results=*/0,
         options,
         /*incremental=*/false,
-        get_state_mapping(options),
+        state_mapping,
         &res_manag,
         /*enable_debug=*/false);
 
     if (llvm::Function *func = code_gen.compile_const_lambda(
-            *lambda, resolver, attr, world_to_object, object_to_world, object_id))
+            *lambda,
+            resolver,
+            attr,
+            (state_mapping & Type_mapper::SM_INCLUDE_UNIFORM_STATE) == 0,
+            world_to_object, object_to_world, object_id))
     {
         // remember the function name, because the function is not valid anymore after jit_compile
         string func_name(func->getName().begin(), func->getName().end(), alloc);
@@ -1335,7 +1341,7 @@ IGenerated_code_executable *Code_generator_jit::compile_into_llvm_ir(
         code->access_messages(),
         llvm_context,
         ICode_generator::TL_NATIVE,
-        enable_simd ? Type_mapper::TM_BIG_VECTORS : Type_mapper::TM_ALL_SCALAR,
+        enable_simd ? Type_mapper::TM_SMALL_VECTORS : Type_mapper::TM_ALL_SCALAR,
         /*sm_version=*/0,
         /*has_tex_handler=*/options.get_bool_option(MDL_JIT_USE_BUILTIN_RESOURCE_HANDLER_CPU),
         Type_mapper::SSM_CORE,
@@ -2074,7 +2080,7 @@ Link_unit_jit *Code_generator_jit::create_link_unit(
         break;
 
     case TL_LLVM_IR:
-        tm_mode = enable_simd ? Type_mapper::TM_BIG_VECTORS : Type_mapper::TM_ALL_SCALAR;
+        tm_mode = enable_simd ? Type_mapper::TM_SMALL_VECTORS : Type_mapper::TM_ALL_SCALAR;
         break;
 
     case TL_NATIVE:

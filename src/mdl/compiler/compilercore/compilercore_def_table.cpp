@@ -845,6 +845,8 @@ static void print_def(Printer *printer, Definition const *def)
         break;
     }
 
+    printer->printf("(ID %u) ", unsigned(def->get_unique_id()));
+
     printer->print_type(type, name);
     if (!is<IType_function>(type)) {
         printer->print(" ");
@@ -1102,18 +1104,14 @@ void Scope::dump(IAllocator *alloc, Printer *printer, size_t depth, bool is_owne
          sub_scope != NULL;
          sub_scope = sub_scope->m_next_subscope)
     {
-        if (owned_scopes.find(sub_scope) == owned_scopes.end())
+        if (owned_scopes.find(sub_scope) == owned_scopes.end()) {
             sub_scope->dump(alloc, printer, depth, /*is_owned=*/false);
+        }
     }
 
     --depth;
     indent(printer, depth);
-    printer->print("}");
-    if (depth == 0)
-        printer->print("  // Module\n");
-    else {
-        printer->print("\n");
-    }
+    printer->print("}\n");
 }
 
 Definition_table::Definition_table(Module &owner)
@@ -2125,7 +2123,9 @@ bool Definition_table::is_owner(IDefinition const *def) const
 }
 
 // Debug helper: Prints the definition table to the given printer.
-void Definition_table::dump(Printer *printer, char const *name) const
+void Definition_table::dump(
+    Printer    *printer,
+    char const *name) const
 {
     Scope const *s = m_global_scope;
 
@@ -2134,6 +2134,17 @@ void Definition_table::dump(Printer *printer, char const *name) const
     printer->print("':\n");
     s->dump(m_arena.get_allocator(), printer, 0, /*is_owned=*/false);
     printer->print("\n");
+}
+
+// Debug helper: Prints the given scope to the given printer.
+void Definition_table::dump_scope(
+    Printer     *printer,
+    Scope const *scope) const
+{
+    if (scope != NULL) {
+        scope->dump(m_arena.get_allocator(), printer, 0, /*is_owned=*/true);
+        printer->print("\n");
+    }
 }
 
 // Decode the since version.

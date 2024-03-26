@@ -268,6 +268,9 @@ public:
     /// Check if this node is a loop header.
     bool is_loop_head() const { return (m_flags & IS_HEADER) != 0; }
 
+    /// Print the name of this Value out to the specified raw_ostream.
+    ///
+    /// \note unused, but required to use the LLVM dominance computation on our Nodes
     void printAsOperand(raw_ostream &OS, bool flag) {}
 
 private:
